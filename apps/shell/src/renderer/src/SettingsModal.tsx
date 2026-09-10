@@ -1106,8 +1106,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   label={t('setGithub')}
                   value={
                     githubStars === null
-                      ? 'github.com/genspark-ai/genoffice'
-                      : `github.com/genspark-ai/genoffice · ★ ${formatStars(githubStars)}`
+                      ? 'github.com/besliky/airy'
+                      : `github.com/besliky/airy · ★ ${formatStars(githubStars)}`
                   }
                   action={
                     <button

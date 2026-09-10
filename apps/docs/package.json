@@ -1,6 +1,6 @@
 {
   "name": "@genoffice/docs",
-  "productName": "GenOffice Docs",
+  "productName": "Airy Docs",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "private": true,
@@ -47,10 +47,10 @@
     "vite": "^7.3.1",
     "vitest": "^4.1.11"
   },
-  "author": "GenOffice",
+  "author": "besliky",
   "build": {
-    "appId": "com.genoffice.docs",
-    "productName": "GenOffice Docs",
+    "appId": "ai.airy.office.docs",
+    "productName": "Airy Docs",
     "electronVersion": "43.3.0",
     "artifactName": "AIDocx-${version}-${arch}.${ext}",
     "directories": {

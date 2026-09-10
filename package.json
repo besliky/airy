@@ -1,8 +1,8 @@
 {
-  "name": "genoffice",
+  "name": "airy",
   "version": "0.1.0",
   "private": true,
-  "description": "AI-native office suite (docs, sheets, slides, pdf, markdown, html)",
+  "description": "Airy: open-source office suite with an MCP copilot for CLI coding agents (fork of GenOffice)",
   "license": "Apache-2.0",
   "engines": {
     "node": ">=22.12.0",
@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/genspark-ai/genoffice.git"
+    "url": "git+https://github.com/besliky/airy.git"
   },
   "workspaces": [
     "apps/*",
@@ -35,6 +35,7 @@
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
     "notices": "node tools/gen-third-party-notices.mjs",
     "licenses": "node tools/check-licenses.mjs",
+    "check:no-genspark": "node tools/check-no-genspark.mjs",
     "dist:mac": "npm run notices && npm run build:all && npm run native:build:universal -w @genoffice/sheets && npm run dist:mac -w @genoffice/shell",
     "dist:win": "npm run notices && npm run build:all && npm run dist:win -w @genoffice/shell",
     "dist:linux": "npm run notices && npm run build:all && npm run dist:linux -w @genoffice/shell"

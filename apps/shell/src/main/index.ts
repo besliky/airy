@@ -199,21 +199,28 @@ import { startShellBridge, stopShellBridge } from './bridge/shell-bridge'
 
 // ANY unpacked run (`npm run shell`, `npm run dev`, `npx electron .`) must not
 // share the installed app's userData or single-instance lock — otherwise a dev
-// run silently quits and forwards its argv to the running installed GenOffice.
+// run silently quits and forwards its argv to the running installed Airy.
 // GENOFFICE_USER_DATA: test drivers point this at a scratch dir so an
 // automated instance can run alongside the dev instance (separate lock).
 if (!app.isPackaged)
   app.setPath(
     'userData',
-    process.env.GENOFFICE_USER_DATA ?? join(app.getPath('appData'), 'GenOffice Dev'),
+    process.env.GENOFFICE_USER_DATA ?? join(app.getPath('appData'), 'Airy Dev'),
   )
 
-// The product rename from "AI Office" to GenOffice changed the userData path; migrate old user data once
+// The product renames ("AI Office" → GenOffice → Airy) changed the userData
+// path (appData/Airy, from productName); migrate old user data once — the
+// most recent legacy layout wins, and only into a still-empty new dir.
 if (app.isPackaged) {
-  const oldDir = join(app.getPath('appData'), 'AI Office')
   const newDir = app.getPath('userData')
   const newEmpty = !existsSync(newDir) || readdirSync(newDir).length === 0
-  if (newEmpty && existsSync(oldDir)) cpSync(oldDir, newDir, { recursive: true })
+  for (const legacyName of ['GenOffice', 'AI Office']) {
+    const oldDir = join(app.getPath('appData'), legacyName)
+    if (newEmpty && existsSync(oldDir)) {
+      cpSync(oldDir, newDir, { recursive: true })
+      break
+    }
+  }
 }
 
 // module build outputs: packaged builds carry them as extraResources
@@ -390,7 +397,7 @@ let cachedGithubStars: number | null = null
 async function fetchGithubStars(): Promise<number | null> {
   if (cachedGithubStars !== null) return cachedGithubStars
   try {
-    const response = await fetch('https://api.github.com/repos/genspark-ai/genoffice', {
+    const response = await fetch('https://api.github.com/repos/besliky/airy', {
       headers: { Accept: 'application/vnd.github+json' },
       signal: AbortSignal.timeout(5000),
     })

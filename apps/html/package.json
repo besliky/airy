@@ -1,6 +1,6 @@
 {
   "name": "@genoffice/html",
-  "productName": "GenOffice HTML",
+  "productName": "Airy HTML",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "private": true,
@@ -43,5 +43,5 @@
     "vite": "^7.3.1",
     "vitest": "^4.1.11"
   },
-  "author": "GenOffice"
+  "author": "besliky"
 }

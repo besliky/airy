@@ -15,15 +15,21 @@ export const BRIDGE_INFO_NAME = 'airy-bridge.json'
 
 /**
  * userData directory names searched for the info file, in order:
- * - 'GenOffice'     — productName of the shell app (apps/shell/package.json);
- *                     packaged runs keep userData in appData/GenOffice
- * - 'GenOffice Dev' — dev/unpacked runs (the main process redirects userData
- *                     to appData/'GenOffice Dev' when !app.isPackaged, unless
+ * - 'Airy'          — productName of the shell app (apps/shell/package.json);
+ *                     packaged runs keep userData in appData/Airy
+ * - 'Airy Dev'      — dev/unpacked runs (the main process redirects userData
+ *                     to appData/'Airy Dev' when !app.isPackaged, unless
  *                     GENOFFICE_USER_DATA points elsewhere — dev setups like
  *                     that need AIRY_BRIDGE_FILE)
- * - 'Airy'          — the upcoming product rename
+ * - 'GenOffice' / 'GenOffice Dev' — legacy pre-rename userData layouts, kept
+ *                     so a bridge file from an older install is still found
  */
-export const BRIDGE_APP_NAME_CANDIDATES: readonly string[] = ['GenOffice', 'GenOffice Dev', 'Airy']
+export const BRIDGE_APP_NAME_CANDIDATES: readonly string[] = [
+  'Airy',
+  'Airy Dev',
+  'GenOffice',
+  'GenOffice Dev',
+]
 
 /** the shape published in the info file (twin of the server's BridgeEndpointInfo) */
 export interface BridgeEndpointInfo {
