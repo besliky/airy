@@ -650,15 +650,15 @@ html.genoffice-popover-open .ribbon-tabs {
   white-space: nowrap;
 }
 
-/* Genspark brand logo (shared by the collapsed entry and the AI panel title) */
-.genspark-badge {
+/* Airy brand logo (shared by the collapsed entry and the AI panel title) */
+.airy-badge {
   display: block;
   width: 22px;
   height: 22px;
   border-radius: 50%;
 }
 
-.ai-panel-title .genspark-badge {
+.ai-panel-title .airy-badge {
   width: 18px;
   height: 18px;
 }

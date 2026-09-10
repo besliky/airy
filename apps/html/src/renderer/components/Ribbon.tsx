@@ -7,7 +7,7 @@ import {
 } from '@airy-office/ui'
 import { useI18n } from '../i18n/locale'
 import type { StringKey } from '../i18n/locale'
-import { GensparkMark } from '../ai/AiPanel'
+import { AiryMark } from '../ai/AiPanel'
 import {
   IconChevronDown,
   IconCode,
@@ -190,9 +190,9 @@ export function Ribbon(p: Props) {
               onClick={p.onToggleAi}
             >
               <span className="rb-big-icon">
-                <GensparkMark size={26} />
+                <AiryMark size={26} />
               </span>
-              <span>Genspark AI</span>
+              <span>Airy AI</span>
             </button>
             <button
               type="button"

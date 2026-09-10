@@ -19,7 +19,7 @@ import {
   BorderThickOuterIcon,
   BorderTopIcon,
   CaretIcon,
-  GensparkMark,
+  AiryMark,
   RIBBON_GLYPH_ICONS,
   RedoIcon,
   SaveAsIcon,
@@ -2541,10 +2541,10 @@ function Ribbon({
           onClick={onAiToggle}
         >
           <span className="tool-icon-row">
-            <GensparkMark size={26} />
+            <AiryMark size={26} />
           </span>
           <span>
-            <strong>Genspark AI</strong>
+            <strong>Airy AI</strong>
           </span>
         </button>
         <button

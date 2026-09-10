@@ -1850,15 +1850,15 @@ button.check-item:hover {
   box-shadow: var(--sheets-shadow-badge);
 }
 
-/* Genspark brand logo (shared by the collapse button and the AI panel title) */
-.genspark-badge {
+/* Airy brand logo (shared by the collapse button and the AI panel title) */
+.airy-badge {
   display: block;
   width: 22px;
   height: 22px;
   border-radius: 50%;
 }
 
-.ai-panel-title .genspark-badge {
+.ai-panel-title .airy-badge {
   width: 18px;
   height: 18px;
 }

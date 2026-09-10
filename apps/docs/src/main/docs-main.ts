@@ -2761,7 +2761,7 @@ export function registerAiIpc(): void {
     const stored = readJson<Partial<AiSettings> & LegacyAiSettings>(SETTINGS_PATH(), {})
     const settings = resolveAiSettings(stored, defaultAiSettings())
     // a stored BYOK provider is honored when usable; half-filled or retired
-    // (genspark) selections resolve to 'none' and the UI asks for setup
+    // (retired) selections resolve to 'none' and the UI asks for setup
     settings.provider = activeProvider(settings)
     return settings
   })
@@ -3163,7 +3163,7 @@ export function registerProjectIpc(): void {
 export function registerDocsIpc(): void {
   // Node fetch (undici) direct connections get reset under VPN/tun setups; retry over Chromium's stack
   setRescueFetch((url, init) => net.fetch(url, init))
-  setAiUserAgent(`GenOffice/${app.getVersion()}`)
+  setAiUserAgent(`Airy/${app.getVersion()}`)
 
   // shared with the other editor modules — last (identical) registration wins
   ipcMain.removeHandler('app:get-language')
