@@ -119,7 +119,6 @@ import {
   snapshotDocPassword,
 } from './docx-encryption'
 import { isExternallyModified, type DiskFileState } from './external-change'
-import { initDocsAutoUpdater } from './updater'
 
 /**
  * Docs main-process logic as an embeddable module: no top-level side effects.
@@ -4522,7 +4521,6 @@ export function startDocsStandalone(): void {
     }
     buildDocsMenu()
     createDocsWindow()
-    initDocsAutoUpdater(() => mainWindow)
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createDocsWindow()
     })
