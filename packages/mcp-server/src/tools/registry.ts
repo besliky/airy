@@ -6,6 +6,7 @@ import { z } from 'zod'
 
 import { DocxSession, getSession, storeSession, type SessionMeta } from '../docx/session.js'
 import { opSignatures, type Op } from '../docx/ops.js'
+import { BridgeClientError, sharedLiveBridge } from '../live/client.js'
 import { SERVER_NAME } from '../version.js'
 
 /** text + mirrored JSON content, the repo's standard tool output shape */
@@ -220,6 +221,182 @@ export function registerTools(server: McpServer): void {
       )
     },
   )
+
+  // ---- live bridge: edit the document open in the running app (Phase 2) ----
+
+  server.registerTool(
+    'live_status',
+    {
+      title: 'Live status',
+      description:
+        'Check the live bridge to the Airy/GenOffice desktop app. Returns {running:false} (no error) when ' +
+        'the app is not running — use the headless document tools in that case. When running, returns the ' +
+        'bridge protocol version, the app pid, and the list of open documents ({id, title, filePath, active}) ' +
+        'of which the live tools always target the active one.',
+      inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+      },
+    },
+    async () => {
+      const bridge = sharedLiveBridge()
+      try {
+        const pong = asRecord(await bridge.call('ping')) ?? {}
+        let documents: unknown[] = []
+        try {
+          const list = asRecord(await bridge.call('list'))
+          if (Array.isArray(list?.documents)) documents = list.documents
+        } catch {
+          // ping proved the bridge is up; a failing list must not flip running
+        }
+        const payload = {
+          running: true,
+          pid: pong.pid,
+          protocolVersion: pong.protocolVersion,
+          documents,
+        }
+        return content(
+          payload,
+          `Live bridge running (pid ${String(pong.pid)}), ${documents.length} open document(s).`,
+        )
+      } catch (err) {
+        const reason = describeBridgeFailure(err)
+        return content({ running: false, reason }, reason)
+      }
+    },
+  )
+
+  server.registerTool(
+    'live_get_context',
+    {
+      title: 'Get live document context',
+      description:
+        'Read the context of the ACTIVE document in the running Airy/GenOffice app: block list (index|type| ' +
+        'content preview), the current selection (<sel>), comments, and the file path. The context is the ' +
+        'freshness baseline for index-addressed live_apply_ops — refetch it after the user edits or a ' +
+        'stale_document error.',
+      inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+      },
+    },
+    async () => {
+      const bridge = sharedLiveBridge()
+      let result: unknown
+      try {
+        result = await bridge.call('get_context')
+      } catch (err) {
+        throw new Error(describeBridgeFailure(err), { cause: err })
+      }
+      const record = asRecord(result)
+      if (!record) throw new Error('live bridge error: get_context returned a malformed payload')
+      return content(record)
+    },
+  )
+
+  server.registerTool(
+    'live_apply_ops',
+    {
+      title: 'Apply edits to the live document',
+      description:
+        'Edit the ACTIVE document in the running Airy/GenOffice app in one go: insert a restricted-HTML ' +
+        'fragment and/or apply canonical edit ops. When both are given the html is inserted first (at the ' +
+        'end of the document, so block indexes from live_get_context stay valid) and the ops then run against ' +
+        'the result — a single call can add a section and format it. The user sees the change immediately; ' +
+        'tracked changes are authored as "Airy Copilot" when the app has track changes on. Each bridge call ' +
+        'is one undo step, so undo a combined edit with live_undo twice. ' +
+        `Operations:\n${OPS_GUIDE}`,
+      inputSchema: {
+        ops: z
+          .array(z.record(z.string(), z.unknown()))
+          .min(1)
+          .max(100)
+          .optional()
+          .describe('Batch of op records, applied in order'),
+        html: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Restricted HTML fragment to insert at the end of the document'),
+      },
+      annotations: {
+        destructiveHint: true,
+      },
+    },
+    async ({ ops, html }) => {
+      if (ops === undefined && html === undefined) {
+        throw new Error('live_apply_ops requires at least one of ops or html')
+      }
+      const bridge = sharedLiveBridge()
+      const applied: Record<string, unknown> = {}
+      try {
+        if (html !== undefined) applied.insert = await bridge.call('insert_content', { html })
+        if (ops !== undefined) applied.ops = await bridge.call('apply_ops', { ops })
+      } catch (err) {
+        throw new Error(describeBridgeFailure(err), { cause: err })
+      }
+      const parts = [
+        ...(applied.insert !== undefined ? ['inserted content'] : []),
+        ...(applied.ops !== undefined ? [`applied ${String(ops?.length ?? 0)} op(s)`] : []),
+      ]
+      return content(applied, `Applied to the live document: ${parts.join(' and ')}.`)
+    },
+  )
+
+  server.registerTool(
+    'live_undo',
+    {
+      title: 'Undo last live edit',
+      description:
+        'Revert the last live bridge turn in the active document of the running Airy/GenOffice app (one ' +
+        'live_apply_ops / live_undo step). Refuses with nothing_to_undo when the agent made no edits yet, ' +
+        'and with stale_document when the user edited the document since — fetch fresh context instead.',
+      inputSchema: {},
+      annotations: {
+        destructiveHint: true,
+      },
+    },
+    async () => {
+      const bridge = sharedLiveBridge()
+      let result: unknown
+      try {
+        result = await bridge.call('undo')
+      } catch (err) {
+        throw new Error(describeBridgeFailure(err), { cause: err })
+      }
+      return content(asRecord(result) ?? { undone: true }, 'Undid the last live bridge turn.')
+    },
+  )
+}
+
+// ---- live bridge helpers ----
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+/** agent-facing message for any live bridge failure */
+function describeBridgeFailure(err: unknown): string {
+  if (err instanceof BridgeClientError) {
+    if (err.code === 'bridge_not_running') {
+      return (
+        `live bridge not running: ${err.message}. ` +
+        'Start the GenOffice (Airy) desktop app with a document open, or point AIRY_BRIDGE_FILE at its ' +
+        'airy-bridge.json, then retry.'
+      )
+    }
+    if (err.code === 'bridge_unauthorized') {
+      return (
+        `live bridge unauthorized: ${err.message}. ` +
+        'The app may have restarted and issued a fresh token — the next call rereads it automatically; ' +
+        'verify AIRY_BRIDGE_FILE if it persists.'
+      )
+    }
+    return `live bridge error${err.bridgeCode ? ` (${err.bridgeCode})` : ''}: ${err.message}`
+  }
+  return err instanceof Error ? err.message : String(err)
 }
 
 function summarizeMeta(meta: SessionMeta): string {
