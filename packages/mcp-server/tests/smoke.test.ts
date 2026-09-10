@@ -21,6 +21,7 @@ interface JsonRpcResponse {
     tools?: Array<{ name: string }>
     structuredContent?: { pong?: boolean; server?: string }
     isError?: boolean
+    content?: Array<{ type: string; text?: string }>
   }
   error?: { code: number; message: string }
 }
@@ -69,10 +70,21 @@ async function runStdioSession(): Promise<Session> {
     method: 'tools/call',
     params: { name: 'ping', arguments: {} },
   })
+  send({
+    jsonrpc: '2.0',
+    id: 4,
+    method: 'tools/call',
+    params: {
+      name: 'open_document',
+      // a path outside the workspace root fails fast but proves the docx
+      // engine code path is alive inside the bundle
+      arguments: { path: '/definitely/not/inside/the/workspace.docx' },
+    },
+  })
 
   const withId = () => responses.filter((message) => typeof message.id === 'number')
   const deadline = Date.now() + 15000
-  while (withId().length < 3) {
+  while (withId().length < 4) {
     if (Date.now() > deadline) {
       child.kill()
       throw new Error(`timed out waiting for responses, got ${JSON.stringify(responses)}`)
@@ -101,11 +113,18 @@ describe('dist bundle smoke test (stdio)', () => {
     const list = byId.get(2)
     expect(list?.error).toBeUndefined()
     expect(list?.result?.tools?.map((tool) => tool.name)).toContain('ping')
+    expect(list?.result?.tools?.map((tool) => tool.name)).toContain('open_document')
 
     const call = byId.get(3)
     expect(call?.error).toBeUndefined()
     expect(call?.result?.isError).toBeFalsy()
     expect(call?.result?.structuredContent).toMatchObject({ pong: true, server: SERVER_NAME })
+
+    // the docx tools answer (error result, not a crash) inside the bundle
+    const docx = byId.get(4)
+    expect(docx?.error).toBeUndefined()
+    expect(docx?.result?.isError).toBe(true)
+    expect(JSON.stringify(docx?.result?.content)).toContain('outside the workspace root')
 
     // The startup notice goes to stderr, never to stdout
     expect(stderr).toContain(SERVER_NAME)
