@@ -30,7 +30,7 @@
     "dev": "concurrently -k -n docs,sheets,slides,pdf,markdown,html,shell -c blue,green,yellow,red,cyan,white,magenta \"npm run dev:renderer -w @airy-office/docs\" \"npm run dev:renderer -w @airy-office/sheets\" \"npm run dev:renderer -w @airy-office/slides\" \"npm run dev:renderer -w @airy-office/pdf\" \"npm run dev:renderer -w @airy-office/markdown\" \"npm run dev:renderer -w @airy-office/html\" \"DOCS_RENDERER_URL=http://localhost:5173 SHEETS_RENDERER_URL=http://localhost:5174 SLIDES_RENDERER_URL=http://localhost:5175 PDF_RENDERER_URL=http://localhost:5176 MARKDOWN_RENDERER_URL=http://localhost:5177 HTML_RENDERER_URL=http://localhost:5178 npm run dev -w @airy-office/shell\"",
     "dev:docs": "npm run dev -w @airy-office/docs",
     "build": "npm run build -w @airy-office/docs",
-    "build:all": "npm run build -w @airy-office/docs && npm run build -w @airy-office/sheets && npm run build -w @airy-office/slides && npm run build -w @airy-office/pdf && npm run build -w @airy-office/markdown && npm run build -w @airy-office/html && npm run build -w @airy-office/shell",
+    "build:all": "npm run build -w @airy-office/mcp && npm run build -w @airy-office/docs && npm run build -w @airy-office/sheets && npm run build -w @airy-office/slides && npm run build -w @airy-office/pdf && npm run build -w @airy-office/markdown && npm run build -w @airy-office/html && npm run build -w @airy-office/shell",
     "shell": "npm run build:all && electron apps/shell",
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
     "notices": "node tools/gen-third-party-notices.mjs",

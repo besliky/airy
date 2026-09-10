@@ -186,6 +186,9 @@ function assertModuleTreesPresent() {
     '../pdf/out',
     '../markdown/out',
     '../html/out',
+    // MCP copilot server bundled for win/linux below; checked here because
+    // gen-third-party-notices loads this config before build:all has run
+    '../../packages/mcp-server/dist/index.js',
   ]) {
     if (!existsSync(join(__dirname, rel))) {
       throw new Error(
@@ -400,6 +403,16 @@ const config = {
         from: WIN_SIDECAR,
         to: 'native/xlsx-sidecar.exe',
       },
+      // MCP copilot server (docs/COPILOT.md "Run the MCP server from an
+      // installed Airy app"): the esbuild bundle is self-contained, so agents
+      // execute it with the app binary as the node runtime:
+      // ELECTRON_RUN_AS_NODE=1 Airy.exe resources\mcp\index.js. The source is
+      // existence-checked in beforePack (assertModuleTreesPresent) because
+      // electron-builder exits 0 on a missing extraResources source.
+      {
+        from: '../../packages/mcp-server/dist',
+        to: 'mcp',
+      },
     ],
   },
   // Unlike win (which cross-compiles the sidecar to an explicit target
@@ -448,6 +461,13 @@ const config = {
       {
         from: '../sheets/native/xlsx-engine/target/release/xlsx-sidecar',
         to: 'native/xlsx-sidecar',
+      },
+      // MCP copilot server, same rationale as the win entry above; on deb it
+      // lands in /opt/Airy/resources/mcp/index.js (installPrefix/sanitized
+      // product name, see LinuxTargetHelper in app-builder-lib).
+      {
+        from: '../../packages/mcp-server/dist',
+        to: 'mcp',
       },
     ],
   },
