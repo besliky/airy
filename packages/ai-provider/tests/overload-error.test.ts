@@ -33,7 +33,7 @@ describe('isAiOverloadedError', () => {
   it('never claims credits-exhausted notices (a separate error class)', () => {
     expect(
       isAiOverloadedError(
-        new Error('Your Genspark credits have been exhausted. Visit genspark.ai/pricing to top up'),
+        new Error('Your Genspark credits have been exhausted. Visit example.com/pricing to top up'),
       ),
     ).toBe(false)
   })

@@ -81,14 +81,14 @@ describe('aiFetch', () => {
     const ok = new Response('{}', { headers: { 'content-type': 'application/json' } })
     const rescue = vi.fn().mockResolvedValue(ok)
     setRescueFetch(rescue)
-    expect(await aiFetch('https://www.genspark.ai/api/x', { method: 'POST', body: '{}' })).toBe(ok)
+    expect(await aiFetch('https://www.example.com/api/x', { method: 'POST', body: '{}' })).toBe(ok)
     expect(rescue).toHaveBeenCalledOnce()
 
     // still blocked on the rescue path: the primary answer stands
     const primary = blocked()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(primary))
     setRescueFetch(vi.fn().mockResolvedValue(blocked()))
-    expect(await aiFetch('https://www.genspark.ai/api/x', { body: '{}' })).toBe(primary)
+    expect(await aiFetch('https://www.example.com/api/x', { body: '{}' })).toBe(primary)
   })
 
   it('does not treat an API 403 or a stream body as a block page', async () => {
