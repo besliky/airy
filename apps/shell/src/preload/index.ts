@@ -10,9 +10,6 @@ import type { AiSettings, CodexModelCatalog } from '@genoffice/ai-provider/brows
 import { installDropOpenBridge } from '@genoffice/electron-utils/drop-open'
 import { normalizeAiPanelPrefs } from '@genoffice/ui/ai-panel-prefs'
 import type {
-  AccountLoginEvent,
-  AccountStatus,
-  CloudProjectsSnapshot,
   HomeApi,
   RecentEntry,
   RecentPage,
@@ -132,25 +129,6 @@ const homeApi: HomeApi = {
     if (!isUiLanguage(lang)) throw new Error('Invalid language.')
     await ipcRenderer.invoke(HOME_CHANNELS.setLanguage, lang)
   },
-  async accountStatus() {
-    const result: unknown = await ipcRenderer.invoke(HOME_CHANNELS.accountStatus)
-    return (result ?? { loggedIn: false }) as AccountStatus
-  },
-  async accountLogin() {
-    const result: unknown = await ipcRenderer.invoke(HOME_CHANNELS.accountLogin)
-    return result === true
-  },
-  onAccountLogin(handler) {
-    const listener = (_event: IpcRendererEvent, ev: AccountLoginEvent) => handler(ev)
-    ipcRenderer.on(HOME_CHANNELS.accountLoginEvent, listener)
-    return () => ipcRenderer.removeListener(HOME_CHANNELS.accountLoginEvent, listener)
-  },
-  async openLoginUrl() {
-    await ipcRenderer.invoke(HOME_CHANNELS.accountLoginOpenUrl)
-  },
-  async accountLogout() {
-    await ipcRenderer.invoke(HOME_CHANNELS.accountLogout)
-  },
   async getAppVersion() {
     const result: unknown = await ipcRenderer.invoke(HOME_CHANNELS.getAppVersion)
     return typeof result === 'string' ? result : ''
@@ -208,9 +186,6 @@ const homeApi: HomeApi = {
   async openGenTeam() {
     await ipcRenderer.invoke(HOME_CHANNELS.openGenTeam)
   },
-  async openCreditUsage() {
-    await ipcRenderer.invoke(HOME_CHANNELS.openCreditUsage)
-  },
   async openGitHubRepo() {
     await ipcRenderer.invoke(HOME_CHANNELS.openGitHubRepo)
   },
@@ -230,23 +205,6 @@ const homeApi: HomeApi = {
   async starPromptAction(action) {
     if (action !== 'starred' && action !== 'later') throw new Error('Invalid star prompt action.')
     await ipcRenderer.invoke(HOME_CHANNELS.starPromptAction, action)
-  },
-  async cloudProjectsCached() {
-    const result: unknown = await ipcRenderer.invoke(HOME_CHANNELS.cloudProjectsCached)
-    return asCloudProjectsSnapshot(result)
-  },
-  async cloudProjectsSync() {
-    // failures (network / CLI) resolve to null so the renderer keeps whatever it has
-    try {
-      const result: unknown = await ipcRenderer.invoke(HOME_CHANNELS.cloudProjects)
-      return asCloudProjectsSnapshot(result)
-    } catch {
-      return null
-    }
-  },
-  async openCloudProject(projectUrl) {
-    if (typeof projectUrl !== 'string' || !projectUrl) throw new Error('Invalid project URL.')
-    await ipcRenderer.invoke(HOME_CHANNELS.openCloudProject, projectUrl)
   },
   // AI settings channels are registered once by the shell's aggregated docs handlers
   async getAiSettings() {
@@ -306,17 +264,6 @@ const homeApi: HomeApi = {
       ? { ok: true }
       : { ok: false, error: typeof raw.error === 'string' ? raw.error : 'Connection failed' }
   },
-}
-
-function asCloudProjectsSnapshot(result: unknown): CloudProjectsSnapshot | null {
-  if (
-    result &&
-    typeof result === 'object' &&
-    Array.isArray((result as CloudProjectsSnapshot).projects)
-  ) {
-    return result as CloudProjectsSnapshot
-  }
-  return null
 }
 
 contextBridge.exposeInMainWorld('aiOffice', homeApi)

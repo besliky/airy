@@ -25,7 +25,7 @@ import type {
 } from '@genoffice/ai-provider'
 import { useI18n } from './locale'
 import type { StringKey, TFunc } from './locale'
-import type { AccountStatus, AiCatalogEntry, UiTheme } from '../../shared/home-api'
+import type { AiCatalogEntry, UiTheme } from '../../shared/home-api'
 import { ProviderLogo } from './provider-logos'
 import './settings.css'
 
@@ -132,10 +132,9 @@ function CustomFontSizeInput({
   )
 }
 
-type SectionId = 'account' | 'aiModel' | 'aiMedia' | 'general' | 'about'
+type SectionId = 'aiModel' | 'aiMedia' | 'general' | 'about'
 
 const SECTIONS: readonly { id: SectionId; labelKey: StringKey }[] = [
-  { id: 'account', labelKey: 'setSecAccount' },
   { id: 'aiModel', labelKey: 'setSecAiModel' },
   { id: 'aiMedia', labelKey: 'setSecAiMedia' },
   { id: 'general', labelKey: 'setSecGeneral' },
@@ -173,19 +172,6 @@ function SectionIcon({ id }: { id: SectionId }) {
           strokeLinejoin="round"
         />
         <circle cx="10.5" cy="6" r="1.1" fill="currentColor" />
-      </svg>
-    )
-  }
-  if (id === 'account') {
-    return (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <circle cx="8" cy="5.2" r="2.9" stroke="currentColor" strokeWidth="1.3" />
-        <path
-          d="M2.7 13.6a5.5 5.5 0 0 1 10.6 0"
-          stroke="currentColor"
-          strokeWidth="1.3"
-          strokeLinecap="round"
-        />
       </svg>
     )
   }
@@ -956,35 +942,12 @@ function AiStatusPill({ status }: { status: AiStatus | null }) {
 }
 
 export interface SettingsModalProps {
-  status: AccountStatus | null
-  loggingOut: boolean
-  /** browser sign-in in progress (spinner shows on the account entry) */
-  loginWaiting: boolean
-  /** device auth URL while waiting — rescue actions when the browser did not auto-open */
-  loginUrl: string | null
-  urlCopied: boolean
-  onOpenLoginUrl: () => void
-  onCopyLoginUrl: () => void
   onClose: () => void
-  /** closes the modal and launches the Genspark login flow (progress shows on the account entry) */
-  onLogin: () => void
-  onLogout: () => void
 }
 
-export function SettingsModal({
-  status,
-  loggingOut,
-  loginWaiting,
-  loginUrl,
-  urlCopied,
-  onOpenLoginUrl,
-  onCopyLoginUrl,
-  onClose,
-  onLogin,
-  onLogout,
-}: SettingsModalProps) {
+export function SettingsModal({ onClose }: SettingsModalProps) {
   const { lang, setLang, t } = useI18n()
-  const [section, setSection] = useState<SectionId>('account')
+  const [section, setSection] = useState<SectionId>('general')
   const [theme, setTheme] = useState<UiTheme>('system')
   const [saveDir, setSaveDir] = useState('')
   const [autoSaveOn, setAutoSaveOn] = useState(false)
@@ -1043,9 +1006,6 @@ export function SettingsModal({
     })
   }
 
-  const loggedIn = status?.loggedIn ?? false
-  const email = status?.email ?? ''
-
   return (
     <div
       className="set-overlay"
@@ -1082,54 +1042,6 @@ export function SettingsModal({
             ))}
           </nav>
           <div className="set-pane">
-            {section === 'account' && (
-              <>
-                <h3 className="set-pane-title">{t('setSecAccount')}</h3>
-                <Field label={t('setEmail')} value={loggedIn ? email : t('setNotLoggedIn')} />
-                {loggedIn && (
-                  <Field
-                    label={t('credits')}
-                    value={
-                      status?.creditBalance === undefined
-                        ? '—'
-                        : Math.floor(status.creditBalance).toLocaleString('en-US')
-                    }
-                    action={
-                      <button
-                        className="set-btn"
-                        data-tip={t('creditsTip')}
-                        onClick={() => void window.aiOffice.openCreditUsage?.()}
-                      >
-                        {t('setViewUsage')}
-                      </button>
-                    }
-                  />
-                )}
-                <div className="set-pane-footer">
-                  {loggedIn ? (
-                    <button className="set-btn danger" disabled={loggingOut} onClick={onLogout}>
-                      {loggingOut ? t('loggingOut') : t('logout')}
-                    </button>
-                  ) : (
-                    <>
-                      {loginWaiting && loginUrl && (
-                        <>
-                          <button className="set-btn" onClick={onOpenLoginUrl}>
-                            {t('loginOpenManually')}
-                          </button>
-                          <button className="set-btn" onClick={onCopyLoginUrl}>
-                            {urlCopied ? t('loginCopied') : t('loginCopyUrl')}
-                          </button>
-                        </>
-                      )}
-                      <button className="set-btn primary" onClick={onLogin}>
-                        {loginWaiting ? t('waitingShort') : t('loginGenspark')}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </>
-            )}
             {section === 'aiModel' && <AiModelPane t={t} />}
             {section === 'aiMedia' && <AiMediaPane t={t} />}
             {section === 'general' && (
