@@ -128,7 +128,7 @@ export async function generateImageTool(
   const byok = activeMediaConfig(settings, 'image')
   try {
     if (!byok) return { error: IMAGE_PROVIDER_NOT_CONFIGURED_ERROR }
-    // `model` named Genspark-only special models (fal-*) once; BYOK uses the configured image model
+    // BYOK uses the configured image model
     const references = await Promise.all((op.referenceImageUrls ?? []).map(loadMediaReference))
     const image = await generateImageWithProvider(byok.provider, byok.config, {
       prompt,

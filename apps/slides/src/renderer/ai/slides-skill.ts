@@ -307,7 +307,7 @@ const TOOLS: AgentToolDef[] = [
         model: {
           type: 'string',
           description:
-            'Optional, defaults to the configured model. Genspark only — specify for special purposes: fal-bria-rmbg=background removal, fal-ai/recraft-clarity-upscale=upscale, flux-pro/outpaint=outpaint, fal-ai/image-editing/text-removal=remove text watermark',
+            'Optional, defaults to the configured model. Some media providers support special-purpose ids (e.g. fal-bria-rmbg=background removal, fal-ai/recraft-clarity-upscale=upscale, flux-pro/outpaint=outpaint, fal-ai/image-editing/text-removal=remove text watermark)',
         },
         referenceImageUrls: {
           type: 'array',
@@ -325,7 +325,7 @@ const TOOLS: AgentToolDef[] = [
   {
     name: 'analyze_media',
     description:
-      'Analyze media content: understand images/audio/video (video and audio need Genspark or Gemini as the media provider). Pass media URLs (or local file paths) and analysis requirements; returns analysis text. Video supports extracting key points, structure, and time ranges — good for turning user material into usable deck content.',
+      'Analyze media content: understand images/audio/video (video and audio need a video-capable media provider such as Gemini). Pass media URLs (or local file paths) and analysis requirements; returns analysis text. Video supports extracting key points, structure, and time ranges — good for turning user material into usable deck content.',
     inputSchema: {
       type: 'object',
       properties: {

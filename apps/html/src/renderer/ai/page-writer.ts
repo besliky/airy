@@ -6,7 +6,7 @@ import type { Brief } from '../document/brief'
  * the HTML. Text deltas stream immediately, so the preview fills in as the model
  * writes and no gateway sees a silent connection. (Tool arguments are buffered
  * server-side until the JSON is complete; a page-sized argument exceeded the
- * Genspark gateway's idle cutoff and arrived as an empty stream.)
+ * gateway's idle cutoff and arrived as an empty stream.)
  */
 export const PAGE_MAX_CHARS = 200_000
 const CONTEXT_CAP = 8000

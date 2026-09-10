@@ -307,7 +307,6 @@ export interface DesktopApi {
   /** start a streaming AI call; deltas arrive via onAiStream with the same requestId */
   aiStream(request: AiStreamRequest): Promise<void>
   aiStreamCancel(requestId: string): Promise<void>
-  /** Genspark account status (gsk login state); withEmail also returns the email (needs a network request, slower) */
   webSearch(
     query: string,
     maxResults?: number,
@@ -335,7 +334,7 @@ export interface DesktopApi {
     error?: string
   }>
   fetchImage(url: string): Promise<{ base64: string; mime: string } | null>
-  /** AI image generation via the Genspark cloud channel (requires login + cloud tools) */
+  /** AI image generation via the configured media provider */
   aiGenerateImage(op: {
     prompt: string
     aspectRatio?: string

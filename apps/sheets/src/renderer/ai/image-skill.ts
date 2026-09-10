@@ -20,7 +20,7 @@ const IMAGES_SYSTEM_PROMPT_NO_GEN = `## Images
 ${PLACEMENT_PROMPT}`
 
 /**
- * `imageGen` is a live predicate (Genspark login + cloud-tools toggle, or a
+ * `imageGen` is a live predicate (a
  * BYOK media key); the loop re-reads tools and systemPrompt before every
  * request, so generate_image appears and disappears without rebuilding the loop.
  */

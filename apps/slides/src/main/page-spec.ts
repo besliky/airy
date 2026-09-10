@@ -4,7 +4,7 @@
  * PPTX with pptx-engine primitives — no HTML intermediate, no conversion step.
  *
  * The spec's element model mirrors what an editable deck needs (and what
- * Genspark's gen_pptx capture emits): absolutely positioned shapes, images
+ * the upstream capture emits): absolutely positioned shapes, images
  * (center-cropped to their frame) and text runs on a fixed px canvas.
  *
  * Electron-only facilities (network fetch, image decoding) are injected so

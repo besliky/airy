@@ -154,11 +154,11 @@ export interface HomeApi {
   starPromptShouldShow(): Promise<StarPromptShow>
   /** user reacted to the star prompt; 'starred' resolves it permanently */
   starPromptAction(action: StarPromptAction): Promise<void>
-  /** AI settings (userData/ai-settings.json, shared by every editor); the genspark key never appears here */
+  /** AI settings (userData/ai-settings.json, shared by every editor) */
   getAiSettings(): Promise<AiSettings>
   /** persist AI settings; open editors pick the change up on their next settings read */
   setAiSettings(settings: AiSettings): Promise<void>
-  /** provider catalog with each fixed endpoint's default base URL (empty for genspark/custom) */
+  /** provider catalog with each fixed endpoint's default base URL (empty for none/custom) */
   getAiProviders(): AiCatalogEntry[]
   /** live Codex model catalog discovered through the current or overridden app-server */
   getCodexModels(cliPath?: string): Promise<CodexModelCatalog>
@@ -166,14 +166,14 @@ export interface HomeApi {
   testAiSettings(settings: AiSettings): Promise<AiChatResponse>
   /** image generation / media analysis provider catalog */
   getAiMediaProviders(): AiMediaProviderMeta[]
-  /** credential check for a (possibly unsaved) media provider; genspark reports the gsk login state */
+  /** credential check for a (possibly unsaved) media provider */
   testAiMediaSettings(input: {
     provider: AiMediaProviderId
     config: AiMediaProviderConfig
   }): Promise<{ ok: boolean; error?: string }>
   /** web search provider catalog */
   getAiSearchProviders(): AiSearchProviderMeta[]
-  /** one minimal query against the given key (genspark reports the gsk login state) */
+  /** one minimal query against the given key */
   testAiSearchSettings(input: {
     provider: AiSearchProviderId
     apiKey: string

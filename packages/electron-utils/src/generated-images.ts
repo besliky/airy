@@ -1,5 +1,5 @@
 /// Local store for AI-generated images that arrive as bytes (BYOK image
-/// providers answer with base64, unlike the Genspark CDN URLs the insert
+/// providers answer with base64, unlike the CDN URLs the insert
 /// pipelines were built around). The bytes are written to a fixed temp
 /// directory and handed back as a file:// URL, which is the only file:// shape
 /// fetchRemoteImage accepts — anything outside this directory stays refused.
