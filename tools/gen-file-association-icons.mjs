@@ -91,7 +91,7 @@ async function renderPng(page, svgDataUrl, canvasSize, contentSize) {
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const page = await browser.newPage({ deviceScaleFactor: 1 })
-const tmp = mkdtempSync(join(tmpdir(), 'genoffice-file-icons-'))
+const tmp = mkdtempSync(join(tmpdir(), 'airy-file-icons-'))
 
 try {
   for (const [type, svgName] of Object.entries(TYPES)) {

@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { basename, join, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-export const GENERATED_IMAGE_DIR = join(tmpdir(), 'genoffice-ai-images')
+export const GENERATED_IMAGE_DIR = join(tmpdir(), 'airy-ai-images')
 
 const MIME_BY_EXT: Record<string, string> = {
   png: 'image/png',

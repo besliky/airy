@@ -727,7 +727,7 @@ function savePastedImage(data: unknown, ext: unknown): string | null {
         ? Buffer.from(data.buffer, data.byteOffset, data.byteLength)
         : null
   if (!bytes || bytes.byteLength === 0) return null
-  const dir = join(app.getPath('temp'), 'genoffice-pasted')
+  const dir = join(app.getPath('temp'), 'airy-pasted')
   mkdirSync(dir, { recursive: true })
   prunePastedImages(dir)
   const stamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-')
@@ -758,7 +758,7 @@ interface RuntimePaths {
   preloadPath: string
   rendererUrl?: string
   rendererFile?: string
-  /** Shell router used to open exported PDFs in a new GenOffice tab. */
+  /** Shell router used to open exported PDFs in a new Airy tab. */
   openGeneratedPath?: (path: string) => boolean
 }
 
@@ -1457,7 +1457,7 @@ function registerHtmlIpc(): void {
       if (docxExportPrepareHook && !(await docxExportPrepareHook(picked.filePath))) {
         return { ok: true, canceled: true }
       }
-      const workDir = await mkdtemp(join(tmpdir(), 'genoffice-html-docx-'))
+      const workDir = await mkdtemp(join(tmpdir(), 'airy-html-docx-'))
       let driver: ElectronBrowserDriver | null = null
       try {
         // Same document the preview shows (scripts on, relative assets via html-asset://):
@@ -1498,7 +1498,7 @@ function registerHtmlIpc(): void {
         configuredDefaultSaveDir(app),
       )
       if (picked.canceled || !picked.filePath) return { ok: true, canceled: true }
-      const workDir = await mkdtemp(join(tmpdir(), 'genoffice-html-pdf-'))
+      const workDir = await mkdtemp(join(tmpdir(), 'airy-html-pdf-'))
       try {
         const docPath = savePathByWc.get(e.sender.id)
         await writeFile(picked.filePath, await renderPrintPdf(request.html, docPath, workDir))

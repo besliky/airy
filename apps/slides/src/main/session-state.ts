@@ -1,5 +1,5 @@
 /**
- * Shared main-process state for GenOffice Slides, extracted from slides-main.ts so
+ * Shared main-process state for Airy Slides, extracted from slides-main.ts so
  * the IPC modules (slides-main, ai-ipc, presenter-show) can share it:
  * per-renderer sessions, snapshot undo/redo history, runtime paths, window
  * references, and RenderSlide rebuild helpers.
@@ -29,7 +29,7 @@ export interface RuntimePaths {
   preloadPath: string
   rendererDevUrl?: string | undefined
   rendererFilePath?: string | undefined
-  /** Shell router used to open exported PDFs in a new GenOffice tab. */
+  /** Shell router used to open exported PDFs in a new Airy tab. */
   openGeneratedPath?: (path: string) => boolean
 }
 

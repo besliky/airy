@@ -323,10 +323,10 @@ interface Props {
  */
 export const CANVAS_BLEED = 160
 
-/* Screenshot-automation hook (fidelity-compare): window.__genofficeHidePhPrompts = true +
- * dispatching 'genoffice:hide-ph-prompts' hides empty-placeholder hints on the edit canvas. */
+/* Screenshot-automation hook (fidelity-compare): window.__airyHidePhPrompts = true +
+ * dispatching 'airy:hide-ph-prompts' hides empty-placeholder hints on the edit canvas. */
 const hidePhPromptsListeners = new Set<() => void>()
-window.addEventListener('genoffice:hide-ph-prompts', () => {
+window.addEventListener('airy:hide-ph-prompts', () => {
   for (const l of hidePhPromptsListeners) l()
 })
 const subscribeHidePhPrompts = (cb: () => void) => {
@@ -335,8 +335,7 @@ const subscribeHidePhPrompts = (cb: () => void) => {
     hidePhPromptsListeners.delete(cb)
   }
 }
-const getHidePhPrompts = () =>
-  !!(window as { __genofficeHidePhPrompts?: boolean }).__genofficeHidePhPrompts
+const getHidePhPrompts = () => !!(window as { __airyHidePhPrompts?: boolean }).__airyHidePhPrompts
 
 /** Default rotate-handle snapping: lock onto 45° multiples (Shift switches to 15° steps) */
 const ROTATION_SNAPS = [0, 45, 90, 135, 180, 225, 270, 315]

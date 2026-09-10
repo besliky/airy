@@ -210,7 +210,7 @@ describe('webSearch (SearchOptions)', () => {
 describe('search-tools', () => {
   it('maps the settings block onto SearchOptions', () => {
     const base = defaultAiSettings()
-    // default provider (genspark legacy) → no keyed backend, env/free chain
+    // default provider (legacy pre-fork value) → no keyed backend, env/free chain
     expect(searchOptionsFromSettings(base)).toEqual({})
     const serper = {
       ...base,

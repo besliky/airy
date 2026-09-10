@@ -174,8 +174,6 @@ export const ms = {
   ribbonFlipH: 'Balik mengufuk',
   ribbonFlipV: 'Balik menegak',
   ribbonDistributeHint: '{title} (pilih 3 elemen atau lebih)',
-  ribbonAiAssistant: 'Genspark',
-  ribbonAiAssistantTip: 'Tunjukkan atau sembunyikan panel Pembantu AI',
   ribbonGroupTable: 'Jadual',
   ribbonInsertTableTip: 'Sisipkan jadual (gaya lalai; pilih baris dan lajur)',
   ribbonTablePickerHint: 'Pilih baris dan lajur',

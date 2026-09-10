@@ -8,8 +8,7 @@ export const en = {
   aiStarterPolishAll: 'Polish the whole document for a more professional tone',
   aiStarterContinue: 'Continue writing from where the document leaves off',
   aiStarterFillTemplate: 'Find and fill in the placeholders in this document',
-  aiGskLoginBtn: 'Sign in to Genspark',
-  aiPanelTitle: 'Genspark',
+  aiPanelTitle: 'Airy',
   aiOpenAssistant: 'Open AI assistant',
   aiSummarizeBtn: 'AI Summarize',
   aiSummarizePrompt: 'Summarize the main content and key points of this document',
@@ -105,7 +104,7 @@ export const en = {
   aiNetworkError:
     'Network problem: could not reach the AI service. Check your connection and try again',
   aiCreditsExhausted:
-    'Your Genspark credits have run out. Visit genspark.ai/pricing to top up, then try again',
+    'Your AI provider credits have run out — top up with your provider, then try again',
   aiSumReadAttachment: 'Read attachment',
   aiSumImageAttachment: 'Image attachment {name}',
   aiSumRead: 'Read {name}',

@@ -177,8 +177,6 @@ export const ko = {
   ribbonFlipH: '좌우 대칭',
   ribbonFlipV: '상하 대칭',
   ribbonDistributeHint: '{title}(요소를 3개 이상 선택해야 함)',
-  ribbonAiAssistant: 'Genspark',
-  ribbonAiAssistantTip: 'AI 도우미 패널 표시/숨기기',
   // Insert
   ribbonGroupTable: '표',
   ribbonInsertTableTip: '표 삽입(기본 스타일, 행과 열 선택 가능)',

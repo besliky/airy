@@ -8,8 +8,7 @@ export const ar = {
   aiStarterPolishAll: 'حسّن صياغة المستند كاملًا بنبرة أكثر احترافية',
   aiStarterContinue: 'تابع الكتابة من حيث انتهى المستند',
   aiStarterFillTemplate: 'اعثر على العناصر النائبة في المستند واملأها',
-  aiGskLoginBtn: 'تسجيل الدخول إلى Genspark',
-  aiPanelTitle: 'Genspark',
+  aiPanelTitle: 'Airy',
   aiOpenAssistant: 'فتح مساعد الذكاء الاصطناعي',
   aiSummarizeBtn: 'تلخيص AI',
   aiSummarizePrompt: 'لخّص المحتوى الرئيسي والنقاط الأساسية لهذا المستند',
@@ -103,8 +102,7 @@ export const ar = {
   aiOverloadedError: 'خدمة الذكاء الاصطناعي مشغولة حاليًا — يرجى المحاولة مرة أخرى بعد قليل',
   aiNetworkError:
     'مشكلة في الشبكة: تعذّر الوصول إلى خدمة الذكاء الاصطناعي. تحقق من الاتصال وحاول مجددًا',
-  aiCreditsExhausted:
-    'نفدت أرصدة Genspark لديك. يرجى إعادة الشحن عبر genspark.ai/pricing ثم المحاولة مجددًا',
+  aiCreditsExhausted: 'نفد رصيدك لدى مزوّد الذكاء الاصطناعي — أعد الشحن لدى المزوّد ثم حاول مجددًا',
   aiSumReadAttachment: 'قراءة المرفق',
   aiSumImageAttachment: 'مرفق صورة {name}',
   aiSumRead: 'قراءة {name}',

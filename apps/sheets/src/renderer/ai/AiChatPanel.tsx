@@ -512,7 +512,7 @@ export function AiChatPanel({
       <header className="ai-panel-header">
         <span className="ai-panel-title">
           <AiryMark size={22} />
-          Genspark
+          Airy
         </span>
         <div className="ai-panel-header-actions">
           {(chat.length > 0 || historicChat.length > 0) && (

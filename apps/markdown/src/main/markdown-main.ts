@@ -311,7 +311,7 @@ interface RuntimePaths {
   preloadPath: string
   rendererUrl?: string
   rendererFile?: string
-  /** Shell router used to open exported PDFs in a new GenOffice tab. */
+  /** Shell router used to open exported PDFs in a new Airy tab. */
   openGeneratedPath?: (path: string) => boolean
 }
 
@@ -789,7 +789,7 @@ function registerMarkdownIpc(): void {
       )
       if (picked.canceled || !picked.filePath) return { ok: true, canceled: true }
       // sheets-style: render the print HTML in a hidden scripting-disabled window
-      const workDir = await mkdtemp(join(tmpdir(), 'genoffice-md-pdf-'))
+      const workDir = await mkdtemp(join(tmpdir(), 'airy-md-pdf-'))
       const printWin = new BrowserWindow({
         show: false,
         webPreferences: { sandbox: true, javascript: false },

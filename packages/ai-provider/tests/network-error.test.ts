@@ -33,7 +33,7 @@ describe('isAiNetworkError', () => {
 
   it('does not match HTTP, credits, or content errors', () => {
     expect(isAiNetworkError(new Error('Claude HTTP 500: internal error'))).toBe(false)
-    expect(isAiNetworkError(new Error('Your Genspark credits have been exhausted.'))).toBe(false)
+    expect(isAiNetworkError(new Error('Your provider credits have been exhausted.'))).toBe(false)
     expect(isAiNetworkError(new Error('Claude returned no content (empty stream)'))).toBe(false)
     expect(isAiNetworkError(new Error('A custom provider requires a Base URL'))).toBe(false)
     expect(isAiNetworkError(null)).toBe(false)

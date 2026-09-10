@@ -71,7 +71,7 @@ export function getUserFontDir(): string | null {
  * the same private FontFace channel as Office DFonts. Registrations are process-wide and
  * live until the app exits — like PowerPoint keeping embedded fonts while the deck is open.
  */
-const EMBEDDED_FONT_DIR = join(tmpdir(), 'genoffice-embedded-fonts')
+const EMBEDDED_FONT_DIR = join(tmpdir(), 'airy-embedded-fonts')
 /** norm(typeface) -> styleKey ('<bold><italic>') -> extracted sfnt path */
 const embeddedFaces = new Map<string, Map<string, string>>()
 

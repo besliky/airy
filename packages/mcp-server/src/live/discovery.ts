@@ -19,7 +19,7 @@ export const BRIDGE_INFO_NAME = 'airy-bridge.json'
  *                     packaged runs keep userData in appData/Airy
  * - 'Airy Dev'      — dev/unpacked runs (the main process redirects userData
  *                     to appData/'Airy Dev' when !app.isPackaged, unless
- *                     GENOFFICE_USER_DATA points elsewhere — dev setups like
+ *                     AIRY_USER_DATA points elsewhere — dev setups like
  *                     that need AIRY_BRIDGE_FILE)
  * - 'GenOffice' / 'GenOffice Dev' — legacy pre-rename userData layouts, kept
  *                     so a bridge file from an older install is still found

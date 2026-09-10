@@ -294,7 +294,7 @@ fn is_safe_entry_name(name: &str) -> bool {
 
 /// The package-relative form of a ZIP entry name: '\' separators, a leading
 /// '/', `./` and empty segments are producer quirks Excel tolerates
-/// (genoffice#196 shipped `/xl/workbook.xml`). None only when the name
+/// (genspark-ai/genoffice#196 shipped `/xl/workbook.xml`). None only when the name
 /// escapes the package root, which is the one case worth rejecting since
 /// entries are never extracted onto the filesystem.
 pub(crate) fn canonical_entry_name(raw: &str) -> Option<String> {
@@ -412,7 +412,7 @@ mod tests {
         assert_eq!(canonical_entry_name("xl/a\0.xml"), None);
     }
 
-    /// genoffice#196: `/xl/...` entry names must open, and a save writes the
+    /// genspark-ai/genoffice#196: `/xl/...` entry names must open, and a save writes the
     /// package back with conformant names.
     #[test]
     fn saves_leading_slash_source_with_canonical_names() {

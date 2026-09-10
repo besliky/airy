@@ -2,8 +2,8 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 
 import type { UniverRuntime, UniverWorksheet } from './univer-state'
 
-const DROPDOWN_COMPONENT_KEY = 'genoffice-active-data-validation-dropdown'
-const INPUT_MESSAGE_COMPONENT_KEY = 'genoffice-active-data-validation-input-message'
+const DROPDOWN_COMPONENT_KEY = 'airy-active-data-validation-dropdown'
+const INPUT_MESSAGE_COMPONENT_KEY = 'airy-active-data-validation-input-message'
 const SHOW_DROPDOWN_COMMAND = 'sheet.operation.show-data-validation-dropdown'
 const DROPDOWN_SIZE = 14
 const INPUT_MESSAGE_WIDTH = 108

@@ -8,7 +8,8 @@ export const GENERATED_PAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const GENERATED_PAGE_NAME =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.pptx$/i
 
-const GENERATED_PAGE_DIRS = ['genoffice-cloud-pages', 'genoffice-local-pages']
+// 'genoffice-*' entries stay: temp dirs written by older builds must still be swept
+const GENERATED_PAGE_DIRS = ['airy-local-pages', 'genoffice-local-pages', 'genoffice-cloud-pages']
 
 /**
  * Remove only expired generated-page files from the suite's app-owned temp

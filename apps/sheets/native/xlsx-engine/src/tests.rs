@@ -780,7 +780,7 @@ fn opens_backslash_and_case_drifted_package() {
     assert_eq!(metadata.sheets[0].column_count, 2);
 }
 
-/// genoffice#196: a producer wrote every entry as `/xl/...`. The names never
+/// genspark-ai/genoffice#196: a producer wrote every entry as `/xl/...`. The names never
 /// leave the archive, so they only need to stay inside the package root.
 #[test]
 fn opens_leading_slash_package() {
@@ -1229,7 +1229,7 @@ fn tint_matches_excel_shades() {
 }
 
 /// Built-in family rules, per the Excel calibration workbook
-/// (genoffice-sample/sheets/calib): totals bands, dk1-gray Medium 15-21
+/// (airy-sample/sheets/calib): totals bands, dk1-gray Medium 15-21
 /// stripes, tinted Medium 22-28, solid Dark bodies, paired Dark 8-11.
 #[test]
 fn builtin_palette_matches_calibration() {
@@ -2047,7 +2047,7 @@ fn pivot_light_low_stripes_off_stays_styled() {
     assert!(json.contains("\"styled\":true"));
 }
 
-/// Excel-calibrated pivot palettes (genoffice-sample/sheets/calib/
+/// Excel-calibrated pivot palettes (airy-sample/sheets/calib/
 /// pivot-style-truths.json, Office 2007 theme): one representative per
 /// block of seven, exact RGB.
 #[test]

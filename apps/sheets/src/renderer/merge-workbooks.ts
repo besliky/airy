@@ -1,6 +1,6 @@
 /**
  * Merge workbooks: pick one or more spreadsheet files and append every sheet
- * to the current workbook (alpha: Olivia, #genoffice-7).
+ * to the current workbook (alpha: Olivia, #airy-7).
  *
  * Each source opens as a secondary sidecar session (the tab's own session
  * stays untouched); cells arrive through the same readWorkbookRange pipeline

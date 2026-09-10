@@ -21,7 +21,7 @@
 
 /* While a Home popover is open the strip must deliver presses (drag regions
    swallow them), so outside-press dismissal can see presses on the blank band */
-html.genoffice-popover-open .tab-bar {
+html.airy-popover-open .tab-bar {
   -webkit-app-region: no-drag;
 }
 
@@ -72,7 +72,7 @@ html.genoffice-popover-open .tab-bar {
 
 /* Home carries the product name and is never closable, so it hugs its own
  * content instead of sharing the document tabs' 240px flex basis — and it
- * never shrinks, so "GenOffice" stays whole however many tabs are open.
+ * never shrinks, so "Airy" stays whole however many tabs are open.
  * ("tab-home", not "home" — home.css owns `.home` for the home page
  * container living in this same document.) */
 .tab-item.tab-home {
@@ -81,7 +81,7 @@ html.genoffice-popover-open .tab-bar {
   /* 2px tighter icon-to-label gap than document tabs: the home glyph is an
    * outline (no solid plate), so the default 8px reads too loose */
   gap: 6px;
-  /* 27px = 3px plate inset + 24px from "GenOffice" to the plate's edge, so the
+  /* 27px = 3px plate inset + 24px from "Airy" to the plate's edge, so the
    * label gets a real 24px of breathing room (the 9px the other tabs' icons
    * get reads too tight after a word) */
   padding-right: 27px;

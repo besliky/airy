@@ -39,7 +39,7 @@ export function isRibbonToggleShortcut(e: KeyboardEvent): boolean {
   return IS_MAC && e.metaKey && e.altKey && !e.ctrlKey && !e.shiftKey && e.code === 'KeyR'
 }
 
-const POPOVER_OPEN_CLASS = 'genoffice-popover-open'
+const POPOVER_OPEN_CLASS = 'airy-popover-open'
 
 /**
  * Hide the peeked band on a press outside the ribbon. Popovers that portal

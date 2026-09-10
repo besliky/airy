@@ -63,15 +63,15 @@ describe('image skill: generate_image', () => {
     expect(result.isError).toBe(true)
   })
 
-  it('propagates generation errors (e.g. not logged in)', async () => {
+  it('propagates generation errors (e.g. provider not configured)', async () => {
     stubDesktopApi({
-      generateImage: vi.fn().mockResolvedValue({ error: 'Genspark account is not logged in' }),
+      generateImage: vi.fn().mockResolvedValue({ error: 'AI provider is not configured' }),
     })
     const result = await createImageSkill().executeTool(
       call('generate_image', { prompt: 'a chart mascot' }),
     )
     expect(result.isError).toBe(true)
-    expect(result.output).toContain('not logged in')
+    expect(result.output).toContain('not configured')
   })
 
   it('returns the generated URL with insertion guidance', async () => {

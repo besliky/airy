@@ -138,8 +138,6 @@ export const pt = {
     'Painel de estilos: veja todos os estilos, crie ou atualize estilos a partir da seleção',
   ribbonMoreStyles: 'Mais estilos',
   ribbonGroupStyles: 'Estilos',
-  ribbonAiAssistant: 'Genspark',
-  ribbonAiAssistantTip: 'Abrir o assistente de IA',
   ribbonRemoveTableStyleTip: 'Remover estilo da tabela',
   ribbonNoStyle: 'Sem Estilo',
   ribbonApplyTableStyleTip: 'Aplicar estilo de tabela {name}',

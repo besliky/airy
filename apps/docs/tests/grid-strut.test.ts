@@ -98,12 +98,12 @@ describe('docStyleCss grid strut face', () => {
     stubMetricsCanvas(1143, 286)
     mountBlankFace()
     const css = docStyleCss(parsedWith(GRID_SECT, 'ＭＳ 明朝'))
-    expect(css).toContain("@font-face { font-family:'GenOffice Grid Strut'")
+    expect(css).toContain("@font-face { font-family:'Airy Grid Strut'")
     expect(css).toContain('ascent-override:114.3%')
     expect(css).toContain('descent-override:28.6%')
     expect(css).toContain('GenOfficePUABlank.woff2')
     expect(css).toContain(
-      ".doc-page .doc-grid-strut { font-family:'GenOffice Grid Strut',var(--doc-grid-strut-tail,serif) }",
+      ".doc-page .doc-grid-strut { font-family:'Airy Grid Strut',var(--doc-grid-strut-tail,serif) }",
     )
     expect(css).toContain('--doc-grid-strut-tail:')
   })

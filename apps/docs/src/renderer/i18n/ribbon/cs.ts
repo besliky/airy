@@ -137,8 +137,6 @@ export const cs = {
     'Podokno stylů: procházení všech stylů, vytvoření nebo aktualizace stylu z výběru',
   ribbonMoreStyles: 'Další styly',
   ribbonGroupStyles: 'Styly',
-  ribbonAiAssistant: 'Genspark',
-  ribbonAiAssistantTip: 'Otevřít asistenta AI',
   ribbonRemoveTableStyleTip: 'Odebrat styl tabulky',
   ribbonNoStyle: 'Bez stylu',
   ribbonApplyTableStyleTip: 'Použít styl tabulky {name}',

@@ -170,8 +170,6 @@ export const he = {
   ribbonFlipH: 'היפוך אופקי',
   ribbonFlipV: 'היפוך אנכי',
   ribbonDistributeHint: '{title} (בחר 3 רכיבים או יותר)',
-  ribbonAiAssistant: 'Genspark',
-  ribbonAiAssistantTip: 'הצגה או הסתרה של חלונית עוזר ה-AI',
   ribbonGroupTable: 'טבלה',
   ribbonInsertTableTip: 'הוספת טבלה (סגנון ברירת מחדל; בחר שורות ועמודות)',
   ribbonTablePickerHint: 'בחר שורות ועמודות',

@@ -8,7 +8,7 @@
 //      apps/sheets/native/xlsx-engine/Cargo.toml, then take
 //      target/release/xlsx-sidecar[.exe] (the `npm run native:build` output
 //      and the macOS universal lipo target — same path).
-//   3. An installed Airy/GenOffice app: process.resourcesPath/native/<exe>
+//   3. An installed Airy app (or a legacy GenOffice install): process.resourcesPath/native/<exe>
 //      (electron-builder extraResources layout).
 //
 // Returns null (never throws) when nothing is found so open_document can

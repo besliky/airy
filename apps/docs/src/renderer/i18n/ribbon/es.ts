@@ -139,8 +139,6 @@ export const es = {
     'Panel de estilos: ver todos los estilos y crear o actualizar estilos a partir de la selección',
   ribbonMoreStyles: 'Más estilos',
   ribbonGroupStyles: 'Estilos',
-  ribbonAiAssistant: 'Genspark',
-  ribbonAiAssistantTip: 'Abrir el asistente de IA',
   ribbonRemoveTableStyleTip: 'Quitar el estilo de tabla',
   ribbonNoStyle: 'Sin estilo',
   ribbonApplyTableStyleTip: 'Aplicar el estilo de tabla {name}',

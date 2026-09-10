@@ -1470,10 +1470,10 @@ describe('insert_image', () => {
     const deps = makeDeps()
     const ok = await executePdfTool(
       deps,
-      call('insert_image', { page: 1, url: 'file:///tmp/genoffice-ai-images/1234.png' }),
+      call('insert_image', { page: 1, url: 'file:///tmp/airy-ai-images/1234.png' }),
     )
     expect(ok.mutated).toBe(true)
-    expect(deps.fetchImage).toHaveBeenCalledWith('file:///tmp/genoffice-ai-images/1234.png')
+    expect(deps.fetchImage).toHaveBeenCalledWith('file:///tmp/airy-ai-images/1234.png')
   })
 
   it('rejects anchor text that is not on the page', async () => {

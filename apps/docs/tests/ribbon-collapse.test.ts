@@ -24,7 +24,7 @@ describe('ribbon collapse', () => {
   })
   afterEach(() => {
     off()
-    document.documentElement.classList.remove('genoffice-popover-open')
+    document.documentElement.classList.remove('airy-popover-open')
   })
 
   it('a press inside the ribbon keeps the peek open', () => {
@@ -48,36 +48,36 @@ describe('ribbon collapse', () => {
   it('a press inside a portaled popover (unmounted by its own dismissal) does not close', async () => {
     const popover = document.createElement('div')
     document.body.append(popover)
-    document.documentElement.classList.add('genoffice-popover-open')
+    document.documentElement.classList.add('airy-popover-open')
     press(popover)
     // the popover's own dismiss listener unmounts it and drops the html class
     popover.remove()
-    document.documentElement.classList.remove('genoffice-popover-open')
+    document.documentElement.classList.remove('airy-popover-open')
     await new Promise((r) => setTimeout(r, 0))
     expect(close).not.toHaveBeenCalled()
   })
 
   it('a document press that only dismissed an open popover still closes the peek', async () => {
-    document.documentElement.classList.add('genoffice-popover-open')
+    document.documentElement.classList.add('airy-popover-open')
     press(doc)
     expect(close).not.toHaveBeenCalled()
-    document.documentElement.classList.remove('genoffice-popover-open')
+    document.documentElement.classList.remove('airy-popover-open')
     await new Promise((r) => setTimeout(r, 0))
     expect(close).toHaveBeenCalledTimes(1)
   })
 
   it('a press inside a popover that stays open does not close', async () => {
-    document.documentElement.classList.add('genoffice-popover-open')
+    document.documentElement.classList.add('airy-popover-open')
     press(doc)
     await new Promise((r) => setTimeout(r, 0))
     expect(close).not.toHaveBeenCalled()
   })
 
   it('Escape with a ribbon popover open leaves the peek to the popover', () => {
-    document.documentElement.classList.add('genoffice-popover-open')
+    document.documentElement.classList.add('airy-popover-open')
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     expect(close).not.toHaveBeenCalled()
-    document.documentElement.classList.remove('genoffice-popover-open')
+    document.documentElement.classList.remove('airy-popover-open')
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     expect(close).toHaveBeenCalledTimes(1)
   })

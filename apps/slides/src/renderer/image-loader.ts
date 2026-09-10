@@ -18,12 +18,12 @@ const METAFILE_RE = /^data:(image\/x-(?:emf|wmf)|image\/(?:emf|wmf));base64,/
  * Meiryo UI came out in the browser's default sans). `false` = a sync is in flight.
  */
 function waitForDocFonts(timeoutMs = 4000): Promise<void> {
-  if (typeof window === 'undefined' || window.__genofficeDocFontsSynced !== false)
+  if (typeof window === 'undefined' || window.__airyDocFontsSynced !== false)
     return Promise.resolve()
   return new Promise((resolve) => {
     const started = Date.now()
     const tick = () => {
-      if (window.__genofficeDocFontsSynced !== false || Date.now() - started >= timeoutMs) resolve()
+      if (window.__airyDocFontsSynced !== false || Date.now() - started >= timeoutMs) resolve()
       else setTimeout(tick, 50)
     }
     setTimeout(tick, 50)

@@ -15,10 +15,8 @@ interface Slide {
   subtitleKey: StringKey
   /** 16px muted paragraph below the title block */
   bodyKey?: StringKey
-  /** render the body in the dimmer footnote gray (slide 3's credits disclaimer) */
+  /** render the body in the dimmer footnote gray (slide 3's provider-cost footnote) */
   bodyDim?: boolean
-  /** community slide shows the credits offer panel with the "Join GenTeam" call-to-action */
-  showOffer?: boolean
   /** closing slide shows the "star us on GitHub" hint */
   showStar?: boolean
   art: 'logo' | 'gift' | 'check'
@@ -26,7 +24,7 @@ interface Slide {
 
 const SLIDES: readonly Slide[] = [
   { titleKey: 'onbTitle1', subtitleKey: 'onbSubtitle1', bodyKey: 'onbBody1', art: 'logo' },
-  { titleKey: 'onbTitle2', subtitleKey: 'onbBody2', showOffer: true, art: 'gift' },
+  { titleKey: 'onbTitle2', subtitleKey: 'onbBody2', art: 'gift' },
   {
     titleKey: 'onbTitle3',
     subtitleKey: 'onbBody3',
@@ -36,13 +34,6 @@ const SLIDES: readonly Slide[] = [
     art: 'check',
   },
 ]
-
-/** render `**emphasized**` segments of a localized string as <strong> */
-function renderEmphasis(text: string) {
-  return text
-    .split('**')
-    .map((part, i) => (i % 2 === 1 ? <strong key={part}>{part}</strong> : part))
-}
 
 /* exact vectors from the design spec:
  * 60px canvas, 4px strokes — same visual mass as the 60px app icon */
@@ -116,8 +107,8 @@ export function Onboarding({ onDone }: OnboardingProps) {
     cardRef.current?.focus()
   }, [])
 
-  // slide changes can strip focus from the active control (leaving slide 2
-  // makes its GenTeam button inert, which blurs it) — pull focus back onto the
+  // slide changes can strip focus from the active control (leaving a slide
+  // deactivates its buttons, which blurs them) — pull focus back onto the
   // card so it never drops to body
   useEffect(() => {
     const card = cardRef.current
@@ -206,23 +197,6 @@ export function Onboarding({ onDone }: OnboardingProps) {
                       <path d="M12 2.5l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.3l-5.8 3.1 1.1-6.5L2.6 9.3l6.5-.9L12 2.5z" />
                     </svg>
                     {t('starOnGitHub')}
-                  </button>
-                </div>
-              )}
-              {s.showOffer && (
-                <div className="onb-offer">
-                  <p className="onb-credits">{renderEmphasis(t('onbCredits'))}</p>
-                  <button className="onb-join" onClick={() => void window.aiOffice.openGenTeam()}>
-                    {t('onbJoinGenTeam')}
-                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                      <path
-                        d="M3.5 8.5 8.5 3.5M4.5 3.5h4v4"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
                   </button>
                 </div>
               )}

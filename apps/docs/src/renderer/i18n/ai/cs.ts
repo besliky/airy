@@ -8,8 +8,7 @@ export const cs = {
   aiStarterPolishAll: 'Vylepšit celý dokument pro profesionálnější tón',
   aiStarterContinue: 'Pokračovat v psaní tam, kde dokument končí',
   aiStarterFillTemplate: 'Najít a vyplnit zástupné texty v tomto dokumentu',
-  aiGskLoginBtn: 'Přihlásit se ke Genspark',
-  aiPanelTitle: 'Genspark',
+  aiPanelTitle: 'Airy',
   aiOpenAssistant: 'Otevřít asistenta AI',
   aiSummarizeBtn: 'Shrnutí AI',
   aiSummarizePrompt: 'Shrňte hlavní obsah a klíčové body tohoto dokumentu',
@@ -107,7 +106,7 @@ export const cs = {
   aiNetworkError:
     'Problém se sítí: nepodařilo se připojit ke službě AI. Zkontrolujte připojení a zkuste to znovu',
   aiCreditsExhausted:
-    'Vaše kredity Genspark byly vyčerpány. Navštivte genspark.ai/pricing pro dobití a zkuste to znovu',
+    'Kredit u poskytovatele AI vyčerpán — dobijte u poskytovatele a zkuste to znovu',
   aiSumReadAttachment: 'Přečtena příloha',
   aiSumImageAttachment: 'Obrázková příloha {name}',
   aiSumRead: 'Přečteno {name}',

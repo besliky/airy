@@ -17,7 +17,7 @@ afterEach(async () => {
 })
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'genoffice-slides-temp-test-'))
+  const root = await mkdtemp(join(tmpdir(), 'airy-slides-temp-test-'))
   roots.push(root)
   return root
 }
@@ -25,8 +25,8 @@ async function tempRoot(): Promise<string> {
 describe('generated-page temp sweep', () => {
   it('removes only expired .pptx files matching the UUID pattern', async () => {
     const root = await tempRoot()
-    const cloudDir = join(root, 'genoffice-cloud-pages')
-    const localDir = join(root, 'genoffice-local-pages')
+    const cloudDir = join(root, 'genoffice-cloud-pages') // legacy name still swept
+    const localDir = join(root, 'airy-local-pages')
     await mkdir(cloudDir, { recursive: true })
     await mkdir(localDir, { recursive: true })
 
@@ -72,7 +72,7 @@ describe('generated-page temp sweep', () => {
     const root = await tempRoot()
     await mkdir(join(root, 'genoffice-cloud-pages'), { recursive: true })
 
-    const dirLike = join(root, 'genoffice-cloud-pages', 'not-a-file')
+    const dirLike = join(root, 'airy-cloud-pages', 'not-a-file')
     await mkdir(dirLike, { recursive: true })
     await writeFile(join(dirLike, 'notes.txt'), 'notes')
     await writeFile(join(dirLike, 'data.json'), '{}')

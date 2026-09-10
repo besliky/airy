@@ -17,8 +17,7 @@ export const ar = {
   aiQcPageSkipped: 'الصفحة {n}: تم تخطي فحص التخطيط التلقائي',
   aiQcStopped: 'تم إيقاف فحص التخطيط',
   aiQcCapped: '{count} صفحة أخرى لم تُفحص (حد لكل تشغيل)',
-  aiGskLoginBtn: 'تسجيل الدخول إلى Genspark',
-  aiPanelTitle: 'Genspark',
+  aiPanelTitle: 'Airy',
   aiOpenAssistant: 'فتح مساعد الذكاء الاصطناعي',
   aiFactCheckBtn: 'تدقيق حقائق AI',
   aiFactCheckPrompt:
@@ -111,8 +110,7 @@ export const ar = {
   aiErrOverloaded: 'خدمة الذكاء الاصطناعي مشغولة حاليًا — يرجى المحاولة مرة أخرى بعد قليل',
   aiErrNetwork:
     'مشكلة في الشبكة: تعذّر الوصول إلى خدمة الذكاء الاصطناعي. تحقق من الاتصال وحاول مجددًا',
-  aiCreditsExhausted:
-    'نفدت أرصدة Genspark لديك. يرجى إعادة الشحن عبر genspark.ai/pricing ثم المحاولة مجددًا',
+  aiCreditsExhausted: 'نفد رصيدك لدى مزوّد الذكاء الاصطناعي — أعد الشحن لدى المزوّد ثم حاول مجددًا',
   aiErrRequestFailed: 'فشل إرسال الطلب: {msg}',
   aiErrGenerateFailed: 'فشل الإنشاء',
   aiErrRegenFailed: 'فشلت إعادة إنشاء الصفحة',

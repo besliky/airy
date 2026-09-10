@@ -140,8 +140,6 @@ export const nl = {
     'Deelvenster Stijlen: blader door alle stijlen, maak of werk stijlen bij op basis van de selectie',
   ribbonMoreStyles: 'Meer stijlen',
   ribbonGroupStyles: 'Stijlen',
-  ribbonAiAssistant: 'Genspark',
-  ribbonAiAssistantTip: 'De AI-assistent openen',
   ribbonRemoveTableStyleTip: 'Tabelstijl verwijderen',
   ribbonNoStyle: 'Geen stijl',
   ribbonApplyTableStyleTip: 'Tabelstijl {name} toepassen',

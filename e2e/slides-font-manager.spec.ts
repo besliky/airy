@@ -11,10 +11,7 @@ import { launchShell, closeAndSaveVideo, waitForPageWithUrl } from './helpers'
  * lives in the repo; zip them into a real .pptx at test time.
  */
 async function buildRubikFixture(): Promise<string> {
-  const out = join(
-    await mkdtemp(join(tmpdir(), 'genoffice-font-manager-')),
-    'font-manager-rubik.pptx',
-  )
+  const out = join(await mkdtemp(join(tmpdir(), 'airy-font-manager-')), 'font-manager-rubik.pptx')
   execFileSync('zip', ['-X', '-q', '-r', out, '.'], {
     cwd: resolve(__dirname, 'assets/font-manager-rubik'),
   })
@@ -23,7 +20,7 @@ async function buildRubikFixture(): Promise<string> {
 
 /**
  * Font manager smoke: source builds without an injected font CDN hide download
- * prompts. Providing GENOFFICE_FONT_CDN_URL enables the catalog/banner; the
+ * prompts. Providing AIRY_FONT_CDN_URL enables the catalog/banner; the
  * actual network download runs only with E2E_FONT_CDN=1.
  */
 test('font download UI follows CDN configuration', async () => {
@@ -52,7 +49,7 @@ test('font download UI follows CDN configuration', async () => {
         missing: await api.fontMissing(),
       }
     })
-    const configured = Boolean(process.env.GENOFFICE_FONT_CDN_URL?.trim())
+    const configured = Boolean(process.env.AIRY_FONT_CDN_URL?.trim())
     if (!configured) {
       expect(fontState.catalog).toEqual([])
       expect(fontState.missing).toEqual([])

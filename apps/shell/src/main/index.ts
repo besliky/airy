@@ -190,7 +190,7 @@ import { startShellBridge, stopShellBridge } from './bridge/shell-bridge'
 import { initUpdater, updaterMenuItems } from './updater'
 
 /**
- * GenOffice unified shell: ONE Electron app, ONE BrowserWindow, hosting the
+ * Airy unified shell: ONE Electron app, ONE BrowserWindow, hosting the
  * docs and sheets modules as WebContentsView tabs behind a WPS-style tab
  * strip. The shell owns the lifecycle — single-instance lock, file-
  * association routing by extension, and per-active-tab menu switching.
@@ -201,13 +201,10 @@ import { initUpdater, updaterMenuItems } from './updater'
 // ANY unpacked run (`npm run shell`, `npm run dev`, `npx electron .`) must not
 // share the installed app's userData or single-instance lock — otherwise a dev
 // run silently quits and forwards its argv to the running installed Airy.
-// GENOFFICE_USER_DATA: test drivers point this at a scratch dir so an
+// AIRY_USER_DATA: test drivers point this at a scratch dir so an
 // automated instance can run alongside the dev instance (separate lock).
 if (!app.isPackaged)
-  app.setPath(
-    'userData',
-    process.env.GENOFFICE_USER_DATA ?? join(app.getPath('appData'), 'Airy Dev'),
-  )
+  app.setPath('userData', process.env.AIRY_USER_DATA ?? join(app.getPath('appData'), 'Airy Dev'))
 
 // The product renames ("AI Office" → GenOffice → Airy) changed the userData
 // path (appData/Airy, from productName); migrate old user data once — the
@@ -296,7 +293,7 @@ registerHtmlSchemes()
 
 // ---- UI language ----
 // Persisted in userData/app-settings.json so the editor modules can read the
-// same file when they pick up i18n later. GENOFFICE_LANG overrides for tests.
+// same file when they pick up i18n later. AIRY_LANG overrides for tests.
 
 const APP_SETTINGS_PATH = () => join(app.getPath('userData'), 'app-settings.json')
 
@@ -304,8 +301,8 @@ let uiLang: Lang | null = null
 
 function currentLang(): Lang {
   if (uiLang) return uiLang
-  if (process.env.GENOFFICE_LANG) {
-    uiLang = normalizeLang(process.env.GENOFFICE_LANG)
+  if (process.env.AIRY_LANG) {
+    uiLang = normalizeLang(process.env.AIRY_LANG)
     setUiLang(uiLang)
     return uiLang
   }
@@ -358,10 +355,6 @@ function currentAiPanelPrefs(): AiPanelPrefs {
 }
 
 // ---- first-run onboarding ----
-// The GenTeam community page opened from the onboarding's second slide.
-// Stable short link served by the genoffice.ai site; it 302s to the tokened
-// invite link, which stays out of this repo and rotates server-side.
-const GENTEAM_URL = 'https://genoffice.ai/join'
 
 // ---- "star us on GitHub" prompt (see star-prompt.ts for the rules) ----
 
@@ -2359,7 +2352,7 @@ function createShellWindow(): void {
     height: 900,
     minWidth: 720,
     minHeight: 550,
-    title: 'GenOffice',
+    title: 'Airy',
     // vibrancy: editor modules punch translucent regions (e.g. the slides
     // thumbnail pane) through to the desktop
     ...(process.platform === 'darwin'
@@ -3140,12 +3133,6 @@ function registerHomeIpc(): void {
     return picked
   })
 
-  ipcMain.handle(HOME_CHANNELS.openGenTeam, () => {
-    shell.openExternal(GENTEAM_URL).catch(() => {
-      // no browser handler available; nothing actionable for the user here
-    })
-  })
-
   ipcMain.handle(HOME_CHANNELS.openGitHubRepo, () => {
     shell.openExternal(GITHUB_REPO_URL).catch(() => {
       // no browser handler available; nothing actionable for the user here
@@ -3162,8 +3149,8 @@ function registerHomeIpc(): void {
     const state = readStarPrompt()
     const docOpens = state.docOpens ?? 0
     // dev preview of the card without waiting out the value thresholds
-    // (same pattern as GENOFFICE_FAKE_UPDATE); nothing is recorded
-    if (!app.isPackaged && process.env.GENOFFICE_FORCE_STAR_PROMPT) return { show: true, docOpens }
+    // (same pattern as AIRY_FAKE_UPDATE); nothing is recorded
+    if (!app.isPackaged && process.env.AIRY_FORCE_STAR_PROMPT) return { show: true, docOpens }
     const grant = (): StarPromptShow => {
       writeStarPrompt(withShown(state, now))
       starPromptSessionGrant = { show: true, docOpens }

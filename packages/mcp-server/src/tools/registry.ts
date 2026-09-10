@@ -363,7 +363,7 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Live status',
       description:
-        'Check the live bridge to the Airy/GenOffice desktop app. Returns {running:false} (no error) when ' +
+        'Check the live bridge to the Airy desktop app. Returns {running:false} (no error) when ' +
         'the app is not running — use the headless document tools in that case. When running, returns the ' +
         'bridge protocol version, the app pid, and the list of open documents ({id, title, filePath, active}) ' +
         'of which the live tools always target the active one.',
@@ -405,7 +405,7 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Get live document context',
       description:
-        'Read the context of the ACTIVE document in the running Airy/GenOffice app: block list (index|type| ' +
+        'Read the context of the ACTIVE document in the running Airy app: block list (index|type| ' +
         'content preview), the current selection (<sel>), comments, and the file path. The context is the ' +
         'freshness baseline for index-addressed live_apply_ops — refetch it after the user edits or a ' +
         'stale_document error.',
@@ -433,7 +433,7 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Apply edits to the live document',
       description:
-        'Edit the ACTIVE document in the running Airy/GenOffice app in one go: insert a restricted-HTML ' +
+        'Edit the ACTIVE document in the running Airy app in one go: insert a restricted-HTML ' +
         'fragment and/or apply canonical edit ops. When both are given the html is inserted first (at the ' +
         'end of the document, so block indexes from live_get_context stay valid) and the ops then run against ' +
         'the result — a single call can add a section and format it. The user sees the change immediately; ' +
@@ -482,7 +482,7 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Undo last live edit',
       description:
-        'Revert the last live bridge turn in the active document of the running Airy/GenOffice app (one ' +
+        'Revert the last live bridge turn in the active document of the running Airy app (one ' +
         'live_apply_ops / live_undo step). Refuses with nothing_to_undo when the agent made no edits yet, ' +
         'and with stale_document when the user edited the document since — fetch fresh context instead.',
       inputSchema: {},
@@ -531,7 +531,7 @@ function describeBridgeFailure(err: unknown): string {
     if (err.code === 'bridge_not_running') {
       return (
         `live bridge not running: ${err.message}. ` +
-        'Start the GenOffice (Airy) desktop app with a document open, or point AIRY_BRIDGE_FILE at its ' +
+        'Start the Airy desktop app with a document open, or point AIRY_BRIDGE_FILE at its ' +
         'airy-bridge.json, then retry.'
       )
     }

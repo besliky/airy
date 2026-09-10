@@ -53,7 +53,7 @@ export async function exportSlidesPdf({
   const win = createWindow()
   let tempDir: string | null = null
   try {
-    tempDir = await mkdtemp(join(tmpdir(), 'genoffice-slides-pdf-'))
+    tempDir = await mkdtemp(join(tmpdir(), 'airy-slides-pdf-'))
     const htmlPath = join(tempDir, 'slides.html')
     await writeFile(htmlPath, buildPdfExportHtml(pngsBase64, widthIn, heightIn), 'utf8')
     await win.loadFile(htmlPath)

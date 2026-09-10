@@ -1,11 +1,10 @@
 /* First-run onboarding: full-window overlay above the home screen.
- * Layout follows the design spec: 540×420 white
- * card, left-aligned content column, slide-2 credits offer panel, and a
- * dots-left / Skip-Back-Next-right footer. Tokens: black pill primary,
- * gray ramp, brand blue #0f7fff only on the credits line. */
+ * Layout follows the design spec: 540×420 white card, left-aligned content
+ * column, and a dots-left / Skip-Back-Next-right footer. Tokens: black pill
+ * primary, gray ramp, brand blue #0f7fff only on the star hint. */
 
 .onb-overlay {
-  ​/* Tokens, scoped to the overlay (home.css keeps its own --accent) */
+  /* Tokens, scoped to the overlay (home.css keeps its own --accent) */
   --onb-font-sans:
     'Arial', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
     sans-serif;
@@ -17,11 +16,10 @@
   --onb-text-secondary: #606366;
   --onb-text-tertiary: #909499;
   --onb-bg-subtle: #f6f7f8;
-  /* offer panel: a whisper of the brand blue instead of neutral gray */
   --onb-bg-panel: #f0f7ff;
   --onb-border-default: #eaeaea;
   --onb-border-strong: #d0d3d8;
-  /* outline-CTA seat (shared by the GenTeam join and GitHub star buttons) */
+  /* outline-CTA seat (the GitHub star button) */
   --onb-cta-bg: #fff;
   --onb-cta-hover-text: #fff;
   --onb-cta-shadow: 0 1px 3px rgba(15, 127, 255, 0.18);
@@ -240,66 +238,6 @@
   background: var(--onb-brand);
 }
 
-/* slide 2's offer: quiet gray lead-in, then the amount in large brand-blue
- * type, grouped with the Join CTA in one panel so the page reads as
- * info / offer / navigation */
-.onb-offer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  width: 100%;
-  margin-top: 14px;
-  padding: 17px 16px;
-  border-radius: 12px;
-  background: var(--onb-bg-panel);
-}
-
-.onb-credits {
-  margin: 0;
-  font-size: 16px;
-  letter-spacing: -0.154px;
-  line-height: 1.5;
-  color: var(--onb-text-secondary);
-}
-
-.onb-credits strong {
-  display: block;
-  margin-top: 4px;
-  color: var(--onb-brand);
-  font-size: 22px;
-  font-weight: 700;
-  font-style: italic;
-  letter-spacing: -0.3px;
-  line-height: normal;
-}
-
-/* the offer CTA is the dialog's standout action: a weighted blue outline —
- * 1.5px border + semibold + a faint blue seat-shadow so it doesn't float on
- * the tinted panel — inverting to solid blue on hover */
-.onb-join {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-  padding: 10.5px 22.5px;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.154px;
-  color: var(--onb-brand);
-  background: #fff;
-  border: 1.5px solid var(--onb-brand);
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(15, 127, 255, 0.18);
-  cursor: pointer;
-  transition: all var(--onb-transition);
-}
-
-.onb-join:hover {
-  color: #fff;
-  background: var(--onb-brand);
-}
-
 /* footer: progress dots on the start side, Skip / Back / Next grouped on the end side */
 .onb-footer {
   display: flex;
@@ -398,7 +336,6 @@
 .onb-next:focus,
 .onb-back:focus,
 .onb-skip:focus,
-.onb-join:focus,
 .onb-star-btn:focus,
 .onb-consent-switch:focus,
 .onb-dot:focus {
@@ -408,7 +345,6 @@
 .onb-next:focus-visible,
 .onb-back:focus-visible,
 .onb-skip:focus-visible,
-.onb-join:focus-visible,
 .onb-star-btn:focus-visible,
 .onb-consent-switch:focus-visible,
 .onb-dot:focus-visible {
@@ -438,7 +374,6 @@
     0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-[data-theme='dark'] .onb-join,
 [data-theme='dark'] .onb-star-btn {
   background: #2a2a2a;
 }
@@ -462,7 +397,6 @@
       0 24px 64px rgba(0, 0, 0, 0.5),
       0 2px 8px rgba(0, 0, 0, 0.3);
   }
-  :root:not([data-theme='light']):not([data-theme='dark']) .onb-join,
   :root:not([data-theme='light']):not([data-theme='dark']) .onb-star-btn {
     background: #2a2a2a;
   }

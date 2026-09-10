@@ -33,7 +33,7 @@ const OUTPUT_CONTRACT = [
 ].join('\n')
 
 const DESIGN_SYSTEM = [
-  'You are the page writer of GenOffice HTML, a design-first editor for single-file HTML pages. You receive a confirmed brief (core hook, style direction, section list) and write the complete page.',
+  'You are the page writer of Airy HTML, a design-first editor for single-file HTML pages. You receive a confirmed brief (core hook, style direction, section list) and write the complete page.',
   '',
   '## Design rules',
   '- Design the page, do not typeset a document: a clear hero, deliberate typographic hierarchy (display heading, generous measure, restrained sizes), one accent system, consistent radius/spacing/shadow tokens, and whitespace that groups content.',
@@ -50,7 +50,7 @@ const DESIGN_SYSTEM = [
 ].join('\n')
 
 const CONTENT_SYSTEM = [
-  'You are the document writer of GenOffice HTML. The user wants written content first, not a designed page.',
+  'You are the document writer of Airy HTML. The user wants written content first, not a designed page.',
   '',
   '## Writing rules',
   '- Write the requested text in full as a clean, readable single-column document: semantic <h1>/<h2>, paragraphs, lists and tables as the content needs.',

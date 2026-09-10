@@ -49,9 +49,7 @@ type GlobalWithWindow = { window?: unknown }
 
 /** the idempotence flag lives on globalThis; clear it between installs */
 function resetInstallFlag(): void {
-  delete (globalThis as Record<symbol | string, unknown>)[
-    Symbol.for('genoffice.drop-open-installed')
-  ]
+  delete (globalThis as Record<symbol | string, unknown>)[Symbol.for('airy.drop-open-installed')]
 }
 
 /** DragEvent-shaped literal; only the fields the bridge touches are provided */

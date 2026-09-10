@@ -4,7 +4,6 @@ export const pl = {
   aiComposerPlaceholderBuild: 'Opisz tabelę, dane lub wykres do utworzenia…',
   aiEmptyBuildTitle: 'Pozwól AI zbudować ten skoroszyt',
   aiEmptyBuildBody: 'Opisz potrzebną tabelę, dane lub wykres — AI utworzy je od razu.',
-  aiGskLoginBtn: 'Zaloguj się do Genspark',
   aiUndelivered: 'Nie wysłano',
   aiRetry: 'Ponów',
   aiOpenAssistant: 'Otwórz asystenta AI',
@@ -48,13 +47,10 @@ export const pl = {
   aiFileTooltip:
     'SHA-256 {sha}\nZapis nadpisuje tylko edytowane wpisy; cała reszta pozostaje bez zmian.',
   aiFileMeta: 'Arkusze: {sheets} · wpisy: {entries}',
-  aiGensparkAccount: 'Konto Genspark',
   aiAccountChecking: 'Sprawdzanie…',
   aiLoggedIn: 'Zalogowano',
   aiLoggedInAs: 'Zalogowano: {email}',
-  aiNotLoggedIn: 'Nie zalogowano (funkcje AI wymagają konta Genspark)',
   aiWaitingBrowserLogin: 'Oczekiwanie na logowanie w przeglądarce…',
-  aiLoginGenspark: 'Zaloguj się do Genspark',
   aiModel: 'Model',
   aiCancel: 'Anuluj',
   aiSave: 'Zapisz',
@@ -65,7 +61,7 @@ export const pl = {
   aiNetworkError:
     'Problem z siecią: nie można połączyć się z usługą AI. Sprawdź połączenie i spróbuj ponownie',
   aiCreditsExhausted:
-    'Twoje kredyty Genspark wyczerpały się. Doładuj konto na genspark.ai/pricing i spróbuj ponownie',
+    'Środki u dostawcy AI się skończyły — doładuj konto u dostawcy i spróbuj ponownie',
   aiToolWorkbookContext: 'Odczyt informacji o skoroszycie',
   aiToolReadRange: 'Odczyt zakresu',
   aiToolReadRangeOf: 'Odczyt zakresu {range}',

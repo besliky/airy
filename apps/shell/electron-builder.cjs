@@ -1,7 +1,7 @@
 /**
  * electron-builder configuration (moved out of package.json "build").
  *
- * GENOFFICE_FONT_CDN_URL — base URL for the curated downloadable-font catalog.
+ * AIRY_FONT_CDN_URL — base URL for the curated downloadable-font catalog.
  * Official release jobs inject it through extraMetadata so the endpoint stays
  * out of source. Without it, font download prompts/catalog entries are hidden;
  * users can still install local font files.
@@ -24,26 +24,23 @@ function normalizeHttpsBaseUrl(name, value) {
   }
 }
 
-const fontCdnUrl = normalizeHttpsBaseUrl(
-  'GENOFFICE_FONT_CDN_URL',
-  process.env.GENOFFICE_FONT_CDN_URL,
-)
+const fontCdnUrl = normalizeHttpsBaseUrl('AIRY_FONT_CDN_URL', process.env.AIRY_FONT_CDN_URL)
 
-// GENOFFICE_MAC_X64=1 — opt into packaging the Intel (x64) dmg/zip alongside
+// AIRY_MAC_X64=1 — opt into packaging the Intel (x64) dmg/zip alongside
 // arm64. Off by default: Intel packages must only ever ship signed with the
 // company certificate (planned dual-track pipeline), so the current release
 // pipeline stays arm64-only and never produces a personally-signed Intel
 // artifact. The downstream layout (feed archive name, Airy-intel.dmg alias)
 // keys off which dmgs exist, so flipping this flag is the single switch.
-const includeMacX64 = process.env.GENOFFICE_MAC_X64 === '1'
+const includeMacX64 = process.env.AIRY_MAC_X64 === '1'
 
-// GENOFFICE_WIN_ARM64=1 — package the Windows ARM64 installer instead of x64.
+// AIRY_WIN_ARM64=1 — package the Windows ARM64 installer instead of x64.
 // CI runs it as a second electron-builder pass (own BUILD_DIR) after the
 // unchanged x64 pass, so the two never share an output dir or a sidecar path:
 // the sidecar comes from the matching cargo target dir and is checked to
 // exist at beforePack because electron-builder exits 0 on a missing
 // extraResources source (Sheets would ship dead on every ARM install).
-const winArm64 = process.env.GENOFFICE_WIN_ARM64 === '1'
+const winArm64 = process.env.AIRY_WIN_ARM64 === '1'
 // 7-Zip packs ARM64 executables with its ARM64 branch filter, which the NSIS
 // install-time extractor (Nsis7z) cannot decode: it silently skips
 // Airy.exe and every dll (electron-builder#9983). BCJ it can decode.
@@ -157,7 +154,7 @@ function assertUniversalVisionOcr() {
 // Runs from the beforePack hook, not at module load: gen-third-party-notices
 // requires this config to read extraResources, and the dist:* scripts run
 // notices before build:all, when the out dirs legitimately don't exist yet.
-// When the mac build packages BOTH arches (GENOFFICE_MAC_X64=1) its
+// When the mac build packages BOTH arches (AIRY_MAC_X64=1) its
 // extraResources entry is a single path shared by the two packs, so the
 // sidecar there must be a lipo fat binary — a host-arch-only build (the plain
 // `native:build` dev path) would silently ship an arm64 sidecar inside the
@@ -369,7 +366,7 @@ const config = {
   mac: {
     // Two separate arch packages (NOT universal): arm64 keeps the exact
     // artifact names and update-feed entries it always had, x64 (opt-in via
-    // GENOFFICE_MAC_X64=1, see includeMacX64 above) adds Intel support with
+    // AIRY_MAC_X64=1, see includeMacX64 above) adds Intel support with
     // electron-builder's default arch-less names (Airy-<v>.dmg /
     // Airy-<v>-mac.zip). Both zips land in one latest-mac.yml and
     // electron-updater picks by process.arch. Dual-arch packs ship the same
@@ -508,7 +505,7 @@ const config = {
 // individually (Smart App Control, WDAC/AppLocker, AV heuristics) block
 // unsigned child processes — the unsigned xlsx-sidecar.exe died with
 // "spawn UNKNOWN" on such machines even though the installer itself was
-// signed. When CI exports GENOFFICE_WIN_SIGN_MODE ("test" = alpha
+// signed. When CI exports AIRY_WIN_SIGN_MODE ("test" = alpha
 // self-signed PFX, "production" = DigiCert KeyLocker — the two modes of
 // scripts/win-sign.cjs, whose env-var contract applies here too), every
 // binary electron-builder signs for win (Airy.exe, the NSIS
@@ -517,10 +514,10 @@ const config = {
 // workflow before packaging since electron-builder does not sign
 // extraResources. Unset (local / fork builds) keeps the old behavior:
 // electron-builder has no signing config and packages everything unsigned.
-const winSignMode = process.env.GENOFFICE_WIN_SIGN_MODE
+const winSignMode = process.env.AIRY_WIN_SIGN_MODE
 if (winSignMode) {
   if (winSignMode !== 'test' && winSignMode !== 'production') {
-    throw new Error(`GENOFFICE_WIN_SIGN_MODE must be "test" or "production", got "${winSignMode}"`)
+    throw new Error(`AIRY_WIN_SIGN_MODE must be "test" or "production", got "${winSignMode}"`)
   }
   config.win.signtoolOptions = {
     // Single pass per file: the sha1+sha256 dual-signing default is a
@@ -540,7 +537,7 @@ if (winSignMode) {
 // CI's "-c.extraMetadata.version=..." CLI override deep-merges with this block,
 // so the version and all injected feature settings survive together.
 const extraMetadata = {}
-if (fontCdnUrl) extraMetadata.genofficeFontCdn = { baseUrl: fontCdnUrl }
+if (fontCdnUrl) extraMetadata.airyFontCdn = { baseUrl: fontCdnUrl }
 if (Object.keys(extraMetadata).length) config.extraMetadata = extraMetadata
 
 module.exports = config

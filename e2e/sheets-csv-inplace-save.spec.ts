@@ -28,7 +28,7 @@ async function cellA1(page: Page): Promise<{ x: number; y: number }> {
 
 test.describe('sheets: a CSV keeps its identity through Save', () => {
   test('Cmd+S writes the edit back to the original .csv', async () => {
-    const scratch = await mkdtemp(join(tmpdir(), 'genoffice-csv-save-e2e-'))
+    const scratch = await mkdtemp(join(tmpdir(), 'airy-csv-save-e2e-'))
     const csvSource = join(scratch, 'data.csv')
     await writeFile(csvSource, 'name,amount\r\nalpha,10\r\n')
 

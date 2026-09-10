@@ -143,8 +143,6 @@ export const ko = {
   ribbonMoreStyles: '스타일 더 보기',
   ribbonGroupStyles: '스타일',
   // Home · AI
-  ribbonAiAssistant: 'Genspark',
-  ribbonAiAssistantTip: 'AI 도우미 열기',
   // Table Design
   ribbonRemoveTableStyleTip: '표 스타일 제거',
   ribbonNoStyle: '스타일 없음',

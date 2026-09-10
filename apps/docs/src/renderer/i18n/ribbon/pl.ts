@@ -138,8 +138,6 @@ export const pl = {
     'Okienko stylów: przeglądaj wszystkie style, twórz lub aktualizuj style na podstawie zaznaczenia',
   ribbonMoreStyles: 'Więcej stylów',
   ribbonGroupStyles: 'Style',
-  ribbonAiAssistant: 'Genspark',
-  ribbonAiAssistantTip: 'Otwórz asystenta AI',
   ribbonRemoveTableStyleTip: 'Usuń styl tabeli',
   ribbonNoStyle: 'Brak stylu',
   ribbonApplyTableStyleTip: 'Zastosuj styl tabeli {name}',

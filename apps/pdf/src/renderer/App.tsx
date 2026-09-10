@@ -273,7 +273,7 @@ type RibbonTab = (typeof RIBBON_TABS)[number]['id'] | 'fillForm'
 
 export default function App() {
   const { lang, t } = useI18n()
-  const collapse = useRibbonCollapse('genoffice-pdf-ribbon-collapsed')
+  const collapse = useRibbonCollapse('airy-pdf-ribbon-collapsed')
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null)
   const [filePath, setFilePath] = useState('')
   const [status, setStatus] = useState<'loading' | 'error' | 'empty' | 'password' | 'ready'>(
@@ -326,10 +326,10 @@ export default function App() {
   }
   // Persisted so a closed AI panel stays closed on next launch (docs/slides parity)
   const [aiCollapsed, setAiCollapsed] = useState(
-    () => localStorage.getItem('genoffice-pdf-show-ai') === '0',
+    () => localStorage.getItem('airy-pdf-show-ai') === '0',
   )
   useEffect(() => {
-    localStorage.setItem('genoffice-pdf-show-ai', aiCollapsed ? '0' : '1')
+    localStorage.setItem('airy-pdf-show-ai', aiCollapsed ? '0' : '1')
   }, [aiCollapsed])
   /** One-shot prompt pushed by the ribbon AI buttons; the panel auto-runs it (docs preset pattern) */
   const [aiPreset, setAiPreset] = useState<{ text: string; nonce: number } | null>(null)

@@ -137,7 +137,7 @@ random token per app session. The MCP server discovers the file by trying
 `<appData>/Airy/airy-bridge.json`, then `Airy Dev`, then the legacy
 `GenOffice` / `GenOffice Dev` layouts; `AIRY_BRIDGE_FILE` overrides the
 location exclusively (no fallback — set it when the app's userData is
-redirected, e.g. `GENOFFICE_USER_DATA` in dev).
+redirected, e.g. `AIRY_USER_DATA` in dev).
 
 The client sends the token with every call and rereads the info file on
 each connect, so an app restart (new token) never authorizes a stale
@@ -158,7 +158,7 @@ document since your last `live_get_context` — fetch fresh context.
 | `AIRY_XLSX_SIDECAR`   | server | Explicit path to the `xlsx-sidecar` binary                            |
 | `AIRY_SOFFICE`        | server | Explicit path to the LibreOffice `soffice` binary                     |
 | `AIRY_DISABLE_BRIDGE` | app    | `=1` disables the live bridge server in the desktop app               |
-| `GENOFFICE_USER_DATA` | app    | Redirects the app's userData (dev/test); pair with `AIRY_BRIDGE_FILE` |
+| `AIRY_USER_DATA`      | app    | Redirects the app's userData (dev/test); pair with `AIRY_BRIDGE_FILE` |
 
 ## Formats and limitations
 

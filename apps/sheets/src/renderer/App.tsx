@@ -1597,7 +1597,7 @@ export function App(): React.JSX.Element {
     })
     // Wide expression CF rules register folded/windowed formula ranges so
     // the engine stops rebuilding millions of per-cell dependency trees on
-    // every stream-in recalculation (genoffice#158).
+    // every stream-in recalculation (genspark-ai/genoffice#158).
     const cfFormulaFoldDisposable = installCfFormulaFold(runtime)
     // duplicateValues / uniqueValues compare display text like Excel (1981233
     // and "1981233" are duplicates).
@@ -3657,10 +3657,10 @@ export function App(): React.JSX.Element {
       ;(window as unknown as Record<string, unknown>).__ribbonCommand = handleRibbonCommand
     }
     // Built-app e2e hook, off by default: the preload exposes
-    // __genofficeDebugHooks only when GENOFFICE_DEBUG_HOOKS=1 (scroll/freeze
+    // __airyDebugHooks only when AIRY_DEBUG_HOOKS=1 (scroll/freeze
     // drivers read Univer's render state through the Facade).
-    if ((window as unknown as Record<string, unknown>).__genofficeDebugHooks === true) {
-      ;(window as unknown as Record<string, unknown>).__genofficeDebug = {
+    if ((window as unknown as Record<string, unknown>).__airyDebugHooks === true) {
+      ;(window as unknown as Record<string, unknown>).__airyDebug = {
         univerAPI: univerRef.current?.univerAPI,
       }
     }

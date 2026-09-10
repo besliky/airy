@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { launchShell, closeAndSaveVideo, waitForPageWithUrl } from './helpers'
 
-// the preload exposes window.__genofficeDebug only under this env var
-process.env.GENOFFICE_DEBUG_HOOKS = '1'
+// the preload exposes window.__airyDebug only under this env var
+process.env.AIRY_DEBUG_HOOKS = '1'
 
 /**
  * Regression for "typed a count into the right-click insert-N-columns box,
@@ -15,7 +15,7 @@ process.env.GENOFFICE_DEBUG_HOOKS = '1'
  */
 test.describe('sheets: Enter runs the context-menu insert-N action', () => {
   test('insert 3 columns left of B via the count box and Enter', async () => {
-    const scratch = await mkdtemp(join(tmpdir(), 'genoffice-menu-enter-'))
+    const scratch = await mkdtemp(join(tmpdir(), 'airy-menu-enter-'))
     const launched = await launchShell({
       onboardingSeen: true,
       videoDir: 'sheets-menu-input-enter',
@@ -45,7 +45,7 @@ test.describe('sheets: Enter runs the context-menu insert-N action', () => {
       if (!grid) throw new Error('worksheet canvas not found')
 
       await sheets.evaluate(async () => {
-        const debug = (window as unknown as Record<string, unknown>).__genofficeDebug as {
+        const debug = (window as unknown as Record<string, unknown>).__airyDebug as {
           univerAPI: {
             getActiveWorkbook(): {
               getActiveSheet(): {
@@ -79,7 +79,7 @@ test.describe('sheets: Enter runs the context-menu insert-N action', () => {
       // the insert ran: the marker moved from B1 to E1 and the menu closed
       await expect(async () => {
         const values = await sheets.evaluate(() => {
-          const debug = (window as unknown as Record<string, unknown>).__genofficeDebug as {
+          const debug = (window as unknown as Record<string, unknown>).__airyDebug as {
             univerAPI: {
               getActiveWorkbook(): {
                 getActiveSheet(): {

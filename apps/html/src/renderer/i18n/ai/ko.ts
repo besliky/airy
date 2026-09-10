@@ -4,7 +4,7 @@ export const ko = {
   aiCollapsePanel: '패널 접기',
   aiComposerPlaceholder: 'AI에게 작성·수정을 요청하세요…',
   aiCopyReplyTitle: '답변 복사',
-  aiCreditsExhausted: '크레딧이 부족합니다. genspark.ai에서 충전하세요',
+  aiCreditsExhausted: 'AI 공급자 크레딧이 소진되었습니다. 공급자에서 충전한 후 다시 시도하세요',
   aiEmptyTitle: 'AI로 페이지 디자인하기',
   aiEmptyBody:
     '랜딩 페이지, 보고서, 포스터 모두 가능합니다. 용도와 대상을 알려주면 AI가 먼저 브리프를 제안하고, 확인 후 페이지를 생성합니다',

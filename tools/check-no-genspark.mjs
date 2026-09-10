@@ -11,11 +11,11 @@
  *   - "@genspark/" npm dependencies — keys in any package.json dependency
  *     block, lockfile entries, and import/require/spawn module specifiers
  *
- * It deliberately does NOT police brand strings: user-facing i18n strings
- * still name upstream trademarks and are swept separately (phase 4b), so
- * i18n directories and documentation files are out of scope here. The
- * license gate lives in tools/check-licenses.mjs; the two run side by side
- * in CI.
+ * Brand strings were swept in phase 4b, so i18n tables are scanned like any
+ * other source. Documentation provenance (README/NOTICE trademark notes,
+ * upstream issue links) still names Genspark by design and stays outside the
+ * scanned roots. The license gate lives in tools/check-licenses.mjs; the two
+ * run side by side in CI.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname, relative, sep } from 'node:path'
@@ -30,14 +30,8 @@ const SCAN_ROOTS = ['apps', 'packages', 'tools', 'scripts']
 /** extra root-level manifests checked for @genspark/ dependencies */
 const SCAN_FILES = ['package.json', 'package-lock.json']
 
-/** directories never descended into (build output, deps, phase-4b i18n) */
-const SKIP_DIRS = new Set([
-  'node_modules',
-  'dist',
-  'out',
-  'release',
-  'i18n', // brand strings stay until the phase-4b sweep, by decision
-])
+/** directories never descended into (build output, deps) */
+const SKIP_DIRS = new Set(['node_modules', 'dist', 'out', 'release'])
 
 /** file extensions whose content is scanned (text source and config only) */
 const SCAN_EXTS = new Set([
@@ -122,8 +116,7 @@ if (violations.length > 0) {
   for (const v of violations) console.error(`  ${v}`)
   console.error(
     '\nGenspark network access and dependencies were removed in phase 4a and must not ' +
-      'come back. Brand-only strings live in i18n and docs (phase 4b) and are not checked here.\n' +
-      'Rules live in tools/check-no-genspark.mjs.',
+      'come back. Rules live in tools/check-no-genspark.mjs.',
   )
   process.exit(1)
 }

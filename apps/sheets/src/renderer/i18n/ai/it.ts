@@ -4,7 +4,6 @@ export const it = {
   aiComposerPlaceholderBuild: 'Descrivi la tabella, i dati o il grafico da creare…',
   aiEmptyBuildTitle: "Lascia che l'IA costruisca questa cartella di lavoro",
   aiEmptyBuildBody: 'Descrivi la tabella, i dati o il grafico che ti servono: l’IA li crea subito.',
-  aiGskLoginBtn: 'Accedi a Genspark',
   aiUndelivered: 'Non inviato',
   aiRetry: 'Riprova',
   aiOpenAssistant: "Apri l'assistente IA",
@@ -49,13 +48,10 @@ export const it = {
   aiFileTooltip:
     'SHA-256 {sha}\nIl salvataggio riscrive solo le voci modificate; tutto il resto viene conservato.',
   aiFileMeta: '{sheets} fogli · {entries} voci',
-  aiGensparkAccount: 'Account Genspark',
   aiAccountChecking: 'Verifica in corso…',
   aiLoggedIn: 'Accesso effettuato',
   aiLoggedInAs: 'Accesso effettuato: {email}',
-  aiNotLoggedIn: 'Accesso non effettuato (le funzioni IA richiedono un account Genspark)',
   aiWaitingBrowserLogin: "In attesa dell'accesso nel browser…",
-  aiLoginGenspark: 'Accedi a Genspark',
   aiModel: 'Modello',
   aiCancel: 'Annulla',
   aiSave: 'Salva',
@@ -66,7 +62,7 @@ export const it = {
   aiNetworkError:
     'Problema di rete: impossibile raggiungere il servizio IA. Controlla la connessione e riprova',
   aiCreditsExhausted:
-    'I tuoi crediti Genspark sono esauriti. Ricarica su genspark.ai/pricing e riprova',
+    'I crediti del tuo provider AI sono esauriti: ricarica presso il provider e riprova',
   aiToolWorkbookContext: 'Lettura delle informazioni della cartella di lavoro',
   aiToolReadRange: "Lettura dell'intervallo",
   aiToolReadRangeOf: "Lettura dell'intervallo {range}",

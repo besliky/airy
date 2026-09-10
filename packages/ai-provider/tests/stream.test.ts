@@ -370,7 +370,7 @@ describe('streamForProvider: anthropic', () => {
 
   it('never sends an empty assistant content array when history has edits-only replies', async () => {
     // Prior empty terminal turns would map to content:[] and break follow-ups
-    // on Anthropic (genoffice#12 / #22 class of multi-turn failures).
+    // on Anthropic (genspark-ai/genoffice#12 / #22 class of multi-turn failures).
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -408,7 +408,7 @@ describe('streamForProvider: anthropic', () => {
 
   it('replaces an HTML error body (e.g. a gateway block page) with a readable note', async () => {
     const html =
-      '<!doctype html>\n<html>\n<head><title>Genspark</title></head><body>app shell</body></html>'
+      '<!doctype html>\n<html>\n<head><title>Portal</title></head><body>app shell</body></html>'
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(html, { status: 403 })))
     const { cb } = collector()
     await expect(

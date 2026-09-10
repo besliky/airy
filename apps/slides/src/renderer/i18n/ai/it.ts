@@ -17,8 +17,7 @@ export const it = {
   aiQcPageSkipped: 'Pagina {n}: controllo automatico del layout saltato',
   aiQcStopped: 'Controllo del layout interrotto',
   aiQcCapped: 'Altre {count} pagina/e non controllate (limite per esecuzione)',
-  aiGskLoginBtn: 'Accedi a Genspark',
-  aiPanelTitle: 'Genspark',
+  aiPanelTitle: 'Airy',
   aiOpenAssistant: "Apri l'assistente IA",
   aiFactCheckBtn: 'Fact-check IA',
   aiFactCheckPrompt:
@@ -116,7 +115,7 @@ export const it = {
   aiErrNetwork:
     'Problema di rete: impossibile raggiungere il servizio IA. Controlla la connessione e riprova',
   aiCreditsExhausted:
-    'I tuoi crediti Genspark sono esauriti. Ricarica su genspark.ai/pricing e riprova',
+    'I crediti del tuo provider AI sono esauriti: ricarica presso il provider e riprova',
   aiErrRequestFailed: 'Invio della richiesta non riuscito: {msg}',
   aiErrGenerateFailed: 'Generazione non riuscita',
   aiErrRegenFailed: 'Rigenerazione della diapositiva non riuscita',
