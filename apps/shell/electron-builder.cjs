@@ -356,6 +356,16 @@ const config = {
     },
   ],
   npmRebuild: false,
+  // Update feed: the fork's GitHub Releases. electron-updater reads this
+  // from the baked resources/app-update.yml (and src/main/updater/ pins the
+  // same owner/repo via setFeedURL). The NSIS exe and AppImage self-update
+  // through it; the deb cannot (electron-updater has no deb support), so it
+  // is a downloads-page artifact and the app only shows a release notice.
+  publish: {
+    provider: 'github',
+    owner: 'besliky',
+    repo: 'airy',
+  },
   mac: {
     // Two separate arch packages (NOT universal): arm64 keeps the exact
     // artifact names and update-feed entries it always had, x64 (opt-in via
@@ -462,10 +472,11 @@ const config = {
   // upgrade with `dnf install ./<new>.rpm`. Packaging needs rpmbuild on the
   // build host (the `rpm` apt package on Ubuntu; CI installs it).
   //
-  // publish: null (explicit) keeps the rpm out of the electron-updater feed
-  // and off the CDN entirely: the rpm is a GitHub-Release download only, so
-  // latest-linux.yml keeps listing exactly what the CDN pipeline uploads
-  // (AppImage + deb) and the promote workflow needs no rpm alias.
+  // publish: null (explicit) opts the rpm out of the top-level GitHub
+  // publish above: electron-builder builds it but never uploads it to the
+  // release, so latest-linux.yml keeps listing exactly the artifacts the
+  // feed serves (AppImage; the deb rides along as a downloads-page asset)
+  // and CI can attach the rpm separately if it is ever distributed.
   rpm: {
     artifactName: 'airy-${version}.${arch}.rpm',
     packageName: 'airy',
