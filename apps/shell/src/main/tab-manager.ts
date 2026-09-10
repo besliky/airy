@@ -410,6 +410,31 @@ export class TabManager {
       .map((t) => ({ id: t.id, webContents: t.view!.webContents }))
   }
 
+  /** open docs tabs with their files, for the external bridge's list method */
+  docsTabSummaries(): Array<{
+    id: string
+    title: string
+    filePath: string | null
+    active: boolean
+  }> {
+    return this.tabs
+      .filter((t) => t.kind === 'docs' && t.view)
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        filePath: t.filePath ?? null,
+        active: t.id === this.activeId,
+      }))
+  }
+
+  /** the active tab's docs view, when the active tab is a docs document (live-bridge target) */
+  activeDocsTab(): { id: string; webContents: WebContents } | undefined {
+    const tab = this.tabs.find((t) => t.id === this.activeId)
+    return tab?.kind === 'docs' && tab.view
+      ? { id: tab.id, webContents: tab.view.webContents }
+      : undefined
+  }
+
   /** closes whichever tab is currently active; no-op for Home (Cmd+W target) */
   closeActiveTab(): void {
     void this.closeTab(this.activeId)

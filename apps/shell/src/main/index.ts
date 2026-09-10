@@ -209,6 +209,7 @@ import { showErrorDialog } from './error-dialog'
 import { normalizeRecentQuery, pageRecentPaths, statPathEntries } from './recent-files'
 import { isSameFile, isValidRenameName } from './rename-validation'
 import { TabManager } from './tab-manager'
+import { startShellBridge, stopShellBridge } from './bridge/shell-bridge'
 import { applyUpdateChannel, initAutoUpdater } from './updater'
 import { isUpdateChannel, type UpdateChannel } from '../shared/update-api'
 
@@ -4308,6 +4309,13 @@ app.whenReady().then(async () => {
   initAnalytics()
   analytics.track('app_launch')
   startSheetsCaptureServer()
+  // live bridge for external agents (Airy Copilot): on by default, AIRY_DISABLE_BRIDGE=1 turns it off
+  void startShellBridge({
+    userDataDir: app.getPath('userData'),
+    getTabManager: () => tabManager,
+  }).catch((err: unknown) => {
+    console.error('bridge server failed to start:', err)
+  })
   createShellWindow()
   // deferred to ready: labels need currentLang(), which reads app.getLocale()
   installBackToHomeItems()
@@ -4330,4 +4338,6 @@ app.on('before-quit', () => {
   // No close prompt may fall through to "Save" during shutdown
   markSheetsShuttingDown()
   stopSheetsSidecar()
+  // close the live bridge socket and remove the token file (best-effort)
+  void stopShellBridge()
 })
