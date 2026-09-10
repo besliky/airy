@@ -377,4 +377,23 @@ export interface DesktopApi {
   reportCloseSaveResult(ok: boolean): void
   /** keep the native View menu's checkbox items in sync with renderer state */
   reportViewMenuState(state: { aiSidebar: boolean; darkCanvas: boolean }): void
+  /** live bridge (Airy Copilot): a command arrived from the shell's local
+   *  socket server; reply once via reportBridgeResult with the same requestId */
+  onBridgeInvoke(handler: (requestId: number, method: string, params: unknown) => void): () => void
+  reportBridgeResult(requestId: number, result: BridgeCommandResult): void
 }
+
+// ---- live bridge (Airy Copilot) ----
+
+/** bridge channels: main -> renderer request, renderer -> main reply */
+export const BRIDGE_INVOKE_CHANNEL = 'airy-bridge:invoke'
+export const BRIDGE_RESULT_CHANNEL = 'airy-bridge:result'
+
+export interface BridgeCommandError {
+  code: string
+  message: string
+}
+
+/** envelope shared with the bridge server (apps/shell/src/main/bridge) */
+export type BridgeCommandResult =
+  { ok: true; result: unknown } | { ok: false; error: BridgeCommandError }

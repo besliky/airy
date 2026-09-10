@@ -41,6 +41,7 @@ import {
 import type { AiDocContent, AiSettings, OpenDocxResult } from '../shared/ipc'
 import { AI_PROVIDERS } from '../shared/ipc'
 import { AiPanel, AI_REVISION_AUTHOR } from './ai/AiPanel'
+import { createBridgeCommandHandler } from './ai/bridge-commands'
 import type { AiCommentsAccess, AiHeaderFooterAccess } from './ai/tools'
 import { applyHfText, hfEditText } from './editor/hf-text'
 import { textColorValue } from './editor/text-color'
@@ -4369,6 +4370,35 @@ export function App() {
     }),
     [],
   )
+
+  // Airy Copilot live bridge: commands from the shell's local bridge server run
+  // through the same agent pipeline (context build, tool execution, snapshot
+  // undo). Stable refs keep one subscription alive across renders/documents.
+  const bridgeCtxRef = useRef({
+    editor,
+    doc,
+    comments: aiCommentsAccess,
+    hf: aiHfAccess,
+  })
+  bridgeCtxRef.current = { editor, doc, comments: aiCommentsAccess, hf: aiHfAccess }
+  useEffect(() => {
+    const handleCommand = createBridgeCommandHandler({
+      getEditor: () => bridgeCtxRef.current.editor,
+      getDocState: () => {
+        const d = bridgeCtxRef.current.doc
+        return d
+          ? { blocks: d.parsed.blocks, isBlank: d.isBlank === true, filePath: d.filePath }
+          : null
+      },
+      getComments: () => bridgeCtxRef.current.comments,
+      getHf: () => bridgeCtxRef.current.hf,
+    })
+    return window.desktop.onBridgeInvoke((requestId, method, params) => {
+      void handleCommand(method, (params as Record<string, unknown>) ?? {}).then((result) =>
+        window.desktop.reportBridgeResult(requestId, result),
+      )
+    })
+  }, [])
 
   const ribbonActions = useStableCallbacks({
     allocateNumId: (kind: 'bullet' | 'ordered') => allocateListNumId(kind),

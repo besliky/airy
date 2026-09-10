@@ -479,7 +479,7 @@ const INDEX_WRITE_SUMMARIES: Record<string, () => string> = {
   edit_chart: () => t('aiSumEditChart'),
 }
 
-const STALE_DOC_ERROR =
+export const STALE_DOC_ERROR =
   'The document was edited by the user since it was last read; block indexes may be stale. ' +
   'Call get_document_context (or read_blocks) to get the current state, then retry.'
 

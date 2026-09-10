@@ -11,6 +11,7 @@ import type {
   AutoSaveDefault,
   UiTheme,
 } from '../shared/ipc'
+import { BRIDGE_INVOKE_CHANNEL, BRIDGE_RESULT_CHANNEL } from '../shared/ipc'
 import type { ProjectApi } from '@genoffice/project-store'
 import { installDropOpenBridge } from '@genoffice/electron-utils/drop-open'
 
@@ -176,6 +177,18 @@ const api: DesktopApi = {
     return () => ipcRenderer.removeListener('docs:close-save-request', listener)
   },
   reportCloseSaveResult: (ok: boolean) => ipcRenderer.send('docs:close-save-result', ok === true),
+  onBridgeInvoke: (handler) => {
+    const listener = (
+      _event: IpcRendererEvent,
+      requestId: number,
+      method: string,
+      params: unknown,
+    ) => handler(requestId, method, params)
+    ipcRenderer.on(BRIDGE_INVOKE_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(BRIDGE_INVOKE_CHANNEL, listener)
+  },
+  reportBridgeResult: (requestId, result) =>
+    ipcRenderer.send(BRIDGE_RESULT_CHANNEL, requestId, result),
 }
 
 const projectApi: ProjectApi = {
