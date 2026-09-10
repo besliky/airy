@@ -187,6 +187,7 @@ import { normalizeRecentQuery, pageRecentPaths, statPathEntries } from './recent
 import { isSameFile, isValidRenameName } from './rename-validation'
 import { TabManager } from './tab-manager'
 import { startShellBridge, stopShellBridge } from './bridge/shell-bridge'
+import { initUpdater, updaterMenuItems } from './updater'
 
 /**
  * GenOffice unified shell: ONE Electron app, ONE BrowserWindow, hosting the
@@ -492,6 +493,12 @@ const tMain = createI18n({
     pdfDocxLocalCorruptDetail: '文件已损坏或不是有效的 PDF，无法转换。',
     dlgPickSaveDir: '选择默认保存位置',
     errSaveDirUnusable: '所选文件夹不可写，无法用作默认保存位置',
+    menuCheckUpdates: '检查更新…',
+    updStatusChecking: '正在检查更新…',
+    updStatusDownloading: '正在下载更新… {percent}%',
+    updStatusUpToDate: '已是最新版本',
+    updStatusFailed: '检查更新失败',
+    updStatusReady: '更新已就绪，退出时安装',
   },
   en: {
     menuFile: 'File',
@@ -580,6 +587,12 @@ const tMain = createI18n({
     dlgPickSaveDir: 'Choose Default Save Location',
     errSaveDirUnusable:
       'The selected folder is not writable and cannot be used as the default save location',
+    menuCheckUpdates: 'Check for Updates…',
+    updStatusChecking: 'Checking for updates…',
+    updStatusDownloading: 'Downloading update… {percent}%',
+    updStatusUpToDate: 'Airy is up to date',
+    updStatusFailed: 'Update check failed',
+    updStatusReady: 'Update ready to install',
   },
   ja: {
     menuFile: 'ファイル',
@@ -668,6 +681,12 @@ const tMain = createI18n({
     dlgPickSaveDir: '既定の保存先を選択',
     errSaveDirUnusable:
       '選択したフォルダーは書き込みできないため、既定の保存先として使用できません',
+    menuCheckUpdates: 'アップデートを確認…',
+    updStatusChecking: 'アップデートを確認中…',
+    updStatusDownloading: 'アップデートをダウンロード中… {percent}%',
+    updStatusUpToDate: '最新バージョンです',
+    updStatusFailed: 'アップデートの確認に失敗しました',
+    updStatusReady: 'アップデートはインストール準備完了です',
   },
   ko: {
     menuFile: '파일',
@@ -755,6 +774,12 @@ const tMain = createI18n({
     pdfDocxLocalCorruptDetail: '파일이 손상되었거나 유효한 PDF가 아니어서 변환할 수 없습니다.',
     dlgPickSaveDir: '기본 저장 위치 선택',
     errSaveDirUnusable: '선택한 폴더에 쓸 수 없어 기본 저장 위치로 사용할 수 없습니다',
+    menuCheckUpdates: '업데이트 확인…',
+    updStatusChecking: '업데이트 확인 중…',
+    updStatusDownloading: '업데이트 다운로드 중… {percent}%',
+    updStatusUpToDate: '최신 버전입니다',
+    updStatusFailed: '업데이트 확인 실패',
+    updStatusReady: '업데이트 설치 준비 완료',
   },
   fr: {
     menuFile: 'Fichier',
@@ -844,6 +869,12 @@ const tMain = createI18n({
     dlgPickSaveDir: "Choisir l'emplacement d'enregistrement par défaut",
     errSaveDirUnusable:
       "Le dossier sélectionné n'est pas accessible en écriture et ne peut pas servir d'emplacement d'enregistrement par défaut",
+    menuCheckUpdates: 'Rechercher des mises à jour…',
+    updStatusChecking: 'Recherche de mises à jour…',
+    updStatusDownloading: 'Téléchargement de la mise à jour… {percent}%',
+    updStatusUpToDate: 'Airy est à jour',
+    updStatusFailed: 'Échec de la recherche de mise à jour',
+    updStatusReady: 'Mise à jour prête à installer',
   },
   de: {
     menuFile: 'Datei',
@@ -933,6 +964,12 @@ const tMain = createI18n({
     dlgPickSaveDir: 'Standard-Speicherort auswählen',
     errSaveDirUnusable:
       'Der ausgewählte Ordner ist nicht beschreibbar und kann nicht als Standard-Speicherort verwendet werden',
+    menuCheckUpdates: 'Nach Updates suchen…',
+    updStatusChecking: 'Suche nach Updates…',
+    updStatusDownloading: 'Update wird heruntergeladen… {percent}%',
+    updStatusUpToDate: 'Airy ist auf dem neuesten Stand',
+    updStatusFailed: 'Updatesuche fehlgeschlagen',
+    updStatusReady: 'Update bereit zur Installation',
   },
   es: {
     menuFile: 'Archivo',
@@ -1022,6 +1059,12 @@ const tMain = createI18n({
     dlgPickSaveDir: 'Elegir ubicación de guardado predeterminada',
     errSaveDirUnusable:
       'La carpeta seleccionada no admite escritura y no puede usarse como ubicación de guardado predeterminada',
+    menuCheckUpdates: 'Buscar actualizaciones…',
+    updStatusChecking: 'Buscando actualizaciones…',
+    updStatusDownloading: 'Descargando actualización… {percent}%',
+    updStatusUpToDate: 'Airy está actualizado',
+    updStatusFailed: 'Error al buscar actualizaciones',
+    updStatusReady: 'Actualización lista para instalar',
   },
   th: {
     menuFile: 'ไฟล์',
@@ -1107,6 +1150,12 @@ const tMain = createI18n({
     pdfDocxLocalCorruptDetail: 'ไฟล์เสียหายหรือไม่ใช่ PDF ที่ถูกต้อง จึงไม่สามารถแปลงได้',
     dlgPickSaveDir: 'เลือกตำแหน่งบันทึกเริ่มต้น',
     errSaveDirUnusable: 'โฟลเดอร์ที่เลือกไม่สามารถเขียนได้ จึงใช้เป็นตำแหน่งบันทึกเริ่มต้นไม่ได้',
+    menuCheckUpdates: 'ตรวจหาอัปเดต…',
+    updStatusChecking: 'กำลังตรวจหาอัปเดต…',
+    updStatusDownloading: 'กำลังดาวน์โหลดอัปเดต… {percent}%',
+    updStatusUpToDate: 'Airy เป็นเวอร์ชันล่าสุดแล้ว',
+    updStatusFailed: 'ตรวจหาอัปเดตไม่สำเร็จ',
+    updStatusReady: 'อัปเดตพร้อมติดตั้งแล้ว',
   },
   id: {
     menuFile: 'File',
@@ -1196,6 +1245,12 @@ const tMain = createI18n({
     dlgPickSaveDir: 'Pilih Lokasi Penyimpanan Default',
     errSaveDirUnusable:
       'Folder yang dipilih tidak dapat ditulis dan tidak bisa digunakan sebagai lokasi penyimpanan default',
+    menuCheckUpdates: 'Periksa Pembaruan…',
+    updStatusChecking: 'Memeriksa pembaruan…',
+    updStatusDownloading: 'Mengunduh pembaruan… {percent}%',
+    updStatusUpToDate: 'Airy sudah versi terbaru',
+    updStatusFailed: 'Gagal memeriksa pembaruan',
+    updStatusReady: 'Pembaruan siap dipasang',
   },
   ru: {
     menuFile: 'Файл',
@@ -1285,6 +1340,12 @@ const tMain = createI18n({
     dlgPickSaveDir: 'Выбрать папку сохранения по умолчанию',
     errSaveDirUnusable:
       'Выбранная папка недоступна для записи и не может использоваться как папка сохранения по умолчанию',
+    menuCheckUpdates: 'Проверить обновления…',
+    updStatusChecking: 'Проверка обновлений…',
+    updStatusDownloading: 'Загрузка обновления… {percent}%',
+    updStatusUpToDate: 'Установлена последняя версия',
+    updStatusFailed: 'Не удалось проверить обновления',
+    updStatusReady: 'Обновление готово к установке',
   },
   ar: {
     menuFile: 'ملف',
@@ -1370,6 +1431,12 @@ const tMain = createI18n({
     pdfDocxLocalCorruptDetail: 'الملف تالف أو ليس ملف PDF صالحًا ولا يمكن تحويله.',
     dlgPickSaveDir: 'اختيار موقع الحفظ الافتراضي',
     errSaveDirUnusable: 'المجلد المحدد غير قابل للكتابة ولا يمكن استخدامه كموقع حفظ افتراضي',
+    menuCheckUpdates: 'التحقق من التحديثات…',
+    updStatusChecking: 'جارٍ التحقق من التحديثات…',
+    updStatusDownloading: 'جارٍ تنزيل التحديث… {percent}%',
+    updStatusUpToDate: 'Airy محدّث',
+    updStatusFailed: 'فشل التحقق من التحديثات',
+    updStatusReady: 'التحديث جاهز للتثبيت',
   },
   pt: {
     menuFile: 'Arquivo',
@@ -1459,6 +1526,12 @@ const tMain = createI18n({
     dlgPickSaveDir: 'Escolher local de salvamento padrão',
     errSaveDirUnusable:
       'A pasta selecionada não permite gravação e não pode ser usada como local de salvamento padrão',
+    menuCheckUpdates: 'Verificar atualizações…',
+    updStatusChecking: 'Verificando atualizações…',
+    updStatusDownloading: 'Baixando atualização… {percent}%',
+    updStatusUpToDate: 'O Airy está atualizado',
+    updStatusFailed: 'Falha ao verificar atualizações',
+    updStatusReady: 'Atualização pronta para instalar',
   },
   it: {
     menuFile: 'File',
@@ -1548,6 +1621,12 @@ const tMain = createI18n({
     dlgPickSaveDir: 'Scegli la posizione di salvataggio predefinita',
     errSaveDirUnusable:
       'La cartella selezionata non è scrivibile e non può essere usata come posizione di salvataggio predefinita',
+    menuCheckUpdates: 'Cerca aggiornamenti…',
+    updStatusChecking: 'Ricerca aggiornamenti…',
+    updStatusDownloading: "Download dell'aggiornamento… {percent}%",
+    updStatusUpToDate: 'Airy è aggiornato',
+    updStatusFailed: 'Ricerca aggiornamenti non riuscita',
+    updStatusReady: 'Aggiornamento pronto da installare',
   },
   pl: {
     menuFile: 'Plik',
@@ -1637,6 +1716,12 @@ const tMain = createI18n({
     dlgPickSaveDir: 'Wybierz domyślną lokalizację zapisu',
     errSaveDirUnusable:
       'Wybrany folder nie pozwala na zapis i nie może być domyślną lokalizacją zapisu',
+    menuCheckUpdates: 'Sprawdź aktualizacje…',
+    updStatusChecking: 'Sprawdzanie aktualizacji…',
+    updStatusDownloading: 'Pobieranie aktualizacji… {percent}%',
+    updStatusUpToDate: 'Airy jest aktualny',
+    updStatusFailed: 'Nie udało się sprawdzić aktualizacji',
+    updStatusReady: 'Aktualizacja gotowa do instalacji',
   },
   cs: {
     menuFile: 'Soubor',
@@ -1724,6 +1809,12 @@ const tMain = createI18n({
     dlgPickSaveDir: 'Zvolte výchozí umístění pro ukládání',
     errSaveDirUnusable:
       'Do vybrané složky nelze zapisovat a nelze ji použít jako výchozí umístění pro ukládání',
+    menuCheckUpdates: 'Zkontrolovat aktualizace…',
+    updStatusChecking: 'Kontrola aktualizací…',
+    updStatusDownloading: 'Stahování aktualizace… {percent}%',
+    updStatusUpToDate: 'Airy je aktuální',
+    updStatusFailed: 'Kontrola aktualizací se nezdařila',
+    updStatusReady: 'Aktualizace je připravena k instalaci',
   },
   nl: {
     menuFile: 'Bestand',
@@ -1813,6 +1904,12 @@ const tMain = createI18n({
     dlgPickSaveDir: 'Standaard opslaglocatie kiezen',
     errSaveDirUnusable:
       'De geselecteerde map is niet beschrijfbaar en kan niet als standaard opslaglocatie worden gebruikt',
+    menuCheckUpdates: 'Zoeken naar updates…',
+    updStatusChecking: 'Updates zoeken…',
+    updStatusDownloading: 'Update wordt gedownload… {percent}%',
+    updStatusUpToDate: 'Airy is up-to-date',
+    updStatusFailed: 'Updatecontrole mislukt',
+    updStatusReady: 'Update klaar om te installeren',
   },
   ms: {
     menuFile: 'Fail',
@@ -1901,6 +1998,12 @@ const tMain = createI18n({
     dlgPickSaveDir: 'Pilih Lokasi Simpanan Lalai',
     errSaveDirUnusable:
       'Folder yang dipilih tidak boleh ditulis dan tidak dapat digunakan sebagai lokasi simpanan lalai',
+    menuCheckUpdates: 'Semak Kemas Kini…',
+    updStatusChecking: 'Menyemak kemas kini…',
+    updStatusDownloading: 'Memuat turun kemas kini… {percent}%',
+    updStatusUpToDate: 'Airy adalah versi terkini',
+    updStatusFailed: 'Semakan kemas kini gagal',
+    updStatusReady: 'Kemas kini sedia untuk dipasang',
   },
   he: {
     menuFile: 'קובץ',
@@ -1987,6 +2090,12 @@ const tMain = createI18n({
     dlgPickSaveDir: 'בחירת מיקום שמירה כברירת מחדל',
     errSaveDirUnusable:
       'התיקייה שנבחרה אינה ניתנת לכתיבה ולא ניתן להשתמש בה כמיקום שמירה כברירת מחדל',
+    menuCheckUpdates: 'בדיקת עדכונים…',
+    updStatusChecking: 'בודק עדכונים…',
+    updStatusDownloading: 'מוריד עדכון… {percent}%',
+    updStatusUpToDate: 'Airy מעודכן',
+    updStatusFailed: 'בדיקת העדכונים נכשלה',
+    updStatusReady: 'העדכון מוכן להתקנה',
   },
   hi: {
     menuFile: 'फ़ाइल',
@@ -2076,6 +2185,12 @@ const tMain = createI18n({
     dlgPickSaveDir: 'डिफ़ॉल्ट सहेजने का स्थान चुनें',
     errSaveDirUnusable:
       'चयनित फ़ोल्डर में लिखा नहीं जा सकता, इसलिए इसे डिफ़ॉल्ट सहेजने के स्थान के रूप में उपयोग नहीं किया जा सकता',
+    menuCheckUpdates: 'अपडेट खोजें…',
+    updStatusChecking: 'अपडेट खोजे जा रहे हैं…',
+    updStatusDownloading: 'अपडेट डाउनलोड हो रहा है… {percent}%',
+    updStatusUpToDate: 'Airy अप-टू-डेट है',
+    updStatusFailed: 'अपडेट जाँच विफल',
+    updStatusReady: 'अपडेट इंस्टॉल हेतु तैयार',
   },
   'zh-TW': {
     menuFile: '檔案',
@@ -2156,6 +2271,12 @@ const tMain = createI18n({
     pdfDocxLocalCorruptDetail: '檔案已損壞或不是有效的 PDF，無法轉換。',
     dlgPickSaveDir: '選擇預設儲存位置',
     errSaveDirUnusable: '所選資料夾無法寫入，無法作為預設儲存位置',
+    menuCheckUpdates: '檢查更新…',
+    updStatusChecking: '正在檢查更新…',
+    updStatusDownloading: '正在下載更新… {percent}%',
+    updStatusUpToDate: '已是最新版本',
+    updStatusFailed: '檢查更新失敗',
+    updStatusReady: '更新已就緒，結束時安裝',
   },
 })
 
@@ -2202,7 +2323,12 @@ function applyPendingProject(filePath: string): void {
   }
 }
 
+/** kind of the tab the application menu was last built for (updater status
+ * changes rebuild the same menu so the Check-for-Updates label stays live) */
+let currentMenuKind: TabKind = 'home'
+
 function applyMenuFor(kind: TabKind): void {
+  currentMenuKind = kind
   switch (kind) {
     case 'docs':
       buildDocsMenu()
@@ -3247,7 +3373,10 @@ function buildHomeMenu(): void {
     {
       role: 'help',
       label: tm('menuHelp'),
-      submenu: [{ label: tm('thirdPartyNotices'), click: () => void openThirdPartyNotices() }],
+      submenu: [
+        ...updaterMenuItems(),
+        { label: tm('thirdPartyNotices'), click: () => void openThirdPartyNotices() },
+      ],
     },
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
@@ -3325,7 +3454,10 @@ function buildPdfMenu(): void {
     {
       role: 'help',
       label: tm('menuHelp'),
-      submenu: [{ label: tm('thirdPartyNotices'), click: () => void openThirdPartyNotices() }],
+      submenu: [
+        ...updaterMenuItems(),
+        { label: tm('thirdPartyNotices'), click: () => void openThirdPartyNotices() },
+      ],
     },
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
@@ -3412,7 +3544,10 @@ function buildMarkdownMenu(): void {
     {
       role: 'help',
       label: tm('menuHelp'),
-      submenu: [{ label: tm('thirdPartyNotices'), click: () => void openThirdPartyNotices() }],
+      submenu: [
+        ...updaterMenuItems(),
+        { label: tm('thirdPartyNotices'), click: () => void openThirdPartyNotices() },
+      ],
     },
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
@@ -3492,7 +3627,10 @@ function buildHtmlMenu(): void {
     {
       role: 'help',
       label: tm('menuHelp'),
-      submenu: [{ label: tm('thirdPartyNotices'), click: () => void openThirdPartyNotices() }],
+      submenu: [
+        ...updaterMenuItems(),
+        { label: tm('thirdPartyNotices'), click: () => void openThirdPartyNotices() },
+      ],
     },
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
@@ -4112,6 +4250,23 @@ app.whenReady().then(async () => {
     getTabManager: () => tabManager,
   }).catch((err: unknown) => {
     console.error('bridge server failed to start:', err)
+  })
+  // In-app updater backed by the fork's GitHub Releases (see
+  // src/main/updater/): inactive in dev and on macOS; the first check is
+  // deferred inside initUpdater so startup never waits on the network.
+  // Must run before createShellWindow: the menu builders read its state.
+  initUpdater({
+    isPackaged: app.isPackaged,
+    getWindow: () => shellWindow,
+    getLabels: () => ({
+      check: tm('menuCheckUpdates'),
+      checking: tm('updStatusChecking'),
+      downloading: tm('updStatusDownloading'),
+      ready: tm('updStatusReady'),
+      upToDate: tm('updStatusUpToDate'),
+      failed: tm('updStatusFailed'),
+    }),
+    onStatusChange: () => applyMenuFor(currentMenuKind),
   })
   createShellWindow()
   // deferred to ready: labels need currentLang(), which reads app.getLocale()
