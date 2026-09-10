@@ -630,14 +630,6 @@ export function AiChatPanel({
                     )}
                   </div>
                 )}
-                {entry.loginRequired && (
-                  <button
-                    className="ai-login-btn"
-                    onClick={() => void window.desktopApi.aiGskLogin()}
-                  >
-                    {t('aiGskLoginBtn')}
-                  </button>
-                )}
               </>
             )}
           </div>

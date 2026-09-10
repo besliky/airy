@@ -23,8 +23,7 @@ function makeAccess(opts?: { failPages?: number[] }) {
     applyDeck: () => {},
     fitWidthPx: 1280,
     retryBackoffMs: 0,
-    isCloudPageGenEnabled: async () => true,
-    generatePageCloud: async (args) => {
+    generatePageLocal: async (args) => {
       if (failPages.has(args.pageIndex)) return { ok: false, error: 'mock fail' }
       return { ok: true, marker: `PAGE${args.pageIndex}:${args.title}` }
     },

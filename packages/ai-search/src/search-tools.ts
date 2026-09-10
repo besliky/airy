@@ -1,14 +1,12 @@
 /**
  * ai:web-search / ai:image-search for the editors' main processes: reads
  * ai-settings.json live and turns the search provider choice into
- * SearchOptions — Genspark keeps the historic chain (gsk when signed in and
- * cloud tools are on, then env keys, then DuckDuckGo); a user Serper / Tavily
- * key runs first and skips gsk.
+ * SearchOptions — a user Serper / Tavily key runs first; without one the
+ * env-key chain runs, falling back to keyless DuckDuckGo.
  */
 
 import {
   activeSearchProvider,
-  cloudToolsEnabled,
   type AiSearchProviderId,
   type AiSettings,
 } from '@genoffice/ai-provider'
@@ -17,11 +15,11 @@ import { readAiSettingsFile } from './media-tools'
 
 export function searchOptionsFromSettings(settings: AiSettings): SearchOptions {
   const provider = activeSearchProvider(settings)
-  if (provider === 'genspark') return { useGsk: cloudToolsEnabled(settings) }
+  // 'genspark' = no keyed backend stored; the env-key chain runs and falls
+  // back to keyless DuckDuckGo
+  if (!provider || provider === 'genspark') return {}
   const key = settings.search!.providers[provider].apiKey
-  return provider === 'tavily'
-    ? { useGsk: false, tavilyKey: key, prefer: 'tavily' }
-    : { useGsk: false, serperKey: key }
+  return provider === 'tavily' ? { tavilyKey: key, prefer: 'tavily' } : { serperKey: key }
 }
 
 export function webSearchTool(settingsPath: string, query: string, maxResults = 6) {
@@ -37,12 +35,13 @@ export async function testSearchProvider(
   provider: AiSearchProviderId,
   apiKey: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  if (provider === 'genspark') return { ok: true }
+  // the retired gsk backend has nothing to test anymore
+  if (provider === 'genspark') return { ok: false, error: 'Genspark search is no longer available' }
   if (!apiKey) return { ok: false, error: 'API key is empty' }
   const options: SearchOptions =
     provider === 'tavily'
-      ? { useGsk: false, tavilyKey: apiKey, serperKey: '', prefer: 'tavily' }
-      : { useGsk: false, serperKey: apiKey, tavilyKey: '' }
+      ? { tavilyKey: apiKey, serperKey: '', prefer: 'tavily' }
+      : { serperKey: apiKey, tavilyKey: '' }
   const r = await webSearch('GenOffice', 1, options)
   if (r.method === provider) return { ok: true }
   return {
