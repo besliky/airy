@@ -1,34 +1,34 @@
 <p align="center">
-  <a href="https://genoffice.ai/">
+  <a href="https://github.com/besliky/airy">
     <picture>
       <source srcset="../assets/readme/hero-dark.webp" media="(prefers-color-scheme: dark)">
-      <img src="../assets/readme/hero.webp" alt="GenOffice — rangkaian Pejabat AI sumber terbuka: Docs, Sheets, Slides, PDF, Markdown dan HTML dengan panel AI terbina dalam" width="100%">
+      <img src="../assets/readme/hero.webp" alt="Airy — rangkaian Pejabat AI sumber terbuka: Docs, Sheets, Slides, PDF, Markdown dan HTML dengan panel AI terbina dalam" width="100%">
     </picture>
   </a>
 </p>
 
-<h1 align="center">GenOffice</h1>
+<h1 align="center">Airy</h1>
 
 <p align="center"><b>Rangkaian Office AI sumber terbuka pertama di dunia yang paling lengkap ciri.</b><br>
 Fail Word, Excel, PowerPoint dan PDF, disunting oleh anda dan AI anda, disimpan semula dalam format sebenar.</p>
 
 <p align="center">
-  <a href="../../LICENSE"><img src="https://img.shields.io/github/license/genspark-ai/genoffice" alt="License: Apache-2.0"></a>
-  <a href="https://github.com/genspark-ai/genoffice/releases/latest"><img src="https://img.shields.io/github/v/release/genspark-ai/genoffice" alt="Latest release"></a>
-  <a href="https://github.com/genspark-ai/genoffice/releases"><img src="https://img.shields.io/github/downloads/genspark-ai/genoffice/total" alt="Downloads"></a>
-  <a href="https://github.com/genspark-ai/genoffice/stargazers"><img src="https://img.shields.io/github/stars/genspark-ai/genoffice?style=flat" alt="GitHub stars"></a>
+  <a href="../../LICENSE"><img src="https://img.shields.io/github/license/besliky/airy" alt="License: Apache-2.0"></a>
+  <a href="https://github.com/besliky/airy/releases/latest"><img src="https://img.shields.io/github/v/release/besliky/airy" alt="Latest release"></a>
+  <a href="https://github.com/besliky/airy/releases"><img src="https://img.shields.io/github/downloads/besliky/airy/total" alt="Downloads"></a>
+  <a href="https://github.com/besliky/airy/stargazers"><img src="https://img.shields.io/github/stars/besliky/airy?style=flat" alt="GitHub stars"></a>
 </p>
 
 <p align="center"><a href="../../README.md">English</a> · <a href="README.es.md">Español</a> · <a href="README.pt-BR.md">Português (Brasil)</a> · <a href="README.de.md">Deutsch</a> · <a href="README.fr.md">Français</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ko.md">한국어</a> · <a href="README.ja.md">日本語</a> · <a href="README.ar.md">العربية</a> · <a href="README.ru.md">Русский</a> · <a href="README.it.md">Italiano</a> · <a href="README.nl.md">Nederlands</a> · <a href="README.pl.md">Polski</a> · <a href="README.cs.md">Čeština</a> · <a href="README.id.md">Bahasa Indonesia</a> · <b>Bahasa Melayu</b> · <a href="README.th.md">ไทย</a> · <a href="README.hi.md">हिन्दी</a> · <a href="README.he.md">עברית</a></p>
 
 <p align="center">
   <a href="#download"><b>Muat Turun</b></a> ·
-  <a href="https://genoffice.ai/"><b>Laman Web</b></a> ·
-  <a href="https://genoffice.ai/join"><b>Komuniti</b></a> ·
+  <a href="https://github.com/besliky/airy"><b>Laman Web</b></a> ·
+  <a href="https://github.com/besliky/airy"><b>Komuniti</b></a> ·
   <a href="../../PRIVACY.md"><b>Privasi</b></a>
 </p>
 
-GenOffice ialah alternatif percuma dan sumber terbuka kepada Microsoft Office
+Airy ialah alternatif percuma dan sumber terbuka kepada Microsoft Office
 untuk macOS, Windows dan Linux. Ia membuka dan menyimpan fail asli `.docx`,
 `.xlsx` dan `.pptx`, menyunting PDF, Markdown dan HTML, serta meletakkan agen
 AI di sebelah setiap dokumen — bukan sekadar kotak sembang yang ditampal di
@@ -47,15 +47,14 @@ kepada anda dengan tepat apa yang disentuhnya.
   ditukar terus pada mesin anda. PDF → Word / Excel / PowerPoint, Markdown →
   Word dan HTML → Word semuanya berjalan di peranti sendiri. Hanya panggilan
   AI yang keluar dari mesin, kepada pembekal pilihan anda.
-- **Kunci anda sendiri atau tiada langsung.** Log masuk dengan Genspark dan
-  anda tidak perlu sebarang kunci, atau bawa kunci anda sendiri untuk Claude,
+- **Kunci anda sendiri atau tiada langsung.** Bawa kunci anda sendiri untuk Claude,
   OpenAI, Gemini, DeepSeek, Kimi, GLM, Qwen, Doubao, MiniMax, Grok, Mistral,
   OpenRouter, atau mana-mana titik akhir yang serasi dengan OpenAI, termasuk
   pelayan setempat.
 
-**Dapatkan:** [macOS](https://github.com/genspark-ai/genoffice/releases/latest) (Apple Silicon dan Intel) ·
-[Windows](https://github.com/genspark-ai/genoffice/releases/latest) (x64 dan Arm) ·
-[Linux](https://github.com/genspark-ai/genoffice/releases/latest) (deb, rpm, AppImage) —
+**Dapatkan:** [macOS](https://github.com/besliky/airy/releases/latest) (Apple Silicon dan Intel) ·
+[Windows](https://github.com/besliky/airy/releases/latest) (x64 dan Arm) ·
+[Linux](https://github.com/besliky/airy/releases/latest) (deb, rpm, AppImage) —
 butiran dan keperluan dalam [Muat Turun](#download).
 
 ## Demo
@@ -67,8 +66,8 @@ pada macOS, dengan AI dipandu oleh gesaan yang boleh anda baca dalam panel.
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/docs-report.webp" alt="GenOffice Docs memaparkan halaman laporan tahunan dua lajur dengan imej muka depan sepenuh lebar, jadual KPI berlorek, pengepala dan pengaki, pada zum 80% dengan panel AI dilipat"></td>
-<td width="50%"><img src="../assets/readme/docs-ai.webp" alt="GenOffice Docs: gambaran keseluruhan syarikat dengan imej sepanduk; AI memadatkan bahagian Overview dan menyisipkan bahagian berbulet baharu, dan panel menawarkan rollback satu klik"></td>
+<td width="50%"><img src="../assets/readme/docs-report.webp" alt="Airy Docs memaparkan halaman laporan tahunan dua lajur dengan imej muka depan sepenuh lebar, jadual KPI berlorek, pengepala dan pengaki, pada zum 80% dengan panel AI dilipat"></td>
+<td width="50%"><img src="../assets/readme/docs-ai.webp" alt="Airy Docs: gambaran keseluruhan syarikat dengan imej sepanduk; AI memadatkan bahagian Overview dan menyisipkan bahagian berbulet baharu, dan panel menawarkan rollback satu klik"></td>
 </tr>
 <tr>
 <td><b>Membuka fail sepertimana Word menyusun aturnya</b> — bahagian dua lajur, imej sepenuh muka, jadual berlorek, pengepala dan pengaki, penomboran halaman berdasarkan metrik baris Word. Gaya, komen, perubahan yang dijejak, persamaan dan tulisan dakwat kekal utuh selepas pergi-balik.</td>
@@ -80,8 +79,8 @@ pada macOS, dengan AI dipandu oleh gesaan yang boleh anda baca dalam panel.
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/sheets-ai.webp" alt="GenOffice Sheets: AI menambah helaian Summary dengan hasil mengikut wilayah dan kategori menggunakan formula SUMIF, ditambah carta lajur, dan melaporkan 43 perubahan yang digunakan dengan butang Undo"></td>
-<td width="50%"><img src="../assets/readme/sheets-qa.webp" alt="GenOffice Sheets: ditanya wilayah mana yang mencatat hasil Q2 tertinggi, AI menjawab Eropah dengan pecahan kategori dan merujuk sel yang digunakannya sebagai pautan, di sebelah helaian Orders"></td>
+<td width="50%"><img src="../assets/readme/sheets-ai.webp" alt="Airy Sheets: AI menambah helaian Summary dengan hasil mengikut wilayah dan kategori menggunakan formula SUMIF, ditambah carta lajur, dan melaporkan 43 perubahan yang digunakan dengan butang Undo"></td>
+<td width="50%"><img src="../assets/readme/sheets-qa.webp" alt="Airy Sheets: ditanya wilayah mana yang mencatat hasil Q2 tertinggi, AI menjawab Eropah dengan pecahan kategori dan merujuk sel yang digunakannya sebagai pautan, di sebelah helaian Orders"></td>
 </tr>
 <tr>
 <td><b>Bina ia</b> — daripada satu ayat, agen menambah helaian Summary dengan <code>SUMIF</code> sebenar mengikut wilayah dan kategori, menyisipkan carta lajur, dan melaksanakan 43 perubahan itu sebagai satu kelompok yang boleh dibuat asal.</td>
@@ -91,15 +90,15 @@ pada macOS, dengan AI dipandu oleh gesaan yang boleh anda baca dalam panel.
 
 ### 3 · Slides — daripada gesaan kepada deck `.pptx`
 
-<img src="../assets/readme/slides-generate.webp" alt="Time-lapse GenOffice Slides menjana deck pelabur Aurora Home: AI merancang jalan cerita dalam panel, slaid muncul satu demi satu pada kanvas, dan deck yang siap berakhir dengan closing ask" width="100%">
+<img src="../assets/readme/slides-generate.webp" alt="Time-lapse Airy Slides menjana deck pelabur Aurora Home: AI merancang jalan cerita dalam panel, slaid muncul satu demi satu pada kanvas, dan deck yang siap berakhir dengan closing ask" width="100%">
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/slides-cover.webp" alt="GenOffice Slides: slaid muka depan deck pelabur Aurora Home yang dijana AI pada kanvas, dengan gesaan asal satu baris dan ringkasan AI tentang apa yang dibinanya dalam panel"></td>
-<td width="50%"><img src="../assets/readme/slides-ai.webp" alt="GenOffice Slides: slaid penutup yang direka bagi deck 11 slaid yang sama, dengan jalur lakaran kecil di kiri dan panel AI meringkaskan jalan ceritanya"></td>
+<td width="50%"><img src="../assets/readme/slides-cover.webp" alt="Airy Slides: slaid muka depan deck pelabur Aurora Home yang dijana AI pada kanvas, dengan gesaan asal satu baris dan ringkasan AI tentang apa yang dibinanya dalam panel"></td>
+<td width="50%"><img src="../assets/readme/slides-ai.webp" alt="Airy Slides: slaid penutup yang direka bagi deck 11 slaid yang sama, dengan jalur lakaran kecil di kiri dan panel AI meringkaskan jalan ceritanya"></td>
 </tr>
 <tr>
-<td><b>Satu baris masuk</b> — "Create a 10-slide investor pitch deck for Aurora Home…". GenOffice merancang jalan cerita, menyelidik angka-angka itu, dan merangka setiap slaid terus pada kanvas sebagai `.pptx` sebenar.</td>
+<td><b>Satu baris masuk</b> — "Create a 10-slide investor pitch deck for Aurora Home…". Airy merancang jalan cerita, menyelidik angka-angka itu, dan merangka setiap slaid terus pada kanvas sebagai `.pptx` sebenar.</td>
 <td><b>Deck siap keluar</b> — sebelas slaid yang direka dengan tipografi, imej yang konsisten dan seruan tindakan penutup; teruskan menyunting dengan induk (masters), susun atur, garis pandu pintar dan pemangkasan tidak merosakkan, atau minta panel menggayakan semula, menulis semula dan menyusun semula.</td>
 </tr>
 </table>
@@ -108,8 +107,8 @@ pada macOS, dengan AI dipandu oleh gesaan yang boleh anda baca dalam panel.
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/pdf-edit.webp" alt="GenOffice PDF: mod Edit text menggariskan setiap blok teks pada halaman untuk penyuntingan semula di tempatnya sementara panel AI menjawab soalan tentang laporan itu dengan rujukan halaman"></td>
-<td width="50%"><img src="../assets/readme/pdf-convert.webp" alt="GenOffice Docs memaparkan dokumen Word yang ditukar secara setempat daripada PDF ulasan suku tahunan Helios, dibuka dalam tab kedua di sebelah PDF asal"></td>
+<td width="50%"><img src="../assets/readme/pdf-edit.webp" alt="Airy PDF: mod Edit text menggariskan setiap blok teks pada halaman untuk penyuntingan semula di tempatnya sementara panel AI menjawab soalan tentang laporan itu dengan rujukan halaman"></td>
+<td width="50%"><img src="../assets/readme/pdf-convert.webp" alt="Airy Docs memaparkan dokumen Word yang ditukar secara setempat daripada PDF ulasan suku tahunan Helios, dibuka dalam tab kedua di sebelah PDF asal"></td>
 </tr>
 <tr>
 <td><b>Sunting di dalam halaman</b> — mod Edit text menggariskan setiap blok teks untuk ditaip semula di tempatnya; strim kandungan ditulis semula melalui PDFium dengan fon asal, bukan anotasi yang sekadar menutup. Tanya AI tentang laporan panjang dan dapatkan jawapan dengan rujukan halaman.</td>
@@ -123,11 +122,11 @@ Nyatakan tujuan halaman itu dan untuk siapa ia dibina. AI mencadangkan
 **ringkasan reka bentuk** dahulu — hook, palet warna, tipografi dan arah
 gaya — sebelum membina satu fail `.html` mandiri berdasarkan token-token itu.
 
-<img src="../assets/readme/html-restyle-motion.webp" alt="Time-lapse GenOffice HTML menggayakan semula halaman pendaratan Lumen: satu permintaan Restyle dalam panel menukar halaman Midnight Studio yang gelap kepada versi Solar Daybreak yang hangat, sementara setiap bahagian dan semua kandungan kekal di tempatnya" width="100%">
+<img src="../assets/readme/html-restyle-motion.webp" alt="Time-lapse Airy HTML menggayakan semula halaman pendaratan Lumen: satu permintaan Restyle dalam panel menukar halaman Midnight Studio yang gelap kepada versi Solar Daybreak yang hangat, sementara setiap bahagian dan semua kandungan kekal di tempatnya" width="100%">
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/html-ai.webp" alt="GenOffice HTML: halaman pendaratan yang dijana untuk lampu meja solar dalam arah gelap Midnight Studio, ditunjukkan dalam pratonton langsung dengan panel AI meringkaskan halaman yang baru dibinanya"></td>
+<td width="50%"><img src="../assets/readme/html-ai.webp" alt="Airy HTML: halaman pendaratan yang dijana untuk lampu meja solar dalam arah gelap Midnight Studio, ditunjukkan dalam pratonton langsung dengan panel AI meringkaskan halaman yang baru dibinanya"></td>
 <td width="50%"><img src="../assets/readme/html-restyle.webp" alt="Halaman pendaratan Lumen yang sama digayakan semula oleh AI ke arah hangat Solar Daybreak: latar belakang seperti kertas, tajuk serif dan aksen jingga, dengan setiap bahagian dan semua teks dikekalkan"></td>
 </tr>
 <tr>
@@ -137,8 +136,8 @@ gaya — sebelum membina satu fail `.html` mandiri berdasarkan token-token itu.
 </table>
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/html-dashboard.webp" alt="GenOffice HTML: UI papan pemuka peribadi yang dijana untuk pereka bebas dalam gaya linen hangat, dengan rel kiri, sapaan serif dan empat kad metrik"></td>
-<td width="50%"><img src="../assets/readme/html-report.webp" alt="GenOffice HTML: laporan data pasaran kenderaan elektrik yang dijana dalam gaya akhbar besar, dengan kepala akhbar serif, angka utama 17.3 juta dan baris statistik"></td>
+<td width="50%"><img src="../assets/readme/html-dashboard.webp" alt="Airy HTML: UI papan pemuka peribadi yang dijana untuk pereka bebas dalam gaya linen hangat, dengan rel kiri, sapaan serif dan empat kad metrik"></td>
+<td width="50%"><img src="../assets/readme/html-report.webp" alt="Airy HTML: laporan data pasaran kenderaan elektrik yang dijana dalam gaya akhbar besar, dengan kepala akhbar serif, angka utama 17.3 juta dan baris statistik"></td>
 </tr>
 <tr>
 <td><b>Reka bentuk UI</b> — permulaan "papan pemuka peribadi" mengubah satu persona kepada susun atur yang berfungsi: rel kiri, sapaan, sparkline jam bercaj, kad invois dan penggunaan, semuanya HTML sebenar yang boleh anda serahkan kepada pembangun.</td>
@@ -150,8 +149,8 @@ gaya — sebelum membina satu fail `.html` mandiri berdasarkan token-token itu.
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/markdown-ai.webp" alt="GenOffice Markdown: perenggan yang dipilih memaparkan popover Ask AI dengan arahan yang ditaip dan cip cadangan seperti Polish, Make more concise, Expand dan Fix grammar, ditambah butang Send now dan Add to queue"></td>
-<td width="50%"><img src="../assets/readme/markdown-render.webp" alt="GenOffice Markdown memaparkan dokumen nota pelancaran dengan jadual, carta alir Mermaid dan senarai tugas, dengan gesaan permulaan panel AI di sebelah kiri"></td>
+<td width="50%"><img src="../assets/readme/markdown-ai.webp" alt="Airy Markdown: perenggan yang dipilih memaparkan popover Ask AI dengan arahan yang ditaip dan cip cadangan seperti Polish, Make more concise, Expand dan Fix grammar, ditambah butang Send now dan Add to queue"></td>
+<td width="50%"><img src="../assets/readme/markdown-render.webp" alt="Airy Markdown memaparkan dokumen nota pelancaran dengan jadual, carta alir Mermaid dan senarai tugas, dengan gesaan permulaan panel AI di sebelah kiri"></td>
 </tr>
 <tr>
 <td><b>Tanya AI tentang pilihan teks</b> — pilih mana-mana ayat dan cip <b>Ask AI</b> akan muncul: taip arahan atau pilih cadangan, hantar serta-merta, atau baris beberapa suntingan berlabuh dan jalankan dalam satu pusingan. Kemasukan yang sama wujud dalam setiap aplikasi.</td>
@@ -159,7 +158,7 @@ gaya — sebelum membina satu fail `.html` mandiri berdasarkan token-token itu.
 </tr>
 </table>
 
-## Mengapa GenOffice
+## Mengapa Airy
 
 - **Sumber terbuka**, Apache-2.0, dibangunkan secara terbuka di GitHub.
 - **Milik anda untuk dijalankan.** Aplikasi native untuk macOS, Windows dan
@@ -170,8 +169,7 @@ gaya — sebelum membina satu fail `.html` mandiri berdasarkan token-token itu.
 - **AI yang menyunting dokumen itu sendiri.** Perubahan dijejak dalam Docs,
   formula dan carta langsung dalam Sheets, slaid dilukis terus pada kanvas,
   setiap pusingan AI adalah snapshot yang boleh anda kembalikan.
-- **Model anda, kunci anda.** Log masuk dengan Genspark, atau bawa kunci
-  untuk Claude, OpenAI, Gemini, DeepSeek dan lain-lain, termasuk pelayan
+- **Model anda, kunci anda.** Bawa kunci untuk Claude, OpenAI, Gemini, DeepSeek dan lain-lain, termasuk pelayan
   setempat dan mana-mana endpoint serasi OpenAI.
 - **PDF yang diuruskan dengan betul.** Sunting teks terus dalam halaman, dan
   tukar PDF kepada Word, Excel atau PowerPoint di peranti sendiri, dengan OCR
@@ -182,10 +180,7 @@ gaya — sebelum membina satu fail `.html` mandiri berdasarkan token-token itu.
 
 ## Bahagian belakang AI
 
-**Log masuk dengan Genspark** dan tidak ada apa-apa yang perlu ditetapkan:
-panggilan model disalurkan melalui proksi Genspark (keluarga Claude, GPT dan
-Gemini) dan agen mendapat carian web serta imej, penjanaan imej, dan analisis
-imej/audio/video.
+**Bawa kunci anda sendiri.** Semua ciri AI berjalan pada penyedia yang anda konfigurasikan sendiri — butiran di bawah.
 
 **Atau bawa kunci anda sendiri.** Settings → AI menyenaraikan Claude, OpenAI,
 Gemini, DeepSeek, Kimi, GLM, Qwen, Doubao, MiniMax, Grok, Mistral, OpenRouter
@@ -204,35 +199,35 @@ yang disimpan sentiasa mengekalkan warna sebenar dokumen itu.
 
 ## Muat Turun
 
-| Platform                             | Keperluan                                             | Muat Turun                                                                                |
-| ------------------------------------ | ----------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| **macOS** — Apple Silicon (arm64)    | macOS 11+                                             | [`.dmg` terkini (arm64)](https://github.com/genspark-ai/genoffice/releases/latest)        |
-| **macOS** — Intel (x64)              | macOS 11+                                             | [`.dmg` terkini (x64)](https://github.com/genspark-ai/genoffice/releases/latest)          |
-| **Windows** (x64, kebanyakan PC)     | Windows 10+, Intel/AMD                                | [Pemasang `-x64.exe` terkini](https://github.com/genspark-ai/genoffice/releases/latest)   |
-| **Windows** pada Arm (ARM64)         | Windows 11 on Arm (Snapdragon X dan seumpamanya)      | [Pemasang `-arm64.exe` terkini](https://github.com/genspark-ai/genoffice/releases/latest) |
-| **Linux** — Debian / Ubuntu          | x86_64, glibc 2.34+ (Ubuntu 22.04 atau lebih baharu)  | [`.deb` terkini](https://github.com/genspark-ai/genoffice/releases/latest)                |
-| **Linux** — Fedora / RHEL / openSUSE | x86_64, glibc 2.34+ (Fedora 35+, RHEL 9+, Leap 15.6+) | [`.rpm` terkini](https://github.com/genspark-ai/genoffice/releases/latest)                |
-| **Linux** — pengedaran lain          | x86_64, glibc 2.34+, FUSE 2                           | [`.AppImage` terkini](https://github.com/genspark-ai/genoffice/releases/latest)           |
+| Platform                             | Keperluan                                             | Muat Turun                                                                       |
+| ------------------------------------ | ----------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **macOS** — Apple Silicon (arm64)    | macOS 11+                                             | [`.dmg` terkini (arm64)](https://github.com/besliky/airy/releases/latest)        |
+| **macOS** — Intel (x64)              | macOS 11+                                             | [`.dmg` terkini (x64)](https://github.com/besliky/airy/releases/latest)          |
+| **Windows** (x64, kebanyakan PC)     | Windows 10+, Intel/AMD                                | [Pemasang `-x64.exe` terkini](https://github.com/besliky/airy/releases/latest)   |
+| **Windows** pada Arm (ARM64)         | Windows 11 on Arm (Snapdragon X dan seumpamanya)      | [Pemasang `-arm64.exe` terkini](https://github.com/besliky/airy/releases/latest) |
+| **Linux** — Debian / Ubuntu          | x86_64, glibc 2.34+ (Ubuntu 22.04 atau lebih baharu)  | [`.deb` terkini](https://github.com/besliky/airy/releases/latest)                |
+| **Linux** — Fedora / RHEL / openSUSE | x86_64, glibc 2.34+ (Fedora 35+, RHEL 9+, Leap 15.6+) | [`.rpm` terkini](https://github.com/besliky/airy/releases/latest)                |
+| **Linux** — pengedaran lain          | x86_64, glibc 2.34+, FUSE 2                           | [`.AppImage` terkini](https://github.com/besliky/airy/releases/latest)           |
 
 Semua binaan berasal daripada `main`; pemasang macOS dan Windows telah
 ditandatangani. Versi lama boleh didapati di halaman
-[Releases](https://github.com/genspark-ai/genoffice/releases).
+[Releases](https://github.com/besliky/airy/releases).
 
 <details>
 <summary><b>Memasang pada Linux</b></summary>
 
 Fail deb dipasang menggunakan apt — ia menarik kebergantungan dan menambah
-GenOffice ke menu aplikasi:
+Airy ke menu aplikasi:
 
 ```bash
-sudo apt install ./genoffice_<version>_amd64.deb
+sudo apt install ./airy_<version>_amd64.deb
 ```
 
 Pada Fedora / keluarga RHEL / openSUSE, pasang fail rpm sebaliknya:
 
 ```bash
-sudo dnf install ./genoffice-<version>.x86_64.rpm     # Fedora / RHEL family
-sudo zypper install ./genoffice-<version>.x86_64.rpm  # openSUSE
+sudo dnf install ./airy-<version>.x86_64.rpm     # Fedora / RHEL family
+sudo zypper install ./airy-<version>.x86_64.rpm  # openSUSE
 ```
 
 AppImage berjalan di tempatnya: pasang runtime FUSE 2
@@ -240,8 +235,8 @@ AppImage berjalan di tempatnya: pasang runtime FUSE 2
 `libfuse2t64`), jadikan fail itu boleh dilaksanakan, kemudian jalankannya:
 
 ```bash
-chmod +x GenOffice-<version>.AppImage
-./GenOffice-<version>.AppImage
+chmod +x Airy-<version>.AppImage
+./Airy-<version>.AppImage
 ```
 
 </details>
@@ -288,47 +283,47 @@ yang perlu dilalui setiap perubahan dan cara pull request diterima masuk.
 
 ## Komuniti
 
-GenOffice sedang dibangunkan secara aktif dan maklum balas anda membentuknya.
+Airy sedang dibangunkan secara aktif dan maklum balas anda membentuknya.
 
 - **Laporkan pepijat atau minta ciri** di
-  [GitHub Issues](https://github.com/genspark-ai/genoffice/issues).
-- **Sertai sembang kumpulan GenOffice** di
-  [GenTeam](https://genoffice.ai/join) untuk berbual dengan pasukan dan
+  [GitHub Issues](https://github.com/besliky/airy/issues).
+- **Sertai sembang kumpulan Airy** di
+  [GenTeam](https://github.com/besliky/airy) untuk berbual dengan pasukan dan
   pengguna lain.
-- **Berikan bintang pada repo ini** jika GenOffice bermanfaat untuk anda —
+- **Berikan bintang pada repo ini** jika Airy bermanfaat untuk anda —
   ini cara terbaik untuk menyokong projek ini.
 
 ## Soalan Lazim
 
 <details>
-<summary><b>Adakah GenOffice percuma?</b></summary>
+<summary><b>Adakah Airy percuma?</b></summary>
 
-Ya. GenOffice percuma dan sumber terbuka di bawah lesen Apache-2.0 — tiada
+Ya. Airy percuma dan sumber terbuka di bawah lesen Apache-2.0 — tiada
 percubaan, tiada peringkat berbayar untuk aplikasi itu sendiri.
 
 </details>
 
 <details>
-<summary><b>Bolehkah GenOffice membuka fail Microsoft Word, Excel dan PowerPoint?</b></summary>
+<summary><b>Bolehkah Airy membuka fail Microsoft Word, Excel dan PowerPoint?</b></summary>
 
-Ya. GenOffice membuka dan menyimpan fail asli `.docx`, `.xlsx` dan `.pptx`.
+Ya. Airy membuka dan menyimpan fail asli `.docx`, `.xlsx` dan `.pptx`.
 Penyimpanan terpelihara bit demi bit: bahagian fail yang tidak anda sentuh
 ditulis semula seadanya, jadi dokumen kekal berfungsi dalam Microsoft Office.
 
 </details>
 
 <details>
-<summary><b>Adakah GenOffice berfungsi luar talian?</b></summary>
+<summary><b>Adakah Airy berfungsi luar talian?</b></summary>
 
 Penyuntingan dokumen sepenuhnya setempat — fail tidak pernah keluar daripada
 mesin anda untuk dibuka, disunting, disimpan atau ditukar. Ciri-ciri AI
 (agen, carian, alat imej) memerlukan sambungan rangkaian, sama ada dengan log
-masuk Genspark atau kunci API model anda sendiri.
+kunci API model anda sendiri.
 
 </details>
 
 <details>
-<summary><b>Bolehkah GenOffice menyunting fail PDF?</b></summary>
+<summary><b>Bolehkah Airy menyunting fail PDF?</b></summary>
 
 Ya — penyuntingan teks dan imej PDF sebenar yang menulis semula strim
 kandungan halaman dengan fon asal terpelihara, bukan anotasi yang sekadar
@@ -337,7 +332,7 @@ menutup.
 </details>
 
 <details>
-<summary><b>Bolehkah GenOffice menukar PDF kepada Word, Excel atau PowerPoint?</b></summary>
+<summary><b>Bolehkah Airy menukar PDF kepada Word, Excel atau PowerPoint?</b></summary>
 
 Ya — sepenuhnya di peranti sendiri: pengekstrakan aksara PDFium ditambah
 analisis susun atur berasaskan geometri, tanpa perkhidmatan awan, tanpa muat
@@ -350,7 +345,7 @@ halaman.
 <details>
 <summary><b>Bolehkah saya menggunakan model AI atau kunci API saya sendiri?</b></summary>
 
-Ya. Selain log masuk Genspark tanpa kunci, GenOffice menyokong bawa kunci
+Ya. Airy menyokong bawa kunci
 anda sendiri untuk Claude, OpenAI, Gemini, DeepSeek, Kimi, GLM, Qwen, Doubao,
 MiniMax, Grok, Mistral, OpenRouter dan OpenCode Zen/Go, ditambah mana-mana
 titik akhir serasi OpenAI — termasuk pelayan model setempat. Carian,
@@ -360,7 +355,7 @@ Settings → AI Media & Search.
 </details>
 
 <details>
-<summary><b>Bolehkah GenOffice menukar HTML kepada Word?</b></summary>
+<summary><b>Bolehkah Airy menukar HTML kepada Word?</b></summary>
 
 Ya — Export as Word dalam aplikasi HTML menghasilkan `.docx` asli yang boleh
 disunting, sepenuhnya di peranti sendiri. Halaman itu dipaparkan dalam
@@ -372,13 +367,13 @@ kotak berhias) dibenamkan sebagai gambar.
 </details>
 
 <details>
-<summary><b>Adakah GenOffice mengumpul sebarang data?</b></summary>
+<summary><b>Adakah Airy mengumpul sebarang data?</b></summary>
 
 Binaan pakej rasmi menghantar analitik penggunaan yang terhad secara lalai,
 dan anda boleh melumpuhkan pelaporan itu pada bila-bila masa di bawah
 Settings → General. Analitik tidak pernah menghantar kandungan dokumen, nama
 fail, laluan fail, identiti akaun atau alamat e-mel. Lihat
-[GenOffice Privacy](../../PRIVACY.md) untuk pendedahan penuh peristiwa dan
+[Airy Privacy](../../PRIVACY.md) untuk pendedahan penuh peristiwa dan
 data.
 
 </details>
@@ -391,7 +386,7 @@ ancaman untuk kandungan yang dijana AI.
 
 ## Penghargaan
 
-GenOffice tidak akan wujud tanpa projek-projek sumber terbuka ini:
+Airy tidak akan wujud tanpa projek-projek sumber terbuka ini:
 
 - [Electron](https://www.electronjs.org/) — runtime desktop untuk setiap
   aplikasi.
@@ -436,10 +431,10 @@ MIT/Apache-2.0/BSD-3-Clause/OFL.
 
 ## Lesen
 
-GenOffice dilesenkan di bawah [Apache License 2.0](../../LICENSE), dengan
+Airy dilesenkan di bawah [Apache License 2.0](../../LICENSE), dengan
 satu kekecualian: direktori `ee/` dikhususkan untuk modul perusahaan pada
 masa hadapan dan dilindungi oleh
-[Lesen Perusahaan GenOffice](../../ee/LICENSE).
+[Lesen Perusahaan Airy](../../ee/LICENSE).
 
 Nama dan logo GenOffice serta Genspark adalah tanda dagangan Mainfunc, Inc.
 Lesen Apache-2.0 tidak memberikan kebenaran untuk menggunakannya (lihat

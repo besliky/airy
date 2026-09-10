@@ -1,9 +1,9 @@
-# GenOffice Privacy
+# Airy Privacy
 
 Last updated: September 10, 2026
 
-GenOffice opens, edits, and saves documents locally. Document editing does not
-upload files to GenOffice. AI features require a network connection and send
+Airy opens, edits, and saves documents locally. Document editing does not
+upload files anywhere. AI features require a network connection and send
 requests only when you use them.
 
 ## No usage analytics

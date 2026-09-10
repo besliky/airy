@@ -17,6 +17,22 @@ that is open in the running Airy app.
   tracked changes, one undo step per agent turn, visible immediately.
 - **Local by design.** Everything file-related happens on your machine.
 
+## Download
+
+Prebuilt installers for every release are on
+[github.com/besliky/airy/releases/latest](https://github.com/besliky/airy/releases/latest):
+
+- **Windows** — `airy-<version>-setup.exe` (NSIS installer, x64)
+- **Linux** — `airy_<version>_amd64.deb` (Debian/Ubuntu) and
+  `airy-<version>-x86_64.AppImage` (runs on any distro); an `.rpm` is
+  published alongside them
+
+The installers are **not code-signed**. Windows SmartScreen and some Linux
+desktops will warn about an unknown publisher — that is expected for an
+unsigned fork; check the release notes and the CI build that produced the
+artifact, or [build from source](#development) instead. macOS builds are not
+published yet.
+
 ## What is different from upstream
 
 Airy is an independent fork of
@@ -101,17 +117,17 @@ support and limits, and the security model — is in
 
 ## Status
 
-| Area                                                                           | State               |
-| ------------------------------------------------------------------------------ | ------------------- |
-| MCP server foundation (stdio, SDK v1, path confinement)                        | done                |
-| Headless docx: open / read / insert / apply_ops / save                         | done                |
-| Live mode: `live_status` / `live_get_context` / `live_apply_ops` / `live_undo` | done                |
-| Headless xlsx via the Rust sidecar (read / save, recalc)                       | done                |
-| Legacy & ODF import: `.xls` / `.ods` (convert), `.doc` / `.odt` (soffice)      | done                |
-| De-Genspark (provider, login, gsk CLI, updater, analytics)                     | done                |
-| Branding: build configs, README, docs                                          | done (config level) |
-| i18n brand strings, npm scope rename, packaged distribution                    | not yet (phase 4b)  |
-| Slides / PDF / Markdown / HTML headless tools                                  | backlog             |
+| Area                                                                           | State           |
+| ------------------------------------------------------------------------------ | --------------- |
+| MCP server foundation (stdio, SDK v1, path confinement)                        | done            |
+| Headless docx: open / read / insert / apply_ops / save                         | done            |
+| Live mode: `live_status` / `live_get_context` / `live_apply_ops` / `live_undo` | done            |
+| Headless xlsx via the Rust sidecar (read / save, recalc)                       | done            |
+| Legacy & ODF import: `.xls` / `.ods` (convert), `.doc` / `.odt` (soffice)      | done            |
+| De-Genspark (provider, login, gsk CLI, updater, analytics)                     | done            |
+| Branding: build configs, README, docs                                          | done            |
+| i18n brand strings, UI marks, packaged distribution                            | done (phase 4b) |
+| Slides / PDF / Markdown / HTML headless tools                                  | backlog         |
 
 ## Development
 

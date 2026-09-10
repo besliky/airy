@@ -3,7 +3,7 @@
 ## Reporting a Vulnerability
 
 Please report suspected vulnerabilities privately via GitHub's
-[private vulnerability reporting](https://github.com/genspark-ai/genoffice/security/advisories/new)
+[private vulnerability reporting](https://github.com/besliky/airy/security/advisories/new)
 on this repository. Do not open public issues for security reports. We aim to
 acknowledge reports within 72 hours.
 
@@ -19,8 +19,8 @@ All application windows run with the full Electron renderer lockdown:
   (`@airy-office/electron-utils` → `safeExternalUrl`) that parses the URL and
   enforces a protocol allowlist (http/https; pdf link annotations additionally
   allow mailto). `file:`, `javascript:`, and custom schemes are always rejected.
-- No API keys are hardcoded. AI requests are proxied through the signed-in
-  account by default; user-supplied keys stay in the OS-level settings store.
+- No API keys are hardcoded. AI requests go only to the provider the user
+  configures; user-supplied keys stay in the local settings store.
 
 ## Threat Model: AI-Generated Layout Scripts (slides)
 
@@ -77,11 +77,11 @@ through `executeJavaScript` and destroys it under a watchdog timeout.
 
 ## Out of Scope
 
-- The cloud AI services this client talks to are operated separately and are
-  not part of this repository; issues with them should be reported through the
-  service provider's channels.
+- The AI providers the app calls are third-party services outside this
+  repository; issues with them should be reported through the provider's
+  own channels.
 - Vulnerabilities that require an already-compromised machine or a modified
   binary. This includes the deliberate environment-variable override points
-  for local development (`GSK_CLI_PATH`, `XLSX_SIDECAR_PATH`): setting them
+  for local development (`AIRY_XLSX_SIDECAR`, `AIRY_TEST_XLS`): setting them
   requires control of the process environment, which is equivalent to code
   execution on the machine.

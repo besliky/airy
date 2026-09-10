@@ -1,4 +1,4 @@
-# Contributing to GenOffice
+# Contributing to Airy
 
 Thanks for your interest in contributing. This document covers the local
 setup, the checks a change must pass, and the conventions used in this
@@ -6,19 +6,14 @@ repository.
 
 ## How changes land here
 
-This GitHub repository is a mirror: development happens in a private tree,
-and `main` here advances through single squashed snapshot commits
-(`Sync snapshot (<date>)`). That is why every file in a sync shows the same
-last-commit message, and why nobody — maintainers included — pushes to
-`main` directly.
+This is a normal GitHub repository: work happens on feature branches, pull
+requests are reviewed and merged into `main`, and issues are tracked here.
+Keep PRs focused — one logical change per PR — and make sure the checks below
+pass before you ask for review.
 
-External pull requests are welcome and are reviewed here. Once a change is
-accepted, a maintainer imports it into the private tree with your authorship
-preserved as a `Co-authored-by:` trailer, and it ships to `main` in the next
-snapshot; your PR is then closed with a note pointing at the snapshot that
-carried it. GitHub will show the PR as "closed" rather than "merged" — the
-code and the attribution still land. Issues and feature requests are handled
-directly on this repository as usual.
+This repository is a fork of
+[GenOffice](https://github.com/genspark-ai/genoffice) (Apache-2.0); upstream
+attribution is preserved in the [NOTICE](NOTICE) file.
 
 ## Repository layout
 
@@ -88,7 +83,7 @@ over them. Point the output directory at an APFS path instead of moving the
 repository:
 
 ```bash
-BUILD_DIR=/tmp/genoffice-release npm run dist:mac
+BUILD_DIR=/tmp/airy-release npm run dist:mac
 ```
 
 `dist:win` additionally expects the xlsx sidecar at the MinGW cross-compilation
@@ -110,8 +105,8 @@ testing and local overrides:
 | Variable                                                 | Effect                                                                        |
 | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `BUILD_DIR`                                              | Override the electron-builder output directory (default `apps/shell/release`) |
-| `GENOFFICE_USER_DATA`                                    | Override the Electron userData directory (test isolation)                     |
-| `GENOFFICE_LANG`                                         | Force the UI language instead of following the OS locale                      |
+| `AIRY_USER_DATA`                                         | Override the Electron userData directory (test isolation)                     |
+| `AIRY_LANG`                                              | Force the UI language instead of following the OS locale                      |
 | `XLSX_SIDECAR_PATH`, `XLSX_OPEN_PATH`, `XLSX_DEBUG_PORT` | Point at a locally built xlsx sidecar and its debug port                      |
 | `*_DEV_PORT`, `*_RENDERER_URL`                           | Per-app Vite dev server ports and renderer URLs (set by `npm run dev`)        |
 | `SERPER_API_KEY`, `TAVILY_API_KEY`                       | Supply a Serper or Tavily web-search key (keyless DuckDuckGo is the fallback) |

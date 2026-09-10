@@ -1,34 +1,34 @@
 <p align="center">
-  <a href="https://genoffice.ai/">
+  <a href="https://github.com/besliky/airy">
     <picture>
       <source srcset="../assets/readme/hero-dark.webp" media="(prefers-color-scheme: dark)">
-      <img src="../assets/readme/hero.webp" alt="GenOffice — het open-source AI-kantoorpakket: Docs, Sheets, Slides, PDF, Markdown en HTML met een ingebouwd AI-paneel" width="100%">
+      <img src="../assets/readme/hero.webp" alt="Airy — het open-source AI-kantoorpakket: Docs, Sheets, Slides, PDF, Markdown en HTML met een ingebouwd AI-paneel" width="100%">
     </picture>
   </a>
 </p>
 
-<h1 align="center">GenOffice</h1>
+<h1 align="center">Airy</h1>
 
 <p align="center"><b>De eerste volwaardige open-source AI-officesuite ter wereld.</b><br>
 Word-, Excel-, PowerPoint- en PDF-bestanden, bewerkt door jou en je AI, opgeslagen in de echte formaten.</p>
 
 <p align="center">
-  <a href="../../LICENSE"><img src="https://img.shields.io/github/license/genspark-ai/genoffice" alt="Licentie: Apache-2.0"></a>
-  <a href="https://github.com/genspark-ai/genoffice/releases/latest"><img src="https://img.shields.io/github/v/release/genspark-ai/genoffice" alt="Nieuwste release"></a>
-  <a href="https://github.com/genspark-ai/genoffice/releases"><img src="https://img.shields.io/github/downloads/genspark-ai/genoffice/total" alt="Downloads"></a>
-  <a href="https://github.com/genspark-ai/genoffice/stargazers"><img src="https://img.shields.io/github/stars/genspark-ai/genoffice?style=flat" alt="GitHub-sterren"></a>
+  <a href="../../LICENSE"><img src="https://img.shields.io/github/license/besliky/airy" alt="Licentie: Apache-2.0"></a>
+  <a href="https://github.com/besliky/airy/releases/latest"><img src="https://img.shields.io/github/v/release/besliky/airy" alt="Nieuwste release"></a>
+  <a href="https://github.com/besliky/airy/releases"><img src="https://img.shields.io/github/downloads/besliky/airy/total" alt="Downloads"></a>
+  <a href="https://github.com/besliky/airy/stargazers"><img src="https://img.shields.io/github/stars/besliky/airy?style=flat" alt="GitHub-sterren"></a>
 </p>
 
 <p align="center"><a href="../../README.md">English</a> · <a href="README.es.md">Español</a> · <a href="README.pt-BR.md">Português (Brasil)</a> · <a href="README.de.md">Deutsch</a> · <a href="README.fr.md">Français</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ko.md">한국어</a> · <a href="README.ja.md">日本語</a> · <a href="README.ar.md">العربية</a> · <a href="README.ru.md">Русский</a> · <a href="README.it.md">Italiano</a> · <b>Nederlands</b> · <a href="README.pl.md">Polski</a> · <a href="README.cs.md">Čeština</a> · <a href="README.id.md">Bahasa Indonesia</a> · <a href="README.ms.md">Bahasa Melayu</a> · <a href="README.th.md">ไทย</a> · <a href="README.hi.md">हिन्दी</a> · <a href="README.he.md">עברית</a></p>
 
 <p align="center">
   <a href="#download"><b>Download</b></a> ·
-  <a href="https://genoffice.ai/"><b>Website</b></a> ·
-  <a href="https://genoffice.ai/join"><b>Community</b></a> ·
+  <a href="https://github.com/besliky/airy"><b>Website</b></a> ·
+  <a href="https://github.com/besliky/airy"><b>Community</b></a> ·
   <a href="../../PRIVACY.md"><b>Privacy</b></a>
 </p>
 
-GenOffice is een gratis, open-source alternatief voor Microsoft Office voor
+Airy is een gratis, open-source alternatief voor Microsoft Office voor
 macOS, Windows en Linux. Het opent en bewaart native `.docx`-, `.xlsx`- en
 `.pptx`-bestanden, bewerkt PDF, Markdown en HTML, en zet bij elk document een
 AI-agent — geen los chatvenstertje erbij geplakt, maar een editor die het
@@ -46,14 +46,13 @@ aangepast.
   opgeslagen en geconverteerd. PDF → Word / Excel / PowerPoint, Markdown →
   Word en HTML → Word draaien allemaal on-device. Alleen de AI-aanroepen
   verlaten de machine, naar de provider die jij kiest.
-- **Jouw eigen keys, of geen enkele.** Log in met Genspark en je hoeft niets te
-  regelen, of gebruik je eigen key voor Claude, OpenAI, Gemini, DeepSeek,
+- **Jouw eigen keys, of geen enkele.** Gebruik je eigen key voor Claude, OpenAI, Gemini, DeepSeek,
   Kimi, GLM, Qwen, Doubao, MiniMax, Grok, Mistral, OpenRouter, of elk
   OpenAI-compatibel endpoint, inclusief lokale servers.
 
-**Haal het hier:** [macOS](https://github.com/genspark-ai/genoffice/releases/latest) (Apple Silicon en Intel) ·
-[Windows](https://github.com/genspark-ai/genoffice/releases/latest) (x64 en Arm) ·
-[Linux](https://github.com/genspark-ai/genoffice/releases/latest) (deb, rpm, AppImage) —
+**Haal het hier:** [macOS](https://github.com/besliky/airy/releases/latest) (Apple Silicon en Intel) ·
+[Windows](https://github.com/besliky/airy/releases/latest) (x64 en Arm) ·
+[Linux](https://github.com/besliky/airy/releases/latest) (deb, rpm, AppImage) —
 details en vereisten in [Download](#download).
 
 ## Demo
@@ -65,8 +64,8 @@ AI aangestuurd vanuit de prompt die je in het paneel kunt lezen.
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/docs-report.webp" alt="GenOffice Docs toont een pagina van een jaarverslag in twee kolommen met een cover-afbeelding over de volledige breedte, een KPI-tabel met arcering, koptekst en voettekst, op 80% zoom met het AI-paneel ingeklapt"></td>
-<td width="50%"><img src="../assets/readme/docs-ai.webp" alt="GenOffice Docs: een bedrijfsoverzicht met een bannerafbeelding; de AI heeft de Overview compacter gemaakt en een nieuwe sectie met opsommingstekens toegevoegd, en het paneel biedt een terugdraaifunctie met één klik"></td>
+<td width="50%"><img src="../assets/readme/docs-report.webp" alt="Airy Docs toont een pagina van een jaarverslag in twee kolommen met een cover-afbeelding over de volledige breedte, een KPI-tabel met arcering, koptekst en voettekst, op 80% zoom met het AI-paneel ingeklapt"></td>
+<td width="50%"><img src="../assets/readme/docs-ai.webp" alt="Airy Docs: een bedrijfsoverzicht met een bannerafbeelding; de AI heeft de Overview compacter gemaakt en een nieuwe sectie met opsommingstekens toegevoegd, en het paneel biedt een terugdraaifunctie met één klik"></td>
 </tr>
 <tr>
 <td><b>Opent het bestand precies zoals Word het opmaakt</b> — secties in twee kolommen, beeldvullende afbeeldingen, tabellen met arcering, koppen en voetteksten, paginering op basis van Words regelmetriek. Stijlen, opmerkingen, tracked changes, vergelijkingen en inkt komen ongewijzigd terug.</td>
@@ -78,8 +77,8 @@ AI aangestuurd vanuit de prompt die je in het paneel kunt lezen.
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/sheets-ai.webp" alt="GenOffice Sheets: de AI heeft een Summary-blad toegevoegd met omzet per regio en categorie via SUMIF-formules, plus een kolomdiagram, en meldt 43 toegepaste wijzigingen met een knop om ongedaan te maken"></td>
-<td width="50%"><img src="../assets/readme/sheets-qa.webp" alt="GenOffice Sheets: gevraagd welke regio de omzet in Q2 aanvoerde, antwoordt de AI Europa met de uitsplitsing per categorie en verwijst als links naar de cellen die het heeft gebruikt, naast het Orders-blad"></td>
+<td width="50%"><img src="../assets/readme/sheets-ai.webp" alt="Airy Sheets: de AI heeft een Summary-blad toegevoegd met omzet per regio en categorie via SUMIF-formules, plus een kolomdiagram, en meldt 43 toegepaste wijzigingen met een knop om ongedaan te maken"></td>
+<td width="50%"><img src="../assets/readme/sheets-qa.webp" alt="Airy Sheets: gevraagd welke regio de omzet in Q2 aanvoerde, antwoordt de AI Europa met de uitsplitsing per categorie en verwijst als links naar de cellen die het heeft gebruikt, naast het Orders-blad"></td>
 </tr>
 <tr>
 <td><b>Bouw het</b> — met één zin voegt de agent een Summary-blad toe met echte <code>SUMIF</code>-formules per regio en categorie, voegt een kolomdiagram in, en past de 43 wijzigingen toe als één batch die je in één keer ongedaan kunt maken.</td>
@@ -89,15 +88,15 @@ AI aangestuurd vanuit de prompt die je in het paneel kunt lezen.
 
 ### 3 · Slides — van een prompt naar een `.pptx`-deck
 
-<img src="../assets/readme/slides-generate.webp" alt="Timelapse van GenOffice Slides dat de Aurora Home investeerdersdeck genereert: de AI plant het verhaal in het paneel, dia's verschijnen één voor één op het canvas, en de voltooide deck eindigt met de afsluitende vraag" width="100%">
+<img src="../assets/readme/slides-generate.webp" alt="Timelapse van Airy Slides dat de Aurora Home investeerdersdeck genereert: de AI plant het verhaal in het paneel, dia's verschijnen één voor één op het canvas, en de voltooide deck eindigt met de afsluitende vraag" width="100%">
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/slides-cover.webp" alt="GenOffice Slides: de openingsslide van een door AI gegenereerd investeerdersdeck voor Aurora Home op het canvas, met de oorspronkelijke prompt van één regel en de samenvatting van de AI over wat het heeft gebouwd, in het paneel"></td>
-<td width="50%"><img src="../assets/readme/slides-ai.webp" alt="GenOffice Slides: de vormgegeven slotslide van hetzelfde deck van 11 slides, met de miniaturenstrook links en het AI-paneel dat de verhaallijn samenvat"></td>
+<td width="50%"><img src="../assets/readme/slides-cover.webp" alt="Airy Slides: de openingsslide van een door AI gegenereerd investeerdersdeck voor Aurora Home op het canvas, met de oorspronkelijke prompt van één regel en de samenvatting van de AI over wat het heeft gebouwd, in het paneel"></td>
+<td width="50%"><img src="../assets/readme/slides-ai.webp" alt="Airy Slides: de vormgegeven slotslide van hetzelfde deck van 11 slides, met de miniaturenstrook links en het AI-paneel dat de verhaallijn samenvat"></td>
 </tr>
 <tr>
-<td><b>Eén regel als input</b> — "Create a 10-slide investor pitch deck for Aurora Home…". GenOffice bepaalt de verhaallijn, zoekt de cijfers uit en zet elke slide als een echte <code>.pptx</code> op het canvas.</td>
+<td><b>Eén regel als input</b> — "Create a 10-slide investor pitch deck for Aurora Home…". Airy bepaalt de verhaallijn, zoekt de cijfers uit en zet elke slide als een echte <code>.pptx</code> op het canvas.</td>
 <td><b>Een afgewerkt deck als resultaat</b> — elf vormgegeven slides met consistente typografie, beeldmateriaal en een afsluitende call-to-action; blijf bewerken met masters, layouts, slimme hulplijnen en niet-destructief bijsnijden, of laat het paneel de stijl, tekst en volgorde aanpassen.</td>
 </tr>
 </table>
@@ -106,8 +105,8 @@ AI aangestuurd vanuit de prompt die je in het paneel kunt lezen.
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/pdf-edit.webp" alt="GenOffice PDF: Edit text mode omkadert elk tekstblok op de pagina voor bewerking op de plek zelf, terwijl het AI-paneel een vraag over het rapport beantwoordt met paginaverwijzingen"></td>
-<td width="50%"><img src="../assets/readme/pdf-convert.webp" alt="GenOffice Docs toont een Word-document dat lokaal is geconverteerd vanuit de kwartaalrapportage-PDF van Helios, geopend in een tweede tab naast de originele PDF"></td>
+<td width="50%"><img src="../assets/readme/pdf-edit.webp" alt="Airy PDF: Edit text mode omkadert elk tekstblok op de pagina voor bewerking op de plek zelf, terwijl het AI-paneel een vraag over het rapport beantwoordt met paginaverwijzingen"></td>
+<td width="50%"><img src="../assets/readme/pdf-convert.webp" alt="Airy Docs toont een Word-document dat lokaal is geconverteerd vanuit de kwartaalrapportage-PDF van Helios, geopend in een tweede tab naast de originele PDF"></td>
 </tr>
 <tr>
 <td><b>Bewerk binnen de pagina</b> — Edit text mode omkadert elk tekstblok voor herschrijven op de plek zelf; de content stream wordt via PDFium herschreven met de originele fonts, geen overplaknotitie. Stel de AI een vraag over een lang rapport en krijg antwoorden met paginaverwijzingen.</td>
@@ -121,11 +120,11 @@ Vertel waarvoor de pagina dient en voor wie hij bedoeld is. De AI stelt eerst
 een **design brief** voor — hook, kleurenpalet, typografie en stijlrichtingen
 — en bouwt daarna op basis van die tokens één zelfstandig `.html`-bestand.
 
-<img src="../assets/readme/html-restyle-motion.webp" alt="Timelapse van GenOffice HTML dat de Lumen landingspagina van stijl verandert: één Restyle-verzoek in het paneel verandert de donkere Midnight Studio-pagina in de warme Solar Daybreak-versie, terwijl elke sectie en alle inhoud op hun plek blijven" width="100%">
+<img src="../assets/readme/html-restyle-motion.webp" alt="Timelapse van Airy HTML dat de Lumen landingspagina van stijl verandert: één Restyle-verzoek in het paneel verandert de donkere Midnight Studio-pagina in de warme Solar Daybreak-versie, terwijl elke sectie en alle inhoud op hun plek blijven" width="100%">
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/html-ai.webp" alt="GenOffice HTML: een gegenereerde landingspagina voor een zonne-energie bureaulamp in de donkere stijlrichting Midnight Studio, getoond in de live preview met het AI-paneel dat de net gebouwde pagina samenvat"></td>
+<td width="50%"><img src="../assets/readme/html-ai.webp" alt="Airy HTML: een gegenereerde landingspagina voor een zonne-energie bureaulamp in de donkere stijlrichting Midnight Studio, getoond in de live preview met het AI-paneel dat de net gebouwde pagina samenvat"></td>
 <td width="50%"><img src="../assets/readme/html-restyle.webp" alt="Dezelfde Lumen-landingspagina, door de AI omgezet naar de warme stijlrichting Solar Daybreak: papieren achtergrond, serif-koppen en een oranje accent, met behoud van elke sectie en alle tekst"></td>
 </tr>
 <tr>
@@ -135,8 +134,8 @@ een **design brief** voor — hook, kleurenpalet, typografie en stijlrichtingen
 </table>
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/html-dashboard.webp" alt="GenOffice HTML: een gegenereerde persoonlijke dashboard-UI voor een freelance designer in een warme linnen stijl, met een navigatiebalk links, een begroeting in serif en vier metriekkaarten"></td>
-<td width="50%"><img src="../assets/readme/html-report.webp" alt="GenOffice HTML: een gegenereerd datarapport over de EV-markt in broadsheet-stijl, met een kopregel in serif, een hoofdcijfer van 17,3 miljoen en een rij met kerncijfers"></td>
+<td width="50%"><img src="../assets/readme/html-dashboard.webp" alt="Airy HTML: een gegenereerde persoonlijke dashboard-UI voor een freelance designer in een warme linnen stijl, met een navigatiebalk links, een begroeting in serif en vier metriekkaarten"></td>
+<td width="50%"><img src="../assets/readme/html-report.webp" alt="Airy HTML: een gegenereerd datarapport over de EV-markt in broadsheet-stijl, met een kopregel in serif, een hoofdcijfer van 17,3 miljoen en een rij met kerncijfers"></td>
 </tr>
 <tr>
 <td><b>UI-mockups</b> — de starter "personal dashboard" zet een persona om in een werkende layout: navigatiebalk links, begroeting, sparkline voor factureerbare uren, facturen- en bezettingskaarten, allemaal echte HTML die je zo aan een developer kunt overdragen.</td>
@@ -148,8 +147,8 @@ een **design brief** voor — hook, kleurenpalet, typografie en stijlrichtingen
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/markdown-ai.webp" alt="GenOffice Markdown: bij een geselecteerde alinea verschijnt een Ask AI-popover met een getypte instructie en suggestiechips zoals Polish, Make more concise, Expand en Fix grammar, plus de knoppen Send now en Add to queue"></td>
-<td width="50%"><img src="../assets/readme/markdown-render.webp" alt="GenOffice Markdown toont een document met lanceringsnotities met een tabel, een Mermaid-stroomdiagram en een taaklijst, met de startprompts van het AI-paneel aan de linkerkant"></td>
+<td width="50%"><img src="../assets/readme/markdown-ai.webp" alt="Airy Markdown: bij een geselecteerde alinea verschijnt een Ask AI-popover met een getypte instructie en suggestiechips zoals Polish, Make more concise, Expand en Fix grammar, plus de knoppen Send now en Add to queue"></td>
+<td width="50%"><img src="../assets/readme/markdown-render.webp" alt="Airy Markdown toont een document met lanceringsnotities met een tabel, een Mermaid-stroomdiagram en een taaklijst, met de startprompts van het AI-paneel aan de linkerkant"></td>
 </tr>
 <tr>
 <td><b>Ask AI over een selectie</b> — selecteer een willekeurige passage en er verschijnt een <b>Ask AI</b>-chip: typ een instructie of kies een suggestie, verstuur die direct, of verzamel meerdere aan tekst verankerde wijzigingen en voer ze in één keer uit. Dezelfde toegang bestaat in elke app.</td>
@@ -157,7 +156,7 @@ een **design brief** voor — hook, kleurenpalet, typografie en stijlrichtingen
 </tr>
 </table>
 
-## Waarom GenOffice
+## Waarom Airy
 
 - **Open source**, Apache-2.0, in het openbaar ontwikkeld op GitHub.
 - **Van jou om te draaien.** Native apps voor macOS, Windows en Linux;
@@ -169,8 +168,7 @@ een **design brief** voor — hook, kleurenpalet, typografie en stijlrichtingen
 - **Een AI die het document zelf bewerkt.** Tracked changes in Docs, live
   formules en grafieken in Sheets, slides die direct op het canvas worden
   getekend, elke AI-beurt een snapshot waarnaar je kunt teruggaan.
-- **Je eigen model, je eigen key.** Log in met Genspark, of gebruik een key
-  voor Claude, OpenAI, Gemini, DeepSeek en meer, inclusief lokale servers en
+- **Je eigen model, je eigen key.** Gebruik een key voor Claude, OpenAI, Gemini, DeepSeek en meer, inclusief lokale servers en
   elk OpenAI-compatibel endpoint.
 - **PDF goed gedaan.** Bewerk tekst direct op de pagina en converteer PDF
   naar Word, Excel of PowerPoint on-device, met systeem-OCR voor scans.
@@ -180,10 +178,7 @@ een **design brief** voor — hook, kleurenpalet, typografie en stijlrichtingen
 
 ## AI-backends
 
-**Log in met Genspark** en er is niets te configureren: modelaanroepen lopen
-via de Genspark-proxy (de Claude-, GPT- en Gemini-families) en de agents
-krijgen toegang tot web- en beeldzoeken, beeldgeneratie en analyse van beeld,
-audio en video.
+**Gebruik een eigen key.** Alle AI-functies draaien op aanbieders die je zelf configureert — details hieronder.
 
 **Of gebruik je eigen key.** Onder Settings → AI vind je Claude, OpenAI,
 Gemini, DeepSeek, Kimi, GLM, Qwen, Doubao, MiniMax, Grok, Mistral, OpenRouter
@@ -202,34 +197,34 @@ opgeslagen bestanden behouden altijd de eigen kleuren van het document.
 
 ## Download
 
-| Platform                             | Vereisten                                               | Download                                                                                    |
-| ------------------------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| **macOS** — Apple Silicon (arm64)    | macOS 11+                                               | [Nieuwste `.dmg` (arm64)](https://github.com/genspark-ai/genoffice/releases/latest)         |
-| **macOS** — Intel (x64)              | macOS 11+                                               | [Nieuwste `.dmg` (x64)](https://github.com/genspark-ai/genoffice/releases/latest)           |
-| **Windows** (x64, de meeste pc's)    | Windows 10+, Intel/AMD                                  | [Nieuwste `-x64.exe`-installer](https://github.com/genspark-ai/genoffice/releases/latest)   |
-| **Windows** op Arm (ARM64)           | Windows 11 op Arm (Snapdragon X en vergelijkbare chips) | [Nieuwste `-arm64.exe`-installer](https://github.com/genspark-ai/genoffice/releases/latest) |
-| **Linux** — Debian / Ubuntu          | x86_64, glibc 2.34+ (Ubuntu 22.04 of nieuwer)           | [Nieuwste `.deb`](https://github.com/genspark-ai/genoffice/releases/latest)                 |
-| **Linux** — Fedora / RHEL / openSUSE | x86_64, glibc 2.34+ (Fedora 35+, RHEL 9+, Leap 15.6+)   | [Nieuwste `.rpm`](https://github.com/genspark-ai/genoffice/releases/latest)                 |
-| **Linux** — overige distributies     | x86_64, glibc 2.34+, FUSE 2                             | [Nieuwste `.AppImage`](https://github.com/genspark-ai/genoffice/releases/latest)            |
+| Platform                             | Vereisten                                               | Download                                                                           |
+| ------------------------------------ | ------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **macOS** — Apple Silicon (arm64)    | macOS 11+                                               | [Nieuwste `.dmg` (arm64)](https://github.com/besliky/airy/releases/latest)         |
+| **macOS** — Intel (x64)              | macOS 11+                                               | [Nieuwste `.dmg` (x64)](https://github.com/besliky/airy/releases/latest)           |
+| **Windows** (x64, de meeste pc's)    | Windows 10+, Intel/AMD                                  | [Nieuwste `-x64.exe`-installer](https://github.com/besliky/airy/releases/latest)   |
+| **Windows** op Arm (ARM64)           | Windows 11 op Arm (Snapdragon X en vergelijkbare chips) | [Nieuwste `-arm64.exe`-installer](https://github.com/besliky/airy/releases/latest) |
+| **Linux** — Debian / Ubuntu          | x86_64, glibc 2.34+ (Ubuntu 22.04 of nieuwer)           | [Nieuwste `.deb`](https://github.com/besliky/airy/releases/latest)                 |
+| **Linux** — Fedora / RHEL / openSUSE | x86_64, glibc 2.34+ (Fedora 35+, RHEL 9+, Leap 15.6+)   | [Nieuwste `.rpm`](https://github.com/besliky/airy/releases/latest)                 |
+| **Linux** — overige distributies     | x86_64, glibc 2.34+, FUSE 2                             | [Nieuwste `.AppImage`](https://github.com/besliky/airy/releases/latest)            |
 
 Alle builds komen van `main`; de macOS- en Windows-installers zijn gesigneerd.
-Oudere versies staan op de pagina [Releases](https://github.com/genspark-ai/genoffice/releases).
+Oudere versies staan op de pagina [Releases](https://github.com/besliky/airy/releases).
 
 <details>
 <summary><b>Installeren op Linux</b></summary>
 
 De deb installeer je met apt — dat haalt de afhankelijkheden op en voegt
-GenOffice toe aan het toepassingenmenu:
+Airy toe aan het toepassingenmenu:
 
 ```bash
-sudo apt install ./genoffice_<version>_amd64.deb
+sudo apt install ./airy_<version>_amd64.deb
 ```
 
 Op Fedora, de RHEL-familie of openSUSE installeer je in plaats daarvan de rpm:
 
 ```bash
-sudo dnf install ./genoffice-<version>.x86_64.rpm     # Fedora / RHEL family
-sudo zypper install ./genoffice-<version>.x86_64.rpm  # openSUSE
+sudo dnf install ./airy-<version>.x86_64.rpm     # Fedora / RHEL family
+sudo zypper install ./airy-<version>.x86_64.rpm  # openSUSE
 ```
 
 De AppImage draait direct: installeer de FUSE 2-runtime
@@ -237,8 +232,8 @@ De AppImage draait direct: installeer de FUSE 2-runtime
 maak het bestand uitvoerbaar en start het:
 
 ```bash
-chmod +x GenOffice-<version>.AppImage
-./GenOffice-<version>.AppImage
+chmod +x Airy-<version>.AppImage
+./Airy-<version>.AppImage
 ```
 
 </details>
@@ -285,31 +280,31 @@ elke wijziging moet doorstaan en hoe pull requests worden gemerged.
 
 ## Community
 
-GenOffice wordt actief doorontwikkeld en jouw feedback bepaalt mee de
+Airy wordt actief doorontwikkeld en jouw feedback bepaalt mee de
 richting.
 
 - **Meld een bug of vraag een functie aan** via
-  [GitHub Issues](https://github.com/genspark-ai/genoffice/issues).
-- **Doe mee aan de GenOffice-groepschat** op
-  [GenTeam](https://genoffice.ai/join) om met het team en andere gebruikers te
+  [GitHub Issues](https://github.com/besliky/airy/issues).
+- **Doe mee aan de Airy-groepschat** op
+  [GenTeam](https://github.com/besliky/airy) om met het team en andere gebruikers te
   praten.
-- **Geef de repo een ster** als je iets aan GenOffice hebt — dat is de beste
+- **Geef de repo een ster** als je iets aan Airy hebt — dat is de beste
   manier om het project te steunen.
 
 ## Veelgestelde vragen
 
 <details>
-<summary><b>Is GenOffice gratis?</b></summary>
+<summary><b>Is Airy gratis?</b></summary>
 
-Ja. GenOffice is gratis en open source onder de Apache-2.0-licentie — geen
+Ja. Airy is gratis en open source onder de Apache-2.0-licentie — geen
 proefperiode, geen betaalde laag voor de apps zelf.
 
 </details>
 
 <details>
-<summary><b>Kan GenOffice bestanden van Microsoft Word, Excel en PowerPoint openen?</b></summary>
+<summary><b>Kan Airy bestanden van Microsoft Word, Excel en PowerPoint openen?</b></summary>
 
-Ja. GenOffice opent en bewaart native `.docx`-, `.xlsx`- en `.pptx`-bestanden.
+Ja. Airy opent en bewaart native `.docx`-, `.xlsx`- en `.pptx`-bestanden.
 Opslaan is byte-behoudend: delen van het bestand die je niet hebt aangeraakt,
 worden byte-voor-byte terugweggeschreven, zodat documenten gewoon blijven
 werken in Microsoft Office.
@@ -317,17 +312,17 @@ werken in Microsoft Office.
 </details>
 
 <details>
-<summary><b>Werkt GenOffice offline?</b></summary>
+<summary><b>Werkt Airy offline?</b></summary>
 
 Documenten bewerken is volledig lokaal — bestanden verlaten je machine nooit
 om te worden geopend, bewerkt, opgeslagen of geconverteerd. De AI-functies
 (agents, search, beeldtools) hebben een netwerkverbinding nodig, met ofwel
-een Genspark-login of je eigen model-API-key.
+je eigen model-API-key.
 
 </details>
 
 <details>
-<summary><b>Kan GenOffice PDF-bestanden bewerken?</b></summary>
+<summary><b>Kan Airy PDF-bestanden bewerken?</b></summary>
 
 Ja — echte bewerking van PDF-tekst en -afbeeldingen, waarbij de content
 stream van de pagina wordt herschreven met behoud van de originele fonts,
@@ -336,7 +331,7 @@ niet met overplaknotities.
 </details>
 
 <details>
-<summary><b>Kan GenOffice PDF converteren naar Word, Excel of PowerPoint?</b></summary>
+<summary><b>Kan Airy PDF converteren naar Word, Excel of PowerPoint?</b></summary>
 
 Ja — volledig on-device: tekenniveau-extractie met PDFium plus
 geometrie-gebaseerde layout-analyse, geen cloudservice, geen upload. Gescande
@@ -349,7 +344,7 @@ pagina-afbeelding.
 <details>
 <summary><b>Kan ik mijn eigen AI-model of API-key gebruiken?</b></summary>
 
-Ja. Naast de keyless Genspark-login ondersteunt GenOffice je eigen key voor
+Ja. Airy ondersteunt je eigen key voor
 Claude, OpenAI, Gemini, DeepSeek, Kimi, GLM, Qwen, Doubao, MiniMax, Grok,
 Mistral, OpenRouter en OpenCode Zen/Go, plus elk OpenAI-compatibel endpoint —
 inclusief lokale modelservers. Search, beeldgeneratie en analyse van beeld en
@@ -358,7 +353,7 @@ video gebruiken hun eigen keys onder Settings → AI Media & Search.
 </details>
 
 <details>
-<summary><b>Kan GenOffice HTML converteren naar Word?</b></summary>
+<summary><b>Kan Airy HTML converteren naar Word?</b></summary>
 
 Ja — Export as Word in de HTML-app levert volledig on-device een native,
 bewerkbare `.docx` op. De pagina wordt gerenderd in de ingebouwde Chromium en
@@ -370,13 +365,13 @@ afbeelding ingevoegd.
 </details>
 
 <details>
-<summary><b>Verzamelt GenOffice gegevens?</b></summary>
+<summary><b>Verzamelt Airy gegevens?</b></summary>
 
 De officiële, kant-en-klare builds versturen standaard beperkte
 gebruiksanalyse, en je kunt rapportage op elk moment uitschakelen onder
 Settings → General. Analytics verstuurt nooit documentinhoud, bestandsnamen,
 bestandspaden, accountidentiteit of e-mailadressen. Zie
-[GenOffice Privacy](../../PRIVACY.md) voor de volledige lijst van events en
+[Airy Privacy](../../PRIVACY.md) voor de volledige lijst van events en
 gegevens die worden gedeeld.
 
 </details>
@@ -389,7 +384,7 @@ dreigingsmodellen voor door AI gegenereerde content.
 
 ## Met dank aan
 
-GenOffice zou niet mogelijk zijn zonder deze open-source projecten:
+Airy zou niet mogelijk zijn zonder deze open-source projecten:
 
 - [Electron](https://www.electronjs.org/) — de desktop-runtime voor elke app.
 - [Univer](https://github.com/dream-num/univer) (Apache-2.0) — de
@@ -435,7 +430,7 @@ MIT/Apache-2.0/BSD-3-Clause/OFL.
 
 ## Licentie
 
-GenOffice wordt uitgebracht onder de [Apache License 2.0](../../LICENSE), met
+Airy wordt uitgebracht onder de [Apache License 2.0](../../LICENSE), met
 één uitzondering: de map `ee/` is gereserveerd voor toekomstige
 enterprise-modules en valt onder de
 [GenOffice Enterprise License](../../ee/LICENSE).

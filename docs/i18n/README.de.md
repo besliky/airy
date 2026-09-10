@@ -1,34 +1,34 @@
 <p align="center">
-  <a href="https://genoffice.ai/">
+  <a href="https://github.com/besliky/airy">
     <picture>
       <source srcset="../assets/readme/hero-dark.webp" media="(prefers-color-scheme: dark)">
-      <img src="../assets/readme/hero.webp" alt="GenOffice – die Open-Source-KI-Office-Suite: Docs, Sheets, Slides, PDF, Markdown und HTML mit integriertem KI-Panel" width="100%">
+      <img src="../assets/readme/hero.webp" alt="Airy – die Open-Source-KI-Office-Suite: Docs, Sheets, Slides, PDF, Markdown und HTML mit integriertem KI-Panel" width="100%">
     </picture>
   </a>
 </p>
 
-<h1 align="center">GenOffice</h1>
+<h1 align="center">Airy</h1>
 
 <p align="center"><b>Die weltweit erste vollwertige Open-Source-KI-Office-Suite.</b><br>
 Word-, Excel-, PowerPoint- und PDF-Dateien, bearbeitet von dir und deiner KI, gespeichert in den echten Formaten.</p>
 
 <p align="center">
-  <a href="../../LICENSE"><img src="https://img.shields.io/github/license/genspark-ai/genoffice" alt="Lizenz: Apache-2.0"></a>
-  <a href="https://github.com/genspark-ai/genoffice/releases/latest"><img src="https://img.shields.io/github/v/release/genspark-ai/genoffice" alt="Neueste Version"></a>
-  <a href="https://github.com/genspark-ai/genoffice/releases"><img src="https://img.shields.io/github/downloads/genspark-ai/genoffice/total" alt="Downloads"></a>
-  <a href="https://github.com/genspark-ai/genoffice/stargazers"><img src="https://img.shields.io/github/stars/genspark-ai/genoffice?style=flat" alt="GitHub-Sterne"></a>
+  <a href="../../LICENSE"><img src="https://img.shields.io/github/license/besliky/airy" alt="Lizenz: Apache-2.0"></a>
+  <a href="https://github.com/besliky/airy/releases/latest"><img src="https://img.shields.io/github/v/release/besliky/airy" alt="Neueste Version"></a>
+  <a href="https://github.com/besliky/airy/releases"><img src="https://img.shields.io/github/downloads/besliky/airy/total" alt="Downloads"></a>
+  <a href="https://github.com/besliky/airy/stargazers"><img src="https://img.shields.io/github/stars/besliky/airy?style=flat" alt="GitHub-Sterne"></a>
 </p>
 
 <p align="center"><a href="../../README.md">English</a> · <a href="README.es.md">Español</a> · <a href="README.pt-BR.md">Português (Brasil)</a> · <b>Deutsch</b> · <a href="README.fr.md">Français</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ko.md">한국어</a> · <a href="README.ja.md">日本語</a> · <a href="README.ar.md">العربية</a> · <a href="README.ru.md">Русский</a> · <a href="README.it.md">Italiano</a> · <a href="README.nl.md">Nederlands</a> · <a href="README.pl.md">Polski</a> · <a href="README.cs.md">Čeština</a> · <a href="README.id.md">Bahasa Indonesia</a> · <a href="README.ms.md">Bahasa Melayu</a> · <a href="README.th.md">ไทย</a> · <a href="README.hi.md">हिन्दी</a> · <a href="README.he.md">עברית</a></p>
 
 <p align="center">
   <a href="#download"><b>Download</b></a> ·
-  <a href="https://genoffice.ai/"><b>Website</b></a> ·
-  <a href="https://genoffice.ai/join"><b>Community</b></a> ·
+  <a href="https://github.com/besliky/airy"><b>Website</b></a> ·
+  <a href="https://github.com/besliky/airy"><b>Community</b></a> ·
   <a href="../../PRIVACY.md"><b>Datenschutz</b></a>
 </p>
 
-GenOffice ist eine kostenlose Open-Source-Alternative zu Microsoft Office für
+Airy ist eine kostenlose Open-Source-Alternative zu Microsoft Office für
 macOS, Windows und Linux. Es öffnet und speichert native `.docx`-, `.xlsx`-
 und `.pptx`-Dateien, bearbeitet PDF, Markdown und HTML und stellt jedem
 Dokument einen KI-Agenten zur Seite – keine angeflanschte Chat-Box, sondern
@@ -47,15 +47,14 @@ er verändert hat.
   bearbeitet, gespeichert und konvertiert. PDF → Word / Excel / PowerPoint,
   Markdown → Word und HTML → Word laufen vollständig auf dem Gerät. Nur die
   KI-Aufrufe verlassen den Rechner – zu dem Anbieter, den du wählst.
-- **Deine Schlüssel oder keine.** Melde dich mit Genspark an und du brauchst
-  keine Schlüssel, oder bring deinen eigenen Schlüssel für Claude, OpenAI,
+- **Deine Schlüssel oder keine.** Bringe deinen eigenen Schlüssel für Claude, OpenAI,
   Gemini, DeepSeek, Kimi, GLM, Qwen, Doubao, MiniMax, Grok, Mistral,
   OpenRouter oder jeden OpenAI-kompatiblen Endpunkt mit – auch lokale Server
   werden unterstützt.
 
-**Los geht's:** [macOS](https://github.com/genspark-ai/genoffice/releases/latest) (Apple Silicon und Intel) ·
-[Windows](https://github.com/genspark-ai/genoffice/releases/latest) (x64 und Arm) ·
-[Linux](https://github.com/genspark-ai/genoffice/releases/latest) (deb, rpm, AppImage) —
+**Los geht's:** [macOS](https://github.com/besliky/airy/releases/latest) (Apple Silicon und Intel) ·
+[Windows](https://github.com/besliky/airy/releases/latest) (x64 und Arm) ·
+[Linux](https://github.com/besliky/airy/releases/latest) (deb, rpm, AppImage) —
 Details und Voraussetzungen unter [Download](#download).
 
 ## Demo
@@ -68,8 +67,8 @@ kannst.
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/docs-report.webp" alt="GenOffice Docs stellt eine zweispaltige Geschäftsberichtsseite mit vollbreitem Titelbild, schattierter KPI-Tabelle, Kopf- und Fußzeile bei 80 % Zoom mit eingeklapptem KI-Panel dar"></td>
-<td width="50%"><img src="../assets/readme/docs-ai.webp" alt="GenOffice Docs: eine Unternehmensübersicht mit einem Banner-Bild; die KI hat die Übersicht gestrafft und einen neuen Abschnitt mit Aufzählungspunkten eingefügt, und das Panel bietet ein Rückgängig per Klick"></td>
+<td width="50%"><img src="../assets/readme/docs-report.webp" alt="Airy Docs stellt eine zweispaltige Geschäftsberichtsseite mit vollbreitem Titelbild, schattierter KPI-Tabelle, Kopf- und Fußzeile bei 80 % Zoom mit eingeklapptem KI-Panel dar"></td>
+<td width="50%"><img src="../assets/readme/docs-ai.webp" alt="Airy Docs: eine Unternehmensübersicht mit einem Banner-Bild; die KI hat die Übersicht gestrafft und einen neuen Abschnitt mit Aufzählungspunkten eingefügt, und das Panel bietet ein Rückgängig per Klick"></td>
 </tr>
 <tr>
 <td><b>Öffnet die Datei genau so, wie Word sie layoutet</b> — zweispaltige Abschnitte, randlose Bilder, schattierte Tabellen, Kopf- und Fußzeilen, Seitenumbruch nach Words Zeilenmetrik. Formatvorlagen, Kommentare, nachverfolgte Änderungen, Formeln und Tinteneingaben bleiben beim Roundtrip unverändert.</td>
@@ -81,8 +80,8 @@ kannst.
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/sheets-ai.webp" alt="GenOffice Sheets: die KI hat ein Summary-Tabellenblatt mit Umsatz nach Region und Kategorie über SUMIF-Formeln sowie ein Säulendiagramm hinzugefügt und meldet 43 angewendete Änderungen mit einer Rückgängig-Schaltfläche"></td>
-<td width="50%"><img src="../assets/readme/sheets-qa.webp" alt="GenOffice Sheets: auf die Frage, welche Region den Q2-Umsatz anführte, antwortet die KI mit Europa samt Aufschlüsselung nach Kategorie und verlinkt die verwendeten Zellen als Belege, neben dem Orders-Tabellenblatt"></td>
+<td width="50%"><img src="../assets/readme/sheets-ai.webp" alt="Airy Sheets: die KI hat ein Summary-Tabellenblatt mit Umsatz nach Region und Kategorie über SUMIF-Formeln sowie ein Säulendiagramm hinzugefügt und meldet 43 angewendete Änderungen mit einer Rückgängig-Schaltfläche"></td>
+<td width="50%"><img src="../assets/readme/sheets-qa.webp" alt="Airy Sheets: auf die Frage, welche Region den Q2-Umsatz anführte, antwortet die KI mit Europa samt Aufschlüsselung nach Kategorie und verlinkt die verwendeten Zellen als Belege, neben dem Orders-Tabellenblatt"></td>
 </tr>
 <tr>
 <td><b>Bau es</b> — aus einem einzigen Satz fügt der Agent ein Summary-Tabellenblatt mit echten <code>SUMIF</code>s nach Region und Kategorie hinzu, fügt ein Säulendiagramm ein und wendet die 43 Änderungen als einen einzigen, rückgängig machbaren Vorgang an.</td>
@@ -92,15 +91,15 @@ kannst.
 
 ### 3 · Slides – vom Prompt zur `.pptx`-Präsentation
 
-<img src="../assets/readme/slides-generate.webp" alt="Zeitraffer von GenOffice Slides bei der Erstellung des Investoren-Decks für Aurora Home: Die KI plant die Storyline im Panel, die Folien erscheinen nacheinander auf der Leinwand, und das fertige Deck endet mit dem abschließenden Ask" width="100%">
+<img src="../assets/readme/slides-generate.webp" alt="Zeitraffer von Airy Slides bei der Erstellung des Investoren-Decks für Aurora Home: Die KI plant die Storyline im Panel, die Folien erscheinen nacheinander auf der Leinwand, und das fertige Deck endet mit dem abschließenden Ask" width="100%">
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/slides-cover.webp" alt="GenOffice Slides: die Titelfolie einer von der KI erstellten Investoren-Präsentation für Aurora Home auf der Arbeitsfläche, mit dem ursprünglichen Ein-Zeilen-Prompt und der Zusammenfassung der KI im Panel, was sie erstellt hat"></td>
-<td width="50%"><img src="../assets/readme/slides-ai.webp" alt="GenOffice Slides: die gestaltete Abschlussfolie derselben 11-Folien-Präsentation, mit der Miniaturansicht-Leiste links und dem KI-Panel, das den Handlungsbogen zusammenfasst"></td>
+<td width="50%"><img src="../assets/readme/slides-cover.webp" alt="Airy Slides: die Titelfolie einer von der KI erstellten Investoren-Präsentation für Aurora Home auf der Arbeitsfläche, mit dem ursprünglichen Ein-Zeilen-Prompt und der Zusammenfassung der KI im Panel, was sie erstellt hat"></td>
+<td width="50%"><img src="../assets/readme/slides-ai.webp" alt="Airy Slides: die gestaltete Abschlussfolie derselben 11-Folien-Präsentation, mit der Miniaturansicht-Leiste links und dem KI-Panel, das den Handlungsbogen zusammenfasst"></td>
 </tr>
 <tr>
-<td><b>Eine Zeile rein</b> — „Erstelle eine 10-Folien-Investoren-Präsentation für Aurora Home…“. GenOffice plant den Handlungsbogen, recherchiert die Zahlen und entwirft jede Folie direkt auf der Arbeitsfläche als echte <code>.pptx</code>.</td>
+<td><b>Eine Zeile rein</b> — „Erstelle eine 10-Folien-Investoren-Präsentation für Aurora Home…“. Airy plant den Handlungsbogen, recherchiert die Zahlen und entwirft jede Folie direkt auf der Arbeitsfläche als echte <code>.pptx</code>.</td>
 <td><b>Eine fertige Präsentation raus</b> — elf gestaltete Folien mit einheitlicher Typografie, Bildsprache und einem abschließenden Call-to-Action; weiter bearbeiten mit Master-Folien, Layouts, intelligenten Hilfslinien und zerstörungsfreiem Zuschneiden, oder das Panel bitten, neu zu stylen, umzuschreiben und neu zu ordnen.</td>
 </tr>
 </table>
@@ -109,8 +108,8 @@ kannst.
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/pdf-edit.webp" alt="GenOffice PDF: Der Textbearbeitungsmodus umrahmt jeden Textblock auf der Seite zur direkten Bearbeitung, während das KI-Panel eine Frage zum Bericht mit Seitenangaben beantwortet"></td>
-<td width="50%"><img src="../assets/readme/pdf-convert.webp" alt="GenOffice Docs zeigt ein Word-Dokument, das lokal aus dem PDF des Helios-Quartalsberichts konvertiert wurde, geöffnet in einem zweiten Tab neben dem Original-PDF"></td>
+<td width="50%"><img src="../assets/readme/pdf-edit.webp" alt="Airy PDF: Der Textbearbeitungsmodus umrahmt jeden Textblock auf der Seite zur direkten Bearbeitung, während das KI-Panel eine Frage zum Bericht mit Seitenangaben beantwortet"></td>
+<td width="50%"><img src="../assets/readme/pdf-convert.webp" alt="Airy Docs zeigt ein Word-Dokument, das lokal aus dem PDF des Helios-Quartalsberichts konvertiert wurde, geöffnet in einem zweiten Tab neben dem Original-PDF"></td>
 </tr>
 <tr>
 <td><b>Direkt auf der Seite bearbeiten</b> — der Textbearbeitungsmodus umrahmt jeden Textblock zum direkten Neutippen; der Inhaltsstream wird über PDFium mit den Originalschriften neu geschrieben, nicht mit einer überdeckenden Anmerkung. Frag die KI zu einem langen Bericht und erhalte Antworten mit Seitenangaben.</td>
@@ -125,11 +124,11 @@ Sag, wofür die Seite gedacht ist und für wen. Die KI schlägt zunächst ein
 Stilrichtungen – und baut dann eine einzige, in sich geschlossene `.html`-Datei
 nach diesen Vorgaben.
 
-<img src="../assets/readme/html-restyle-motion.webp" alt="Zeitraffer von GenOffice HTML beim Neugestalten der Lumen-Landingpage: Eine einzige Restyle-Anfrage im Panel verwandelt die dunkle Midnight Studio-Seite in die warme Solar Daybreak-Version, während jeder Abschnitt und der gesamte Text unverändert bleiben" width="100%">
+<img src="../assets/readme/html-restyle-motion.webp" alt="Zeitraffer von Airy HTML beim Neugestalten der Lumen-Landingpage: Eine einzige Restyle-Anfrage im Panel verwandelt die dunkle Midnight Studio-Seite in die warme Solar Daybreak-Version, während jeder Abschnitt und der gesamte Text unverändert bleiben" width="100%">
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/html-ai.webp" alt="GenOffice HTML: eine generierte Landingpage für eine Solar-Schreibtischlampe in der dunklen Stilrichtung „Midnight Studio“, gezeigt in der Live-Vorschau mit dem KI-Panel, das die gerade erstellte Seite zusammenfasst"></td>
+<td width="50%"><img src="../assets/readme/html-ai.webp" alt="Airy HTML: eine generierte Landingpage für eine Solar-Schreibtischlampe in der dunklen Stilrichtung „Midnight Studio“, gezeigt in der Live-Vorschau mit dem KI-Panel, das die gerade erstellte Seite zusammenfasst"></td>
 <td width="50%"><img src="../assets/readme/html-restyle.webp" alt="Dieselbe Lumen-Landingpage, von der KI in die warme Stilrichtung „Solar Daybreak“ umgestylt: Papierhintergrund, Serifen-Überschriften und ein Orange-Akzent, wobei jeder Abschnitt und der gesamte Text erhalten bleiben"></td>
 </tr>
 <tr>
@@ -139,8 +138,8 @@ nach diesen Vorgaben.
 </table>
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/html-dashboard.webp" alt="GenOffice HTML: ein generiertes persönliches Dashboard-UI für eine freiberufliche Designerin im warmen Leinen-Stil, mit einer linken Leiste, einer Begrüßung in Serifenschrift und vier Kennzahlen-Karten"></td>
-<td width="50%"><img src="../assets/readme/html-report.webp" alt="GenOffice HTML: ein generierter Datenreport zum E-Auto-Markt im Broadsheet-Stil, mit einem Serifen-Kopf, einer Schlagzeile von 17,3 Millionen und einer Kennzahlenzeile"></td>
+<td width="50%"><img src="../assets/readme/html-dashboard.webp" alt="Airy HTML: ein generiertes persönliches Dashboard-UI für eine freiberufliche Designerin im warmen Leinen-Stil, mit einer linken Leiste, einer Begrüßung in Serifenschrift und vier Kennzahlen-Karten"></td>
+<td width="50%"><img src="../assets/readme/html-report.webp" alt="Airy HTML: ein generierter Datenreport zum E-Auto-Markt im Broadsheet-Stil, mit einem Serifen-Kopf, einer Schlagzeile von 17,3 Millionen und einer Kennzahlenzeile"></td>
 </tr>
 <tr>
 <td><b>UI-Mockups</b> — die Vorlage „Personal Dashboard“ macht aus einer Persona ein funktionierendes Layout: linke Leiste, Begrüßung, Sparkline für abrechenbare Stunden, Rechnungs- und Auslastungskarten – alles echtes HTML, das du direkt an eine Entwicklerin oder einen Entwickler weitergeben kannst.</td>
@@ -152,8 +151,8 @@ nach diesen Vorgaben.
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/markdown-ai.webp" alt="GenOffice Markdown: In einem ausgewählten Absatz erscheint ein Ask-AI-Popover mit einer eingegebenen Anweisung und Vorschlags-Chips wie „Polish“, „Make more concise“, „Expand“ und „Fix grammar“, außerdem den Schaltflächen „Send now“ und „Add to queue“"></td>
-<td width="50%"><img src="../assets/readme/markdown-render.webp" alt="GenOffice Markdown stellt ein Launch-Notes-Dokument mit einer Tabelle, einem Mermaid-Flussdiagramm und einer Aufgabenliste dar, mit den Start-Prompts des KI-Panels links"></td>
+<td width="50%"><img src="../assets/readme/markdown-ai.webp" alt="Airy Markdown: In einem ausgewählten Absatz erscheint ein Ask-AI-Popover mit einer eingegebenen Anweisung und Vorschlags-Chips wie „Polish“, „Make more concise“, „Expand“ und „Fix grammar“, außerdem den Schaltflächen „Send now“ und „Add to queue“"></td>
+<td width="50%"><img src="../assets/readme/markdown-render.webp" alt="Airy Markdown stellt ein Launch-Notes-Dokument mit einer Tabelle, einem Mermaid-Flussdiagramm und einer Aufgabenliste dar, mit den Start-Prompts des KI-Panels links"></td>
 </tr>
 <tr>
 <td><b>Ask AI zu einer Auswahl</b> — markiere eine beliebige Textstelle, und ein <b>Ask AI</b>-Chip erscheint: eine Anweisung eingeben oder einen Vorschlag auswählen, sofort senden, oder mehrere verankerte Änderungen in eine Warteschlange legen und in einem Durchgang ausführen. Denselben Einstiegspunkt gibt es in jeder App.</td>
@@ -161,7 +160,7 @@ nach diesen Vorgaben.
 </tr>
 </table>
 
-## Warum GenOffice
+## Warum Airy
 
 - **Open Source**, Apache-2.0, offen entwickelt auf GitHub.
 - **Läuft auf deinem Rechner.** Native Apps für macOS, Windows und Linux;
@@ -173,8 +172,7 @@ nach diesen Vorgaben.
   Docs, echte Formeln und Diagramme in Sheets, Folien werden direkt auf die
   Arbeitsfläche gezeichnet, und jeder KI-Schritt hinterlässt einen Snapshot,
   den du zurückrollen kannst.
-- **Dein Modell, dein Schlüssel.** Melde dich mit Genspark an oder bring einen
-  eigenen Schlüssel für Claude, OpenAI, Gemini, DeepSeek und mehr mit – lokale
+- **Dein Modell, dein Schlüssel.** Bringe einen eigenen Schlüssel für Claude, OpenAI, Gemini, DeepSeek und mehr mit – lokale
   Server und jeder OpenAI-kompatible Endpunkt sind ebenfalls möglich.
 - **PDF richtig gemacht.** Text direkt auf der Seite bearbeiten und PDF lokal
   in Word, Excel oder PowerPoint konvertieren, mit System-OCR für Scans.
@@ -184,10 +182,7 @@ nach diesen Vorgaben.
 
 ## KI-Backends
 
-**Mit Genspark anmelden**, und es gibt nichts zu konfigurieren:
-Modellaufrufe laufen über den Genspark-Proxy (die Modellfamilien Claude, GPT
-und Gemini), und die Agenten erhalten Web- und Bildsuche, Bildgenerierung
-sowie Bild-/Audio-/Videoanalyse.
+**Bringe deinen eigenen Schlüssel mit.** Alle KI-Funktionen laufen über Anbieter, die du selbst konfigurierst — Details unten.
 
 **Oder bring deinen eigenen Schlüssel mit.** Unter Einstellungen → KI stehen
 Claude, OpenAI, Gemini, DeepSeek, Kimi, GLM, Qwen, Doubao, MiniMax, Grok,
@@ -207,35 +202,35 @@ Farben des Dokuments.
 
 ## Download
 
-| Plattform                            | Voraussetzungen                                       | Download                                                                                    |
-| ------------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| **macOS** – Apple Silicon (arm64)    | macOS 11+                                             | [Neueste `.dmg` (arm64)](https://github.com/genspark-ai/genoffice/releases/latest)          |
-| **macOS** – Intel (x64)              | macOS 11+                                             | [Neueste `.dmg` (x64)](https://github.com/genspark-ai/genoffice/releases/latest)            |
-| **Windows** (x64, die meisten PCs)   | Windows 10+, Intel/AMD                                | [Neuester `-x64.exe`-Installer](https://github.com/genspark-ai/genoffice/releases/latest)   |
-| **Windows** auf Arm (ARM64)          | Windows 11 auf Arm (Snapdragon X und Ähnliche)        | [Neuester `-arm64.exe`-Installer](https://github.com/genspark-ai/genoffice/releases/latest) |
-| **Linux** – Debian / Ubuntu          | x86_64, glibc 2.34+ (Ubuntu 22.04 oder neuer)         | [Neueste `.deb`](https://github.com/genspark-ai/genoffice/releases/latest)                  |
-| **Linux** – Fedora / RHEL / openSUSE | x86_64, glibc 2.34+ (Fedora 35+, RHEL 9+, Leap 15.6+) | [Neueste `.rpm`](https://github.com/genspark-ai/genoffice/releases/latest)                  |
-| **Linux** – andere Distributionen    | x86_64, glibc 2.34+, FUSE 2                           | [Neueste `.AppImage`](https://github.com/genspark-ai/genoffice/releases/latest)             |
+| Plattform                            | Voraussetzungen                                       | Download                                                                           |
+| ------------------------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **macOS** – Apple Silicon (arm64)    | macOS 11+                                             | [Neueste `.dmg` (arm64)](https://github.com/besliky/airy/releases/latest)          |
+| **macOS** – Intel (x64)              | macOS 11+                                             | [Neueste `.dmg` (x64)](https://github.com/besliky/airy/releases/latest)            |
+| **Windows** (x64, die meisten PCs)   | Windows 10+, Intel/AMD                                | [Neuester `-x64.exe`-Installer](https://github.com/besliky/airy/releases/latest)   |
+| **Windows** auf Arm (ARM64)          | Windows 11 auf Arm (Snapdragon X und Ähnliche)        | [Neuester `-arm64.exe`-Installer](https://github.com/besliky/airy/releases/latest) |
+| **Linux** – Debian / Ubuntu          | x86_64, glibc 2.34+ (Ubuntu 22.04 oder neuer)         | [Neueste `.deb`](https://github.com/besliky/airy/releases/latest)                  |
+| **Linux** – Fedora / RHEL / openSUSE | x86_64, glibc 2.34+ (Fedora 35+, RHEL 9+, Leap 15.6+) | [Neueste `.rpm`](https://github.com/besliky/airy/releases/latest)                  |
+| **Linux** – andere Distributionen    | x86_64, glibc 2.34+, FUSE 2                           | [Neueste `.AppImage`](https://github.com/besliky/airy/releases/latest)             |
 
 Alle Builds stammen aus `main`; die macOS- und Windows-Installer sind
 signiert. Ältere Versionen findest du auf der Seite
-[Releases](https://github.com/genspark-ai/genoffice/releases).
+[Releases](https://github.com/besliky/airy/releases).
 
 <details>
 <summary><b>Installation unter Linux</b></summary>
 
 Das deb-Paket wird mit apt installiert – es zieht die Abhängigkeiten nach
-und fügt GenOffice dem Anwendungsmenü hinzu:
+und fügt Airy dem Anwendungsmenü hinzu:
 
 ```bash
-sudo apt install ./genoffice_<version>_amd64.deb
+sudo apt install ./airy_<version>_amd64.deb
 ```
 
 Installiere auf Fedora / RHEL-Familie / openSUSE stattdessen das rpm-Paket:
 
 ```bash
-sudo dnf install ./genoffice-<version>.x86_64.rpm     # Fedora / RHEL family
-sudo zypper install ./genoffice-<version>.x86_64.rpm  # openSUSE
+sudo dnf install ./airy-<version>.x86_64.rpm     # Fedora / RHEL family
+sudo zypper install ./airy-<version>.x86_64.rpm  # openSUSE
 ```
 
 Das AppImage läuft direkt: installiere die FUSE-2-Laufzeit
@@ -243,8 +238,8 @@ Das AppImage läuft direkt: installiere die FUSE-2-Laufzeit
 `libfuse2t64`), mache die Datei ausführbar und starte sie dann:
 
 ```bash
-chmod +x GenOffice-<version>.AppImage
-./GenOffice-<version>.AppImage
+chmod +x Airy-<version>.AppImage
+./Airy-<version>.AppImage
 ```
 
 </details>
@@ -292,30 +287,30 @@ und wie Pull Requests landen, stehen in
 
 ## Community
 
-GenOffice wird aktiv weiterentwickelt, und dein Feedback prägt es mit.
+Airy wird aktiv weiterentwickelt, und dein Feedback prägt es mit.
 
 - **Melde einen Bug oder wünsche dir ein Feature** in
-  [GitHub Issues](https://github.com/genspark-ai/genoffice/issues).
-- **Tritt dem GenOffice-Gruppenchat** auf
-  [GenTeam](https://genoffice.ai/join) bei, um mit dem Team und anderen
+  [GitHub Issues](https://github.com/besliky/airy/issues).
+- **Tritt dem Airy-Gruppenchat** auf
+  [GenTeam](https://github.com/besliky/airy) bei, um mit dem Team und anderen
   Nutzern zu sprechen.
-- **Gib dem Repo einen Stern**, wenn dir GenOffice nützlich ist – das ist
+- **Gib dem Repo einen Stern**, wenn dir Airy nützlich ist – das ist
   die beste Art, das Projekt zu unterstützen.
 
 ## FAQ
 
 <details>
-<summary><b>Ist GenOffice kostenlos?</b></summary>
+<summary><b>Ist Airy kostenlos?</b></summary>
 
-Ja. GenOffice ist kostenlos und Open Source unter der Apache-2.0-Lizenz –
+Ja. Airy ist kostenlos und Open Source unter der Apache-2.0-Lizenz –
 keine Testversion, keine kostenpflichtige Stufe für die Apps selbst.
 
 </details>
 
 <details>
-<summary><b>Kann GenOffice Microsoft Word-, Excel- und PowerPoint-Dateien öffnen?</b></summary>
+<summary><b>Kann Airy Microsoft Word-, Excel- und PowerPoint-Dateien öffnen?</b></summary>
 
-Ja. GenOffice öffnet und speichert native `.docx`-, `.xlsx`- und
+Ja. Airy öffnet und speichert native `.docx`-, `.xlsx`- und
 `.pptx`-Dateien. Das Speichern ist byteerhaltend: Teile der Datei, die du
 nicht angefasst hast, werden Byte für Byte zurückgeschrieben, sodass
 Dokumente in Microsoft Office weiter funktionieren.
@@ -323,18 +318,17 @@ Dokumente in Microsoft Office weiter funktionieren.
 </details>
 
 <details>
-<summary><b>Funktioniert GenOffice offline?</b></summary>
+<summary><b>Funktioniert Airy offline?</b></summary>
 
 Die Dokumentbearbeitung ist vollständig lokal – Dateien verlassen deinen
 Rechner nie, um geöffnet, bearbeitet, gespeichert oder konvertiert zu
 werden. Die KI-Funktionen (Agenten, Suche, Bildwerkzeuge) benötigen eine
-Netzwerkverbindung, entweder über eine Genspark-Anmeldung oder deinen
-eigenen Modell-API-Schlüssel.
+Netzwerkverbindung über deinen eigenen Modell-API-Schlüssel.
 
 </details>
 
 <details>
-<summary><b>Kann GenOffice PDF-Dateien bearbeiten?</b></summary>
+<summary><b>Kann Airy PDF-Dateien bearbeiten?</b></summary>
 
 Ja – echte PDF-Text- und Bildbearbeitung, die den Seiteninhalts-Stream unter
 Erhalt der Originalschriften neu schreibt, statt überdeckender Anmerkungen.
@@ -342,7 +336,7 @@ Erhalt der Originalschriften neu schreibt, statt überdeckender Anmerkungen.
 </details>
 
 <details>
-<summary><b>Kann GenOffice PDF in Word, Excel oder PowerPoint konvertieren?</b></summary>
+<summary><b>Kann Airy PDF in Word, Excel oder PowerPoint konvertieren?</b></summary>
 
 Ja – vollständig lokal: zeichenweise Extraktion über PDFium plus
 geometriebasierte Layoutanalyse, kein Cloud-Dienst, kein Upload. Auch
@@ -355,7 +349,7 @@ Seitenbild konvertiert werden.
 <details>
 <summary><b>Kann ich mein eigenes KI-Modell oder meinen eigenen API-Schlüssel verwenden?</b></summary>
 
-Ja. Neben der schlüssellosen Genspark-Anmeldung unterstützt GenOffice das
+Ja. Airy unterstützt das
 Mitbringen eigener Schlüssel für Claude, OpenAI, Gemini, DeepSeek, Kimi,
 GLM, Qwen, Doubao, MiniMax, Grok, Mistral, OpenRouter und OpenCode Zen/Go,
 plus jeden OpenAI-kompatiblen Endpunkt – einschließlich lokaler
@@ -365,7 +359,7 @@ eigene Schlüssel unter Einstellungen → KI-Medien & Suche.
 </details>
 
 <details>
-<summary><b>Kann GenOffice HTML in Word konvertieren?</b></summary>
+<summary><b>Kann Airy HTML in Word konvertieren?</b></summary>
 
 Ja – **Als Word exportieren** in der HTML-App erzeugt vollständig lokal
 eine native, bearbeitbare `.docx`. Die Seite wird im eingebauten Chromium
@@ -377,14 +371,14 @@ Boxen) werden als Bilder eingebettet.
 </details>
 
 <details>
-<summary><b>Erfasst GenOffice irgendwelche Daten?</b></summary>
+<summary><b>Erfasst Airy irgendwelche Daten?</b></summary>
 
 Offizielle gepackte Builds senden standardmäßig begrenzte Nutzungsanalysen,
 und du kannst die Übermittlung jederzeit unter Einstellungen → Allgemein
 deaktivieren. Die Analysen senden niemals Dokumentinhalte, Dateinamen,
 Dateipfade, Kontoidentität oder E-Mail-Adressen. Die vollständigen Angaben
 zu Ereignissen und Daten stehen in
-[GenOffice-Datenschutz](../../PRIVACY.md).
+[Airy-Datenschutz](../../PRIVACY.md).
 
 </details>
 
@@ -396,7 +390,7 @@ KI-generierte Inhalte stehen in [SECURITY.md](../../SECURITY.md).
 
 ## Danksagungen
 
-GenOffice wäre ohne diese Open-Source-Projekte nicht möglich:
+Airy wäre ohne diese Open-Source-Projekte nicht möglich:
 
 - [Electron](https://www.electronjs.org/) – die Desktop-Laufzeitumgebung für jede App.
 - [Univer](https://github.com/dream-num/univer) (Apache-2.0) – der
@@ -441,7 +435,7 @@ Laufzeitabhängigkeiten stehen unter MIT/Apache-2.0/BSD-3-Clause/OFL.
 
 ## Lizenz
 
-GenOffice steht unter der [Apache License 2.0](../../LICENSE), mit einer
+Airy steht unter der [Apache License 2.0](../../LICENSE), mit einer
 Ausnahme: Das Verzeichnis `ee/` ist für zukünftige Enterprise-Module
 reserviert und unterliegt der
 [GenOffice Enterprise License](../../ee/LICENSE).

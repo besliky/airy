@@ -1,34 +1,34 @@
 <p align="center">
-  <a href="https://genoffice.ai/">
+  <a href="https://github.com/besliky/airy">
     <picture>
       <source srcset="../assets/readme/hero-dark.webp" media="(prefers-color-scheme: dark)">
-      <img src="../assets/readme/hero.webp" alt="GenOffice — สวีท Office ที่ขับเคลื่อนด้วย AI แบบโอเพนซอร์ส: Docs, Sheets, Slides, PDF, Markdown และ HTML พร้อมแผง AI ในตัว" width="100%">
+      <img src="../assets/readme/hero.webp" alt="Airy — สวีท Office ที่ขับเคลื่อนด้วย AI แบบโอเพนซอร์ส: Docs, Sheets, Slides, PDF, Markdown และ HTML พร้อมแผง AI ในตัว" width="100%">
     </picture>
   </a>
 </p>
 
-<h1 align="center">GenOffice</h1>
+<h1 align="center">Airy</h1>
 
 <p align="center"><b>ชุดโปรแกรม Office AI แบบโอเพนซอร์สที่ครบฟีเจอร์รายแรกของโลก</b><br>
 ไฟล์ Word, Excel, PowerPoint และ PDF แก้ไขโดยคุณและ AI ของคุณ บันทึกกลับเป็นฟอร์แมตจริง</p>
 
 <p align="center">
-  <a href="../../LICENSE"><img src="https://img.shields.io/github/license/genspark-ai/genoffice" alt="License: Apache-2.0"></a>
-  <a href="https://github.com/genspark-ai/genoffice/releases/latest"><img src="https://img.shields.io/github/v/release/genspark-ai/genoffice" alt="Latest release"></a>
-  <a href="https://github.com/genspark-ai/genoffice/releases"><img src="https://img.shields.io/github/downloads/genspark-ai/genoffice/total" alt="Downloads"></a>
-  <a href="https://github.com/genspark-ai/genoffice/stargazers"><img src="https://img.shields.io/github/stars/genspark-ai/genoffice?style=flat" alt="GitHub stars"></a>
+  <a href="../../LICENSE"><img src="https://img.shields.io/github/license/besliky/airy" alt="License: Apache-2.0"></a>
+  <a href="https://github.com/besliky/airy/releases/latest"><img src="https://img.shields.io/github/v/release/besliky/airy" alt="Latest release"></a>
+  <a href="https://github.com/besliky/airy/releases"><img src="https://img.shields.io/github/downloads/besliky/airy/total" alt="Downloads"></a>
+  <a href="https://github.com/besliky/airy/stargazers"><img src="https://img.shields.io/github/stars/besliky/airy?style=flat" alt="GitHub stars"></a>
 </p>
 
 <p align="center"><a href="../../README.md">English</a> · <a href="README.es.md">Español</a> · <a href="README.pt-BR.md">Português (Brasil)</a> · <a href="README.de.md">Deutsch</a> · <a href="README.fr.md">Français</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ko.md">한국어</a> · <a href="README.ja.md">日本語</a> · <a href="README.ar.md">العربية</a> · <a href="README.ru.md">Русский</a> · <a href="README.it.md">Italiano</a> · <a href="README.nl.md">Nederlands</a> · <a href="README.pl.md">Polski</a> · <a href="README.cs.md">Čeština</a> · <a href="README.id.md">Bahasa Indonesia</a> · <a href="README.ms.md">Bahasa Melayu</a> · <b>ไทย</b> · <a href="README.hi.md">हिन्दी</a> · <a href="README.he.md">עברית</a></p>
 
 <p align="center">
   <a href="#download"><b>ดาวน์โหลด</b></a> ·
-  <a href="https://genoffice.ai/"><b>เว็บไซต์</b></a> ·
-  <a href="https://genoffice.ai/join"><b>คอมมูนิตี้</b></a> ·
+  <a href="https://github.com/besliky/airy"><b>เว็บไซต์</b></a> ·
+  <a href="https://github.com/besliky/airy"><b>คอมมูนิตี้</b></a> ·
   <a href="../../PRIVACY.md"><b>ความเป็นส่วนตัว</b></a>
 </p>
 
-GenOffice คือทางเลือกฟรีและโอเพนซอร์สของ Microsoft Office สำหรับ macOS,
+Airy คือทางเลือกฟรีและโอเพนซอร์สของ Microsoft Office สำหรับ macOS,
 Windows และ Linux เปิดและบันทึกไฟล์ `.docx`, `.xlsx` และ `.pptx` แบบดั้งเดิม
 แก้ไข PDF, Markdown และ HTML ได้ และวางเอเจนต์ AI ไว้ข้างเอกสารทุกฉบับ —
 ไม่ใช่กล่องแชทที่แปะไว้ข้างๆ แต่เป็นเอดิเตอร์ที่อ่านไฟล์ ทำการแก้ไข
@@ -44,15 +44,14 @@ Windows และ Linux เปิดและบันทึกไฟล์ `.do
   และแปลงบนเครื่องของคุณเอง PDF → Word / Excel / PowerPoint, Markdown → Word
   และ HTML → Word ทั้งหมดทำงานในเครื่อง มีเพียงการเรียก AI เท่านั้นที่ออกจาก
   เครื่องไปยังผู้ให้บริการที่คุณเลือก
-- **ใช้คีย์ของคุณเองหรือไม่ต้องใช้เลยก็ได้** ลงชื่อเข้าใช้ด้วย Genspark
-  แล้วข้ามการตั้งค่าคีย์ไปได้เลย หรือใช้คีย์ของคุณเองกับ Claude, OpenAI,
+- **ใช้คีย์ของคุณเองหรือไม่ต้องใช้เลยก็ได้** ใช้คีย์ของคุณเองกับ Claude, OpenAI,
   Gemini, DeepSeek, Kimi, GLM, Qwen, Doubao, MiniMax, Grok, Mistral,
   OpenRouter หรือ endpoint ที่รองรับ OpenAI-compatible ใดๆ
   รวมถึงเซิร์ฟเวอร์โมเดลภายในเครื่องด้วย
 
-**ดาวน์โหลด:** [macOS](https://github.com/genspark-ai/genoffice/releases/latest) (Apple Silicon และ Intel) ·
-[Windows](https://github.com/genspark-ai/genoffice/releases/latest) (x64 และ Arm) ·
-[Linux](https://github.com/genspark-ai/genoffice/releases/latest) (deb, rpm, AppImage) —
+**ดาวน์โหลด:** [macOS](https://github.com/besliky/airy/releases/latest) (Apple Silicon และ Intel) ·
+[Windows](https://github.com/besliky/airy/releases/latest) (x64 และ Arm) ·
+[Linux](https://github.com/besliky/airy/releases/latest) (deb, rpm, AppImage) —
 รายละเอียดและความต้องการของระบบดูได้ในหัวข้อ [ดาวน์โหลด](#download)
 
 ## เดโม
@@ -64,8 +63,8 @@ Windows และ Linux เปิดและบันทึกไฟล์ `.do
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/docs-report.webp" alt="GenOffice Docs แสดงหน้ารายงานประจำปีแบบสองคอลัมน์ พร้อมภาพหน้าปกเต็มความกว้าง ตาราง KPI แบบมีเงา หัวกระดาษและท้ายกระดาษ ที่ซูม 80% โดยแผง AI ถูกย่อไว้"></td>
-<td width="50%"><img src="../assets/readme/docs-ai.webp" alt="GenOffice Docs: ภาพรวมบริษัทพร้อมภาพแบนเนอร์ AI ได้ปรับส่วน Overview ให้กระชับขึ้นและแทรกส่วนบุลเลตใหม่ โดยแผงมีปุ่มย้อนกลับคลิกเดียว"></td>
+<td width="50%"><img src="../assets/readme/docs-report.webp" alt="Airy Docs แสดงหน้ารายงานประจำปีแบบสองคอลัมน์ พร้อมภาพหน้าปกเต็มความกว้าง ตาราง KPI แบบมีเงา หัวกระดาษและท้ายกระดาษ ที่ซูม 80% โดยแผง AI ถูกย่อไว้"></td>
+<td width="50%"><img src="../assets/readme/docs-ai.webp" alt="Airy Docs: ภาพรวมบริษัทพร้อมภาพแบนเนอร์ AI ได้ปรับส่วน Overview ให้กระชับขึ้นและแทรกส่วนบุลเลตใหม่ โดยแผงมีปุ่มย้อนกลับคลิกเดียว"></td>
 </tr>
 <tr>
 <td><b>เปิดไฟล์ตามที่ Word จัดวาง</b> — ส่วนสองคอลัมน์ ภาพเต็มหน้า ตารางแบบมีเงา หัวกระดาษและท้ายกระดาษ การแบ่งหน้าตามมาตรวัดบรรทัดของ Word สไตล์ ความคิดเห็น tracked changes สมการ และงานเขียนด้วยลายมือคงเดิมทุกรอบการเปิด-บันทึก</td>
@@ -77,8 +76,8 @@ Windows และ Linux เปิดและบันทึกไฟล์ `.do
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/sheets-ai.webp" alt="GenOffice Sheets: AI เพิ่มชีต Summary พร้อมรายรับตามภูมิภาคและหมวดหมู่โดยใช้สูตร SUMIF บวกกราฟแท่ง และรายงานว่ามีการเปลี่ยนแปลง 43 รายการพร้อมปุ่ม Undo"></td>
-<td width="50%"><img src="../assets/readme/sheets-qa.webp" alt="GenOffice Sheets: เมื่อถูกถามว่าภูมิภาคใดมีรายรับ Q2 นำหน้า AI ตอบว่ายุโรป พร้อมรายละเอียดแยกตามหมวดหมู่และอ้างอิงเซลล์ที่ใช้เป็นลิงก์ ข้างชีต Orders"></td>
+<td width="50%"><img src="../assets/readme/sheets-ai.webp" alt="Airy Sheets: AI เพิ่มชีต Summary พร้อมรายรับตามภูมิภาคและหมวดหมู่โดยใช้สูตร SUMIF บวกกราฟแท่ง และรายงานว่ามีการเปลี่ยนแปลง 43 รายการพร้อมปุ่ม Undo"></td>
+<td width="50%"><img src="../assets/readme/sheets-qa.webp" alt="Airy Sheets: เมื่อถูกถามว่าภูมิภาคใดมีรายรับ Q2 นำหน้า AI ตอบว่ายุโรป พร้อมรายละเอียดแยกตามหมวดหมู่และอ้างอิงเซลล์ที่ใช้เป็นลิงก์ ข้างชีต Orders"></td>
 </tr>
 <tr>
 <td><b>สร้างมันขึ้นมา</b> — จากประโยคเดียว เอเจนต์เพิ่มชีต Summary พร้อมสูตร <code>SUMIF</code> จริงแยกตามภูมิภาคและหมวดหมู่ แทรกกราฟแท่ง และรวมการเปลี่ยนแปลงทั้ง 43 รายการเป็นชุดเดียวที่ย้อนกลับได้</td>
@@ -88,15 +87,15 @@ Windows และ Linux เปิดและบันทึกไฟล์ `.do
 
 ### 3 · Slides — จากพรอมป์สู่สไลด์ `.pptx`
 
-<img src="../assets/readme/slides-generate.webp" alt="ภาพไทม์แลปส์ของ GenOffice Slides ขณะสร้างสไลด์นำเสนอนักลงทุน Aurora Home: AI วางโครงเรื่องในแผงควบคุม สไลด์ปรากฏบนแคนวาสทีละแผ่น และเดคที่เสร็จสมบูรณ์ปิดท้ายด้วย closing ask" width="100%">
+<img src="../assets/readme/slides-generate.webp" alt="ภาพไทม์แลปส์ของ Airy Slides ขณะสร้างสไลด์นำเสนอนักลงทุน Aurora Home: AI วางโครงเรื่องในแผงควบคุม สไลด์ปรากฏบนแคนวาสทีละแผ่น และเดคที่เสร็จสมบูรณ์ปิดท้ายด้วย closing ask" width="100%">
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/slides-cover.webp" alt="GenOffice Slides: สไลด์หน้าปกของดาต้าเดคนักลงทุน Aurora Home ที่สร้างโดย AI บนแคนวาส พร้อมพรอมป์บรรทัดเดียวต้นฉบับและสรุปของ AI ว่าสร้างอะไรไปในแผง"></td>
-<td width="50%"><img src="../assets/readme/slides-ai.webp" alt="GenOffice Slides: สไลด์ปิดที่ออกแบบแล้วของเดคเดียวกันที่มี 11 สไลด์ พร้อมแถบภาพย่อทางซ้ายและแผง AI สรุปเนื้อเรื่อง"></td>
+<td width="50%"><img src="../assets/readme/slides-cover.webp" alt="Airy Slides: สไลด์หน้าปกของดาต้าเดคนักลงทุน Aurora Home ที่สร้างโดย AI บนแคนวาส พร้อมพรอมป์บรรทัดเดียวต้นฉบับและสรุปของ AI ว่าสร้างอะไรไปในแผง"></td>
+<td width="50%"><img src="../assets/readme/slides-ai.webp" alt="Airy Slides: สไลด์ปิดที่ออกแบบแล้วของเดคเดียวกันที่มี 11 สไลด์ พร้อมแถบภาพย่อทางซ้ายและแผง AI สรุปเนื้อเรื่อง"></td>
 </tr>
 <tr>
-<td><b>ใส่แค่บรรทัดเดียว</b> — "สร้างสไลด์นำเสนอนักลงทุน 10 สไลด์สำหรับ Aurora Home…" GenOffice วางเนื้อเรื่อง ค้นคว้าตัวเลข และร่างทุกสไลด์ลงบนแคนวาสเป็น `.pptx` จริง</td>
+<td><b>ใส่แค่บรรทัดเดียว</b> — "สร้างสไลด์นำเสนอนักลงทุน 10 สไลด์สำหรับ Aurora Home…" Airy วางเนื้อเรื่อง ค้นคว้าตัวเลข และร่างทุกสไลด์ลงบนแคนวาสเป็น `.pptx` จริง</td>
 <td><b>ได้เดคที่เสร็จสมบูรณ์</b> — สไลด์ที่ออกแบบแล้ว 11 สไลด์ด้วยไทโปกราฟีและภาพที่สอดคล้องกัน และคำกระตุ้นการตัดสินใจปิดท้าย แก้ไขต่อได้ด้วย master, layout, smart guide และการครอปแบบไม่ทำลายต้นฉบับ หรือให้แผงช่วยปรับสไตล์ เขียนใหม่ และจัดลำดับใหม่</td>
 </tr>
 </table>
@@ -105,8 +104,8 @@ Windows และ Linux เปิดและบันทึกไฟล์ `.do
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/pdf-edit.webp" alt="GenOffice PDF: โหมด Edit text ขีดกรอบทุกบล็อกข้อความบนหน้าเพื่อแก้ไขในตำแหน่งเดิม ขณะที่แผง AI ตอบคำถามเกี่ยวกับรายงานพร้อมอ้างอิงหมายเลขหน้า"></td>
-<td width="50%"><img src="../assets/readme/pdf-convert.webp" alt="GenOffice Docs แสดงเอกสาร Word ที่แปลงในเครื่องจาก PDF รายงานรายไตรมาส Helios เปิดในแท็บที่สองข้างไฟล์ PDF ต้นฉบับ"></td>
+<td width="50%"><img src="../assets/readme/pdf-edit.webp" alt="Airy PDF: โหมด Edit text ขีดกรอบทุกบล็อกข้อความบนหน้าเพื่อแก้ไขในตำแหน่งเดิม ขณะที่แผง AI ตอบคำถามเกี่ยวกับรายงานพร้อมอ้างอิงหมายเลขหน้า"></td>
+<td width="50%"><img src="../assets/readme/pdf-convert.webp" alt="Airy Docs แสดงเอกสาร Word ที่แปลงในเครื่องจาก PDF รายงานรายไตรมาส Helios เปิดในแท็บที่สองข้างไฟล์ PDF ต้นฉบับ"></td>
 </tr>
 <tr>
 <td><b>แก้ไขในหน้าเอกสาร</b> — โหมด Edit text ขีดกรอบทุกบล็อกข้อความเพื่อพิมพ์ทับในตำแหน่งเดิม โดย content stream ถูกเขียนใหม่ผ่าน PDFium ด้วยฟอนต์เดิม ไม่ใช่การแปะข้อความทับ ถาม AI เกี่ยวกับรายงานยาวๆ แล้วได้คำตอบพร้อมอ้างอิงหมายเลขหน้า</td>
@@ -120,11 +119,11 @@ Windows และ Linux เปิดและบันทึกไฟล์ `.do
 ก่อน — hook, จานสี, ไทโปกราฟี และแนวทางสไตล์ — จากนั้นจึงสร้างไฟล์ `.html`
 แบบครบในตัวไฟล์เดียวตามโทเคนเหล่านั้น
 
-<img src="../assets/readme/html-restyle-motion.webp" alt="ภาพไทม์แลปส์ของ GenOffice HTML ขณะปรับสไตล์หน้า Landing Page ของ Lumen: คำขอ Restyle เพียงครั้งเดียวในแผงควบคุมเปลี่ยนหน้า Midnight Studio ที่มืดให้เป็นเวอร์ชัน Solar Daybreak ที่อบอุ่น โดยทุกส่วนและเนื้อหาทั้งหมดยังคงอยู่ในตำแหน่งเดิม" width="100%">
+<img src="../assets/readme/html-restyle-motion.webp" alt="ภาพไทม์แลปส์ของ Airy HTML ขณะปรับสไตล์หน้า Landing Page ของ Lumen: คำขอ Restyle เพียงครั้งเดียวในแผงควบคุมเปลี่ยนหน้า Midnight Studio ที่มืดให้เป็นเวอร์ชัน Solar Daybreak ที่อบอุ่น โดยทุกส่วนและเนื้อหาทั้งหมดยังคงอยู่ในตำแหน่งเดิม" width="100%">
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/html-ai.webp" alt="GenOffice HTML: หน้า landing page ที่สร้างขึ้นสำหรับโคมไฟตั้งโต๊ะพลังงานแสงอาทิตย์ในแนว Midnight Studio โทนมืด แสดงในพรีวิวสดพร้อมแผง AI สรุปหน้าที่สร้างไปแล้ว"></td>
+<td width="50%"><img src="../assets/readme/html-ai.webp" alt="Airy HTML: หน้า landing page ที่สร้างขึ้นสำหรับโคมไฟตั้งโต๊ะพลังงานแสงอาทิตย์ในแนว Midnight Studio โทนมืด แสดงในพรีวิวสดพร้อมแผง AI สรุปหน้าที่สร้างไปแล้ว"></td>
 <td width="50%"><img src="../assets/readme/html-restyle.webp" alt="หน้า landing page Lumen เดิมที่ถูก AI ปรับสไตล์ใหม่เป็นแนว Solar Daybreak โทนอบอุ่น: พื้นหลังสีกระดาษ หัวข้อฟอนต์ serif และสีเน้นส้ม โดยทุกส่วนและเนื้อหาทั้งหมดยังคงอยู่"></td>
 </tr>
 <tr>
@@ -134,8 +133,8 @@ Windows และ Linux เปิดและบันทึกไฟล์ `.do
 </table>
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/html-dashboard.webp" alt="GenOffice HTML: หน้า dashboard ส่วนตัวที่สร้างขึ้นสำหรับนักออกแบบฟรีแลนซ์ในสไตล์ผ้าลินินโทนอุ่น มีแถบด้านซ้าย คำทักทายฟอนต์ serif และการ์ดเมตริกสี่ใบ"></td>
-<td width="50%"><img src="../assets/readme/html-report.webp" alt="GenOffice HTML: รายงานข้อมูลตลาดรถยนต์ไฟฟ้าที่สร้างขึ้นในสไตล์หนังสือพิมพ์ พร้อมหัวเรื่องฟอนต์ serif ตัวเลขเด่น 17.3 ล้าน และแถวข้อมูลสถิติ"></td>
+<td width="50%"><img src="../assets/readme/html-dashboard.webp" alt="Airy HTML: หน้า dashboard ส่วนตัวที่สร้างขึ้นสำหรับนักออกแบบฟรีแลนซ์ในสไตล์ผ้าลินินโทนอุ่น มีแถบด้านซ้าย คำทักทายฟอนต์ serif และการ์ดเมตริกสี่ใบ"></td>
+<td width="50%"><img src="../assets/readme/html-report.webp" alt="Airy HTML: รายงานข้อมูลตลาดรถยนต์ไฟฟ้าที่สร้างขึ้นในสไตล์หนังสือพิมพ์ พร้อมหัวเรื่องฟอนต์ serif ตัวเลขเด่น 17.3 ล้าน และแถวข้อมูลสถิติ"></td>
 </tr>
 <tr>
 <td><b>โมเดล UI จำลอง</b> — เทมเพลตเริ่มต้น "personal dashboard" เปลี่ยนเพอร์โซนาให้เป็นเลย์เอาต์ที่ใช้งานได้จริง: แถบด้านซ้าย คำทักทาย สปาร์กไลน์ชั่วโมงที่เรียกเก็บเงินได้ การ์ดใบแจ้งหนี้และการใช้งาน ทั้งหมดเป็น HTML จริงที่ส่งต่อให้นักพัฒนาได้</td>
@@ -147,8 +146,8 @@ Windows และ Linux เปิดและบันทึกไฟล์ `.do
 
 <table>
 <tr>
-<td width="50%"><img src="../assets/readme/markdown-ai.webp" alt="GenOffice Markdown: พารากราฟที่เลือกไว้แสดงป็อปโอเวอร์ Ask AI พร้อมคำสั่งที่พิมพ์และชิปคำแนะนำ เช่น Polish, Make more concise, Expand และ Fix grammar พร้อมปุ่ม Send now และ Add to queue"></td>
-<td width="50%"><img src="../assets/readme/markdown-render.webp" alt="GenOffice Markdown แสดงเอกสารบันทึกการเปิดตัวที่มีตาราง แผนภาพโฟลว์ Mermaid และรายการงาน พร้อมพรอมป์เริ่มต้นของแผง AI ทางซ้าย"></td>
+<td width="50%"><img src="../assets/readme/markdown-ai.webp" alt="Airy Markdown: พารากราฟที่เลือกไว้แสดงป็อปโอเวอร์ Ask AI พร้อมคำสั่งที่พิมพ์และชิปคำแนะนำ เช่น Polish, Make more concise, Expand และ Fix grammar พร้อมปุ่ม Send now และ Add to queue"></td>
+<td width="50%"><img src="../assets/readme/markdown-render.webp" alt="Airy Markdown แสดงเอกสารบันทึกการเปิดตัวที่มีตาราง แผนภาพโฟลว์ Mermaid และรายการงาน พร้อมพรอมป์เริ่มต้นของแผง AI ทางซ้าย"></td>
 </tr>
 <tr>
 <td><b>ถาม AI เกี่ยวกับข้อความที่เลือก</b> — เลือกข้อความส่วนใดก็ได้ แล้วชิป <b>Ask AI</b> จะปรากฏขึ้น: พิมพ์คำสั่งหรือเลือกคำแนะนำ ส่งทันที หรือจัดคิวการแก้ไขแบบยึดตำแหน่งไว้หลายรายการแล้วรันทีเดียว จุดเข้าใช้งานเดียวกันนี้มีอยู่ในทุกแอป</td>
@@ -156,7 +155,7 @@ Windows และ Linux เปิดและบันทึกไฟล์ `.do
 </tr>
 </table>
 
-## ทำไมต้อง GenOffice
+## ทำไมต้อง Airy
 
 - **โอเพนซอร์ส** Apache-2.0 พัฒนาแบบเปิดบน GitHub
 - **เป็นของคุณให้รันเอง** แอปเนทิฟสำหรับ macOS, Windows และ Linux ไฟล์อยู่บนดิสก์
@@ -165,7 +164,7 @@ Windows และ Linux เปิดและบันทึกไฟล์ `.do
   ส่วนของไฟล์ที่คุณไม่ได้แก้ไขจะถูกคัดลอกไว้เหมือนเดิม
 - **AI ที่แก้ไขเอกสารได้เอง** tracked changes ใน Docs สูตรและกราฟที่คำนวณสดใน
   Sheets สไลด์ที่วาดตรงบนแคนวาส ทุกรอบของ AI คือสแนปช็อตที่คุณย้อนกลับได้
-- **โมเดลของคุณ คีย์ของคุณ** ลงชื่อเข้าใช้ด้วย Genspark หรือใส่คีย์ของคุณเองสำหรับ
+- **โมเดลของคุณ คีย์ของคุณ** ใส่คีย์ของคุณเองสำหรับ
   Claude, OpenAI, Gemini, DeepSeek และอื่นๆ รวมถึงเซิร์ฟเวอร์ในเครื่องและ
   endpoint ที่รองรับ OpenAI-compatible ใดๆ
 - **PDF ที่ทำได้อย่างถูกต้อง** แก้ไขข้อความในตำแหน่งเดิมบนหน้า และแปลง PDF เป็น
@@ -175,9 +174,7 @@ Windows และ Linux เปิดและบันทึกไฟล์ `.do
 
 ## แบ็กเอนด์ AI
 
-**ลงชื่อเข้าใช้ด้วย Genspark** แล้วไม่ต้องตั้งค่าอะไรเลย: การเรียกโมเดล
-จะส่งผ่านพร็อกซีของ Genspark (ตระกูล Claude, GPT และ Gemini) และเอเจนต์
-จะได้รับความสามารถค้นหาเว็บและภาพ สร้างภาพ และวิเคราะห์ภาพ/เสียง/วิดีโอ
+**ใช้คีย์ของคุณเอง.** ฟีเจอร์ AI ทั้งหมดทำงานกับผู้ให้บริการที่คุณกำหนดเอง — รายละเอียดด้านล่าง
 
 **หรือใช้คีย์ของคุณเอง** เมนู Settings → AI มีให้เลือก Claude, OpenAI,
 Gemini, DeepSeek, Kimi, GLM, Qwen, Doubao, MiniMax, Grok, Mistral,
@@ -197,34 +194,34 @@ endpoint ที่รองรับ OpenAI-compatible ใดๆ สำหรั
 
 ## ดาวน์โหลด
 
-| แพลตฟอร์ม                            | ความต้องการของระบบ                                    | ดาวน์โหลด                                                                                  |
-| ------------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **macOS** — Apple Silicon (arm64)    | macOS 11+                                             | [`.dmg` ล่าสุด (arm64)](https://github.com/genspark-ai/genoffice/releases/latest)          |
-| **macOS** — Intel (x64)              | macOS 11+                                             | [`.dmg` ล่าสุด (x64)](https://github.com/genspark-ai/genoffice/releases/latest)            |
-| **Windows** (x64, พีซีทั่วไป)        | Windows 10+, Intel/AMD                                | [ตัวติดตั้ง `-x64.exe` ล่าสุด](https://github.com/genspark-ai/genoffice/releases/latest)   |
-| **Windows** บน Arm (ARM64)           | Windows 11 on Arm (Snapdragon X และรุ่นใกล้เคียง)     | [ตัวติดตั้ง `-arm64.exe` ล่าสุด](https://github.com/genspark-ai/genoffice/releases/latest) |
-| **Linux** — Debian / Ubuntu          | x86_64, glibc 2.34+ (Ubuntu 22.04 ขึ้นไป)             | [`.deb` ล่าสุด](https://github.com/genspark-ai/genoffice/releases/latest)                  |
-| **Linux** — Fedora / RHEL / openSUSE | x86_64, glibc 2.34+ (Fedora 35+, RHEL 9+, Leap 15.6+) | [`.rpm` ล่าสุด](https://github.com/genspark-ai/genoffice/releases/latest)                  |
-| **Linux** — ดิสโทรอื่นๆ              | x86_64, glibc 2.34+, FUSE 2                           | [`.AppImage` ล่าสุด](https://github.com/genspark-ai/genoffice/releases/latest)             |
+| แพลตฟอร์ม                            | ความต้องการของระบบ                                    | ดาวน์โหลด                                                                         |
+| ------------------------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **macOS** — Apple Silicon (arm64)    | macOS 11+                                             | [`.dmg` ล่าสุด (arm64)](https://github.com/besliky/airy/releases/latest)          |
+| **macOS** — Intel (x64)              | macOS 11+                                             | [`.dmg` ล่าสุด (x64)](https://github.com/besliky/airy/releases/latest)            |
+| **Windows** (x64, พีซีทั่วไป)        | Windows 10+, Intel/AMD                                | [ตัวติดตั้ง `-x64.exe` ล่าสุด](https://github.com/besliky/airy/releases/latest)   |
+| **Windows** บน Arm (ARM64)           | Windows 11 on Arm (Snapdragon X และรุ่นใกล้เคียง)     | [ตัวติดตั้ง `-arm64.exe` ล่าสุด](https://github.com/besliky/airy/releases/latest) |
+| **Linux** — Debian / Ubuntu          | x86_64, glibc 2.34+ (Ubuntu 22.04 ขึ้นไป)             | [`.deb` ล่าสุด](https://github.com/besliky/airy/releases/latest)                  |
+| **Linux** — Fedora / RHEL / openSUSE | x86_64, glibc 2.34+ (Fedora 35+, RHEL 9+, Leap 15.6+) | [`.rpm` ล่าสุด](https://github.com/besliky/airy/releases/latest)                  |
+| **Linux** — ดิสโทรอื่นๆ              | x86_64, glibc 2.34+, FUSE 2                           | [`.AppImage` ล่าสุด](https://github.com/besliky/airy/releases/latest)             |
 
 บิลด์ทั้งหมดมาจาก `main` ตัวติดตั้ง macOS และ Windows ผ่านการลงนามแล้ว
-เวอร์ชันเก่ากว่านี้ดูได้ที่หน้า [Releases](https://github.com/genspark-ai/genoffice/releases)
+เวอร์ชันเก่ากว่านี้ดูได้ที่หน้า [Releases](https://github.com/besliky/airy/releases)
 
 <details>
 <summary><b>การติดตั้งบน Linux</b></summary>
 
-ไฟล์ deb ติดตั้งด้วย apt — จะดึงดีเพนเดนซีที่ต้องใช้และเพิ่ม GenOffice
+ไฟล์ deb ติดตั้งด้วย apt — จะดึงดีเพนเดนซีที่ต้องใช้และเพิ่ม Airy
 ลงในเมนูแอปพลิเคชันให้อัตโนมัติ:
 
 ```bash
-sudo apt install ./genoffice_<version>_amd64.deb
+sudo apt install ./airy_<version>_amd64.deb
 ```
 
 บน Fedora / ตระกูล RHEL / openSUSE ให้ติดตั้งไฟล์ rpm แทน:
 
 ```bash
-sudo dnf install ./genoffice-<version>.x86_64.rpm     # Fedora / RHEL family
-sudo zypper install ./genoffice-<version>.x86_64.rpm  # openSUSE
+sudo dnf install ./airy-<version>.x86_64.rpm     # Fedora / RHEL family
+sudo zypper install ./airy-<version>.x86_64.rpm  # openSUSE
 ```
 
 ไฟล์ AppImage รันได้ทันทีในตำแหน่งที่อยู่: ติดตั้งรันไทม์ FUSE 2
@@ -232,8 +229,8 @@ sudo zypper install ./genoffice-<version>.x86_64.rpm  # openSUSE
 กำหนดสิทธิ์ให้ไฟล์รันได้ แล้วรัน:
 
 ```bash
-chmod +x GenOffice-<version>.AppImage
-./GenOffice-<version>.AppImage
+chmod +x Airy-<version>.AppImage
+./Airy-<version>.AppImage
 ```
 
 </details>
@@ -278,47 +275,46 @@ npm run dist:linux   # package Linux AppImage + deb + rpm
 
 ## คอมมูนิตี้
 
-GenOffice อยู่ในระหว่างการพัฒนาอย่างต่อเนื่อง และความคิดเห็นของคุณ
+Airy อยู่ในระหว่างการพัฒนาอย่างต่อเนื่อง และความคิดเห็นของคุณ
 มีส่วนกำหนดทิศทางของมัน
 
 - **รายงานบั๊กหรือขอฟีเจอร์ใหม่** ได้ที่
-  [GitHub Issues](https://github.com/genspark-ai/genoffice/issues)
-- **เข้าร่วมกลุ่มแชทของ GenOffice** ได้ที่
-  [GenTeam](https://genoffice.ai/join) เพื่อพูดคุยกับทีมงานและผู้ใช้คนอื่นๆ
-- **ให้ดาว repo นี้** หาก GenOffice มีประโยชน์กับคุณ — เป็นวิธีที่ดีที่สุด
+  [GitHub Issues](https://github.com/besliky/airy/issues)
+- **เข้าร่วมกลุ่มแชทของ Airy** ได้ที่
+  [GenTeam](https://github.com/besliky/airy) เพื่อพูดคุยกับทีมงานและผู้ใช้คนอื่นๆ
+- **ให้ดาว repo นี้** หาก Airy มีประโยชน์กับคุณ — เป็นวิธีที่ดีที่สุด
   ในการสนับสนุนโปรเจกต์นี้
 
 ## คำถามที่พบบ่อย
 
 <details>
-<summary><b>GenOffice ฟรีหรือไม่</b></summary>
+<summary><b>Airy ฟรีหรือไม่</b></summary>
 
-ใช่ GenOffice ฟรีและโอเพนซอร์สภายใต้สัญญาอนุญาต Apache-2.0 — ไม่มีช่วง
+ใช่ Airy ฟรีและโอเพนซอร์สภายใต้สัญญาอนุญาต Apache-2.0 — ไม่มีช่วง
 ทดลองใช้ ไม่มีระดับที่ต้องเสียเงินสำหรับตัวแอปเอง
 
 </details>
 
 <details>
-<summary><b>GenOffice เปิดไฟล์ Microsoft Word, Excel และ PowerPoint ได้หรือไม่</b></summary>
+<summary><b>Airy เปิดไฟล์ Microsoft Word, Excel และ PowerPoint ได้หรือไม่</b></summary>
 
-ได้ GenOffice เปิดและบันทึกไฟล์ `.docx`, `.xlsx` และ `.pptx` แบบดั้งเดิม
+ได้ Airy เปิดและบันทึกไฟล์ `.docx`, `.xlsx` และ `.pptx` แบบดั้งเดิม
 การบันทึกคงบิตต่อบิต: ส่วนของไฟล์ที่คุณไม่ได้แตะจะถูกเขียนกลับเหมือนเดิม
 ทุกไบต์ เอกสารจึงยังใช้งานได้ต่อใน Microsoft Office
 
 </details>
 
 <details>
-<summary><b>GenOffice ใช้งานแบบออฟไลน์ได้หรือไม่</b></summary>
+<summary><b>Airy ใช้งานแบบออฟไลน์ได้หรือไม่</b></summary>
 
 การแก้ไขเอกสารทำงานในเครื่องทั้งหมด — ไฟล์ไม่ออกจากเครื่องของคุณเลย
 เมื่อเปิด แก้ไข บันทึก หรือแปลง ฟีเจอร์ AI (เอเจนต์ การค้นหา เครื่องมือภาพ)
-ต้องมีการเชื่อมต่อเครือข่าย โดยลงชื่อเข้าใช้ด้วย Genspark หรือใช้คีย์ API
-โมเดลของคุณเอง
+ต้องมีการเชื่อมต่อเครือข่าย โดยใช้คีย์ API โมเดลของคุณเอง
 
 </details>
 
 <details>
-<summary><b>GenOffice แก้ไขไฟล์ PDF ได้หรือไม่</b></summary>
+<summary><b>Airy แก้ไขไฟล์ PDF ได้หรือไม่</b></summary>
 
 ได้ — การแก้ไขข้อความและภาพใน PDF จริง ที่เขียน content stream ของหน้า
 ใหม่โดยคงฟอนต์เดิมไว้ ไม่ใช่การแปะ annotation ทับ
@@ -326,7 +322,7 @@ GenOffice อยู่ในระหว่างการพัฒนาอย�
 </details>
 
 <details>
-<summary><b>GenOffice แปลง PDF เป็น Word, Excel หรือ PowerPoint ได้หรือไม่</b></summary>
+<summary><b>Airy แปลง PDF เป็น Word, Excel หรือ PowerPoint ได้หรือไม่</b></summary>
 
 ได้ — ทำงานในเครื่องทั้งหมด: การดึงข้อมูลระดับตัวอักษรด้วย PDFium
 ร่วมกับการวิเคราะห์เลย์เอาต์แบบตามเรขาคณิต ไม่ต้องใช้บริการคลาวด์
@@ -338,7 +334,7 @@ GenOffice อยู่ในระหว่างการพัฒนาอย�
 <details>
 <summary><b>ใช้โมเดล AI หรือคีย์ API ของตัวเองได้หรือไม่</b></summary>
 
-ได้ นอกจากการลงชื่อเข้าใช้ด้วย Genspark ที่ไม่ต้องใช้คีย์แล้ว GenOffice
+ได้ Airy
 ยังรองรับการใช้คีย์ของคุณเองกับ Claude, OpenAI, Gemini, DeepSeek, Kimi,
 GLM, Qwen, Doubao, MiniMax, Grok, Mistral, OpenRouter และ OpenCode Zen/Go
 พร้อม endpoint ที่รองรับ OpenAI-compatible ใดๆ — รวมถึงเซิร์ฟเวอร์โมเดล
@@ -348,7 +344,7 @@ GLM, Qwen, Doubao, MiniMax, Grok, Mistral, OpenRouter และ OpenCode Zen/Go
 </details>
 
 <details>
-<summary><b>GenOffice แปลง HTML เป็น Word ได้หรือไม่</b></summary>
+<summary><b>Airy แปลง HTML เป็น Word ได้หรือไม่</b></summary>
 
 ได้ — Export as Word ในแอป HTML สร้าง `.docx` ที่แก้ไขได้แบบเนทิฟทั้งหมด
 ในเครื่อง หน้าเว็บถูกเรนเดอร์ใน Chromium ที่มีในตัวและลดรูปลงเป็นโครงสร้าง
@@ -359,12 +355,12 @@ Word จริง: หัวเรื่อง พารากราฟ รา�
 </details>
 
 <details>
-<summary><b>GenOffice เก็บข้อมูลอะไรบ้างหรือไม่</b></summary>
+<summary><b>Airy เก็บข้อมูลอะไรบ้างหรือไม่</b></summary>
 
 บิลด์ที่แพ็กเกจอย่างเป็นทางการส่งข้อมูลวิเคราะห์การใช้งานแบบจำกัดเป็นค่า
 เริ่มต้น และคุณสามารถปิดการรายงานได้ทุกเมื่อที่ Settings → General ข้อมูล
 วิเคราะห์จะไม่ส่งเนื้อหาเอกสาร ชื่อไฟล์ พาธไฟล์ ข้อมูลบัญชี หรือที่อยู่อีเมล
-ดู [GenOffice Privacy](../../PRIVACY.md) สำหรับรายละเอียดเหตุการณ์และข้อมูล
+ดู [Airy Privacy](../../PRIVACY.md) สำหรับรายละเอียดเหตุการณ์และข้อมูล
 ทั้งหมดที่เปิดเผย
 
 </details>
@@ -377,7 +373,7 @@ Word จริง: หัวเรื่อง พารากราฟ รา�
 
 ## คำขอบคุณ
 
-GenOffice จะไม่สามารถเกิดขึ้นได้หากไม่มีโครงการโอเพนซอร์สเหล่านี้:
+Airy จะไม่สามารถเกิดขึ้นได้หากไม่มีโครงการโอเพนซอร์สเหล่านี้:
 
 - [Electron](https://www.electronjs.org/) — รันไทม์เดสก์ท็อปสำหรับทุกแอป
 - [Univer](https://github.com/dream-num/univer) (Apache-2.0) — คอร์ของ UI
@@ -421,7 +417,7 @@ MIT/Apache-2.0/BSD-3-Clause/OFL
 
 ## สัญญาอนุญาต
 
-GenOffice อยู่ภายใต้สัญญาอนุญาต [Apache License 2.0](../../LICENSE)
+Airy อยู่ภายใต้สัญญาอนุญาต [Apache License 2.0](../../LICENSE)
 โดยมีข้อยกเว้นหนึ่งข้อ: ไดเรกทอรี `ee/` สงวนไว้สำหรับโมดูลระดับองค์กร
 ในอนาคต และอยู่ภายใต้ [GenOffice Enterprise License](../../ee/LICENSE)
 
