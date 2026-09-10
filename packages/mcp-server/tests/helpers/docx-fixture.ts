@@ -1,0 +1,81 @@
+// Fixture builder for the docx tests: a minimal, valid .docx assembled with
+// jszip in-process (no network, no committed binaries). Mirrors the shape of
+// packages/docx-engine/tests/helpers/build-docx.ts, kept local so the MCP
+// package's tests stay self-contained.
+import JSZip from 'jszip'
+
+const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
+
+const STYLES_XML =
+  XML_DECL +
+  '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+  '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+  '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/>' +
+  '<w:pPr><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:sz w:val="32"/></w:rPr></w:style>' +
+  '<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/>' +
+  '<w:pPr><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style>' +
+  '<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/></w:style>' +
+  '</w:styles>'
+
+const NUMBERING_XML =
+  XML_DECL +
+  '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+  '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val="&#61623;"/></w:lvl></w:abstractNum>' +
+  '<w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl></w:abstractNum>' +
+  '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>' +
+  '<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>' +
+  '</w:numbering>'
+
+const BODY_XML = [
+  '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Quarterly Report</w:t></w:r></w:p>',
+  '<w:p><w:r><w:t xml:space="preserve">Revenue grew by </w:t></w:r>' +
+    '<w:r><w:rPr><w:b/></w:rPr><w:t>12 percent</w:t></w:r>' +
+    '<w:r><w:t xml:space="preserve"> year over year.</w:t></w:r></w:p>',
+  '<w:p><w:pPr><w:pStyle w:val="ListParagraph"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>First bullet item</w:t></w:r></w:p>',
+  '<w:p><w:pPr><w:pStyle w:val="ListParagraph"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Second bullet item</w:t></w:r></w:p>',
+  '<w:p><w:pPr><w:pStyle w:val="ListParagraph"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr><w:r><w:t>Numbered step</w:t></w:r></w:p>',
+  '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="4000"/></w:tblGrid>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>Region</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Sales</w:t></w:r></w:p></w:tc></w:tr>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>East</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>4200</w:t></w:r></w:p></w:tc></w:tr>' +
+    '</w:tbl>',
+  '<w:p><w:r><w:t>End of report.</w:t></w:r></w:p>',
+].join('')
+
+/** the representative test document: heading, styled paragraph, lists, table, tail */
+export async function buildFixtureDocx(): Promise<Uint8Array> {
+  const zip = new JSZip()
+  zip.file(
+    '[Content_Types].xml',
+    `${XML_DECL}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+      '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>' +
+      '</Types>',
+  )
+  zip.file(
+    '_rels/.rels',
+    `${XML_DECL}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '</Relationships>',
+  )
+  zip.file(
+    'word/_rels/document.xml.rels',
+    `${XML_DECL}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>' +
+      '</Relationships>',
+  )
+  zip.file('word/styles.xml', STYLES_XML)
+  zip.file('word/numbering.xml', NUMBERING_XML)
+  zip.file(
+    'word/document.xml',
+    `${XML_DECL}<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${BODY_XML}` +
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
+      '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>' +
+      '</w:body></w:document>',
+  )
+  return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
+}
