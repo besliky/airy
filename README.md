@@ -1,5 +1,7 @@
 # Airy
 
+<p align="center"><img src="docs/assets/airy_logo.png" width="240"></p>
+
 Airy is an open-source office suite (docs, sheets, slides, PDF, Markdown,
 HTML) with a built-in **MCP copilot**: a Model Context Protocol server that
 lets CLI coding agents — Claude Code, ZCode, and any other MCP client — open,
