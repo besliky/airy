@@ -39,7 +39,7 @@ import {
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
   toggleDevToolsItem,
-} from '@genoffice/electron-utils'
+} from '@airy-office/electron-utils'
 import {
   resolveGroupChildId,
   runTxn,
@@ -49,11 +49,11 @@ import {
   type TxnResult,
 } from './ops'
 import { mapScriptOps } from './ops/script-map'
-import { matchesElementRef } from '@genoffice/pptx-engine/identity'
+import { matchesElementRef } from '@airy-office/pptx-engine/identity'
 import { buildPagePptx, parsePageSpec } from './page-spec'
 import { sniffImageMime } from './media-mime'
-import { getUiLang, normalizeLang, setUiLang } from '@genoffice/i18n'
-import { ProjectStore } from '@genoffice/project-store'
+import { getUiLang, normalizeLang, setUiLang } from '@airy-office/i18n'
+import { ProjectStore } from '@airy-office/project-store'
 import {
   copyElementData,
   findGroupChild,
@@ -100,14 +100,14 @@ import {
   type Paragraph,
   type Slide,
   type TextElement,
-} from '@genoffice/pptx-engine'
+} from '@airy-office/pptx-engine'
 import {
   buildRenderSlide,
   layoutText,
   makeViewport,
   EMU_PER_PX_96,
   type RenderSlide,
-} from '@genoffice/pptx-render'
+} from '@airy-office/pptx-render'
 import { refineComplexWidths, shapedMetricsReady } from './shaped-metrics'
 import { cfbKind, isCfbHeader } from './cfb-sniff'
 import { unplayableAudioCodec } from './mp4-audio-sniff'

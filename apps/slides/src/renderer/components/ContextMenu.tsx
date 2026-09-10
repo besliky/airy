@@ -3,7 +3,7 @@
  * Items that are null render as separators.
  */
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { platformShortcuts } from '@genoffice/i18n'
+import { platformShortcuts } from '@airy-office/i18n'
 
 export interface CtxItem {
   label: string

@@ -1,6 +1,6 @@
 // Read-only text session for legacy formats the engines cannot edit without
 // an external converter (Phase 3b): today the .doc path without LibreOffice,
-// backed by word-extractor through @genoffice/file-parse. The agent gets the
+// backed by word-extractor through @airy-office/file-parse. The agent gets the
 // full text plus an explicit editable:false limitation in the meta; closing
 // is a no-op (no temp files, no sidecar session).
 import { randomUUID } from 'node:crypto'

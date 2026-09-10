@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 
-import { latexToOmml, ommlToMathML } from '@genoffice/docx-engine/math'
+import { latexToOmml, ommlToMathML } from '@airy-office/docx-engine/math'
 import { useI18n } from './i18n/locale'
 
 /// Excel's Insert → Equation: LaTeX input with a live MathML preview (docs'

@@ -1,6 +1,6 @@
 /** Insert tab of the slides ribbon. Extracted from Ribbon.tsx. */
 import type { InsertKind } from '../../shared/ipc'
-import { WORDART_PRESETS, wordArtStrokePx } from '@genoffice/ui'
+import { WORDART_PRESETS, wordArtStrokePx } from '@airy-office/ui'
 import {
   CHART_GALLERY,
   ICON_COLORS,

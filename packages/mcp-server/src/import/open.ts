@@ -8,14 +8,14 @@
 //                       styles lost -> warning)
 //   .doc             -> soffice -> temp .docx -> DocxSession with origin;
 //                       without LibreOffice -> read-only TextSession
-//                       (word-extractor through @genoffice/file-parse)
+//                       (word-extractor through @airy-office/file-parse)
 //   .odt             -> soffice -> temp .docx -> DocxSession with origin;
 //                       without LibreOffice -> actionable error
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { extname, join } from 'node:path'
 
-import { docToText } from '@genoffice/file-parse'
+import { docToText } from '@airy-office/file-parse'
 
 import { DocxSession, type SessionOrigin } from '../docx/session.js'
 import { resolveConfined } from '../docx/paths.js'

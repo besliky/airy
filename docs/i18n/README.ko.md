@@ -275,7 +275,7 @@ npm run dist:linux   # package Linux AppImage + deb + rpm
 ```
 
 sheets 앱은 xlsx 사이드카를 위해 Rust 툴체인이 추가로 필요합니다
-(`cargo`가 PATH에 있어야 함). `npm run build -w @genoffice/sheets`를
+(`cargo`가 PATH에 있어야 함). `npm run build -w @airy-office/sheets`를
 실행하면 자동으로 컴파일됩니다. 모든 변경 사항이 통과해야 하는 검사와
 풀 리퀘스트가 병합되는 과정은 [CONTRIBUTING.md](../../CONTRIBUTING.md)를 참고하세요.
 

@@ -4,7 +4,7 @@ import {
   aiPanelFontPx,
   aiPanelZoom,
   normalizeAiPanelPrefs,
-} from '@genoffice/ui/ai-panel-prefs'
+} from '@airy-office/ui/ai-panel-prefs'
 
 describe('normalizeAiPanelPrefs', () => {
   it('falls back to defaults for missing or malformed input', () => {

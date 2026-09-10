@@ -36,7 +36,7 @@ import menuHtmlIcon1x from './assets/menu-html.png?asset'
 import menuHtmlIcon2x from './assets/menu-html@2x.png?asset'
 import menuHomeIcon1x from './assets/menu-home.png?asset'
 import menuHomeIcon2x from './assets/menu-home@2x.png?asset'
-import { createI18n, isLang, normalizeLang, setUiLang, type Lang } from '@genoffice/i18n'
+import { createI18n, isLang, normalizeLang, setUiLang, type Lang } from '@airy-office/i18n'
 import {
   DEFAULT_SAVE_DIR_KEY,
   DROP_OPEN_CHANNEL,
@@ -50,7 +50,7 @@ import {
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
   windowMenuTemplate,
-} from '@genoffice/electron-utils'
+} from '@airy-office/electron-utils'
 import { readAppSettings, writeAppSetting, writeAppSettings } from './app-settings'
 import {
   LAST_RUN_VERSION_KEY,
@@ -65,7 +65,7 @@ import {
   withShown,
 } from './star-prompt'
 import { handleDroppedFiles } from './dropped-files'
-import { ProjectStore } from '@genoffice/project-store'
+import { ProjectStore } from '@airy-office/project-store'
 
 import {
   buildDocsMenu,
@@ -179,7 +179,7 @@ import {
   normalizeAiPanelPrefs,
   sameAiPanelPrefs,
   type AiPanelPrefs,
-} from '@genoffice/ui/ai-panel-prefs'
+} from '@airy-office/ui/ai-panel-prefs'
 import type { TabKind } from '../shared/tabs-api'
 import { TABS_CHANNELS } from '../shared/tabs-api'
 import { showErrorDialog } from './error-dialog'

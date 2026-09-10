@@ -17,13 +17,13 @@ import {
   type AiSettings,
   type LegacyAiSettings,
   type MediaBlob,
-} from '@genoffice/ai-provider'
+} from '@airy-office/ai-provider'
 import {
   fetchRemoteImage,
   fetchWithSsrfGuard,
   readGeneratedImage,
   storeGeneratedImage,
-} from '@genoffice/electron-utils'
+} from '@airy-office/electron-utils'
 
 export const IMAGE_PROVIDER_NOT_CONFIGURED_ERROR =
   'No image provider is configured; ask the user to configure one under Settings (AI Media) to use this tool'

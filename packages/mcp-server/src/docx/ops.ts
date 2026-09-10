@@ -16,7 +16,7 @@ import {
   type ParaFormat,
   type Run,
   type TableModel,
-} from '@genoffice/docx-engine'
+} from '@airy-office/docx-engine'
 
 // ---- session entry model ----
 

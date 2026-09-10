@@ -1,4 +1,4 @@
-import type { EmbeddedFont } from '@genoffice/docx-engine'
+import type { EmbeddedFont } from '@airy-office/docx-engine'
 import { noteEmbeddedFontsChanged } from './line-metrics'
 
 let active: FontFace[] = []

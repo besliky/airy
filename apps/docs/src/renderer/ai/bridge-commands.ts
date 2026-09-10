@@ -7,7 +7,7 @@
 // last turn and refuses when the user has edited since.
 import type { Editor, JSONContent } from '@tiptap/core'
 import type { Node as PmNode } from '@tiptap/pm/model'
-import { BLANK_BULLET_NUM_ID, BLANK_ORDERED_NUM_ID, type Block } from '@genoffice/docx-engine'
+import { BLANK_BULLET_NUM_ID, BLANK_ORDERED_NUM_ID, type Block } from '@airy-office/docx-engine'
 
 import type { BridgeCommandResult } from '../../shared/ipc'
 import { TABLE_TRAILING_SKIP } from '../editor/extensions'

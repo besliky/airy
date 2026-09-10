@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { IpcRendererEvent } from 'electron'
-import type { AiPanelPrefs } from '@genoffice/ui'
+import type { AiPanelPrefs } from '@airy-office/ui'
 import type {
   AiChatRequest,
   AiSettings,
@@ -12,8 +12,8 @@ import type {
   UiTheme,
 } from '../shared/ipc'
 import { BRIDGE_INVOKE_CHANNEL, BRIDGE_RESULT_CHANNEL } from '../shared/ipc'
-import type { ProjectApi } from '@genoffice/project-store'
-import { installDropOpenBridge } from '@genoffice/electron-utils/drop-open'
+import type { ProjectApi } from '@airy-office/project-store'
+import { installDropOpenBridge } from '@airy-office/electron-utils/drop-open'
 
 const api: DesktopApi = {
   getLanguage: () => ipcRenderer.invoke('app:get-language'),

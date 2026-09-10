@@ -24,7 +24,7 @@ import {
   type GeneratedBlock,
   type ParsedDocFull,
   type SaveBlock,
-} from '@genoffice/docx-engine'
+} from '@airy-office/docx-engine'
 
 import { blocksToHtml, blockPreviewText, blockTypeName, parseRestrictedHtml } from './html.js'
 import {

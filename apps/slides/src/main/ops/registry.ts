@@ -26,9 +26,9 @@ import {
   matchesElementRef,
   parseMasterPart,
   slideDurableId,
-} from '@genoffice/pptx-engine'
+} from '@airy-office/pptx-engine'
 export { elementDurableId, matchesElementRef, slideDurableId }
-import type { OpenedPptx, Slide, SlideElement } from '@genoffice/pptx-engine'
+import type { OpenedPptx, Slide, SlideElement } from '@airy-office/pptx-engine'
 
 export class GuidedError extends Error {}
 

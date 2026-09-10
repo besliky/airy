@@ -279,7 +279,7 @@ npm run dist:linux   # package Linux AppImage + deb + rpm
 ```
 
 De sheets-app heeft daarnaast een Rust-toolchain nodig voor de xlsx-sidecar
-(`cargo` op je PATH); `npm run build -w @genoffice/sheets` compileert die
+(`cargo` op je PATH); `npm run build -w @airy-office/sheets` compileert die
 automatisch. Zie [CONTRIBUTING.md](../../CONTRIBUTING.md) voor de checks die
 elke wijziging moet doorstaan en hoe pull requests worden gemerged.
 

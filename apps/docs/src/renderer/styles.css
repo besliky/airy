@@ -1,6 +1,6 @@
 /* Per-app accent (word-blue family) + docs-only tokens.
  * Chrome tokens (surface/text/border/…, AI panel --color-*) come from
- * @genoffice/ui/tokens.css; nothing here may shadow those names. */
+ * @airy-office/ui/tokens.css; nothing here may shadow those names. */
 :root {
   --word-blue: #185abd;
   --word-blue-dark: #124a9e;
@@ -1190,7 +1190,7 @@ html.genoffice-popover-open .ribbon-tabs {
   background: var(--hover);
 }
 
-/* Anchor positioning for the shared Word-style color panel (@genoffice/ui
+/* Anchor positioning for the shared Word-style color panel (@airy-office/ui
    .gcp-palette draws the chrome; this only places it under its trigger). */
 .docs-color-pop {
   position: fixed;
@@ -8260,7 +8260,7 @@ body.docs-crop-active
   border-color: var(--word-blue);
 }
 
-/* Shared dropdown (@genoffice/ui gs-dd) app sizing: modal dialogs keep the old
+/* Shared dropdown (@airy-office/ui gs-dd) app sizing: modal dialogs keep the old
    `.modal select` footprint; ribbon/table/page-number rows scope their own
    width/height below */
 .modal .gs-dd {

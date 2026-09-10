@@ -87,7 +87,7 @@ export async function findSidecarBinary(fromDir?: string): Promise<string | null
 export function sidecarMissingError(): Error {
   return new Error(
     'The xlsx sidecar binary is not available. Build it with ' +
-      '`npm run native:build -w @genoffice/sheets` (requires cargo/rust), or point the ' +
+      '`npm run native:build -w @airy-office/sheets` (requires cargo/rust), or point the ' +
       `${SIDECAR_ENV} env var at an existing xlsx-sidecar binary.`,
   )
 }

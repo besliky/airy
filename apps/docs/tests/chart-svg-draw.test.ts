@@ -1,4 +1,4 @@
-import type { ChartDisplay } from '@genoffice/docx-engine'
+import type { ChartDisplay } from '@airy-office/docx-engine'
 import { describe, expect, it } from 'vitest'
 import { drawChartSvg } from '../src/renderer/editor/protected-render'
 

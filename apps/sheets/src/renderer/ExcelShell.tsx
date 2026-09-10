@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { platformShortcuts } from '@genoffice/i18n'
+import { platformShortcuts } from '@airy-office/i18n'
 import {
   Dropdown,
   RibbonCollapseButton,
@@ -7,7 +7,7 @@ import {
   ShapePreview,
   useDismissablePopover,
   useRibbonCollapse,
-} from '@genoffice/ui'
+} from '@airy-office/ui'
 
 import {
   BorderAllIcon,

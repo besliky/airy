@@ -96,13 +96,13 @@ import {
   spliceCharColors,
 } from './color-runs'
 import type { CharStyle } from './color-runs'
-import { platformShortcuts } from '@genoffice/i18n'
+import { platformShortcuts } from '@airy-office/i18n'
 import {
   Dropdown,
   RibbonCollapseButton,
   useDismissablePopover,
   useRibbonCollapse,
-} from '@genoffice/ui'
+} from '@airy-office/ui'
 import { useI18n } from './i18n/locale'
 import { useAutosave } from './useAutosave'
 import type {

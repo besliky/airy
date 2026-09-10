@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
-import { parseDocx } from '@genoffice/docx-engine'
+import { parseDocx } from '@airy-office/docx-engine'
 import { buildExtensions } from '../src/renderer/editor/extensions'
 import { exportDocxBytes, mapDocToSaveBlocks } from '../src/renderer/export/docxExport'
 

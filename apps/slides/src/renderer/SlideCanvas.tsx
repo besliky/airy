@@ -30,7 +30,7 @@ import type {
   TableRenderNode,
   PictureRenderNode,
   GroupRenderNode,
-} from '@genoffice/pptx-render'
+} from '@airy-office/pptx-render'
 import { boxPivotProps, fillToKonva, isEditableText } from './konva-adapter'
 import { tableCellAtPoint, tableLocalPointFromStage } from './table-hit'
 import {

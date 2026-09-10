@@ -1,4 +1,4 @@
-import { defineStrings } from '@genoffice/i18n'
+import { defineStrings } from '@airy-office/i18n'
 import { zh } from './dialogs/zh'
 import { en } from './dialogs/en'
 import { ja } from './dialogs/ja'

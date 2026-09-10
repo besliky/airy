@@ -1,5 +1,5 @@
 {
-  "name": "@genoffice/sheets",
+  "name": "@airy-office/sheets",
   "productName": "Airy Sheets",
   "version": "0.1.0",
   "private": true,
@@ -24,14 +24,14 @@
   },
   "dependencies": {
     "@fluentui/react-icons": "^2.0.333",
-    "@genoffice/agent-core": "*",
-    "@genoffice/ai-provider": "*",
-    "@genoffice/ai-search": "*",
-    "@genoffice/docx-engine": "*",
-    "@genoffice/electron-utils": "*",
-    "@genoffice/file-parse": "*",
-    "@genoffice/i18n": "*",
-    "@genoffice/ui": "*",
+    "@airy-office/agent-core": "*",
+    "@airy-office/ai-provider": "*",
+    "@airy-office/ai-search": "*",
+    "@airy-office/docx-engine": "*",
+    "@airy-office/electron-utils": "*",
+    "@airy-office/file-parse": "*",
+    "@airy-office/i18n": "*",
+    "@airy-office/ui": "*",
     "@univerjs/core": "^0.25.1",
     "@univerjs/data-validation": "^0.25.1",
     "@univerjs/engine-render": "^0.25.1",
@@ -56,7 +56,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@genoffice/project-store": "*",
+    "@airy-office/project-store": "*",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

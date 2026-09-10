@@ -1,4 +1,4 @@
-import type { AgentTransport } from '@genoffice/agent-core'
+import type { AgentTransport } from '@airy-office/agent-core'
 import type { Brief } from '../document/brief'
 
 /**

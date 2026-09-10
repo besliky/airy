@@ -1,5 +1,5 @@
 import JSZip from 'jszip'
-import { parseCustGeom } from '@genoffice/pptx-engine/custgeom'
+import { parseCustGeom } from '@airy-office/pptx-engine/custgeom'
 import { parseChartPartXml } from './chart'
 import { findInkRuns, stripInkRuns } from './ink'
 import { isMetafileMime, metafileToDataUrl } from './metafile'

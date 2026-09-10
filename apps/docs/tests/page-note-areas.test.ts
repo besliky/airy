@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
-import type { NoteInfo } from '@genoffice/docx-engine'
+import type { NoteInfo } from '@airy-office/docx-engine'
 import { PageEndnotes, PageFootnotes } from '../src/renderer/components/PageNoteAreas'
 import { endnotesAnchorY } from '../src/renderer/pagination'
 

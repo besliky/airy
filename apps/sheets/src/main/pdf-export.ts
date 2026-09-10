@@ -8,7 +8,7 @@ import { join } from 'node:path'
 
 import { BrowserWindow, dialog } from 'electron'
 
-import { showSaveDialogWithMemory } from '@genoffice/electron-utils'
+import { showSaveDialogWithMemory } from '@airy-office/electron-utils'
 
 import { evenPageRanges, stitchPlan, type PageVariant } from './pdf-page-variants'
 

@@ -2,7 +2,7 @@ import type { Node as PmNode } from '@tiptap/pm/model'
 import {} from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
 import {} from '@tiptap/pm/tables'
-import { WORDART_PRESETS, wordArtStrokePx } from '@genoffice/ui'
+import { WORDART_PRESETS, wordArtStrokePx } from '@airy-office/ui'
 import {
   autospaceBoundaries,
   autospacePadBetween,
@@ -43,7 +43,7 @@ import {
   type TableModel,
   type TableParagraph,
   type TextboxDisplay,
-} from '@genoffice/docx-engine'
+} from '@airy-office/docx-engine'
 
 /**
  * Custom schema mirroring the docx-engine Block model 1:1.

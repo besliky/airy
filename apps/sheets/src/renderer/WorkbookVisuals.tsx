@@ -1,8 +1,8 @@
 import { Fragment, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { BooleanNumber, numfmt } from '@univerjs/core'
-import { isMetafileMime, metafileToDataUrl } from '@genoffice/docx-engine/metafile'
-import { Dropdown, shapePreviewPath, useDismissablePopover } from '@genoffice/ui'
+import { isMetafileMime, metafileToDataUrl } from '@airy-office/docx-engine/metafile'
+import { Dropdown, shapePreviewPath, useDismissablePopover } from '@airy-office/ui'
 
 import type { createUniver } from './create-univer'
 

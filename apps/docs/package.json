@@ -1,5 +1,5 @@
 {
-  "name": "@genoffice/docs",
+  "name": "@airy-office/docs",
   "productName": "Airy Docs",
   "version": "0.1.0",
   "license": "Apache-2.0",
@@ -18,14 +18,14 @@
     "dist:dir": "electron-vite build && electron-builder --dir"
   },
   "devDependencies": {
-    "@genoffice/agent-core": "*",
-    "@genoffice/i18n": "*",
-    "@genoffice/ai-provider": "*",
-    "@genoffice/ai-search": "*",
-    "@genoffice/docx-engine": "*",
-    "@genoffice/file-parse": "*",
-    "@genoffice/project-store": "*",
-    "@genoffice/ui": "*",
+    "@airy-office/agent-core": "*",
+    "@airy-office/i18n": "*",
+    "@airy-office/ai-provider": "*",
+    "@airy-office/ai-search": "*",
+    "@airy-office/docx-engine": "*",
+    "@airy-office/file-parse": "*",
+    "@airy-office/project-store": "*",
+    "@airy-office/ui": "*",
     "@tiptap/core": "3.31.0",
     "@tiptap/extensions": "3.31.0",
     "@tiptap/pm": "3.31.0",
@@ -91,9 +91,9 @@
     }
   },
   "dependencies": {
-    "@genoffice/electron-utils": "*",
-    "@genoffice/font-metrics": "*",
+    "@airy-office/electron-utils": "*",
+    "@airy-office/font-metrics": "*",
     "pdf-lib": "^1.17.1",
-    "@genoffice/pptx-render": "*"
+    "@airy-office/pptx-render": "*"
   }
 }

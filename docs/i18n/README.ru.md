@@ -283,7 +283,7 @@ npm run dist:linux   # package Linux AppImage + deb + rpm
 ```
 
 Приложению Sheets также нужен инструментарий Rust для его xlsx sidecar
-(`cargo` в PATH); команда `npm run build -w @genoffice/sheets` собирает его
+(`cargo` в PATH); команда `npm run build -w @airy-office/sheets` собирает его
 автоматически. Список проверок, которые должно проходить каждое изменение, и
 порядок принятия pull request-ов — в [CONTRIBUTING.md](../../CONTRIBUTING.md).
 

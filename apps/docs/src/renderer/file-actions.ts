@@ -37,7 +37,7 @@ import {
   type ThemeColors,
   type ThemeFonts,
   type WriteProtection,
-} from '@genoffice/docx-engine'
+} from '@airy-office/docx-engine'
 import type { Dispatch, SetStateAction } from 'react'
 import type { AiDocContent, OpenDocxResult } from '../shared/ipc'
 import {

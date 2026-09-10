@@ -8,8 +8,8 @@
 import { app, dialog, ipcMain } from 'electron'
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { showOpenDialogWithMemory } from '@genoffice/electron-utils'
-import { parseFileToText } from '@genoffice/file-parse'
+import { showOpenDialogWithMemory } from '@airy-office/electron-utils'
+import { parseFileToText } from '@airy-office/file-parse'
 import type {
   AttachmentAddResult,
   AttachmentImageResult,
@@ -51,7 +51,7 @@ const ATTACHMENT_TEXT_EXTS = new Set([
   'sql',
   'css',
 ])
-/** office/pdf formats extract text via @genoffice/file-parse; images skip text extraction and go multimodal (slides:files-read-image) */
+/** office/pdf formats extract text via @airy-office/file-parse; images skip text extraction and go multimodal (slides:files-read-image) */
 const ATTACHMENT_EXTS = new Set([
   ...ATTACHMENT_TEXT_EXTS,
   'doc',
@@ -130,7 +130,7 @@ function savePastedImage(data: unknown, ext: unknown): string | null {
   return filePath
 }
 
-/** Extract attachment text via @genoffice/file-parse (docx/pdf/pptx/xlsx/plain text) */
+/** Extract attachment text via @airy-office/file-parse (docx/pdf/pptx/xlsx/plain text) */
 async function extractAttachmentText(filePath: string): Promise<string> {
   const stat = statSync(filePath)
   const stamp = `${stat.mtimeMs}:${stat.size}`

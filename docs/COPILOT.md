@@ -24,7 +24,7 @@ node packages/mcp-server/dist/index.js   # speaks JSON-RPC on stdio
 Spreadsheet support (`.xlsx` / `.xlsm` / `.xls` / `.ods`) spawns the Rust
 xlsx sidecar. The server finds it automatically in a repo checkout
 (`apps/sheets/native/xlsx-engine/target/release/xlsx-sidecar`, built by
-`npm run build -w @genoffice/sheets`, which needs `cargo` on PATH) or in an
+`npm run build -w @airy-office/sheets`, which needs `cargo` on PATH) or in an
 installed app; `AIRY_XLSX_SIDECAR` points at an explicit binary.
 
 Legacy text formats (`.doc` / `.odt`) are converted through LibreOffice:

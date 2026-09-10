@@ -1,4 +1,4 @@
-import type { RenderNode } from '@genoffice/pptx-render'
+import type { RenderNode } from '@airy-office/pptx-render'
 import { describe, expect, it } from 'vitest'
 import {
   autoContextTabForElement,

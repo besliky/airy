@@ -8,7 +8,7 @@ import { t } from '../i18n/locale'
 import { dkBackground } from './dark-page'
 import { fillInk } from './shading-ink'
 import { textColorDecls } from './text-color'
-import {} from '@genoffice/docx-engine'
+import {} from '@airy-office/docx-engine'
 
 /**
  * Custom schema mirroring the docx-engine Block model 1:1.

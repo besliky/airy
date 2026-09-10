@@ -69,7 +69,7 @@ import {
   type TableModel,
   type TextboxDisplay,
   type TextboxListMarker,
-} from '@genoffice/docx-engine'
+} from '@airy-office/docx-engine'
 import {
   bulletMarkerScale,
   computeListMarkerInfos,

@@ -282,7 +282,7 @@ npm run dist:linux   # package Linux AppImage + deb + rpm
 ```
 
 Aplikacja sheets dodatkowo wymaga zestawu narzędzi Rust dla swojego
-sidecara xlsx (`cargo` w PATH); `npm run build -w @genoffice/sheets`
+sidecara xlsx (`cargo` w PATH); `npm run build -w @airy-office/sheets`
 kompiluje go automatycznie. Zobacz [CONTRIBUTING.md](../../CONTRIBUTING.md),
 aby poznać kontrole, które musi przejść każda zmiana, oraz sposób
 scalania pull requestów.

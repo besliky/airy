@@ -18,7 +18,7 @@ import {
   type OpenedPptx,
   type SlideElement,
   type TextElement,
-} from '@genoffice/pptx-engine'
+} from '@airy-office/pptx-engine'
 import { runTxn, opNames, elementDurableId, slideDurableId } from '../src/main/ops'
 import { mapScriptOps } from '../src/main/ops/script-map'
 

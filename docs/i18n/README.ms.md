@@ -282,7 +282,7 @@ npm run dist:linux   # package Linux AppImage + deb + rpm
 ```
 
 Aplikasi sheets juga memerlukan toolchain Rust untuk sidecar xlsx-nya
-(`cargo` pada PATH); `npm run build -w @genoffice/sheets` mengkompilnya
+(`cargo` pada PATH); `npm run build -w @airy-office/sheets` mengkompilnya
 secara automatik. Lihat [CONTRIBUTING.md](../../CONTRIBUTING.md) untuk semakan
 yang perlu dilalui setiap perubahan dan cara pull request diterima masuk.
 

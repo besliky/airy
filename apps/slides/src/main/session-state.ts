@@ -14,12 +14,12 @@ import {
   resolveSchemeColor,
   type OpenedPptx,
   type Slide,
-} from '@genoffice/pptx-engine'
+} from '@airy-office/pptx-engine'
 import {
   buildRenderSlide,
   type FontMetricsProvider,
   type RenderSlide,
-} from '@genoffice/pptx-render'
+} from '@airy-office/pptx-render'
 import { createSystemFontMetrics, resetFontRegistry } from './fonts'
 import { tiffToPng } from './tiff-decode'
 import { neutralizeJpegOrientation } from './jpeg-orientation'

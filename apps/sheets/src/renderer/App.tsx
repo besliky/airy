@@ -51,7 +51,7 @@ import {
 import { isNumericIdentifierText } from './cell-warning'
 import { consumePendingUndoCarry, undoStackDepth } from './undo-carry'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { useAutoSavePref, type AiScopeQuoteData } from '@genoffice/ui'
+import { useAutoSavePref, type AiScopeQuoteData } from '@airy-office/ui'
 
 import {
   CellValueType,
@@ -106,8 +106,8 @@ import {
   COMPLETED_VIA_TOOLS_TEXT,
   composeSkills,
   type AgentImage,
-} from '@genoffice/agent-core'
-import { imageGenerationAvailable, type AiSettings } from '@genoffice/ai-provider/browser'
+} from '@airy-office/agent-core'
+import { imageGenerationAvailable, type AiSettings } from '@airy-office/ai-provider/browser'
 import { type WorkbookOperation } from '../domain/workbook-dsl'
 import { columnLabel, parseAddress, rangeCellCount } from '../domain/cell-address'
 import { aggregateWorkbookRange } from './ai/aggregate-range'

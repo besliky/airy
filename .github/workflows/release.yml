@@ -65,7 +65,7 @@ jobs:
       # the installers land only in this run's artifacts.
       - name: Build and package (linux, no publish)
         if: ${{ !(github.event_name == 'push' || inputs.publish == true) }}
-        run: npm run notices && npm run build:all && npm run release:linux -w @genoffice/shell -- --publish never
+        run: npm run notices && npm run build:all && npm run release:linux -w @airy-office/shell -- --publish never
 
       - name: Upload artifacts (linux)
         if: always()
@@ -133,7 +133,7 @@ jobs:
 
       - name: Build and package (windows, no publish)
         if: ${{ !(github.event_name == 'push' || inputs.publish == true) }}
-        run: npm run notices && npm run build:all && npm run release:win -w @genoffice/shell -- --publish never
+        run: npm run notices && npm run build:all && npm run release:win -w @airy-office/shell -- --publish never
 
       - name: Upload artifacts (windows)
         if: always()

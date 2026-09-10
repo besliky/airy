@@ -8,13 +8,13 @@
     // node_modules would otherwise typecheck against another checkout) —
     // same mapping as packages/pdf2docx/tsconfig.json
     "paths": {
-      "@genoffice/docx-engine": ["../../packages/docx-engine/src/index.ts"],
-      "@genoffice/font-metrics": ["../../packages/font-metrics/src/index.ts"],
-      "@genoffice/electron-utils": ["../../packages/electron-utils/src/index.ts"],
-      "@genoffice/ai-provider": ["../../packages/ai-provider/src/index.ts"],
-      "@genoffice/i18n": ["../../packages/i18n/src/index.ts"],
-      "@genoffice/ui": ["../../packages/ui/src/index.ts"],
-      "@genoffice/pptx-engine": ["../../packages/pptx-engine/src/index.ts"]
+      "@airy-office/docx-engine": ["../../packages/docx-engine/src/index.ts"],
+      "@airy-office/font-metrics": ["../../packages/font-metrics/src/index.ts"],
+      "@airy-office/electron-utils": ["../../packages/electron-utils/src/index.ts"],
+      "@airy-office/ai-provider": ["../../packages/ai-provider/src/index.ts"],
+      "@airy-office/i18n": ["../../packages/i18n/src/index.ts"],
+      "@airy-office/ui": ["../../packages/ui/src/index.ts"],
+      "@airy-office/pptx-engine": ["../../packages/pptx-engine/src/index.ts"]
     }
   },
   "include": [

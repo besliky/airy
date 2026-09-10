@@ -17,7 +17,7 @@ import type {
   RenderSlide,
   ShapeRenderNode,
   TableRenderNode,
-} from '@genoffice/pptx-render'
+} from '@airy-office/pptx-render'
 import type { StringKey } from '../i18n/locale'
 
 /** Localized noun for an element kind, shared by the popover title and the queue rows */

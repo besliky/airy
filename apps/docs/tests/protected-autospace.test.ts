@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { DOMSerializer } from '@tiptap/pm/model'
-import type { TableModel, TextboxDisplay } from '@genoffice/docx-engine'
+import type { TableModel, TextboxDisplay } from '@airy-office/docx-engine'
 import { renderTableSpec, renderTextboxSpec } from '../src/renderer/editor/protected-render'
 
 const render = (spec: unknown): HTMLElement =>

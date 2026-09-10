@@ -8,7 +8,7 @@
 // externalizes automatically for platform=node.
 //
 // The banner defines a real CJS `require` for the inlined CommonJS
-// dependencies (word-extractor via @genoffice/file-parse calls
+// dependencies (word-extractor via @airy-office/file-parse calls
 // require('buffer') at load time); without it esbuild's ESM interop shim
 // throws "Dynamic require of X is not supported".
 import { build } from 'esbuild'

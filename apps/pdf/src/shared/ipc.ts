@@ -1,6 +1,6 @@
-import type { AiPanelPrefs } from '@genoffice/ui'
-import type { Lang } from '@genoffice/i18n'
-import type { AiSettings, AiStreamChunk, AiStreamRequest } from '@genoffice/ai-provider'
+import type { AiPanelPrefs } from '@airy-office/ui'
+import type { Lang } from '@airy-office/i18n'
+import type { AiSettings, AiStreamChunk, AiStreamRequest } from '@airy-office/ai-provider'
 
 export const PDF_CHANNELS = {
   consumePending: 'pdf:consume-pending',

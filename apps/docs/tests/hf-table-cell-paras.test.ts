@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { HeaderFooter, HfImage, HfTextBox, SectionSettings } from '@genoffice/docx-engine'
+import type { HeaderFooter, HfImage, HfTextBox, SectionSettings } from '@airy-office/docx-engine'
 import {
   HF_WASHOUT_FILTER,
   hfFloatPagePos,

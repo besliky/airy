@@ -7,7 +7,7 @@
  * (prod_082 8pt regression / prod_008+091 guard).
  */
 import { describe, expect, it } from 'vitest'
-import type { ParsedDocFull, StyleDisplay, StyleInfo } from '@genoffice/docx-engine'
+import type { ParsedDocFull, StyleDisplay, StyleInfo } from '@airy-office/docx-engine'
 import { docStyleCss } from '../src/renderer/doc-style-css'
 
 ;(globalThis as { CSS?: unknown }).CSS ??= { escape: (s: string) => s }

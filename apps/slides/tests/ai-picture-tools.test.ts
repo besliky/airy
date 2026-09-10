@@ -1,7 +1,7 @@
 /** AI picture tool replace_image: dispatch and guards (crop/opacity moved to apply_ops setPictureSrcRect/setPictureOpacity). */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createSlidesSkill, type DeckAccess } from '../src/renderer/ai/slides-skill'
-import type { RenderSlide, PlacedBox } from '@genoffice/pptx-render'
+import type { RenderSlide, PlacedBox } from '@airy-office/pptx-render'
 import type { AgentToolCall } from '../src/shared/ipc'
 
 const box = (x: number, y: number, w: number, h: number): PlacedBox => ({

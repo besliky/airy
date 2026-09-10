@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { Dropdown } from '@genoffice/ui'
+import { Dropdown } from '@airy-office/ui'
 
 import { transposeChartSeries, type ChartVisualState } from '../domain/chart-visual'
 import { ColorDropdown } from './ColorDropdown'

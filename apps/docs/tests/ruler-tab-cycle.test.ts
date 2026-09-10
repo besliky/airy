@@ -1,4 +1,4 @@
-import type { TabStop } from '@genoffice/docx-engine'
+import type { TabStop } from '@airy-office/docx-engine'
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { beforeAll, describe, expect, it } from 'vitest'

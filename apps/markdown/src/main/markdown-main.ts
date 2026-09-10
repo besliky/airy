@@ -22,9 +22,9 @@ import {
   safeExternalUrl,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
-} from '@genoffice/electron-utils'
-import { createI18n, getUiLang } from '@genoffice/i18n'
-import { generateImageTool } from '@genoffice/ai-search'
+} from '@airy-office/electron-utils'
+import { createI18n, getUiLang } from '@airy-office/i18n'
+import { generateImageTool } from '@airy-office/ai-search'
 import { atomicWriteFile } from './atomic-write'
 import {
   copyImageIntoOwnedAssets,
@@ -879,7 +879,7 @@ export function createMarkdownView(openPath?: string | null): WebContentsView {
   return view
 }
 
-/** Standalone window mode: `npm run dev -w @genoffice/markdown`, md path passed via argv */
+/** Standalone window mode: `npm run dev -w @airy-office/markdown`, md path passed via argv */
 export function startMarkdownStandalone(): void {
   installNavigationGuard(app)
   installContextMenu(app, () => contextMenuLabels(getUiLang()))

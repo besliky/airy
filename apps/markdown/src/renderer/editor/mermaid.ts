@@ -1,5 +1,5 @@
 import type { Mermaid } from 'mermaid'
-import type { NewImage } from '@genoffice/docx-engine'
+import type { NewImage } from '@airy-office/docx-engine'
 
 export const MERMAID_LANGUAGE = 'mermaid'
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useAutoSavePref } from '@genoffice/ui'
+import { useAutoSavePref } from '@airy-office/ui'
 import { EditorContent, useEditor } from '@tiptap/react'
-import { FindPanel, type FindFocusRequest, type FindPanelStrings } from '@genoffice/ui'
+import { FindPanel, type FindFocusRequest, type FindPanelStrings } from '@airy-office/ui'
 import type { Editor } from '@tiptap/core'
 import { useI18n } from './i18n/locale'
 import {

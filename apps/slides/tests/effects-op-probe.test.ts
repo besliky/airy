@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { addElement, createBlankPptx, openPptx } from '@genoffice/pptx-engine'
+import { addElement, createBlankPptx, openPptx } from '@airy-office/pptx-engine'
 import { runTxn } from '../src/main/ops'
 
 describe('setEffects op end-to-end probe', () => {

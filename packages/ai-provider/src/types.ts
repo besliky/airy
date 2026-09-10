@@ -1,4 +1,4 @@
-import type { AgentMessage, AgentToolCall, AgentToolDef } from '@genoffice/agent-core'
+import type { AgentMessage, AgentToolCall, AgentToolDef } from '@airy-office/agent-core'
 
 /**
  * 'none' = no provider configured yet (the default): every AI feature answers

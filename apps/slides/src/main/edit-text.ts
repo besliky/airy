@@ -12,7 +12,7 @@ import {
   type Paragraph,
   type ParagraphFormatPatch,
   type TextRun,
-} from '@genoffice/pptx-engine'
+} from '@airy-office/pptx-engine'
 import type { EditParagraph } from '../shared/ipc'
 
 /** Normalize a color to 6-digit uppercase hex (strip #/alpha), for comparison. */

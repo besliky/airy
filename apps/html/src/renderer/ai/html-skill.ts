@@ -1,4 +1,4 @@
-import type { AgentSkill } from '@genoffice/agent-core'
+import type { AgentSkill } from '@airy-office/agent-core'
 import { createHtmlSkill, type HtmlDocAccess } from './tools'
 
 const SYSTEM_PROMPT = [

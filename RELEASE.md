@@ -13,7 +13,7 @@ The app version lives in `apps/shell/package.json` (`version`). A release is:
 
 ```bash
 # 1. bump the version (nothing else tracks it)
-npm version patch -w @genoffice/shell   # or minor / major
+npm version patch -w @airy-office/shell   # or minor / major
 
 # 2. commit the bump, then tag it with the SAME version
 git tag v0.9.1

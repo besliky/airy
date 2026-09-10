@@ -32,7 +32,7 @@ import type {
   TextboxParaDisplay,
   ThemeColors,
   ThemeFonts,
-} from '@genoffice/docx-engine'
+} from '@airy-office/docx-engine'
 import {
   ColorPicker,
   Dropdown,
@@ -40,7 +40,7 @@ import {
   isSymbolFontFamily,
   useDismissablePopover,
   useRibbonCollapse,
-} from '@genoffice/ui'
+} from '@airy-office/ui'
 import { HIGHLIGHT_CSS } from '../editor/extensions'
 import { applyCase, type CaseMode } from '../editor/case-transform'
 import { setParagraphDirection, setSelectionAlign } from '../editor/direction'

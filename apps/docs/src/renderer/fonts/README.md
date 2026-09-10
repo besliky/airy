@@ -20,7 +20,7 @@ freely redistributable with the app. Licenses: Carlito and Liberation are
 (circumflex/breve) was dropped (Ậ/Ệ/Ộ in Regular/Bold); advance widths are unchanged.
 Renamed per OFL 1.1 §2 — "Carlito" is a Reserved Font Name. The files live in
 `packages/ui/src/fonts/` (shared with sheets and slides, which alias Calibri/Aptos
-to the same faces) and are referenced here as `@genoffice/ui/fonts/Carlito-*.ttf`.
+to the same faces) and are referenced here as `@airy-office/ui/fonts/Carlito-*.ttf`.
 
 Purpose: when a Word font declared by the document is missing on this machine, the
 browser's silent fallback (Helvetica etc.) changes glyph widths, so line-break points

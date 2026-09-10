@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
-import { Dropdown } from '@genoffice/ui'
+import { Dropdown } from '@airy-office/ui'
 import { t } from '../i18n/locale'
 import { MERMAID_LANGUAGE, renderMermaid } from './mermaid'
 import type { MermaidResult } from './mermaid'

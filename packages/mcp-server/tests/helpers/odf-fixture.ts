@@ -2,7 +2,7 @@
 // OpenDocument zip assembled in-process (mimetype first and stored, per the
 // ODF packaging spec) — LibreOffice opens it through the writer8 path.
 // Binary .xls/.doc fixtures cannot be generated without third-party writers;
-// .doc reuses the committed sample from @genoffice/file-parse, .xls is only
+// .doc reuses the committed sample from @airy-office/file-parse, .xls is only
 // exercised when a real fixture is supplied (see the skipIf in the tests).
 import JSZip from 'jszip'
 

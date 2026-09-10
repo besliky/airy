@@ -1,4 +1,4 @@
-import type { AiPanelPrefs } from '@genoffice/ui'
+import type { AiPanelPrefs } from '@airy-office/ui'
 /**
  * slides main-process <-> renderer IPC contract (Phase 3: open/save/edit, AI not included yet).
  *
@@ -8,13 +8,13 @@ import type { AiPanelPrefs } from '@genoffice/ui'
  * renderer sends edit intents (text/geometry changes) back to the main process, which applies
  * them to the model and rebuilds the RenderSlide.
  */
-import type { RenderSlide } from '@genoffice/pptx-render'
-import type { SlideComment, SectionInfo } from '@genoffice/pptx-engine'
-import type { AiSettings, AiStreamChunk, AiStreamRequest } from '@genoffice/ai-provider'
+import type { RenderSlide } from '@airy-office/pptx-render'
+import type { SlideComment, SectionInfo } from '@airy-office/pptx-engine'
+import type { AiSettings, AiStreamChunk, AiStreamRequest } from '@airy-office/ai-provider'
 
-export type { SlideComment, SectionInfo } from '@genoffice/pptx-engine'
+export type { SlideComment, SectionInfo } from '@airy-office/pptx-engine'
 
-// Canonical definitions of AI-related types live in @genoffice/ai-provider / @genoffice/agent-core (shared with docs)
+// Canonical definitions of AI-related types live in @airy-office/ai-provider / @airy-office/agent-core (shared with docs)
 export type {
   AiProviderConfig,
   AiProviderId,
@@ -22,9 +22,9 @@ export type {
   AiSettings,
   AiStreamChunk,
   AiStreamRequest,
-} from '@genoffice/ai-provider'
-export { AI_PROVIDERS } from '@genoffice/ai-provider/browser'
-export type { AgentToolCall, AgentToolDef } from '@genoffice/agent-core'
+} from '@airy-office/ai-provider'
+export { AI_PROVIDERS } from '@airy-office/ai-provider/browser'
+export type { AgentToolCall, AgentToolDef } from '@airy-office/agent-core'
 
 export type UiTheme = 'light' | 'dark' | 'system'
 

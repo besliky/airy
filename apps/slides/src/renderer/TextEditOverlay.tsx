@@ -5,8 +5,8 @@
  * paragraph/run structure (each run's format preserved independently) and go through IPC editText.
  */
 import React, { useEffect, useRef } from 'react'
-import { DEFAULT_INSETS_EMU, emuToPx } from '@genoffice/pptx-render'
-import type { GlyphRun, ShapeRenderNode, TextLine } from '@genoffice/pptx-render'
+import { DEFAULT_INSETS_EMU, emuToPx } from '@airy-office/pptx-render'
+import type { GlyphRun, ShapeRenderNode, TextLine } from '@airy-office/pptx-render'
 import type { EditParagraph, EditRun, LinkTargetOp } from '../shared/ipc'
 import { decodeLinkTarget, encodeLinkTarget } from '../shared/run-link'
 import { displayFontFamily, konvaBaselineDrop } from './konva-adapter'

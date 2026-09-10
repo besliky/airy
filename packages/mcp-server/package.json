@@ -27,8 +27,8 @@
     "vitest": "^4.1.11"
   },
   "dependencies": {
-    "@genoffice/docx-engine": "*",
-    "@genoffice/file-parse": "*",
+    "@airy-office/docx-engine": "*",
+    "@airy-office/file-parse": "*",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "jszip": "^3.10.1",
     "zod": "^4.6.1"

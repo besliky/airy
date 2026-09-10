@@ -49,9 +49,9 @@ import {
   showSaveDialogWithMemory,
   viewMenuTemplate,
   windowMenuTemplate,
-} from '@genoffice/electron-utils'
-import { createI18n, getUiLang, type Lang, normalizeLang, setUiLang } from '@genoffice/i18n'
-import { ProjectStore } from '@genoffice/project-store'
+} from '@airy-office/electron-utils'
+import { createI18n, getUiLang, type Lang, normalizeLang, setUiLang } from '@airy-office/i18n'
+import { ProjectStore } from '@airy-office/project-store'
 
 import {
   AiCreditsError,
@@ -71,11 +71,11 @@ import {
   type AiSettings,
   type AiStreamChunk,
   type LegacyAiSettings,
-} from '@genoffice/ai-provider'
-import { shutdownCodexAppServers } from '@genoffice/ai-provider/codex-app-server'
+} from '@airy-office/ai-provider'
+import { shutdownCodexAppServers } from '@airy-office/ai-provider/codex-app-server'
 import { csvToXlsxBuffer, decodeCsvBuffer, sheetCsvToXlsxBuffer } from '../gateway/csv-import'
-import { webSearchTool, imageSearchTool, generateImageTool } from '@genoffice/ai-search'
-import { parseFileToText } from '@genoffice/file-parse'
+import { webSearchTool, imageSearchTool, generateImageTool } from '@airy-office/ai-search'
+import { parseFileToText } from '@airy-office/file-parse'
 import type { CellEdit, SheetStructuralOps } from '../gateway/xlsx-gateway'
 import { readArchiveEntryText, saveWorkbookViaSidecar } from '../gateway/xlsx-package-io'
 import { parsePivotDefinition } from '../gateway/xlsx-pivot'
@@ -1983,7 +1983,7 @@ const ATTACHMENT_TEXT_EXTS = new Set([
   'sql',
   'css',
 ])
-/** office/pdf formats extract text via @genoffice/file-parse; images skip text
+/** office/pdf formats extract text via @airy-office/file-parse; images skip text
  * extraction and go multimodal (sheets:files-read-image) */
 const ATTACHMENT_EXTS = new Set([
   ...ATTACHMENT_TEXT_EXTS,
@@ -2064,7 +2064,7 @@ function savePastedImage(data: unknown, ext: unknown): string | null {
   return filePath
 }
 
-/** Attachment text extraction via @genoffice/file-parse (docx/pdf/pptx/xlsx/plain text) */
+/** Attachment text extraction via @airy-office/file-parse (docx/pdf/pptx/xlsx/plain text) */
 async function extractAttachmentText(filePath: string): Promise<string> {
   const stat = statSync(filePath)
   const stamp = `${stat.mtimeMs}:${stat.size}`

@@ -31,7 +31,7 @@ async function openSession(): Promise<DocxSession> {
 }
 
 async function reparseSaved(path: string) {
-  const { parseDocx } = await import('@genoffice/docx-engine')
+  const { parseDocx } = await import('@airy-office/docx-engine')
   return parseDocx(new Uint8Array(await readFile(path)))
 }
 

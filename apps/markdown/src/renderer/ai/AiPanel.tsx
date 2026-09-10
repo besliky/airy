@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactElement, ReactNode } from 'react'
-import { AgentLoop, composeSkills } from '@genoffice/agent-core'
-import { imageGenerationAvailable, type AiSettings } from '@genoffice/ai-provider/browser'
+import { AgentLoop, composeSkills } from '@airy-office/agent-core'
+import { imageGenerationAvailable, type AiSettings } from '@airy-office/ai-provider/browser'
 import {
   AiComposer,
   AiScopeQuote,
   AiTypingIndicator,
   Markdown,
   type AiScopeQuoteData,
-} from '@genoffice/ui'
+} from '@airy-office/ui'
 import type { Editor } from '@tiptap/core'
 import { aiLangDirective, t as tGlobal, useI18n } from '../i18n/locale'
 import sendEnterOn from '../assets/send-enter-on.png'

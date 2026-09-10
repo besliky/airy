@@ -1,11 +1,11 @@
-import type { AgentSkill, ToolDisplay } from '@genoffice/agent-core'
+import type { AgentSkill, ToolDisplay } from '@airy-office/agent-core'
 import type {
   GroupRenderNode,
   PictureRenderNode,
   RenderNode,
   RenderSlide,
   ShapeRenderNode,
-} from '@genoffice/pptx-render'
+} from '@airy-office/pptx-render'
 import type { AgentToolCall, AgentToolDef } from '../../shared/ipc'
 import { OP_GROUPS, opGuide, opGuideCatalog, opSignatureIndex } from '../../shared/op-docs'
 import { auditSlideLayout, formatAudit } from './layout-audit'

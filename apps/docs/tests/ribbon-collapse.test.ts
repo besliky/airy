@@ -3,7 +3,7 @@ import {
   installRibbonPeekDismiss,
   isRibbonToggleShortcut,
   readRibbonCollapsed,
-} from '@genoffice/ui'
+} from '@airy-office/ui'
 
 const press = (target: Element) =>
   target.dispatchEvent(new Event('pointerdown', { bubbles: true, composed: true }))

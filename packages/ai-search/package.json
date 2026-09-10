@@ -1,5 +1,5 @@
 {
-  "name": "@genoffice/ai-search",
+  "name": "@airy-office/ai-search",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "private": true,
@@ -14,8 +14,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@genoffice/ai-provider": "*",
-    "@genoffice/electron-utils": "*"
+    "@airy-office/ai-provider": "*",
+    "@airy-office/electron-utils": "*"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

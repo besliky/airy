@@ -1,9 +1,9 @@
-import type { AiPanelPrefs } from '@genoffice/ui'
+import type { AiPanelPrefs } from '@airy-office/ui'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { IpcRendererEvent } from 'electron'
-import type { RenderSlide } from '@genoffice/pptx-render'
-import type { ProjectApi } from '@genoffice/project-store'
-import { installDropOpenBridge } from '@genoffice/electron-utils/drop-open'
+import type { RenderSlide } from '@airy-office/pptx-render'
+import type { ProjectApi } from '@airy-office/project-store'
+import { installDropOpenBridge } from '@airy-office/electron-utils/drop-open'
 import type {
   AddChartOp,
   AddElementOp,

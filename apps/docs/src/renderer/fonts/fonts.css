@@ -13,25 +13,25 @@
    (tools/patch-carlito-vi.py); renamed per OFL Reserved Font Name clause */
 @font-face {
   font-family: 'Carlito GO';
-  src: url('@genoffice/ui/fonts/Carlito-Regular.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Regular.ttf');
   font-weight: normal;
   font-style: normal;
 }
 @font-face {
   font-family: 'Carlito GO';
-  src: url('@genoffice/ui/fonts/Carlito-Bold.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Bold.ttf');
   font-weight: bold;
   font-style: normal;
 }
 @font-face {
   font-family: 'Carlito GO';
-  src: url('@genoffice/ui/fonts/Carlito-Italic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Italic.ttf');
   font-weight: normal;
   font-style: italic;
 }
 @font-face {
   font-family: 'Carlito GO';
-  src: url('@genoffice/ui/fonts/Carlito-BoldItalic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-BoldItalic.ttf');
   font-weight: bold;
   font-style: italic;
 }
@@ -376,35 +376,35 @@
  * ~Carlito, bold +3%, digits +3.2%/+6.5%, space -14.7%. */
 @font-face {
   font-family: 'Aptos GO';
-  src: url('@genoffice/ui/fonts/Carlito-Regular.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Regular.ttf');
   size-adjust: 106.5%;
   font-weight: normal;
   font-style: normal;
 }
 @font-face {
   font-family: 'Aptos GO';
-  src: url('@genoffice/ui/fonts/Carlito-Bold.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Bold.ttf');
   size-adjust: 110%;
   font-weight: bold;
   font-style: normal;
 }
 @font-face {
   font-family: 'Aptos GO';
-  src: url('@genoffice/ui/fonts/Carlito-Italic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Italic.ttf');
   size-adjust: 106.9%;
   font-weight: normal;
   font-style: italic;
 }
 @font-face {
   font-family: 'Aptos GO';
-  src: url('@genoffice/ui/fonts/Carlito-BoldItalic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-BoldItalic.ttf');
   size-adjust: 110.2%;
   font-weight: bold;
   font-style: italic;
 }
 @font-face {
   font-family: 'Aptos GO';
-  src: url('@genoffice/ui/fonts/Carlito-Regular.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Regular.ttf');
   size-adjust: 105.4%;
   unicode-range: U+0030-0039;
   font-weight: normal;
@@ -412,7 +412,7 @@
 }
 @font-face {
   font-family: 'Aptos GO';
-  src: url('@genoffice/ui/fonts/Carlito-Bold.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Bold.ttf');
   size-adjust: 105.4%;
   unicode-range: U+0030-0039;
   font-weight: bold;
@@ -420,7 +420,7 @@
 }
 @font-face {
   font-family: 'Aptos GO';
-  src: url('@genoffice/ui/fonts/Carlito-Italic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Italic.ttf');
   size-adjust: 105.4%;
   unicode-range: U+0030-0039;
   font-weight: normal;
@@ -428,7 +428,7 @@
 }
 @font-face {
   font-family: 'Aptos GO';
-  src: url('@genoffice/ui/fonts/Carlito-BoldItalic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-BoldItalic.ttf');
   size-adjust: 105.4%;
   unicode-range: U+0030-0039;
   font-weight: bold;
@@ -436,7 +436,7 @@
 }
 @font-face {
   font-family: 'Aptos GO';
-  src: url('@genoffice/ui/fonts/Carlito-Regular.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Regular.ttf');
   size-adjust: 89.8%;
   unicode-range: U+0020, U+00A0;
   font-weight: normal;
@@ -444,7 +444,7 @@
 }
 @font-face {
   font-family: 'Aptos GO';
-  src: url('@genoffice/ui/fonts/Carlito-Bold.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Bold.ttf');
   size-adjust: 89.8%;
   unicode-range: U+0020, U+00A0;
   font-weight: bold;
@@ -452,7 +452,7 @@
 }
 @font-face {
   font-family: 'Aptos GO';
-  src: url('@genoffice/ui/fonts/Carlito-Italic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Italic.ttf');
   size-adjust: 89.8%;
   unicode-range: U+0020, U+00A0;
   font-weight: normal;
@@ -460,7 +460,7 @@
 }
 @font-face {
   font-family: 'Aptos GO';
-  src: url('@genoffice/ui/fonts/Carlito-BoldItalic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-BoldItalic.ttf');
   size-adjust: 89.8%;
   unicode-range: U+0020, U+00A0;
   font-weight: bold;
@@ -468,35 +468,35 @@
 }
 @font-face {
   font-family: 'Aptos Display GO';
-  src: url('@genoffice/ui/fonts/Carlito-Regular.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Regular.ttf');
   size-adjust: 99.9%;
   font-weight: normal;
   font-style: normal;
 }
 @font-face {
   font-family: 'Aptos Display GO';
-  src: url('@genoffice/ui/fonts/Carlito-Bold.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Bold.ttf');
   size-adjust: 103%;
   font-weight: bold;
   font-style: normal;
 }
 @font-face {
   font-family: 'Aptos Display GO';
-  src: url('@genoffice/ui/fonts/Carlito-Italic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Italic.ttf');
   size-adjust: 100.5%;
   font-weight: normal;
   font-style: italic;
 }
 @font-face {
   font-family: 'Aptos Display GO';
-  src: url('@genoffice/ui/fonts/Carlito-BoldItalic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-BoldItalic.ttf');
   size-adjust: 103.5%;
   font-weight: bold;
   font-style: italic;
 }
 @font-face {
   font-family: 'Aptos Display GO';
-  src: url('@genoffice/ui/fonts/Carlito-Regular.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Regular.ttf');
   size-adjust: 103.2%;
   unicode-range: U+0030-0039;
   font-weight: normal;
@@ -504,7 +504,7 @@
 }
 @font-face {
   font-family: 'Aptos Display GO';
-  src: url('@genoffice/ui/fonts/Carlito-Bold.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Bold.ttf');
   size-adjust: 106.5%;
   unicode-range: U+0030-0039;
   font-weight: bold;
@@ -512,7 +512,7 @@
 }
 @font-face {
   font-family: 'Aptos Display GO';
-  src: url('@genoffice/ui/fonts/Carlito-Italic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Italic.ttf');
   size-adjust: 103.2%;
   unicode-range: U+0030-0039;
   font-weight: normal;
@@ -520,7 +520,7 @@
 }
 @font-face {
   font-family: 'Aptos Display GO';
-  src: url('@genoffice/ui/fonts/Carlito-BoldItalic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-BoldItalic.ttf');
   size-adjust: 106.5%;
   unicode-range: U+0030-0039;
   font-weight: bold;
@@ -528,7 +528,7 @@
 }
 @font-face {
   font-family: 'Aptos Display GO';
-  src: url('@genoffice/ui/fonts/Carlito-Regular.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Regular.ttf');
   size-adjust: 85.3%;
   unicode-range: U+0020, U+00A0;
   font-weight: normal;
@@ -536,7 +536,7 @@
 }
 @font-face {
   font-family: 'Aptos Display GO';
-  src: url('@genoffice/ui/fonts/Carlito-Bold.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Bold.ttf');
   size-adjust: 85.3%;
   unicode-range: U+0020, U+00A0;
   font-weight: bold;
@@ -544,7 +544,7 @@
 }
 @font-face {
   font-family: 'Aptos Display GO';
-  src: url('@genoffice/ui/fonts/Carlito-Italic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Italic.ttf');
   size-adjust: 85.3%;
   unicode-range: U+0020, U+00A0;
   font-weight: normal;
@@ -552,7 +552,7 @@
 }
 @font-face {
   font-family: 'Aptos Display GO';
-  src: url('@genoffice/ui/fonts/Carlito-BoldItalic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-BoldItalic.ttf');
   size-adjust: 85.3%;
   unicode-range: U+0020, U+00A0;
   font-weight: bold;
@@ -1054,7 +1054,7 @@
  * "Cu₂O" rendered as "Cu₂ O". Serve them from bundled latin faces instead. */
 @font-face {
   font-family: 'GenOffice Sans KR';
-  src: url('@genoffice/ui/fonts/Carlito-Regular.ttf') format('truetype');
+  src: url('@airy-office/ui/fonts/Carlito-Regular.ttf') format('truetype');
   unicode-range: U+2070-209F, U+00B2-00B3, U+00B9;
   font-weight: normal;
   font-style: normal;
@@ -1062,7 +1062,7 @@
 @font-face {
   font-family: 'GenOffice Serif KR';
   /* Carlito, not Caladea/LiberationSerif: only Carlito covers the whole block */
-  src: url('@genoffice/ui/fonts/Carlito-Regular.ttf') format('truetype');
+  src: url('@airy-office/ui/fonts/Carlito-Regular.ttf') format('truetype');
   unicode-range: U+2070-209F, U+00B2-00B3, U+00B9;
   font-weight: normal;
   font-style: normal;
@@ -1090,7 +1090,7 @@
 }
 @font-face {
   font-family: 'Noto Sans CJK SC';
-  src: url('@genoffice/ui/fonts/Carlito-Regular.ttf') format('truetype');
+  src: url('@airy-office/ui/fonts/Carlito-Regular.ttf') format('truetype');
   unicode-range: U+2070-2071, U+2074-2094;
   font-weight: normal;
   font-style: normal;

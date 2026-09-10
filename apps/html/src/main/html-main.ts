@@ -32,10 +32,10 @@ import {
   safeExternalUrl,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
-} from '@genoffice/electron-utils'
-import { createI18n, getUiLang } from '@genoffice/i18n'
-import { generateImageTool } from '@genoffice/ai-search'
-import { parseFileToText } from '@genoffice/file-parse'
+} from '@airy-office/electron-utils'
+import { createI18n, getUiLang } from '@airy-office/i18n'
+import { generateImageTool } from '@airy-office/ai-search'
+import { parseFileToText } from '@airy-office/file-parse'
 import { convertHtmlToDocx } from '../../../../packages/html2docx/src'
 import { atomicWriteFile } from './atomic-write'
 import { ElectronBrowserDriver } from './html2docx-driver'
@@ -637,7 +637,7 @@ const TEXT_EXTS = new Set([
   'sql',
   'css',
 ])
-/** office/pdf formats get text extracted via @genoffice/file-parse; images skip extraction and go multimodal */
+/** office/pdf formats get text extracted via @airy-office/file-parse; images skip extraction and go multimodal */
 const ATTACHMENT_EXTS = new Set([
   ...TEXT_EXTS,
   'doc',
@@ -1616,7 +1616,7 @@ export function createHtmlView(openPath?: string | null): WebContentsView {
   return view
 }
 
-/** Standalone window mode: `npm run dev -w @genoffice/html`, md path passed via argv */
+/** Standalone window mode: `npm run dev -w @airy-office/html`, md path passed via argv */
 export function startHtmlStandalone(): void {
   registerHtmlSchemes()
   installNavigationGuard(app)

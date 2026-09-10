@@ -1,61 +1,61 @@
 /* Bundled metric substitutes for fonts most decks assume but macOS/Linux lack:
  * Carlito ↔ Calibri (document content rendering — the canvas font chains in
  * konva-adapter.ts list Carlito right after Calibri). The files are the suite's
- * shared copy (@genoffice/ui/fonts); their internal family name is "Carlito GO"
+ * shared copy (@airy-office/ui/fonts); their internal family name is "Carlito GO"
  * (docs' Vietnamese-diacritics rebuild), which is what the main-process metrics
  * report as the draw family — declare both names. */
 @font-face {
   font-family: 'Carlito';
-  src: url('@genoffice/ui/fonts/Carlito-Regular.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Regular.ttf');
   font-weight: normal;
   font-style: normal;
 }
 @font-face {
   font-family: 'Carlito';
-  src: url('@genoffice/ui/fonts/Carlito-Bold.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Bold.ttf');
   font-weight: bold;
   font-style: normal;
 }
 @font-face {
   font-family: 'Carlito';
-  src: url('@genoffice/ui/fonts/Carlito-Italic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Italic.ttf');
   font-weight: normal;
   font-style: italic;
 }
 @font-face {
   font-family: 'Carlito';
-  src: url('@genoffice/ui/fonts/Carlito-BoldItalic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-BoldItalic.ttf');
   font-weight: bold;
   font-style: italic;
 }
 @font-face {
   font-family: 'Carlito GO';
-  src: url('@genoffice/ui/fonts/Carlito-Regular.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Regular.ttf');
   font-weight: normal;
   font-style: normal;
 }
 @font-face {
   font-family: 'Carlito GO';
-  src: url('@genoffice/ui/fonts/Carlito-Bold.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Bold.ttf');
   font-weight: bold;
   font-style: normal;
 }
 @font-face {
   font-family: 'Carlito GO';
-  src: url('@genoffice/ui/fonts/Carlito-Italic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-Italic.ttf');
   font-weight: normal;
   font-style: italic;
 }
 @font-face {
   font-family: 'Carlito GO';
-  src: url('@genoffice/ui/fonts/Carlito-BoldItalic.ttf');
+  src: url('@airy-office/ui/fonts/Carlito-BoldItalic.ttf');
   font-weight: bold;
   font-style: italic;
 }
 
 /* Per-app accent (powerpoint-orange family) + slides-only tokens.
  * Chrome tokens (surface/text/border/…, AI panel --color-*) come from
- * @genoffice/ui/tokens.css; nothing here may shadow those names. */
+ * @airy-office/ui/tokens.css; nothing here may shadow those names. */
 :root {
   --accent: #c43e1c;
   --accent-dark: #a33517;
@@ -3830,7 +3830,7 @@ body.vib .slide-list {
   box-shadow: var(--slides-thumb-shadow);
 }
 
-/* Shared dropdown (@genoffice/ui gs-dd) app sizing: format-pane rows, the
+/* Shared dropdown (@airy-office/ui gs-dd) app sizing: format-pane rows, the
  * ribbon animation-timing group, and modal dialogs */
 .fp-prow .gs-dd {
   width: 120px;
@@ -4591,7 +4591,7 @@ body.vib .slide-list {
   border-radius: 1px;
 }
 
-/* Anchor positioning for the shared Word-style color panel (@genoffice/ui
+/* Anchor positioning for the shared Word-style color panel (@airy-office/ui
    .gcp-palette draws the chrome; this wrapper only places it under the trigger). */
 .rb-color-pop {
   position: fixed;

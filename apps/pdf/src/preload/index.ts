@@ -1,8 +1,8 @@
-import type { AiPanelPrefs } from '@genoffice/ui'
+import type { AiPanelPrefs } from '@airy-office/ui'
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Lang } from '@genoffice/i18n'
-import type { AiStreamChunk } from '@genoffice/ai-provider'
-import { installDropOpenBridge } from '@genoffice/electron-utils/drop-open'
+import type { Lang } from '@airy-office/i18n'
+import type { AiStreamChunk } from '@airy-office/ai-provider'
+import { installDropOpenBridge } from '@airy-office/electron-utils/drop-open'
 import { AI_CHANNELS, PDF_CHANNELS } from '../shared/ipc'
 import type { PdfApi, UiTheme } from '../shared/ipc'
 

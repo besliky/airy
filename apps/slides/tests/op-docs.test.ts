@@ -5,7 +5,7 @@
  * removed op) fails here, not in production.
  */
 import { describe, it, expect } from 'vitest'
-import { addElement, createBlankPptx, openPptx } from '@genoffice/pptx-engine'
+import { addElement, createBlankPptx, openPptx } from '@airy-office/pptx-engine'
 import { runTxn, opNames } from '../src/main/ops'
 import {
   OP_DOCS,

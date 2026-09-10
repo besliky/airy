@@ -1,7 +1,7 @@
 // Locale tables for the updater's dialogs and notification (menu-item labels
 // live in index.ts's tMain next to the other menu strings). Pure module: only
-// @genoffice/i18n, no Electron.
-import { createI18n, getUiLang } from '@genoffice/i18n'
+// @airy-office/i18n, no Electron.
+import { createI18n, getUiLang } from '@airy-office/i18n'
 
 /** keys use {version} placeholders consumed by createI18n's format() */
 const tUpd = createI18n({

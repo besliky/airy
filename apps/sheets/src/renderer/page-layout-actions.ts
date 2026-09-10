@@ -5,7 +5,7 @@
  * per-sheet print settings; nothing renders in the grid (Univer has no
  * page-layout view), everything lands in the saved file.
  */
-import { isMetafileMime, metafileToDataUrl } from '@genoffice/docx-engine/metafile'
+import { isMetafileMime, metafileToDataUrl } from '@airy-office/docx-engine/metafile'
 import type { WorkbookOperation } from '../domain/workbook-dsl'
 import type { ApplyOutcome } from '../domain/workbook.types'
 

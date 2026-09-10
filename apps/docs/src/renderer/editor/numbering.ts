@@ -8,4 +8,4 @@ export {
   markerTabAdvance,
   type ListItemRef,
   type ListMarkerInfo,
-} from '@genoffice/docx-engine'
+} from '@airy-office/docx-engine'

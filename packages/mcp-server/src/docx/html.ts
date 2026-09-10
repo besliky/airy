@@ -17,7 +17,7 @@ import {
   type GeneratedBlock,
   type Run,
   type TableModel,
-} from '@genoffice/docx-engine'
+} from '@airy-office/docx-engine'
 
 // ---- parsing: restricted HTML -> session content ----
 

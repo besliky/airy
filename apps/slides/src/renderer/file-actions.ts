@@ -3,7 +3,7 @@
  * export. Each function takes the ActionCtx built fresh per call.
  * (Printing lives in components/PrintDialog.tsx — preview + options dialog.)
  */
-import type { RenderSlide } from '@genoffice/pptx-render'
+import type { RenderSlide } from '@airy-office/pptx-render'
 import type { ActionCtx } from './action-context'
 import { renderSlidesToPngBase64 } from './export-render'
 import { t } from './i18n/locale'

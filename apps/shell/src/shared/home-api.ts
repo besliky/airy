@@ -8,10 +8,10 @@ import type {
   AiSearchProviderMeta,
   AiSettings,
   CodexModelCatalog,
-} from '@genoffice/ai-provider'
-import type { AiPanelPrefs } from '@genoffice/ui/ai-panel-prefs'
+} from '@airy-office/ai-provider'
+import type { AiPanelPrefs } from '@airy-office/ui/ai-panel-prefs'
 
-/** UI language; kept self-contained here (mirrors Lang in @genoffice/i18n) */
+/** UI language; kept self-contained here (mirrors Lang in @airy-office/i18n) */
 export type UiLanguage =
   | 'zh'
   | 'en'

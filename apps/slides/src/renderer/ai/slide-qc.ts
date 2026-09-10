@@ -9,12 +9,12 @@ import {
   type AgentImage,
   type AgentSkill,
   type AgentTransport,
-} from '@genoffice/agent-core'
+} from '@airy-office/agent-core'
 import {
   getProviderAdapter,
   modelLacksVision,
   type AiSettings,
-} from '@genoffice/ai-provider/browser'
+} from '@airy-office/ai-provider/browser'
 import { auditSlideLayout } from './layout-audit'
 import { createSlidesSkill, formatSlideDump, type DeckAccess } from './slides-skill'
 import qcVisualPrompt from './prompts/qc-visual.md?raw'

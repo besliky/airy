@@ -1,4 +1,4 @@
-import type { RenderNode } from '@genoffice/pptx-render'
+import type { RenderNode } from '@airy-office/pptx-render'
 
 /** 'mixed' = multi-select spanning pictures/groups: only selection-wide commands (outline) apply */
 export type ContextElementType =

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseDocx, readSections, type TableModel } from '@genoffice/docx-engine'
+import { parseDocx, readSections, type TableModel } from '@airy-office/docx-engine'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
 import {
   blocksToPmDoc,

@@ -3,7 +3,7 @@
 //
 // Decision (S6): apps/sheets/src/gateway is verified Electron-free — its only
 // non-local runtime dependencies are node builtins, jszip and zod (SA4
-// section 5; the @genoffice/ai-provider / @genoffice/ui imports in
+// section 5; the @airy-office/ai-provider / @airy-office/ui imports in
 // shared/desktop-api are type-only and stripped at build time). Importing the
 // app modules directly from this package therefore bundles cleanly (esbuild
 // inlines them into dist/index.js; vitest resolves the raw TS through the

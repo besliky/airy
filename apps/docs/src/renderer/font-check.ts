@@ -1,4 +1,4 @@
-import type { ParsedDoc } from '@genoffice/docx-engine'
+import type { ParsedDoc } from '@airy-office/docx-engine'
 import { BUNDLED_FONTS, cssFontFamily, isBundledFont } from './line-metrics'
 
 const GENERIC = new Set(['serif', 'sans-serif', 'monospace'])

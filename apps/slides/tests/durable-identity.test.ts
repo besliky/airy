@@ -13,9 +13,9 @@ import {
   savePptx,
   type OpenedPptx,
   type TextElement,
-} from '@genoffice/pptx-engine'
+} from '@airy-office/pptx-engine'
 import { runTxn, elementDurableId, slideDurableId } from '../src/main/ops'
-import { elementCNvPrId, groupChildDurableId, patchSlideXml } from '@genoffice/pptx-engine'
+import { elementCNvPrId, groupChildDurableId, patchSlideXml } from '@airy-office/pptx-engine'
 
 let opened: OpenedPptx
 

@@ -1,4 +1,4 @@
-import { defineStrings } from '@genoffice/i18n'
+import { defineStrings } from '@airy-office/i18n'
 import { zh } from './panes/zh'
 import { en } from './panes/en'
 import { ja } from './panes/ja'

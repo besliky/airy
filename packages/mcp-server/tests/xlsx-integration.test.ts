@@ -42,7 +42,7 @@ afterAll(async () => {
 
 describeWithBinary(
   'xlsx session against the real sidecar binary ' +
-    '(skipped when absent: build with `npm run native:build -w @genoffice/sheets` or set AIRY_XLSX_SIDECAR)',
+    '(skipped when absent: build with `npm run native:build -w @airy-office/sheets` or set AIRY_XLSX_SIDECAR)',
   () => {
     it('opens, reads values and formulas, journals edits, saves and re-reads', async () => {
       const bookPath = join(root, 'budget.xlsx')

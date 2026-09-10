@@ -22,7 +22,7 @@ import {
   type GroupElement,
   type OpenedPptx,
   type SlideElement,
-} from '@genoffice/pptx-engine'
+} from '@airy-office/pptx-engine'
 import { runTxn } from '../src/main/ops'
 import { OP_DOCS } from '../src/shared/op-docs'
 

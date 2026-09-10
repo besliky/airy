@@ -33,7 +33,7 @@ export interface PickImageResult {
   name: string
 }
 
-// ---- AI provider settings/config/streaming: canonical types live in @genoffice/ai-provider ----
+// ---- AI provider settings/config/streaming: canonical types live in @airy-office/ai-provider ----
 
 import type {
   AiChatRequest,
@@ -41,9 +41,9 @@ import type {
   AiSettings,
   AiStreamChunk,
   AiStreamRequest,
-} from '@genoffice/ai-provider'
-import type { FaceVerticalMetrics } from '@genoffice/font-metrics'
-import type { AiPanelPrefs } from '@genoffice/ui'
+} from '@airy-office/ai-provider'
+import type { FaceVerticalMetrics } from '@airy-office/font-metrics'
+import type { AiPanelPrefs } from '@airy-office/ui'
 
 export type { FaceVerticalMetrics }
 
@@ -56,17 +56,17 @@ export type {
   AiSettings,
   AiStreamChunk,
   AiStreamRequest,
-} from '@genoffice/ai-provider'
-export { AI_PROVIDERS } from '@genoffice/ai-provider/browser'
+} from '@airy-office/ai-provider'
+export { AI_PROVIDERS } from '@airy-office/ai-provider/browser'
 
-// ---- agent protocol: canonical types live in @genoffice/agent-core ----
+// ---- agent protocol: canonical types live in @airy-office/agent-core ----
 
 export type {
   AgentMessage,
   AgentToolCall,
   AgentToolDef,
   AgentToolResult,
-} from '@genoffice/agent-core'
+} from '@airy-office/agent-core'
 
 // ---- chat attachments (local files fed to the agent via tools) ----
 

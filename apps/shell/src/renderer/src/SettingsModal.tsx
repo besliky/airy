@@ -7,14 +7,14 @@ import {
   Dropdown,
   aiPanelFontPx,
   clampAiCustomFontSize,
-} from '@genoffice/ui'
-import type { AiFontSize, AiPanelPrefs } from '@genoffice/ui'
+} from '@airy-office/ui'
+import type { AiFontSize, AiPanelPrefs } from '@airy-office/ui'
 import {
   DEFAULT_MAX_OUTPUT_TOKENS,
   MAX_MAX_OUTPUT_TOKENS,
   MIN_MAX_OUTPUT_TOKENS,
   clampMaxOutputTokens,
-} from '@genoffice/ai-provider/browser'
+} from '@airy-office/ai-provider/browser'
 import type {
   AiMediaProviderId,
   AiMediaProviderMeta,
@@ -22,7 +22,7 @@ import type {
   AiSearchProviderMeta,
   AiSearchSettings,
   AiSettings,
-} from '@genoffice/ai-provider'
+} from '@airy-office/ai-provider'
 import { useI18n } from './locale'
 import type { StringKey, TFunc } from './locale'
 import type { AiCatalogEntry, UiTheme } from '../../shared/home-api'

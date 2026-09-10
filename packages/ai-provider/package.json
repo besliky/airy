@@ -1,5 +1,5 @@
 {
-  "name": "@genoffice/ai-provider",
+  "name": "@airy-office/ai-provider",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "private": true,
@@ -16,7 +16,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@genoffice/agent-core": "*"
+    "@airy-office/agent-core": "*"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

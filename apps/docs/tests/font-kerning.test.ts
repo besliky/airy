@@ -7,7 +7,12 @@
  */
 import { describe, expect, it } from 'vitest'
 import { DOMSerializer } from '@tiptap/pm/model'
-import type { ParsedDocFull, StyleDisplay, StyleInfo, TextboxDisplay } from '@genoffice/docx-engine'
+import type {
+  ParsedDocFull,
+  StyleDisplay,
+  StyleInfo,
+  TextboxDisplay,
+} from '@airy-office/docx-engine'
 import { docStyleCss } from '../src/renderer/doc-style-css'
 import { renderTextboxSpec } from '../src/renderer/editor/protected-render'
 import { TextStyleMark } from '../src/renderer/editor/marks'

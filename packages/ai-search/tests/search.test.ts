@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { webSearch, imageSearch } from '../src/index'
 import { searchOptionsFromSettings, testSearchProvider } from '../src/search-tools'
-import { defaultAiSettings } from '@genoffice/ai-provider'
+import { defaultAiSettings } from '@airy-office/ai-provider'
 
 const realFetch = globalThis.fetch
 afterEach(() => {

@@ -7,14 +7,14 @@
     // Pin resolution to this repo's workspace sources (avoids stale types when node_modules links point elsewhere)
     "baseUrl": ".",
     "paths": {
-      "@genoffice/pptx-engine": ["../../packages/pptx-engine/src/index.ts"],
-      "@genoffice/pptx-engine/table-grid": ["../../packages/pptx-engine/src/table-grid.ts"],
-      "@genoffice/pptx-engine/identity": ["../../packages/pptx-engine/src/identity.ts"],
-      "@genoffice/pptx-engine/background-promote": [
+      "@airy-office/pptx-engine": ["../../packages/pptx-engine/src/index.ts"],
+      "@airy-office/pptx-engine/table-grid": ["../../packages/pptx-engine/src/table-grid.ts"],
+      "@airy-office/pptx-engine/identity": ["../../packages/pptx-engine/src/identity.ts"],
+      "@airy-office/pptx-engine/background-promote": [
         "../../packages/pptx-engine/src/background-promote.ts"
       ],
-      "@genoffice/pptx-render": ["../../packages/pptx-render/src/index.ts"],
-      "@genoffice/docx-engine/metafile": ["../../packages/docx-engine/src/metafile.ts"]
+      "@airy-office/pptx-render": ["../../packages/pptx-render/src/index.ts"],
+      "@airy-office/docx-engine/metafile": ["../../packages/docx-engine/src/metafile.ts"]
     }
   },
   "include": ["src", "tests", "electron.vite.config.ts", "vitest.config.ts"]

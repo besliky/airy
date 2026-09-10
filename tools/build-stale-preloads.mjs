@@ -40,7 +40,7 @@ const stale = APPS.filter((app) => {
 if (stale.length) {
   console.log(`Rebuilding stale preloads: ${stale.join(', ')}`)
   for (const app of stale) {
-    const r = spawnSync('npm', ['run', 'build', '-w', `@genoffice/${app}`], { stdio: 'inherit' })
+    const r = spawnSync('npm', ['run', 'build', '-w', `@airy-office/${app}`], { stdio: 'inherit' })
     if (r.status !== 0) process.exit(r.status ?? 1)
   }
 }

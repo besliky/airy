@@ -276,7 +276,7 @@ npm run dist:linux   # package Linux AppImage + deb + rpm
 
 يحتاج تطبيق Sheets بالإضافة إلى ذلك إلى سلسلة أدوات Rust لعمليته المساعدة
 الخاصة بـ xlsx (يجب أن يكون `cargo` متاحًا في PATH)؛ ويقوم أمر
-`npm run build -w @genoffice/sheets` بتجميعه تلقائيًا. راجع
+`npm run build -w @airy-office/sheets` بتجميعه تلقائيًا. راجع
 [CONTRIBUTING.md](../../CONTRIBUTING.md) لمعرفة الفحوصات التي يجب أن يمر بها
 كل تغيير وكيفية دمج طلبات السحب (pull requests).
 

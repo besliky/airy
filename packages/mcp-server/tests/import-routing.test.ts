@@ -22,7 +22,7 @@ vi.mock('../src/import/soffice.js', () => ({
 import { extensionOf, openDocument } from '../src/import/open.js'
 import { TextSession } from '../src/sessions/text.js'
 
-// committed binary Word 97-2003 sample from @genoffice/file-parse
+// committed binary Word 97-2003 sample from @airy-office/file-parse
 const DOC_SAMPLE = fileURLToPath(
   new URL('../../../packages/file-parse/tests/fixtures/legacy-sample.doc', import.meta.url),
 )

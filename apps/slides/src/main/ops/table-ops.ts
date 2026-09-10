@@ -21,8 +21,8 @@ import {
   type TableMergeOp,
   type TableStructureOp,
   type TableStyleEdit,
-} from '@genoffice/pptx-engine'
-import { editTableStyle } from '@genoffice/pptx-engine'
+} from '@airy-office/pptx-engine'
+import { editTableStyle } from '@airy-office/pptx-engine'
 import type { EditParagraph } from '../../shared/ipc'
 import { applyEditParagraphs, collectParagraphFormatPatches } from '../edit-text'
 import { GuidedError, register, resolveElement, type Op, type OpRecord } from './registry'
