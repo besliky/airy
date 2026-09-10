@@ -13,8 +13,9 @@
 // DOMParser-based HTML branch) is not portable without a view, so the ops
 // vocabulary here is reimplemented against the engine model directly.
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { copyFile, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { basename, dirname, join, resolve } from 'node:path'
 
 import {
   parseDocx,
@@ -37,6 +38,12 @@ import {
   type SessionEntry,
 } from './ops.js'
 import { resolveConfined, workspaceRoot } from './paths.js'
+import {
+  convertViaSoffice,
+  findSoffice,
+  SOFFICE_FILTERS,
+  sofficeMissingError,
+} from '../import/soffice.js'
 
 // ---- limits (mirror the embedded agent, scaled to the MCP 30k answer budget) ----
 
@@ -62,8 +69,14 @@ function clip(text: string, max: number): string {
 
 export interface SessionMeta {
   handle: string
+  kind: 'docx'
   path: string
   fileName: string
+  format: 'docx'
+  converted: boolean
+  editable: boolean
+  warnings: string[]
+  originPath?: string
   blockCount: number
   wordCount: number
   charCount: number
@@ -82,6 +95,24 @@ export interface SaveResult {
   path: string
   bytes: number
   unchanged: boolean
+  /** which writer produced the file: the docx engine or a LibreOffice origin export */
+  format?: 'docx' | 'origin'
+  warnings?: string[]
+}
+
+/**
+ * A legacy/ODF document this session was converted from (Phase 3b): editing
+ * happens on a temp .docx produced by LibreOffice, `origin` remembers where
+ * to write back on save_document(format:'origin').
+ */
+export interface SessionOrigin {
+  /** absolute path of the original .doc/.odt file */
+  readonly path: string
+  readonly format: 'doc' | 'odt'
+  /** mtime/size of the origin at conversion time (fence for origin export) */
+  readonly stamp: { mtimeMs: number; size: number } | null
+  /** temp dir holding the converted .docx; removed on close */
+  readonly tempDir: string | null
 }
 
 export class FencingError extends Error {
@@ -101,8 +132,10 @@ interface FileStamp {
 
 export class DocxSession {
   readonly handle: string
-  /** absolute path the document was opened from */
+  /** absolute path the document was opened from (temp .docx for imports) */
   readonly path: string
+  /** conversion origin when the document came from .doc/.odt */
+  readonly origin: SessionOrigin | null
 
   private readonly root: string
   private readonly parsed: ParsedDocFull
@@ -117,6 +150,7 @@ export class DocxSession {
     root: string,
     parsed: ParsedDocFull,
     stamp: FileStamp | null,
+    origin: SessionOrigin | null,
   ) {
     this.handle = handle
     this.path = path
@@ -124,6 +158,7 @@ export class DocxSession {
     this.parsed = parsed
     this.entries = DocxSession.initialEntries(parsed)
     this.baseline = stamp
+    this.origin = origin
   }
 
   private static initialEntries(parsed: ParsedDocFull): SessionEntry[] {
@@ -132,9 +167,14 @@ export class DocxSession {
       .map((block) => ({ kind: 'original' as const, block }))
   }
 
-  /** Open a .docx inside the workspace root and parse it into the session model. */
-  static async open(rawPath: string, root?: string): Promise<DocxSession> {
-    const path = resolveConfined(rawPath, root)
+  /**
+   * Open a .docx inside the workspace root and parse it into the session
+   * model. With `origin`, the path is a server-controlled temp .docx from a
+   * .doc/.odt conversion (outside the root by design), so confinement is
+   * skipped here — the origin path was confined before conversion.
+   */
+  static async open(rawPath: string, root?: string, origin?: SessionOrigin): Promise<DocxSession> {
+    const path = origin ? resolve(rawPath) : resolveConfined(rawPath, root)
     let bytes: Uint8Array
     let stamp: FileStamp
     try {
@@ -155,7 +195,14 @@ export class DocxSession {
         { cause: e },
       )
     }
-    return new DocxSession(randomUUID(), path, root ?? workspaceRoot(), parsed, stamp)
+    return new DocxSession(
+      randomUUID(),
+      path,
+      root ?? workspaceRoot(),
+      parsed,
+      stamp,
+      origin ?? null,
+    )
   }
 
   // ---- reading ----
@@ -178,8 +225,19 @@ export class DocxSession {
       .join('')
     return {
       handle: this.handle,
-      path: this.path,
-      fileName: this.path.split('/').pop() ?? this.path,
+      kind: 'docx',
+      path: this.origin?.path ?? this.path,
+      fileName: (this.origin?.path ?? this.path).split('/').pop() ?? this.path,
+      format: 'docx',
+      converted: this.origin !== null,
+      editable: true,
+      warnings:
+        this.origin === null
+          ? []
+          : [
+              `Converted from .${this.origin.format} via LibreOffice — edits are applied to the converted .docx model.`,
+            ],
+      ...(this.origin === null ? {} : { originPath: this.origin.path }),
       blockCount: this.entries.length,
       wordCount: countWords(fullText),
       charCount: fullText.length,
@@ -341,9 +399,15 @@ export class DocxSession {
    *
    * mtime/size fencing: saving over the file this session opened refuses when
    * the file changed on disk since open (external writer), with a clear error.
+   *
+   * Default target: the opened .docx; for sessions converted from .doc/.odt a
+   * fresh sibling .docx next to the original. format:'origin' exports the
+   * edited document back to the original .doc/.odt through LibreOffice
+   * (best-effort) instead.
    */
-  async save(rawPath?: string): Promise<SaveResult> {
-    const target = resolveConfined(rawPath ?? this.path, this.root)
+  async save(rawPath?: string, format: 'docx' | 'origin' = 'docx'): Promise<SaveResult> {
+    if (format === 'origin') return this.saveToOrigin()
+    const target = resolveConfined(rawPath ?? this.defaultTarget(), this.root)
     if (target === this.path && this.baseline) {
       let current: FileStamp
       try {
@@ -357,24 +421,7 @@ export class DocxSession {
       }
     }
 
-    const saveBlocks = toSaveBlocks(this.entries)
-    // only numbering definitions the final content actually references are
-    // appended (an allocated-but-unused id — e.g. a setList that matched nothing
-    // — must not touch word/numbering.xml)
-    const referenced = new Set(
-      this.entries
-        .filter((e): e is Extract<SessionEntry, { kind: 'edited' }> => e.kind === 'edited')
-        .map((e) => e.gen.list?.numId)
-        .filter((id): id is string => id !== undefined),
-    )
-    const numbering = {
-      newDefs: this.pending.newDefs.filter((d) => referenced.has(d.numId)),
-      restartNums: this.pending.restartNums.filter((r) => referenced.has(r.numId)),
-    }
-    const hasNumbering = numbering.newDefs.length > 0 || numbering.restartNums.length > 0
-    const bytes = await saveDocx(this.parsed, saveBlocks as SaveBlock[], {
-      ...(hasNumbering ? { numbering } : {}),
-    })
+    const bytes = await this.serialize()
 
     await mkdir(dirname(target), { recursive: true })
     const tmp = join(dirname(target), `.${target.split('/').pop() ?? 'doc'}.airy-${randomUUID()}`)
@@ -395,28 +442,117 @@ export class DocxSession {
       path: target,
       bytes: bytes.byteLength,
       unchanged: bytes === this.parsed.internal.originalBytes,
+      format: 'docx',
+      ...(this.origin === null
+        ? {}
+        : {
+            warnings: [
+              `Saved as .docx; the original .${this.origin.format} file "${this.origin.path}" was left untouched (use format "origin" to export back).`,
+            ],
+          }),
     }
+  }
+
+  private defaultTarget(): string {
+    if (this.origin === null) return this.path
+    const name = basename(this.origin.path)
+    const dot = name.lastIndexOf('.')
+    const stem = dot > 0 ? name.slice(0, dot) : name
+    return join(dirname(this.origin.path), `${stem}.docx`)
+  }
+
+  /** Engine serialization shared by the docx and origin save paths. */
+  private async serialize(): Promise<Uint8Array> {
+    const saveBlocks = toSaveBlocks(this.entries)
+    // only numbering definitions the final content actually references are
+    // appended (an allocated-but-unused id — e.g. a setList that matched nothing
+    // — must not touch word/numbering.xml)
+    const referenced = new Set(
+      this.entries
+        .filter((e): e is Extract<SessionEntry, { kind: 'edited' }> => e.kind === 'edited')
+        .map((e) => e.gen.list?.numId)
+        .filter((id): id is string => id !== undefined),
+    )
+    const numbering = {
+      newDefs: this.pending.newDefs.filter((d) => referenced.has(d.numId)),
+      restartNums: this.pending.restartNums.filter((r) => referenced.has(r.numId)),
+    }
+    const hasNumbering = numbering.newDefs.length > 0 || numbering.restartNums.length > 0
+    return saveDocx(this.parsed, saveBlocks as SaveBlock[], {
+      ...(hasNumbering ? { numbering } : {}),
+    })
+  }
+
+  /**
+   * Best-effort export back to the original legacy/ODF format: serialize the
+   * edited docx in memory, convert through LibreOffice with the canonical
+   * export filter, promote atomically onto the origin path.
+   */
+  private async saveToOrigin(): Promise<SaveResult> {
+    if (this.origin === null) {
+      throw new Error('format "origin" is only valid for sessions converted from .doc/.odt.')
+    }
+    if (this.origin.stamp) {
+      let current: FileStamp | null
+      try {
+        const info = await stat(this.origin.path)
+        current = { mtimeMs: info.mtimeMs, size: info.size }
+      } catch {
+        current = null
+      }
+      if (
+        !current ||
+        current.mtimeMs !== this.origin.stamp.mtimeMs ||
+        current.size !== this.origin.stamp.size
+      ) {
+        throw new FencingError(this.origin.path)
+      }
+    }
+    const tool = await findSoffice()
+    if (!tool) {
+      throw sofficeMissingError(`Exporting back to .${this.origin.format} requires LibreOffice.`)
+    }
+    const bytes = await this.serialize()
+    const workDir = await mkdtemp(join(tmpdir(), 'airy-origin-'))
+    try {
+      const tempDocx = join(workDir, 'document.docx')
+      await writeFile(tempDocx, bytes)
+      const output = await convertViaSoffice(tool, tempDocx, {
+        filter: this.origin.format === 'doc' ? SOFFICE_FILTERS.doc : SOFFICE_FILTERS.odt,
+        extension: this.origin.format,
+        outDir: workDir,
+      })
+      const tmpTarget = join(
+        dirname(this.origin.path),
+        `.${basename(this.origin.path)}.airy-${randomUUID()}`,
+      )
+      await copyFile(output, tmpTarget)
+      await rename(tmpTarget, this.origin.path)
+      this.savedPath = this.origin.path
+      const info = await stat(this.origin.path)
+      return {
+        path: this.origin.path,
+        bytes: info.size,
+        unchanged: false,
+        format: 'origin',
+        warnings: [
+          `Exported back to .${this.origin.format} via LibreOffice — best-effort fidelity, verify the result.`,
+        ],
+      }
+    } finally {
+      await rm(workDir, { recursive: true, force: true })
+    }
+  }
+
+  /** Release session resources: remove the conversion temp dir when present. */
+  async close(): Promise<string[]> {
+    if (this.origin?.tempDir) {
+      await rm(this.origin.tempDir, { recursive: true, force: true })
+      return [this.origin.tempDir]
+    }
+    return []
   }
 }
 
-// ---- session store ----
-
-const sessions = new Map<string, DocxSession>()
-
-export function storeSession(session: DocxSession): DocxSession {
-  sessions.set(session.handle, session)
-  return session
-}
-
-export function getSession(handle: string): DocxSession {
-  const session = sessions.get(handle)
-  if (!session)
-    throw new Error(
-      `Unknown document handle "${handle}". Open the document first with open_document.`,
-    )
-  return session
-}
-
-export function sessionCount(): number {
-  return sessions.size
-}
+// Session storage lives in ../sessions/store.ts (one handle space shared by
+// the docx, xlsx and read-only text sessions since S6).

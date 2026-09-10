@@ -1,12 +1,24 @@
 // Single registration point for every MCP tool (ADR-3): all registerTool calls
 // live in this module, isolating the rest of the server from the SDK tool API
 // so a future SDK migration (v1 -> v2) only has to touch this file.
+//
+// Since S6 the document tools are multi-format: open_document accepts
+// .docx/.xlsx/.xlsm/.xls/.ods/.doc/.odt and hands out handles from one shared
+// session store; read_document stays the text-document reader (docx sessions
+// and read-only text), while workbooks are read through read_workbook — a
+// separate tool rather than a read_document extension because the addressing
+// models differ fundamentally (block indexes vs sheet + A1 ranges), and one
+// zod schema cannot describe both without confusing agents.
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
-import { DocxSession, getSession, storeSession, type SessionMeta } from '../docx/session.js'
+import { DocxSession, type SessionMeta } from '../docx/session.js'
 import { opSignatures, type Op } from '../docx/ops.js'
+import { openDocument } from '../import/open.js'
 import { BridgeClientError, sharedLiveBridge } from '../live/client.js'
+import { getSession, removeSession, storeSession, type DocumentSession } from '../sessions/store.js'
+import { TextSession } from '../sessions/text.js'
+import { XlsxSession, type XlsxSessionMeta } from '../xlsx/session.js'
 import { SERVER_NAME } from '../version.js'
 
 /** text + mirrored JSON content, the repo's standard tool output shape */
@@ -53,31 +65,36 @@ export function registerTools(server: McpServer): void {
     },
   )
 
-  // ---- headless docx editing (Phase 1) ----
+  // ---- headless document editing (Phase 1 docx, Phase 3/3b xlsx + legacy) ----
 
   server.registerTool(
     'open_document',
     {
       title: 'Open document',
       description:
-        'Open a .docx file and return a session handle for the other document tools. ' +
-        'The path must be absolute or workspace-relative and must stay inside the server workspace root ' +
-        '(AIRY_WORKSPACE_ROOT env var, default: the process working directory). Read-only: nothing is written until save_document.',
+        'Open a document and return a session handle for the other document tools. Supported ' +
+        'formats: .docx and .xlsx/.xlsm open natively (fully editable); .xls and .ods import via ' +
+        'conversion (editable as .xlsx; styling is lost — see warnings); .doc and .odt convert to ' +
+        '.docx via LibreOffice when installed (editable; save_document format "origin" exports ' +
+        'back); without LibreOffice a .doc still opens read-only as extracted text (editable: ' +
+        'false). The path must be absolute or workspace-relative and stay inside the server ' +
+        'workspace root (AIRY_WORKSPACE_ROOT env var, default: the process working directory). ' +
+        'Read-only: nothing is written until save_document. Close sessions with close_document.',
       inputSchema: {
         path: z
           .string()
           .min(1)
-          .describe('Absolute or workspace-relative path of the .docx file to open'),
+          .describe('Absolute or workspace-relative path of the document to open'),
       },
       annotations: {
         readOnlyHint: true,
       },
     },
     async ({ path }) => {
-      const session = await DocxSession.open(path)
+      const session = await openDocument(path)
       storeSession(session)
       const meta = session.meta()
-      return content(meta, summarizeMeta(meta))
+      return content(meta, summarizeOpenMeta(meta))
     },
   )
 
@@ -86,10 +103,13 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Read document',
       description:
-        'Read an open document. By default returns the block overview ("index|type|content preview" one line per ' +
-        'block, plus full-text word/character stats). Pass blocks (indexes) or range ({start,end}) to get the full ' +
-        'content of those blocks as restricted HTML (p, h1-h6, ul/ol/li, strong/em/u/s, a, br, table). ' +
-        'Block indexes are the addressing scheme for insert_content (at) and apply_ops targets; re-read after edits — indexes shift.',
+        'Read an open text document (.docx sessions, or read-only text sessions from legacy ' +
+        '.doc). By default returns the block overview ("index|type|content preview" one line per ' +
+        'block, plus full-text word/character stats). Pass blocks (indexes) or range ({start,end}) ' +
+        'to get the full content of those blocks as restricted HTML (p, h1-h6, ul/ol/li, ' +
+        'strong/em/u/s, a, br, table). Block indexes are the addressing scheme for insert_content ' +
+        '(at) and apply_ops targets; re-read after edits — indexes shift. For workbook (.xlsx) ' +
+        'sessions use read_workbook instead.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
         blocks: z
@@ -108,8 +128,56 @@ export function registerTools(server: McpServer): void {
     },
     async ({ handle, blocks, range }) => {
       const session = getSession(handle)
+      if (session instanceof XlsxSession) {
+        throw new Error(
+          'This handle is a workbook session; use read_workbook (sheet + range) instead.',
+        )
+      }
+      if (session instanceof TextSession) {
+        return { content: [{ type: 'text' as const, text: session.readDocument() }] }
+      }
       const text = session.readDocument({
         ...(blocks !== undefined ? { blocks } : {}),
+        ...(range !== undefined ? { range } : {}),
+      })
+      return { content: [{ type: 'text' as const, text }] }
+    },
+  )
+
+  server.registerTool(
+    'read_workbook',
+    {
+      title: 'Read workbook',
+      description:
+        'Read an open workbook (.xlsx/.xlsm/.xls/.ods sessions). Without options returns the ' +
+        'sheet overview ("index|name|id|rows x cols", one line per sheet). With sheet (name or ' +
+        'index) and an A1-style range ("A1:E10", single cell "B2") returns a pipe table of cell ' +
+        'values; formula cells render as "=FORMULA (cached value)". Without a range the sheet\'s ' +
+        'top-left corner (up to 20 rows x 10 columns) is returned as a starting point. Re-read ' +
+        'after save_document — sessions always reflect the latest save.',
+      inputSchema: {
+        handle: z.string().min(1).describe('Session handle from open_document'),
+        sheet: z
+          .union([z.string().min(1), z.number().int().min(0)])
+          .optional()
+          .describe('Sheet name or 0-based index (from the overview)'),
+        range: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('A1-style range within the sheet, e.g. "A1:E10" or "B2"'),
+      },
+      annotations: {
+        readOnlyHint: true,
+      },
+    },
+    async ({ handle, sheet, range }) => {
+      const session = getSession(handle)
+      if (!(session instanceof XlsxSession)) {
+        throw new Error('This handle is not a workbook session; use read_document instead.')
+      }
+      const text = await session.readWorkbook({
+        ...(sheet !== undefined ? { sheet } : {}),
         ...(range !== undefined ? { range } : {}),
       })
       return { content: [{ type: 'text' as const, text }] }
@@ -121,11 +189,11 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Insert content',
       description:
-        'Insert new content into an open document from a restricted HTML fragment (no DOM features needed). ' +
-        'Supported tags: p, h1-h6, ul, ol, li (nested lists allowed), strong/b, em/i, u, s, a[href], br, ' +
-        'blockquote, pre, table/tr/th/td (header row styled, cells plain text). Unknown tags keep their text; ' +
-        'markdown fences and plain text are tolerated (blank lines split paragraphs). ' +
-        'Insertion happens in memory; persist with save_document.',
+        'Insert new content into an open .docx document from a restricted HTML fragment (no DOM ' +
+        'features needed). Supported tags: p, h1-h6, ul, ol, li (nested lists allowed), strong/b, ' +
+        'em/i, u, s, a[href], br, blockquote, pre, table/tr/th/td (header row styled, cells plain ' +
+        'text). Unknown tags keep their text; markdown fences and plain text are tolerated (blank ' +
+        'lines split paragraphs). Insertion happens in memory; persist with save_document.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
         html: z.string().min(1).describe('Restricted HTML fragment to insert'),
@@ -143,7 +211,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ handle, html, at }) => {
-      const session = getSession(handle)
+      const session = requireDocxSession(handle)
       const { inserted } = session.insertContent(html, at ?? Number.MAX_SAFE_INTEGER)
       const meta = session.meta()
       return content(
@@ -162,8 +230,9 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Apply edit operations',
       description:
-        'Apply a batch of canonical edit operations to an open document. The batch is validated up front and ' +
-        'applied atomically: any invalid op rejects the whole batch with an error and nothing is applied. ' +
+        'Apply a batch of canonical edit operations to an open .docx document. The batch is ' +
+        'validated up front and applied atomically: any invalid op rejects the whole batch with ' +
+        'an error and nothing is applied. ' +
         `Operations:\n${OPS_GUIDE}\nEdits happen in memory; persist with save_document.`,
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
@@ -182,7 +251,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ handle, ops, dryRun }) => {
-      const session = getSession(handle)
+      const session = requireDocxSession(handle)
       const { results, summary, dryRun: isDry } = session.applyOps(ops as Op[], dryRun === true)
       return content(
         { results, summary, dryRun: isDry },
@@ -196,28 +265,93 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Save document',
       description:
-        'Save an open document to disk atomically (temp file + rename). Without a path it overwrites the file the ' +
-        'document was opened from; that save refuses with a clear error when the file changed on disk since open ' +
-        '(another program edited it) — reopen and re-apply in that case. Untouched parts of the document are kept ' +
-        'byte-identical; a save with zero edits writes the original bytes back verbatim. Returns the absolute path.',
+        'Save an open document to disk atomically (temp file + rename). Without a path: a .docx ' +
+        'session overwrites the file it was opened from (refusing with a clear error when the ' +
+        'file changed on disk since open — reopen and re-apply in that case), while sessions ' +
+        'imported from .xls/.ods/.doc/.odt write a fresh sibling file with the native extension ' +
+        'next to the original (the original stays untouched). format "origin" instead exports ' +
+        'back to the original .doc/.odt/.ods through LibreOffice (best-effort; .xls output is ' +
+        'not supported — use the default .xlsx save). Untouched parts of the document are kept ' +
+        'byte-identical; a save with zero edits writes the original bytes back verbatim. Returns ' +
+        'the absolute path.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
         path: z
           .string()
           .min(1)
           .optional()
-          .describe('Optional save-as path (workspace-confined); default: the opened file'),
+          .describe('Optional save-as path (workspace-confined); default: see description'),
+        format: z
+          .enum(['docx', 'xlsx', 'origin'])
+          .optional()
+          .describe(
+            'Output format: default matches the session (docx sessions -> "docx", workbooks -> ' +
+              '"xlsx"); "origin" exports back to the original legacy/ODF format via LibreOffice',
+          ),
       },
       annotations: {
         destructiveHint: true,
       },
     },
-    async ({ handle, path }) => {
+    async ({ handle, path, format }) => {
       const session = getSession(handle)
-      const result = await session.save(path)
+      if (session instanceof TextSession) {
+        throw new Error(
+          'This is a read-only text session (legacy .doc without LibreOffice); it cannot be saved. ' +
+            'Install LibreOffice to open the document as an editable converted .docx session.',
+        )
+      }
+      if (session instanceof XlsxSession) {
+        if (format === 'docx') {
+          throw new Error(
+            'format "docx" is not valid for a workbook session; use "xlsx" or "origin".',
+          )
+        }
+        const result = await session.save(path, format === 'origin' ? 'origin' : 'xlsx')
+        return content(
+          result,
+          `Saved ${result.bytes} bytes to ${result.path} (${result.format})` +
+            `${result.unchanged ? ' — no changes: bytes round-tripped verbatim' : ''}` +
+            `${result.warnings.length > 0 ? `. ${result.warnings.join(' ')}` : ''}`,
+        )
+      }
+      if (format === 'xlsx') {
+        throw new Error(
+          'format "xlsx" is not valid for a text document session; use "docx" or "origin".',
+        )
+      }
+      const result = await session.save(path, format === 'origin' ? 'origin' : 'docx')
       return content(
         result,
         `Saved ${result.bytes} bytes to ${result.path}${result.unchanged ? ' (no changes: bytes round-tripped verbatim)' : ''}`,
+      )
+    },
+  )
+
+  server.registerTool(
+    'close_document',
+    {
+      title: 'Close document',
+      description:
+        'Close an open session and release its resources: workbook sessions close their sidecar ' +
+        'session and remove conversion temp files; sessions converted from .doc/.odt remove their ' +
+        'temp .docx. After closing, the handle is invalid (open_document again to continue). ' +
+        'Unsaved edits are discarded.',
+      inputSchema: {
+        handle: z.string().min(1).describe('Session handle from open_document'),
+      },
+      annotations: {
+        destructiveHint: true,
+      },
+    },
+    async ({ handle }) => {
+      const session = getSession(handle)
+      const kind = session.meta().kind
+      const cleanedTempDirs = await session.close()
+      removeSession(handle)
+      return content(
+        { closed: true, handle, kind, cleanedTempDirs },
+        `Closed ${kind} session ${handle}${cleanedTempDirs.length > 0 ? ` (removed ${String(cleanedTempDirs.length)} temp dir(s))` : ''}.`,
       )
     },
   )
@@ -369,6 +503,20 @@ export function registerTools(server: McpServer): void {
   )
 }
 
+// ---- session helpers ----
+
+/** Docx-only tools (insert_content/apply_ops) reject other session kinds clearly. */
+function requireDocxSession(handle: string): DocxSession {
+  const session: DocumentSession = getSession(handle)
+  if (!(session instanceof DocxSession)) {
+    throw new Error(
+      'insert_content/apply_ops are only available for editable .docx sessions ' +
+        `(this handle is a "${session.meta().kind}" session).`,
+    )
+  }
+  return session
+}
+
 // ---- live bridge helpers ----
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -399,7 +547,27 @@ function describeBridgeFailure(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
-function summarizeMeta(meta: SessionMeta): string {
+// ---- open_document summaries (one per session kind) ----
+
+type AnyOpenMeta = SessionMeta | XlsxSessionMeta | ReturnType<TextSession['meta']>
+
+function summarizeOpenMeta(meta: AnyOpenMeta): string {
+  if (meta.kind === 'xlsx') {
+    const names = meta.sheets.map((sheet) => sheet.name).join(', ')
+    const suffix = meta.converted
+      ? ` (imported from .${meta.format} — ${meta.warnings[0] ?? 'conversion'})`
+      : ''
+    return (
+      `Opened ${meta.path.split('/').pop() ?? meta.path} as an editable workbook${suffix}: ` +
+      `${String(meta.sheets.length)} sheet(s) — ${names}. Handle: ${meta.handle}. Path: ${meta.path}`
+    )
+  }
+  if (meta.kind === 'text') {
+    return (
+      `Opened ${meta.fileName} read-only (.${meta.format}, text extraction): ${String(meta.wordCount)} words, ` +
+      `${String(meta.charCount)} characters. ${meta.warnings[0] ?? ''} Handle: ${meta.handle}. Path: ${meta.path}`
+    )
+  }
   return (
     `Opened ${meta.fileName}: ${meta.blockCount} blocks, ${meta.wordCount} words ` +
     `(${meta.charCount} characters). Handle: ${meta.handle}. Path: ${meta.path}`
