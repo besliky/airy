@@ -1,7 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@genoffice/ui": ["./src/types/ui-stub.ts"]
+    }
   },
   "include": ["src", "tests"]
 }
