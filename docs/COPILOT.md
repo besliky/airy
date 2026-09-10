@@ -98,6 +98,72 @@ Any MCP client that supports stdio servers works: server name `airy`
 (letters/digits/dash only), no required environment variables, startup
 under 5 s, logs on stderr, reads carry `readOnlyHint`.
 
+## Run the MCP server from an installed Airy app
+
+The Windows and Linux installers bundle the built server as
+`resources/mcp/index.js` next to the app binary, and the app itself doubles
+as its Node runtime: with `ELECTRON_RUN_AS_NODE=1`, `Airy.exe` / `airy`
+runs any script exactly like `node` (same Node line the bundle targets, and
+`process.resourcesPath` still points at the install's `resources` dir, so
+the xlsx sidecar in `resources/native` is found automatically). A machine
+with the app installed therefore needs no Node.js and no repo checkout.
+The bundle is self-contained — nothing else from the install is required.
+
+**Windows (NSIS).** The installer is per-user (assisted mode with a
+changeable directory), so the default location is
+`C:\Users\<you>\AppData\Local\Programs\Airy`. Claude Code `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "airy": {
+      "command": "C:\\Users\\<you>\\AppData\\Local\\Programs\\Airy\\Airy.exe",
+      "env": { "ELECTRON_RUN_AS_NODE": "1" },
+      "args": ["C:\\Users\\<you>\\AppData\\Local\\Programs\\Airy\\resources\\mcp\\index.js"]
+    }
+  }
+}
+```
+
+**Linux (deb).** The package installs under `/opt/Airy`: binary
+`/opt/Airy/airy`, server `/opt/Airy/resources/mcp/index.js`. ZCode
+(`~/.zcode/cli/config.json`):
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "airy": {
+        "type": "stdio",
+        "command": "/opt/Airy/airy",
+        "env": { "ELECTRON_RUN_AS_NODE": "1" },
+        "args": ["/opt/Airy/resources/mcp/index.js"],
+        "enabled": true,
+        "timeoutMs": 60000
+      }
+    }
+  }
+}
+```
+
+Claude Code on Linux takes the same paths in `command` / `args` with the
+same `env` (see the Windows snippet). The `rpm` installs to the same
+`/opt/Airy` layout.
+
+**Linux (AppImage).** The squashfs mount point differs between runs, so a
+config cannot point into a mounted AppImage reliably. Either install the
+deb, use a checkout, or extract the image once and point at the extraction:
+
+```bash
+chmod +x Airy-<version>-x86_64.AppImage
+./Airy-<version>-x86_64.AppImage --appimage-extract
+# runtime: ./squashfs-root/airy
+# server:  ./squashfs-root/resources/mcp/index.js
+```
+
+The `live_*` tools still need the Airy app running; it bridges regardless
+of which copy of the server connects to it.
+
 ## Tools
 
 Headless (no app required):

@@ -35,6 +35,12 @@ unsigned fork; check the release notes and the CI build that produced the
 artifact, or [build from source](#development) instead. macOS builds are not
 published yet.
 
+Every installer also bundles the **MCP server** (`resources/mcp/index.js`), so
+coding agents can run it straight from the installed app — no Node.js and no
+repo checkout required. See
+[docs/COPILOT.md](docs/COPILOT.md#run-the-mcp-server-from-an-installed-airy-app)
+for the ready-made agent configs.
+
 ## What is different from upstream
 
 Airy is an independent fork of
