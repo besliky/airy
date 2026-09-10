@@ -16,7 +16,9 @@
     "start": "electron-vite build && electron .",
     "dist:mac": "electron-vite build && electron-builder --mac",
     "dist:win": "electron-vite build && electron-builder --win",
-    "dist:linux": "electron-vite build && electron-builder --linux"
+    "dist:linux": "electron-vite build && electron-builder --linux",
+    "release:win": "electron-vite build && electron-builder --win nsis",
+    "release:linux": "electron-vite build && electron-builder --linux AppImage deb"
   },
   "devDependencies": {
     "@genoffice/agent-core": "*",

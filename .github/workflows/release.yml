@@ -1,0 +1,144 @@
+name: Release
+
+# Installers and GitHub Releases publishing for the fork. A v* tag push runs
+# the full pipeline and publishes the artifacts to the release matching the
+# tag; a manual workflow_dispatch build produces the same artifacts but only
+# uploads them to the workflow run, unless its `publish` input is set.
+# See RELEASE.md for the tagging protocol and the update flow per platform.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish artifacts to a GitHub release (otherwise they are only uploaded to this run)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Setup Rust
+        # SHA-pinned (third-party action); the ref no longer selects the
+        # toolchain, so it is passed explicitly.
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, 2026-07
+        with:
+          toolchain: stable
+
+      - name: Cache cargo (xlsx-sidecar)
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: apps/sheets/native/xlsx-engine
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Tag push (or an opted-in manual run): the full release chain — third-
+      # party notices, all six apps, then electron-builder uploads the deb,
+      # the AppImage and latest-linux.yml to the GitHub release named after
+      # apps/shell's version (the tag must match it; see RELEASE.md).
+      - name: Build and publish (linux)
+        if: ${{ github.event_name == 'push' || inputs.publish == true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run release:linux
+
+      # Manual run without publishing: the same chain with --publish never, so
+      # the installers land only in this run's artifacts.
+      - name: Build and package (linux, no publish)
+        if: ${{ !(github.event_name == 'push' || inputs.publish == true) }}
+        run: npm run notices && npm run build:all && npm run release:linux -w @genoffice/shell -- --publish never
+
+      - name: Upload artifacts (linux)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: airy-linux
+          path: apps/shell/release
+          if-no-files-found: error
+
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # The win packaging expects the sidecar at the windows-gnu cross target
+      # dir (WIN_SIDECAR in apps/shell/electron-builder.cjs checks
+      # target/x86_64-pc-windows-gnu/release/xlsx-sidecar.exe; CONTRIBUTING.md
+      # "Building installers" documents the same command). .cargo/config.toml
+      # pins no default target (its crt-static flags only apply to the msvc
+      # triples), so the gnu target must be requested explicitly here.
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, 2026-07
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-gnu
+
+      - name: Cache cargo (xlsx-sidecar)
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: apps/sheets/native/xlsx-engine
+
+      # rustc links pc-windows-gnu through gcc. The GitHub windows runner
+      # images ship MinGW via chocolatey; install it only if image drift ever
+      # removes it, and print the version for the build log either way.
+      - name: Ensure MinGW linker (windows-gnu sidecar)
+        run: |
+          if (-not (Get-Command gcc -ErrorAction SilentlyContinue)) {
+            choco install -y mingw
+          }
+          gcc --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build xlsx sidecar (x86_64-pc-windows-gnu)
+        working-directory: apps/sheets/native/xlsx-engine
+        run: cargo build --release --target x86_64-pc-windows-gnu
+
+      - name: Build and publish (windows)
+        if: ${{ github.event_name == 'push' || inputs.publish == true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run release:win
+
+      - name: Build and package (windows, no publish)
+        if: ${{ !(github.event_name == 'push' || inputs.publish == true) }}
+        run: npm run notices && npm run build:all && npm run release:win -w @genoffice/shell -- --publish never
+
+      - name: Upload artifacts (windows)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: airy-windows
+          path: apps/shell/release
+          if-no-files-found: error

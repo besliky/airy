@@ -38,7 +38,9 @@
     "check:no-genspark": "node tools/check-no-genspark.mjs",
     "dist:mac": "npm run notices && npm run build:all && npm run native:build:universal -w @genoffice/sheets && npm run dist:mac -w @genoffice/shell",
     "dist:win": "npm run notices && npm run build:all && npm run dist:win -w @genoffice/shell",
-    "dist:linux": "npm run notices && npm run build:all && npm run dist:linux -w @genoffice/shell"
+    "dist:linux": "npm run notices && npm run build:all && npm run dist:linux -w @genoffice/shell",
+    "release:win": "npm run notices && npm run build:all && npm run release:win -w @genoffice/shell -- --publish always",
+    "release:linux": "npm run notices && npm run build:all && npm run release:linux -w @genoffice/shell -- --publish always"
   },
   "dependencies": {
     "ws": "^8.21.1"
