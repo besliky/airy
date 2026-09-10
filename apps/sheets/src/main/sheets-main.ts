@@ -61,6 +61,7 @@ import {
   chatForProvider,
   defaultAiSettings,
   activeProvider,
+  NO_PROVIDER_ERROR,
   maxOutputTokensOf,
   resolveAiSettings,
   setAiUserAgent,
@@ -3083,6 +3084,7 @@ export function registerSheetsAiIpc(): void {
     const request = aiChatRequestSchema.parse(input)
     const provider = request.settings.provider as AiProviderId
     const config = request.settings.providers[provider]
+    if (provider === 'none') return { ok: false, error: NO_PROVIDER_ERROR }
     if (!config || (provider !== 'codex' && !config.apiKey)) {
       return {
         ok: false,
@@ -3113,6 +3115,10 @@ export function registerSheetsAiIpc(): void {
     const config = request.settings.providers[provider]
     const send = (chunk: AiStreamChunk) => {
       if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.aiStreamChunk, chunk)
+    }
+    if (provider === 'none') {
+      send({ requestId, type: 'error', error: NO_PROVIDER_ERROR })
+      return
     }
     if (!config || (provider !== 'codex' && !config.apiKey)) {
       send({

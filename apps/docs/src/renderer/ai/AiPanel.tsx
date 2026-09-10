@@ -431,8 +431,6 @@ export function AiPanel({
   editorRef.current = editor
   const settingsRef = useRef(settings)
   settingsRef.current = settings
-  /** the gsk backend is gone; kept as a constant the media-availability predicates consume */
-  const gskLoggedInRef = useRef(false)
   const blocksRef = useRef(blocks)
   blocksRef.current = blocks
   const numIdFallbackRef = useRef(numIdFallback)
@@ -615,7 +613,7 @@ export function AiPanel({
           () => (trackChangesRef.current ? { author: AI_REVISION_AUTHOR } : undefined),
           () => commentsAccessRef.current,
           () => hfAccessRef.current,
-          () => imageGenerationAvailable(settingsRef.current, gskLoggedInRef.current),
+          () => imageGenerationAvailable(settingsRef.current),
         ),
         createFilesSkill(availableAttachments),
       ]),

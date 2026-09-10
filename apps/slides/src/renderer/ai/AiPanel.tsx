@@ -523,8 +523,6 @@ export function AiPanel({
   const settingsRef = useRef(settings)
   settingsRef.current = settings
 
-  /** the gsk backend is gone; kept as a constant the media-availability predicates consume */
-  const gskLoggedInRef = useRef(false)
   const imagesRef = useRef(images)
   imagesRef.current = images
   const attachmentsRef = useRef(attachments)
@@ -1268,10 +1266,8 @@ export function AiPanel({
           return { ok: false, error: String('') }
         }
       },
-      imageGenAvailable: () =>
-        imageGenerationAvailable(settingsRef.current, gskLoggedInRef.current),
-      mediaAnalysisAvailable: () =>
-        mediaAnalysisAvailable(settingsRef.current, gskLoggedInRef.current),
+      imageGenAvailable: () => imageGenerationAvailable(settingsRef.current),
+      mediaAnalysisAvailable: () => mediaAnalysisAvailable(settingsRef.current),
       unreadTextAttachments: () =>
         availableAttachments()
           .filter(

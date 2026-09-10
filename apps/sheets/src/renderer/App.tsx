@@ -771,8 +771,6 @@ export function App(): React.JSX.Element {
   const aiSettingsRef = useRef<AiSettings | null>(null)
   aiSettingsRef.current = aiSettings
 
-  /** the gsk backend is gone; kept as a constant the media-availability predicates consume */
-  const gskLoggedInRef = useRef(false)
   const [aiBusy, setAiBusy] = useState(false)
   // Display history survives restarts via localStorage; the AgentLoop's model
   // context does not, so restored turns are read-only transcript.
@@ -1041,9 +1039,7 @@ export function App(): React.JSX.Element {
           },
         }),
         createSearchSkill(),
-        createImageSkill(() =>
-          imageGenerationAvailable(aiSettingsRef.current, gskLoggedInRef.current),
-        ),
+        createImageSkill(() => imageGenerationAvailable(aiSettingsRef.current)),
       ]),
       events: {
         onText: (text) => {
@@ -1189,12 +1185,12 @@ export function App(): React.JSX.Element {
   function isAgentConfigured(): boolean {
     const settings = aiSettingsRef.current
     if (!settings) return false
+    // 'none' = nothing configured yet; an unconfigured setup must not look ready
+    if (settings.provider === 'none') return false
     const config = settings.providers[settings.provider]
     if (!config?.model) return false
-    // Genspark's key never lands in the settings file; the main process injects
-    // it from the gsk login state. When logged out, requests return an error
-    // guiding sign-in — not intercepted here.
-    return settings.provider === 'genspark' || !!config.apiKey
+    // Codex authenticates through its own CLI login; everyone else needs a key
+    return settings.provider === 'codex' || !!config.apiKey
   }
 
   /** Image attachments read as base64 and sent multimodal with this user message

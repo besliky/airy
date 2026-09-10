@@ -17,18 +17,16 @@ export type {
   AiSettings,
   AiStreamChunk,
   AiStreamRequest,
-  GenSparkAccountStatus,
   LegacyAiSettings,
 } from './types'
 export {
   AI_PROVIDERS,
   DEFAULT_MAX_OUTPUT_TOKENS,
-  GENSPARK_LLM_BASE_URLS,
   MAX_MAX_OUTPUT_TOKENS,
   MIN_MAX_OUTPUT_TOKENS,
+  NO_PROVIDER_ERROR,
   activeProvider,
   clampMaxOutputTokens,
-  cloudToolsEnabled,
   defaultAiSettings,
   maxOutputTokensOf,
   resolveAiSettings,
@@ -61,12 +59,7 @@ export {
   sniffImageMime,
   testMediaProvider,
 } from './media-protocols'
-export type {
-  AnalyzeMediaInput,
-  ByokMediaProviderId,
-  GenerateImageInput,
-  MediaBlob,
-} from './media-protocols'
+export type { AnalyzeMediaInput, GenerateImageInput, MediaBlob } from './media-protocols'
 export { AI_PROVIDER_ADAPTERS, getProviderAdapter, modelLacksVision } from './registry'
 export type {
   AiProtocol,

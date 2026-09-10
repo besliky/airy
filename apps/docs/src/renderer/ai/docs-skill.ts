@@ -30,7 +30,7 @@ export function createDocsSkill(
   getTrack?: () => AiTrack | undefined,
   getComments?: () => AiCommentsAccess | undefined,
   getHf?: () => AiHeaderFooterAccess | undefined,
-  /** live predicate (gsk login && cloud-tools toggle, or a BYOK media key); false hides generate_image */
+  /** live predicate (a BYOK media key); false hides generate_image */
   imageGenAvailable?: () => boolean,
 ): AgentSkill {
   // Selection frozen per run: tools act on the range the prompt described,

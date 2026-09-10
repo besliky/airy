@@ -171,8 +171,6 @@ export function AiPanel({
   }, [panelWidth])
 
   const settingsRef = useRef<AiSettings | null>(null)
-  /** the gsk backend is gone; kept as a constant the media-availability predicates consume */
-  const gskLoggedInRef = useRef(false)
   const langRef = useRef(lang)
   langRef.current = lang
   const depsRef = useRef(deps)
@@ -246,7 +244,7 @@ export function AiPanel({
             read: () => depsRef.current.getFrontmatter(),
             write: (inner) => depsRef.current.setFrontmatter(inner),
           },
-          () => imageGenerationAvailable(settingsRef.current, gskLoggedInRef.current),
+          () => imageGenerationAvailable(settingsRef.current),
         ),
         createSearchSkill(),
       ]),

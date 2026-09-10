@@ -68,7 +68,7 @@ const IMAGE_GEN_OFF_NOTE =
 export function createMarkdownSkill(
   getEditor: () => Editor | null,
   fm?: FrontmatterAccess,
-  /** live predicate (gsk login && cloud-tools toggle, or a BYOK media key); false hides generate_image */
+  /** live predicate (a BYOK media key); false hides generate_image */
   imageGenAvailable?: () => boolean,
 ): AgentSkill {
   return {

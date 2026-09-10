@@ -57,6 +57,7 @@ import {
   chatForProvider,
   defaultAiSettings,
   activeProvider,
+  NO_PROVIDER_ERROR,
   testMediaProvider,
   type AiMediaProviderConfig,
   type AiMediaProviderId,
@@ -2758,17 +2759,9 @@ export function registerAiIpc(): void {
   app.once('before-quit', shutdownCodexAppServers)
   ipcMain.handle('ai:get-settings', (): AiSettings => {
     const stored = readJson<Partial<AiSettings> & LegacyAiSettings>(SETTINGS_PATH(), {})
-    // pre-lock legacy file: genspark selected with cloud tools opted out. The
-    // settings UI locks the tools switch on with genspark and apps read this
-    // file live, so heal the stored flag once. Judged on the *stored* provider
-    // — never the activeProvider fallback below, which must not leak into the
-    // file and clobber a saved (half-configured) BYOK selection.
-    if ((stored.provider ?? 'genspark') === 'genspark' && stored.gskToolsEnabled === false) {
-      stored.gskToolsEnabled = true
-      writeJson(SETTINGS_PATH(), stored)
-    }
     const settings = resolveAiSettings(stored, defaultAiSettings())
-    // a stored BYOK provider is honored when usable; half-filled configs fall back to genspark
+    // a stored BYOK provider is honored when usable; half-filled or retired
+    // (genspark) selections resolve to 'none' and the UI asks for setup
     settings.provider = activeProvider(settings)
     return settings
   })
@@ -2789,6 +2782,10 @@ export function registerAiIpc(): void {
     const config = settings.providers?.[provider]
     const send = (chunk: AiStreamChunk) => {
       if (!event.sender.isDestroyed()) event.sender.send('ai:stream-chunk', chunk)
+    }
+    if (provider === 'none') {
+      send({ requestId, type: 'error', error: NO_PROVIDER_ERROR })
+      return
     }
     if (!config || (provider !== 'codex' && !config.apiKey)) {
       send({
@@ -2927,10 +2924,6 @@ export function registerAiIpc(): void {
       config?: AiMediaProviderConfig
     }
     if (!provider) return { ok: false, error: 'No media provider selected' }
-    if (provider === 'genspark') {
-      // retired gsk backend has nothing to test anymore
-      return { ok: false, error: 'Genspark media tools are no longer available' }
-    }
     if (!config) return { ok: false, error: 'No media provider configuration' }
     return testMediaProvider(provider, config)
   })
@@ -2939,6 +2932,7 @@ export function registerAiIpc(): void {
     const { settings, system, user } = request
     const provider = settings.provider
     const config = settings.providers?.[provider]
+    if (provider === 'none') return { ok: false, error: NO_PROVIDER_ERROR }
     if (!config || (provider !== 'codex' && !config.apiKey)) {
       return {
         ok: false,

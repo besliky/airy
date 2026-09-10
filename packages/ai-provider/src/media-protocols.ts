@@ -39,8 +39,6 @@ export interface AnalyzeMediaInput {
   requirements: string
 }
 
-export type ByokMediaProviderId = Exclude<AiMediaProviderId, 'genspark'>
-
 /** image generation can take minutes on the large models */
 const GENERATE_TIMEOUT_MS = 600_000
 const ANALYZE_TIMEOUT_MS = 300_000
@@ -54,14 +52,14 @@ function trimSlash(url: string): string {
   return url.replace(/\/+$/, '')
 }
 
-function metaOf(provider: ByokMediaProviderId): AiMediaProviderMeta {
+function metaOf(provider: AiMediaProviderId): AiMediaProviderMeta {
   const meta = getMediaProviderMeta(provider)
   if (!meta) throw new Error(`Unknown media provider: ${provider}`)
   return meta
 }
 
 /** base URL of the OpenAI-shaped endpoints (images + chat) for a provider */
-function openAiBase(provider: ByokMediaProviderId, config: AiMediaProviderConfig): string {
+function openAiBase(provider: AiMediaProviderId, config: AiMediaProviderConfig): string {
   if (provider === 'qwen') return `${dashscopeRoot(config)}/compatible-mode/v1`
   const meta = metaOf(provider)
   return trimSlash(config.baseUrl || meta.defaultBaseUrl || OPENAI_IMAGES_BASE_URL)
@@ -191,7 +189,7 @@ interface OpenAiImagesStyle {
   edits: 'multipart' | 'inline' | 'none'
 }
 
-function openAiImagesStyle(provider: ByokMediaProviderId): OpenAiImagesStyle {
+function openAiImagesStyle(provider: AiMediaProviderId): OpenAiImagesStyle {
   switch (provider) {
     case 'doubao':
       return {
@@ -223,7 +221,7 @@ async function openAiImageResult(
 }
 
 async function generateImageOpenAi(
-  provider: ByokMediaProviderId,
+  provider: AiMediaProviderId,
   config: AiMediaProviderConfig,
   model: string,
   input: GenerateImageInput,
@@ -391,7 +389,7 @@ function openAiContentText(content: unknown): string {
 }
 
 async function analyzeMediaOpenAi(
-  provider: ByokMediaProviderId,
+  provider: AiMediaProviderId,
   config: AiMediaProviderConfig,
   model: string,
   input: AnalyzeMediaInput,
@@ -638,7 +636,7 @@ function requireBaseUrl(meta: AiMediaProviderMeta, config: AiMediaProviderConfig
 }
 
 export async function generateImageWithProvider(
-  provider: ByokMediaProviderId,
+  provider: AiMediaProviderId,
   config: AiMediaProviderConfig,
   input: GenerateImageInput,
   signal?: AbortSignal,
@@ -661,7 +659,7 @@ export async function generateImageWithProvider(
 }
 
 export async function analyzeMediaWithProvider(
-  provider: ByokMediaProviderId,
+  provider: AiMediaProviderId,
   config: AiMediaProviderConfig,
   input: AnalyzeMediaInput,
   signal?: AbortSignal,
@@ -682,7 +680,7 @@ export async function analyzeMediaWithProvider(
  * without one answer 404/405 to a valid key, so only 401/403 count as failure.
  */
 export async function testMediaProvider(
-  provider: ByokMediaProviderId,
+  provider: AiMediaProviderId,
   config: AiMediaProviderConfig,
   signal?: AbortSignal,
 ): Promise<{ ok: boolean; error?: string }> {

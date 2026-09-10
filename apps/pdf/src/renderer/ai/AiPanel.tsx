@@ -249,8 +249,6 @@ export function AiPanel({
   }, [panelWidth])
   const settingsRef = useRef<AiSettings | null>(null)
 
-  /** the gsk backend is gone; kept as a constant the media-availability predicates consume */
-  const gskLoggedInRef = useRef(false)
   const langRef = useRef(lang)
   langRef.current = lang
   const apiRef = useRef(api)
@@ -356,8 +354,7 @@ export function AiPanel({
       deleteImage: (ref) => apiRef.current.deleteImage(ref),
       searchImages: (query, max) => apiRef.current.searchImages(query, max),
       generateImage: (op) => apiRef.current.generateImage(op),
-      imageGenAvailable: () =>
-        imageGenerationAvailable(settingsRef.current, gskLoggedInRef.current),
+      imageGenAvailable: () => imageGenerationAvailable(settingsRef.current),
       fetchImage: (url) => apiRef.current.fetchImage(url),
     }
     loopRef.current = new AgentLoop({

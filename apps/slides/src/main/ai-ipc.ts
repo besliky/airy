@@ -23,6 +23,7 @@ import {
   isAiOverloadedError,
   defaultAiSettings,
   activeProvider,
+  NO_PROVIDER_ERROR,
   maxOutputTokensOf,
   resolveAiSettings,
   setAiUserAgent,
@@ -126,6 +127,10 @@ export function registerAiIpc(): void {
     const config = settings.providers?.[provider]
     const send = (chunk: AiStreamChunk) => {
       if (!event.sender.isDestroyed()) event.sender.send('ai:stream-chunk', chunk)
+    }
+    if (provider === 'none') {
+      send({ requestId, type: 'error', error: NO_PROVIDER_ERROR })
+      return
     }
     if (!config || (provider !== 'codex' && !config.apiKey)) {
       send({

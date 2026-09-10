@@ -1,14 +1,14 @@
 import { ANTHROPIC_BASE_URL } from './protocols/anthropic'
 import { GEMINI_BASE_URL } from './protocols/gemini'
-import { AI_PROVIDERS, GENSPARK_LLM_BASE_URLS } from './providers'
+import { AI_PROVIDERS, NO_PROVIDER_ERROR } from './providers'
 import type { AiProviderConfig, AiProviderId, AiProviderMeta } from './types'
 
 /** Wire protocols every provider maps onto, including the official Codex app-server bridge. */
 export type AiProtocol = 'anthropic' | 'gemini' | 'openai-compatible' | 'codex-app-server'
 
 export interface ProviderCapabilities {
-  /** How the provider authenticates: app login, user key, or the Codex CLI's existing login. */
-  auth: 'gsk-login' | 'api-key' | 'codex-chatgpt'
+  /** How the provider authenticates: user key or the Codex CLI's existing login. */
+  auth: 'api-key' | 'codex-chatgpt'
   /** chat models accept image input (declarative; for custom endpoints it is assumed, not known) */
   vision: boolean
 }
@@ -37,7 +37,7 @@ function metaOf(id: AiProviderId): AiProviderMeta {
 
 /**
  * Model families that fix sampling and reject a temperature field, on any
- * route — vendor API, the Genspark proxy, OpenRouter's vendor-prefixed ids,
+ * route — vendor API, OpenRouter's vendor-prefixed ids,
  * or a mirror behind a custom base URL. Kimi K3 answers "only 1 is allowed";
  * OpenAI's GPT-5 reasoning family rejects any temperature other than the
  * default outright, and the o-series reasoning models (o1/o3/o4) likewise
@@ -133,21 +133,12 @@ function fixedEndpoint(
 }
 
 export const AI_PROVIDER_ADAPTERS: Record<AiProviderId, ProviderAdapter> = {
-  genspark: {
-    meta: metaOf('genspark'),
-    capabilities: { auth: 'gsk-login', vision: true },
-    // Route by model id prefix: claude uses the Anthropic protocol (preserves image
-    // input fidelity), the rest OpenAI-compatible. The proxy's gemini endpoint was
-    // removed server-side (405 as of 2026-08-31) along with its gemini models.
-    resolveEndpoint(config) {
-      if (config.model.startsWith('claude')) {
-        return { protocol: 'anthropic', baseUrl: GENSPARK_LLM_BASE_URLS.anthropic }
-      }
-      return {
-        protocol: 'openai-compatible',
-        baseUrl: GENSPARK_LLM_BASE_URLS.openai,
-        ...(modelHasFixedSampling(config.model) ? { omitTemperature: true } : {}),
-      }
+  none: {
+    meta: metaOf('none'),
+    capabilities: { auth: 'api-key', vision: false },
+    // never reached: callers guard on activeProvider() and answer NO_PROVIDER_ERROR
+    resolveEndpoint() {
+      throw new Error(NO_PROVIDER_ERROR)
     },
   },
   codex: {
@@ -178,7 +169,7 @@ export const AI_PROVIDER_ADAPTERS: Record<AiProviderId, ProviderAdapter> = {
     meta: metaOf('openai'),
     capabilities: { auth: 'api-key', vision: true },
     // every current OpenAI model accepts the renamed field, so it is safe endpoint-wide;
-    // other openai-compatible vendors (and the LiteLLM-backed Genspark proxy) still expect `max_tokens`
+    // other openai-compatible vendors still expect `max_tokens`
     resolveEndpoint: fixedEndpoint('openai-compatible', 'https://api.openai.com/v1', {
       useMaxCompletionTokens: true,
     }),

@@ -15,9 +15,9 @@ import { readAiSettingsFile } from './media-tools'
 
 export function searchOptionsFromSettings(settings: AiSettings): SearchOptions {
   const provider = activeSearchProvider(settings)
-  // 'genspark' = no keyed backend stored; the env-key chain runs and falls
-  // back to keyless DuckDuckGo
-  if (!provider || provider === 'genspark') return {}
+  // null = no keyed backend stored; the env-key chain runs and falls back to
+  // keyless DuckDuckGo
+  if (!provider) return {}
   const key = settings.search!.providers[provider].apiKey
   return provider === 'tavily' ? { tavilyKey: key, prefer: 'tavily' } : { serperKey: key }
 }
@@ -35,8 +35,6 @@ export async function testSearchProvider(
   provider: AiSearchProviderId,
   apiKey: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  // the retired gsk backend has nothing to test anymore
-  if (provider === 'genspark') return { ok: false, error: 'Genspark search is no longer available' }
   if (!apiKey) return { ok: false, error: 'API key is empty' }
   const options: SearchOptions =
     provider === 'tavily'

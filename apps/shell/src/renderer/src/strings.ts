@@ -162,6 +162,7 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: '留空使用官方端点。',
     setAiGensparkHint: '使用 Genspark 账号登录，无需 API key。',
+    setAiNoneHint: '尚未配置 AI 服务商。请选择一个服务商并填入对应的 API Key。',
     setAiCodexPath: 'Codex 可执行文件',
     setAiCodexPathHint: '仅自定义安装时填写；留空会自动检测。',
     setAiCodexAutoPlaceholder: '留空自动检测（推荐）',
@@ -391,6 +392,8 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: 'Leave empty for the official endpoint.',
     setAiGensparkHint: 'Uses your Genspark sign-in; no API key needed.',
+    setAiNoneHint:
+      'No provider configured yet. Pick a provider and enter its API key to use AI features.',
     setAiCodexPath: 'Codex executable',
     setAiCodexPathHint: 'Only set this for a custom install; leave blank to auto-detect.',
     setAiCodexAutoPlaceholder: 'Auto-detect (recommended)',
@@ -637,6 +640,7 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: '空欄で公式エンドポイントを使用します。',
     setAiGensparkHint: 'Genspark アカウントでサインインするため、API キーは不要です。',
+    setAiNoneHint: 'AIプロバイダーが未設定です。プロバイダーを選択し、APIキーを入力してください。',
     setAiCodexPath: 'Codex 実行ファイル',
     setAiCodexPathHint: 'カスタムインストール時のみ指定します。空欄なら自動検出します。',
     setAiCodexAutoPlaceholder: '自動検出（推奨）',
@@ -878,6 +882,7 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: '비워 두면 공식 엔드포인트를 사용합니다.',
     setAiGensparkHint: 'Genspark 로그인으로 사용하며 API 키가 필요 없습니다.',
+    setAiNoneHint: 'AI 공급자가 구성되지 않았습니다. 공급자를 선택하고 API 키를 입력하세요.',
     setAiCodexPath: 'Codex 실행 파일',
     setAiCodexPathHint: '사용자 지정 설치에만 입력하세요. 비워 두면 자동 감지합니다.',
     setAiCodexAutoPlaceholder: '자동 감지(권장)',
@@ -1125,6 +1130,8 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: 'Laisser vide pour le point de terminaison officiel.',
     setAiGensparkHint: 'Utilise votre connexion Genspark ; aucune clé API requise.',
+    setAiNoneHint:
+      'Aucun fournisseur configuré. Choisissez un fournisseur et saisissez sa clé API.',
     setAiCodexPath: 'Exécutable Codex',
     setAiCodexPathHint:
       'À renseigner uniquement pour une installation personnalisée ; sinon, détection automatique.',
@@ -1378,6 +1385,8 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: 'Leer lassen für den offiziellen Endpunkt.',
     setAiGensparkHint: 'Nutzt Ihre Genspark-Anmeldung; kein API-Schlüssel nötig.',
+    setAiNoneHint:
+      'Kein Anbieter konfiguriert. Wählen Sie einen Anbieter und geben Sie dessen API-Schlüssel ein.',
     setAiCodexPath: 'Codex-Programmdatei',
     setAiCodexPathHint:
       'Nur bei einer benutzerdefinierten Installation angeben; leer lassen für automatische Erkennung.',
@@ -1629,6 +1638,8 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: 'Deja vacío para usar el endpoint oficial.',
     setAiGensparkHint: 'Usa tu inicio de sesión de Genspark; no se necesita clave de API.',
+    setAiNoneHint:
+      'No hay ningún proveedor configurado. Elige un proveedor e introduce su clave de API.',
     setAiCodexPath: 'Ejecutable de Codex',
     setAiCodexPathHint:
       'Indícalo solo para una instalación personalizada; déjalo vacío para detectarlo automáticamente.',
@@ -1872,6 +1883,7 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: 'เว้นว่างเพื่อใช้ปลายทางอย่างเป็นทางการ',
     setAiGensparkHint: 'ใช้การลงชื่อเข้าใช้ Genspark ไม่ต้องใช้คีย์ API',
+    setAiNoneHint: 'ยังไม่ได้ตั้งค่าผู้ให้บริการ AI โปรดเลือกผู้ให้บริการและกรอกคีย์ API',
     setAiCodexPath: 'ไฟล์ปฏิบัติการ Codex',
     setAiCodexPathHint: 'กรอกเฉพาะเมื่อติดตั้งแบบกำหนดเอง เว้นว่างไว้เพื่อค้นหาอัตโนมัติ',
     setAiCodexAutoPlaceholder: 'ค้นหาอัตโนมัติ (แนะนำ)',
@@ -2116,6 +2128,8 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: 'Kosongkan untuk endpoint resmi.',
     setAiGensparkHint: 'Menggunakan login Genspark; tanpa kunci API.',
+    setAiNoneHint:
+      'Belum ada penyedia AI yang dikonfigurasi. Pilih penyedia dan masukkan kunci API-nya.',
     setAiCodexPath: 'Berkas eksekusi Codex',
     setAiCodexPathHint: 'Isi hanya untuk instalasi khusus; kosongkan agar terdeteksi otomatis.',
     setAiCodexAutoPlaceholder: 'Deteksi otomatis (disarankan)',
@@ -2361,6 +2375,7 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: 'Оставьте пустым для официальной конечной точки.',
     setAiGensparkHint: 'Использует вход в Genspark; ключ API не нужен.',
+    setAiNoneHint: 'Провайдер ИИ не настроен. Выберите провайдера и введите его API-ключ.',
     setAiCodexPath: 'Исполняемый файл Codex',
     setAiCodexPathHint:
       'Указывайте только для нестандартной установки; оставьте пустым для автоопределения.',
@@ -2606,6 +2621,7 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: 'اتركه فارغًا لاستخدام نقطة النهاية الرسمية.',
     setAiGensparkHint: 'يستخدم تسجيل الدخول إلى Genspark؛ لا حاجة لمفتاح API.',
+    setAiNoneHint: 'لم يتم تكوين مزود الذكاء الاصطناعي بعد. اختر مزودًا وأدخل مفتاح API الخاص به.',
     setAiCodexPath: 'ملف Codex التنفيذي',
     setAiCodexPathHint: 'حدده فقط للتثبيت المخصص؛ اتركه فارغًا للاكتشاف التلقائي.',
     setAiCodexAutoPlaceholder: 'اكتشاف تلقائي (موصى به)',
@@ -2843,6 +2859,7 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: 'Deixe vazio para o endpoint oficial.',
     setAiGensparkHint: 'Usa seu login Genspark; nenhuma chave de API necessária.',
+    setAiNoneHint: 'Nenhum provedor configurado. Escolha um provedor e insira a chave de API.',
     setAiCodexPath: 'Executável do Codex',
     setAiCodexPathHint:
       'Preencha apenas para uma instalação personalizada; deixe em branco para detectar automaticamente.',
@@ -3080,6 +3097,8 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: "Lascia vuoto per l'endpoint ufficiale.",
     setAiGensparkHint: 'Usa il tuo accesso Genspark; nessuna chiave API richiesta.',
+    setAiNoneHint:
+      'Nessun provider configurato. Scegli un provider e inserisci la relativa chiave API.',
     setAiCodexPath: 'Eseguibile Codex',
     setAiCodexPathHint:
       'Compila solo per un’installazione personalizzata; lascia vuoto per il rilevamento automatico.',
@@ -3316,6 +3335,7 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: 'Pozostaw puste, aby użyć oficjalnego punktu końcowego.',
     setAiGensparkHint: 'Korzysta z logowania Genspark; klucz API nie jest potrzebny.',
+    setAiNoneHint: 'Nie skonfigurowano dostawcy AI. Wybierz dostawcę i wpisz jego klucz API.',
     setAiCodexPath: 'Plik wykonywalny Codex',
     setAiCodexPathHint:
       'Ustaw tylko dla instalacji niestandardowej; pozostaw puste, aby wykryć automatycznie.',
@@ -3543,6 +3563,8 @@ export const strings = {
     setAiBaseUrl: 'Základní URL',
     setAiBaseUrlHint: 'Pro oficiální koncový bod ponechte prázdné.',
     setAiGensparkHint: 'Používá vaše přihlášení ke Genspark; klíč API není potřeba.',
+    setAiNoneHint:
+      'Není nakonfigurován žádný poskytovatel AI. Vyberte poskytovatele a zadejte jeho klíč API.',
     setAiCodexPath: 'Spustitelný soubor Codex',
     setAiCodexPathHint:
       'Vyplňte jen u vlastní instalace; prázdné pole znamená automatickou detekci.',
@@ -3792,6 +3814,7 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: 'Leeg laten voor het officiële eindpunt.',
     setAiGensparkHint: 'Gebruikt je Genspark-login; geen API-sleutel nodig.',
+    setAiNoneHint: 'Geen provider ingesteld. Kies een provider en voer de API-sleutel in.',
     setAiCodexPath: 'Codex-uitvoerbaar bestand',
     setAiCodexPathHint:
       'Alleen invullen voor een aangepaste installatie; laat leeg voor automatische detectie.',
@@ -4029,6 +4052,7 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: 'Biarkan kosong untuk endpoint rasmi.',
     setAiGensparkHint: 'Menggunakan log masuk Genspark; tiada kunci API diperlukan.',
+    setAiNoneHint: 'Tiada penyedia AI dikonfigurasi. Pilih penyedia dan masukkan kunci API.',
     setAiCodexPath: 'Fail boleh laku Codex',
     setAiCodexPathHint:
       'Isi hanya untuk pemasangan tersuai; biarkan kosong untuk pengesanan automatik.',
@@ -4262,6 +4286,7 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: 'השאר ריק לנקודת הקצה הרשמית.',
     setAiGensparkHint: 'משתמש בכניסת Genspark שלך; אין צורך במפתח API.',
+    setAiNoneHint: 'טרם הוגדר ספק AI. בחר ספק והזן את מפתח ה-API שלו.',
     setAiCodexPath: 'קובץ ההפעלה של Codex',
     setAiCodexPathHint: 'יש למלא רק בהתקנה מותאמת; השאר ריק לזיהוי אוטומטי.',
     setAiCodexAutoPlaceholder: 'זיהוי אוטומטי (מומלץ)',
@@ -4495,6 +4520,8 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: 'आधिकारिक एंडपॉइंट के लिए खाली छोड़ें।',
     setAiGensparkHint: 'आपके Genspark साइन-इन का उपयोग करता है; API कुंजी की आवश्यकता नहीं।',
+    setAiNoneHint:
+      'कोई AI प्रदाता कॉन्फ़िगर नहीं है। एक प्रदाता चुनें और उसकी API कुंजी दर्ज करें।',
     setAiCodexPath: 'Codex निष्पादन फ़ाइल',
     setAiCodexPathHint: 'केवल कस्टम इंस्टॉलेशन के लिए भरें; स्वतः पहचान के लिए खाली छोड़ें।',
     setAiCodexAutoPlaceholder: 'स्वतः पहचान (अनुशंसित)',
@@ -4725,6 +4752,7 @@ export const strings = {
     setAiBaseUrl: 'Base URL',
     setAiBaseUrlHint: '留空使用官方端點。',
     setAiGensparkHint: '使用 Genspark 帳號登入，無需 API key。',
+    setAiNoneHint: '尚未設定 AI 服務供應商。請選擇一個供應商並填入對應的 API Key。',
     setAiCodexPath: 'Codex 可執行檔',
     setAiCodexPathHint: '僅自訂安裝時填寫；留空會自動偵測。',
     setAiCodexAutoPlaceholder: '留空自動偵測（建議）',

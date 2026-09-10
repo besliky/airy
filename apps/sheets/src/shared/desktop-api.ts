@@ -2426,7 +2426,6 @@ export const aiSettingsInputSchema = z
   .object({
     provider: z.string().min(1),
     providers: z.record(z.string(), aiProviderConfigSchema),
-    gskToolsEnabled: z.boolean().optional(),
     media: z
       .object({
         imageProvider: z.string().min(1).optional(),

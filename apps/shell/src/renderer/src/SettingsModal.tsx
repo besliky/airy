@@ -255,14 +255,9 @@ function AiModelPane({ t }: { t: TFunc }) {
     let alive = true
     void window.aiOffice.getAiSettings?.().then((s) => {
       if (!alive || !s) return
-      // The switch is disabled with genspark, so never present it stranded
-      // off. Display-only: s.provider may be the activeProvider fallback for
-      // a half-configured BYOK selection, so writing anything back here would
-      // clobber the stored choice — the main process heals a genuine legacy
-      // genspark+off file itself, judged on the raw stored provider.
-      if (s.provider === 'genspark' && s.gskToolsEnabled === false) {
-        s = { ...s, gskToolsEnabled: true }
-      }
+      // Display-only: s.provider may be the activeProvider fallback ('none')
+      // for a half-configured selection, so writing anything back here would
+      // clobber the stored choice.
       setSettings(s)
       const codex = s.providers.codex
       if (codex) {
@@ -283,7 +278,7 @@ function AiModelPane({ t }: { t: TFunc }) {
     baseUrl: undefined,
     cliPath: undefined,
   }
-  const isGenspark = provider === 'genspark'
+  const isNone = provider === 'none'
   const isCodex = provider === 'codex'
 
   const touch = () => {
@@ -308,12 +303,7 @@ function AiModelPane({ t }: { t: TFunc }) {
     touch()
   }
   const selectProvider = (id: AiSettings['provider']) => {
-    // cloud tools cannot be off with genspark (chat runs through gsk anyway)
-    setSettings({
-      ...settings,
-      provider: id,
-      ...(id === 'genspark' ? { gskToolsEnabled: true } : {}),
-    })
+    setSettings({ ...settings, provider: id })
     touch()
   }
   const save = () => {
@@ -369,7 +359,7 @@ function AiModelPane({ t }: { t: TFunc }) {
         />
       </div>
       <div className="set-field-desc set-ai-note">
-        {isGenspark ? t('setAiGensparkHint') : isCodex ? t('setAiCodexHint') : t('setAiByokNote')}
+        {isNone ? t('setAiNoneHint') : isCodex ? t('setAiCodexHint') : t('setAiByokNote')}
       </div>
       <div className="set-field">
         <div className="set-field-text">
@@ -420,7 +410,7 @@ function AiModelPane({ t }: { t: TFunc }) {
             }}
           />
         </div>
-      ) : !isGenspark ? (
+      ) : !isNone ? (
         <>
           <div className="set-field">
             <div className="set-field-text">
@@ -484,26 +474,6 @@ function AiModelPane({ t }: { t: TFunc }) {
           value={maxTokensDraft ?? String(settings.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS)}
           onChange={(e) => setMaxTokensDraft(e.target.value)}
           onBlur={commitMaxTokens}
-        />
-      </div>
-      <div className="set-field">
-        <div className="set-field-text">
-          <div className="set-field-stack">
-            <div className="set-field-label">{t('setAiGskTools')}</div>
-            <div className="set-field-desc">{t('setAiGskToolsDesc')}</div>
-          </div>
-        </div>
-        {/* locked on with the genspark provider — chat runs through gsk anyway */}
-        <button
-          className="set-switch"
-          role="switch"
-          aria-checked={settings.gskToolsEnabled !== false}
-          aria-label={t('setAiGskTools')}
-          disabled={isGenspark}
-          onClick={() => {
-            setSettings({ ...settings, gskToolsEnabled: settings.gskToolsEnabled === false })
-            touch()
-          }}
         />
       </div>
       <div className="set-pane-footer">
@@ -615,32 +585,22 @@ function AiMediaPane({ t }: { t: TFunc }) {
     setTesting(true)
     setTestResult(null)
     try {
-      const vendors = new Set<AiMediaProviderId>(
-        [media.imageProvider, media.analysisProvider, media.videoAnalysisProvider].filter(
-          (id) => id !== 'genspark',
-        ),
-      )
+      const vendors = new Set<AiMediaProviderId>([
+        media.imageProvider,
+        media.analysisProvider,
+        media.videoAnalysisProvider,
+      ])
       const checks: Promise<{ ok: boolean; error?: string } | undefined>[] = [...vendors].map(
         (id) =>
           window.aiOffice.testAiMediaSettings?.({ provider: id, config: mediaConfigOf(id) }) ??
           Promise.resolve(undefined),
       )
-      if (search.provider !== 'genspark') {
-        checks.push(
-          window.aiOffice.testAiSearchSettings?.({
-            provider: search.provider,
-            apiKey: search.providers[search.provider]?.apiKey ?? '',
-          }) ?? Promise.resolve(undefined),
-        )
-      }
-      if (checks.length === 0) {
-        checks.push(
-          window.aiOffice.testAiMediaSettings?.({
-            provider: 'genspark',
-            config: mediaConfigOf('genspark'),
-          }) ?? Promise.resolve(undefined),
-        )
-      }
+      checks.push(
+        window.aiOffice.testAiSearchSettings?.({
+          provider: search.provider,
+          apiKey: search.providers[search.provider]?.apiKey ?? '',
+        }) ?? Promise.resolve(undefined),
+      )
       const results = await Promise.all(checks)
       setTestResult(results.find((r) => r && !r.ok) ?? { ok: true })
     } catch (error) {
@@ -808,33 +768,26 @@ function AiMediaPane({ t }: { t: TFunc }) {
       <section key={cap}>
         <h4 className="set-pane-subtitle">{title}</h4>
         {providerRow(title, id, options, pick)}
-        <div className="set-field-desc set-ai-note">
-          {id === 'genspark' ? t('setAiMediaGensparkHint') : meta.description}
-        </div>
-        {id !== 'genspark' && (
-          <>
-            {modelRow(
-              `set-ai-${cap}-model`,
-              cap === 'image' ? meta.imageModels : meta.analysisModels,
-              cap === 'image' ? meta.defaultImageModel : meta.defaultAnalysisModel,
-              config[modelField],
-              (m) => updateMediaConfig(id, { [modelField]: m }),
-            )}
-            {keyRow(`set-ai-${cap}-key`, config.apiKey, meta.keyPlaceholder, (v) =>
-              updateMediaConfig(id, { apiKey: v }),
-            )}
-            {baseUrlRow(`set-ai-${cap}-base-url`, meta, config.baseUrl ?? '', (v) =>
-              updateMediaConfig(id, { baseUrl: v }),
-            )}
-          </>
+        <div className="set-field-desc set-ai-note">{meta.description}</div>
+        {modelRow(
+          `set-ai-${cap}-model`,
+          cap === 'image' ? meta.imageModels : meta.analysisModels,
+          cap === 'image' ? meta.defaultImageModel : meta.defaultAnalysisModel,
+          config[modelField],
+          (m) => updateMediaConfig(id, { [modelField]: m }),
+        )}
+        {keyRow(`set-ai-${cap}-key`, config.apiKey, meta.keyPlaceholder, (v) =>
+          updateMediaConfig(id, { apiKey: v }),
+        )}
+        {baseUrlRow(`set-ai-${cap}-base-url`, meta, config.baseUrl ?? '', (v) =>
+          updateMediaConfig(id, { baseUrl: v }),
         )}
       </section>
     )
   }
 
   const searchMeta = searchCatalog.find((m) => m.id === search.provider)
-  const searchKey =
-    search.provider === 'genspark' ? '' : (search.providers[search.provider]?.apiKey ?? '')
+  const searchKey = search.providers[search.provider]?.apiKey ?? ''
 
   return (
     <>
@@ -846,19 +799,14 @@ function AiMediaPane({ t }: { t: TFunc }) {
           setSearch({ ...search, provider: v as AiSearchSettings['provider'] }),
         )}
         <div className="set-field-desc set-ai-note">
-          {search.provider === 'genspark'
-            ? t('setAiSearchGensparkHint')
-            : searchMeta?.imageSearch
-              ? t('setAiSearchSerperHint')
-              : t('setAiSearchTavilyHint')}
+          {searchMeta?.imageSearch ? t('setAiSearchSerperHint') : t('setAiSearchTavilyHint')}
         </div>
-        {search.provider !== 'genspark' &&
-          keyRow('set-ai-search-key', searchKey, searchMeta?.keyPlaceholder ?? 'API Key', (v) =>
-            setSearch({
-              ...search,
-              providers: { ...search.providers, [search.provider]: { apiKey: v } },
-            }),
-          )}
+        {keyRow('set-ai-search-key', searchKey, searchMeta?.keyPlaceholder ?? 'API Key', (v) =>
+          setSearch({
+            ...search,
+            providers: { ...search.providers, [search.provider]: { apiKey: v } },
+          }),
+        )}
       </section>
       {mediaBlock('image')}
       {mediaBlock('analysis')}
