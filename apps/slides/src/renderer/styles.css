@@ -5565,9 +5565,10 @@ body.vib .slide-list {
   color: var(--color-brand-secondary);
 }
 
-/* the brand mark uses currentColor and keeps the button's ink, not the blue */
-.stage-ai-btn svg.airy-mark {
-  color: var(--slides-stagebar-ink);
+/* the brand mark is a raster gradient glyph (airy-mark.png); keep it from
+   shrinking inside the row */
+.stage-ai-btn img.airy-mark {
+  flex-shrink: 0;
 }
 
 /* Notes pane (bottom, PowerPoint style) */

@@ -9,6 +9,7 @@ import {
   clampAiCustomFontSize,
 } from '@airy-office/ui'
 import type { AiFontSize, AiPanelPrefs } from '@airy-office/ui'
+import airyMark from '@airy-office/ui/assets/airy-mark.png'
 import {
   DEFAULT_MAX_OUTPUT_TOKENS,
   MAX_MAX_OUTPUT_TOKENS,
@@ -1100,6 +1101,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             )}
             {section === 'about' && (
               <>
+                <div className="set-about-brand" aria-hidden="true">
+                  <img className="set-about-mark" src={airyMark} alt="" />
+                  <span className="set-about-word">airy</span>
+                </div>
                 <h3 className="set-pane-title">{t('setSecAbout')}</h3>
                 <Field label={t('versionLabel')} value={appVersion || '—'} />
                 <Field

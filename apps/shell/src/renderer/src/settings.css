@@ -127,6 +127,29 @@
   line-height: 1.2;
 }
 
+/* About pane brand block: the gradient mark glyph + wordmark; the mark reads
+   on light and dark surfaces as-is, the word follows the theme text color */
+.set-about-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.set-about-mark {
+  display: block;
+  width: 40px;
+  height: 40px;
+}
+
+.set-about-word {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--text-primary);
+}
+
 .set-field {
   display: flex;
   align-items: center;

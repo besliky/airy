@@ -436,8 +436,10 @@ button {
   color: var(--color-brand-secondary);
 }
 
-.ai-feature-icon svg {
-  /* 24px renders the 24-unit viewBox 1:1, so the 1.5 stroke paints 1.5px */
+.ai-feature-icon svg,
+.ai-feature-icon img {
+  /* 24px renders the 24-unit viewBox 1:1, so the 1.5 stroke paints 1.5px;
+     the raster brand mark fills the same slot */
   width: 24px;
   height: 24px;
 }

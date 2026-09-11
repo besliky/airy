@@ -1,4 +1,5 @@
 import type { ReactElement, ReactNode } from 'react'
+import airyMark from '@airy-office/ui/assets/airy-mark.png'
 
 /// Ribbon icon set drawn to the shared icon standard: 24×24 canvas with
 /// 1.5-unit strokes, round caps and round joins. The rendered size comes
@@ -834,32 +835,17 @@ export const RIBBON_GLYPH_ICONS: Record<string, ReactElement> = {
   ),
 }
 
-/** Airy brand mark (gradient "A" badge), inline so it renders crisply at
- * device resolution instead of going through <img> rasterization */
+/** Airy brand mark: the shared gradient glyph asset (256px PNG from
+ * tools/icons/gen_app_icons.py, imported via @airy-office/ui) */
 export function AiryMark({ size = 18 }: { size?: number }): ReactElement {
   return (
-    <svg
+    <img
+      className="airy-mark"
+      src={airyMark}
       width={size}
       height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden
-    >
-      <defs>
-        <linearGradient id="airy-mark-bg" x1="4" y1="3" x2="20" y2="21" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#22D3EE" />
-          <stop offset="1" stopColor="#A855F7" />
-        </linearGradient>
-      </defs>
-      <rect width="24" height="24" rx="7" fill="url(#airy-mark-bg)" />
-      <path
-        d="M7.6 17.3 12 6.7l4.4 10.6M9.75 13.6h4.5"
-        stroke="#fff"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+      alt=""
+      aria-hidden="true"
+    />
   )
 }
