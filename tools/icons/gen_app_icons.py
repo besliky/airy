@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Generate Airy application icons from the brand assets.
 
-Inputs (outside the repo, kept as the single source of truth for the brand):
+Inputs:
 
-  brand-assets/airy_no_background.png  — 1254x1254 RGBA: the gradient "A" mark
-      on top, the "airy" wordmark below. Only the mark becomes the app icon.
-  brand-assets/airy_logo.png           — full logo (mark + wordmark) on white,
-      reused as docs/assets/airy_logo.png for the README banner.
+  tools/icons/source/airy_without_bg_no_text.png — 1254x1254 RGBA: the gradient
+      mark alone (no wordmark, transparent background), committed so the icon
+      set regenerates without the out-of-repo brand-assets directory.
+  brand-assets/airy_logo.png               — full logo (mark + wordmark) on white,
+      reused as docs/assets/airy_logo.png for the README banner. Outside the
+      repo (only the README banner needs it).
 
 Outputs:
 
@@ -25,6 +27,11 @@ Outputs:
   apps/docs/build/{icon.png,icon-mac.png,icon.icns,icon.ico}
                                        — same files for the legacy standalone
                                          docs app
+  apps/shell/src/renderer/src/assets/app-icon.png
+                                       — 1024x1024 copy of the master icon for
+                                         the onboarding slide (shown at 60px)
+  packages/ui/src/assets/airy-mark.png — 256x256 tight mark for the shared
+                                         AiryMark component (all renderers)
   docs/assets/airy_logo.png            — full logo, width 960, for README
 
 icns/ico are hand-rolled containers here (pure stdlib + PIL): icns is just a
@@ -47,15 +54,19 @@ from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BRAND_ASSETS = REPO_ROOT.parent / "brand-assets"
-MARK_PNG = BRAND_ASSETS / "airy_no_background.png"
+MARK_PNG = REPO_ROOT / "tools" / "icons" / "source" / "airy_without_bg_no_text.png"
 LOGO_PNG = BRAND_ASSETS / "airy_logo.png"
 
 SHELL_BUILD = REPO_ROOT / "apps" / "shell" / "build"
 DOCS_BUILD = REPO_ROOT / "apps" / "docs" / "build"
 LINUX_ICON_SET = SHELL_BUILD / "icons"
+SHELL_RENDERER_ICON = REPO_ROOT / "apps" / "shell" / "src" / "renderer" / "src" / "assets" / "app-icon.png"
+UI_MARK = REPO_ROOT / "packages" / "ui" / "src" / "assets" / "airy-mark.png"
 DOCS_ASSETS = REPO_ROOT / "docs" / "assets"
 
 MASTER_SIZE = 1024
+# tight mark asset the shared AiryMark component renders in the UI
+UI_MARK_SIZE = 256
 # transparent margin around the mark, fraction of the canvas side
 APP_PADDING = 0.08
 # macOS app icons sit on a standard grid with 824/1024 content (the same
@@ -81,17 +92,16 @@ README_LOGO_WIDTH = 960
 
 
 def load_mark() -> Image.Image:
-    """Crop the "A" mark from the no-background brand asset.
+    """Tight-crop the icon-only mark.
 
-    The asset stacks the mark over the wordmark, so the mark's bbox is the
-    alpha bounding box of the top half of the canvas.
+    The source is the bare gradient mark on a transparent background (no
+    wordmark anymore), so its bbox is simply the alpha bounding box.
     """
     with Image.open(MARK_PNG) as img:
         rgba = img.convert("RGBA")
-        top_half = rgba.crop((0, 0, rgba.width, rgba.height // 2))
-        bbox = top_half.getchannel("A").getbbox()
+        bbox = rgba.getchannel("A").getbbox()
         if bbox is None:
-            raise SystemExit(f"{MARK_PNG}: top half is fully transparent")
+            raise SystemExit(f"{MARK_PNG}: fully transparent")
         return rgba.crop(bbox)
 
 
@@ -165,6 +175,8 @@ def main() -> None:
             DOCS_BUILD / "icon-mac.png",
             DOCS_BUILD / "icon.icns",
             DOCS_BUILD / "icon.ico",
+            SHELL_RENDERER_ICON,
+            UI_MARK,
             DOCS_ASSETS / "airy_logo.png",
         ]
         report(targets)
@@ -203,6 +215,12 @@ def main() -> None:
         )
     write(DOCS_BUILD / "icon.icns", build_icns(mac_master))
     write(DOCS_BUILD / "icon.ico", build_ico(app_master))
+
+    # onboarding slide 1 shows the app icon (CSS caps it at 60px)
+    write(SHELL_RENDERER_ICON, png_bytes(app_master))
+
+    # tight mark for the shared AiryMark component across the renderers
+    write(UI_MARK, png_bytes(compose(mark, UI_MARK_SIZE, 1.0)))
 
     # full logo (mark + wordmark on white) for the README banner
     with Image.open(LOGO_PNG) as logo:
