@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
-import logoLockup from './assets/airy-logo.svg'
+import airyMark from '@airy-office/ui/assets/airy-mark.png'
 import iconDocx from './assets/file-docx.svg'
 import iconXlsx from './assets/file-xlsx.svg'
 import iconPptx from './assets/file-pptx.svg'
@@ -1547,7 +1547,8 @@ export function Home() {
     <div className="home">
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <img className="logo-lockup" src={logoLockup} alt="Airy" />
+          <img className="logo-mark" src={airyMark} alt="" aria-hidden="true" />
+          <span className="logo-word">airy</span>
         </div>
 
         <nav className="sidebar-nav">

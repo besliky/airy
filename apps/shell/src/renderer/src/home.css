@@ -14,9 +14,6 @@
   --timeline-user-text: #5a6170;
   /* lift for the active segment in gray-track tab pills */
   --shadow-pill: 0 1px 2px rgb(0 0 0 / 8%);
-
-  /* airy-logo.svg is pure black-and-white; dark themes flip it to 1 */
-  --logo-invert: 0;
 }
 
 /* ── Dark mode overrides ─────────────────────────────────── */
@@ -32,7 +29,6 @@
   --timeline-user-bg: #2a2a3a;
   --timeline-user-text: #b0b0c0;
   --shadow-pill: 0 1px 2px rgb(0 0 0 / 40%);
-  --logo-invert: 1;
 }
 
 /* System dark: no data-theme or data-theme="system" — follow OS preference */
@@ -47,7 +43,6 @@
     --timeline-user-bg: #2a2a3a;
     --timeline-user-text: #b0b0c0;
     --shadow-pill: 0 1px 2px rgb(0 0 0 / 40%);
-    --logo-invert: 1;
   }
 }
 
@@ -116,11 +111,22 @@ body.vib .home {
   margin-bottom: 20px;
 }
 
-.logo-lockup {
+/* Brand lockup: the real gradient mark glyph plus the "airy" wordmark. The
+ * mark's blue→purple gradient sits on a transparent background and reads on
+ * both light and dark surfaces, so no invert filter is applied here — only
+ * the wordmark follows the theme via --text-primary. */
+.logo-mark {
   display: block;
+  width: 28px;
   height: 28px;
-  width: auto;
-  filter: invert(var(--logo-invert));
+}
+
+.logo-word {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--text-primary);
 }
 
 .sidebar-nav {
