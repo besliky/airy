@@ -15,10 +15,12 @@ const DELIMITERS = [',', ';', '\t'] as const
  * writes (windows-1251 included), scored script-aware in @airy-office/file-parse.
  * `preferred` (from the UI language) breaks the exact-score ties those
  * charsets produce — GBK and Shift_JIS both decode the same bytes to
- * plausible-looking but different CJK.
+ * plausible-looking but different CJK. A BOM is decoded to a U+FEFF character
+ * like any text read, then dropped: the grid never wants it in a cell.
  */
 export function decodeCsvBuffer(bytes: Uint8Array, preferred?: string): string {
-  return decodeTextBytes(bytes, preferred)
+  const text = decodeTextBytes(bytes, preferred)
+  return text.startsWith('﻿') ? text.slice(1) : text
 }
 
 /// Counts delimiter occurrences outside quotes over the first lines and

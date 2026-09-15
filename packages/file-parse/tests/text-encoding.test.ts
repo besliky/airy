@@ -58,14 +58,20 @@ const gbk = (text: string): Buffer => encodeLegacy(text, 'gb18030', 0xfe, 0x40)
 const shiftJis = (text: string): Buffer => encodeLegacy(text, 'shift_jis', 0xfc, 0x40)
 
 describe('decodeTextBytes', () => {
-  it('reads UTF-8 with and without a BOM, and UTF-16 in both byte orders', () => {
-    const text = 'город,житель\n'
+  const text = 'город,житель\n'
+
+  it('reads UTF-8 without a BOM', () => {
     expect(decodeTextBytes(Buffer.from(text, 'utf8'))).toBe(text)
+  })
+
+  it('reads UTF-8 and UTF-16 BOMs as a leading U+FEFF character, like readFile(utf8)', () => {
+    // editors write that character back as BOM bytes on save, so an
+    // untouched open→save round-trip must stay byte-identical
     expect(
       decodeTextBytes(Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(text, 'utf8')])),
-    ).toBe(text)
-    expect(decodeTextBytes(Buffer.from(`\uFEFF${text}`, 'utf16le'))).toBe(text)
-    expect(decodeTextBytes(Buffer.from(`\uFEFF${text}`, 'utf16le').swap16())).toBe(text)
+    ).toBe(`﻿${text}`)
+    expect(decodeTextBytes(Buffer.from(`﻿${text}`, 'utf16le'))).toBe(`﻿${text}`)
+    expect(decodeTextBytes(Buffer.from(`﻿${text}`, 'utf16le').swap16())).toBe(`﻿${text}`)
   })
 
   it('keeps plain ASCII untouched', () => {

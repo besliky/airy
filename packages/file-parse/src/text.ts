@@ -114,6 +114,20 @@ function tryDecode(bytes: Uint8Array, charset: string): string | null {
   }
 }
 
+/**
+ * Decode keeping a leading BOM as its U+FEFF character, matching what
+ * readFile(path, 'utf8') always did: editors keep that character in the
+ * document and write the BOM bytes back on save, so an untouched
+ * open→save round-trips byte-identically.
+ */
+function tryDecodeKeepBom(bytes: Uint8Array, charset: string): string | null {
+  try {
+    return new TextDecoder(charset, { ignoreBOM: true }).decode(bytes)
+  } catch {
+    return null
+  }
+}
+
 function tryDecodeStrict(bytes: Uint8Array): string | null {
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
@@ -201,10 +215,10 @@ function scoreSample(text: string, byteLength: number, highBytes: number): Sampl
  */
 export function decodeTextBytes(bytes: Uint8Array, preferred?: string): string {
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
-    return tryDecode(bytes.subarray(3), 'utf-8') ?? ''
+    return tryDecodeKeepBom(bytes, 'utf-8') ?? ''
   }
-  if (bytes[0] === 0xff && bytes[1] === 0xfe) return tryDecode(bytes.subarray(2), 'utf-16le') ?? ''
-  if (bytes[0] === 0xfe && bytes[1] === 0xff) return tryDecode(bytes.subarray(2), 'utf-16be') ?? ''
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return tryDecodeKeepBom(bytes, 'utf-16le') ?? ''
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return tryDecodeKeepBom(bytes, 'utf-16be') ?? ''
 
   const utf8 = tryDecodeStrict(bytes)
   if (utf8 !== null) return utf8
@@ -256,10 +270,10 @@ const META_CHARSET_RE = /<meta[^>]+charset\s*=\s*["']?\s*([a-z0-9_.:-]+)/i
  */
 export function decodeHtmlText(bytes: Uint8Array, preferred?: string): string {
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
-    return tryDecode(bytes.subarray(3), 'utf-8') ?? ''
+    return tryDecodeKeepBom(bytes, 'utf-8') ?? ''
   }
-  if (bytes[0] === 0xff && bytes[1] === 0xfe) return tryDecode(bytes.subarray(2), 'utf-16le') ?? ''
-  if (bytes[0] === 0xfe && bytes[1] === 0xff) return tryDecode(bytes.subarray(2), 'utf-16be') ?? ''
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return tryDecodeKeepBom(bytes, 'utf-16le') ?? ''
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return tryDecodeKeepBom(bytes, 'utf-16be') ?? ''
 
   const utf8 = tryDecodeStrict(bytes)
   if (utf8 !== null) return utf8
