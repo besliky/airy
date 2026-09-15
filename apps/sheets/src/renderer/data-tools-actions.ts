@@ -6,6 +6,8 @@
  */
 import { ILayoutService } from '@univerjs/preset-sheets-core'
 
+import { legacyCharsetForLang } from '@airy-office/file-parse/text'
+
 import { columnLabel } from '../domain/cell-address'
 import { decodeCsvBuffer, isNumericCell, parseCsv } from '../gateway/csv-import'
 import type { AdvancedFilterColumn, AdvancedFilterCriteria } from './AdvancedFilterDialog'
@@ -49,15 +51,6 @@ export interface DataToolsContext {
 /// undoable; larger files should open as their own workbook instead.
 const CSV_IMPORT_MAX_CELLS = 50_000
 
-/// Excel writes CSV in the system's legacy charset; the UI language is the
-/// best tie-breaker we have (same map as the main-process open path).
-const CSV_CHARSET_BY_LANG: Record<string, string> = {
-  zh: 'gb18030',
-  'zh-TW': 'big5',
-  ja: 'shift_jis',
-  ko: 'euc-kr',
-}
-
 /// Data → From Text/CSV: reads a delimited file (encoding and delimiter
 /// sniffed by the shared CSV pipeline) into the active sheet at the selection.
 export function handleImportCsv(ctx: DataToolsContext): void {
@@ -72,7 +65,7 @@ export function handleImportCsv(ctx: DataToolsContext): void {
       return
     }
     void file.arrayBuffer().then((buffer) => {
-      importCsvText(ctx, decodeCsvBuffer(new Uint8Array(buffer), CSV_CHARSET_BY_LANG[getLang()]))
+      importCsvText(ctx, decodeCsvBuffer(new Uint8Array(buffer), legacyCharsetForLang(getLang())))
     })
   }
   input.click()

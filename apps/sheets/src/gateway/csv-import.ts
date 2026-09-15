@@ -4,74 +4,23 @@
 
 import JSZip from 'jszip'
 
+import { decodeTextBytes } from '@airy-office/file-parse/text'
+
 import { encodeXlsxEscapes } from './xlsx-escapes'
 
 const DELIMITERS = [',', ';', '\t'] as const
 
-// Excel writes CSV in the system's legacy charset, not UTF-8 (GBK on Chinese
-// Windows, Shift_JIS on Japanese), so decoding everything as UTF-8 turns every
-// non-ASCII cell into replacement characters.
-const LEGACY_CHARSETS = ['gb18030', 'shift_jis', 'big5', 'euc-kr', 'windows-1252'] as const
-
-function decode(bytes: Uint8Array, charset: string, fatal = false): string | null {
-  try {
-    return new TextDecoder(charset, { fatal }).decode(bytes)
-  } catch {
-    return null
-  }
-}
-
-/** how plausible a decoding is: CJK/ASCII good, replacement chars and control bytes bad */
-function score(text: string): number {
-  let value = 0
-  for (const character of text) {
-    const code = character.codePointAt(0) ?? 0
-    if (character === '�') value -= 20
-    else if (code < 0x20 && character !== '\n' && character !== '\r' && character !== '\t')
-      value -= 10
-    else if (code < 0x7f) value += 1
-    // half-width katakana is the signature of double-byte text misread as
-    // Shift_JIS, and near-absent from real spreadsheets — never a good sign
-    else if (code >= 0xff61 && code <= 0xff9f) value -= 2
-    else if (
-      (code >= 0x3000 && code <= 0x9fff) || // CJK punctuation, kana, unified ideographs
-      (code >= 0xac00 && code <= 0xd7af) || // hangul
-      (code >= 0xff00 && code <= 0xffef) // full-width forms
-    )
-      value += 2
-  }
-  return value
-}
-
 /**
  * Decodes CSV bytes: BOM, then strict UTF-8, then the legacy charsets Excel
- * writes. `preferred` (from the UI language) breaks the ties those charsets
- * produce — GBK and Shift_JIS both decode the same bytes to plausible-looking
- * but different CJK.
+ * writes (windows-1251 included), scored script-aware in @airy-office/file-parse.
+ * `preferred` (from the UI language) breaks the exact-score ties those
+ * charsets produce — GBK and Shift_JIS both decode the same bytes to
+ * plausible-looking but different CJK. A BOM is decoded to a U+FEFF character
+ * like any text read, then dropped: the grid never wants it in a cell.
  */
 export function decodeCsvBuffer(bytes: Uint8Array, preferred?: string): string {
-  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
-    return decode(bytes.subarray(3), 'utf-8') ?? ''
-  }
-  if (bytes[0] === 0xff && bytes[1] === 0xfe) return decode(bytes.subarray(2), 'utf-16le') ?? ''
-  if (bytes[0] === 0xfe && bytes[1] === 0xff) return decode(bytes.subarray(2), 'utf-16be') ?? ''
-
-  const utf8 = decode(bytes, 'utf-8', true)
-  if (utf8 !== null) return utf8
-
-  let best = decode(bytes, 'utf-8') ?? ''
-  let bestScore = score(best)
-  const candidates = preferred ? [preferred, ...LEGACY_CHARSETS] : LEGACY_CHARSETS
-  for (const charset of candidates) {
-    const candidate = decode(bytes, charset)
-    if (candidate === null) continue
-    const candidateScore = score(candidate)
-    if (candidateScore > bestScore) {
-      best = candidate
-      bestScore = candidateScore
-    }
-  }
-  return best
+  const text = decodeTextBytes(bytes, preferred)
+  return text.startsWith('\uFEFF') ? text.slice(1) : text
 }
 
 /// Counts delimiter occurrences outside quotes over the first lines and
@@ -104,7 +53,7 @@ export function sniffDelimiter(text: string): string {
 }
 
 export function parseCsv(input: string, delimiter = sniffDelimiter(input)): string[][] {
-  const text = input.startsWith('﻿') ? input.slice(1) : input
+  const text = input.startsWith('\uFEFF') ? input.slice(1) : input
   const rows: string[][] = []
   let row: string[] = []
   let field = ''

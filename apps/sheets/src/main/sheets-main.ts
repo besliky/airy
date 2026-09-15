@@ -50,7 +50,7 @@ import {
   viewMenuTemplate,
   windowMenuTemplate,
 } from '@airy-office/electron-utils'
-import { createI18n, getUiLang, type Lang, normalizeLang, setUiLang } from '@airy-office/i18n'
+import { createI18n, getUiLang, normalizeLang, setUiLang } from '@airy-office/i18n'
 import { ProjectStore } from '@airy-office/project-store'
 
 import {
@@ -75,6 +75,7 @@ import {
 import { shutdownCodexAppServers } from '@airy-office/ai-provider/codex-app-server'
 import { csvToXlsxBuffer, decodeCsvBuffer, sheetCsvToXlsxBuffer } from '../gateway/csv-import'
 import { webSearchTool, imageSearchTool, generateImageTool } from '@airy-office/ai-search'
+import { legacyCharsetForLang } from '@airy-office/file-parse/text'
 import { parseFileToText } from '@airy-office/file-parse'
 import type { CellEdit, SheetStructuralOps } from '../gateway/xlsx-gateway'
 import { readArchiveEntryText, saveWorkbookViaSidecar } from '../gateway/xlsx-package-io'
@@ -3694,13 +3695,7 @@ async function openWorkbookSession(
 
 /** which legacy charset an Excel CSV most likely uses, judged by the UI language */
 function legacyCsvCharset(): string | undefined {
-  const byLang: Partial<Record<Lang, string>> = {
-    zh: 'gb18030',
-    'zh-TW': 'big5',
-    ja: 'shift_jis',
-    ko: 'euc-kr',
-  }
-  return byLang[getUiLang()]
+  return legacyCharsetForLang(getUiLang())
 }
 
 /// .xls and .csv open as a converted copy in the temp dir; the session

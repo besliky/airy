@@ -36,6 +36,7 @@ import {
 import { createI18n, getUiLang } from '@airy-office/i18n'
 import { generateImageTool } from '@airy-office/ai-search'
 import { parseFileToText } from '@airy-office/file-parse'
+import { decodeHtmlText, legacyCharsetForLang } from '@airy-office/file-parse/text'
 import { convertHtmlToDocx } from '../../../../packages/html2docx/src'
 import { atomicWriteFile } from './atomic-write'
 import { ElectronBrowserDriver } from './html2docx-driver'
@@ -1187,7 +1188,9 @@ function registerHtmlIpc(): void {
     if (typeof path !== 'string' || !allowedByWc.get(e.sender.id)?.has(path)) {
       throw new Error('html: path not granted to this view')
     }
-    return await readFile(path, 'utf8')
+    // Honor the document's own <meta charset>, then BOM/UTF-8, then
+    // detection — a plain utf8 read mojibakes every legacy-encoded page.
+    return decodeHtmlText(await readFile(path), legacyCharsetForLang(getUiLang()))
   })
 
   ipcMain.handle(
