@@ -25,6 +25,7 @@ import {
 } from '@airy-office/electron-utils'
 import { createI18n, getUiLang } from '@airy-office/i18n'
 import { generateImageTool } from '@airy-office/ai-search'
+import { decodeTextBytes, legacyCharsetForLang } from '@airy-office/file-parse/text'
 import { atomicWriteFile } from './atomic-write'
 import {
   copyImageIntoOwnedAssets,
@@ -562,7 +563,9 @@ function registerMarkdownIpc(): void {
     if (typeof path !== 'string' || !allowedByWc.get(e.sender.id)?.has(path)) {
       throw new Error('markdown: path not granted to this view')
     }
-    return await readFile(path, 'utf8')
+    // Markdown files are usually UTF-8, but legacy locales still produce
+    // windows-125x ones — detect instead of readFile's lossy UTF-8 read.
+    return decodeTextBytes(await readFile(path), legacyCharsetForLang(getUiLang()))
   })
 
   ipcMain.handle(

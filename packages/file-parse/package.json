@@ -6,7 +6,8 @@
   "type": "module",
   "description": "shared attachment parsing: PDF, Office and plain-text formats to text; images flagged for multimodal input",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./text": "./src/text.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

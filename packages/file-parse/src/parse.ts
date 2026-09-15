@@ -5,6 +5,7 @@ import { docxToText } from './docx'
 import { pdfToText } from './pdf'
 import { pptToText } from './ppt'
 import { pptxToText } from './pptx'
+import { decodeHtmlText, decodeTextBytes } from './text'
 import { xlsxToText } from './xlsx'
 
 export type ParsedFileKind = 'text' | 'image' | 'unsupported'
@@ -47,7 +48,12 @@ export async function parseFileToText(filePath: string): Promise<ParsedFile> {
   if (imageMime) return { ok: true, kind: 'image', mime: imageMime }
   try {
     if (TEXT_EXTS.has(ext)) {
-      return { ok: true, kind: 'text', text: await readFile(filePath, 'utf-8') }
+      // plain-text attachments are not always UTF-8 (legacy locales write
+      // windows-125x and friends) — decode with detection instead of letting
+      // readFile's lossy UTF-8 turn every non-ASCII byte into U+FFFD
+      const bytes = await readFile(filePath)
+      const text = ext === 'html' || ext === 'htm' ? decodeHtmlText(bytes) : decodeTextBytes(bytes)
+      return { ok: true, kind: 'text', text }
     }
     switch (ext) {
       case 'doc':

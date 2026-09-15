@@ -1,4 +1,5 @@
 export { parseFileToText, type ParsedFile, type ParsedFileKind } from './parse'
+export { decodeHtmlText, decodeTextBytes, legacyCharsetForLang } from './text'
 export { docToText } from './doc'
 export { docxToText } from './docx'
 export { pptToText } from './ppt'

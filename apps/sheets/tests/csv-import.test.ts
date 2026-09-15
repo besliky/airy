@@ -34,6 +34,12 @@ describe('decodeCsvBuffer', () => {
     expect(decodeCsvBuffer(shiftJisBytes(jp), 'shift_jis')).toBe(jp)
   })
 
+  it('reads windows-1251 Cyrillic CSVs without any hint', () => {
+    const ru = 'Артикул;Наименование\nЗенкер 16,8x20;10\nПластина CCGW120408;2\n'
+    expect(decodeCsvBuffer(cp1251Bytes(ru))).toBe(ru)
+    expect(decodeCsvBuffer(cp1251Bytes(ru), 'windows-1251')).toBe(ru)
+  })
+
   it('uses the preferred charset to break GBK/Shift_JIS ties', () => {
     // these bytes decode to plausible CJK under both, so the UI language decides
     expect(decodeCsvBuffer(shiftJisBytes(jp))).not.toBe(jp)
@@ -72,6 +78,28 @@ function encodeWith(text: string, charset: string): Buffer {
 
 const gbkBytes = (text: string): Buffer => encodeWith(text, 'gb18030')
 const shiftJisBytes = (text: string): Buffer => encodeWith(text, 'shift_jis')
+
+/** same brute-force idea as encodeWith, for single-byte charsets */
+function cp1251Bytes(text: string): Buffer {
+  const decoder = new TextDecoder('windows-1251')
+  const out: number[] = []
+  for (const character of text) {
+    const code = character.codePointAt(0)!
+    if (code < 0x80) {
+      out.push(code)
+      continue
+    }
+    let found = false
+    for (let b = 0x80; b <= 0xff && !found; b += 1) {
+      if (decoder.decode(new Uint8Array([b])) === character) {
+        out.push(b)
+        found = true
+      }
+    }
+    if (!found) throw new Error(`cannot encode ${character} in windows-1251`)
+  }
+  return Buffer.from(out)
+}
 
 describe('parseCsv', () => {
   it('handles quotes, embedded delimiters, escaped quotes, and CRLF', () => {
