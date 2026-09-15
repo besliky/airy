@@ -171,15 +171,14 @@ function scoreSample(text: string, byteLength: number, highBytes: number): Sampl
 
   let dominant: { script: Script; bucket: { count: number; common: number } } | undefined
   for (const entry of scripts) {
-    if (!dominant || entry[1].count > dominant.bucket.count) dominant = { script: entry[0], bucket: entry[1] }
+    if (!dominant || entry[1].count > dominant.bucket.count)
+      dominant = { script: entry[0], bucket: entry[1] }
   }
   // Score scripts in bytes, not letters: a multibyte charset turns the same
   // bytes into half as many (twice as wide) characters, so per-letter scores
   // would systematically favor single-byte misreads of CJK text.
   const scriptBytes =
-    dominant === undefined || highChars === 0
-      ? 0
-      : (dominant.bucket.count * highBytes) / highChars
+    dominant === undefined || highChars === 0 ? 0 : (dominant.bucket.count * highBytes) / highChars
   if (scriptBytes >= SCRIPT_BYTES_MIN && scriptBytes >= SCRIPT_DENSITY_MIN * byteLength) {
     score += 2 * scriptBytes
     if (
@@ -215,8 +214,7 @@ export function decodeTextBytes(bytes: Uint8Array, preferred?: string): string {
   const sample = bytes.subarray(0, SCORE_SAMPLE_BYTES)
   let highBytes = 0
   for (const b of sample) if (b >= 0x80) highBytes += 1
-  const score = (text: string | null): Sample =>
-    scoreSample(text ?? '', sample.length, highBytes)
+  const score = (text: string | null): Sample => scoreSample(text ?? '', sample.length, highBytes)
 
   let bestCharset: string | null = null
   let best = score(tryDecode(sample, 'utf-8'))

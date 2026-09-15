@@ -61,7 +61,9 @@ describe('decodeTextBytes', () => {
   it('reads UTF-8 with and without a BOM, and UTF-16 in both byte orders', () => {
     const text = 'город,житель\n'
     expect(decodeTextBytes(Buffer.from(text, 'utf8'))).toBe(text)
-    expect(decodeTextBytes(Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(text, 'utf8')]))).toBe(text)
+    expect(
+      decodeTextBytes(Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(text, 'utf8')])),
+    ).toBe(text)
     expect(decodeTextBytes(Buffer.from(`\uFEFF${text}`, 'utf16le'))).toBe(text)
     expect(decodeTextBytes(Buffer.from(`\uFEFF${text}`, 'utf16le').swap16())).toBe(text)
   })
@@ -156,7 +158,8 @@ describe('parseFileToText: legacy-encoded attachments', () => {
   })
 
   it('decodes a legacy .html attachment via its meta charset', async () => {
-    const body = '<html><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1251"></head><body>Каталог</body></html>'
+    const body =
+      '<html><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1251"></head><body>Каталог</body></html>'
     const path = writeFixture('page-cp1251.html', cp1251(body))
     const result = await parseFileToText(path)
     expect(result.ok).toBe(true)
