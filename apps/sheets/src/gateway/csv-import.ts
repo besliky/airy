@@ -20,7 +20,7 @@ const DELIMITERS = [',', ';', '\t'] as const
  */
 export function decodeCsvBuffer(bytes: Uint8Array, preferred?: string): string {
   const text = decodeTextBytes(bytes, preferred)
-  return text.startsWith('﻿') ? text.slice(1) : text
+  return text.startsWith('\uFEFF') ? text.slice(1) : text
 }
 
 /// Counts delimiter occurrences outside quotes over the first lines and
@@ -53,7 +53,7 @@ export function sniffDelimiter(text: string): string {
 }
 
 export function parseCsv(input: string, delimiter = sniffDelimiter(input)): string[][] {
-  const text = input.startsWith('﻿') ? input.slice(1) : input
+  const text = input.startsWith('\uFEFF') ? input.slice(1) : input
   const rows: string[][] = []
   let row: string[] = []
   let field = ''

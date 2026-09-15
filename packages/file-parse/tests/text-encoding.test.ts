@@ -69,9 +69,9 @@ describe('decodeTextBytes', () => {
     // untouched open→save round-trip must stay byte-identical
     expect(
       decodeTextBytes(Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(text, 'utf8')])),
-    ).toBe(`﻿${text}`)
-    expect(decodeTextBytes(Buffer.from(`﻿${text}`, 'utf16le'))).toBe(`﻿${text}`)
-    expect(decodeTextBytes(Buffer.from(`﻿${text}`, 'utf16le').swap16())).toBe(`﻿${text}`)
+    ).toBe(`\uFEFF${text}`)
+    expect(decodeTextBytes(Buffer.from(`\uFEFF${text}`, 'utf16le'))).toBe(`\uFEFF${text}`)
+    expect(decodeTextBytes(Buffer.from(`\uFEFF${text}`, 'utf16le').swap16())).toBe(`\uFEFF${text}`)
   })
 
   it('keeps plain ASCII untouched', () => {
