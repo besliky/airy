@@ -17,6 +17,7 @@ import {
   ipcMain,
   nativeImage,
   nativeTheme,
+  screen,
   session,
   shell,
   webContents,
@@ -187,6 +188,12 @@ import {
 import type { TabKind } from '../shared/tabs-api'
 import { TABS_CHANNELS } from '../shared/tabs-api'
 import { showErrorDialog } from './error-dialog'
+import {
+  isWindowOnScreen,
+  readWindowState,
+  writeWindowState,
+  type WindowState,
+} from './window-state'
 import { normalizeRecentQuery, pageRecentPaths, statPathEntries } from './recent-files'
 import { isSameFile, isValidRenameName } from './rename-validation'
 import { TabManager } from './tab-manager'
@@ -300,6 +307,7 @@ registerHtmlSchemes()
 // same file when they pick up i18n later. AIRY_LANG overrides for tests.
 
 const APP_SETTINGS_PATH = () => join(app.getPath('userData'), 'app-settings.json')
+const WINDOW_STATE_PATH = () => join(app.getPath('userData'), 'window-state.json')
 
 let uiLang: Lang | null = null
 
@@ -2598,10 +2606,51 @@ function applyMenuFor(kind: TabKind): void {
   }
 }
 
+/**
+ * Restore the persisted window geometry, discarding state that is malformed
+ * or no longer fully on a current display (monitor unplugged / resolution
+ * changed) — those cases fall back to the default centered-ish window.
+ */
+function restoreWindowState(): WindowState | null {
+  const state = readWindowState(WINDOW_STATE_PATH())
+  if (
+    state &&
+    isWindowOnScreen(
+      state,
+      screen.getAllDisplays().map((d) => d.bounds),
+    )
+  )
+    return state
+  return null
+}
+
+/** capture the current geometry (normal bounds + flags) and persist it */
+function persistWindowState(win: BrowserWindow): void {
+  if (win.isDestroyed()) return
+  try {
+    // normalBounds: the restore size while maximized/fullscreen, so a relaunch
+    // reopens un-maximized at the size the user had before maximizing
+    const b = win.getNormalBounds()
+    writeWindowState(WINDOW_STATE_PATH(), {
+      x: b.x,
+      y: b.y,
+      width: b.width,
+      height: b.height,
+      isMaximized: win.isMaximized(),
+      isFullScreen: win.isFullScreen(),
+    })
+  } catch (err) {
+    // geometry persistence must never break closing or moving the window
+    console.warn('[shell] window state save failed:', err)
+  }
+}
+
 function createShellWindow(): void {
+  const saved = restoreWindowState()
   const win = new BrowserWindow({
-    width: 1360,
-    height: 900,
+    ...(saved
+      ? { x: saved.x, y: saved.y, width: saved.width, height: saved.height }
+      : { width: 1360, height: 900 }),
     minWidth: 720,
     minHeight: 550,
     title: 'Airy',
@@ -2617,7 +2666,33 @@ function createShellWindow(): void {
       sandbox: true,
     },
   })
+  // flags apply after creation (constructor options cannot restore them);
+  // maximized bounds are laid out by the OS, the tab strip follows via resize
+  if (saved?.isFullScreen) win.setFullScreen(true)
+  else if (saved?.isMaximized) win.maximize()
   shellWindow = win
+
+  // Persist geometry on move/resize (debounced — a drag fires dozens of
+  // events) and immediately on state flips and close, the last of which is
+  // the authoritative snapshot a relaunch restores.
+  let geometrySaveTimer: ReturnType<typeof setTimeout> | null = null
+  const scheduleGeometrySave = (): void => {
+    if (geometrySaveTimer) clearTimeout(geometrySaveTimer)
+    geometrySaveTimer = setTimeout(() => {
+      geometrySaveTimer = null
+      persistWindowState(win)
+    }, 500)
+  }
+  win.on('resize', scheduleGeometrySave)
+  win.on('move', scheduleGeometrySave)
+  win.on('maximize', () => persistWindowState(win))
+  win.on('unmaximize', () => persistWindowState(win))
+  win.on('enter-full-screen', () => persistWindowState(win))
+  win.on('leave-full-screen', () => persistWindowState(win))
+  win.on('close', () => {
+    if (geometrySaveTimer) clearTimeout(geometrySaveTimer)
+    persistWindowState(win)
+  })
   // dragging the window by the tab strip's blank (draggable) area produces no
   // DOM event anywhere — will-move is the only signal to dismiss popovers
   win.on('will-move', () => broadcastChromePressed())
