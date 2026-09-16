@@ -15,7 +15,7 @@ import { copyFile, mkdtemp, rename, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 
-import { FencingError } from '../docx/session.js'
+import { FencingError, assertSaveTargetFree } from '../docx/session.js'
 import { resolveConfined, workspaceRoot } from '../docx/paths.js'
 import {
   convertViaSoffice,
@@ -229,6 +229,8 @@ export class XlsxSession {
   private activeSheetIndex: number
   private baseline: FileStamp | null
   private savedPath: string | null = null
+  /** every target this session has written (repeat save-as needs no overwrite) */
+  private readonly savedTargets = new Set<string>()
 
   private constructor(options: {
     handle: string
@@ -508,11 +510,23 @@ export class XlsxSession {
    *
    * Default target: the opened .xlsx; for imported .xls/.ods books a fresh
    * sibling .xlsx next to the original (true legacy output is not supported;
-   * format 'origin' refuses for .xls and exports .ods via LibreOffice).
+   * format 'origin' refuses for .xls and exports .ods via LibreOffice). An
+   * explicit target that already exists is refused unless it is the session's
+   * own backing file / last output, or overwrite is true.
    */
-  async save(rawPath?: string, format: 'xlsx' | 'origin' = 'xlsx'): Promise<XlsxSaveResult> {
+  async save(
+    rawPath?: string,
+    format: 'xlsx' | 'origin' = 'xlsx',
+    options: { overwrite?: boolean } = {},
+  ): Promise<XlsxSaveResult> {
     if (format === 'origin') return this.saveToOrigin()
     const target = resolveConfined(rawPath ?? this.defaultTarget(), this.root)
+    await assertSaveTargetFree(
+      target,
+      [this.backingPath, ...this.savedTargets],
+      rawPath,
+      options.overwrite,
+    )
     if (target === this.backingPath) await this.assertBackingUnchanged()
 
     const result = await saveWorkbookViaSidecar({
@@ -525,6 +539,7 @@ export class XlsxSession {
     const unchanged = this.edits.length === 0
     this.edits.length = 0
     this.savedPath = target
+    this.savedTargets.add(target)
     if (target === this.backingPath) {
       this.baseline = await statOrNull(this.backingPath)
       // the sidecar's in-memory index still reflects the pre-save file:
@@ -604,6 +619,7 @@ export class XlsxSession {
       const bytes = await statOrNull(this.originPath)
       this.edits.length = 0
       this.savedPath = this.originPath
+      this.savedTargets.add(this.originPath)
       return {
         path: this.originPath,
         bytes: bytes?.size ?? 0,

@@ -168,17 +168,17 @@ of which copy of the server connects to it.
 
 Headless (no app required):
 
-| Tool                 | Signature (short)                                                                                         |
-| -------------------- | --------------------------------------------------------------------------------------------------------- |
-| `ping`               | `()` — liveness probe                                                                                     |
-| `open_document`      | `(path)` — open `.docx/.xlsx/.xlsm/.xls/.ods/.doc/.odt`, returns a session handle + meta                  |
-| `read_document`      | `(handle, blocks? \| range?)` — block overview or full restricted HTML for text documents                 |
-| `read_workbook`      | `(handle, sheet?, range?)` — sheet overview or a pipe table of an A1 range                                |
-| `insert_content`     | `(handle, html, at?)` — insert a restricted-HTML fragment after block `at`                                |
-| `apply_ops`          | `(handle, ops, dryRun?)` — validated, atomic batch of canonical edit ops (max 100)                        |
-| `apply_workbook_ops` | `(handle, edits, dryRun?)` — validated batch of cell edits: value / formula / style / rich text (max 100) |
-| `save_document`      | `(handle, path?, format?)` — atomic save; `format: "origin"` exports back to the legacy format            |
-| `close_document`     | `(handle)` — close the session, clean up temp files                                                       |
+| Tool                 | Signature (short)                                                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ping`               | `()` — liveness probe                                                                                                                                          |
+| `open_document`      | `(path)` — open `.docx/.xlsx/.xlsm/.xls/.ods/.doc/.odt`, returns a session handle + meta                                                                       |
+| `read_document`      | `(handle, blocks? \| range?)` — block overview or full restricted HTML for text documents                                                                      |
+| `read_workbook`      | `(handle, sheet?, range?)` — sheet overview or a pipe table of an A1 range                                                                                     |
+| `insert_content`     | `(handle, html, at?)` — insert a restricted-HTML fragment after block `at`                                                                                     |
+| `apply_ops`          | `(handle, ops, dryRun?)` — validated, atomic batch of canonical edit ops (max 100)                                                                             |
+| `apply_workbook_ops` | `(handle, edits, dryRun?)` — validated batch of cell edits: value / formula / style / rich text (max 100)                                                      |
+| `save_document`      | `(handle, path?, overwrite?, format?)` — atomic save; refuses existing targets without `overwrite: true`; `format: "origin"` exports back to the legacy format |
+| `close_document`     | `(handle)` — close the session, clean up temp files                                                                                                            |
 
 Live (app running; always target the _active_ tab):
 
@@ -231,8 +231,12 @@ each connect, so an app restart (new token) never authorizes a stale
 connection. Per-call timeout is 30 s. Live edits are visible immediately;
 with track changes on they are authored as "Airy Copilot", and each bridge
 call is one undo step (`live_undo` after a combined `html` + `ops` call
-needs two undos). A `stale_document` error means the user edited the
-document since your last `live_get_context` — fetch fresh context.
+needs two undos). A combined `live_apply_ops` whose ops batch fails after
+the html was inserted rolls the insert back with an automatic undo — the
+document ends at its pre-call state (or the error says the edit may be
+partially applied and to call `live_undo`). A `stale_document` error means
+the user edited the document since your last `live_get_context` — fetch
+fresh context.
 
 `AIRY_DISABLE_BRIDGE=1` turns the bridge off in the app entirely.
 
@@ -274,10 +278,13 @@ Headless slides, PDF, Markdown and HTML tools are planned (backlog).
   reread from disk on every connect. The bridge listens on a local
   socket/named pipe only — no network surface.
 - **No silent overwrites.** `save_document` is atomic (temp + rename) and
-  fenced: saving over the opened file refuses with an error when the file
-  changed on disk since it was opened (an external writer — another editor,
-  sync client, or the Airy app itself). The remedy is to reopen and reapply,
-  or to use the `live_*` tools when the document is open in the app.
+  double-fenced: saving over the opened file refuses with an error when the
+  file changed on disk since it was opened (an external writer — another
+  editor, sync client, or the Airy app itself), and an explicit save-as to a
+  path that already exists is refused unless it is a file the session itself
+  opened or saved — pass `overwrite: true` to replace an unrelated file. The
+  remedy for a fence error is to reopen and reapply, or to use the `live_*`
+  tools when the document is open in the app.
 - **Read-only until save.** Opening and editing never touch the original
   file; converted imports write a new sibling file and leave the original
   untouched.

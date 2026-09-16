@@ -125,6 +125,35 @@ export class FencingError extends Error {
   }
 }
 
+/**
+ * Save-as clobber guard shared by the docx and xlsx sessions: refuse an
+ * explicit target that already exists on disk unless it is one of the
+ * session's own files (the opened file / a previous save's output) or the
+ * caller passed overwrite. Default targets (rawPath undefined) are exempt —
+ * repeat saves over the session's own output keep working.
+ */
+export async function assertSaveTargetFree(
+  target: string,
+  owned: ReadonlyArray<string | null>,
+  rawPath: string | undefined,
+  overwrite: boolean | undefined,
+): Promise<void> {
+  if (rawPath === undefined || overwrite === true) return
+  if (owned.some((path) => path !== null && path === target)) return
+  let exists = true
+  try {
+    await stat(target)
+  } catch {
+    exists = false
+  }
+  if (exists) {
+    throw new Error(
+      `Refusing to save: "${target}" already exists and is not a file this session opened or ` +
+        'saved. Pass overwrite: true to replace it (the existing file will be lost).',
+    )
+  }
+}
+
 interface FileStamp {
   mtimeMs: number
   size: number
@@ -143,6 +172,8 @@ export class DocxSession {
   private pending = emptyNumbering()
   private baseline: FileStamp | null
   private savedPath: string | null = null
+  /** every target this session has written (repeat save-as needs no overwrite) */
+  private readonly savedTargets = new Set<string>()
 
   private constructor(
     handle: string,
@@ -400,14 +431,28 @@ export class DocxSession {
    * mtime/size fencing: saving over the file this session opened refuses when
    * the file changed on disk since open (external writer), with a clear error.
    *
+   * Save-as clobber guard: an explicit target that already exists on disk is
+   * refused unless it is the file this session opened (or last saved) or
+   * `overwrite` is true — the default targets below keep working unchanged.
+   *
    * Default target: the opened .docx; for sessions converted from .doc/.odt a
    * fresh sibling .docx next to the original. format:'origin' exports the
    * edited document back to the original .doc/.odt through LibreOffice
    * (best-effort) instead.
    */
-  async save(rawPath?: string, format: 'docx' | 'origin' = 'docx'): Promise<SaveResult> {
+  async save(
+    rawPath?: string,
+    format: 'docx' | 'origin' = 'docx',
+    options: { overwrite?: boolean } = {},
+  ): Promise<SaveResult> {
     if (format === 'origin') return this.saveToOrigin()
     const target = resolveConfined(rawPath ?? this.defaultTarget(), this.root)
+    await assertSaveTargetFree(
+      target,
+      [this.path, ...this.savedTargets],
+      rawPath,
+      options.overwrite,
+    )
     if (target === this.path && this.baseline) {
       let current: FileStamp
       try {
@@ -438,6 +483,7 @@ export class DocxSession {
       }
     }
     this.savedPath = target
+    this.savedTargets.add(target)
     return {
       path: target,
       bytes: bytes.byteLength,
@@ -529,6 +575,7 @@ export class DocxSession {
       await copyFile(output, tmpTarget)
       await rename(tmpTarget, this.origin.path)
       this.savedPath = this.origin.path
+      this.savedTargets.add(this.origin.path)
       const info = await stat(this.origin.path)
       return {
         path: this.origin.path,

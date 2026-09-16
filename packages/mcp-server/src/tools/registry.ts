@@ -395,7 +395,9 @@ export function registerTools(server: McpServer): void {
         'session overwrites the file it was opened from (refusing with a clear error when the ' +
         'file changed on disk since open — reopen and re-apply in that case), while sessions ' +
         'imported from .xls/.ods/.doc/.odt write a fresh sibling file with the native extension ' +
-        'next to the original (the original stays untouched). format "origin" instead exports ' +
+        'next to the original (the original stays untouched). An explicit path that already ' +
+        'exists on disk is refused with an error unless it is a file the session itself opened ' +
+        'or saved — pass overwrite: true to replace it. format "origin" instead exports ' +
         'back to the original .doc/.odt/.ods through LibreOffice (best-effort; .xls output is ' +
         'not supported — use the default .xlsx save). Untouched parts of the document are kept ' +
         'byte-identical; a save with zero edits writes the original bytes back verbatim. Returns ' +
@@ -407,6 +409,13 @@ export function registerTools(server: McpServer): void {
           .min(1)
           .optional()
           .describe('Optional save-as path (workspace-confined); default: see description'),
+        overwrite: z
+          .boolean()
+          .optional()
+          .describe(
+            'Allow replacing an existing file at path (default false: an existing unrelated ' +
+              'file is refused)',
+          ),
         format: z
           .enum(['docx', 'xlsx', 'origin'])
           .optional()
@@ -419,7 +428,7 @@ export function registerTools(server: McpServer): void {
         destructiveHint: true,
       },
     },
-    async ({ handle, path, format }) => {
+    async ({ handle, path, overwrite, format }) => {
       const session = getSession(handle)
       if (session instanceof TextSession) {
         throw new Error(
@@ -427,13 +436,18 @@ export function registerTools(server: McpServer): void {
             'Install LibreOffice to open the document as an editable converted .docx session.',
         )
       }
+      const saveOptions = overwrite === undefined ? {} : { overwrite }
       if (session instanceof XlsxSession) {
         if (format === 'docx') {
           throw new Error(
             'format "docx" is not valid for a workbook session; use "xlsx" or "origin".',
           )
         }
-        const result = await session.save(path, format === 'origin' ? 'origin' : 'xlsx')
+        const result = await session.save(
+          path,
+          format === 'origin' ? 'origin' : 'xlsx',
+          saveOptions,
+        )
         return content(
           result,
           `Saved ${result.bytes} bytes to ${result.path} (${result.format})` +
@@ -446,7 +460,7 @@ export function registerTools(server: McpServer): void {
           'format "xlsx" is not valid for a text document session; use "docx" or "origin".',
         )
       }
-      const result = await session.save(path, format === 'origin' ? 'origin' : 'docx')
+      const result = await session.save(path, format === 'origin' ? 'origin' : 'docx', saveOptions)
       return content(
         result,
         `Saved ${result.bytes} bytes to ${result.path}${result.unchanged ? ' (no changes: bytes round-tripped verbatim)' : ''}`,
@@ -562,7 +576,10 @@ export function registerTools(server: McpServer): void {
         'Edit the ACTIVE document in the running Airy app in one go: insert a restricted-HTML ' +
         'fragment and/or apply canonical edit ops. When both are given the html is inserted first (at the ' +
         'end of the document, so block indexes from live_get_context stay valid) and the ops then run against ' +
-        'the result — a single call can add a section and format it. The user sees the change immediately; ' +
+        'the result — a single call can add a section and format it. When the ops batch fails after the ' +
+        'html was inserted, the insert turn is automatically rolled back with an undo, so a failed call ' +
+        'leaves the document at its pre-call state (if that undo itself fails, the error says the edit may ' +
+        'be partially applied — call live_undo to revert the insert). The user sees the change immediately; ' +
         'tracked changes are authored as "Airy Copilot" when the app has track changes on. Each bridge call ' +
         'is one undo step, so undo a combined edit with live_undo twice. ' +
         `Operations:\n${OPS_GUIDE}\n${LIVE_OPS_EXTRAS}`,
@@ -589,11 +606,31 @@ export function registerTools(server: McpServer): void {
       }
       const bridge = sharedLiveBridge()
       const applied: Record<string, unknown> = {}
+      let inserted = false
       try {
-        if (html !== undefined) applied.insert = await bridge.call('insert_content', { html })
+        if (html !== undefined) {
+          applied.insert = await bridge.call('insert_content', { html })
+          inserted = true
+        }
         if (ops !== undefined) applied.ops = await bridge.call('apply_ops', { ops })
       } catch (err) {
-        throw new Error(describeBridgeFailure(err), { cause: err })
+        if (!inserted) throw new Error(describeBridgeFailure(err), { cause: err })
+        // the html landed but the ops batch failed: revert the insert turn so
+        // the document is not left half-edited (best-effort — when the undo
+        // itself fails, say the edit may be partially applied and point at
+        // live_undo)
+        let rollbackNote: string
+        try {
+          await bridge.call('undo')
+          rollbackNote =
+            ' — the inserted html was rolled back with an undo; the document is back at its ' +
+            'pre-call state (nothing was applied).'
+        } catch (undoErr) {
+          rollbackNote =
+            ` — the inserted html could NOT be rolled back (${describeBridgeFailure(undoErr)}); ` +
+            'the edit may be partially applied, call live_undo to revert the insert.'
+        }
+        throw new Error(describeBridgeFailure(err) + rollbackNote, { cause: err })
       }
       const parts = [
         ...(applied.insert !== undefined ? ['inserted content'] : []),

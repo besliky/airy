@@ -2,7 +2,7 @@
 // A1 parsing, read rendering, the cell-edit journal and the save/origin
 // matrix — all against a stub sidecar IO and a mocked save module (the real
 // gateway save needs the sidecar binary; covered by the integration file).
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -230,6 +230,26 @@ describe('XlsxSession journal + save matrix', () => {
     // in-place save closes and reopens the sidecar session for fresh reads
     expect(io.calls.close).toHaveLength(1)
     expect(io.calls.open).toEqual([join(root, 'book.xlsx'), join(root, 'book.xlsx')])
+  })
+
+  it('refuses save-as over an existing unrelated file unless overwrite is set', async () => {
+    const { session } = await nativeSession()
+    const other = join(root, 'other.xlsx')
+    await writeFile(other, 'unrelated workbook bytes')
+    await expect(session.save(other)).rejects.toThrow(/already exists/)
+    await expect(session.save(other)).rejects.toThrow(/overwrite: true/)
+    // the refusal left the existing file untouched
+    expect(await readFile(other, 'utf8')).toBe('unrelated workbook bytes')
+    // explicit consent replaces it
+    await expect(session.save(other, 'xlsx', { overwrite: true })).resolves.toMatchObject({
+      path: other,
+      format: 'xlsx',
+    })
+    expect(await readFile(other, 'utf8')).toBe('saved-xlsx-bytes')
+    // the session's own backing file still saves without overwrite (fencing path)
+    await expect(session.save()).resolves.toMatchObject({ path: join(root, 'book.xlsx') })
+    // repeat save-as onto the session's own last output keeps working
+    await expect(session.save(other)).resolves.toMatchObject({ path: other })
   })
 
   it('defaults .xls imports to a sibling .xlsx and leaves the origin untouched', async () => {

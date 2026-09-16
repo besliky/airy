@@ -238,6 +238,62 @@ describe('live tools over MCP', () => {
     }
   })
 
+  it('live_apply_ops rolls the html insert back when the ops batch fails', async () => {
+    if (process.platform === 'win32') return
+    const handle = await startBridge({
+      insert_content: () => 'inserted 1 block(s)',
+      apply_ops: () => {
+        throw new MockBridgeMethodError('invalid_params', 'op #1 bogus: unknown op "nope"')
+      },
+      undo: () => ({ undone: true }),
+    })
+    const { client, close } = await connectSession()
+    try {
+      const result = await call(client, 'live_apply_ops', {
+        html: '<p>draft section</p>',
+        ops: [{ op: 'nope' }],
+      })
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('unknown op "nope"')
+      expect(text(result)).toContain('rolled back')
+      expect(text(result)).toContain('pre-call state')
+      // the insert was undone over the bridge before the error surfaced
+      expect(handle.requests.map((r) => r.method)).toEqual(['insert_content', 'apply_ops', 'undo'])
+    } finally {
+      await close()
+    }
+  })
+
+  it('live_apply_ops reports a partial edit when the rollback undo fails too', async () => {
+    if (process.platform === 'win32') return
+    const handle = await startBridge({
+      insert_content: () => 'inserted 1 block(s)',
+      apply_ops: () => {
+        throw new MockBridgeMethodError('invalid_params', 'op #1 bogus: unknown op "nope"')
+      },
+      undo: () => {
+        throw new MockBridgeMethodError(
+          'stale_document',
+          'the document changed since the last bridge turn',
+        )
+      },
+    })
+    const { client, close } = await connectSession()
+    try {
+      const result = await call(client, 'live_apply_ops', {
+        html: '<p>draft section</p>',
+        ops: [{ op: 'nope' }],
+      })
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('could NOT be rolled back')
+      expect(text(result)).toContain('partially applied')
+      expect(text(result)).toContain('live_undo')
+      expect(handle.requests.map((r) => r.method)).toEqual(['insert_content', 'apply_ops', 'undo'])
+    } finally {
+      await close()
+    }
+  })
+
   it('live_apply_ops rejects a call with neither ops nor html', async () => {
     if (process.platform === 'win32') return
     await startBridge({})

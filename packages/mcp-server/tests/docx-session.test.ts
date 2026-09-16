@@ -303,6 +303,26 @@ describe('save: byte preservation and fencing', () => {
     expect(Buffer.compare(await readFile(docPath), await buildFixtureDocx())).toBe(0)
   })
 
+  it('refuses save-as over an existing unrelated file unless overwrite is set', async () => {
+    const session = await openSession()
+    session.insertContent('<p>edit</p>', 0)
+    const other = join(root, 'other.docx')
+    await writeFile(other, "someone else's document")
+    await expect(session.save(other)).rejects.toThrow(/already exists/)
+    await expect(session.save(other)).rejects.toThrow(/overwrite: true/)
+    // the refusal left the existing file untouched
+    expect(await readFile(other, 'utf8')).toBe("someone else's document")
+    // explicit consent replaces it
+    await expect(session.save(other, 'docx', { overwrite: true })).resolves.toMatchObject({
+      path: other,
+    })
+    expect(await readFile(other, 'utf8')).not.toBe("someone else's document")
+    // the session's own opened file still saves without overwrite (fencing path)
+    await expect(session.save(docPath)).resolves.toMatchObject({ path: docPath })
+    // repeat save-as onto the session's own last output keeps working
+    await expect(session.save(other)).resolves.toMatchObject({ path: other })
+  })
+
   it('refuses to save when the file changed on disk since open', async () => {
     const session = await openSession()
     session.insertContent('<p>edit</p>', 0)
