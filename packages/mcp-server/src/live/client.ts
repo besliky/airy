@@ -7,7 +7,12 @@
 // fresh, rereading the info file so a restarted app's new token is picked up.
 import { connect as netConnect, type Socket } from 'node:net'
 
-import { candidateBridgeInfoPaths, discoverBridgeInfo } from './discovery.js'
+import {
+  candidateBridgeInfoPaths,
+  discoverBridgeInfos,
+  type DiscoveryOptions,
+  type DiscoveredBridge,
+} from './discovery.js'
 import {
   BRIDGE_PROTOCOL_VERSION,
   NdjsonFramer,
@@ -158,13 +163,21 @@ export interface LiveBridge {
   close(): void
 }
 
-export function createLiveBridge(options: { timeoutMs?: number } = {}): LiveBridge {
+export function createLiveBridge(
+  options: { timeoutMs?: number } & DiscoveryOptions = {},
+): LiveBridge {
   const timeoutMs = options.timeoutMs ?? DEFAULT_BRIDGE_CALL_TIMEOUT_MS
+  const discoveryOptions: DiscoveryOptions = {
+    env: options.env,
+    platform: options.platform,
+    homeDir: options.homeDir,
+    isProcessAlive: options.isProcessAlive,
+  }
   let connection: BridgeConnection | null = null
   let chain: Promise<unknown> = Promise.resolve()
 
   function notRunning(): BridgeClientError {
-    const searched = candidateBridgeInfoPaths()
+    const searched = candidateBridgeInfoPaths(discoveryOptions)
       .map((p) => `\n  - ${p}`)
       .join('')
     return new BridgeClientError(
@@ -186,10 +199,8 @@ export function createLiveBridge(options: { timeoutMs?: number } = {}): LiveBrid
     return parsed.value
   }
 
-  async function connectAndHandshake(): Promise<BridgeConnection> {
-    const found = await discoverBridgeInfo()
-    if (!found) throw notRunning()
-
+  /** connect + handshake one candidate */
+  async function connectCandidate(found: DiscoveredBridge): Promise<BridgeConnection> {
     const socket = netConnect(found.info.socketPath)
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -239,6 +250,27 @@ export function createLiveBridge(options: { timeoutMs?: number } = {}): LiveBrid
     }
     connection = conn
     return conn
+  }
+
+  async function connectAndHandshake(): Promise<BridgeConnection> {
+    const candidates = await discoverBridgeInfos(discoveryOptions)
+    // a candidate whose socket is unreachable (stale file, crashed app) must
+    // not strand the later ones: connect failures fall through to the next
+    // candidate; only the last error surfaces. Handshake-level failures
+    // (unauthorized, malformed stream) belong to a live server and are thrown.
+    let lastConnectError: BridgeClientError | null = null
+    for (const found of candidates) {
+      try {
+        return await connectCandidate(found)
+      } catch (err) {
+        if (err instanceof BridgeClientError && err.code === 'bridge_not_running') {
+          lastConnectError = err
+          continue
+        }
+        throw err
+      }
+    }
+    throw lastConnectError ?? notRunning()
   }
 
   async function performCall(method: string, params?: Record<string, unknown>): Promise<unknown> {

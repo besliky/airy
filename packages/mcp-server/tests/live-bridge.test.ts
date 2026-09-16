@@ -3,7 +3,7 @@
 // which the tests drive through a linked InMemoryTransport pair — the same
 // in-process pattern as server.test.ts / docx-tools.test.ts, so the full
 // tool -> client -> socket -> dispatcher path runs per call.
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -501,5 +501,88 @@ describe('live bridge client (direct)', () => {
     expect(results).toEqual(['slow-result', 'fast-result'])
     // the client never overlaps requests: slow resolves first despite the delay
     expect(settled).toEqual(['slow', 'fast'])
+  })
+})
+
+describe('live bridge candidate fallback', () => {
+  it('falls back to the next candidate when the first socket is unreachable', async () => {
+    if (process.platform === 'win32') return
+    // candidate layout under a fake home: 'Airy' holds a stale file pointing
+    // at a socket that no longer exists; 'Airy Dev' holds the live bridge
+    const home = join(dir, 'fallback-home')
+    const staleDir = join(home, '.config', 'Airy')
+    const liveDir = join(home, '.config', 'Airy Dev')
+    mkdirSync(staleDir, { recursive: true })
+    mkdirSync(liveDir, { recursive: true })
+    mkdirSync(join(dir, 'live'), { recursive: true })
+    const live = await startMockBridge({ dir: join(dir, 'live'), methods: PING_METHODS })
+    bridge = live
+    writeFileSync(
+      join(staleDir, 'airy-bridge.json'),
+      JSON.stringify({
+        socketPath: join(dir, 'gone.sock'),
+        token: 'f'.repeat(64),
+        pid: process.pid,
+        protocolVersion: 1,
+      }),
+      'utf8',
+    )
+    writeFileSync(
+      join(liveDir, 'airy-bridge.json'),
+      JSON.stringify({
+        socketPath: live.socketPath,
+        token: live.info.token,
+        pid: live.info.pid,
+        protocolVersion: 1,
+      }),
+      'utf8',
+    )
+    const bridgeClient = createLiveBridge({ env: {}, homeDir: home, platform: 'linux' })
+    expect(await bridgeClient.call('ping')).toEqual({
+      pong: true,
+      protocolVersion: 1,
+      pid: 4242,
+    })
+  })
+
+  it('skips a stale file whose app pid is dead even before connecting', async () => {
+    if (process.platform === 'win32') return
+    const home = join(dir, 'deadpid-home')
+    const staleDir = join(home, '.config', 'Airy')
+    const liveDir = join(home, '.config', 'Airy Dev')
+    mkdirSync(staleDir, { recursive: true })
+    mkdirSync(liveDir, { recursive: true })
+    mkdirSync(join(dir, 'live2'), { recursive: true })
+    const live = await startMockBridge({ dir: join(dir, 'live2'), methods: PING_METHODS })
+    bridge = live
+    writeFileSync(
+      join(staleDir, 'airy-bridge.json'),
+      JSON.stringify({
+        socketPath: live.socketPath,
+        token: '0'.repeat(64),
+        pid: 424242,
+        protocolVersion: 1,
+      }),
+      'utf8',
+    )
+    writeFileSync(
+      join(liveDir, 'airy-bridge.json'),
+      JSON.stringify({
+        socketPath: live.socketPath,
+        token: live.info.token,
+        pid: live.info.pid,
+        protocolVersion: 1,
+      }),
+      'utf8',
+    )
+    // pid 424242 is not alive, so the stale candidate (wrong token!) is
+    // skipped and the live one wins — without the probe this would be
+    // bridge_unauthorized
+    const bridgeClient = createLiveBridge({ env: {}, homeDir: home, platform: 'linux' })
+    expect(await bridgeClient.call('ping')).toEqual({
+      pong: true,
+      protocolVersion: 1,
+      pid: 4242,
+    })
   })
 })

@@ -112,6 +112,9 @@ export const strings = {
     setAnalytics: '发送匿名使用统计',
     setAnalyticsDesc:
       '该功能默认开启，可随时在“设置 → 常规”中关闭。使用 Google Analytics 4；Google 会接收您的公网 IP 地址和传输元数据，但绝不收集文档内容或文件名。',
+    setLiveBridge: 'Copilot 实时桥接',
+    setLiveBridgeDesc:
+      '允许编码代理（MCP）连接本应用以读取和编辑打开的文档。供 Claude、Cursor、airy-mcp 等工具使用。',
     setAiFontSize: 'AI 面板文字大小',
     aiFontSizeDefault: '默认',
     aiFontSizeLarge: '大',
@@ -297,6 +300,9 @@ export const strings = {
     setAnalytics: 'Send anonymous usage statistics',
     setAnalyticsDesc:
       'Enabled by default and can be turned off anytime in Settings → General. Uses Google Analytics 4; Google receives your public IP address and transport metadata, but document contents and file names are never collected.',
+    setLiveBridge: 'Copilot live bridge',
+    setLiveBridgeDesc:
+      'Let coding agents (MCP) attach to this app to read and edit open documents. Used by tools like Claude, Cursor or airy-mcp.',
     setAiFontSize: 'AI panel text size',
     aiFontSizeDefault: 'Default',
     aiFontSizeLarge: 'Large',
@@ -497,6 +503,9 @@ export const strings = {
     setAnalytics: '匿名の使用状況統計を送信',
     setAnalyticsDesc:
       '既定で有効です。設定 → 一般でいつでも無効にできます。Google Analytics 4 を使用し、Google は公開 IP アドレスと通信メタデータを受け取りますが、文書の内容やファイル名は収集されません。',
+    setLiveBridge: 'Copilot ライブブリッジ',
+    setLiveBridgeDesc:
+      'コーディングエージェント（MCP）がこのアプリに接続して開いているドキュメントを読み書きできるようにします。Claude・Cursor・airy-mcp などのツールで利用されます。',
     setAiFontSize: 'AI パネルの文字サイズ',
     aiFontSizeDefault: '標準',
     aiFontSizeLarge: '大',
@@ -695,6 +704,9 @@ export const strings = {
     setAnalytics: '익명 사용 통계 보내기',
     setAnalyticsDesc:
       '기본적으로 켜져 있으며 설정 → 일반에서 언제든 끌 수 있습니다. Google Analytics 4를 사용하며 Google은 공인 IP 주소와 전송 메타데이터를 수신하지만 문서 내용이나 파일 이름은 수집하지 않습니다.',
+    setLiveBridge: 'Copilot 라이브 브리지',
+    setLiveBridgeDesc:
+      '코딩 에이전트(MCP)가 이 앱에 연결하여 열린 문서를 읽고 편집할 수 있도록 합니다. Claude, Cursor, airy-mcp 등의 도구에서 사용됩니다.',
     setAiFontSize: 'AI 패널 글자 크기',
     aiFontSizeDefault: '기본',
     aiFontSizeLarge: '크게',
@@ -895,6 +907,9 @@ export const strings = {
     setAnalytics: "Envoyer des statistiques d'utilisation anonymes",
     setAnalyticsDesc:
       'Activé par défaut et désactivable dans Paramètres → Général. Utilise Google Analytics 4 ; Google reçoit votre adresse IP publique et les métadonnées de transport, mais jamais le contenu des documents ni les noms de fichiers.',
+    setLiveBridge: 'Pont Copilot en direct',
+    setLiveBridgeDesc:
+      'Permet aux agents de code (MCP) de se connecter à cette application pour lire et modifier les documents ouverts. Utilisé par des outils comme Claude, Cursor ou airy-mcp.',
     setAiFontSize: 'Taille du texte du panneau IA',
     aiFontSizeDefault: 'Par défaut',
     aiFontSizeLarge: 'Grande',
@@ -1101,6 +1116,9 @@ export const strings = {
     setAnalytics: 'Anonyme Nutzungsstatistiken senden',
     setAnalyticsDesc:
       'Standardmäßig aktiviert und unter Einstellungen → Allgemein deaktivierbar. Verwendet Google Analytics 4; Google erhält Ihre öffentliche IP-Adresse und Transportmetadaten, aber keine Dokumentinhalte oder Dateinamen.',
+    setLiveBridge: 'Copilot-Live-Bridge',
+    setLiveBridgeDesc:
+      'Erlaubt Coding-Agenten (MCP), sich mit dieser App zu verbinden und geöffnete Dokumente zu lesen und zu bearbeiten. Wird von Tools wie Claude, Cursor oder airy-mcp genutzt.',
     setAiFontSize: 'Textgröße im KI-Bereich',
     aiFontSizeDefault: 'Standard',
     aiFontSizeLarge: 'Groß',
@@ -1306,6 +1324,9 @@ export const strings = {
     setAnalytics: 'Enviar estadísticas de uso anónimas',
     setAnalyticsDesc:
       'Activado de forma predeterminada y desactivable en Configuración → General. Usa Google Analytics 4; Google recibe tu IP pública y metadatos de transporte, pero nunca el contenido de documentos ni los nombres de archivo.',
+    setLiveBridge: 'Puente Copilot en vivo',
+    setLiveBridgeDesc:
+      'Permite que los agentes de código (MCP) se conecten a esta aplicación para leer y editar documentos abiertos. Lo usan herramientas como Claude, Cursor o airy-mcp.',
     setAiFontSize: 'Tamaño del texto del panel de IA',
     aiFontSizeDefault: 'Predeterminado',
     aiFontSizeLarge: 'Grande',
@@ -1507,6 +1528,9 @@ export const strings = {
     setAnalytics: 'ส่งสถิติการใช้งานแบบไม่ระบุตัวตน',
     setAnalyticsDesc:
       'เปิดใช้งานเป็นค่าเริ่มต้นและปิดได้ทุกเมื่อใน การตั้งค่า → ทั่วไป ใช้ Google Analytics 4 โดย Google จะได้รับ IP สาธารณะและข้อมูลเมตาการรับส่งข้อมูล แต่จะไม่เก็บเนื้อหาเอกสารหรือชื่อไฟล์',
+    setLiveBridge: 'Copilot live bridge',
+    setLiveBridgeDesc:
+      'อนุญาตให้เอเจนต์เขียนโค้ด (MCP) เชื่อมต่อกับแอปนี้เพื่ออ่านและแก้ไขเอกสารที่เปิดอยู่ ใช้โดยเครื่องมืออย่าง Claude, Cursor หรือ airy-mcp',
     setAiFontSize: 'ขนาดตัวอักษรในแผง AI',
     aiFontSizeDefault: 'ค่าเริ่มต้น',
     aiFontSizeLarge: 'ใหญ่',
@@ -1704,6 +1728,9 @@ export const strings = {
     setAnalytics: 'Kirim statistik penggunaan anonim',
     setAnalyticsDesc:
       'Aktif secara default dan dapat dimatikan di Pengaturan → Umum. Menggunakan Google Analytics 4; Google menerima IP publik dan metadata transport Anda, tetapi tidak pernah mengumpulkan isi dokumen atau nama file.',
+    setLiveBridge: 'Copilot live bridge',
+    setLiveBridgeDesc:
+      'Mengizinkan agen pengkodean (MCP) terhubung ke aplikasi ini untuk membaca dan mengedit dokumen yang terbuka. Digunakan oleh alat seperti Claude, Cursor, atau airy-mcp.',
     setAiFontSize: 'Ukuran teks panel AI',
     aiFontSizeDefault: 'Bawaan',
     aiFontSizeLarge: 'Besar',
@@ -1906,6 +1933,9 @@ export const strings = {
     setAnalytics: 'Отправлять анонимную статистику использования',
     setAnalyticsDesc:
       'Включено по умолчанию и отключается в Настройки → Общие. Используется Google Analytics 4; Google получает публичный IP и транспортные метаданные, но не содержимое документов и не имена файлов.',
+    setLiveBridge: 'Живой мост Copilot',
+    setLiveBridgeDesc:
+      'Позволяет агентам для программирования (MCP) подключаться к этому приложению и работать с открытыми документами. Используется такими инструментами, как Claude, Cursor и airy-mcp.',
     setAiFontSize: 'Размер текста панели ИИ',
     aiFontSizeDefault: 'По умолчанию',
     aiFontSizeLarge: 'Крупный',
@@ -2106,6 +2136,9 @@ export const strings = {
     setAnalytics: 'إرسال إحصاءات استخدام مجهولة الهوية',
     setAnalyticsDesc:
       'مفعّل افتراضيًا ويمكن إيقافه في الإعدادات ← عام. يستخدم Google Analytics 4؛ تتلقى Google عنوان IP العام وبيانات النقل، ولكن لا يتم جمع محتوى المستندات أو أسماء الملفات.',
+    setLiveBridge: 'جسر Copilot المباشر',
+    setLiveBridgeDesc:
+      'يتيح لوكلاء البرمجة (MCP) الاتصال بهذا التطبيق لقراءة المستندات المفتوحة وتحريرها. تستخدمه أدوات مثل Claude وCursor وairy-mcp.',
     setAiFontSize: 'حجم نص لوحة الذكاء الاصطناعي',
     aiFontSizeDefault: 'افتراضي',
     aiFontSizeLarge: 'كبير',
@@ -2299,6 +2332,9 @@ export const strings = {
     setAnalytics: 'Enviar estatísticas de uso anônimas',
     setAnalyticsDesc:
       'Ativado por padrão e pode ser desativado em Configurações → Geral. Usa o Google Analytics 4; o Google recebe seu IP público e metadados de transporte, mas nunca o conteúdo dos documentos ou nomes de arquivos.',
+    setLiveBridge: 'Ponte Copilot ao vivo',
+    setLiveBridgeDesc:
+      'Permite que agentes de código (MCP) se conectem a este aplicativo para ler e editar documentos abertos. Usado por ferramentas como Claude, Cursor ou airy-mcp.',
     setAiFontSize: 'Tamanho do texto do painel de IA',
     aiFontSizeDefault: 'Padrão',
     aiFontSizeLarge: 'Grande',
@@ -2492,6 +2528,9 @@ export const strings = {
     setAnalytics: 'Invia statistiche di utilizzo anonime',
     setAnalyticsDesc:
       "Attivo per impostazione predefinita e disattivabile in Impostazioni → Generali. Utilizza Google Analytics 4; Google riceve l'IP pubblico e i metadati di trasporto, ma mai contenuti o nomi dei file.",
+    setLiveBridge: 'Bridge Copilot in tempo reale',
+    setLiveBridgeDesc:
+      'Consente agli agenti di codifica (MCP) di collegarsi a questa app per leggere e modificare i documenti aperti. Usato da strumenti come Claude, Cursor o airy-mcp.',
     setAiFontSize: 'Dimensione del testo del pannello IA',
     aiFontSizeDefault: 'Predefinita',
     aiFontSizeLarge: 'Grande',
@@ -2684,6 +2723,9 @@ export const strings = {
     setAnalytics: 'Wysyłaj anonimowe statystyki użytkowania',
     setAnalyticsDesc:
       'Domyślnie włączone; można wyłączyć w Ustawienia → Ogólne. Korzysta z Google Analytics 4; Google otrzymuje publiczny adres IP i metadane transportowe, ale nigdy treść dokumentów ani nazwy plików.',
+    setLiveBridge: 'Mostek Copilot na żywo',
+    setLiveBridgeDesc:
+      'Pozwala agentom kodowania (MCP) łączyć się z tą aplikacją, aby czytać i edytować otwarte dokumenty. Używane przez narzędzia takie jak Claude, Cursor czy airy-mcp.',
     setAiFontSize: 'Rozmiar tekstu panelu AI',
     aiFontSizeDefault: 'Domyślny',
     aiFontSizeLarge: 'Duży',
@@ -2951,6 +2993,9 @@ export const strings = {
     setAutoSave: 'Automaticky ukládat všechny dokumenty',
     setAutoSaveDesc:
       'Zapne automatické ukládání ve všech editorech jako výchozí. Pro jednotlivé okno ho lze stále vypnout.',
+    setLiveBridge: 'Živý most Copilot',
+    setLiveBridgeDesc:
+      'Umožňuje kódovacím agentům (MCP) připojit se k této aplikaci a číst či upravovat otevřené dokumenty. Používají ho nástroje jako Claude, Cursor nebo airy-mcp.',
     setAiFontSize: 'Velikost textu panelu AI',
     aiFontSizeDefault: 'Výchozí',
     aiFontSizeLarge: 'Velké',
@@ -3069,6 +3114,9 @@ export const strings = {
     setAnalytics: 'Anonieme gebruiksstatistieken verzenden',
     setAnalyticsDesc:
       'Standaard ingeschakeld en uit te schakelen via Instellingen → Algemeen. Gebruikt Google Analytics 4; Google ontvangt uw openbare IP en transportmetadata, maar nooit documentinhoud of bestandsnamen.',
+    setLiveBridge: 'Copilot live bridge',
+    setLiveBridgeDesc:
+      'Laat coding-agenten (MCP) verbinden met deze app om geopende documenten te lezen en bewerken. Gebruikt door tools zoals Claude, Cursor of airy-mcp.',
     setAiFontSize: 'Tekstgrootte AI-paneel',
     aiFontSizeDefault: 'Standaard',
     aiFontSizeLarge: 'Groot',
@@ -3261,6 +3309,9 @@ export const strings = {
     setAnalytics: 'Hantar statistik penggunaan tanpa nama',
     setAnalyticsDesc:
       'Diaktifkan secara lalai dan boleh dimatikan di Tetapan → Umum. Menggunakan Google Analytics 4; Google menerima IP awam dan metadata pengangkutan, tetapi tidak pernah kandungan dokumen atau nama fail.',
+    setLiveBridge: 'Copilot live bridge',
+    setLiveBridgeDesc:
+      'Membenarkan ejen pengekodan (MCP) menyambung ke aplikasi ini untuk membaca dan mengedit dokumen terbuka. Digunakan oleh alat seperti Claude, Cursor atau airy-mcp.',
     setAiFontSize: 'Saiz teks panel AI',
     aiFontSizeDefault: 'Lalai',
     aiFontSizeLarge: 'Besar',
@@ -3451,6 +3502,9 @@ export const strings = {
     setAnalytics: 'שליחת נתוני שימוש אנונימיים',
     setAnalyticsDesc:
       'מופעל כברירת מחדל וניתן לכיבוי בהגדרות ← כללי. משתמש ב-Google Analytics 4; Google מקבלת IP ציבורי ומטא-נתוני תעבורה, אך לא תוכן מסמכים או שמות קבצים.',
+    setLiveBridge: 'גשר Copilot חי',
+    setLiveBridgeDesc:
+      'מאפשר לסוכני קידוד (MCP) להתחבר ליישום זה כדי לקרוא ולערוך מסמכים פתוחים. נעשה בו שימוש בכלים כמו Claude, Cursor או airy-mcp.',
     setAiFontSize: 'גודל הטקסט בחלונית ה-AI',
     aiFontSizeDefault: 'ברירת מחדל',
     aiFontSizeLarge: 'גדול',
@@ -3639,6 +3693,9 @@ export const strings = {
     setAnalytics: 'गुमनाम उपयोग आँकड़े भेजें',
     setAnalyticsDesc:
       'डिफ़ॉल्ट रूप से चालू; सेटिंग्स → सामान्य में बंद किया जा सकता है। Google Analytics 4 का उपयोग होता है; Google को सार्वजनिक IP और ट्रांसपोर्ट मेटाडेटा मिलता है, लेकिन दस्तावेज़ सामग्री या फ़ाइल नाम नहीं।',
+    setLiveBridge: 'Copilot लाइव ब्रिज',
+    setLiveBridgeDesc:
+      'कोडिंग एजेंटों (MCP) को ऐप से जुड़कर खुले दस्तावेज़ पढ़ने और संपादित करने की अनुमति देता है। Claude, Cursor या airy-mcp जैसे टूल द्वारा उपयोग किया जाता है।',
     setAiFontSize: 'AI पैनल का टेक्स्ट आकार',
     aiFontSizeDefault: 'डिफ़ॉल्ट',
     aiFontSizeLarge: 'बड़ा',
@@ -3826,6 +3883,9 @@ export const strings = {
     setAnalytics: '傳送匿名使用統計',
     setAnalyticsDesc:
       '此功能預設開啟，可隨時在「設定 → 一般」中關閉。使用 Google Analytics 4；Google 會接收您的公開 IP 位址和傳輸中繼資料，但絕不收集文件內容或檔案名稱。',
+    setLiveBridge: 'Copilot 即時橋接',
+    setLiveBridgeDesc:
+      '允許編碼代理（MCP）連線本應用程式以讀取和編輯開啟的文件。供 Claude、Cursor、airy-mcp 等工具使用。',
     setAiFontSize: 'AI 面板文字大小',
     aiFontSizeDefault: '預設',
     aiFontSizeLarge: '大',

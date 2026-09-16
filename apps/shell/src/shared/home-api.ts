@@ -43,6 +43,9 @@ export interface AutoSaveDefault {
   updatedAt: number
 }
 
+/** whether the Copilot live bridge (local socket for coding agents via MCP) starts */
+export type LiveBridgeEnabled = boolean
+
 /** a recent file entry shown on the home screen; type derives from the extension */
 export interface RecentEntry {
   path: string
@@ -133,6 +136,10 @@ export interface HomeApi {
   getAutoSaveDefault(): Promise<AutoSaveDefault>
   /** persist the AutoSave default; broadcasts 'app:auto-save-default-changed' to all web contents */
   setAutoSaveDefault(on: boolean): Promise<void>
+  /** whether the Copilot live bridge server runs (persisted in userData/app-settings.json, default on) */
+  getLiveBridgeEnabled(): Promise<LiveBridgeEnabled>
+  /** persist and start/stop the live bridge immediately; resolves the new state */
+  setLiveBridgeEnabled(on: boolean): Promise<LiveBridgeEnabled>
   /** AI panel text size + chat-input spellcheck (persisted in userData/app-settings.json) */
   getAiPanelPrefs(): Promise<AiPanelPrefs>
   /** merge + persist; broadcasts 'app:ai-panel-prefs-changed' to all web contents */
@@ -268,6 +275,8 @@ export const HOME_CHANNELS = {
   setTheme: 'home:set-theme',
   getAutoSaveDefault: 'home:get-auto-save-default',
   setAutoSaveDefault: 'home:set-auto-save-default',
+  getLiveBridgeEnabled: 'home:get-live-bridge-enabled',
+  setLiveBridgeEnabled: 'home:set-live-bridge-enabled',
   getAiPanelPrefs: 'home:get-ai-panel-prefs',
   setAiPanelPrefs: 'home:set-ai-panel-prefs',
   getDefaultSaveDir: 'home:get-default-save-dir',

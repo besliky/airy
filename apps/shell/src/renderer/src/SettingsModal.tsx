@@ -905,6 +905,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [theme, setTheme] = useState<UiTheme>('system')
   const [saveDir, setSaveDir] = useState('')
   const [autoSaveOn, setAutoSaveOn] = useState(false)
+  const [liveBridgeOn, setLiveBridgeOn] = useState(true)
   const [aiPrefs, setAiPrefs] = useState<AiPanelPrefs>(DEFAULT_AI_PANEL_PREFS)
   const [appVersion, setAppVersion] = useState('')
   const [githubStars, setGithubStars] = useState<number | null>(null)
@@ -919,6 +920,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     })
     void window.aiOffice.getAutoSaveDefault?.().then((v) => {
       if (alive) setAutoSaveOn(v.on)
+    })
+    void window.aiOffice.getLiveBridgeEnabled?.().then((v) => {
+      if (alive) setLiveBridgeOn(v)
     })
     void window.aiOffice.getAiPanelPrefs?.().then((prefs) => {
       if (alive) setAiPrefs(prefs)
@@ -1099,6 +1103,26 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       const next = !autoSaveOn
                       setAutoSaveOn(next)
                       void window.aiOffice.setAutoSaveDefault?.(next).catch(() => {})
+                    }}
+                  />
+                </div>
+                <div className="set-field">
+                  <div className="set-field-text">
+                    <div className="set-field-stack">
+                      <div className="set-field-label">{t('setLiveBridge')}</div>
+                      <div className="set-field-desc">{t('setLiveBridgeDesc')}</div>
+                    </div>
+                  </div>
+                  <button
+                    className="set-switch"
+                    role="switch"
+                    aria-checked={liveBridgeOn}
+                    aria-label={t('setLiveBridge')}
+                    onClick={() => {
+                      const next = !liveBridgeOn
+                      setLiveBridgeOn(next)
+                      // the main process starts/stops the socket server live
+                      void window.aiOffice.setLiveBridgeEnabled?.(next).catch(() => {})
                     }}
                   />
                 </div>

@@ -171,6 +171,7 @@ import {
 } from '../../../html/src/main/html-main'
 import type {
   AutoSaveDefault,
+  LiveBridgeEnabled,
   RecentEntry,
   RecentPage,
   RenameResult,
@@ -3126,6 +3127,30 @@ function statEntries(paths: string[]): RecentEntry[] {
   return statPathEntries(paths, new Set(readStarredFiles()))
 }
 
+/** live-bridge user preference (app-settings.json `liveBridge`); absent = enabled */
+function liveBridgeEnabled(): boolean {
+  if (process.env.AIRY_DISABLE_BRIDGE === '1') return false
+  return readAppSettings(APP_SETTINGS_PATH()).liveBridge !== false
+}
+
+/** persist the preference and bring the bridge up/down right away */
+async function setLiveBridgeEnabled(on: boolean): Promise<boolean> {
+  writeAppSetting(APP_SETTINGS_PATH(), 'liveBridge', on)
+  try {
+    if (on) {
+      await startShellBridge({
+        userDataDir: app.getPath('userData'),
+        getTabManager: () => tabManager,
+      })
+    } else {
+      await stopShellBridge()
+    }
+  } catch (err) {
+    console.error(`bridge server failed to ${on ? 'start' : 'stop'}:`, err)
+  }
+  return liveBridgeEnabled()
+}
+
 function registerHomeIpc(): void {
   ipcMain.handle(HOME_CHANNELS.getAppVersion, (): string => app.getVersion())
 
@@ -3358,6 +3383,14 @@ function registerHomeIpc(): void {
       autoSaveDefaultUpdatedAt: next.updatedAt,
     })
     for (const wc of webContents.getAllWebContents()) wc.send('app:auto-save-default-changed', next)
+  })
+
+  // Copilot live bridge toggle: persisted in app-settings.json; flipping it
+  // starts/stops the local socket server immediately (no restart needed)
+  ipcMain.handle(HOME_CHANNELS.getLiveBridgeEnabled, (): LiveBridgeEnabled => liveBridgeEnabled())
+  ipcMain.handle(HOME_CHANNELS.setLiveBridgeEnabled, (_event, on: unknown) => {
+    if (typeof on !== 'boolean') return liveBridgeEnabled()
+    return setLiveBridgeEnabled(on)
   })
 
   ipcMain.handle(HOME_CHANNELS.getAiPanelPrefs, (): AiPanelPrefs => currentAiPanelPrefs())
@@ -4506,13 +4539,17 @@ app.whenReady().then(async () => {
     // settings write failures must never block startup
   }
   startSheetsCaptureServer()
-  // live bridge for external agents (Airy Copilot): on by default, AIRY_DISABLE_BRIDGE=1 turns it off
-  void startShellBridge({
-    userDataDir: app.getPath('userData'),
-    getTabManager: () => tabManager,
-  }).catch((err: unknown) => {
-    console.error('bridge server failed to start:', err)
-  })
+  // live bridge for external agents (Airy Copilot): on by default; off via
+  // Settings → General or AIRY_DISABLE_BRIDGE=1 (agents keep working unless
+  // the user explicitly opts out, so the default stays on)
+  if (liveBridgeEnabled()) {
+    void startShellBridge({
+      userDataDir: app.getPath('userData'),
+      getTabManager: () => tabManager,
+    }).catch((err: unknown) => {
+      console.error('bridge server failed to start:', err)
+    })
+  }
   // In-app updater backed by the fork's GitHub Releases (see
   // src/main/updater/): inactive in dev and on macOS; the first check is
   // deferred inside initUpdater so startup never waits on the network.

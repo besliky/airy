@@ -162,6 +162,13 @@ const homeApi: HomeApi = {
     if (typeof on !== 'boolean') throw new Error('Invalid AutoSave default.')
     await ipcRenderer.invoke(HOME_CHANNELS.setAutoSaveDefault, on)
   },
+  async getLiveBridgeEnabled() {
+    return (await ipcRenderer.invoke(HOME_CHANNELS.getLiveBridgeEnabled)) === true
+  },
+  async setLiveBridgeEnabled(on) {
+    if (typeof on !== 'boolean') throw new Error('Invalid live bridge flag.')
+    return (await ipcRenderer.invoke(HOME_CHANNELS.setLiveBridgeEnabled, on)) === true
+  },
   async getAiPanelPrefs() {
     return normalizeAiPanelPrefs(await ipcRenderer.invoke(HOME_CHANNELS.getAiPanelPrefs))
   },
