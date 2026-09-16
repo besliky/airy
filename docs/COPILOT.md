@@ -262,8 +262,13 @@ Headless slides, PDF, Markdown and HTML tools are planned (backlog).
 ## Security model
 
 - **Path confinement.** Every input and output path must resolve inside the
-  workspace root (`AIRY_WORKSPACE_ROOT`, default the server's cwd);
-  traversal that escapes the root is rejected with a clear error.
+  workspace root (`AIRY_WORKSPACE_ROOT`, default the server's cwd); traversal
+  that escapes the root is rejected with a clear error. Symlinks are resolved
+  for both the root and the candidate before the check, so a link that lives
+  inside the root but points outside cannot smuggle paths out (links that
+  resolve back inside the root stay usable). On Windows the comparison folds
+  case, matching the case-insensitive filesystem — `c:\users\...` and
+  `C:\Users\...` are the same path.
 - **Token, not location.** The bridge socket and its info file are `0600`;
   every bridge call must carry the current per-session token, which is
   reread from disk on every connect. The bridge listens on a local

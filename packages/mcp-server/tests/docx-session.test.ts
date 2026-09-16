@@ -2,6 +2,7 @@
 // insert_content, apply_ops semantics (validation-forward, atomicity),
 // byte-preservation, mtime fencing and path confinement.
 import { mkdtemp, readFile, writeFile, rm, mkdir } from 'node:fs/promises'
+import { symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -339,6 +340,67 @@ describe('path confinement', () => {
   it('allows paths inside the root and resolves relative ones against it', () => {
     expect(resolveConfined('a.docx', root)).toBe(join(root, 'a.docx'))
     expect(resolveConfined(join(root, 'sub', 'a.docx'), root)).toBe(join(root, 'sub', 'a.docx'))
+  })
+
+  it('rejects symlinks inside the root that point outside (real-path check)', async () => {
+    // the outside target must exist: the real-path check only resolves when
+    // every path component is present (a dangling link falls back lexical)
+    const outsideDir = join(root, '..', 'airy-outside-target')
+    await mkdir(outsideDir)
+    await writeFile(join(outsideDir, 'secret.docx'), 'outside bytes')
+    try {
+      symlinkSync(outsideDir, join(root, 'escape'), 'dir')
+    } catch (e) {
+      // creating symlinks needs privileges on some platforms (Windows without
+      // developer mode); confinement of the lexical path is still covered above
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === 'EPERM' || code === 'EACCES') return
+      throw e
+    }
+    try {
+      // the link itself lives inside the root but resolves outside: rejected
+      expect(() => resolveConfined(join(root, 'escape', 'secret.docx'), root)).toThrow(
+        /outside the workspace root/,
+      )
+      // a relative hop through the link is rejected the same way
+      expect(() => resolveConfined('escape/secret.docx', root)).toThrow(
+        /outside the workspace root/,
+      )
+      // end to end: opening through the link is refused
+      await expect(DocxSession.open(join(root, 'escape', 'secret.docx'), root)).rejects.toThrow(
+        /outside the workspace root/,
+      )
+    } finally {
+      await rm(outsideDir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps symlinks usable when they resolve back inside the root', async () => {
+    const inner = join(root, 'inner')
+    await mkdir(inner)
+    await writeFile(join(inner, 'real.docx'), await buildFixtureDocx())
+    try {
+      symlinkSync(inner, join(root, 'alias'), 'dir')
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === 'EPERM' || code === 'EACCES') return
+      throw e
+    }
+    // opening through the in-root alias works and addresses the real file
+    const session = await DocxSession.open(join(root, 'alias', 'real.docx'), root)
+    expect(session.meta().blockCount).toBe(7)
+  })
+
+  it('folds case in the confinement compare on Windows-like platforms', () => {
+    const realPlatform = process.platform
+    try {
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      // drive-letter case differences must not reject a confined path
+      expect(resolveConfined(join(root, 'a.docx'), root)).toBe(join(root, 'a.docx'))
+      expect(resolveConfined(root.toUpperCase(), root.toUpperCase())).toBe(root.toUpperCase())
+    } finally {
+      Object.defineProperty(process, 'platform', { value: realPlatform })
+    }
   })
 
   it('open and save enforce confinement end to end', async () => {

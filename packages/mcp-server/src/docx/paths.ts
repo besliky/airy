@@ -2,6 +2,7 @@
 // paths must resolve inside the workspace root, which comes from
 // AIRY_WORKSPACE_ROOT (default: the process working directory). This is the
 // headless twin of the renderer's allowlisted-paths IPC gate.
+import { realpathSync } from 'node:fs'
 import { isAbsolute, resolve, sep } from 'node:path'
 
 export const WORKSPACE_ROOT_ENV = 'AIRY_WORKSPACE_ROOT'
@@ -24,20 +25,54 @@ export class PathOutsideWorkspaceError extends Error {
 }
 
 /**
+ * The real path when it exists, else the lexical path. Non-existent targets
+ * (a save-as to a fresh file) keep the lexical form so the prefix check still
+ * applies to the path the caller spelled.
+ */
+function realPathOrLexical(path: string): string {
+  try {
+    return realpathSync(path)
+  } catch {
+    return path
+  }
+}
+
+/**
+ * Confinement prefix check. Windows filesystems are case-insensitive (and
+ * case-preserving), so the comparison folds case there — a candidate spelled
+ * `c:\users\...` must not be spuriously rejected against the root
+ * `C:\Users\...`. Everywhere else the check stays case-sensitive like the
+ * filesystem it guards.
+ */
+function isInsideRoot(candidate: string, root: string): boolean {
+  const fold = process.platform === 'win32'
+  const toComparable = (path: string) => (fold ? path.toLowerCase() : path)
+  const prefix = toComparable(root.endsWith(sep) ? root : root + sep)
+  const value = toComparable(candidate)
+  return value === toComparable(root) || value.startsWith(prefix)
+}
+
+/**
  * Resolve `rawPath` against the workspace root and enforce confinement.
  *
  * Relative paths resolve against the root (not the process cwd, which may drift
- * between tool calls). Traversal (`../`) that escapes the root is rejected; the
- * check is lexical (path.resolve collapses `..` before the comparison), which
- * also covers URL-style and Windows-separator smuggling. Symlinks that point
- * outside the root are not chased — v1 keeps the check cheap and predictable.
+ * between tool calls). Traversal (`../`) that escapes the root is rejected
+ * lexically (path.resolve collapses `..` before the comparison), which also
+ * covers URL-style and Windows-separator smuggling. Symlinks are then
+ * resolved for BOTH the root and the candidate before the prefix check, so a
+ * link that lives inside the root but points outside cannot smuggle paths out
+ * of confinement (a link pointing elsewhere inside the root stays usable).
+ * The returned path keeps its lexical spelling — callers address files by the
+ * path the agent gave, only the confinement decision uses the real paths.
  */
 export function resolveConfined(rawPath: string, root = workspaceRoot()): string {
   if (typeof rawPath !== 'string' || rawPath.trim() === '') {
     throw new Error('A non-empty file path is required')
   }
   const resolved = isAbsolute(rawPath) ? resolve(rawPath) : resolve(root, rawPath)
-  if (resolved !== root && !resolved.startsWith(root + sep)) {
+  const realRoot = realPathOrLexical(root)
+  const realCandidate = realPathOrLexical(resolved)
+  if (!isInsideRoot(realCandidate, realRoot)) {
     throw new PathOutsideWorkspaceError(rawPath, root)
   }
   return resolved
