@@ -19,6 +19,7 @@ export {
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
 } from './dialog-memory'
+export { ALL_OPEN_EXTENSIONS, OPEN_EXTENSION_GROUPS } from './open-filters'
 export {
   DEFAULT_SAVE_DIR_KEY,
   configuredDefaultSaveDir,

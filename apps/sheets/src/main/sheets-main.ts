@@ -36,6 +36,8 @@ import type {
 } from 'electron'
 import { z } from 'zod'
 import {
+  ALL_OPEN_EXTENSIONS,
+  OPEN_EXTENSION_GROUPS,
   appMenuLabels,
   buildPrintableHtml,
   configuredDefaultSaveDir,
@@ -154,6 +156,11 @@ const tMain = createI18n({
     filterXlsm: 'Excel 启用宏的工作簿',
     dlgAddAttachment: '添加附件',
     filterSupported: '支持的文件',
+    filterWord: 'Word 文档',
+    filterPpt: 'PowerPoint 演示文稿',
+    filterPdf: 'PDF 文档',
+    filterMarkdown: 'Markdown 文档',
+    filterHtml: 'HTML 文档',
     filterAll: '所有文件',
     errUnsupportedExt: '暂不支持 .{ext} 类型',
     errNotFile: '不是文件',
@@ -209,6 +216,11 @@ const tMain = createI18n({
     filterXlsm: 'Excel Macro-Enabled Workbooks',
     dlgAddAttachment: 'Add Attachments',
     filterSupported: 'Supported Files',
+    filterWord: 'Word Documents',
+    filterPpt: 'PowerPoint Presentations',
+    filterPdf: 'PDF Documents',
+    filterMarkdown: 'Markdown Documents',
+    filterHtml: 'HTML Documents',
     filterAll: 'All Files',
     errUnsupportedExt: '.{ext} files are not supported',
     errNotFile: 'not a file',
@@ -266,6 +278,11 @@ const tMain = createI18n({
     filterXlsm: 'Excel マクロ有効ブック',
     dlgAddAttachment: '添付ファイルを追加',
     filterSupported: 'サポートされているファイル',
+    filterWord: 'Word 文書',
+    filterPpt: 'PowerPoint プレゼンテーション',
+    filterPdf: 'PDF ドキュメント',
+    filterMarkdown: 'Markdown ドキュメント',
+    filterHtml: 'HTML ドキュメント',
     filterAll: 'すべてのファイル',
     errUnsupportedExt: '.{ext} 形式には対応していません',
     errNotFile: 'ファイルではありません',
@@ -326,6 +343,11 @@ const tMain = createI18n({
     filterXlsm: 'Excel 매크로 사용 통합 문서',
     dlgAddAttachment: '첨부 파일 추가',
     filterSupported: '지원되는 파일',
+    filterWord: 'Word 문서',
+    filterPpt: 'PowerPoint 프레젠테이션',
+    filterPdf: 'PDF 문서',
+    filterMarkdown: 'Markdown 문서',
+    filterHtml: 'HTML 문서',
     filterAll: '모든 파일',
     errUnsupportedExt: '.{ext} 형식은 지원되지 않습니다',
     errNotFile: '파일이 아닙니다',
@@ -386,6 +408,11 @@ const tMain = createI18n({
     filterXlsm: 'Classeurs Excel prenant en charge les macros',
     dlgAddAttachment: 'Ajouter des pièces jointes',
     filterSupported: 'Fichiers pris en charge',
+    filterWord: 'Documents Word',
+    filterPpt: 'Présentations PowerPoint',
+    filterPdf: 'Documents PDF',
+    filterMarkdown: 'Documents Markdown',
+    filterHtml: 'Documents HTML',
     filterAll: 'Tous les fichiers',
     errUnsupportedExt: 'Les fichiers .{ext} ne sont pas pris en charge',
     errNotFile: "n'est pas un fichier",
@@ -447,6 +474,11 @@ const tMain = createI18n({
     filterXlsm: 'Excel-Arbeitsmappen mit Makros',
     dlgAddAttachment: 'Anlagen hinzufügen',
     filterSupported: 'Unterstützte Dateien',
+    filterWord: 'Word-Dokumente',
+    filterPpt: 'PowerPoint-Präsentationen',
+    filterPdf: 'PDF-Dokumente',
+    filterMarkdown: 'Markdown-Dokumente',
+    filterHtml: 'HTML-Dokumente',
     filterAll: 'Alle Dateien',
     errUnsupportedExt: '.{ext}-Dateien werden nicht unterstützt',
     errNotFile: 'keine Datei',
@@ -507,6 +539,11 @@ const tMain = createI18n({
     filterXlsm: 'Libros de Excel habilitados para macros',
     dlgAddAttachment: 'Agregar datos adjuntos',
     filterSupported: 'Archivos compatibles',
+    filterWord: 'Documentos de Word',
+    filterPpt: 'Presentaciones de PowerPoint',
+    filterPdf: 'Documentos PDF',
+    filterMarkdown: 'Documentos Markdown',
+    filterHtml: 'Documentos HTML',
     filterAll: 'Todos los archivos',
     errUnsupportedExt: 'Los archivos .{ext} no son compatibles',
     errNotFile: 'no es un archivo',
@@ -567,6 +604,11 @@ const tMain = createI18n({
     filterXlsm: 'เวิร์กบุ๊ก Excel ที่เปิดใช้งานแมโคร',
     dlgAddAttachment: 'เพิ่มสิ่งที่แนบ',
     filterSupported: 'ไฟล์ที่รองรับ',
+    filterWord: 'เอกสาร Word',
+    filterPpt: 'งานนำเสนอ PowerPoint',
+    filterPdf: 'เอกสาร PDF',
+    filterMarkdown: 'เอกสาร Markdown',
+    filterHtml: 'เอกสาร HTML',
     filterAll: 'ไฟล์ทั้งหมด',
     errUnsupportedExt: 'ไม่รองรับไฟล์ชนิด .{ext}',
     errNotFile: 'ไม่ใช่ไฟล์',
@@ -626,6 +668,11 @@ const tMain = createI18n({
     filterXlsm: 'Buku kerja Excel dengan makro aktif',
     dlgAddAttachment: 'Tambahkan lampiran',
     filterSupported: 'File yang didukung',
+    filterWord: 'Dokumen Word',
+    filterPpt: 'Presentasi PowerPoint',
+    filterPdf: 'Dokumen PDF',
+    filterMarkdown: 'Dokumen Markdown',
+    filterHtml: 'Dokumen HTML',
     filterAll: 'Semua file',
     errUnsupportedExt: 'File .{ext} tidak didukung',
     errNotFile: 'bukan file',
@@ -684,6 +731,11 @@ const tMain = createI18n({
     filterXlsm: 'Книги Excel с поддержкой макросов',
     dlgAddAttachment: 'Добавить вложения',
     filterSupported: 'Поддерживаемые файлы',
+    filterWord: 'Документы Word',
+    filterPpt: 'Презентации PowerPoint',
+    filterPdf: 'Документы PDF',
+    filterMarkdown: 'Документы Markdown',
+    filterHtml: 'Документы HTML',
     filterAll: 'Все файлы',
     errUnsupportedExt: 'Файлы .{ext} не поддерживаются',
     errNotFile: 'не является файлом',
@@ -743,6 +795,11 @@ const tMain = createI18n({
     filterXlsm: 'مصنفات Excel ممكّنة بوحدات الماكرو',
     dlgAddAttachment: 'إضافة مرفقات',
     filterSupported: 'الملفات المدعومة',
+    filterWord: 'مستندات Word',
+    filterPpt: 'عروض PowerPoint التقديمية',
+    filterPdf: 'مستندات PDF',
+    filterMarkdown: 'مستندات Markdown',
+    filterHtml: 'مستندات HTML',
     filterAll: 'كل الملفات',
     errUnsupportedExt: 'ملفات .{ext} غير مدعومة',
     errNotFile: 'ليس ملفًا',
@@ -799,6 +856,11 @@ const tMain = createI18n({
     filterXlsm: 'Pastas de Trabalho Habilitadas para Macro do Excel',
     dlgAddAttachment: 'Adicionar Anexos',
     filterSupported: 'Arquivos Compatíveis',
+    filterWord: 'Documentos do Word',
+    filterPpt: 'Apresentações do PowerPoint',
+    filterPdf: 'Documentos PDF',
+    filterMarkdown: 'Documentos Markdown',
+    filterHtml: 'Documentos HTML',
     filterAll: 'Todos os Arquivos',
     errUnsupportedExt: 'arquivos .{ext} não são suportados',
     errNotFile: 'não é um arquivo',
@@ -858,6 +920,11 @@ const tMain = createI18n({
     filterXlsm: 'Cartelle di lavoro di Excel con attivazione macro',
     dlgAddAttachment: 'Aggiungi allegati',
     filterSupported: 'File supportati',
+    filterWord: 'Documenti Word',
+    filterPpt: 'Presentazioni PowerPoint',
+    filterPdf: 'Documenti PDF',
+    filterMarkdown: 'Documenti Markdown',
+    filterHtml: 'Documenti HTML',
     filterAll: 'Tutti i file',
     errUnsupportedExt: 'i file .{ext} non sono supportati',
     errNotFile: 'non è un file',
@@ -918,6 +985,11 @@ const tMain = createI18n({
     filterXlsm: 'Skoroszyty programu Excel z obsługą makr',
     dlgAddAttachment: 'Dodaj załączniki',
     filterSupported: 'Obsługiwane pliki',
+    filterWord: 'Dokumenty programu Word',
+    filterPpt: 'Prezentacje programu PowerPoint',
+    filterPdf: 'Dokumenty PDF',
+    filterMarkdown: 'Dokumenty Markdown',
+    filterHtml: 'Dokumenty HTML',
     filterAll: 'Wszystkie pliki',
     errUnsupportedExt: 'pliki .{ext} nie są obsługiwane',
     errNotFile: 'to nie jest plik',
@@ -977,6 +1049,11 @@ const tMain = createI18n({
     filterXlsm: 'Sešity Excelu s podporou maker',
     dlgAddAttachment: 'Přidat přílohy',
     filterSupported: 'Podporované soubory',
+    filterWord: 'Dokumenty Word',
+    filterPpt: 'Prezentace PowerPoint',
+    filterPdf: 'Dokumenty PDF',
+    filterMarkdown: 'Dokumenty Markdown',
+    filterHtml: 'Dokumenty HTML',
     filterAll: 'Všechny soubory',
     errUnsupportedExt: 'soubory .{ext} nejsou podporovány',
     errNotFile: 'není soubor',
@@ -1036,6 +1113,11 @@ const tMain = createI18n({
     filterXlsm: "Excel-werkmappen met macro's",
     dlgAddAttachment: 'Bijlagen toevoegen',
     filterSupported: 'Ondersteunde bestanden',
+    filterWord: 'Word-documenten',
+    filterPpt: 'PowerPoint-presentaties',
+    filterPdf: 'PDF-documenten',
+    filterMarkdown: 'Markdown-documenten',
+    filterHtml: 'HTML-documenten',
     filterAll: 'Alle bestanden',
     errUnsupportedExt: '.{ext}-bestanden worden niet ondersteund',
     errNotFile: 'geen bestand',
@@ -1096,6 +1178,11 @@ const tMain = createI18n({
     filterXlsm: 'Buku Kerja Excel Didayakan Makro',
     dlgAddAttachment: 'Tambah Lampiran',
     filterSupported: 'Fail yang Disokong',
+    filterWord: 'Dokumen Word',
+    filterPpt: 'Persembahan PowerPoint',
+    filterPdf: 'Dokumen PDF',
+    filterMarkdown: 'Dokumen Markdown',
+    filterHtml: 'Dokumen HTML',
     filterAll: 'Semua Fail',
     errUnsupportedExt: 'fail .{ext} tidak disokong',
     errNotFile: 'bukan fail',
@@ -1155,6 +1242,11 @@ const tMain = createI18n({
     filterXlsm: 'חוברות עבודה של Excel מותאמות מאקרו',
     dlgAddAttachment: 'הוספת קבצים מצורפים',
     filterSupported: 'קבצים נתמכים',
+    filterWord: 'מסמכי Word',
+    filterPpt: 'מצגות PowerPoint',
+    filterPdf: 'מסמכי PDF',
+    filterMarkdown: 'מסמכי Markdown',
+    filterHtml: 'מסמכי HTML',
     filterAll: 'כל הקבצים',
     errUnsupportedExt: 'קובצי .{ext} אינם נתמכים',
     errNotFile: 'אינו קובץ',
@@ -1211,6 +1303,11 @@ const tMain = createI18n({
     filterXlsm: 'Excel मैक्रो-सक्षम कार्यपुस्तिकाएँ',
     dlgAddAttachment: 'अनुलग्नक जोड़ें',
     filterSupported: 'समर्थित फ़ाइलें',
+    filterWord: 'Word दस्तावेज़',
+    filterPpt: 'PowerPoint प्रस्तुतियाँ',
+    filterPdf: 'PDF दस्तावेज़',
+    filterMarkdown: 'Markdown दस्तावेज़',
+    filterHtml: 'HTML दस्तावेज़',
     filterAll: 'सभी फ़ाइलें',
     errUnsupportedExt: '.{ext} फ़ाइलें समर्थित नहीं हैं',
     errNotFile: 'फ़ाइल नहीं है',
@@ -1270,6 +1367,11 @@ const tMain = createI18n({
     filterXlsm: 'Excel 啟用巨集的活頁簿',
     dlgAddAttachment: '新增附件',
     filterSupported: '支援的檔案',
+    filterWord: 'Word 文件',
+    filterPpt: 'PowerPoint 簡報',
+    filterPdf: 'PDF 文件',
+    filterMarkdown: 'Markdown 文件',
+    filterHtml: 'HTML 文件',
     filterAll: '所有檔案',
     errUnsupportedExt: '暫不支援 .{ext} 類型',
     errNotFile: '不是檔案',
@@ -2213,12 +2315,27 @@ export function registerSheetsIpc(): void {
     // retry loop stops re-sending 'open' for the same file
     queuedWorkbookPaths.delete(event.sender.id)
     if (!path) {
-      const selection = await openFileDialog(event, {
-        properties: ['openFile'],
-        filters: [{ name: tm('filterSpreadsheets'), extensions: ['xlsx', 'xlsm', 'xls', 'csv'] }],
-      })
+      // In the shell, File > Open offers every document type (like Home's
+      // browse); standalone keeps the spreadsheet-only filter.
+      const filters = sheetsOpenPathRouter
+        ? [
+            { name: tm('filterSupported'), extensions: [...ALL_OPEN_EXTENSIONS] },
+            { name: tm('filterWord'), extensions: [...OPEN_EXTENSION_GROUPS.word] },
+            { name: tm('filterSpreadsheets'), extensions: ['xlsx', 'xlsm', 'xls', 'csv'] },
+            { name: tm('filterPpt'), extensions: [...OPEN_EXTENSION_GROUPS.ppt] },
+            { name: tm('filterPdf'), extensions: [...OPEN_EXTENSION_GROUPS.pdf] },
+            { name: tm('filterMarkdown'), extensions: [...OPEN_EXTENSION_GROUPS.markdown] },
+            { name: tm('filterHtml'), extensions: [...OPEN_EXTENSION_GROUPS.html] },
+          ]
+        : [{ name: tm('filterSpreadsheets'), extensions: ['xlsx', 'xlsm', 'xls', 'csv'] }]
+      const selection = await openFileDialog(event, { properties: ['openFile'], filters })
       if (selection.canceled || !selection.filePaths[0]) return null
       path = selection.filePaths[0]
+      // another editor's file: the shell routes it to the right tab
+      if (sheetsOpenPathRouter && !/\.(xlsx|xlsm|xls|csv)$/i.test(path)) {
+        sheetsOpenPathRouter(path)
+        return null
+      }
     }
     const prepared = await prepareWorkbookForOpen(
       entry.client,
@@ -3809,6 +3926,16 @@ export function setSheetsCloseTabHook(fn: (() => void) | null): void {
   closeActiveTabHook = fn
 }
 
+/**
+ * Shell-mode File > Open routing: when the suite-wide open dialog (all
+ * document types) picks a non-spreadsheet file, hand it to the shell's
+ * extension router instead of failing to parse it here. Null in standalone.
+ */
+let sheetsOpenPathRouter: ((path: string) => boolean) | null = null
+export function setSheetsOpenPathRouter(fn: ((path: string) => boolean) | null): void {
+  sheetsOpenPathRouter = fn
+}
+
 /// The ribbon has no File tab; file commands live in
 /// the application menu and are forwarded to the renderer.
 function installApplicationMenu(): void {
@@ -3848,15 +3975,21 @@ function installApplicationMenu(): void {
             click: () => sendMenuAction('export-csv'),
           },
           { type: 'separator' },
+          // Ctrl/Cmd+W closes the active tab everywhere (shell tab mode) or the
+          // window (standalone); Ctrl/Cmd+Q quits the whole app on Windows/Linux
+          // (macOS gets it from the app menu)
           closeActiveTabHook
             ? {
-                label: process.platform === 'darwin' ? tm('menuClose') : tm('menuQuit'),
-                accelerator: process.platform === 'darwin' ? 'CmdOrCtrl+W' : 'CmdOrCtrl+Q',
+                label: tm('menuClose'),
+                accelerator: 'CmdOrCtrl+W',
                 click: () => closeActiveTabHook?.(),
               }
             : process.platform === 'darwin'
               ? { role: 'close' as const, label: tm('menuClose') }
               : { role: 'quit' as const, label: tm('menuQuit') },
+          ...(closeActiveTabHook && process.platform !== 'darwin'
+            ? [{ role: 'quit' as const, label: tm('menuQuit') }]
+            : []),
         ],
       },
       {

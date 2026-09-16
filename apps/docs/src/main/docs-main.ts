@@ -38,6 +38,8 @@ import {
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
   toggleDevToolsItem,
+  ALL_OPEN_EXTENSIONS,
+  OPEN_EXTENSION_GROUPS,
   voidLoad,
   windowMenuTemplate,
 } from '@airy-office/electron-utils'
@@ -160,6 +162,12 @@ const tMain = createI18n({
     filterImages: '图片',
     dlgAddAttachment: '添加附件',
     filterSupported: '支持的文件',
+    filterExcel: 'Excel 工作簿',
+    filterPpt: 'PowerPoint 演示文稿',
+    filterPdf: 'PDF 文档',
+    filterMarkdown: 'Markdown 文档',
+    filterHtml: 'HTML 文档',
+    menuQuit: '退出',
     filterAll: '所有文件',
     dlgExportPdf: '导出为 PDF',
     dlgExportHtml: '导出为 HTML',
@@ -256,6 +264,12 @@ const tMain = createI18n({
     filterImages: 'Images',
     dlgAddAttachment: 'Add Attachments',
     filterSupported: 'Supported Files',
+    filterExcel: 'Excel Workbooks',
+    filterPpt: 'PowerPoint Presentations',
+    filterPdf: 'PDF Documents',
+    filterMarkdown: 'Markdown Documents',
+    filterHtml: 'HTML Documents',
+    menuQuit: 'Quit',
     filterAll: 'All Files',
     dlgExportPdf: 'Export as PDF',
     dlgExportHtml: 'Export as HTML',
@@ -351,6 +365,12 @@ const tMain = createI18n({
     filterImages: '画像',
     dlgAddAttachment: '添付ファイルの追加',
     filterSupported: 'サポートされているファイル',
+    filterExcel: 'Excel ブック',
+    filterPpt: 'PowerPoint プレゼンテーション',
+    filterPdf: 'PDF ドキュメント',
+    filterMarkdown: 'Markdown ドキュメント',
+    filterHtml: 'HTML ドキュメント',
+    menuQuit: '終了',
     filterAll: 'すべてのファイル',
     dlgExportPdf: 'PDF としてエクスポート',
     dlgExportHtml: 'HTML としてエクスポート',
@@ -448,6 +468,12 @@ const tMain = createI18n({
     filterImages: '그림',
     dlgAddAttachment: '첨부 파일 추가',
     filterSupported: '지원되는 파일',
+    filterExcel: 'Excel 통합 문서',
+    filterPpt: 'PowerPoint 프레젠테이션',
+    filterPdf: 'PDF 문서',
+    filterMarkdown: 'Markdown 문서',
+    filterHtml: 'HTML 문서',
+    menuQuit: '끝내기',
     filterAll: '모든 파일',
     dlgExportPdf: 'PDF로 내보내기',
     dlgExportHtml: 'HTML로 내보내기',
@@ -546,6 +572,12 @@ const tMain = createI18n({
     filterImages: 'Images',
     dlgAddAttachment: 'Ajouter des pièces jointes',
     filterSupported: 'Fichiers pris en charge',
+    filterExcel: 'Classeurs Excel',
+    filterPpt: 'Présentations PowerPoint',
+    filterPdf: 'Documents PDF',
+    filterMarkdown: 'Documents Markdown',
+    filterHtml: 'Documents HTML',
+    menuQuit: 'Quitter',
     filterAll: 'Tous les fichiers',
     dlgExportPdf: 'Exporter au format PDF',
     dlgExportHtml: 'Exporter au format HTML',
@@ -644,6 +676,12 @@ const tMain = createI18n({
     filterImages: 'Bilder',
     dlgAddAttachment: 'Anlagen hinzufügen',
     filterSupported: 'Unterstützte Dateien',
+    filterExcel: 'Excel-Arbeitsmappen',
+    filterPpt: 'PowerPoint-Präsentationen',
+    filterPdf: 'PDF-Dokumente',
+    filterMarkdown: 'Markdown-Dokumente',
+    filterHtml: 'HTML-Dokumente',
+    menuQuit: 'Beenden',
     filterAll: 'Alle Dateien',
     dlgExportPdf: 'Als PDF exportieren',
     dlgExportHtml: 'Als HTML exportieren',
@@ -741,6 +779,12 @@ const tMain = createI18n({
     filterImages: 'Imágenes',
     dlgAddAttachment: 'Agregar datos adjuntos',
     filterSupported: 'Archivos compatibles',
+    filterExcel: 'Libros de Excel',
+    filterPpt: 'Presentaciones de PowerPoint',
+    filterPdf: 'Documentos PDF',
+    filterMarkdown: 'Documentos Markdown',
+    filterHtml: 'Documentos HTML',
+    menuQuit: 'Salir',
     filterAll: 'Todos los archivos',
     dlgExportPdf: 'Exportar como PDF',
     dlgExportHtml: 'Exportar como HTML',
@@ -838,6 +882,12 @@ const tMain = createI18n({
     filterImages: 'รูปภาพ',
     dlgAddAttachment: 'เพิ่มสิ่งที่แนบ',
     filterSupported: 'ไฟล์ที่รองรับ',
+    filterExcel: 'เวิร์กบุ๊ก Excel',
+    filterPpt: 'งานนำเสนอ PowerPoint',
+    filterPdf: 'เอกสาร PDF',
+    filterMarkdown: 'เอกสาร Markdown',
+    filterHtml: 'เอกสาร HTML',
+    menuQuit: 'ออก',
     filterAll: 'ไฟล์ทั้งหมด',
     dlgExportPdf: 'ส่งออกเป็น PDF',
     dlgExportHtml: 'ส่งออกเป็น HTML',
@@ -935,6 +985,12 @@ const tMain = createI18n({
     filterImages: 'Gambar',
     dlgAddAttachment: 'Tambahkan Lampiran',
     filterSupported: 'File yang Didukung',
+    filterExcel: 'Buku Kerja Excel',
+    filterPpt: 'Presentasi PowerPoint',
+    filterPdf: 'Dokumen PDF',
+    filterMarkdown: 'Dokumen Markdown',
+    filterHtml: 'Dokumen HTML',
+    menuQuit: 'Keluar',
     filterAll: 'Semua File',
     dlgExportPdf: 'Ekspor sebagai PDF',
     dlgExportHtml: 'Ekspor sebagai HTML',
@@ -1032,6 +1088,12 @@ const tMain = createI18n({
     filterImages: 'Изображения',
     dlgAddAttachment: 'Добавить вложения',
     filterSupported: 'Поддерживаемые файлы',
+    filterExcel: 'Книги Excel',
+    filterPpt: 'Презентации PowerPoint',
+    filterPdf: 'Документы PDF',
+    filterMarkdown: 'Документы Markdown',
+    filterHtml: 'Документы HTML',
+    menuQuit: 'Выход',
     filterAll: 'Все файлы',
     dlgExportPdf: 'Экспорт в PDF',
     dlgExportHtml: 'Экспорт в HTML',
@@ -1129,6 +1191,12 @@ const tMain = createI18n({
     filterImages: 'الصور',
     dlgAddAttachment: 'إضافة مرفقات',
     filterSupported: 'الملفات المدعومة',
+    filterExcel: 'مصنفات Excel',
+    filterPpt: 'عروض PowerPoint التقديمية',
+    filterPdf: 'مستندات PDF',
+    filterMarkdown: 'مستندات Markdown',
+    filterHtml: 'مستندات HTML',
+    menuQuit: 'إنهاء',
     filterAll: 'كل الملفات',
     dlgExportPdf: 'تصدير بتنسيق PDF',
     dlgExportHtml: 'تصدير بتنسيق HTML',
@@ -1226,6 +1294,12 @@ const tMain = createI18n({
     filterImages: 'Imagens',
     dlgAddAttachment: 'Adicionar Anexos',
     filterSupported: 'Arquivos Compatíveis',
+    filterExcel: 'Pastas de trabalho do Excel',
+    filterPpt: 'Apresentações do PowerPoint',
+    filterPdf: 'Documentos PDF',
+    filterMarkdown: 'Documentos Markdown',
+    filterHtml: 'Documentos HTML',
+    menuQuit: 'Sair',
     filterAll: 'Todos os Arquivos',
     dlgExportPdf: 'Exportar como PDF',
     dlgExportHtml: 'Exportar como HTML',
@@ -1323,6 +1397,12 @@ const tMain = createI18n({
     filterImages: 'Immagini',
     dlgAddAttachment: 'Aggiungi allegati',
     filterSupported: 'File supportati',
+    filterExcel: 'Cartelle di lavoro Excel',
+    filterPpt: 'Presentazioni PowerPoint',
+    filterPdf: 'Documenti PDF',
+    filterMarkdown: 'Documenti Markdown',
+    filterHtml: 'Documenti HTML',
+    menuQuit: 'Esci',
     filterAll: 'Tutti i file',
     dlgExportPdf: 'Esporta come PDF',
     dlgExportHtml: 'Esporta come HTML',
@@ -1420,6 +1500,12 @@ const tMain = createI18n({
     filterImages: 'Obrazy',
     dlgAddAttachment: 'Dodaj załączniki',
     filterSupported: 'Obsługiwane pliki',
+    filterExcel: 'Skoroszyty programu Excel',
+    filterPpt: 'Prezentacje programu PowerPoint',
+    filterPdf: 'Dokumenty PDF',
+    filterMarkdown: 'Dokumenty Markdown',
+    filterHtml: 'Dokumenty HTML',
+    menuQuit: 'Zakończ',
     filterAll: 'Wszystkie pliki',
     dlgExportPdf: 'Eksportuj jako PDF',
     dlgExportHtml: 'Eksportuj jako HTML',
@@ -1517,6 +1603,12 @@ const tMain = createI18n({
     filterImages: 'Obrázky',
     dlgAddAttachment: 'Přidat přílohy',
     filterSupported: 'Podporované soubory',
+    filterExcel: 'Sešity Excel',
+    filterPpt: 'Prezentace PowerPoint',
+    filterPdf: 'Dokumenty PDF',
+    filterMarkdown: 'Dokumenty Markdown',
+    filterHtml: 'Dokumenty HTML',
+    menuQuit: 'Ukončit',
     filterAll: 'Všechny soubory',
     dlgExportPdf: 'Exportovat jako PDF',
     dlgExportHtml: 'Exportovat jako HTML',
@@ -1614,6 +1706,12 @@ const tMain = createI18n({
     filterImages: 'Afbeeldingen',
     dlgAddAttachment: 'Bijlagen toevoegen',
     filterSupported: 'Ondersteunde bestanden',
+    filterExcel: 'Excel-werkmappen',
+    filterPpt: 'PowerPoint-presentaties',
+    filterPdf: 'PDF-documenten',
+    filterMarkdown: 'Markdown-documenten',
+    filterHtml: 'HTML-documenten',
+    menuQuit: 'Afsluiten',
     filterAll: 'Alle bestanden',
     dlgExportPdf: 'Exporteren als PDF',
     dlgExportHtml: 'Exporteren als HTML',
@@ -1711,6 +1809,12 @@ const tMain = createI18n({
     filterImages: 'Imej',
     dlgAddAttachment: 'Tambah Lampiran',
     filterSupported: 'Fail yang Disokong',
+    filterExcel: 'Buku Kerja Excel',
+    filterPpt: 'Persembahan PowerPoint',
+    filterPdf: 'Dokumen PDF',
+    filterMarkdown: 'Dokumen Markdown',
+    filterHtml: 'Dokumen HTML',
+    menuQuit: 'Keluar',
     filterAll: 'Semua Fail',
     dlgExportPdf: 'Eksport sebagai PDF',
     dlgExportHtml: 'Eksport sebagai HTML',
@@ -1807,6 +1911,12 @@ const tMain = createI18n({
     filterImages: 'תמונות',
     dlgAddAttachment: 'הוספת קבצים מצורפים',
     filterSupported: 'קבצים נתמכים',
+    filterExcel: 'חוברות עבודה של Excel',
+    filterPpt: 'מצגות PowerPoint',
+    filterPdf: 'מסמכי PDF',
+    filterMarkdown: 'מסמכי Markdown',
+    filterHtml: 'מסמכי HTML',
+    menuQuit: 'יציאה',
     filterAll: 'כל הקבצים',
     dlgExportPdf: 'ייצוא כ-PDF',
     dlgExportHtml: 'ייצוא כ-HTML',
@@ -1904,6 +2014,12 @@ const tMain = createI18n({
     filterImages: 'छवियाँ',
     dlgAddAttachment: 'अनुलग्नक जोड़ें',
     filterSupported: 'समर्थित फ़ाइलें',
+    filterExcel: 'Excel वर्कबुक',
+    filterPpt: 'PowerPoint प्रस्तुतियाँ',
+    filterPdf: 'PDF दस्तावेज़',
+    filterMarkdown: 'Markdown दस्तावेज़',
+    filterHtml: 'HTML दस्तावेज़',
+    menuQuit: 'बाहर निकलें',
     filterAll: 'सभी फ़ाइलें',
     dlgExportPdf: 'PDF के रूप में निर्यात करें',
     dlgExportHtml: 'HTML के रूप में निर्यात करें',
@@ -2000,6 +2116,12 @@ const tMain = createI18n({
     filterImages: '圖片',
     dlgAddAttachment: '新增附件',
     filterSupported: '支援的檔案',
+    filterExcel: 'Excel 活頁簿',
+    filterPpt: 'PowerPoint 簡報',
+    filterPdf: 'PDF 文件',
+    filterMarkdown: 'Markdown 文件',
+    filterHtml: 'HTML 文件',
+    menuQuit: '結束',
     filterAll: '所有檔案',
     dlgExportPdf: '匯出為 PDF',
     dlgExportHtml: '匯出為 HTML',
@@ -3190,13 +3312,32 @@ export function registerDocsIpc(): void {
   )
 
   ipcMain.handle('docs:open', async (event) => {
+    // In the shell, File > Open offers every document type (like Home's
+    // browse); standalone keeps the Word-only filter.
+    const filters = docsOpenPathRouter
+      ? [
+          { name: tm('filterSupported'), extensions: [...ALL_OPEN_EXTENSIONS] },
+          { name: tm('filterWord'), extensions: [...OPEN_EXTENSION_GROUPS.word] },
+          { name: tm('filterExcel'), extensions: [...OPEN_EXTENSION_GROUPS.excel] },
+          { name: tm('filterPpt'), extensions: [...OPEN_EXTENSION_GROUPS.ppt] },
+          { name: tm('filterPdf'), extensions: [...OPEN_EXTENSION_GROUPS.pdf] },
+          { name: tm('filterMarkdown'), extensions: [...OPEN_EXTENSION_GROUPS.markdown] },
+          { name: tm('filterHtml'), extensions: [...OPEN_EXTENSION_GROUPS.html] },
+        ]
+      : [{ name: tm('filterWord'), extensions: ['docx'] }]
     const result = await openDialog(event, {
       title: tm('dlgOpenDoc'),
-      filters: [{ name: tm('filterWord'), extensions: ['docx'] }],
+      filters,
       properties: ['openFile'],
     })
     if (result.canceled || result.filePaths.length === 0) return null
-    return loadDocx(result.filePaths[0], event.sender.id)
+    const picked = result.filePaths[0]
+    // another editor's file: the shell routes it to the right tab
+    if (docsOpenPathRouter && !/\.docx$/i.test(picked)) {
+      docsOpenPathRouter(picked)
+      return null
+    }
+    return loadDocx(picked, event.sender.id)
   })
 
   // renderer-named path: only files inside a granted directory (dialog pick,
@@ -3844,6 +3985,16 @@ export function setDocsShellHooks(hooks: DocsShellHooks | null): void {
   shellHooks = hooks
 }
 
+/**
+ * Shell-mode File > Open routing: when the suite-wide open dialog (all
+ * document types) picks a non-.docx file, hand it to the shell's extension
+ * router instead of failing to parse it here. Null in standalone mode.
+ */
+let docsOpenPathRouter: ((path: string) => boolean) | null = null
+export function setDocsOpenPathRouter(fn: ((path: string) => boolean) | null): void {
+  docsOpenPathRouter = fn
+}
+
 /** After writing an exported/AI-generated file: open it in the right tab
  * (shell) or reveal it in the folder (standalone). Tab-opening failure must
  * not report the write itself as failed — the file is already persisted. */
@@ -4014,6 +4165,12 @@ export function buildDocsMenu(): void {
           ? [{ type: 'separator' as const }, ...extraFileMenuItems]
           : []),
         { type: 'separator' },
+        { label: tm('menuSave'), accelerator: 'CmdOrCtrl+S', click: () => sendCommand('save') },
+        {
+          label: tm('menuSaveAs'),
+          accelerator: 'Shift+CmdOrCtrl+S',
+          click: () => sendCommand('save-as'),
+        },
         shellHooks
           ? {
               label: tm('menuClose'),
@@ -4021,12 +4178,6 @@ export function buildDocsMenu(): void {
               click: () => shellHooks?.closeActiveTab(),
             }
           : { role: 'close' as const, label: tm('menuClose') },
-        { label: tm('menuSave'), accelerator: 'CmdOrCtrl+S', click: () => sendCommand('save') },
-        {
-          label: tm('menuSaveAs'),
-          accelerator: 'Shift+CmdOrCtrl+S',
-          click: () => sendCommand('save-as'),
-        },
         { type: 'separator' },
         { label: tm('menuPageSetup'), click: () => sendCommand('page-setup') },
         { label: tm('menuExportPdf'), click: () => sendCommand('export-pdf') },
@@ -4038,6 +4189,10 @@ export function buildDocsMenu(): void {
           // printed sheet is exactly one editor page (WYSIWYG), then invokes docs:print
           click: () => sendCommand('print'),
         },
+        // macOS gets Quit from the app menu; Ctrl/Cmd+Q must quit everywhere
+        ...(process.platform === 'darwin'
+          ? []
+          : [{ type: 'separator' as const }, { role: 'quit' as const, label: tm('menuQuit') }]),
       ],
     },
     {

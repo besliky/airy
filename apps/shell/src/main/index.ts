@@ -40,9 +40,11 @@ import menuHomeIcon1x from './assets/menu-home.png?asset'
 import menuHomeIcon2x from './assets/menu-home@2x.png?asset'
 import { createI18n, isLang, normalizeLang, setUiLang, type Lang } from '@airy-office/i18n'
 import {
+  ALL_OPEN_EXTENSIONS,
   DEFAULT_SAVE_DIR_KEY,
   DROP_OPEN_CHANNEL,
   GITHUB_REPO_URL,
+  OPEN_EXTENSION_GROUPS,
   appMenuLabels,
   contextMenuLabels,
   editMenuTemplate,
@@ -51,6 +53,7 @@ import {
   installContextMenu,
   installNavigationGuard,
   isRecoverableRendererCrash,
+  toggleDevToolsItem,
   isUsableSaveDir,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
@@ -78,6 +81,7 @@ import {
   docsFileRenamed,
   docsQueryDirty,
   requestDocsClose,
+  setDocsOpenPathRouter,
   readRecentFiles,
   readStarredFiles,
   recordRecentFile,
@@ -113,6 +117,7 @@ import {
   sheetsFileRenamed,
   setSheetsCloseTabHook,
   setSheetsExtraFileMenuItems,
+  setSheetsOpenPathRouter,
   setSheetsShellWindow,
   setSheetsWorkbookOpenedHook,
   startSheetsCaptureServer,
@@ -126,6 +131,7 @@ import {
   setSlidesCloseTabHook,
   setSlidesExtraFileMenuItems,
   setSlidesOpenedHook,
+  setSlidesOpenPathRouter,
   setSlidesShellWindow,
   setSlidesShowBleed,
   slidesFileRenamed,
@@ -532,6 +538,7 @@ const tMain = createI18n({
     tabCloseAll: '关闭全部标签页',
     tabDuplicate: '复制标签页',
     menuSelectTab: '选择标签页',
+    menuQuit: '退出',
     menuSelectTabN: '标签页 {n}',
     menuSelectLastTab: '最后一个标签页',
     crashPageBody: '此标签页已意外停止。请在对话框中选择重新加载或关闭该标签页。',
@@ -641,6 +648,7 @@ const tMain = createI18n({
     tabCloseAll: 'Close All',
     tabDuplicate: 'Duplicate',
     menuSelectTab: 'Select Tab',
+    menuQuit: 'Quit',
     menuSelectTabN: 'Tab {n}',
     menuSelectLastTab: 'Last Tab',
     crashPageBody: 'This tab stopped unexpectedly. Choose Reload or Close Tab in the dialog.',
@@ -750,6 +758,7 @@ const tMain = createI18n({
     tabCloseAll: 'すべてのタブを閉じる',
     tabDuplicate: 'タブを複製',
     menuSelectTab: 'タブを選択',
+    menuQuit: '終了',
     menuSelectTabN: 'タブ {n}',
     menuSelectLastTab: '最後のタブ',
     crashPageBody:
@@ -859,6 +868,7 @@ const tMain = createI18n({
     tabCloseAll: '모든 탭 닫기',
     tabDuplicate: '탭 복제',
     menuSelectTab: '탭 선택',
+    menuQuit: '끝내기',
     menuSelectTabN: '탭 {n}',
     menuSelectLastTab: '마지막 탭',
     crashPageBody:
@@ -970,6 +980,7 @@ const tMain = createI18n({
     tabCloseAll: 'Tout fermer',
     tabDuplicate: 'Dupliquer',
     menuSelectTab: "Sélectionner l'onglet",
+    menuQuit: 'Quitter',
     menuSelectTabN: 'Onglet {n}',
     menuSelectLastTab: 'Dernier onglet',
     crashPageBody:
@@ -1082,6 +1093,7 @@ const tMain = createI18n({
     tabCloseAll: 'Alle schließen',
     tabDuplicate: 'Duplizieren',
     menuSelectTab: 'Tab auswählen',
+    menuQuit: 'Beenden',
     menuSelectTabN: 'Tab {n}',
     menuSelectLastTab: 'Letzter Tab',
     crashPageBody:
@@ -1194,6 +1206,7 @@ const tMain = createI18n({
     tabCloseAll: 'Cerrar todas',
     tabDuplicate: 'Duplicar',
     menuSelectTab: 'Seleccionar pestaña',
+    menuQuit: 'Salir',
     menuSelectTabN: 'Pestaña {n}',
     menuSelectLastTab: 'Última pestaña',
     crashPageBody:
@@ -1301,6 +1314,7 @@ const tMain = createI18n({
     tabCloseAll: 'ปิดแท็บทั้งหมด',
     tabDuplicate: 'ทำสำเนาแท็บ',
     menuSelectTab: 'เลือกแท็บ',
+    menuQuit: 'ออก',
     menuSelectTabN: 'แท็บ {n}',
     menuSelectLastTab: 'แท็บสุดท้าย',
     crashPageBody: 'แท็บนี้หยุดทำงานโดยไม่คาดคิด โปรดเลือกโหลดใหม่หรือปิดแท็บในกล่องโต้ตอบ',
@@ -1411,6 +1425,7 @@ const tMain = createI18n({
     tabCloseAll: 'Tutup Semua',
     tabDuplicate: 'Duplikatkan',
     menuSelectTab: 'Pilih Tab',
+    menuQuit: 'Keluar',
     menuSelectTabN: 'Tab {n}',
     menuSelectLastTab: 'Tab Terakhir',
     crashPageBody: 'Tab ini berhenti tanpa diduga. Pilih Muat ulang atau Tutup tab pada dialog.',
@@ -1521,6 +1536,7 @@ const tMain = createI18n({
     tabCloseAll: 'Закрыть все',
     tabDuplicate: 'Дублировать',
     menuSelectTab: 'Выбрать вкладку',
+    menuQuit: 'Выход',
     menuSelectTabN: 'Вкладка {n}',
     menuSelectLastTab: 'Последняя вкладка',
     crashPageBody:
@@ -1629,6 +1645,7 @@ const tMain = createI18n({
     tabCloseAll: 'إغلاق الكل',
     tabDuplicate: 'تكرار',
     menuSelectTab: 'اختيار علامة تبويب',
+    menuQuit: 'إنهاء',
     menuSelectTabN: 'علامة تبويب {n}',
     menuSelectLastTab: 'آخر علامة تبويب',
     crashPageBody:
@@ -1740,6 +1757,7 @@ const tMain = createI18n({
     tabCloseAll: 'Fechar Todas',
     tabDuplicate: 'Duplicar',
     menuSelectTab: 'Selecionar Aba',
+    menuQuit: 'Sair',
     menuSelectTabN: 'Aba {n}',
     menuSelectLastTab: 'Última Aba',
     crashPageBody:
@@ -1853,6 +1871,7 @@ const tMain = createI18n({
     tabCloseAll: 'Chiudi tutte',
     tabDuplicate: 'Duplica',
     menuSelectTab: 'Seleziona scheda',
+    menuQuit: 'Esci',
     menuSelectTabN: 'Scheda {n}',
     menuSelectLastTab: 'Ultima scheda',
     crashPageBody:
@@ -1964,6 +1983,7 @@ const tMain = createI18n({
     tabCloseAll: 'Zamknij wszystkie',
     tabDuplicate: 'Duplikuj',
     menuSelectTab: 'Wybierz kartę',
+    menuQuit: 'Zakończ',
     menuSelectTabN: 'Karta {n}',
     menuSelectLastTab: 'Ostatnia karta',
     crashPageBody:
@@ -2073,6 +2093,7 @@ const tMain = createI18n({
     tabCloseAll: 'Zavřít vše',
     tabDuplicate: 'Duplikovat',
     menuSelectTab: 'Vybrat kartu',
+    menuQuit: 'Ukončit',
     menuSelectTabN: 'Karta {n}',
     menuSelectLastTab: 'Poslední karta',
     crashPageBody:
@@ -2184,6 +2205,7 @@ const tMain = createI18n({
     tabCloseAll: 'Alles sluiten',
     tabDuplicate: 'Dupliceren',
     menuSelectTab: 'Tabblad selecteren',
+    menuQuit: 'Afsluiten',
     menuSelectTabN: 'Tabblad {n}',
     menuSelectLastTab: 'Laatste tabblad',
     crashPageBody:
@@ -2294,6 +2316,7 @@ const tMain = createI18n({
     tabCloseAll: 'Tutup Semua',
     tabDuplicate: 'Duplikasi',
     menuSelectTab: 'Pilih Tab',
+    menuQuit: 'Keluar',
     menuSelectTabN: 'Tab {n}',
     menuSelectLastTab: 'Tab Terakhir',
     crashPageBody:
@@ -2402,6 +2425,7 @@ const tMain = createI18n({
     tabCloseAll: 'סגירת הכול',
     tabDuplicate: 'שכפול',
     menuSelectTab: 'בחירת לשונית',
+    menuQuit: 'יציאה',
     menuSelectTabN: 'לשונית {n}',
     menuSelectLastTab: 'הלשונית האחרונה',
     crashPageBody: 'כרטיסייה זו נעצרה באופן בלתי צפוי. בחרו טעינה מחדש או סגירה בתיבת הדו-שיח.',
@@ -2512,6 +2536,7 @@ const tMain = createI18n({
     tabCloseAll: 'सभी टैब बंद करें',
     tabDuplicate: 'टैब डुप्लिकेट करें',
     menuSelectTab: 'टैब चुनें',
+    menuQuit: 'बाहर निकलें',
     menuSelectTabN: 'टैब {n}',
     menuSelectLastTab: 'अंतिम टैब',
     crashPageBody: 'यह टैब अचानक बंद हो गया। संवाद बॉक्स में पुनः लोड करें या टैब बंद करें चुनें।',
@@ -2612,6 +2637,7 @@ const tMain = createI18n({
     tabCloseAll: '關閉全部分頁',
     tabDuplicate: '複製分頁',
     menuSelectTab: '選擇分頁',
+    menuQuit: '結束',
     menuSelectTabN: '分頁 {n}',
     menuSelectLastTab: '最後一個分頁',
     crashPageBody: '此分頁已意外停止。請在對話框中選擇重新載入或關閉分頁。',
@@ -2994,6 +3020,11 @@ function createShellWindow(): void {
     openGeneratedPath: (path) => openGeneratedDocument(path),
   })
   setSheetsCloseTabHook(() => manager.closeActiveTab())
+  // A File > Open inside an editor tab that picked a file of another type is
+  // routed by extension exactly like an open from Home
+  setDocsOpenPathRouter((path) => openDocumentPath(path))
+  setSheetsOpenPathRouter((path) => openDocumentPath(path))
+  setSlidesOpenPathRouter((path) => openDocumentPath(path))
   // ⌘W targets the focused window: in a detached slides editor window it closes
   // that window (running its own close guard), not the shell's active tab
   setSlidesCloseTabHook(() => {
@@ -3165,25 +3196,24 @@ const HTML_RE = /\.html?$/i
 const UNSUPPORTED_DOC_RE = /\.(doc|rtf|odt|ppt|pps|odp|ods|xlsb|pages|key|numbers)$/i
 
 /**
- * Single source of truth for the open-dialog filter. Includes the
- * legacy .doc/.ppt binaries so they are selectable and surface the explicit
- * "not supported" dialog via openDocumentPath instead of being grayed out.
+ * The suite-wide open-dialog filter list: one entry per document type plus the
+ * combined "all supported" filter, shared by the Home browse, every shell File
+ * > Open, and (in shell mode) the editors' own File > Open. Extension groups
+ * come from electron-utils; the names are localized here. Legacy .doc/.ppt
+ * binaries stay selectable so they surface the explicit "not supported"
+ * dialog via openDocumentPath instead of being grayed out.
  */
-const OPEN_DIALOG_EXTENSIONS = [
-  'docx',
-  'doc',
-  'xlsx',
-  'xlsm',
-  'xls',
-  'csv',
-  'pptx',
-  'ppt',
-  'pdf',
-  'md',
-  'markdown',
-  'html',
-  'htm',
-]
+function openDialogFilters() {
+  return [
+    { name: tm('filterSupported'), extensions: [...ALL_OPEN_EXTENSIONS] },
+    { name: tm('filterWord'), extensions: [...OPEN_EXTENSION_GROUPS.word] },
+    { name: tm('filterExcel'), extensions: [...OPEN_EXTENSION_GROUPS.excel] },
+    { name: tm('filterPpt'), extensions: [...OPEN_EXTENSION_GROUPS.ppt] },
+    { name: tm('filterPdf'), extensions: [...OPEN_EXTENSION_GROUPS.pdf] },
+    { name: tm('filterMarkdown'), extensions: [...OPEN_EXTENSION_GROUPS.markdown] },
+    { name: tm('filterHtml'), extensions: [...OPEN_EXTENSION_GROUPS.html] },
+  ]
+}
 
 function supportedFileIn(argv: string[]): string | null {
   return (
@@ -3553,15 +3583,7 @@ function registerHomeIpc(): void {
     if (!win) return
     const result = await showOpenDialogWithMemory(dialog, win, {
       title: tm('dlgOpenTitle'),
-      filters: [
-        { name: tm('filterSupported'), extensions: OPEN_DIALOG_EXTENSIONS },
-        { name: tm('filterWord'), extensions: ['docx', 'doc'] },
-        { name: tm('filterExcel'), extensions: ['xlsx', 'xlsm', 'xls', 'csv'] },
-        { name: tm('filterPpt'), extensions: ['pptx', 'ppt'] },
-        { name: tm('filterPdf'), extensions: ['pdf'] },
-        { name: tm('filterMarkdown'), extensions: ['md', 'markdown'] },
-        { name: tm('filterHtml'), extensions: ['html', 'htm'] },
-      ],
+      filters: openDialogFilters(),
       properties: ['openFile', 'multiSelections'],
     })
     if (!result.canceled) for (const path of result.filePaths) openDocumentPath(path)
@@ -4091,10 +4113,62 @@ async function openFileViaDialog(): Promise<void> {
   const win = shellWindow ?? BrowserWindow.getFocusedWindow()
   if (!win) return
   const result = await showOpenDialogWithMemory(dialog, win, {
-    filters: [{ name: tm('filterSupported'), extensions: OPEN_DIALOG_EXTENSIONS }],
+    filters: openDialogFilters(),
     properties: ['openFile', 'multiSelections'],
   })
   if (!result.canceled) for (const path of result.filePaths) openDocumentPath(path)
+}
+
+/** File > New submenu (all six document types, no accelerators — Home keeps
+ *  the one suite-wide Ctrl/Cmd+N) — shared by every shell-built menu */
+function newFileSubMenu(): MenuItemConstructorOptions {
+  return {
+    label: tm('menuSectionNew'),
+    submenu: [
+      { label: tm('menuNewDoc'), icon: menuIcons().docx, click: () => newDocTab() },
+      { label: tm('menuNewSheet'), icon: menuIcons().xlsx, click: () => void newSheetTab() },
+      { label: tm('menuNewSlide'), icon: menuIcons().pptx, click: () => newSlideTab() },
+      { label: tm('menuNewMarkdown'), icon: menuIcons().md, click: () => newMarkdownTab() },
+      { label: tm('menuNewHtml'), icon: menuIcons().html, click: () => newHtmlTab() },
+      { label: tm('menuNewPdf'), icon: menuIcons().pdf, click: () => void newPdfTab() },
+    ],
+  }
+}
+
+/**
+ * View menu for the shell-built tab menus (Home had none): Chromium zoom +
+ * fullscreen for every tab; reload and devtools stay dev-only — reloading a
+ * dirty markdown/html tab would silently drop unsaved edits, matching docs'
+ * dev-gated devtools entry.
+ */
+function shellViewMenu(): MenuItemConstructorOptions {
+  const labels = appMenuLabels(currentLang())
+  return {
+    label: labels.view,
+    submenu: [
+      { role: 'resetZoom', label: labels.actualSize },
+      { role: 'zoomIn', label: labels.zoomIn },
+      { role: 'zoomOut', label: labels.zoomOut },
+      { type: 'separator' },
+      { role: 'togglefullscreen', label: labels.fullscreen },
+      ...(app.isPackaged
+        ? []
+        : [
+            { type: 'separator' as const },
+            { role: 'reload' as const, label: labels.reload },
+            { role: 'forceReload' as const, label: labels.forceReload },
+            toggleDevToolsItem(labels),
+          ]),
+    ],
+  }
+}
+
+/** File-menu tail for shell-built menus: on Windows/Linux an explicit Quit
+ *  (Ctrl/Cmd+Q quits the whole app, every tab); macOS gets it from the app menu */
+function quitMenuItem(): MenuItemConstructorOptions[] {
+  return process.platform === 'darwin'
+    ? []
+    : [{ type: 'separator' }, { role: 'quit' as const, label: tm('menuQuit') }]
 }
 
 function buildHomeMenu(): void {
@@ -4126,9 +4200,11 @@ function buildHomeMenu(): void {
         },
         { type: 'separator' },
         { role: 'close', label: tm('menuClose') },
+        ...quitMenuItem(),
       ],
     },
     editMenuTemplate(process.platform, appMenuLabels(currentLang())),
+    shellViewMenu(),
     shellWindowMenu(),
     {
       role: 'help',
@@ -4151,6 +4227,8 @@ function buildPdfMenu(): void {
     {
       label: tm('menuFile'),
       submenu: [
+        newFileSubMenu(),
+        { type: 'separator' },
         {
           label: tm('menuOpen'),
           accelerator: 'CmdOrCtrl+O',
@@ -4214,9 +4292,11 @@ function buildPdfMenu(): void {
           accelerator: 'CmdOrCtrl+W',
           click: () => tabManager?.closeActiveTab(),
         },
+        ...quitMenuItem(),
       ],
     },
     editMenuTemplate(process.platform, appMenuLabels(currentLang())),
+    shellViewMenu(),
     shellWindowMenu(),
     {
       role: 'help',
@@ -4239,6 +4319,8 @@ function buildMarkdownMenu(): void {
     {
       label: tm('menuFile'),
       submenu: [
+        newFileSubMenu(),
+        { type: 'separator' },
         {
           label: tm('menuOpen'),
           accelerator: 'CmdOrCtrl+O',
@@ -4304,9 +4386,11 @@ function buildMarkdownMenu(): void {
           accelerator: 'CmdOrCtrl+W',
           click: () => tabManager?.closeActiveTab(),
         },
+        ...quitMenuItem(),
       ],
     },
     editMenuTemplate(process.platform, appMenuLabels(currentLang())),
+    shellViewMenu(),
     shellWindowMenu(),
     {
       role: 'help',
@@ -4329,6 +4413,8 @@ function buildHtmlMenu(): void {
     {
       label: tm('menuFile'),
       submenu: [
+        newFileSubMenu(),
+        { type: 'separator' },
         {
           label: tm('menuOpen'),
           accelerator: 'CmdOrCtrl+O',
@@ -4387,9 +4473,11 @@ function buildHtmlMenu(): void {
           accelerator: 'CmdOrCtrl+W',
           click: () => tabManager?.closeActiveTab(),
         },
+        ...quitMenuItem(),
       ],
     },
     editMenuTemplate(process.platform, appMenuLabels(currentLang())),
+    shellViewMenu(),
     shellWindowMenu(),
     {
       role: 'help',
@@ -4862,16 +4950,17 @@ function openThirdPartyNotices(): Promise<string> {
   return shell.openPath(path)
 }
 
-/** every module's File menu gets a way back to the launcher */
+/** every module's File menu gets the New submenu (parity with Home) and a way back to the launcher */
 function installBackToHomeItems(): void {
   const backToHomeItem: MenuItemConstructorOptions = {
     label: tm('backToHome'),
     accelerator: 'Shift+CmdOrCtrl+H',
     click: () => tabManager?.openHomeTab(),
   }
-  setDocsExtraFileMenuItems([backToHomeItem])
-  setSheetsExtraFileMenuItems([backToHomeItem])
-  setSlidesExtraFileMenuItems([backToHomeItem])
+  const items = [newFileSubMenu(), backToHomeItem]
+  setDocsExtraFileMenuItems(items)
+  setSheetsExtraFileMenuItems(items)
+  setSlidesExtraFileMenuItems(items)
 }
 
 function installDockMenu(): void {

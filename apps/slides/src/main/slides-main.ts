@@ -28,6 +28,8 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { cleanupExpiredGeneratedPages } from './generated-page-temp'
 import { exportSlidesPdf } from './pdf-export'
 import {
+  ALL_OPEN_EXTENSIONS,
+  OPEN_EXTENSION_GROUPS,
   appMenuLabels,
   configuredDefaultSaveDir,
   contextMenuLabels,
@@ -1172,12 +1174,29 @@ export function registerSlidesIpc(): void {
 
   ipcMain.handle('slides:open', async (e, fitWidthPx: number) => {
     const parent = dialogParent()
+    // In the shell, File > Open offers every document type (like Home's
+    // browse); standalone keeps the presentation-only filter.
     const options = {
       properties: ['openFile' as const],
-      filters: [{ name: 'PowerPoint', extensions: ['pptx', 'ppt'] }],
+      filters: slidesOpenPathRouter
+        ? [
+            { name: tm('filterSupported'), extensions: [...ALL_OPEN_EXTENSIONS] },
+            { name: tm('filterWord'), extensions: [...OPEN_EXTENSION_GROUPS.word] },
+            { name: tm('filterExcel'), extensions: [...OPEN_EXTENSION_GROUPS.excel] },
+            { name: tm('filterPpt'), extensions: [...OPEN_EXTENSION_GROUPS.ppt] },
+            { name: tm('filterPdf'), extensions: [...OPEN_EXTENSION_GROUPS.pdf] },
+            { name: tm('filterMarkdown'), extensions: [...OPEN_EXTENSION_GROUPS.markdown] },
+            { name: tm('filterHtml'), extensions: [...OPEN_EXTENSION_GROUPS.html] },
+          ]
+        : [{ name: tm('filterPpt'), extensions: ['pptx', 'ppt'] }],
     }
     const r = await showOpenDialogWithMemory(dialog, parent, options)
     if (r.canceled || !r.filePaths[0]) return null
+    // another editor's file: the shell routes it to the right tab
+    if (slidesOpenPathRouter && !/\.(pptx|ppt)$/i.test(r.filePaths[0])) {
+      slidesOpenPathRouter(r.filePaths[0])
+      return null
+    }
     if (await rejectLegacyPpt(r.filePaths[0])) return null
     return openAndBuild(e.sender, r.filePaths[0], fitWidthPx)
   })
@@ -4412,6 +4431,16 @@ export function setSlidesCloseTabHook(fn: (() => void) | null): void {
   closeActiveTabHook = fn
 }
 
+/**
+ * Shell-mode File > Open routing: when the suite-wide open dialog (all
+ * document types) picks a non-presentation file, hand it to the shell's
+ * extension router instead of failing to parse it here. Null in standalone.
+ */
+let slidesOpenPathRouter: ((path: string) => boolean) | null = null
+export function setSlidesOpenPathRouter(fn: ((path: string) => boolean) | null): void {
+  slidesOpenPathRouter = fn
+}
+
 export function buildSlidesMenu(): Menu {
   const send = (cmd: string) =>
     (windowRefs.activeWebContents ?? BrowserWindow.getFocusedWindow()?.webContents)?.send(
@@ -4449,15 +4478,19 @@ export function buildSlidesMenu(): Menu {
         { label: tm('menuExportImages'), click: () => send('export-images') },
         { label: tm('menuPrint'), accelerator: 'CmdOrCtrl+P', click: () => send('print') },
         { type: 'separator' },
+        // Ctrl/Cmd+W closes the active tab everywhere (shell tab mode) or the
+        // window (standalone); Ctrl/Cmd+Q quits the whole app on Windows/Linux
+        // (macOS gets it from the app menu)
         closeActiveTabHook
           ? {
-              label: isMac ? tm('menuClose') : tm('menuQuit'),
-              accelerator: isMac ? 'CmdOrCtrl+W' : 'CmdOrCtrl+Q',
+              label: tm('menuClose'),
+              accelerator: 'CmdOrCtrl+W',
               click: () => closeActiveTabHook?.(),
             }
           : isMac
             ? { role: 'close' as const, label: tm('menuClose') }
             : { role: 'quit' as const, label: tm('menuQuit') },
+        ...(closeActiveTabHook && !isMac ? [{ role: 'quit' as const, label: tm('menuQuit') }] : []),
       ],
     },
     {
