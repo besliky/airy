@@ -168,16 +168,17 @@ of which copy of the server connects to it.
 
 Headless (no app required):
 
-| Tool             | Signature (short)                                                                              |
-| ---------------- | ---------------------------------------------------------------------------------------------- |
-| `ping`           | `()` — liveness probe                                                                          |
-| `open_document`  | `(path)` — open `.docx/.xlsx/.xlsm/.xls/.ods/.doc/.odt`, returns a session handle + meta       |
-| `read_document`  | `(handle, blocks? \| range?)` — block overview or full restricted HTML for text documents      |
-| `read_workbook`  | `(handle, sheet?, range?)` — sheet overview or a pipe table of an A1 range                     |
-| `insert_content` | `(handle, html, at?)` — insert a restricted-HTML fragment after block `at`                     |
-| `apply_ops`      | `(handle, ops, dryRun?)` — validated, atomic batch of canonical edit ops (max 100)             |
-| `save_document`  | `(handle, path?, format?)` — atomic save; `format: "origin"` exports back to the legacy format |
-| `close_document` | `(handle)` — close the session, clean up temp files                                            |
+| Tool                 | Signature (short)                                                                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------------- |
+| `ping`               | `()` — liveness probe                                                                                     |
+| `open_document`      | `(path)` — open `.docx/.xlsx/.xlsm/.xls/.ods/.doc/.odt`, returns a session handle + meta                  |
+| `read_document`      | `(handle, blocks? \| range?)` — block overview or full restricted HTML for text documents                 |
+| `read_workbook`      | `(handle, sheet?, range?)` — sheet overview or a pipe table of an A1 range                                |
+| `insert_content`     | `(handle, html, at?)` — insert a restricted-HTML fragment after block `at`                                |
+| `apply_ops`          | `(handle, ops, dryRun?)` — validated, atomic batch of canonical edit ops (max 100)                        |
+| `apply_workbook_ops` | `(handle, edits, dryRun?)` — validated batch of cell edits: value / formula / style / rich text (max 100) |
+| `save_document`      | `(handle, path?, format?)` — atomic save; `format: "origin"` exports back to the legacy format            |
+| `close_document`     | `(handle)` — close the session, clean up temp files                                                       |
 
 Live (app running; always target the _active_ tab):
 
@@ -192,6 +193,15 @@ Edit ops are flat records targeting blocks by `nodeType` / `headingLevel` /
 `containsText` / `blockIndexes`; `apply_ops` output includes the full
 signature list. Block indexes shift after inserts — re-read before further
 addressing.
+
+Workbook editing goes through `apply_workbook_ops`: one batch of cell edits,
+each targeting a single cell by sheet (name or index) and A1 ref with a
+value, a formula (stored without a cached result, so apps recalculate on
+open), a style patch (`bold`, `fillColor`, `numberFormat`, borders, ...),
+rich-text runs, or a combination. Formulas win over values; later edits to
+the same cell win per channel (content replaces content, style replaces
+style). Charts, pivots, merged ranges and sheet structure are **not**
+editable headlessly.
 
 ## Live mode
 

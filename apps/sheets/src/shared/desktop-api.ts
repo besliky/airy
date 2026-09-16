@@ -263,7 +263,10 @@ const worksheetMetadataSchema = z
       .default([]),
   })
   .strict()
-const richRunSchema = z
+/// Exported for the MCP server's apply_workbook_ops input schema, so the
+/// agent-accepted rich-run shape cannot drift from what the save gateway
+/// serializes.
+export const richRunSchema = z
   .object({
     text: z.string(),
     bold: z.boolean(),

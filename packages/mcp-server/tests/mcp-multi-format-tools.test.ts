@@ -13,12 +13,18 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../src/xlsx/save.js', () => ({
-  saveWorkbookViaSidecar: vi.fn(async (request: { targetPath: string }) => {
-    await writeFile(request.targetPath, 'saved-xlsx-bytes')
-    return { touchedEntries: [], removedEntries: [], addedEntries: [] }
-  }),
-}))
+vi.mock('../src/xlsx/save.js', async (importOriginal) => {
+  // keep the re-exported gateway schemas (the registry's tool input uses
+  // them); only the save call itself is mocked
+  const original = await importOriginal<typeof import('../src/xlsx/save.js')>()
+  return {
+    ...original,
+    saveWorkbookViaSidecar: vi.fn(async (request: { targetPath: string }) => {
+      await writeFile(request.targetPath, 'saved-xlsx-bytes')
+      return { touchedEntries: [], removedEntries: [], addedEntries: [] }
+    }),
+  }
+})
 
 vi.mock('../src/import/soffice.js', () => ({
   SOFFICE_FILTERS: { docx: 'MS Word 2007 XML', doc: 'MS Word 97', odt: 'writer8', ods: 'calc8' },

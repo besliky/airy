@@ -23,7 +23,12 @@ import {
   SOFFICE_FILTERS,
   sofficeMissingError,
 } from '../import/soffice.js'
-import { saveWorkbookViaSidecar, type CellEdit } from './save.js'
+import {
+  saveWorkbookViaSidecar,
+  type CellEdit,
+  type WorkbookRichRun,
+  type WorkbookStyleEdit,
+} from './save.js'
 import type { XlsxIo } from './sidecar-client.js'
 
 // ---- limits (kept inside the ~30k character MCP answer budget) ----
@@ -449,31 +454,46 @@ export class XlsxSession {
   // ---- editing ----
 
   /**
-   * Journal cell edits (last write per cell wins, insertion order kept).
+   * Journal cell edits (patch merge per cell, insertion order kept).
    * Values write as constants; a formula writes `=...` without a cached
-   * value, so full-featured spreadsheet apps recalculate it on open.
+   * value, so full-featured spreadsheet apps recalculate it on open (a
+   * formula wins over a value when both are given). A style/rich/styleReset
+   * patch merges onto the journaled content edit for the same cell — the
+   * same present=set patch semantics as the docx ops. dryRun validates the
+   * whole batch (sheet names, refs, edit shapes) without journaling.
    */
-  setCells(input: {
-    sheet: string | number
-    cells: ReadonlyArray<{
-      ref: string
-      value?: string | number | boolean | null
-      formula?: string
-    }>
-  }): { journaled: number } {
+  setCells(
+    input: {
+      sheet: string | number
+      cells: ReadonlyArray<{
+        ref: string
+        value?: string | number | boolean | null
+        formula?: string
+        style?: WorkbookStyleEdit
+        rich?: readonly WorkbookRichRun[]
+        styleReset?: boolean
+      }>
+    },
+    dryRun = false,
+  ): { journaled: number } {
     const sheet = this.resolveSheet(input.sheet)
     let journaled = 0
     for (const cell of input.cells) {
       const address = parseA1Range(cell.ref)
-      const existing = this.edits.find(
-        (edit) =>
-          edit.sheetName === sheet.name &&
-          edit.row === address.startRow &&
-          edit.column === address.startColumn,
-      )
+      if (address.startRow !== address.endRow || address.startColumn !== address.endColumn) {
+        throw new Error(`Cell ref "${cell.ref}" must be a single cell like "B2", not a range.`)
+      }
       const edit = toCellEdit(sheet.name, address.startRow, address.startColumn, cell)
-      if (existing) Object.assign(existing, edit)
-      else this.edits.push(edit)
+      if (!dryRun) {
+        const existing = this.edits.find(
+          (candidate) =>
+            candidate.sheetName === sheet.name &&
+            candidate.row === address.startRow &&
+            candidate.column === address.startColumn,
+        )
+        if (existing) mergeCellEdit(existing, edit)
+        else this.edits.push(edit)
+      }
       journaled += 1
     }
     return { journaled }
@@ -674,27 +694,85 @@ function toCellEdit(
   sheetName: string,
   row: number,
   column: number,
-  cell: { value?: string | number | boolean | null; formula?: string },
+  cell: {
+    value?: string | number | boolean | null
+    formula?: string
+    style?: WorkbookStyleEdit
+    rich?: readonly WorkbookRichRun[]
+    styleReset?: boolean
+  },
 ): CellEdit {
+  if (
+    cell.value === undefined &&
+    cell.formula === undefined &&
+    cell.rich === undefined &&
+    cell.style === undefined &&
+    cell.styleReset === undefined
+  ) {
+    throw new Error(
+      `The edit for ${sheetName}!${columnToLabel(column)}${String(row + 1)} needs at least one ` +
+        'of value, formula, rich, style or styleReset.',
+    )
+  }
+  const stylePatch =
+    cell.style === undefined && cell.styleReset === undefined
+      ? {}
+      : {
+          ...(cell.style === undefined ? {} : { style: cell.style }),
+          ...(cell.styleReset === undefined ? {} : { styleReset: cell.styleReset }),
+        }
   if (cell.formula !== undefined) {
     const formula = cell.formula.startsWith('=') ? cell.formula : `=${cell.formula}`
-    // no cached <v>: apps with a formula engine recalculate on open
+    // no cached <v>: apps with a formula engine recalculate on open (an
+    // agent-guessed cached result would go stale; value is ignored here)
     return {
       sheetName,
       row,
       column,
       writeValue: true,
       cell: { value: '', formula },
+      ...stylePatch,
     }
   }
-  const value = cell.value ?? null
-  return {
-    sheetName,
-    row,
-    column,
-    writeValue: true,
-    cell: { value },
+  if (cell.value !== undefined || cell.rich !== undefined) {
+    return {
+      sheetName,
+      row,
+      column,
+      writeValue: true,
+      cell: { value: cell.value ?? joinedRichText(cell.rich, null) },
+      ...(cell.rich === undefined ? {} : { rich: cell.rich }),
+      ...stylePatch,
+    }
   }
+  // style-only: writeValue false keeps the cell's stored content untouched
+  return { sheetName, row, column, writeValue: false, cell: { value: null }, ...stylePatch }
+}
+
+/** the cell text rich runs spell out (`value` holds the joined text on the wire) */
+function joinedRichText(
+  rich: readonly WorkbookRichRun[] | undefined,
+  fallback: string | number | boolean | null,
+): string | number | boolean | null {
+  if (rich === undefined || rich.length === 0) return fallback
+  return rich.map((run) => run.text).join('')
+}
+
+/**
+ * Patch-merge a later edit onto a journaled one: a content edit (writeValue)
+ * replaces the journaled content (and rich runs), a style patch replaces the
+ * journaled style — channels the new edit does not mention stay untouched.
+ */
+function mergeCellEdit(existing: CellEdit, edit: CellEdit): void {
+  const content: Record<string, unknown> = edit.writeValue
+    ? { writeValue: true, cell: edit.cell, rich: edit.rich }
+    : {}
+  Object.assign(
+    existing,
+    content,
+    ...(edit.style === undefined ? [] : [{ style: edit.style }]),
+    ...(edit.styleReset === undefined ? [] : [{ styleReset: edit.styleReset }]),
+  )
 }
 
 function renderCell(cell: RangeCell | undefined): string {

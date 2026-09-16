@@ -15,3 +15,15 @@
 // copy.
 export { saveWorkbookViaSidecar } from '../../../../apps/sheets/src/gateway/xlsx-package-io.js'
 export type { CellEdit } from '../../../../apps/sheets/src/gateway/xlsx-gateway.js'
+// Input schemas + types for agent-issued cell edits, straight from the save
+// gateway's shared contract so the tool-accepted shape cannot drift from what
+// the planner serializes (desktop-api is already part of the runtime bundle
+// through xlsx-package-io's MAX_PATCH_ENTRY_BYTES import).
+export type {
+  WorkbookRichRun,
+  WorkbookStyleEdit,
+} from '../../../../apps/sheets/src/shared/desktop-api.js'
+export {
+  richRunSchema,
+  workbookStyleEditSchema,
+} from '../../../../apps/sheets/src/shared/desktop-api.js'

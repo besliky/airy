@@ -19,6 +19,7 @@ import { BridgeClientError, sharedLiveBridge } from '../live/client.js'
 import { getSession, removeSession, storeSession, type DocumentSession } from '../sessions/store.js'
 import { TextSession } from '../sessions/text.js'
 import { XlsxSession, type XlsxSessionMeta } from '../xlsx/session.js'
+import { richRunSchema, workbookStyleEditSchema } from '../xlsx/save.js'
 import { SERVER_NAME } from '../version.js'
 
 /** text + mirrored JSON content, the repo's standard tool output shape */
@@ -35,6 +36,57 @@ const OPS_GUIDE = [
   'Target conditions (AND, at least one): nodeType ("heading"|"paragraph"|"listItem"|"image"), headingLevel (1-6), containsText (+ matchCase: false), blockIndexes[].',
   ...opSignatures().map((s) => `- ${s}`),
 ].join('\n')
+
+/** one agent-issued cell edit: sheet + A1 ref + value/formula/style patches */
+const CELL_EDIT_SCHEMA = z
+  .object({
+    sheet: z
+      .union([z.string().min(1), z.number().int().min(0)])
+      .describe('Sheet name or 0-based index (from the read_workbook overview)'),
+    ref: z.string().min(1).max(16).describe('Single cell in A1 notation, e.g. "B2"'),
+    value: z
+      .union([z.string().max(32_767), z.number().finite(), z.boolean(), z.null()])
+      .optional()
+      .describe('Constant to store (null clears the value); ignored when formula is given'),
+    formula: z
+      .string()
+      .min(1)
+      .max(8_192)
+      .optional()
+      .describe(
+        'Formula, with or without the leading "="; written without a cached result so ' +
+          'apps recalculate on open',
+      ),
+    style: workbookStyleEditSchema
+      .optional()
+      .describe(
+        'Style patch (bold, italic, fillColor "#RRGGBB", fontColor, numberFormat, ' +
+          'horizontalAlignment, borders, ...): only the given keys change, the rest of the ' +
+          "cell's format survives",
+      ),
+    rich: z
+      .array(richRunSchema)
+      .max(1_000)
+      .optional()
+      .describe(
+        'Rich-text runs for a string value ({ text, bold, italic, underline, strikethrough, ' +
+          'color?, size?, family?, vertAlign? }); the joined run text becomes the cell value',
+      ),
+    styleReset: z
+      .boolean()
+      .optional()
+      .describe('Reset the cell to the default style before applying the style patch'),
+  })
+  .strict()
+  .refine(
+    (edit) =>
+      edit.value !== undefined ||
+      edit.formula !== undefined ||
+      edit.style !== undefined ||
+      edit.rich !== undefined ||
+      edit.styleReset !== undefined,
+    { message: 'A cell edit needs at least one of value, formula, style, rich or styleReset.' },
+  )
 
 export function registerTools(server: McpServer): void {
   // Liveness probe: lets an agent confirm the server is reachable before the
@@ -73,7 +125,9 @@ export function registerTools(server: McpServer): void {
       title: 'Open document',
       description:
         'Open a document and return a session handle for the other document tools. Supported ' +
-        'formats: .docx and .xlsx/.xlsm open natively (fully editable); .xls and .ods import via ' +
+        'formats: .docx and .xlsx/.xlsm open natively (docx fully editable via insert_content/' +
+        'apply_ops; workbooks editable in cell values, formulas and styles via apply_workbook_ops ' +
+        '— charts, pivots and sheet structure are not editable headlessly); .xls and .ods import via ' +
         'conversion (editable as .xlsx; styling is lost — see warnings); .doc and .odt convert to ' +
         '.docx via LibreOffice when installed (editable; save_document format "origin" exports ' +
         'back); without LibreOffice a .doc still opens read-only as extracted text (editable: ' +
@@ -181,6 +235,69 @@ export function registerTools(server: McpServer): void {
         ...(range !== undefined ? { range } : {}),
       })
       return { content: [{ type: 'text' as const, text }] }
+    },
+  )
+
+  server.registerTool(
+    'apply_workbook_ops',
+    {
+      title: 'Apply workbook edits',
+      description:
+        'Apply a batch of cell edits to an open workbook session (.xlsx/.xlsm/.xls/.ods). Each ' +
+        'edit targets one cell by sheet (name or index) and A1 ref and may set a value (string / ' +
+        'number / boolean / null), a formula (stored without a cached result, so spreadsheet apps ' +
+        'recalculate on open), a style patch (bold, fillColor "#RRGGBB", numberFormat, borders, ' +
+        '...), rich-text runs, or a combination. Fields are patches: a value/formula edit replaces ' +
+        "the cell's content, a style edit replaces only the cell's format, and later edits to the " +
+        'same cell win per channel. The batch is validated up front (unknown sheets, bad refs, ' +
+        'malformed edits reject the whole batch); dryRun reports without journaling. Edits are ' +
+        'journaled in memory; persist with save_document, which keeps untouched zip entries ' +
+        'byte-identical. Cell values, formulas and styles only — charts, pivots, merged ranges and ' +
+        'sheet structure are not editable headlessly.',
+      inputSchema: {
+        handle: z.string().min(1).describe('Session handle from open_document'),
+        edits: z
+          .array(CELL_EDIT_SCHEMA)
+          .min(1)
+          .max(100)
+          .describe('Batch of cell edits, journaled in order'),
+        dryRun: z
+          .boolean()
+          .optional()
+          .describe('Validate and report the batch without journaling anything'),
+      },
+      annotations: {
+        destructiveHint: false,
+      },
+    },
+    async ({ handle, edits, dryRun }) => {
+      const session = requireWorkbookSession(handle)
+      // journal per sheet (first-appearance order keeps the batch's order)
+      const bySheet = new Map<string | number, typeof edits>()
+      for (const edit of edits) {
+        const group = bySheet.get(edit.sheet) ?? []
+        group.push(edit)
+        bySheet.set(edit.sheet, group)
+      }
+      const batches = [...bySheet.entries()].map(([sheet, group]) => ({
+        sheet,
+        cells: group.map(({ sheet: _sheet, ...cell }) => cell),
+      }))
+      // validate the whole batch up front so a bad edit rejects everything
+      // (setCells in dry-run mode parses every sheet name and ref)
+      for (const batch of batches) session.setCells(batch, true)
+      let journaled = 0
+      if (dryRun !== true) {
+        for (const batch of batches) journaled += session.setCells(batch, false).journaled
+      } else {
+        journaled = edits.length
+      }
+      const meta = session.meta()
+      return content(
+        { journaled, dirty: meta.dirty, dryRun: dryRun === true },
+        `Journaled ${journaled} cell edit(s)${dryRun === true ? ' (dry run, nothing applied)' : ''}; ` +
+          'persist with save_document.',
+      )
     },
   )
 
@@ -512,6 +629,19 @@ function requireDocxSession(handle: string): DocxSession {
     throw new Error(
       'insert_content/apply_ops are only available for editable .docx sessions ' +
         `(this handle is a "${session.meta().kind}" session).`,
+    )
+  }
+  return session
+}
+
+/** Workbook-only tools (apply_workbook_ops) reject other session kinds clearly. */
+function requireWorkbookSession(handle: string): XlsxSession {
+  const session: DocumentSession = getSession(handle)
+  if (!(session instanceof XlsxSession)) {
+    throw new Error(
+      'apply_workbook_ops is only available for workbook sessions ' +
+        `(this handle is a "${session.meta().kind}" session; ` +
+        'use insert_content/apply_ops for text documents).',
     )
   }
   return session
