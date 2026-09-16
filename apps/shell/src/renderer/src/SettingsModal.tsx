@@ -905,6 +905,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [theme, setTheme] = useState<UiTheme>('system')
   const [saveDir, setSaveDir] = useState('')
   const [autoSaveOn, setAutoSaveOn] = useState(false)
+  const [restoreSessionOn, setRestoreSessionOn] = useState(true)
   const [liveBridgeOn, setLiveBridgeOn] = useState(true)
   const [aiPrefs, setAiPrefs] = useState<AiPanelPrefs>(DEFAULT_AI_PANEL_PREFS)
   const [appVersion, setAppVersion] = useState('')
@@ -920,6 +921,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     })
     void window.aiOffice.getAutoSaveDefault?.().then((v) => {
       if (alive) setAutoSaveOn(v.on)
+    })
+    void window.aiOffice.getRestoreSession?.().then((v) => {
+      if (alive) setRestoreSessionOn(v)
     })
     void window.aiOffice.getLiveBridgeEnabled?.().then((v) => {
       if (alive) setLiveBridgeOn(v)
@@ -1103,6 +1107,26 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       const next = !autoSaveOn
                       setAutoSaveOn(next)
                       void window.aiOffice.setAutoSaveDefault?.(next).catch(() => {})
+                    }}
+                  />
+                </div>
+                <div className="set-field">
+                  <div className="set-field-text">
+                    <div className="set-field-stack">
+                      <div className="set-field-label">{t('setRestoreSession')}</div>
+                      <div className="set-field-desc">{t('setRestoreSessionDesc')}</div>
+                    </div>
+                  </div>
+                  <button
+                    className="set-switch"
+                    role="switch"
+                    aria-checked={restoreSessionOn}
+                    aria-label={t('setRestoreSession')}
+                    onClick={() => {
+                      const next = !restoreSessionOn
+                      setRestoreSessionOn(next)
+                      // read on the next launch; open tabs are unaffected
+                      void window.aiOffice.setRestoreSession?.(next).catch(() => {})
                     }}
                   />
                 </div>

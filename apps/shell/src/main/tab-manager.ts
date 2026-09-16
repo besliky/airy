@@ -200,6 +200,21 @@ export class TabManager {
     }))
   }
 
+  /** id of the active tab (session persistence) */
+  activeTabId(): string {
+    return this.activeId
+  }
+
+  /** file-backed tabs in strip order (session persistence; untitled/present tabs have no file) */
+  sessionTabs(): Array<{ id: string; kind: TabKind; filePath: string | undefined }> {
+    return this.tabs.map((t) => ({ id: t.id, kind: t.kind, filePath: t.filePath }))
+  }
+
+  /** the tab showing this file for a given kind, if any (session restore activation) */
+  findTabIdByPath(kind: TabKind, path: string): string | undefined {
+    return this.tabs.find((t) => t.kind === kind && t.filePath === path)?.id
+  }
+
   openHomeTab(): void {
     this.activateTab(HOME_ID)
   }

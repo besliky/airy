@@ -140,6 +140,10 @@ export interface HomeApi {
   getLiveBridgeEnabled(): Promise<LiveBridgeEnabled>
   /** persist and start/stop the live bridge immediately; resolves the new state */
   setLiveBridgeEnabled(on: boolean): Promise<LiveBridgeEnabled>
+  /** whether the previous session's tabs reopen on launch (persisted in userData/app-settings.json, default on) */
+  getRestoreSession(): Promise<boolean>
+  /** persist the session-restore preference (applies on the next launch) */
+  setRestoreSession(on: boolean): Promise<void>
   /** AI panel text size + chat-input spellcheck (persisted in userData/app-settings.json) */
   getAiPanelPrefs(): Promise<AiPanelPrefs>
   /** merge + persist; broadcasts 'app:ai-panel-prefs-changed' to all web contents */
@@ -277,6 +281,8 @@ export const HOME_CHANNELS = {
   setAutoSaveDefault: 'home:set-auto-save-default',
   getLiveBridgeEnabled: 'home:get-live-bridge-enabled',
   setLiveBridgeEnabled: 'home:set-live-bridge-enabled',
+  getRestoreSession: 'home:get-restore-session',
+  setRestoreSession: 'home:set-restore-session',
   getAiPanelPrefs: 'home:get-ai-panel-prefs',
   setAiPanelPrefs: 'home:set-ai-panel-prefs',
   getDefaultSaveDir: 'home:get-default-save-dir',

@@ -109,6 +109,8 @@ export const strings = {
     saveLocation: '默认保存位置',
     setAutoSave: '所有文档自动保存',
     setAutoSaveDesc: '在每个编辑器中默认开启自动保存，仍可在单个窗口中关闭。',
+    setRestoreSession: '恢复上次会话',
+    setRestoreSessionDesc: '启动时重新打开上次退出或崩溃时打开的文件。',
     setAnalytics: '发送匿名使用统计',
     setAnalyticsDesc:
       '该功能默认开启，可随时在“设置 → 常规”中关闭。使用 Google Analytics 4；Google 会接收您的公网 IP 地址和传输元数据，但绝不收集文档内容或文件名。',
@@ -297,6 +299,8 @@ export const strings = {
     setAutoSave: 'Auto-save all documents',
     setAutoSaveDesc:
       'Turn on AutoSave by default in every editor. You can still switch it off for a single window.',
+    setRestoreSession: 'Restore previous session',
+    setRestoreSessionDesc: 'Reopen the files that were open when Airy last closed or crashed.',
     setAnalytics: 'Send anonymous usage statistics',
     setAnalyticsDesc:
       'Enabled by default and can be turned off anytime in Settings → General. Uses Google Analytics 4; Google receives your public IP address and transport metadata, but document contents and file names are never collected.',
@@ -500,6 +504,9 @@ export const strings = {
     setAutoSave: 'すべてのドキュメントを自動保存',
     setAutoSaveDesc:
       'すべてのエディターで自動保存をデフォルトでオンにします。個々のウィンドウでオフにすることもできます。',
+    setRestoreSession: '前回のセッションを復元',
+    setRestoreSessionDesc:
+      '前回終了時（またはクラッシュ時）に開いていたファイルを起動時に再び開きます。',
     setAnalytics: '匿名の使用状況統計を送信',
     setAnalyticsDesc:
       '既定で有効です。設定 → 一般でいつでも無効にできます。Google Analytics 4 を使用し、Google は公開 IP アドレスと通信メタデータを受け取りますが、文書の内容やファイル名は収集されません。',
@@ -701,6 +708,9 @@ export const strings = {
     saveLocation: '저장 위치',
     setAutoSave: '모든 문서 자동 저장',
     setAutoSaveDesc: '모든 편집기에서 자동 저장을 기본으로 켭니다. 개별 창에서는 끌 수 있습니다.',
+    setRestoreSession: '이전 세션 복원',
+    setRestoreSessionDesc:
+      '마지막으로 종료하거나 충돌했을 때 열려 있던 파일을 시작 시 다시 엽니다.',
     setAnalytics: '익명 사용 통계 보내기',
     setAnalyticsDesc:
       '기본적으로 켜져 있으며 설정 → 일반에서 언제든 끌 수 있습니다. Google Analytics 4를 사용하며 Google은 공인 IP 주소와 전송 메타데이터를 수신하지만 문서 내용이나 파일 이름은 수집하지 않습니다.',
@@ -904,6 +914,9 @@ export const strings = {
     setAutoSave: 'Enregistrer automatiquement tous les documents',
     setAutoSaveDesc:
       "Active l'enregistrement automatique par défaut dans chaque éditeur. Vous pouvez toujours le désactiver pour une fenêtre.",
+    setRestoreSession: 'Restaurer la session précédente',
+    setRestoreSessionDesc:
+      'Rouvre au démarrage les fichiers ouverts lors de la dernière fermeture ou du dernier plantage.',
     setAnalytics: "Envoyer des statistiques d'utilisation anonymes",
     setAnalyticsDesc:
       'Activé par défaut et désactivable dans Paramètres → Général. Utilise Google Analytics 4 ; Google reçoit votre adresse IP publique et les métadonnées de transport, mais jamais le contenu des documents ni les noms de fichiers.',
@@ -1113,6 +1126,9 @@ export const strings = {
     setAutoSave: 'Alle Dokumente automatisch speichern',
     setAutoSaveDesc:
       'Aktiviert AutoSave standardmäßig in jedem Editor. Für ein einzelnes Fenster kann es weiterhin ausgeschaltet werden.',
+    setRestoreSession: 'Vorherige Sitzung wiederherstellen',
+    setRestoreSessionDesc:
+      'Öffnet beim Start die Dateien erneut, die beim letzten Schließen oder Absturz geöffnet waren.',
     setAnalytics: 'Anonyme Nutzungsstatistiken senden',
     setAnalyticsDesc:
       'Standardmäßig aktiviert und unter Einstellungen → Allgemein deaktivierbar. Verwendet Google Analytics 4; Google erhält Ihre öffentliche IP-Adresse und Transportmetadaten, aber keine Dokumentinhalte oder Dateinamen.',
@@ -1321,6 +1337,9 @@ export const strings = {
     setAutoSave: 'Guardar automáticamente todos los documentos',
     setAutoSaveDesc:
       'Activa el autoguardado de forma predeterminada en todos los editores. Aún puedes desactivarlo en una ventana concreta.',
+    setRestoreSession: 'Restaurar la sesión anterior',
+    setRestoreSessionDesc:
+      'Reabre al iniciar los archivos que estaban abiertos al cerrar o fallar por última vez.',
     setAnalytics: 'Enviar estadísticas de uso anónimas',
     setAnalyticsDesc:
       'Activado de forma predeterminada y desactivable en Configuración → General. Usa Google Analytics 4; Google recibe tu IP pública y metadatos de transporte, pero nunca el contenido de documentos ni los nombres de archivo.',
@@ -1525,6 +1544,8 @@ export const strings = {
     saveLocation: 'ตำแหน่งบันทึก',
     setAutoSave: 'บันทึกอัตโนมัติทุกเอกสาร',
     setAutoSaveDesc: 'เปิดบันทึกอัตโนมัติเป็นค่าเริ่มต้นในทุกตัวแก้ไข คุณยังปิดได้ในแต่ละหน้าต่าง',
+    setRestoreSession: 'กู้คืนเซสชันก่อนหน้า',
+    setRestoreSessionDesc: 'เปิดไฟล์ที่เปิดอยู่ตอนปิดโปรแกรมหรือขัดข้องครั้งล่าสุดเมื่อเริ่มทำงาน',
     setAnalytics: 'ส่งสถิติการใช้งานแบบไม่ระบุตัวตน',
     setAnalyticsDesc:
       'เปิดใช้งานเป็นค่าเริ่มต้นและปิดได้ทุกเมื่อใน การตั้งค่า → ทั่วไป ใช้ Google Analytics 4 โดย Google จะได้รับ IP สาธารณะและข้อมูลเมตาการรับส่งข้อมูล แต่จะไม่เก็บเนื้อหาเอกสารหรือชื่อไฟล์',
@@ -1725,6 +1746,9 @@ export const strings = {
     setAutoSave: 'Simpan otomatis semua dokumen',
     setAutoSaveDesc:
       'Aktifkan Simpan Otomatis secara default di setiap editor. Anda masih dapat menonaktifkannya untuk satu jendela.',
+    setRestoreSession: 'Pulihkan sesi sebelumnya',
+    setRestoreSessionDesc:
+      'Membuka kembali berkas yang terbuka saat Airy terakhir ditutup atau crash.',
     setAnalytics: 'Kirim statistik penggunaan anonim',
     setAnalyticsDesc:
       'Aktif secara default dan dapat dimatikan di Pengaturan → Umum. Menggunakan Google Analytics 4; Google menerima IP publik dan metadata transport Anda, tetapi tidak pernah mengumpulkan isi dokumen atau nama file.',
@@ -1930,6 +1954,9 @@ export const strings = {
     setAutoSave: 'Автосохранение всех документов',
     setAutoSaveDesc:
       'Включает автосохранение по умолчанию во всех редакторах. Его по-прежнему можно выключить для отдельного окна.',
+    setRestoreSession: 'Восстановить предыдущий сеанс',
+    setRestoreSessionDesc:
+      'При запуске заново открывает файлы, открытые при последнем закрытии или сбое.',
     setAnalytics: 'Отправлять анонимную статистику использования',
     setAnalyticsDesc:
       'Включено по умолчанию и отключается в Настройки → Общие. Используется Google Analytics 4; Google получает публичный IP и транспортные метаданные, но не содержимое документов и не имена файлов.',
@@ -2133,6 +2160,8 @@ export const strings = {
     setAutoSave: 'حفظ جميع المستندات تلقائيًا',
     setAutoSaveDesc:
       'تشغيل الحفظ التلقائي افتراضيًا في كل محرر. لا يزال بإمكانك إيقافه لنافذة واحدة.',
+    setRestoreSession: 'استعادة الجلسة السابقة',
+    setRestoreSessionDesc: 'يعيد فتح الملفات التي كانت مفتوحة عند آخر إغلاق أو انهيار للتطبيق.',
     setAnalytics: 'إرسال إحصاءات استخدام مجهولة الهوية',
     setAnalyticsDesc:
       'مفعّل افتراضيًا ويمكن إيقافه في الإعدادات ← عام. يستخدم Google Analytics 4؛ تتلقى Google عنوان IP العام وبيانات النقل، ولكن لا يتم جمع محتوى المستندات أو أسماء الملفات.',
@@ -2329,6 +2358,9 @@ export const strings = {
     setAutoSave: 'Salvar automaticamente todos os documentos',
     setAutoSaveDesc:
       'Ativa o salvamento automático por padrão em todos os editores. Você ainda pode desativá-lo em uma janela específica.',
+    setRestoreSession: 'Restaurar sessão anterior',
+    setRestoreSessionDesc:
+      'Reabre ao iniciar os arquivos abertos no último encerramento ou travamento.',
     setAnalytics: 'Enviar estatísticas de uso anônimas',
     setAnalyticsDesc:
       'Ativado por padrão e pode ser desativado em Configurações → Geral. Usa o Google Analytics 4; o Google recebe seu IP público e metadados de transporte, mas nunca o conteúdo dos documentos ou nomes de arquivos.',
@@ -2525,6 +2557,9 @@ export const strings = {
     setAutoSave: 'Salva automaticamente tutti i documenti',
     setAutoSaveDesc:
       'Attiva il salvataggio automatico per impostazione predefinita in ogni editor. Puoi comunque disattivarlo per una singola finestra.',
+    setRestoreSession: 'Ripristina la sessione precedente',
+    setRestoreSessionDesc:
+      "All'avvio riapre i file aperti all'ultima chiusura o all'ultimo arresto anomalo.",
     setAnalytics: 'Invia statistiche di utilizzo anonime',
     setAnalyticsDesc:
       "Attivo per impostazione predefinita e disattivabile in Impostazioni → Generali. Utilizza Google Analytics 4; Google riceve l'IP pubblico e i metadati di trasporto, ma mai contenuti o nomi dei file.",
@@ -2720,6 +2755,9 @@ export const strings = {
     setAutoSave: 'Automatycznie zapisuj wszystkie dokumenty',
     setAutoSaveDesc:
       'Włącza autozapis domyślnie w każdym edytorze. Nadal możesz go wyłączyć dla pojedynczego okna.',
+    setRestoreSession: 'Przywróć poprzednią sesję',
+    setRestoreSessionDesc:
+      'Przy uruchomieniu ponownie otwiera pliki otwarte podczas ostatniego zamknięcia lub awarii.',
     setAnalytics: 'Wysyłaj anonimowe statystyki użytkowania',
     setAnalyticsDesc:
       'Domyślnie włączone; można wyłączyć w Ustawienia → Ogólne. Korzysta z Google Analytics 4; Google otrzymuje publiczny adres IP i metadane transportowe, ale nigdy treść dokumentów ani nazwy plików.',
@@ -2911,6 +2949,9 @@ export const strings = {
     themeDark: 'Tmavý',
     themeSystem: 'Podle systému',
     saveLocation: 'Umístění pro ukládání',
+    setRestoreSession: 'Obnovit předchozí relaci',
+    setRestoreSessionDesc:
+      'Při spuštění znovu otevře soubory otevřené při posledním ukončení nebo pádu.',
     setAnalytics: 'Odesílat anonymní statistiky používání',
     setAnalyticsDesc:
       'Ve výchozím nastavení zapnuto, kdykoli lze vypnout v Nastavení → Obecné. Používá Google Analytics 4; Google obdrží vaši veřejnou IP adresu a přenosová metadata, obsah dokumentů ani názvy souborů se však nikdy neshromažďují.',
@@ -3111,6 +3152,9 @@ export const strings = {
     setAutoSave: 'Alle documenten automatisch opslaan',
     setAutoSaveDesc:
       'Zet automatisch opslaan standaard aan in elke editor. Je kunt het nog steeds uitschakelen voor één venster.',
+    setRestoreSession: 'Vorige sessie herstellen',
+    setRestoreSessionDesc:
+      'Opent bij het opstarten de bestanden die openstonden bij het laatste afsluiten of crashen.',
     setAnalytics: 'Anonieme gebruiksstatistieken verzenden',
     setAnalyticsDesc:
       'Standaard ingeschakeld en uit te schakelen via Instellingen → Algemeen. Gebruikt Google Analytics 4; Google ontvangt uw openbare IP en transportmetadata, maar nooit documentinhoud of bestandsnamen.',
@@ -3306,6 +3350,9 @@ export const strings = {
     setAutoSave: 'Simpan automatik semua dokumen',
     setAutoSaveDesc:
       'Hidupkan Simpan Automatik secara lalai dalam setiap editor. Anda masih boleh mematikannya untuk satu tetingkap.',
+    setRestoreSession: 'Pulihkan sesi sebelumnya',
+    setRestoreSessionDesc:
+      'Membuka semula fail yang dibuka ketika Airy terakhir ditutup atau ranap.',
     setAnalytics: 'Hantar statistik penggunaan tanpa nama',
     setAnalyticsDesc:
       'Diaktifkan secara lalai dan boleh dimatikan di Tetapan → Umum. Menggunakan Google Analytics 4; Google menerima IP awam dan metadata pengangkutan, tetapi tidak pernah kandungan dokumen atau nama fail.',
@@ -3499,6 +3546,8 @@ export const strings = {
     saveLocation: 'מיקום שמירה',
     setAutoSave: 'שמירה אוטומטית של כל המסמכים',
     setAutoSaveDesc: 'מפעיל שמירה אוטומטית כברירת מחדל בכל עורך. עדיין אפשר לכבות אותה בחלון בודד.',
+    setRestoreSession: 'שחזור ההפעלה הקודמת',
+    setRestoreSessionDesc: 'פותח מחדש בהפעלה את הקבצים שהיו פתוחים בסגירה או בקריסה האחרונה.',
     setAnalytics: 'שליחת נתוני שימוש אנונימיים',
     setAnalyticsDesc:
       'מופעל כברירת מחדל וניתן לכיבוי בהגדרות ← כללי. משתמש ב-Google Analytics 4; Google מקבלת IP ציבורי ומטא-נתוני תעבורה, אך לא תוכן מסמכים או שמות קבצים.',
@@ -3690,6 +3739,9 @@ export const strings = {
     setAutoSave: 'सभी दस्तावेज़ स्वतः सहेजें',
     setAutoSaveDesc:
       'हर संपादक में स्वतः सहेजना डिफ़ॉल्ट रूप से चालू करता है। आप इसे किसी एक विंडो के लिए अब भी बंद कर सकते हैं।',
+    setRestoreSession: 'पिछला सेशन पुनर्स्थापित करें',
+    setRestoreSessionDesc:
+      'लॉन्च होने पर वे फ़ाइलें फिर से खोलता है जो पिछली बार बंद होने या क्रैश होने पर खुली थीं।',
     setAnalytics: 'गुमनाम उपयोग आँकड़े भेजें',
     setAnalyticsDesc:
       'डिफ़ॉल्ट रूप से चालू; सेटिंग्स → सामान्य में बंद किया जा सकता है। Google Analytics 4 का उपयोग होता है; Google को सार्वजनिक IP और ट्रांसपोर्ट मेटाडेटा मिलता है, लेकिन दस्तावेज़ सामग्री या फ़ाइल नाम नहीं।',
@@ -3880,6 +3932,8 @@ export const strings = {
     saveLocation: '預設儲存位置',
     setAutoSave: '所有文件自動儲存',
     setAutoSaveDesc: '在每個編輯器中預設開啟自動儲存，仍可在單一視窗中關閉。',
+    setRestoreSession: '恢復上次工作階段',
+    setRestoreSessionDesc: '啟動時重新開啟上次退出或當機時開啟的檔案。',
     setAnalytics: '傳送匿名使用統計',
     setAnalyticsDesc:
       '此功能預設開啟，可隨時在「設定 → 一般」中關閉。使用 Google Analytics 4；Google 會接收您的公開 IP 位址和傳輸中繼資料，但絕不收集文件內容或檔案名稱。',

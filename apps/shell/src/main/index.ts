@@ -189,6 +189,12 @@ import type { TabKind } from '../shared/tabs-api'
 import { TABS_CHANNELS } from '../shared/tabs-api'
 import { showErrorDialog } from './error-dialog'
 import {
+  pruneSession,
+  readSessionState,
+  serializeSession,
+  writeSessionState,
+} from './session-state'
+import {
   isWindowOnScreen,
   readWindowState,
   writeWindowState,
@@ -308,6 +314,7 @@ registerHtmlSchemes()
 
 const APP_SETTINGS_PATH = () => join(app.getPath('userData'), 'app-settings.json')
 const WINDOW_STATE_PATH = () => join(app.getPath('userData'), 'window-state.json')
+const SESSION_PATH = () => join(app.getPath('userData'), 'session.json')
 
 let uiLang: Lang | null = null
 
@@ -2645,6 +2652,61 @@ function persistWindowState(win: BrowserWindow): void {
   }
 }
 
+// ---- session persistence (tab set + active tab, restored on launch) ----
+
+/** "Restore previous session" preference (app-settings.json `restoreSession`); absent = on */
+function sessionRestoreEnabled(): boolean {
+  return readAppSettings(APP_SETTINGS_PATH()).restoreSession !== false
+}
+
+let sessionSaveTimer: ReturnType<typeof setTimeout> | null = null
+
+/** Persist the open-tab set (debounced — every open/close/reorder/activation fires this) */
+function scheduleSessionSave(): void {
+  if (sessionSaveTimer) clearTimeout(sessionSaveTimer)
+  sessionSaveTimer = setTimeout(() => {
+    sessionSaveTimer = null
+    if (!tabManager) return
+    try {
+      writeSessionState(
+        SESSION_PATH(),
+        serializeSession(tabManager.sessionTabs(), tabManager.activeTabId()),
+      )
+    } catch (err) {
+      // session persistence must never break tab operations
+      console.warn('[shell] session state save failed:', err)
+    }
+  }, 800)
+}
+
+/**
+ * Reopen the file-backed tabs from the previous run (quit or crash). Files
+ * that no longer exist are skipped silently; restored tabs go through the
+ * same routing as a manual open (recents, dedupe, renderer read grants).
+ * Returns how many tabs were restored.
+ */
+function restorePreviousSession(): number {
+  if (!sessionRestoreEnabled()) return 0
+  const saved = readSessionState(SESSION_PATH())
+  if (!saved) return 0
+  const live = pruneSession(saved, (path) => existsSync(path))
+  let opened = 0
+  for (const entry of live.tabs) {
+    if (routeDocumentPath(entry.path)) opened++
+  }
+  if (opened === 0) return 0
+  // re-activate the tab that was active at close (the last open already left
+  // its own tab active when the saved active entry could not be restored)
+  if (live.activePath) {
+    const activeEntry = live.tabs.find((tab) => tab.path === live.activePath)
+    if (activeEntry) {
+      const id = tabManager?.findTabIdByPath(activeEntry.kind, activeEntry.path)
+      if (id) tabManager?.activateTab(id)
+    }
+  }
+  return opened
+}
+
 function createShellWindow(): void {
   const saved = restoreWindowState()
   const win = new BrowserWindow({
@@ -2702,7 +2764,10 @@ function createShellWindow(): void {
 
   const manager = new TabManager(
     win,
-    () => win.webContents.send(TABS_CHANNELS.changed, manager.list()),
+    () => {
+      win.webContents.send(TABS_CHANNELS.changed, manager.list())
+      scheduleSessionSave()
+    },
     applyMenuFor,
     // no extension: these tabs have no file on disk yet; the title becomes the
     // real filename (the localized untitled default + .docx etc.) once the first save lands
@@ -3466,6 +3531,12 @@ function registerHomeIpc(): void {
   ipcMain.handle(HOME_CHANNELS.setLiveBridgeEnabled, (_event, on: unknown) => {
     if (typeof on !== 'boolean') return liveBridgeEnabled()
     return setLiveBridgeEnabled(on)
+  })
+
+  // session restore toggle (Settings → General): read on the next launch
+  ipcMain.handle(HOME_CHANNELS.getRestoreSession, (): boolean => sessionRestoreEnabled())
+  ipcMain.handle(HOME_CHANNELS.setRestoreSession, (_event, on: unknown) => {
+    if (typeof on === 'boolean') writeAppSetting(APP_SETTINGS_PATH(), 'restoreSession', on)
   })
 
   ipcMain.handle(HOME_CHANNELS.getAiPanelPrefs, (): AiPanelPrefs => currentAiPanelPrefs())
@@ -4647,7 +4718,11 @@ app.whenReady().then(async () => {
   installBackToHomeItems()
   installDockMenu()
 
-  if (!pendingLaunchPath || !openDocumentPath(pendingLaunchPath)) tabManager?.openHomeTab()
+  const restoredTabs = restorePreviousSession()
+  if (!pendingLaunchPath || !openDocumentPath(pendingLaunchPath)) {
+    // nothing to open and no session to fall back on → Home
+    if (restoredTabs === 0) tabManager?.openHomeTab()
+  }
   pendingLaunchPath = null
 
   app.on('activate', () => {
