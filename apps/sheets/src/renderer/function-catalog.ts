@@ -26,7 +26,6 @@ import {
   FUNCTION_NAMES_STATISTICAL,
   FUNCTION_NAMES_TEXT,
   FUNCTION_NAMES_WEB,
-  type IFunctionService,
 } from '@univerjs/engine-formula'
 
 import type { StringKey } from './i18n/locale'
@@ -109,8 +108,16 @@ function derivedSyntax(name: string, entry: { functionParameter?: unknown } | un
 /// Builds the catalog from the live registry. Falls back to the curated
 /// list alone when the engine has not registered its executors yet (the
 /// dialog opens before the plugin batch lands only in tests).
+/// The slice of Univer's IFunctionService the catalog reads (structural so
+/// tests can pass a bare executor map). The key type is intentionally
+/// `unknown`: Univer's IFunctionNames union mixes string with enum-object
+/// typings, so keys are normalized through String() at use.
+export interface ExecutorRegistry {
+  getExecutors(): { size: number; keys(): Iterable<unknown> }
+}
+
 export function buildFunctionCatalog(
-  functionService: Pick<IFunctionService, 'getExecutors'> | null,
+  functionService: ExecutorRegistry | null,
   locale: FunctionListLocale | null,
   curated: readonly CuratedFunction[],
 ): CatalogFunction[] {
@@ -141,9 +148,7 @@ export function buildFunctionCatalog(
   }
   const executors = functionService?.getExecutors()
   if (executors && executors.size > 0) {
-    for (const name of executors.keys()) {
-      push(typeof name === 'string' ? name.toUpperCase() : name.toString())
-    }
+    for (const key of executors.keys()) push(String(key).toUpperCase())
   } else {
     for (const spec of curated) push(spec.name)
   }

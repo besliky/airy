@@ -42,7 +42,9 @@ const LOCALE: FunctionListLocale = {
   },
 }
 
-function registryOf(...names: string[]): { getExecutors(): Map<string, object> } {
+function registryOf(...names: string[]): {
+  getExecutors(): { size: number; keys(): Iterable<unknown> }
+} {
   return { getExecutors: () => new Map(names.map((name) => [name, {}])) }
 }
 
