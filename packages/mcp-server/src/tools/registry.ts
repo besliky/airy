@@ -88,6 +88,15 @@ const CELL_EDIT_SCHEMA = z
     { message: 'A cell edit needs at least one of value, formula, style, rich or styleReset.' },
   )
 
+/** ops the embedded live registry accepts beyond the headless guide (kept in
+ * sync with the apps/docs/src/renderer/ai/ops.ts signatures) */
+const LIVE_OPS_EXTRAS = [
+  'Live-only extras accepted by the embedded registry in addition to the ops above:',
+  '- setImageProperties <target nodeType "image"> widthPx? heightPx? align? ("left"|"center"|"right"|null) — image blocks only; giving one dimension scales the other proportionally',
+  '- insertToc afterBlockIndex (-1 = document start) — insert a TOC field built from the current headings; Word computes page numbers on open (fails when the document has no headings)',
+  '- setFont / setMatchedFont additionally accept link: { url } | null over this bridge.',
+].join('\n')
+
 export function registerTools(server: McpServer): void {
   // Liveness probe: lets an agent confirm the server is reachable before the
   // real document tools arrive in later phases.
@@ -556,7 +565,7 @@ export function registerTools(server: McpServer): void {
         'the result — a single call can add a section and format it. The user sees the change immediately; ' +
         'tracked changes are authored as "Airy Copilot" when the app has track changes on. Each bridge call ' +
         'is one undo step, so undo a combined edit with live_undo twice. ' +
-        `Operations:\n${OPS_GUIDE}`,
+        `Operations:\n${OPS_GUIDE}\n${LIVE_OPS_EXTRAS}`,
       inputSchema: {
         ops: z
           .array(z.record(z.string(), z.unknown()))

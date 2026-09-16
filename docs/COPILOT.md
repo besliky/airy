@@ -192,7 +192,18 @@ Live (app running; always target the _active_ tab):
 Edit ops are flat records targeting blocks by `nodeType` / `headingLevel` /
 `containsText` / `blockIndexes`; `apply_ops` output includes the full
 signature list. Block indexes shift after inserts — re-read before further
-addressing.
+addressing. Both `nodeType` vocabularies are accepted everywhere, headless
+and live: the ops-guide names (`heading` / `paragraph` / `listItem` /
+`image`) and the renderer's canonical names (`docHeading` / `docParagraph` /
+`docListItem` / `image`) target the same blocks.
+
+The live bridge additionally accepts the embedded registry's extra ops —
+`setImageProperties` (resize/align image blocks) and `insertToc` (insert a
+TOC field after a block) — and `setFont` / `setMatchedFont` gain a
+`link: { url } | null` field. Live `apply_ops` / `insert_content` only work
+on the ACTIVE tab when it is a **docs** document; a sheets/slides/pdf tab in
+front answers `not_docs_tab` (use the headless workbook tools for
+spreadsheets).
 
 Workbook editing goes through `apply_workbook_ops`: one batch of cell edits,
 each targeting a single cell by sheet (name or index) and A1 ref with a

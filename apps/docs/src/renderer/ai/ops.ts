@@ -36,6 +36,27 @@ export interface Target {
   range?: { from: number; to: number }
 }
 
+/**
+ * The MCP server's ops guide documents the headless vocabulary
+ * (heading/paragraph/listItem), and the live bridge forwards agent ops
+ * verbatim — so both spellings must target the same blocks. Aliases are
+ * normalized to the canonical PM node type names at validation time; the
+ * canonical names (docHeading/docParagraph/docListItem/image) keep working
+ * unchanged (the embedded AI panel and the ribbon use them).
+ */
+export function normalizeNodeType(nodeType: string): string {
+  switch (nodeType) {
+    case 'heading':
+      return 'docHeading'
+    case 'paragraph':
+      return 'docParagraph'
+    case 'listItem':
+      return 'docListItem'
+    default:
+      return nodeType
+  }
+}
+
 export interface FontFields {
   bold?: boolean
   italic?: boolean
@@ -193,7 +214,11 @@ function validateTarget(target: unknown, where: string): string | null {
   if (!target || typeof target !== 'object') return `${where}: missing target`
   const tg = target as Target
   if (tg.nodeType !== undefined && !NODE_TYPES.includes(tg.nodeType)) {
-    return `${where}: unknown nodeType "${String(tg.nodeType)}"`
+    return (
+      `${where}: unknown nodeType "${String(tg.nodeType)}" ` +
+      `(accepted: ${NODE_TYPES.join(', ')} or the MCP ops-guide aliases ` +
+      'heading/paragraph/listItem)'
+    )
   }
   if (
     tg.headingLevel !== undefined &&
@@ -1344,6 +1369,14 @@ export function executeOps(editor: Editor, ops: unknown, ctx: OpContext = {}): E
       return
     }
     const op = raw as Op
+    // ops-guide aliases (heading/paragraph/listItem) normalize to the
+    // canonical node type names before validation and matching
+    if (op.target && typeof op.target.nodeType === 'string') {
+      op.target = {
+        ...op.target,
+        nodeType: normalizeNodeType(op.target.nodeType) as Target['nodeType'],
+      }
+    }
     const def = REGISTRY.get(op.op)
     if (!def || (def.hidden && ctx.source !== 'ui')) {
       errors.push(`${where}: unknown op "${op.op}". Supported ops: [${opNames().join(', ')}]`)
