@@ -49,6 +49,7 @@ import {
   showSaveDialogWithMemory,
   viewMenuTemplate,
   windowMenuTemplate,
+  voidLoad,
 } from '@airy-office/electron-utils'
 import { createI18n, getUiLang, normalizeLang, setUiLang } from '@airy-office/i18n'
 import { ProjectStore } from '@airy-office/project-store'
@@ -1895,9 +1896,12 @@ export function createSheetsView(options: { includeAiHandlers?: boolean } = {}):
     // append via URL so a dev URL that already carries query params stays valid
     const devUrl = new URL(runtime.rendererUrl)
     devUrl.searchParams.set('mode', 'tab')
-    void view.webContents.loadURL(devUrl.toString())
+    voidLoad(view.webContents.loadURL(devUrl.toString()), 'sheets tab renderer')
   } else {
-    void view.webContents.loadFile(runtime.rendererFile, { query: { mode: 'tab' } })
+    voidLoad(
+      view.webContents.loadFile(runtime.rendererFile, { query: { mode: 'tab' } }),
+      'sheets tab renderer',
+    )
   }
   return view
 }

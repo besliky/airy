@@ -1,6 +1,11 @@
 import { basename } from 'node:path'
 import { BrowserWindow } from 'electron'
 import type { Rectangle, WebContents, WebContentsView } from 'electron'
+import {
+  crashErrorPageUrl,
+  isRecoverableRendererCrash,
+  voidLoad,
+} from '@airy-office/electron-utils'
 
 import {
   createDocsView,
@@ -54,6 +59,16 @@ interface TabRecord {
   filePath?: string
   /** chrome-free Present tab: no file, no editor menu or save/export targets */
   present?: boolean
+  /** renderer crashed (oom/crashed): awaiting the user's Reload/Close decision */
+  crashed?: boolean
+}
+
+/** Renderer-crash recovery hooks, supplied by the shell (localized prompt + error page). */
+export interface TabCrashUi {
+  /** body text for the in-tab error page shown while awaiting the decision */
+  errorPageBody: () => string
+  /** notified once per crash; the shell shows the Reload/Close dialog */
+  onCrash: (info: { id: string; kind: TabKind; title: string; reason: string }) => void
 }
 
 /** must match the tab strip's rendered height (apps/shell/src/renderer/src/TabBar.tsx) */
@@ -85,6 +100,8 @@ export class TabManager {
     private readonly applyMenuFor: (kind: TabKind) => void,
     /** localized placeholder title for a tab that has no file yet */
     private readonly untitledTitleFor?: (kind: TabKind) => string,
+    /** renderer-crash recovery (error page + Reload/Close prompt), shell-provided */
+    private readonly crashUi?: TabCrashUi,
   ) {
     // Layout once synchronously for macOS/Windows (bounds are already correct),
     // then once more on the next tick. On Linux/X11, `resize` fires before the
@@ -136,6 +153,35 @@ export class TabManager {
     })
   }
 
+  /**
+   * Crash recovery: a renderer lost to oom/crashed would otherwise stay as a
+   * blank zombie tab. Replace its content with an error page and hand the
+   * decision to the shell (Reload restarts the renderer, Close drops the
+   * tab). Intentional teardown reasons never prompt.
+   */
+  private watchRendererCrash(id: string, view: WebContentsView): void {
+    view.webContents.on('render-process-gone', (_event, details) => {
+      if (!isRecoverableRendererCrash(details.reason)) return
+      const tab = this.tabs.find((t) => t.id === id)
+      if (!tab || tab.crashed) return
+      tab.crashed = true
+      if (this.htmlFullScreenId === id) {
+        this.htmlFullScreenId = null
+        this.layout()
+      }
+      voidLoad(
+        view.webContents.loadURL(crashErrorPageUrl(this.crashUi?.errorPageBody() ?? '')),
+        `crash error page for tab ${id}`,
+      )
+      this.crashUi?.onCrash({ id, kind: tab.kind, title: tab.title, reason: details.reason })
+    })
+  }
+
+  /** whether a tab's renderer crashed and is awaiting recovery (observability for tests) */
+  isTabCrashed(id: string): boolean {
+    return this.tabs.find((t) => t.id === id)?.crashed === true
+  }
+
   /** re-fit the active tab's view after a window resize */
   layout(): void {
     // Deferred resize layouts can land after the shell window was closed.
@@ -169,6 +215,7 @@ export class TabManager {
     this.shellWindow.contentView.addChildView(view)
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
+    this.watchRendererCrash(id, view)
     this.tabs.push({
       id,
       kind: 'docs',
@@ -191,6 +238,7 @@ export class TabManager {
     this.shellWindow.contentView.addChildView(view)
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
+    this.watchRendererCrash(id, view)
     this.tabs.push({
       id,
       kind: 'sheets',
@@ -208,6 +256,7 @@ export class TabManager {
     this.shellWindow.contentView.addChildView(view)
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
+    this.watchRendererCrash(id, view)
     this.tabs.push({
       id,
       kind: 'slides',
@@ -225,17 +274,20 @@ export class TabManager {
     this.shellWindow.contentView.addChildView(view)
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
+    this.watchRendererCrash(id, view)
     this.tabs.push({ id, kind: 'pdf', view, title: basename(openPath), filePath: openPath })
     this.activateTab(id)
     return id
   }
 
-  /** Remount the tab's renderer so it re-reads its file from disk (View > Reload). */
+  /** Remount the tab's renderer so it re-reads its file from disk (View > Reload;
+   *  also the crash-recovery "Reload" action — clears the crashed state). */
   reloadTab(id: string): void {
     const tab = this.tabs.find((t) => t.id === id)
     const wc = tab?.view?.webContents
     if (!wc || wc.isDestroyed()) return
     if (tab.kind === 'pdf') clearPdfDirty(wc.id)
+    tab.crashed = false
     wc.reload()
   }
 
@@ -245,6 +297,7 @@ export class TabManager {
     this.shellWindow.contentView.addChildView(view)
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
+    this.watchRendererCrash(id, view)
     this.tabs.push({
       id,
       kind: 'markdown',
@@ -262,6 +315,7 @@ export class TabManager {
     this.shellWindow.contentView.addChildView(view)
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
+    this.watchRendererCrash(id, view)
     this.tabs.push({
       id,
       kind: 'html',
@@ -280,6 +334,7 @@ export class TabManager {
     this.shellWindow.contentView.addChildView(view)
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
+    this.watchRendererCrash(id, view)
     this.tabs.push({
       id,
       kind: 'html',

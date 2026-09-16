@@ -32,6 +32,7 @@ import {
   safeExternalUrl,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
+  voidLoad,
 } from '@airy-office/electron-utils'
 import { createI18n, getUiLang } from '@airy-office/i18n'
 import { generateImageTool } from '@airy-office/ai-search'
@@ -1585,8 +1586,9 @@ function bindPresentView(wc: WebContents, ownerWcId: number, title: string): voi
   if (runtime.rendererUrl) {
     const url = new URL(runtime.rendererUrl)
     for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v)
-    void wc.loadURL(url.toString())
-  } else if (runtime.rendererFile) void wc.loadFile(runtime.rendererFile, { query })
+    voidLoad(wc.loadURL(url.toString()), 'html window')
+  } else if (runtime.rendererFile)
+    voidLoad(wc.loadFile(runtime.rendererFile, { query }), 'html window')
 }
 
 export function createHtmlPresentView(owner: WebContents, title: string): WebContentsView {
@@ -1614,8 +1616,10 @@ export function createHtmlView(openPath?: string | null): WebContentsView {
     },
   })
   grantAndTrack(view.webContents, openPath)
-  if (runtime.rendererUrl) void view.webContents.loadURL(runtime.rendererUrl)
-  else if (runtime.rendererFile) void view.webContents.loadFile(runtime.rendererFile)
+  if (runtime.rendererUrl)
+    voidLoad(view.webContents.loadURL(runtime.rendererUrl), 'html tab renderer')
+  else if (runtime.rendererFile)
+    voidLoad(view.webContents.loadFile(runtime.rendererFile), 'html tab renderer')
   return view
 }
 
@@ -1643,8 +1647,8 @@ export function startHtmlStandalone(): void {
     })
     const argPath = process.argv.slice(1).find((a) => /\.html?$/i.test(a) && existsSync(a))
     grantAndTrack(win.webContents, argPath)
-    if (runtime.rendererUrl) void win.loadURL(runtime.rendererUrl)
-    else if (runtime.rendererFile) void win.loadFile(runtime.rendererFile)
+    if (runtime.rendererUrl) voidLoad(win.loadURL(runtime.rendererUrl), 'html window')
+    else if (runtime.rendererFile) voidLoad(win.loadFile(runtime.rendererFile), 'html window')
   })
   app.on('window-all-closed', () => app.quit())
 }

@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { PdfPasswordUiState } from '../shared/pdf-password-api'
 import { PDF_PASSWORD_CHANNELS } from '../shared/pdf-password-api'
+import { voidLoad } from '@airy-office/electron-utils'
 
 /**
  * Password prompt for encrypted PDFs (P23): a frameless modal card centered
@@ -99,9 +100,12 @@ export function promptPdfPassword(
   })
 
   if (process.env.ELECTRON_RENDERER_URL) {
-    void win.loadURL(`${process.env.ELECTRON_RENDERER_URL}/pdf-password.html`)
+    voidLoad(
+      win.loadURL(`${process.env.ELECTRON_RENDERER_URL}/pdf-password.html`),
+      'pdf password window',
+    )
   } else {
-    void win.loadFile(join(__dirname, '../renderer/pdf-password.html'))
+    voidLoad(win.loadFile(join(__dirname, '../renderer/pdf-password.html')), 'pdf password window')
   }
   return promise
 }

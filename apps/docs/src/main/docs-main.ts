@@ -36,6 +36,7 @@ import {
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
   toggleDevToolsItem,
+  voidLoad,
   windowMenuTemplate,
 } from '@airy-office/electron-utils'
 import { configureMetricsCache, familyVerticalMetrics } from '@airy-office/font-metrics'
@@ -135,6 +136,7 @@ const isDev = !!process.env.ELECTRON_RENDERER_URL
 
 const tMain = createI18n({
   zh: {
+    dlgLoadFailed: '应用窗口加载失败。',
     dlgOpenDoc: '打开文档',
     filterWord: 'Word 文档',
     dlgSaveAs: '另存为',
@@ -229,6 +231,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Airy Docs 帮助',
   },
   en: {
+    dlgLoadFailed: 'The app window failed to load.',
     dlgOpenDoc: 'Open Document',
     filterWord: 'Word Documents',
     dlgSaveAs: 'Save As',
@@ -324,6 +327,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Airy Docs Help',
   },
   ja: {
+    dlgLoadFailed: 'アプリウィンドウの読み込みに失敗しました。',
     dlgOpenDoc: '文書を開く',
     filterWord: 'Word 文書',
     dlgSaveAs: '名前を付けて保存',
@@ -419,6 +423,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Airy Docs ヘルプ',
   },
   ko: {
+    dlgLoadFailed: '앱 창을 로드하지 못했습니다.',
     dlgOpenDoc: '문서 열기',
     filterWord: 'Word 문서',
     dlgSaveAs: '다른 이름으로 저장',
@@ -515,6 +520,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Airy Docs 도움말',
   },
   fr: {
+    dlgLoadFailed: 'Échec du chargement de la fenêtre principale.',
     dlgOpenDoc: 'Ouvrir un document',
     filterWord: 'Documents Word',
     dlgSaveAs: 'Enregistrer sous',
@@ -612,6 +618,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Aide Airy Docs',
   },
   de: {
+    dlgLoadFailed: 'Das Anwendungsfenster konnte nicht geladen werden.',
     dlgOpenDoc: 'Dokument öffnen',
     filterWord: 'Word-Dokumente',
     dlgSaveAs: 'Speichern unter',
@@ -709,6 +716,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Airy Docs-Hilfe',
   },
   es: {
+    dlgLoadFailed: 'No se pudo cargar la ventana de la aplicación.',
     dlgOpenDoc: 'Abrir documento',
     filterWord: 'Documentos de Word',
     dlgSaveAs: 'Guardar como',
@@ -806,6 +814,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Ayuda de Airy Docs',
   },
   th: {
+    dlgLoadFailed: 'โหลดหน้าต่างแอปไม่สำเร็จ',
     dlgOpenDoc: 'เปิดเอกสาร',
     filterWord: 'เอกสาร Word',
     dlgSaveAs: 'บันทึกเป็น',
@@ -901,6 +910,7 @@ const tMain = createI18n({
     menuDocsHelp: 'วิธีใช้ Airy Docs',
   },
   id: {
+    dlgLoadFailed: 'Gagal memuat jendela aplikasi.',
     dlgOpenDoc: 'Buka Dokumen',
     filterWord: 'Dokumen Word',
     dlgSaveAs: 'Simpan Sebagai',
@@ -997,6 +1007,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Bantuan Airy Docs',
   },
   ru: {
+    dlgLoadFailed: 'Не удалось загрузить окно приложения.',
     dlgOpenDoc: 'Открыть документ',
     filterWord: 'Документы Word',
     dlgSaveAs: 'Сохранить как',
@@ -1093,6 +1104,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Справка Airy Docs',
   },
   ar: {
+    dlgLoadFailed: 'فشل تحميل نافذة التطبيق.',
     dlgOpenDoc: 'فتح مستند',
     filterWord: 'مستندات Word',
     dlgSaveAs: 'حفظ باسم',
@@ -1189,6 +1201,7 @@ const tMain = createI18n({
     menuDocsHelp: 'تعليمات Airy Docs',
   },
   pt: {
+    dlgLoadFailed: 'Falha ao carregar a janela do aplicativo.',
     dlgOpenDoc: 'Abrir Documento',
     filterWord: 'Documentos do Word',
     dlgSaveAs: 'Salvar Como',
@@ -1285,6 +1298,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Ajuda do Airy Docs',
   },
   it: {
+    dlgLoadFailed: 'Impossibile caricare la finestra dell’app.',
     dlgOpenDoc: 'Apri documento',
     filterWord: 'Documenti Word',
     dlgSaveAs: 'Salva con nome',
@@ -1381,6 +1395,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Guida di Airy Docs',
   },
   pl: {
+    dlgLoadFailed: 'Nie udało się załadować okna aplikacji.',
     dlgOpenDoc: 'Otwórz dokument',
     filterWord: 'Dokumenty programu Word',
     dlgSaveAs: 'Zapisz jako',
@@ -1477,6 +1492,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Pomoc Airy Docs',
   },
   cs: {
+    dlgLoadFailed: 'Okno aplikace se nepodařilo načíst.',
     dlgOpenDoc: 'Otevřít dokument',
     filterWord: 'Dokumenty Wordu',
     dlgSaveAs: 'Uložit jako',
@@ -1573,6 +1589,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Nápověda Airy Docs',
   },
   nl: {
+    dlgLoadFailed: 'Het app-venster kon niet worden geladen.',
     dlgOpenDoc: 'Document openen',
     filterWord: 'Word-documenten',
     dlgSaveAs: 'Opslaan als',
@@ -1669,6 +1686,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Airy Docs Help',
   },
   ms: {
+    dlgLoadFailed: 'Gagal memuat tetingkap aplikasi.',
     dlgOpenDoc: 'Buka Dokumen',
     filterWord: 'Dokumen Word',
     dlgSaveAs: 'Simpan Sebagai',
@@ -1765,6 +1783,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Bantuan Airy Docs',
   },
   he: {
+    dlgLoadFailed: 'טעינת חלון היישום נכשלה.',
     dlgOpenDoc: 'פתיחת מסמך',
     filterWord: 'מסמכי Word',
     dlgSaveAs: 'שמירה בשם',
@@ -1860,6 +1879,7 @@ const tMain = createI18n({
     menuDocsHelp: 'עזרה של Airy Docs',
   },
   hi: {
+    dlgLoadFailed: 'ऐप विंडो लोड करने में विफल।',
     dlgOpenDoc: 'दस्तावेज़ खोलें',
     filterWord: 'Word दस्तावेज़',
     dlgSaveAs: 'इस रूप में सहेजें',
@@ -1956,6 +1976,7 @@ const tMain = createI18n({
     menuDocsHelp: 'Airy Docs सहायता',
   },
   'zh-TW': {
+    dlgLoadFailed: '應用程式視窗載入失敗。',
     dlgOpenDoc: '開啟文件',
     filterWord: 'Word 文件',
     dlgSaveAs: '另存新檔',
@@ -4183,11 +4204,23 @@ export function createDocsWindow(openPath?: string): BrowserWindow {
     return { action: 'deny' }
   })
 
-  if (runtime.rendererUrl) {
-    void win.loadURL(runtime.rendererUrl)
-  } else {
-    void win.loadFile(runtime.rendererFile)
-  }
+  // A rejected load must not escape as an unhandled rejection: surface it
+  // (parented async dialog — same pattern as the shell's error dialog).
+  const winLoad = runtime.rendererUrl
+    ? win.loadURL(runtime.rendererUrl)
+    : win.loadFile(runtime.rendererFile)
+  winLoad.catch((err: unknown) => {
+    console.error('[docs] window load failed:', err)
+    if (!win.isDestroyed()) {
+      void dialog
+        .showMessageBox(win, {
+          type: 'error',
+          message: tm('dlgLoadFailed'),
+          detail: err instanceof Error ? err.message : String(err),
+        })
+        .catch(() => undefined)
+    }
+  })
   // close guard for standalone-window mode (tab mode goes through the same flow via the shell's tab-manager/window-close path)
   let closeConfirmed = false
   win.on('close', (event) => {
@@ -4410,9 +4443,12 @@ export function createDocsView(openPath?: string): WebContentsView {
     // append via URL so a dev URL that already carries query params stays valid
     const devUrl = new URL(runtime.rendererUrl)
     devUrl.searchParams.set('mode', 'tab')
-    void view.webContents.loadURL(devUrl.toString())
+    voidLoad(view.webContents.loadURL(devUrl.toString()), 'docs tab renderer')
   } else {
-    void view.webContents.loadFile(runtime.rendererFile, { query: { mode: 'tab' } })
+    voidLoad(
+      view.webContents.loadFile(runtime.rendererFile, { query: { mode: 'tab' } }),
+      'docs tab renderer',
+    )
   }
   // view.webContents becomes undefined after destroy, so grab the id beforehand
   const wcId = view.webContents.id

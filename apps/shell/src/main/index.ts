@@ -46,6 +46,7 @@ import {
   editMenuTemplate,
   installContextMenu,
   installNavigationGuard,
+  isRecoverableRendererCrash,
   isUsableSaveDir,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
@@ -492,7 +493,15 @@ const tMain = createI18n({
     updStatusUpToDate: '已是最新版本',
     updStatusFailed: '检查更新失败',
     updStatusReady: '更新已就绪，退出时安装',
+    dlgRendererCrashed: '此标签页的渲染进程已意外停止。',
+    dlgRendererCrashedDetail: '标签页内容已崩溃（{reason}）。您可以重新加载或关闭该标签页。',
+    btnReload: '重新加载',
+    btnCloseTab: '关闭标签页',
+    crashPageBody: '此标签页已意外停止。请在对话框中选择重新加载或关闭该标签页。',
+    dlgLoadFailed: '应用窗口加载失败。',
+    errUnhandledException: '发生意外错误。应用将尝试继续运行。',
   },
+
   en: {
     menuFile: 'File',
     menuSectionNew: 'New',
@@ -586,7 +595,16 @@ const tMain = createI18n({
     updStatusUpToDate: 'Airy is up to date',
     updStatusFailed: 'Update check failed',
     updStatusReady: 'Update ready to install',
+    dlgRendererCrashed: 'This tab’s renderer process stopped unexpectedly.',
+    dlgRendererCrashedDetail:
+      'The tab content crashed ({reason}). You can reload or close the tab.',
+    btnReload: 'Reload',
+    btnCloseTab: 'Close Tab',
+    crashPageBody: 'This tab stopped unexpectedly. Choose Reload or Close Tab in the dialog.',
+    dlgLoadFailed: 'The app window failed to load.',
+    errUnhandledException: 'An unexpected error occurred. The app will try to keep running.',
   },
+
   ja: {
     menuFile: 'ファイル',
     menuSectionNew: '新規作成',
@@ -680,7 +698,17 @@ const tMain = createI18n({
     updStatusUpToDate: '最新バージョンです',
     updStatusFailed: 'アップデートの確認に失敗しました',
     updStatusReady: 'アップデートはインストール準備完了です',
+    dlgRendererCrashed: 'このタブのレンダラープロセスが予期せず停止しました。',
+    dlgRendererCrashedDetail:
+      'タブの内容がクラッシュしました（{reason}）。タブを再読み込みするか閉じることができます。',
+    btnReload: '再読み込み',
+    btnCloseTab: 'タブを閉じる',
+    crashPageBody:
+      'このタブは予期せず停止しました。ダイアログで再読み込みまたはタブを閉じてください。',
+    dlgLoadFailed: 'アプリウィンドウの読み込みに失敗しました。',
+    errUnhandledException: '予期しないエラーが発生しました。アプリは実行を続行しようとします。',
   },
+
   ko: {
     menuFile: '파일',
     menuSectionNew: '새로 만들기',
@@ -773,7 +801,17 @@ const tMain = createI18n({
     updStatusUpToDate: '최신 버전입니다',
     updStatusFailed: '업데이트 확인 실패',
     updStatusReady: '업데이트 설치 준비 완료',
+    dlgRendererCrashed: '이 탭의 렌더러 프로세스가 예기치 않게 중지되었습니다.',
+    dlgRendererCrashedDetail:
+      '탭 콘텐츠가 중단되었습니다({reason}). 탭을 다시 로드하거나 닫을 수 있습니다.',
+    btnReload: '다시 로드',
+    btnCloseTab: '탭 닫기',
+    crashPageBody:
+      '이 탭이 예기치 않게 중지되었습니다. 대화상자에서 다시 로드 또는 탭 닫기를 선택하세요.',
+    dlgLoadFailed: '앱 창을 로드하지 못했습니다.',
+    errUnhandledException: '예기치 않은 오류가 발생했습니다. 앱은 계속 실행을 시도합니다.',
   },
+
   fr: {
     menuFile: 'Fichier',
     menuSectionNew: 'Nouveau',
@@ -868,7 +906,18 @@ const tMain = createI18n({
     updStatusUpToDate: 'Airy est à jour',
     updStatusFailed: 'Échec de la recherche de mise à jour',
     updStatusReady: 'Mise à jour prête à installer',
+    dlgRendererCrashed: 'Arrêt inattendu du processus de rendu de cet onglet.',
+    dlgRendererCrashedDetail:
+      'Le contenu de cet onglet a planté ({reason}). Vous pouvez le recharger ou le fermer.',
+    btnReload: 'Recharger',
+    btnCloseTab: 'Fermer cet onglet',
+    crashPageBody:
+      'Arrêt inattendu de cet onglet. Choisissez Recharger ou Fermer cet onglet dans la boîte de dialogue.',
+    dlgLoadFailed: 'Échec du chargement de la fenêtre principale.',
+    errUnhandledException:
+      'Une erreur inattendue est survenue. L’application va tenter de continuer.',
   },
+
   de: {
     menuFile: 'Datei',
     menuSectionNew: 'Neu',
@@ -963,7 +1012,18 @@ const tMain = createI18n({
     updStatusUpToDate: 'Airy ist auf dem neuesten Stand',
     updStatusFailed: 'Updatesuche fehlgeschlagen',
     updStatusReady: 'Update bereit zur Installation',
+    dlgRendererCrashed: 'Der Rendererprozess dieses Tabs wurde unerwartet beendet.',
+    dlgRendererCrashedDetail:
+      'Der Tab-Inhalt ist abgestürzt ({reason}). Sie können den Tab neu laden oder schließen.',
+    btnReload: 'Neu laden',
+    btnCloseTab: 'Tab schließen',
+    crashPageBody:
+      'Dieser Tab wurde unerwartet beendet. Wählen Sie im Dialog „Neu laden“ oder „Tab schließen“.',
+    dlgLoadFailed: 'Das Anwendungsfenster konnte nicht geladen werden.',
+    errUnhandledException:
+      'Ein unerwarteter Fehler ist aufgetreten. Die App versucht weiterzulaufen.',
   },
+
   es: {
     menuFile: 'Archivo',
     menuSectionNew: 'Nuevo',
@@ -1058,7 +1118,18 @@ const tMain = createI18n({
     updStatusUpToDate: 'Airy está actualizado',
     updStatusFailed: 'Error al buscar actualizaciones',
     updStatusReady: 'Actualización lista para instalar',
+    dlgRendererCrashed: 'El proceso de renderizado de esta pestaña se detuvo inesperadamente.',
+    dlgRendererCrashedDetail:
+      'El contenido de la pestaña falló ({reason}). Puede recargar o cerrar la pestaña.',
+    btnReload: 'Recargar',
+    btnCloseTab: 'Cerrar pestaña',
+    crashPageBody:
+      'Esta pestaña se detuvo inesperadamente. Elija Recargar o Cerrar pestaña en el diálogo.',
+    dlgLoadFailed: 'No se pudo cargar la ventana de la aplicación.',
+    errUnhandledException:
+      'Ocurrió un error inesperado. La aplicación intentará seguir funcionando.',
   },
+
   th: {
     menuFile: 'ไฟล์',
     menuSectionNew: 'สร้างใหม่',
@@ -1149,7 +1220,15 @@ const tMain = createI18n({
     updStatusUpToDate: 'Airy เป็นเวอร์ชันล่าสุดแล้ว',
     updStatusFailed: 'ตรวจหาอัปเดตไม่สำเร็จ',
     updStatusReady: 'อัปเดตพร้อมติดตั้งแล้ว',
+    dlgRendererCrashed: 'โปรเซสตัวเรนเดอร์ของแท็บนี้หยุดทำงานโดยไม่คาดคิด',
+    dlgRendererCrashedDetail: 'เนื้อหาของแท็บล่ม ({reason}) คุณสามารถโหลดแท็บใหม่หรือปิดแท็บได้',
+    btnReload: 'โหลดใหม่',
+    btnCloseTab: 'ปิดแท็บ',
+    crashPageBody: 'แท็บนี้หยุดทำงานโดยไม่คาดคิด โปรดเลือกโหลดใหม่หรือปิดแท็บในกล่องโต้ตอบ',
+    dlgLoadFailed: 'โหลดหน้าต่างแอปไม่สำเร็จ',
+    errUnhandledException: 'เกิดข้อผิดพลาดที่ไม่คาดคิด แอปจะพยายามทำงานต่อไป',
   },
+
   id: {
     menuFile: 'File',
     menuSectionNew: 'Baru',
@@ -1244,7 +1323,16 @@ const tMain = createI18n({
     updStatusUpToDate: 'Airy sudah versi terbaru',
     updStatusFailed: 'Gagal memeriksa pembaruan',
     updStatusReady: 'Pembaruan siap dipasang',
+    dlgRendererCrashed: 'Proses perender tab ini berhenti tanpa diduga.',
+    dlgRendererCrashedDetail:
+      'Konten tab mengalami kegagalan ({reason}). Anda dapat memuat ulang atau menutup tab tersebut.',
+    btnReload: 'Muat ulang',
+    btnCloseTab: 'Tutup tab',
+    crashPageBody: 'Tab ini berhenti tanpa diduga. Pilih Muat ulang atau Tutup tab pada dialog.',
+    dlgLoadFailed: 'Gagal memuat jendela aplikasi.',
+    errUnhandledException: 'Terjadi kesalahan tak terduga. Aplikasi akan mencoba tetap berjalan.',
   },
+
   ru: {
     menuFile: 'Файл',
     menuSectionNew: 'Создать',
@@ -1339,7 +1427,18 @@ const tMain = createI18n({
     updStatusUpToDate: 'Установлена последняя версия',
     updStatusFailed: 'Не удалось проверить обновления',
     updStatusReady: 'Обновление готово к установке',
+    dlgRendererCrashed: 'Процесс отрисовки этой вкладки неожиданно завершился.',
+    dlgRendererCrashedDetail:
+      'Содержимое вкладки аварийно завершилось ({reason}). Можно перезагрузить или закрыть вкладку.',
+    btnReload: 'Перезагрузить',
+    btnCloseTab: 'Закрыть вкладку',
+    crashPageBody:
+      'Вкладка неожиданно остановилась. Выберите «Перезагрузить» или «Закрыть вкладку» в диалоге.',
+    dlgLoadFailed: 'Не удалось загрузить окно приложения.',
+    errUnhandledException:
+      'Произошла непредвиденная ошибка. Приложение попытается продолжить работу.',
   },
+
   ar: {
     menuFile: 'ملف',
     menuSectionNew: 'جديد',
@@ -1430,7 +1529,17 @@ const tMain = createI18n({
     updStatusUpToDate: 'Airy محدّث',
     updStatusFailed: 'فشل التحقق من التحديثات',
     updStatusReady: 'التحديث جاهز للتثبيت',
+    dlgRendererCrashed: 'توقفت عملية العرض الخاصة بهذه علامة التبويب بشكل غير متوقع.',
+    dlgRendererCrashedDetail:
+      'تعطل محتوى علامة التبويب ({reason}). يمكنك إعادة تحميل علامة التبويب أو إغلاقها.',
+    btnReload: 'إعادة التحميل',
+    btnCloseTab: 'إغلاق علامة التبويب',
+    crashPageBody:
+      'توقفت علامة التبويب هذه بشكل غير متوقع. اختر إعادة التحميل أو الإغلاق من مربع الحوار.',
+    dlgLoadFailed: 'فشل تحميل نافذة التطبيق.',
+    errUnhandledException: 'حدث خطأ غير متوقع. سيحاول التطبيق الاستمرار في العمل.',
   },
+
   pt: {
     menuFile: 'Arquivo',
     menuSectionNew: 'Novo',
@@ -1525,7 +1634,18 @@ const tMain = createI18n({
     updStatusUpToDate: 'O Airy está atualizado',
     updStatusFailed: 'Falha ao verificar atualizações',
     updStatusReady: 'Atualização pronta para instalar',
+    dlgRendererCrashed: 'O processo de renderização desta aba parou inesperadamente.',
+    dlgRendererCrashedDetail:
+      'O conteúdo da aba falhou ({reason}). Você pode recarregar ou fechar a aba.',
+    btnReload: 'Recarregar',
+    btnCloseTab: 'Fechar aba',
+    crashPageBody:
+      'Esta aba parou inesperadamente. Escolha Recarregar ou Fechar aba na caixa de diálogo.',
+    dlgLoadFailed: 'Falha ao carregar a janela do aplicativo.',
+    errUnhandledException:
+      'Ocorreu um erro inesperado. O aplicativo tentará continuar funcionando.',
   },
+
   it: {
     menuFile: 'File',
     menuSectionNew: 'Nuovo',
@@ -1620,7 +1740,18 @@ const tMain = createI18n({
     updStatusUpToDate: 'Airy è aggiornato',
     updStatusFailed: 'Ricerca aggiornamenti non riuscita',
     updStatusReady: 'Aggiornamento pronto da installare',
+    dlgRendererCrashed:
+      'Il processo di rendering di questa scheda si è interrotto in modo imprevisto.',
+    dlgRendererCrashedDetail:
+      'Il contenuto della scheda è andato in crash ({reason}). È possibile ricaricare o chiudere la scheda.',
+    btnReload: 'Ricarica',
+    btnCloseTab: 'Chiudi scheda',
+    crashPageBody:
+      'Questa scheda si è interrotta in modo imprevisto. Scegli Ricarica o Chiudi scheda nella finestra di dialogo.',
+    dlgLoadFailed: 'Impossibile caricare la finestra dell’app.',
+    errUnhandledException: 'Si è verificato un errore imprevisto. L’app proverà a continuare.',
   },
+
   pl: {
     menuFile: 'Plik',
     menuSectionNew: 'Nowy',
@@ -1715,7 +1846,17 @@ const tMain = createI18n({
     updStatusUpToDate: 'Airy jest aktualny',
     updStatusFailed: 'Nie udało się sprawdzić aktualizacji',
     updStatusReady: 'Aktualizacja gotowa do instalacji',
+    dlgRendererCrashed: 'Proces renderowania tej karty nieoczekiwanie zakończył działanie.',
+    dlgRendererCrashedDetail:
+      'Zawartość karty uległa awarii ({reason}). Można ponownie załadować lub zamknąć kartę.',
+    btnReload: 'Załaduj ponownie',
+    btnCloseTab: 'Zamknij kartę',
+    crashPageBody:
+      'Ta karta nieoczekiwanie przestała działać. W oknie dialogowym wybierz opcję ponownego załadowania lub zamknięcia karty.',
+    dlgLoadFailed: 'Nie udało się załadować okna aplikacji.',
+    errUnhandledException: 'Wystąpił nieoczekiwany błąd. Aplikacja spróbuje kontynuować działanie.',
   },
+
   cs: {
     menuFile: 'Soubor',
     menuSectionNew: 'Nový',
@@ -1808,7 +1949,17 @@ const tMain = createI18n({
     updStatusUpToDate: 'Airy je aktuální',
     updStatusFailed: 'Kontrola aktualizací se nezdařila',
     updStatusReady: 'Aktualizace je připravena k instalaci',
+    dlgRendererCrashed: 'Vykreslovací proces této karty se neočekávaně ukončil.',
+    dlgRendererCrashedDetail:
+      'Obsah karty selhal ({reason}). Kartu můžete znovu načíst nebo zavřít.',
+    btnReload: 'Znovu načíst',
+    btnCloseTab: 'Zavřít kartu',
+    crashPageBody:
+      'Tato karta se neočekávaně zastavila. V dialogovém okně zvolte Znovu načíst nebo Zavřít kartu.',
+    dlgLoadFailed: 'Okno aplikace se nepodařilo načíst.',
+    errUnhandledException: 'Došlo k neočekávané chybě. Aplikace se pokusí pokračovat.',
   },
+
   nl: {
     menuFile: 'Bestand',
     menuSectionNew: 'Nieuw',
@@ -1903,7 +2054,17 @@ const tMain = createI18n({
     updStatusUpToDate: 'Airy is up-to-date',
     updStatusFailed: 'Updatecontrole mislukt',
     updStatusReady: 'Update klaar om te installeren',
+    dlgRendererCrashed: 'Het renderproces van dit tabblad is onverwacht gestopt.',
+    dlgRendererCrashedDetail:
+      'De inhoud van het tabblad is gecrasht ({reason}). U kunt het tabblad opnieuw laden of sluiten.',
+    btnReload: 'Opnieuw laden',
+    btnCloseTab: 'Tabblad sluiten',
+    crashPageBody:
+      'Dit tabblad is onverwacht gestopt. Kies Opnieuw laden of Tabblad sluiten in het dialoogvenster.',
+    dlgLoadFailed: 'Het app-venster kon niet worden geladen.',
+    errUnhandledException: 'Er is een onverwachte fout opgetreden. De app probeert door te gaan.',
   },
+
   ms: {
     menuFile: 'Fail',
     menuSectionNew: 'Baharu',
@@ -1997,7 +2158,17 @@ const tMain = createI18n({
     updStatusUpToDate: 'Airy adalah versi terkini',
     updStatusFailed: 'Semakan kemas kini gagal',
     updStatusReady: 'Kemas kini sedia untuk dipasang',
+    dlgRendererCrashed: 'Proses pemapar tab ini telah berhenti secara tiba-tiba.',
+    dlgRendererCrashedDetail:
+      'Kandungan tab telah rosak ({reason}). Anda boleh memuat semula atau menutup tab tersebut.',
+    btnReload: 'Muat semula',
+    btnCloseTab: 'Tutup tab',
+    crashPageBody:
+      'Tab ini berhenti secara tiba-tiba. Pilih Muat semula atau Tutup tab pada dialog.',
+    dlgLoadFailed: 'Gagal memuat tetingkap aplikasi.',
+    errUnhandledException: 'Ralat tidak dijangka berlaku. Aplikasi akan cuba terus berjalan.',
   },
+
   he: {
     menuFile: 'קובץ',
     menuSectionNew: 'חדש',
@@ -2089,7 +2260,16 @@ const tMain = createI18n({
     updStatusUpToDate: 'Airy מעודכן',
     updStatusFailed: 'בדיקת העדכונים נכשלה',
     updStatusReady: 'העדכון מוכן להתקנה',
+    dlgRendererCrashed: 'תהליך העיבוד של כרטיסייה זו נעצר באופן בלתי צפוי.',
+    dlgRendererCrashedDetail:
+      'תוכן הכרטיסייה קרס ({reason}). ניתן לטעון מחדש או לסגור את הכרטיסייה.',
+    btnReload: 'טעינה מחדש',
+    btnCloseTab: 'סגירת הכרטיסייה',
+    crashPageBody: 'כרטיסייה זו נעצרה באופן בלתי צפוי. בחרו טעינה מחדש או סגירה בתיבת הדו-שיח.',
+    dlgLoadFailed: 'טעינת חלון היישום נכשלה.',
+    errUnhandledException: 'אירעה שגיאה בלתי צפויה. היישום ינסה להמשיך לפעול.',
   },
+
   hi: {
     menuFile: 'फ़ाइल',
     menuSectionNew: 'नया',
@@ -2184,7 +2364,16 @@ const tMain = createI18n({
     updStatusUpToDate: 'Airy अप-टू-डेट है',
     updStatusFailed: 'अपडेट जाँच विफल',
     updStatusReady: 'अपडेट इंस्टॉल हेतु तैयार',
+    dlgRendererCrashed: 'इस टैब की रेंडरर प्रक्रिया अचानक बंद हो गई।',
+    dlgRendererCrashedDetail:
+      'टैब की सामग्री क्रैश हो गई ({reason})। आप टैब पुनः लोड कर सकते हैं या बंद कर सकते हैं।',
+    btnReload: 'पुनः लोड करें',
+    btnCloseTab: 'टैब बंद करें',
+    crashPageBody: 'यह टैब अचानक बंद हो गया। संवाद बॉक्स में पुनः लोड करें या टैब बंद करें चुनें।',
+    dlgLoadFailed: 'ऐप विंडो लोड करने में विफल।',
+    errUnhandledException: 'अप्रत्याशित त्रुटि हुई। ऐप चलने का प्रयास करेगा।',
   },
+
   'zh-TW': {
     menuFile: '檔案',
     menuSectionNew: '新增',
@@ -2270,6 +2459,13 @@ const tMain = createI18n({
     updStatusUpToDate: '已是最新版本',
     updStatusFailed: '檢查更新失敗',
     updStatusReady: '更新已就緒，結束時安裝',
+    dlgRendererCrashed: '此分頁的渲染程序已意外停止。',
+    dlgRendererCrashedDetail: '分頁內容已當機（{reason}）。您可以重新載入或關閉該分頁。',
+    btnReload: '重新載入',
+    btnCloseTab: '關閉分頁',
+    crashPageBody: '此分頁已意外停止。請在對話框中選擇重新載入或關閉分頁。',
+    dlgLoadFailed: '應用程式視窗載入失敗。',
+    errUnhandledException: '發生意外錯誤。應用程式將嘗試繼續執行。',
   },
 })
 
@@ -2280,6 +2476,59 @@ const tm = (key: Parameters<typeof tMain>[1], params?: Parameters<typeof tMain>[
 
 let shellWindow: BrowserWindow | null = null
 let tabManager: TabManager | null = null
+/** Home renderer crashed and awaits its Reload decision (dedupe guard) */
+let homeRendererCrashed = false
+
+// ---- process-level safety net ----
+// All six apps' main code shares this one process, so an unhandled rejection
+// or a synchronous throw outside a handler used to kill every open document
+// tab. Rejections are logged only (they are common and mostly harmless; a
+// dialog per rejection would spam); uncaught exceptions additionally surface
+// through the single-flight error dialog and the app tries to keep running.
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[shell] unhandled rejection:', reason)
+})
+
+process.on('uncaughtException', (err) => {
+  console.error('[shell] uncaught exception:', err)
+  showErrorDialog(shellWindow, tm('errUnhandledException'), err)
+})
+
+app.on('child-process-gone', (_event, details) => {
+  // utility/network/GPU children: log for diagnostics; Chromium restarts them itself
+  console.error(`[shell] child process gone: type=${details.type} reason=${details.reason}`)
+})
+
+/** Prompt the user after a tab renderer crashed; Reload restarts it, Close drops it. */
+function promptRendererCrash(info: { id: string; title: string; reason: string }): void {
+  const manager = tabManager
+  if (!manager || !shellWindow || shellWindow.isDestroyed()) return
+  const isHome = info.id === 'home'
+  void dialog
+    .showMessageBox(shellWindow, {
+      type: 'error',
+      message: tm('dlgRendererCrashed'),
+      detail: tm('dlgRendererCrashedDetail', { reason: info.reason }),
+      buttons: [tm('btnReload'), ...(isHome ? [] : [tm('btnCloseTab')]), tm('btnCancel')],
+      defaultId: 0,
+      cancelId: isHome ? 1 : 2,
+    })
+    .then(({ response }) => {
+      if (response === 0) {
+        // Home is the shell window's own renderer, not a manager view
+        if (isHome && shellWindow && !shellWindow.isDestroyed()) {
+          homeRendererCrashed = false
+          shellWindow.webContents.reload()
+        } else {
+          manager.reloadTab(info.id)
+        }
+      } else if (response === 1 && !isHome) {
+        void manager.closeTab(info.id)
+      }
+    })
+    .catch(() => undefined)
+}
 
 /**
  * When the user creates a file from a specific project view, remember which
@@ -2389,8 +2638,21 @@ function createShellWindow(): void {
             : kind === 'html'
               ? tm('untitledHtml')
               : tm('untitledSheet'),
+    // renderer-crash recovery: in-tab error page + localized Reload/Close prompt
+    {
+      errorPageBody: () => tm('crashPageBody'),
+      onCrash: (info) => promptRendererCrash(info),
+    },
   )
   tabManager = manager
+
+  // The Home tab is the shell window's own renderer: same crash recovery as
+  // editor tabs (blank shell → prompt; Reload restarts it).
+  win.webContents.on('render-process-gone', (_event, details) => {
+    if (!isRecoverableRendererCrash(details.reason) || homeRendererCrashed) return
+    homeRendererCrashed = true
+    promptRendererCrash({ id: 'home', title: 'Airy', reason: details.reason })
+  })
 
   // pushRecent-triggered docs menu rebuilds must not clobber the active tab's menu
   setDocsMenuGate(() => manager.list().some((t) => t.active && t.kind === 'docs'))
@@ -2555,11 +2817,15 @@ function createShellWindow(): void {
     if (tabManager === manager) tabManager = null
   })
 
-  if (process.env.ELECTRON_RENDERER_URL) {
-    void win.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    void win.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+  // A rejected load used to become an unhandled rejection; surface it instead
+  // (single-flight error dialog) so a missing/corrupt bundle is visible.
+  const shellLoad = process.env.ELECTRON_RENDERER_URL
+    ? win.loadURL(process.env.ELECTRON_RENDERER_URL)
+    : win.loadFile(join(__dirname, '../renderer/index.html'))
+  shellLoad.catch((err: unknown) => {
+    console.error('[shell] renderer load failed:', err)
+    showErrorDialog(win, tm('dlgLoadFailed'), err)
+  })
 }
 
 // ---- routing: one dispatch function for every open path ----

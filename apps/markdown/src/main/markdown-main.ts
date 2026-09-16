@@ -22,6 +22,7 @@ import {
   safeExternalUrl,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
+  voidLoad,
 } from '@airy-office/electron-utils'
 import { createI18n, getUiLang } from '@airy-office/i18n'
 import { generateImageTool } from '@airy-office/ai-search'
@@ -877,8 +878,10 @@ export function createMarkdownView(openPath?: string | null): WebContentsView {
     },
   })
   grantAndTrack(view.webContents, openPath)
-  if (runtime.rendererUrl) void view.webContents.loadURL(runtime.rendererUrl)
-  else if (runtime.rendererFile) void view.webContents.loadFile(runtime.rendererFile)
+  if (runtime.rendererUrl)
+    voidLoad(view.webContents.loadURL(runtime.rendererUrl), 'markdown tab renderer')
+  else if (runtime.rendererFile)
+    voidLoad(view.webContents.loadFile(runtime.rendererFile), 'markdown tab renderer')
   return view
 }
 
@@ -905,8 +908,8 @@ export function startMarkdownStandalone(): void {
     })
     const argPath = process.argv.slice(1).find((a) => /\.(md|markdown)$/i.test(a) && existsSync(a))
     grantAndTrack(win.webContents, argPath)
-    if (runtime.rendererUrl) void win.loadURL(runtime.rendererUrl)
-    else if (runtime.rendererFile) void win.loadFile(runtime.rendererFile)
+    if (runtime.rendererUrl) voidLoad(win.loadURL(runtime.rendererUrl), 'markdown window')
+    else if (runtime.rendererFile) voidLoad(win.loadFile(runtime.rendererFile), 'markdown window')
   })
   app.on('window-all-closed', () => app.quit())
 }

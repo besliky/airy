@@ -12,8 +12,9 @@ interface FakeWebContents {
   on: ReturnType<typeof vi.fn>
   close: ReturnType<typeof vi.fn>
   reload: ReturnType<typeof vi.fn>
+  loadURL: ReturnType<typeof vi.fn>
   isDestroyed: ReturnType<typeof vi.fn>
-  listeners: Map<string, () => void>
+  listeners: Map<string, (event?: unknown, details?: unknown) => void>
 }
 
 interface FakeView {
@@ -35,6 +36,7 @@ function makeFakeView(): FakeView {
       }),
       close: vi.fn(),
       reload: vi.fn(),
+      loadURL: vi.fn(() => Promise.resolve()),
       isDestroyed: vi.fn(() => false),
     },
     setVisible: vi.fn(),
@@ -518,5 +520,82 @@ describe('dirty-tab queries (shell close guard)', () => {
     manager.openSheetsTab()
     manager.openDocsTab('/tmp/a.docx')
     expect(manager.docsTabs().map((t) => t.id)).toEqual(['t1', 't3'])
+  })
+})
+
+describe('renderer crash recovery', () => {
+  function makeCrashManager() {
+    const onCrash = vi.fn()
+    const errorPageBody = vi.fn(() => 'This tab stopped unexpectedly.')
+    const manager = new TabManager(
+      shellWindow as never,
+      () => onChanged(),
+      (kind) => applyMenuFor(kind),
+      undefined,
+      { errorPageBody, onCrash },
+    )
+    return { manager, onCrash, errorPageBody }
+  }
+
+  function emitCrash(view: FakeView, reason: string): void {
+    const handler = view.webContents.listeners.get('render-process-gone')
+    expect(handler).toBeDefined()
+    handler!({}, { reason })
+  }
+
+  it('marks a crashed tab, shows the error page and notifies the shell', () => {
+    const { manager, onCrash } = makeCrashManager()
+    const id = manager.openDocsTab('/tmp/report.docx')
+    const view = lastCreatedView(createDocsView)
+    expect(manager.isTabCrashed(id)).toBe(false)
+
+    emitCrash(view, 'oom')
+
+    expect(manager.isTabCrashed(id)).toBe(true)
+    expect(onCrash).toHaveBeenCalledWith({
+      id,
+      kind: 'docs',
+      title: 'report.docx',
+      reason: 'oom',
+    })
+    // in-tab error state replaces the dead renderer content
+    expect(view.webContents.loadURL).toHaveBeenCalledTimes(1)
+    const url = view.webContents.loadURL.mock.calls[0]![0] as string
+    expect(url.startsWith('data:text/html;charset=utf-8,')).toBe(true)
+    expect(decodeURIComponent(url)).toContain('This tab stopped unexpectedly.')
+  })
+
+  it('reloadTab clears the crashed state and restarts the renderer', () => {
+    const { manager } = makeCrashManager()
+    const id = manager.openDocsTab()
+    const view = lastCreatedView(createDocsView)
+    emitCrash(view, 'crashed')
+
+    manager.reloadTab(id)
+
+    expect(manager.isTabCrashed(id)).toBe(false)
+    expect(view.webContents.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores intentional teardown reasons', () => {
+    const { manager, onCrash } = makeCrashManager()
+    manager.openDocsTab()
+    const view = lastCreatedView(createDocsView)
+
+    emitCrash(view, 'clean-exit')
+
+    expect(onCrash).not.toHaveBeenCalled()
+    expect(view.webContents.loadURL).not.toHaveBeenCalled()
+  })
+
+  it('prompts only once for a repeated crash signal', () => {
+    const { manager, onCrash } = makeCrashManager()
+    const id = manager.openDocsTab()
+    const view = lastCreatedView(createDocsView)
+    emitCrash(view, 'oom')
+    emitCrash(view, 'oom')
+
+    expect(onCrash).toHaveBeenCalledTimes(1)
+    expect(manager.isTabCrashed(id)).toBe(true)
   })
 })

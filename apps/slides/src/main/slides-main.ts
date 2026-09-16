@@ -39,6 +39,7 @@ import {
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
   toggleDevToolsItem,
+  voidLoad,
 } from '@airy-office/electron-utils'
 import {
   resolveGroupChildId,
@@ -4359,9 +4360,12 @@ export function createSlidesView(openPath?: string | null): WebContentsView {
     // append via URL so a dev URL that already carries query params stays valid
     const devUrl = new URL(runtime.rendererDevUrl)
     devUrl.searchParams.set('mode', 'tab')
-    void view.webContents.loadURL(devUrl.toString())
+    voidLoad(view.webContents.loadURL(devUrl.toString()), 'slides tab renderer')
   } else if (runtime.rendererFilePath)
-    void view.webContents.loadFile(runtime.rendererFilePath, { query: { mode: 'tab' } })
+    voidLoad(
+      view.webContents.loadFile(runtime.rendererFilePath, { query: { mode: 'tab' } }),
+      'slides tab renderer',
+    )
   return view
 }
 

@@ -10,6 +10,7 @@ import { BrowserWindow, ipcMain, screen } from 'electron'
 import type { WebContents } from 'electron'
 import type { AudienceNavAction, ShowInkEvent, ShowSyncState } from '../shared/ipc'
 import { runtime, sessions, viewerWcIds, windowRefs } from './session-state'
+import { voidLoad } from '@airy-office/electron-utils'
 
 interface PresenterShow {
   presenterWc: WebContents
@@ -98,9 +99,15 @@ export function registerPresenterIpc(): void {
     })
     if (runtime.rendererDevUrl) {
       const sep = runtime.rendererDevUrl.includes('?') ? '&' : '?'
-      void win.loadURL(`${runtime.rendererDevUrl}${sep}mode=audience`)
+      voidLoad(
+        win.loadURL(`${runtime.rendererDevUrl}${sep}mode=audience`),
+        'slides presenter window',
+      )
     } else if (runtime.rendererFilePath) {
-      void win.loadFile(runtime.rendererFilePath, { query: { mode: 'audience' } })
+      voidLoad(
+        win.loadFile(runtime.rendererFilePath, { query: { mode: 'audience' } }),
+        'slides presenter window',
+      )
     }
     return { audience: true }
   })
