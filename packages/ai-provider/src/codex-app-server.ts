@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { access, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
-import { delimiter, dirname, isAbsolute, join, resolve, sep } from 'node:path'
+import { delimiter, dirname, isAbsolute, join, posix, resolve, sep, win32 } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { AgentImage, AgentMessage, AgentToolCall, AgentToolDef } from '@airy-office/agent-core'
 import type { AiChatResponse, AiProviderConfig, CodexModelCatalog } from './types'
@@ -190,6 +190,27 @@ async function codexOnPath(
 }
 
 /**
+ * Basenames a configured CLI path may resolve to. The path arrives from a
+ * renderer, so an arbitrary existing executable (e.g. /bin/sh) must never be
+ * spawned: only these names are honored, everything else falls through to the
+ * default discovery.
+ */
+const CODEX_EXECUTABLE_BASENAMES: Record<'posix' | 'win32', readonly string[]> = {
+  posix: ['codex'],
+  win32: ['codex.exe', 'codex.cmd', 'codex.bat'],
+}
+
+export function isCodexCliCandidatePath(path: string, platform?: NodeJS.Platform): boolean {
+  const resolvedPlatform = platform ?? process.platform
+  // Use the checked platform's basename so Windows backslash paths classify
+  // correctly even when the check runs on POSIX (and vice versa).
+  const name = (resolvedPlatform === 'win32' ? win32.basename : posix.basename)(path.trim())
+  const names = CODEX_EXECUTABLE_BASENAMES[resolvedPlatform === 'win32' ? 'win32' : 'posix']
+  const compare = resolvedPlatform === 'win32' ? name.toLowerCase() : name
+  return names.includes(compare)
+}
+
+/**
  * Resolve the current Codex CLI on demand. Desktop-managed paths contain a
  * release hash, so a saved path inside that tree is intentionally treated as
  * automatic and upgraded to the newest complete installation.
@@ -212,9 +233,13 @@ export async function resolveCodexCliPath(
       managedRoot && isAbsolute(configuredExecutable)
         ? isInside(configuredExecutable, managedRoot, platform)
         : false
-    if (!managed) {
-      if (!isAbsolute(configuredExecutable)) return configuredExecutable
-      if (await fileExists(configuredExecutable)) return configuredExecutable
+    if (
+      !managed &&
+      isAbsolute(configuredExecutable) &&
+      isCodexCliCandidatePath(configuredExecutable, platform) &&
+      (await fileExists(configuredExecutable))
+    ) {
+      return configuredExecutable
     }
   }
 

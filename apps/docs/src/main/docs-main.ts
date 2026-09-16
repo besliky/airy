@@ -73,7 +73,11 @@ import {
   type AiStreamRequest,
   type LegacyAiSettings,
 } from '@airy-office/ai-provider'
-import { listCodexModels, shutdownCodexAppServers } from '@airy-office/ai-provider/codex-app-server'
+import {
+  isCodexCliCandidatePath,
+  listCodexModels,
+  shutdownCodexAppServers,
+} from '@airy-office/ai-provider/codex-app-server'
 import {
   generateImageTool,
   testSearchProvider,
@@ -2735,6 +2739,14 @@ export function registerAiIpc(): void {
   })
 
   ipcMain.handle('ai:codex-models', async (_event, cliPath: unknown) => {
+    // The path is renderer-supplied: reject non-codex executables up front so a
+    // compromised renderer cannot ask the main process to spawn an arbitrary
+    // binary (resolveCodexCliPath re-checks before anything is spawned).
+    if (typeof cliPath === 'string' && cliPath.trim() && !isCodexCliCandidatePath(cliPath)) {
+      throw new Error(
+        'Custom Codex CLI path rejected: the executable must be named codex (codex.exe/.cmd/.bat on Windows).',
+      )
+    }
     return listCodexModels(typeof cliPath === 'string' ? cliPath : undefined)
   })
 
