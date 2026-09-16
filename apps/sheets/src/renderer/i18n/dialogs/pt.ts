@@ -401,4 +401,12 @@ export const pt = {
   dlgFnDescNpv: 'Retorna o valor presente líquido de um fluxo de caixa a uma taxa de desconto.',
   dlgFnDescIrr: 'Retorna a taxa interna de retorno de uma série de fluxos de caixa.',
   dlgFnCatFinancial: 'Financeira',
+  dlgFnCatDatabase: 'Banco de dados',
+  dlgFnCatEngineering: 'Engenharia',
+  dlgFnCatInformation: 'Informação',
+  dlgFnCatCompatibility: 'Compatibilidade',
+  dlgFnCatCube: 'Cubo',
+  dlgFnCatWeb: 'Web',
+  dlgFnCatArray: 'Matriz',
+  dlgFnCatMore: 'Mais',
 } satisfies Record<keyof typeof zh, string>

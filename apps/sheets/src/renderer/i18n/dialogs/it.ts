@@ -402,4 +402,12 @@ export const it = {
   dlgFnDescNpv: 'Restituisce il valore attuale netto di un flusso di cassa a un tasso di sconto.',
   dlgFnDescIrr: 'Restituisce il tasso di rendimento interno di una serie di flussi.',
   dlgFnCatFinancial: 'Finanziarie',
+  dlgFnCatDatabase: 'Database',
+  dlgFnCatEngineering: 'Ingegneria',
+  dlgFnCatInformation: 'Informazioni',
+  dlgFnCatCompatibility: 'Compatibilità',
+  dlgFnCatCube: 'Cubo',
+  dlgFnCatWeb: 'Web',
+  dlgFnCatArray: 'Matrice',
+  dlgFnCatMore: 'Altro',
 } satisfies Record<keyof typeof zh, string>

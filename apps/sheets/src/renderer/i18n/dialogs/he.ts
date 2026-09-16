@@ -393,4 +393,12 @@ export const he = {
   dlgFnDescNpv: 'מחזיר את הערך הנוכחי הנקי של תזרים מזומנים בשיעור היוון.',
   dlgFnDescIrr: 'מחזיר את שיעור התשואה הפנימי של סדרת תזרימים.',
   dlgFnCatFinancial: 'פיננסי',
+  dlgFnCatDatabase: 'מסד נתונים',
+  dlgFnCatEngineering: 'הנדסה',
+  dlgFnCatInformation: 'מידע',
+  dlgFnCatCompatibility: 'תאימות',
+  dlgFnCatCube: 'קובייה',
+  dlgFnCatWeb: 'Web',
+  dlgFnCatArray: 'מערך',
+  dlgFnCatMore: 'אחר',
 } satisfies Record<keyof typeof zh, string>

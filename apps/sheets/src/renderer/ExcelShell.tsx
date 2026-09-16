@@ -54,6 +54,7 @@ import {
 import type { GoalSeekResult } from './goal-seek'
 import { GoalSeekDialog } from './GoalSeekDialog'
 import { InsertFunctionDialog } from './InsertFunctionDialog'
+import type { CatalogFunction } from './function-catalog'
 import { SubtotalDialog, type SubtotalConfig } from './SubtotalDialog'
 import { ConsolidateDialog } from './ConsolidateDialog'
 import type { ConsolidateConfig } from './consolidate'
@@ -274,6 +275,9 @@ interface ExcelShellProps {
   readonly onGoToReference: (ref: string) => string | null
   readonly onListDefinedNames: () => readonly { name: string; ref: string }[]
   readonly onApplyFormula: (formula: string) => string | null
+  /// Builds the Insert Function catalog from the live Univer registry;
+  /// called when the dialog opens (the registry must have landed by then).
+  readonly getFunctionCatalog: () => readonly CatalogFunction[]
   readonly onCreateSubtotal: (config: SubtotalConfig) => string | null
   readonly onCreateConsolidate: (config: ConsolidateConfig) => string | null
   /// Prefill for the Consolidate reference input (current multi-cell selection).
@@ -344,6 +348,7 @@ export function ExcelShell({
   onGoToReference,
   onListDefinedNames,
   onApplyFormula,
+  getFunctionCatalog,
   onCreateSubtotal,
   onCreateConsolidate,
   onGetConsolidateDefault,
@@ -828,6 +833,7 @@ export function ExcelShell({
           targetLabel={onGetActiveCell()}
           onApply={onApplyFormula}
           initialCategory={insertFunctionCat}
+          getCatalog={getFunctionCatalog}
           onClose={() => setInsertFunctionCat(null)}
         />
       )}

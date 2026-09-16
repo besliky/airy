@@ -399,4 +399,12 @@ export const ms = {
   dlgFnDescNpv: 'Mengembalikan nilai kini bersih aliran tunai pada kadar diskaun.',
   dlgFnDescIrr: 'Mengembalikan kadar pulangan dalaman satu siri aliran tunai.',
   dlgFnCatFinancial: 'Kewangan',
+  dlgFnCatDatabase: 'Pangkalan data',
+  dlgFnCatEngineering: 'Kejuruteraan',
+  dlgFnCatInformation: 'Maklumat',
+  dlgFnCatCompatibility: 'Keserasian',
+  dlgFnCatCube: 'Kubus',
+  dlgFnCatWeb: 'Web',
+  dlgFnCatArray: 'Tatasusunan',
+  dlgFnCatMore: 'Lain-lain',
 } satisfies Record<keyof typeof zh, string>

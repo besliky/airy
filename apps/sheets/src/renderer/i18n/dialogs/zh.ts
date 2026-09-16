@@ -385,4 +385,12 @@ export const zh = {
   dlgFnDescNpv: '按贴现率计算现金流的净现值。',
   dlgFnDescIrr: '计算一系列现金流的内部收益率。',
   dlgFnCatFinancial: '财务',
+  dlgFnCatDatabase: '数据库',
+  dlgFnCatEngineering: '工程',
+  dlgFnCatInformation: '信息',
+  dlgFnCatCompatibility: '兼容性',
+  dlgFnCatCube: '多维数据集',
+  dlgFnCatWeb: 'Web',
+  dlgFnCatArray: '数组',
+  dlgFnCatMore: '其他',
 }

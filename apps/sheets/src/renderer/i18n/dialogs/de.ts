@@ -404,4 +404,12 @@ export const de = {
   dlgFnDescNpv: 'Gibt den Nettobarwert eines Cashflows bei einem Abschlagssatz zurück.',
   dlgFnDescIrr: 'Gibt den internen Zinsfuß einer Cashflow-Reihe zurück.',
   dlgFnCatFinancial: 'Finanzmathematik',
+  dlgFnCatDatabase: 'Datenbank',
+  dlgFnCatEngineering: 'Technik',
+  dlgFnCatInformation: 'Information',
+  dlgFnCatCompatibility: 'Kompatibilität',
+  dlgFnCatCube: 'Cube',
+  dlgFnCatWeb: 'Web',
+  dlgFnCatArray: 'Matrix',
+  dlgFnCatMore: 'Weitere',
 } satisfies Record<keyof typeof zh, string>

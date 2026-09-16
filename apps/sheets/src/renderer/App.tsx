@@ -73,7 +73,7 @@ import {
   type IRange,
   type IStyleData,
 } from '@univerjs/core'
-import { FormulaExecutedStateType } from '@univerjs/engine-formula'
+import { FormulaExecutedStateType, IFunctionService } from '@univerjs/engine-formula'
 import { IFindReplaceService } from '@univerjs/find-replace'
 import { UniverSheetsConditionalFormattingPreset } from '@univerjs/preset-sheets-conditional-formatting'
 import UniverPresetSheetsConditionalFormattingEnUS from '@univerjs/preset-sheets-conditional-formatting/locales/en-US'
@@ -274,6 +274,8 @@ import {
 } from './formula-view'
 import { installCachedValueFallbackInterceptor } from './formula-cached-fallback'
 import { installSupportedFunctionProbe } from './function-registry-probe'
+import { buildFunctionCatalog } from './function-catalog'
+import { CURATED_FUNCTIONS } from './InsertFunctionDialog'
 import { installCellFilenameFunction } from './cell-function'
 import { installFormulaLexerFix } from './formula-lexer-fix'
 import { installFormulaNewlineDisplay } from './formula-newline-display'
@@ -425,6 +427,24 @@ function dateTextKind(value: string): 'date-like' | 'text' {
   dateTextKinds.set(value, kind)
   return kind
 }
+
+/// The merged Univer en-US locale tree: every preset pack plus the app's
+/// sheets-ui patches. Shared by createUniver and the Insert Function
+/// catalog (sheets-formula.functionList descriptions).
+const UNIVER_EN_US_LOCALE = mergeLocales(
+  UniverPresetSheetsCoreEnUS,
+  UniverPresetSheetsConditionalFormattingEnUS,
+  UniverPresetSheetsFilterEnUS,
+  UniverPresetSheetsDataValidationEnUS,
+  UniverPresetSheetsNoteEnUS,
+  UniverPresetSheetsFindReplaceEnUS,
+  UniverPresetSheetsSortEnUS,
+  UniverPresetSheetsTableEnUS,
+  numberAsTextAlertLocale(UniverPresetSheetsCoreEnUS),
+  // last wins per namespace: feed the alert-patched pack through so
+  // both sheets-ui patches survive the shallow merge
+  insertRowsBelowLocale(numberAsTextAlertLocale(UniverPresetSheetsCoreEnUS)),
+)
 
 export function App(): React.JSX.Element {
   const adapterRef = useRef(new InMemoryWorkbookAdapter(initialSnapshot))
@@ -1374,22 +1394,7 @@ export function App(): React.JSX.Element {
       theme: greenTheme,
       darkMode: isDarkTheme(),
       locale: LocaleType.EN_US,
-      locales: {
-        [LocaleType.EN_US]: mergeLocales(
-          UniverPresetSheetsCoreEnUS,
-          UniverPresetSheetsConditionalFormattingEnUS,
-          UniverPresetSheetsFilterEnUS,
-          UniverPresetSheetsDataValidationEnUS,
-          UniverPresetSheetsNoteEnUS,
-          UniverPresetSheetsFindReplaceEnUS,
-          UniverPresetSheetsSortEnUS,
-          UniverPresetSheetsTableEnUS,
-          numberAsTextAlertLocale(UniverPresetSheetsCoreEnUS),
-          // last wins per namespace: feed the alert-patched pack through so
-          // both sheets-ui patches survive the shallow merge
-          insertRowsBelowLocale(numberAsTextAlertLocale(UniverPresetSheetsCoreEnUS)),
-        ),
-      },
+      locales: { [LocaleType.EN_US]: UNIVER_EN_US_LOCALE },
       presets: [
         UniverSheetsCorePreset({
           container: 'univer-container',
@@ -4207,6 +4212,15 @@ export function App(): React.JSX.Element {
         onGoToReference={(ref) => goToReferenceImpl(dataToolsContext(), ref)}
         onListDefinedNames={() => listDefinedNamesImpl(dataToolsContext())}
         onApplyFormula={(formula) => handleApplyFormulaImpl(dataToolsContext(), formula)}
+        getFunctionCatalog={() =>
+          buildFunctionCatalog(
+            univerRef.current
+              ? univerRef.current.univer.__getInjector().get(IFunctionService)
+              : null,
+            UNIVER_EN_US_LOCALE,
+            CURATED_FUNCTIONS,
+          )
+        }
         onCreateSubtotal={(config) => handleCreateSubtotalImpl(dataToolsContext(), config)}
         onCreateConsolidate={(config) => handleCreateConsolidateImpl(dataToolsContext(), config)}
         onGetConsolidateDefault={() => consolidateDefaultReferenceImpl(dataToolsContext())}

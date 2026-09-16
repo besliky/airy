@@ -399,4 +399,12 @@ export const ja = {
   dlgFnDescNpv: '割引率に基づくキャッシュフローの正味現在価値を返します。',
   dlgFnDescIrr: '一連のキャッシュフローの内部収益率を返します。',
   dlgFnCatFinancial: '財務',
+  dlgFnCatDatabase: 'データベース',
+  dlgFnCatEngineering: 'エンジニアリング',
+  dlgFnCatInformation: '情報',
+  dlgFnCatCompatibility: '互換性',
+  dlgFnCatCube: 'キューブ',
+  dlgFnCatWeb: 'Web',
+  dlgFnCatArray: '配列',
+  dlgFnCatMore: 'その他',
 } satisfies Record<keyof typeof zh, string>

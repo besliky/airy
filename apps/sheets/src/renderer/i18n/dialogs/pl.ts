@@ -402,4 +402,12 @@ export const pl = {
   dlgFnDescNpv: 'Zwraca wartość bieżącą netto przepływów przy danej stopie dyskontowej.',
   dlgFnDescIrr: 'Zwraca wewnętrzną stopę zwrotu dla serii przepływów.',
   dlgFnCatFinancial: 'Finansowe',
+  dlgFnCatDatabase: 'Baza danych',
+  dlgFnCatEngineering: 'Inżynierskie',
+  dlgFnCatInformation: 'Informacje',
+  dlgFnCatCompatibility: 'Zgodność',
+  dlgFnCatCube: 'Moduł',
+  dlgFnCatWeb: 'Web',
+  dlgFnCatArray: 'Tablice',
+  dlgFnCatMore: 'Inne',
 } satisfies Record<keyof typeof zh, string>
