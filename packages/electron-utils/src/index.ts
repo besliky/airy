@@ -53,3 +53,12 @@ export {
   type PrintWindow,
 } from './print-html-pdf'
 export { crashErrorPageUrl, isRecoverableRendererCrash, voidLoad } from './process-safety'
+export {
+  grantRendererDir,
+  grantRendererFileAccess,
+  grantedRendererDirs,
+  isPathInsideDir,
+  pathIsInsideAny,
+  rendererMayReadPath,
+  resetRendererFileGrants,
+} from './renderer-file-access'

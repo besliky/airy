@@ -41,9 +41,11 @@ import {
   configuredDefaultSaveDir,
   contextMenuLabels,
   fetchRemoteImage,
+  grantRendererFileAccess,
   installContextMenu,
   installNavigationGuard,
   printHtmlToPdf,
+  rendererMayReadPath,
   safeExternalUrl,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
@@ -1994,8 +1996,12 @@ function collectAttachments(paths: string[]): AttachmentAddResult {
   const rejected: string[] = []
   for (const p of paths) {
     const { meta, error } = statAttachment(p)
-    if (meta) accepted.push(meta)
-    else if (error) rejected.push(error)
+    // accepted = user-chosen attachment (dialog pick or drag-drop): its
+    // folder joins the renderer read allowlist for the read channels
+    if (meta) {
+      grantRendererFileAccess(p)
+      accepted.push(meta)
+    } else if (error) rejected.push(error)
   }
   return { accepted, rejected }
 }
@@ -2959,6 +2965,10 @@ export function registerSheetsIpc(): void {
       if (ATTACHMENT_IMAGE_EXTS.has(ext)) {
         return { ok: false, error: tm('errImageNoText') }
       }
+      // only attachments from granted directories (see collectAttachments)
+      if (!rendererMayReadPath(validatedPath)) {
+        return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
+      }
       try {
         const text = await extractAttachmentText(validatedPath)
         const start = Math.max(0, Math.floor(Number(offset)) || 0)
@@ -2985,6 +2995,10 @@ export function registerSheetsIpc(): void {
     const ext = name.split('.').pop()?.toLowerCase() ?? ''
     const mime = ATTACHMENT_IMAGE_MIME[ext]
     if (!mime) return { ok: false, error: `${name}: ${tm('errNotImage')}` }
+    // only attachments from granted directories (see collectAttachments)
+    if (!rendererMayReadPath(validatedPath)) {
+      return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
+    }
     try {
       const stat = statSync(validatedPath)
       if (stat.size > ATTACHMENT_IMAGE_MAX_BYTES) {

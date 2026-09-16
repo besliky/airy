@@ -32,8 +32,10 @@ import {
   configuredDefaultSaveDir,
   contextMenuLabels,
   fetchRemoteImage,
+  grantRendererFileAccess,
   installContextMenu,
   installNavigationGuard,
+  rendererMayReadPath,
   safeExternalUrl,
   saveAsSuggestion,
   showOpenDialogWithMemory,
@@ -355,8 +357,18 @@ async function handleRendererFreeze(wc: WebContents): Promise<void> {
   }
 }
 
+/**
+ * Renderers allowed to receive a screen-capture stream. The display-media
+ * handler below answers for the whole default session, so every other
+ * renderer (docs, sheets, home, …) must be denied: granting sources[0]
+ * unconditionally would hand a live primary-screen stream to any code that
+ * manages to run in one of them.
+ */
+const screenCaptureWcIds = new Set<number>()
+
 function trackSlidesWebContents(wc: WebContents): void {
   windowRefs.activeWebContents = wc
+  screenCaptureWcIds.add(wc.id)
   wc.on('unresponsive', () => void handleRendererFreeze(wc))
   // The AI panel opens links via window.open; route them to the system
   // browser instead of spawning an in-app window with remote content.
@@ -376,6 +388,7 @@ function trackSlidesWebContents(wc: WebContents): void {
     closeSaveWaiters.get(wc.id)?.(false)
     closeSaveWaiters.delete(wc.id)
     autoSavePrefByWc.delete(wc.id)
+    screenCaptureWcIds.delete(wc.id)
     if (windowRefs.activeWebContents === wc) windowRefs.activeWebContents = null
   })
 }
@@ -1042,11 +1055,20 @@ export function registerSlidesIpc(): void {
   ipcMain.handle('app:get-language', () => getUiLang())
 
   // Screen recording: source dispatch for the renderer's navigator.mediaDevices.getDisplayMedia.
-  // macOS prefers the system picker (with its permission flow), falling back to the first screen.
+  // Scoped to slides renderers only (screenCaptureWcIds): the handler answers
+  // for the whole default session, and answering any other renderer would
+  // grant it a live screen stream with no prompt. macOS prefers the system
+  // picker (with its permission flow), falling back to the first screen.
   void app.whenReady().then(() => {
     try {
       electronSession.defaultSession.setDisplayMediaRequestHandler(
-        (_request, callback) => {
+        (request, callback) => {
+          // frame null on torn-down renderers; fromFrame null when unknown
+          const wc = request.frame ? webContents.fromFrame(request.frame) : null
+          if (!wc || !screenCaptureWcIds.has(wc.id)) {
+            callback({})
+            return
+          }
           desktopCapturer
             .getSources({ types: ['screen', 'window'] })
             .then((sources) => {
@@ -1162,6 +1184,9 @@ export function registerSlidesIpc(): void {
 
   ipcMain.handle('slides:open-path', async (e, path: string, fitWidthPx: number) => {
     if (!path || !existsSync(path)) return null
+    // renderer-named path: only granted directories (shell-routed opens,
+    // dialog picks, recents served by slides:recent) may be parsed
+    if (!rendererMayReadPath(path)) return null
     if (await rejectLegacyPpt(path)) return null
     return openAndBuild(e.sender, path, fitWidthPx)
   })
@@ -4123,7 +4148,13 @@ export function registerSlidesIpc(): void {
     },
   )
 
-  ipcMain.handle('slides:recent', () => readRecent())
+  ipcMain.handle('slides:recent', async () => {
+    // recents are the user's own decks: serving them also (re)grants their
+    // folders so slides:open-path works for last session's files
+    const recent = await readRecent()
+    for (const p of recent) grantRendererFileAccess(p)
+    return recent
+  })
 
   // ── Show fullscreen: macOS native fullscreen is an animated Space transition, so
   // the slideshow would render windowed for ~1s mid-flight. Instead one call covers

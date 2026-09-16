@@ -8,7 +8,11 @@
 import { app, dialog, ipcMain } from 'electron'
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { showOpenDialogWithMemory } from '@airy-office/electron-utils'
+import {
+  grantRendererFileAccess,
+  rendererMayReadPath,
+  showOpenDialogWithMemory,
+} from '@airy-office/electron-utils'
 import { parseFileToText } from '@airy-office/file-parse'
 import type {
   AttachmentAddResult,
@@ -104,8 +108,12 @@ function collectAttachments(paths: string[]): AttachmentAddResult {
   const rejected: string[] = []
   for (const p of paths) {
     const { meta, error } = statAttachment(p)
-    if (meta) accepted.push(meta)
-    else if (error) rejected.push(error)
+    // accepted = user-chosen attachment (dialog pick or drag-drop): its
+    // folder joins the renderer read allowlist for the read channels
+    if (meta) {
+      grantRendererFileAccess(p)
+      accepted.push(meta)
+    } else if (error) rejected.push(error)
   }
   return { accepted, rejected }
 }
@@ -183,6 +191,10 @@ export function registerAttachmentIpc(): void {
       if (ATTACHMENT_IMAGE_EXTS.has(ext)) {
         return { ok: false, error: tm('errImageNoText') }
       }
+      // only attachments from granted directories (see collectAttachments)
+      if (!rendererMayReadPath(filePath)) {
+        return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
+      }
       try {
         const text = await extractAttachmentText(filePath)
         const start = Math.max(0, Math.floor(offset) || 0)
@@ -206,6 +218,10 @@ export function registerAttachmentIpc(): void {
     const ext = name.split('.').pop()?.toLowerCase() ?? ''
     const mime = ATTACHMENT_IMAGE_MIME[ext]
     if (!mime) return { ok: false, error: `${name}: ${tm('errNotImage')}` }
+    // only attachments from granted directories (see collectAttachments)
+    if (!rendererMayReadPath(filePath)) {
+      return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
+    }
     try {
       const stat = statSync(filePath)
       if (stat.size > ATTACHMENT_IMAGE_MAX_BYTES) {

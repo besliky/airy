@@ -28,9 +28,11 @@ import {
   configuredDefaultSaveDir,
   contextMenuLabels,
   fetchRemoteImage,
+  grantRendererFileAccess,
   installContextMenu,
   installNavigationGuard,
   printHtmlToPdf,
+  rendererMayReadPath,
   safeExternalUrl,
   saveAsSuggestion,
   showOpenDialogWithMemory,
@@ -2170,6 +2172,8 @@ export function uniquePathIn(dir: string, fileName: string): string {
 
 export function openExternalDocx(filePath: string | null): void {
   if (!filePath || !/\.docx$/i.test(filePath)) return
+  // OS-level open (file association / dock / argv): user-intended, grant it
+  grantRendererFileAccess(filePath)
   const win = BrowserWindow.getFocusedWindow() ?? mainWindow
   if (!rendererReady || !win) {
     pendingOpenPath = filePath
@@ -2664,8 +2668,12 @@ function collectAttachments(paths: string[]): AttachmentAddResult {
   const rejected: string[] = []
   for (const p of paths) {
     const { meta, error } = statAttachment(p)
-    if (meta) accepted.push(meta)
-    else if (error) rejected.push(error)
+    // accepted = user-chosen attachment (dialog pick or drag-drop): its
+    // folder joins the renderer read allowlist for the read channels
+    if (meta) {
+      grantRendererFileAccess(p)
+      accepted.push(meta)
+    } else if (error) rejected.push(error)
   }
   return { accepted, rejected }
 }
@@ -3191,7 +3199,13 @@ export function registerDocsIpc(): void {
     return loadDocx(result.filePaths[0], event.sender.id)
   })
 
-  ipcMain.handle('docs:open-path', (event, filePath: string) => loadDocx(filePath, event.sender.id))
+  // renderer-named path: only files inside a granted directory (dialog pick,
+  // shell-routed open, pending open queued by main) may be parsed
+  ipcMain.handle('docs:open-path', (event, filePath: string) =>
+    typeof filePath === 'string' && rendererMayReadPath(filePath)
+      ? loadDocx(filePath, event.sender.id)
+      : null,
+  )
 
   // Review > Protect > Encrypt with Password: set/clear the open password.
   // Takes effect on the next save (docs:save / save-as / save-new all consult the store).
@@ -3484,9 +3498,13 @@ export function registerDocsIpc(): void {
       createAiDocument(request),
   )
 
-  ipcMain.handle('docs:recent', () =>
-    readJson<string[]>(RECENT_PATH(), []).filter((p) => existsSync(p)),
-  )
+  ipcMain.handle('docs:recent', () => {
+    // recents are the user's own documents: serving them also (re)grants
+    // their folders so docs:open-path works for last session's files
+    const recent = readJson<string[]>(RECENT_PATH(), []).filter((p) => existsSync(p))
+    for (const p of recent) grantRendererFileAccess(p)
+    return recent
+  })
 
   ipcMain.handle('docs:pick-image', async (event) => {
     const result = await openDialog(event, {
@@ -3535,6 +3553,9 @@ export function registerDocsIpc(): void {
       if (ATTACHMENT_IMAGE_EXTS.has(ext)) {
         return { ok: false, error: tm('errImageNoText') }
       }
+      // only attachments from granted directories (see collectAttachments)
+      if (!rendererMayReadPath(filePath))
+        return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
       try {
         const text = await extractAttachmentText(filePath)
         const start = Math.max(0, Math.floor(offset) || 0)
@@ -3558,6 +3579,9 @@ export function registerDocsIpc(): void {
     const ext = name.split('.').pop()?.toLowerCase() ?? ''
     const mime = ATTACHMENT_IMAGE_MIME[ext]
     if (!mime) return { ok: false, error: `${name}: ${tm('errNotImage')}` }
+    // only attachments from granted directories (see collectAttachments)
+    if (!rendererMayReadPath(filePath))
+      return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
     try {
       const stat = statSync(filePath)
       if (stat.size > ATTACHMENT_IMAGE_MAX_BYTES) {

@@ -835,6 +835,24 @@ const INLINE_MARK_TAGS: Record<string, string> = {
   strike: 'strike',
 }
 
+/**
+ * Whitelist for hrefs entering link marks: http(s), mailto, in-document
+ * fragments and plain relative references. Everything else — javascript:,
+ * file:, data:, vbscript: … — is dropped so a prompt-injected answer cannot
+ * persist a dangerous scheme into the document (opening is separately gated,
+ * but the stored attribute itself must stay benign). Returns null to mean
+ * "keep the text, drop the link".
+ */
+export function sanitizeLinkHref(raw: string | null): string | null {
+  const href = (raw ?? '').trim()
+  if (!href) return null
+  if (/^(https?|mailto):/i.test(href)) return href
+  if (href.startsWith('#')) return href
+  // anything else with a scheme is not allowed; scheme-less values are relative refs
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return null
+  return href
+}
+
 function parseInline(element: Node, marks: PmMark[]): PmNode[] {
   const nodes: PmNode[] = []
   element.childNodes.forEach((child) => {
@@ -852,8 +870,14 @@ function parseInline(element: Node, marks: PmMark[]): PmNode[] {
       return
     }
     if (tag === 'a') {
-      const href = el.getAttribute('href') ?? ''
-      nodes.push(...parseInline(el, [...marks, { type: 'link', attrs: { href, rId: null } }]))
+      // never persist an unvetted scheme: sanitize, and keep the text without
+      // the link mark when the href is dropped
+      const href = sanitizeLinkHref(el.getAttribute('href'))
+      nodes.push(
+        ...(href !== null
+          ? parseInline(el, [...marks, { type: 'link', attrs: { href, rId: null } }])
+          : parseInline(el, marks)),
+      )
       return
     }
     if (tag === 'formula') {

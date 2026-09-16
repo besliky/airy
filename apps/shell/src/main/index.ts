@@ -44,6 +44,8 @@ import {
   appMenuLabels,
   contextMenuLabels,
   editMenuTemplate,
+  grantRendererDir,
+  grantRendererFileAccess,
   installContextMenu,
   installNavigationGuard,
   isRecoverableRendererCrash,
@@ -2941,6 +2943,9 @@ function openGeneratedDocument(filePath: string): boolean {
 
 function routeDocumentPath(filePath: string): boolean {
   if (!existsSync(filePath) || !tabManager) return false
+  // every shell-routed open is user-intended: its folder becomes readable
+  // for the renderer that will load it (renderer file-read allowlist)
+  grantRendererFileAccess(filePath)
   if (DOCX_RE.test(filePath)) {
     recordRecentFile(filePath)
     const existing = tabManager.findDocsTabByPath(filePath)
@@ -3381,7 +3386,11 @@ function registerHomeIpc(): void {
 
   // effective folder where new/untitled files land; the editor mains resolve
   // the same setting themselves (configuredDefaultSaveDir via docs' defaultSaveDir)
-  ipcMain.handle(HOME_CHANNELS.getDefaultSaveDir, (): string => defaultSaveDir())
+  ipcMain.handle(HOME_CHANNELS.getDefaultSaveDir, (): string => {
+    // the default save folder is a standing user choice: readable for renderers
+    grantRendererDir(defaultSaveDir())
+    return defaultSaveDir()
+  })
 
   ipcMain.handle(HOME_CHANNELS.pickDefaultSaveDir, async (): Promise<string | null> => {
     const result = await showOpenDialogWithMemory(dialog, shellWindow, {

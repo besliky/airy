@@ -6,6 +6,8 @@
 /// it into the next dialog's `defaultPath`.
 import { basename, dirname, join } from 'node:path'
 
+import { grantRendererDir, grantRendererFileAccess } from './renderer-file-access'
+
 import type {
   BrowserWindow,
   Dialog,
@@ -54,6 +56,10 @@ export async function showOpenDialogWithMemory(
       dialog,
       options.properties?.includes('openDirectory') ? picked : dirname(picked),
     )
+    // Every dialog pick is a user-driven folder choice: allow the renderers
+    // to read what the user just picked (files and chosen directories alike).
+    for (const filePath of result.filePaths) grantRendererFileAccess(filePath)
+    if (options.properties?.includes('openDirectory')) grantRendererDir(picked)
   }
   return result
 }
@@ -84,6 +90,8 @@ export async function showSaveDialogWithMemory(
     : await dialog.showSaveDialog(withDir)
   if (!result.canceled && result.filePath) {
     lastUsedDirectoryByDialog.set(dialog, dirname(result.filePath))
+    // the user just chose this folder for a save: reading there is fine too
+    grantRendererFileAccess(result.filePath)
   }
   return result
 }
