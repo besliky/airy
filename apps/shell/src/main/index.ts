@@ -3,6 +3,7 @@ import {
   copyFileSync,
   cpSync,
   existsSync,
+  mkdirSync,
   readFileSync,
   readdirSync,
   renameSync,
@@ -108,7 +109,6 @@ import {
   markSheetsShuttingDown,
   requestSheetsClose,
   resolveSheetsSessionPath,
-  markSheetsUntitledPath,
   sendSheetsMenuAction,
   sheetsFileRenamed,
   setSheetsCloseTabHook,
@@ -131,9 +131,9 @@ import {
   slidesFileRenamed,
 } from '../../../slides/src/main/slides-main'
 import {
+  clearPdfDirty,
   configurePdfRuntime,
   flushPdfSave,
-  markPdfUntitledPath,
   pdfIsDirty,
   requestPdfClose,
   requestPdfSaveAs,
@@ -188,6 +188,13 @@ import {
 import type { TabKind } from '../shared/tabs-api'
 import { TABS_CHANNELS } from '../shared/tabs-api'
 import { showErrorDialog } from './error-dialog'
+import {
+  isInsideDirectory,
+  listStagedFiles,
+  orphanedStagedFiles,
+  removeStagedFile,
+  untitledStagingDir,
+} from './untitled-staging'
 import {
   pruneSession,
   readSessionState,
@@ -2661,21 +2668,33 @@ function sessionRestoreEnabled(): boolean {
 
 let sessionSaveTimer: ReturnType<typeof setTimeout> | null = null
 
+/** write the current session (skipStaged drops untitled-staged tabs — quit only) */
+function persistSessionState(skipStaged = false): void {
+  if (!tabManager) return
+  try {
+    const stagingDir = skipStaged ? UNTITLED_STAGING_DIR() : null
+    const tabs = stagingDir
+      ? tabManager
+          .sessionTabs()
+          .map((tab) =>
+            tab.filePath && isInsideDirectory(stagingDir, tab.filePath)
+              ? { ...tab, filePath: undefined }
+              : tab,
+          )
+      : tabManager.sessionTabs()
+    writeSessionState(SESSION_PATH(), serializeSession(tabs, tabManager.activeTabId()))
+  } catch (err) {
+    // session persistence must never break tab operations
+    console.warn('[shell] session state save failed:', err)
+  }
+}
+
 /** Persist the open-tab set (debounced — every open/close/reorder/activation fires this) */
 function scheduleSessionSave(): void {
   if (sessionSaveTimer) clearTimeout(sessionSaveTimer)
   sessionSaveTimer = setTimeout(() => {
     sessionSaveTimer = null
-    if (!tabManager) return
-    try {
-      writeSessionState(
-        SESSION_PATH(),
-        serializeSession(tabManager.sessionTabs(), tabManager.activeTabId()),
-      )
-    } catch (err) {
-      // session persistence must never break tab operations
-      console.warn('[shell] session state save failed:', err)
-    }
+    persistSessionState()
   }, 800)
 }
 
@@ -2788,7 +2807,11 @@ function createShellWindow(): void {
     },
   )
   tabManager = manager
-
+  // a tab closed without ever saving its staged untitled file — delete the
+  // scratch file (quit goes through the window close path instead, not here)
+  manager.onTabClosed = (tab) => {
+    if (tab.filePath) removeStagedTabFile(tab.filePath)
+  }
   // The Home tab is the shell window's own renderer: same crash recovery as
   // editor tabs (blank shell → prompt; Reload restarts it).
   win.webContents.on('render-process-gone', (_event, details) => {
@@ -2841,6 +2864,10 @@ function createShellWindow(): void {
   // When ⌘O opens a file inside a tab, sync the tab title/path (used for de-dup by path) and record it as recent.
   // The first save / save-as fires this too, so applyPendingProject also runs here.
   setSheetsWorkbookOpenedHook((wc, path) => {
+    // a staged untitled workbook's first save landed elsewhere — the scratch
+    // file under userData is dead (moved by auto-rename, or superseded)
+    const previous = manager.tabFilePathFor(wc.id)
+    if (previous && previous !== path) removeStagedTabFile(previous)
     manager.setTabFileFor(wc.id, path)
     recordRecentFile(path)
     applyPendingProject(path)
@@ -2878,9 +2905,18 @@ function createShellWindow(): void {
   setHtmlProvisionalTitleHook((wc, title) => manager.setTabTitleFor(wc.id, title))
   // pdf content-derived auto-rename: the file moved on disk, follow it everywhere
   setPdfRenamedHook((wc, oldPath, newPath) => {
+    const wasStaged = isInsideDirectory(UNTITLED_STAGING_DIR(), oldPath)
     manager.setTabFileFor(wc.id, newPath)
-    replaceRecentFile(oldPath, newPath)
-    projectFileRenamed(oldPath, newPath)
+    if (wasStaged) {
+      // the rename moved the staged file into the real save folder: adopt the
+      // recents entry and any pending "create in project" for the final path
+      removeRecentFiles([oldPath])
+      recordRecentFile(newPath)
+      applyPendingProject(newPath)
+    } else {
+      replaceRecentFile(oldPath, newPath)
+      projectFileRenamed(oldPath, newPath)
+    }
   })
   // markdown "convert & open in Docs" → route the fresh .docx to a docs tab
   setMarkdownDocxExportedHook((path) => {
@@ -2921,8 +2957,12 @@ function createShellWindow(): void {
       dirtyHtml.length === 0 &&
       dirtySlides.length === 0 &&
       docsTabs.length === 0
-    )
+    ) {
+      // the close really happens now: discard never-saved untitled tabs and
+      // flush the session without them (a crash keeps them instead)
+      discardStagedTabsOnQuit()
       return
+    }
     event.preventDefault()
     void (async () => {
       for (const tab of dirtySheets) {
@@ -2951,6 +2991,7 @@ function createShellWindow(): void {
         if (!(await requestDocsClose(tab.webContents, win))) return
       }
       closeConfirmed = true
+      discardStagedTabsOnQuit()
       if (!win.isDestroyed()) win.close()
     })()
   })
@@ -3141,18 +3182,62 @@ function routeDocumentPath(filePath: string): boolean {
   return false
 }
 
+// ---- untitled staging (blank sheets/pdf files live under userData until their first save) ----
+
+const UNTITLED_STAGING_DIR = () => untitledStagingDir(app.getPath('userData'))
+
+/** delete a staged file and its recent-list entry (the file never had a real home) */
+function removeStagedTabFile(path: string): void {
+  if (removeStagedFile(UNTITLED_STAGING_DIR(), path)) removeRecentFiles([path])
+}
+
+/** stage a blank untitled file in userData instead of the default save folder */
+function stageUntitledFile(fileName: string, bytes: Buffer | Uint8Array): string {
+  const dir = UNTITLED_STAGING_DIR()
+  mkdirSync(dir, { recursive: true })
+  const filePath = uniquePathIn(dir, fileName)
+  writeFileSync(filePath, bytes)
+  return filePath
+}
+
+/** staged files that survived a crash but no open tab owns — purge at launch */
+function purgeOrphanStagedFiles(): void {
+  const open = (tabManager?.sessionTabs() ?? [])
+    .map((tab) => tab.filePath)
+    .filter((path): path is string => typeof path === 'string')
+  for (const path of orphanedStagedFiles(listStagedFiles(UNTITLED_STAGING_DIR()), open)) {
+    removeStagedTabFile(path)
+  }
+}
+
+/** a clean quit discards never-saved untitled tabs, exactly like the in-memory
+ *  docs/markdown/html ones: delete their staged files and flush the session
+ *  without them (a crash keeps them — session restore reopens the survivors) */
+function discardStagedTabsOnQuit(): void {
+  const manager = tabManager
+  if (!manager) return
+  const stagingDir = UNTITLED_STAGING_DIR()
+  for (const tab of manager.sessionTabs()) {
+    if (tab.filePath && isInsideDirectory(stagingDir, tab.filePath))
+      removeStagedTabFile(tab.filePath)
+  }
+  persistSessionState(true)
+}
+
 /**
- * "New spreadsheet" creates the backing .xlsx in the default folder up front and
- * opens it as a regular file tab — the blank in-memory demo mode has no save
- * pipeline, so the file must exist before edits. Falls back to the old blank
- * tab if the write fails.
+ * "New spreadsheet" stages the blank .xlsx under userData (untitled-staging/)
+ * and opens it as a regular file tab — the blank in-memory demo mode has no
+ * save pipeline, so the file must exist before edits, but it must not pollute
+ * the default save folder. The first save opens the Save dialog anchored in
+ * the default save folder (sheets' suggestSaveAs); closing without saving
+ * deletes the staged file. Falls back to the old blank tab if the write fails.
  */
 async function newSheetTab(): Promise<void> {
   try {
-    const filePath = uniquePathIn(defaultSaveDir(), `${tm('untitledSheet')}.xlsx`)
-    writeFileSync(filePath, await blankXlsxBuffer())
-    // eligible for content-derived auto-rename after the first AI generation
-    markSheetsUntitledPath(filePath)
+    const filePath = stageUntitledFile(`${tm('untitledSheet')}.xlsx`, await blankXlsxBuffer())
+    // the staging path itself marks the workbook untitled in sheets-main:
+    // its first save opens the Save dialog anchored in the default save
+    // folder, and an AI content-derived rename moves it there
     if (routeDocumentPath(filePath)) recordStarPromptDocOpen()
   } catch (err) {
     console.warn('[shell] blank workbook create failed, opening in-memory blank tab:', err)
@@ -3213,18 +3298,19 @@ function newHtmlTab(): void {
 }
 
 /**
- * "New PDF" creates a blank single-page .pdf in the default folder up front and
- * opens it as a regular file tab — the PDF module has no in-memory blank mode
- * (openPdfTab requires a path), same pattern as the blank workbook above.
+ * "New PDF" stages the blank single-page .pdf under userData (untitled-staging/)
+ * and opens it as a regular file tab — the PDF module has no in-memory blank
+ * mode (openPdfTab requires a path). The first explicit Save opens the Save
+ * dialog anchored in the default save folder and rebinds the tab; closing
+ * without saving deletes the staged file.
  */
 async function newPdfTab(): Promise<void> {
   try {
-    const filePath = uniquePathIn(defaultSaveDir(), `${tm('untitledPdf')}.pdf`)
-    writeFileSync(filePath, await blankPdfBuffer())
-    // Opt the file into content-derived auto-naming on its first save
-    markPdfUntitledPath(filePath)
-    // PDF has no opened/saved shell hook — assign the pending project right here
-    applyPendingProject(filePath)
+    const filePath = stageUntitledFile(`${tm('untitledPdf')}.pdf`, await blankPdfBuffer())
+    // the staging path itself marks the pdf untitled in pdf-main (AI
+    // content-derived auto-naming, first-save dialog in the shell's pdf menu)
+    // A pending "create in project" intentionally stays pending: it applies to
+    // the final path the first save or auto-rename picks, not this staged file
     // counts one doc-open — same as the blank workbook above
     if (routeDocumentPath(filePath)) recordStarPromptDocOpen()
   } catch (err) {
@@ -3849,7 +3935,14 @@ function buildPdfMenu(): void {
           accelerator: 'CmdOrCtrl+S',
           click: () => {
             const tab = tabManager?.activePdfTab()
-            if (tab) void flushPdfSave(tab.webContents)
+            if (!tab) return
+            // an untitled staged pdf: the first explicit Save picks where the
+            // file should live (default save folder) and rebinds the tab
+            if (tab.filePath && isInsideDirectory(UNTITLED_STAGING_DIR(), tab.filePath)) {
+              void saveStagedPdfAs(tab.id)
+              return
+            }
+            void flushPdfSave(tab.webContents)
           },
         },
         {
@@ -4112,6 +4205,47 @@ async function savePdfAs(): Promise<void> {
   } finally {
     savingPdfAs = false
     setPdfSaveAsInFlight(tab.webContents, false)
+  }
+}
+
+/**
+ * First explicit Save of an untitled staged pdf: pick the destination (Save
+ * dialog anchored in the default save folder), write the pending edits to it,
+ * rebind the tab to the real path and drop the staged scratch file. Unlike
+ * savePdfAs (a non-destructive copy that opens a second tab), this REPLACES
+ * the staged tab: its only "file" was scratch space under userData.
+ */
+async function saveStagedPdfAs(tabId: string): Promise<void> {
+  const tab = tabManager?.activePdfTab()
+  if (!tab || tab.id !== tabId || !tab.filePath) return
+  if (!shellWindow || savingPdfAs) return
+  const stagedPath = tab.filePath
+  savingPdfAs = true
+  setPdfSaveAsInFlight(tab.webContents, true)
+  try {
+    const picked = await showSaveDialogWithMemory(dialog, shellWindow, {
+      defaultPath: join(defaultSaveDir(), basename(stagedPath)),
+      filters: [{ name: tm('filterPdf'), extensions: ['pdf'] }],
+    })
+    if (picked.canceled || !picked.filePath) return
+    if (pdfIsDirty(tab.webContents.id)) {
+      // Renderer applies its pending edits onto the source bytes; the pdf main
+      // process writes the result to the picked path only
+      if (!(await requestPdfSaveAs(tab.webContents, picked.filePath))) return
+    } else {
+      // No pending edits → a byte-identical copy
+      copyFileSync(stagedPath, picked.filePath)
+    }
+    // the edits are persisted at the picked path — the staged tab goes without
+    // its unsaved-changes prompt and is replaced by the real file
+    clearPdfDirty(tab.webContents.id)
+    await tabManager?.closeTab(tab.id)
+    removeStagedTabFile(stagedPath)
+    applyPendingProject(picked.filePath)
+    openDocumentPath(picked.filePath)
+  } finally {
+    savingPdfAs = false
+    if (!tab.webContents.isDestroyed()) setPdfSaveAsInFlight(tab.webContents, false)
   }
 }
 
@@ -4724,6 +4858,9 @@ app.whenReady().then(async () => {
     if (restoredTabs === 0) tabManager?.openHomeTab()
   }
   pendingLaunchPath = null
+  // staged untitled files nothing reopened (crash leftovers whose session was
+  // not restored — restore disabled or pruned) are dead scratch: clean them
+  purgeOrphanStagedFiles()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createShellWindow()

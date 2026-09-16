@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
-import { basename, dirname, isAbsolute, join } from 'node:path'
+import { basename, dirname, isAbsolute, join, sep } from 'node:path'
 
 import {
   app,
@@ -1595,6 +1595,20 @@ export function markSheetsUntitledPath(path: string): void {
   untitledWorkbookPaths.add(path)
 }
 
+/** userData folder where the shell stages untitled workbooks until their first save */
+const UNTITLED_STAGING_DIR = () => join(app.getPath('userData'), 'untitled-staging')
+
+/**
+ * Whether a workbook is a shell-staged untitled (path-derived, so a workbook
+ * restored by session recovery after a crash still counts): its first save
+ * must open the Save dialog anchored in the default save folder
+ * (suggestSaveAs), and a content-derived auto-rename moves it into that
+ * folder rather than within the staging directory.
+ */
+function isStagedUntitledWorkbook(path: string): boolean {
+  return path.startsWith(UNTITLED_STAGING_DIR() + sep)
+}
+
 /** Sanitize an AI-provided sheet name into a safe filename base: strip illegal path chars, collapse whitespace, cap length; null if invalid. (Mirrors slides' draft naming.) */
 function sanitizeAutoRenameBase(raw: string): string | null {
   const cleaned = raw
@@ -2897,10 +2911,19 @@ export function registerSheetsIpc(): void {
       const entry = sessionFor(event)
       const validatedSessionId = z.string().uuid().parse(sessionId)
       const session = entry.sessions.get(validatedSessionId)
-      if (!session || !untitledWorkbookPaths.has(session.path)) return { renamed: false }
+      // staged untitled paths qualify too (a crash-restored one is not in the set)
+      if (
+        !session ||
+        (!untitledWorkbookPaths.has(session.path) && !isStagedUntitledWorkbook(session.path))
+      )
+        return { renamed: false }
       const base = sanitizeAutoRenameBase(z.string().min(1).max(100).parse(baseName))
       if (!base) return { renamed: false }
-      const dir = dirname(session.path)
+      // A staged untitled workbook renames into the default save folder, not
+      // within the staging directory (dirname of the staged path).
+      const dir = isStagedUntitledWorkbook(session.path)
+        ? configuredDefaultSaveDir(app)
+        : dirname(session.path)
       let target = join(dir, `${base}.xlsx`)
       for (let i = 2; existsSync(target) && i < 100; i++) target = join(dir, `${base}-${i}.xlsx`)
       if (existsSync(target) || target === session.path) return { renamed: false }
@@ -3726,6 +3749,11 @@ async function prepareWorkbookForOpen(
 }> {
   const extension = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
   if (extension !== 'csv' && extension !== 'xls') {
+    // A shell-staged untitled workbook: the first save must ask where the
+    // file should live (default save folder), like a converted .xls import.
+    if (isStagedUntitledWorkbook(path)) {
+      return { openPath: path, suggestSaveAs: join(configuredDefaultSaveDir(app), basename(path)) }
+    }
     // Unsaved work from a lost session: offer the recovery copy. Restoring
     // opens it with restoreTarget pointing back at the original, so a plain
     // Save writes straight back over the file the user opened — the restore

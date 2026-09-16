@@ -10,7 +10,7 @@ import {
 } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { userInfo } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, sep } from 'node:path'
 import { BrowserWindow, WebContentsView, app, dialog, ipcMain, shell } from 'electron'
 import type { WebContents } from 'electron'
 import {
@@ -571,6 +571,20 @@ export function clearPdfDirty(webContentsId: number): void {
 
 /** Paths of shell-created blank PDFs still carrying their untitled name; only these may auto-rename */
 const untitledPdfPaths = new Set<string>()
+
+/** userData folder where the shell stages untitled PDFs until their first save */
+const UNTITLED_STAGING_DIR = () => join(app.getPath('userData'), 'untitled-staging')
+
+/**
+ * Whether a PDF is a shell-staged untitled (path-derived, so a PDF restored
+ * by session recovery after a crash still counts): it counts as untitled for
+ * content-derived auto-naming, and an auto-rename moves it into the default
+ * save folder rather than within the staging directory.
+ */
+function isStagedUntitledPdf(path: string): boolean {
+  return path.startsWith(UNTITLED_STAGING_DIR() + sep)
+}
+
 /** Shell hook fired after an auto-rename so the tab title / recents / project mapping follow the file */
 let pdfRenamedHook: ((wc: WebContents, oldPath: string, newPath: string) => void) | null = null
 
@@ -884,7 +898,8 @@ function registerPdfIpc(): void {
     return (
       typeof path === 'string' &&
       !!allowedByWc.get(e.sender.id)?.has(path) &&
-      untitledPdfPaths.has(path)
+      // staged paths qualify too (a crash-restored one is not in the set)
+      (untitledPdfPaths.has(path) || isStagedUntitledPdf(path))
     )
   })
 
@@ -894,12 +909,15 @@ function registerPdfIpc(): void {
       if (typeof path !== 'string' || !allowedByWc.get(e.sender.id)?.has(path)) {
         return { renamed: false }
       }
-      // Only shell-created blanks still carrying their untitled name; user-chosen names never move
-      if (!untitledPdfPaths.has(path)) return { renamed: false }
+      // Only shell-created blanks still carrying their untitled name; user-chosen names never move.
+      // Staged untitled paths qualify too (a crash-restored one is not in the set).
+      if (!untitledPdfPaths.has(path) && !isStagedUntitledPdf(path)) return { renamed: false }
       if (typeof baseName !== 'string') return { renamed: false }
       const base = sanitizeAutoRenameBase(baseName)
       if (!base) return { renamed: false }
-      const dir = dirname(path)
+      // A staged untitled PDF renames into the default save folder, not
+      // within the staging directory (dirname of the staged path).
+      const dir = isStagedUntitledPdf(path) ? configuredDefaultSaveDir(app) : dirname(path)
       // The file being renamed does not occupy its own name: a proposed base equal
       // to the current stem must be a no-op, not a hop to the next numbered suffix
       let target: string | null = null

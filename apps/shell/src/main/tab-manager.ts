@@ -205,6 +205,23 @@ export class TabManager {
     return this.activeId
   }
 
+  /** current backing file of the tab owning this webContents (staged-save rebind checks) */
+  tabFilePathFor(webContentsId: number): string | undefined {
+    return this.tabs.find((t) => t.view?.webContents.id === webContentsId)?.filePath
+  }
+
+  /** whether any tab currently shows this file (staged-survivor purge at launch) */
+  hasTabForPath(path: string): boolean {
+    return this.tabs.some((t) => t.filePath === path)
+  }
+
+  /**
+   * Fired after a tab was removed (per-tab close — a whole-window quit closes
+   * the window instead, so this does not fire there). The shell uses it to
+   * delete staged untitled files when their tab closes without a first save.
+   */
+  onTabClosed?: (tab: { id: string; kind: TabKind; filePath?: string }) => void
+
   /** file-backed tabs in strip order (session persistence; untitled/present tabs have no file) */
   sessionTabs(): Array<{ id: string; kind: TabKind; filePath: string | undefined }> {
     return this.tabs.map((t) => ({ id: t.id, kind: t.kind, filePath: t.filePath }))
@@ -548,6 +565,7 @@ export class TabManager {
     if (idx < 0) return
     if (this.htmlFullScreenId === id) this.htmlFullScreenId = null
     const [removed] = this.tabs.splice(idx, 1)
+    this.onTabClosed?.({ id: removed.id, kind: removed.kind, filePath: removed.filePath })
     if (this.activeId === id) {
       const fallback = this.tabs[idx - 1] ?? this.tabs[0]
       this.activateTab(fallback.id)

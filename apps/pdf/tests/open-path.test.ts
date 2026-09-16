@@ -45,7 +45,11 @@ function makeFakeWebContents(): FakeWebContents {
 }
 
 vi.mock('electron', () => ({
-  app: { on: vi.fn(), whenReady: vi.fn(() => new Promise(() => {})) },
+  app: {
+    on: vi.fn(),
+    whenReady: vi.fn(() => new Promise(() => {})),
+    getPath: () => '/tmp/airy-pdf-test-user-data',
+  },
   dialog: {},
   shell: {},
   BrowserWindow: class {},
