@@ -54,6 +54,9 @@ import {
 import type { GoalSeekResult } from './goal-seek'
 import { GoalSeekDialog } from './GoalSeekDialog'
 import { InsertFunctionDialog } from './InsertFunctionDialog'
+import { PrintDialog } from './PrintDialog'
+import type { PrintSetupOverrides } from './page-layout-actions'
+import type { WorkbookExportPdfRequest } from '../shared/desktop-api'
 import type { CatalogFunction } from './function-catalog'
 import { SubtotalDialog, type SubtotalConfig } from './SubtotalDialog'
 import { ConsolidateDialog } from './ConsolidateDialog'
@@ -278,6 +281,27 @@ interface ExcelShellProps {
   /// Builds the Insert Function catalog from the live Univer registry;
   /// called when the dialog opens (the registry must have landed by then).
   readonly getFunctionCatalog: () => readonly CatalogFunction[]
+  /// Print dialog visibility (File › Print / Ctrl+P).
+  readonly showPrintDialog: boolean
+  readonly onClosePrintDialog: () => void
+  /// File-tab actions (non-mac ribbons show a File dropdown, like docs and
+  /// slides; macOS keeps the application menu).
+  readonly onOpenWorkbook: () => void
+  readonly onExportPdf: () => void
+  readonly onExportCsv: () => void
+  readonly onOpenPrintDialog: () => void
+  /// Surfaces print failures in the status bar.
+  readonly onSetStatusMessage: (message: string) => void
+  /// Lays the active sheet out for the print dialog; see page-layout-actions.
+  readonly buildPrintRequest: (overrides: PrintSetupOverrides) => Promise<{
+    request: WorkbookExportPdfRequest
+    effective: {
+      paperSize: number
+      orientation: 'portrait' | 'landscape'
+      scale: number
+      fitToPage: boolean
+    }
+  }>
   readonly onCreateSubtotal: (config: SubtotalConfig) => string | null
   readonly onCreateConsolidate: (config: ConsolidateConfig) => string | null
   /// Prefill for the Consolidate reference input (current multi-cell selection).
@@ -349,6 +373,14 @@ export function ExcelShell({
   onListDefinedNames,
   onApplyFormula,
   getFunctionCatalog,
+  showPrintDialog,
+  onClosePrintDialog,
+  onOpenPrintDialog,
+  onOpenWorkbook,
+  onExportPdf,
+  onExportCsv,
+  onSetStatusMessage,
+  buildPrintRequest,
   onCreateSubtotal,
   onCreateConsolidate,
   onGetConsolidateDefault,
@@ -403,6 +435,7 @@ export function ExcelShell({
   const [pivotEditSeed, setPivotEditSeed] = useState<PivotEditSeed | null>(null)
   /** null = closed; string = open on that catalog category ('All' for the plain button) */
   const [insertFunctionCat, setInsertFunctionCat] = useState<string | null>(null)
+  const [fileMenuOpen, setFileMenuOpen] = useState(false)
   const [showSubtotalDialog, setShowSubtotalDialog] = useState(false)
   const [showGoalSeek, setShowGoalSeek] = useState(false)
   const [showConsolidateDialog, setShowConsolidateDialog] = useState(false)
@@ -520,6 +553,74 @@ export function ExcelShell({
           aria-label="Workbook commands"
           onDoubleClick={collapse.onTabsDoubleClick}
         >
+          {!IS_MAC && (
+            <div className="file-tab-wrap">
+              <button
+                type="button"
+                className={`ribbon-tab ribbon-tab-file ${fileMenuOpen ? 'open' : ''}`}
+                onClick={() => setFileMenuOpen((open) => !open)}
+              >
+                {t('appFileTab')}
+              </button>
+              {fileMenuOpen && (
+                <div className="file-menu">
+                  <button
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      onOpenWorkbook()
+                    }}
+                  >
+                    {t('appFileOpen')} <span className="file-menu-key">Ctrl+O</span>
+                  </button>
+                  <button
+                    disabled={!canSave}
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      onSave()
+                    }}
+                  >
+                    {t('appFileSave')} <span className="file-menu-key">Ctrl+S</span>
+                  </button>
+                  <button
+                    disabled={!canSaveAs}
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      onSaveAs()
+                    }}
+                  >
+                    {t('appFileSaveAs')} <span className="file-menu-key">Ctrl+Shift+S</span>
+                  </button>
+                  <button
+                    disabled={!canSave}
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      onExportPdf()
+                    }}
+                  >
+                    {t('appFileExportPdf')}
+                  </button>
+                  <button
+                    disabled={!canSave}
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      onExportCsv()
+                    }}
+                  >
+                    {t('appFileExportCsv')}
+                  </button>
+                  <button
+                    disabled={!canSave}
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      onOpenPrintDialog()
+                    }}
+                  >
+                    {t('appFilePrint')} <span className="file-menu-key">Ctrl+P</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <button
             type="button"
             className="qa-btn"
@@ -826,6 +927,13 @@ export function ExcelShell({
           initialSetCell={onGetActiveCell()}
           onSolve={onGoalSeek}
           onClose={() => setShowGoalSeek(false)}
+        />
+      )}
+      {showPrintDialog && (
+        <PrintDialog
+          buildRequest={buildPrintRequest}
+          onClose={onClosePrintDialog}
+          setStatus={onSetStatusMessage}
         />
       )}
       {insertFunctionCat !== null && (

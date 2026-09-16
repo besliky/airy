@@ -2590,6 +2590,29 @@ export const workbookExportPdfResultSchema = z.union([
 export type WorkbookExportPdfRequest = z.infer<typeof workbookExportPdfRequestSchema>
 export type WorkbookExportPdfResult = z.infer<typeof workbookExportPdfResultSchema>
 
+/// Print dialog preview: the same request the PDF export sends, answered
+/// with the rendered PDF's bytes (base64) and page count — nothing is
+/// written to disk and no save dialog appears.
+export const workbookPrintPreviewResultSchema = z.union([
+  z
+    .object({
+      ok: z.literal(true),
+      base64: z.string().min(1),
+      pageCount: z.number().int().positive().max(100_000),
+    })
+    .strict(),
+  z.object({ ok: z.literal(false), error: z.string().min(1) }).strict(),
+])
+
+/// Print dialog Print: hands the print HTML to the system print dialog
+/// (ok=false without an error means the user canceled there).
+export const workbookPrintResultSchema = z
+  .object({ ok: z.boolean(), error: z.string().min(1).optional() })
+  .strict()
+
+export type WorkbookPrintPreviewResult = z.infer<typeof workbookPrintPreviewResultSchema>
+export type WorkbookPrintResult = z.infer<typeof workbookPrintResultSchema>
+
 /// CSV export of the active sheet: the renderer serializes display values,
 /// the main process runs the loss warning + save dialog and writes the bytes.
 export const workbookExportCsvRequestSchema = z
@@ -2786,6 +2809,10 @@ export interface DesktopApi {
     baseName: string,
   ): Promise<{ renamed: boolean; name?: string }>
   exportPdf(request: WorkbookExportPdfRequest): Promise<WorkbookExportPdfResult>
+  /** Print dialog preview: the print HTML rendered to PDF bytes + page count */
+  previewPrint(request: WorkbookExportPdfRequest): Promise<WorkbookPrintPreviewResult>
+  /** Print dialog Print: system print dialog over the print HTML */
+  printWorkbook(request: WorkbookExportPdfRequest): Promise<WorkbookPrintResult>
   exportCsv(request: WorkbookExportCsvRequest): Promise<WorkbookExportCsvResult>
   /// First Save of a CSV session: native "keep this format?" dialog.
   confirmCsvSave(): Promise<'csv' | 'xlsx' | 'cancel'>
@@ -2845,7 +2872,8 @@ export interface DesktopApi {
   getPathForFile(file: File): string
 }
 
-export type MenuAction = 'open' | 'save' | 'save-as' | 'export-pdf' | 'export-csv' | 'undo' | 'redo'
+export type MenuAction =
+  'open' | 'save' | 'save-as' | 'export-pdf' | 'export-csv' | 'print' | 'undo' | 'redo'
 
 export interface WebSearchResult {
   results: Array<{ title: string; url: string; snippet: string }>

@@ -653,6 +653,8 @@ export const ja = {
   appSheetStillIndexing: 'シートのインデックスを作成中です — しばらくしてからお試しください。',
   // Print (export PDF)
   appPrintNothing: 'このシートには印刷できる内容がありません。',
+  appPrintFailed: '印刷に失敗しました:{error}',
+  appPrintPreviewFailed: '印刷プレビューを生成できませんでした。',
   appPrintTooLarge:
     '印刷範囲が大きすぎます — 「ページレイアウト」タブでより小さい印刷範囲を設定してください。',
   appPrintBadArea: '印刷範囲 "{area}" が無効です。',
@@ -680,6 +682,13 @@ export const ja = {
   appApply: '適用',
   // Ribbon tabs
   appTabHome: 'ホーム',
+  appFileTab: 'ファイル',
+  appFileOpen: 'ワークシートを開く',
+  appFileSave: '保存',
+  appFileSaveAs: '名前を付けて保存',
+  appFileExportPdf: 'PDF としてエクスポート…',
+  appFileExportCsv: 'CSV としてエクスポート…',
+  appFilePrint: '印刷…',
   appTabInsert: '挿入',
   appTabPageLayout: 'ページレイアウト',
   appTabFormulas: '数式',

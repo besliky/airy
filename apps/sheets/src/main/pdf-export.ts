@@ -14,7 +14,12 @@ import { evenPageRanges, stitchPlan, type PageVariant } from './pdf-page-variant
 
 import type { IpcMainInvokeEvent, WebContents } from 'electron'
 import type { PDFDocument } from 'pdf-lib'
-import type { WorkbookExportPdfRequest, WorkbookExportPdfResult } from '../shared/desktop-api'
+import type {
+  WorkbookExportPdfRequest,
+  WorkbookExportPdfResult,
+  WorkbookPrintPreviewResult,
+  WorkbookPrintResult,
+} from '../shared/desktop-api'
 
 export async function exportPdf(
   event: IpcMainInvokeEvent,
@@ -128,4 +133,86 @@ async function renderPdf(
     if (page) merged.addPage(page)
   }
   return Buffer.from(await merged.save())
+}
+
+/// Shared scaffolding for the print dialog's channels: the same hidden
+/// scripting-disabled window the export uses, handed to a callback instead
+/// of a save dialog + file write.
+async function withPrintWindow<T>(
+  request: WorkbookExportPdfRequest,
+  run: (contents: WebContents) => Promise<T>,
+): Promise<T> {
+  const workDir = await mkdtemp(join(tmpdir(), 'ai-excel-print-'))
+  const htmlPath = join(workDir, 'print.html')
+  const window = new BrowserWindow({
+    show: false,
+    webPreferences: { sandbox: true, javascript: false },
+  })
+  try {
+    await writeFile(htmlPath, request.html, 'utf8')
+    await window.loadFile(htmlPath)
+    return await run(window.webContents)
+  } finally {
+    window.destroy()
+    await rm(workDir, { recursive: true, force: true })
+  }
+}
+
+/// Print dialog preview: the print HTML as PDF bytes (base64) plus its page
+/// count — nothing touches disk and no save dialog appears.
+export async function previewPrint(
+  _event: IpcMainInvokeEvent,
+  request: WorkbookExportPdfRequest,
+): Promise<WorkbookPrintPreviewResult> {
+  try {
+    return await withPrintWindow(request, async (contents) => {
+      const pdf = await renderPdf(contents, request)
+      const { PDFDocument: PdfDocument } = await import('pdf-lib')
+      const pageCount = (await PdfDocument.load(pdf)).getPageCount()
+      return { ok: true, base64: pdf.toString('base64'), pageCount }
+    })
+  } catch (err) {
+    return { ok: false, error: String(err) }
+  }
+}
+
+/// Print dialog Print: the system print dialog over the print HTML, with
+/// the request's paper size, orientation, margins, and scale. Header and
+/// footer templates only render through printToPDF (Chromium's limitation),
+/// so they stay a PDF-export feature. Resolves when the system dialog is
+/// dismissed; ok=false without an error means the user canceled there.
+export async function printWorkbook(
+  _event: IpcMainInvokeEvent,
+  request: WorkbookExportPdfRequest,
+): Promise<WorkbookPrintResult> {
+  try {
+    return await withPrintWindow(request, async (contents) => {
+      const printed = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
+        contents.print(
+          {
+            printBackground: true,
+            landscape: request.landscape,
+            pageSize: request.pageSize,
+            margins: {
+              marginType: 'custom',
+              top: request.margins.top,
+              bottom: request.margins.bottom,
+              left: request.margins.left,
+              right: request.margins.right,
+            },
+            scaleFactor: Math.round(request.scale * 100),
+          },
+          (success, failureReason) => {
+            resolve({
+              ok: success,
+              ...(failureReason && !/cancel/i.test(failureReason) ? { error: failureReason } : {}),
+            })
+          },
+        )
+      })
+      return printed satisfies WorkbookPrintResult
+    })
+  } catch (err) {
+    return { ok: false, error: String(err) }
+  }
 }

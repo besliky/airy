@@ -1149,7 +1149,7 @@ export function App() {
       const rect = scrollContainerRef.current?.getBoundingClientRect()
       const anchor = rect ? { vx: e.clientX - rect.left, vy: e.clientY - rect.top } : null
       setZoom((z) => {
-        const next = Math.min(200, Math.max(50, z - e.deltaY * 0.6))
+        const next = Math.min(400, Math.max(50, z - e.deltaY * 0.6))
         if (next !== z) zoomAnchorRef.current = anchor
         return next
       })
@@ -2038,7 +2038,7 @@ export function App() {
       // whole page = the entire page visible, so it must fit both dimensions;
       // floor, not round: rounding up would push the page past the pane edge
       const next = mode === 'width' ? wFit : Math.min(wFit, hFit)
-      const applied = Math.min(200, Math.max(50, Math.floor(next)))
+      const applied = Math.min(400, Math.max(50, Math.floor(next)))
       lastFitRef.current = { mode, value: applied }
       setZoom(applied)
     },
@@ -4016,7 +4016,7 @@ export function App() {
           editor?.chain().focus().redo().run()
           break
         case 'zoom-in':
-          setZoom((z) => Math.min(200, Math.round(z) + 10))
+          setZoom((z) => Math.min(400, Math.round(z) + 10))
           break
         case 'zoom-out':
           setZoom((z) => Math.max(50, Math.round(z) - 10))
@@ -5021,14 +5021,14 @@ export function App() {
                 className="zoom-slider"
                 type="range"
                 min={50}
-                max={200}
+                max={400}
                 step={10}
                 value={Math.round(zoom)}
                 onChange={(e) => setZoom(Number(e.target.value))}
               />
               <button
                 className="zoom-btn"
-                onClick={() => setZoom((z) => Math.min(200, Math.round(z) + 10))}
+                onClick={() => setZoom((z) => Math.min(400, Math.round(z) + 10))}
               >
                 +
               </button>

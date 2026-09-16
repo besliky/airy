@@ -270,33 +270,7 @@ const desktopApi: DesktopApi = {
     return result as { renamed: boolean; name?: string }
   },
   async exportPdf(request) {
-    if (
-      !isRecord(request) ||
-      typeof request.fileName !== 'string' ||
-      request.fileName.length === 0 ||
-      request.fileName.length > 255 ||
-      typeof request.html !== 'string' ||
-      request.html.length === 0 ||
-      request.html.length > 20_000_000 ||
-      typeof request.landscape !== 'boolean' ||
-      !isPdfPageSize(request.pageSize) ||
-      !isRecord(request.margins) ||
-      !['top', 'bottom', 'left', 'right'].every((edge) => {
-        const value = (request.margins as Record<string, unknown>)[edge]
-        return typeof value === 'number' && value >= 0 && value <= 3
-      }) ||
-      typeof request.scale !== 'number' ||
-      request.scale < 0.1 ||
-      request.scale > 2 ||
-      (request.headerTemplate !== undefined &&
-        !isBoundedString(request.headerTemplate, MAX_PDF_TEMPLATE_CHARS)) ||
-      (request.footerTemplate !== undefined &&
-        !isBoundedString(request.footerTemplate, MAX_PDF_TEMPLATE_CHARS)) ||
-      (request.firstPage !== undefined && !isPdfPageVariant(request.firstPage)) ||
-      (request.evenPages !== undefined && !isPdfPageVariant(request.evenPages))
-    ) {
-      throw new Error('Invalid PDF export request.')
-    }
+    validatePdfRequest(request)
     const result: unknown = await ipcRenderer.invoke(IPC_CHANNELS.exportPdf, request)
     if (
       !isRecord(result) ||
@@ -306,6 +280,27 @@ const desktopApi: DesktopApi = {
       throw new Error('Invalid PDF export response.')
     }
     return result as { canceled: true } | { canceled: false; path: string }
+  },
+  async previewPrint(request) {
+    validatePdfRequest(request)
+    const result: unknown = await ipcRenderer.invoke(IPC_CHANNELS.previewPrint, request)
+    if (
+      !isRecord(result) ||
+      typeof result.ok !== 'boolean' ||
+      (result.ok === true &&
+        (typeof result.base64 !== 'string' || typeof result.pageCount !== 'number'))
+    ) {
+      throw new Error('Invalid print preview response.')
+    }
+    return result as { ok: true; base64: string; pageCount: number } | { ok: false; error: string }
+  },
+  async printWorkbook(request) {
+    validatePdfRequest(request)
+    const result: unknown = await ipcRenderer.invoke(IPC_CHANNELS.print, request)
+    if (!isRecord(result) || typeof result.ok !== 'boolean') {
+      throw new Error('Invalid print response.')
+    }
+    return result as { ok: boolean; error?: string }
   },
   async exportCsv(request) {
     if (
@@ -396,6 +391,7 @@ const desktopApi: DesktopApi = {
         action === 'save' ||
         action === 'save-as' ||
         action === 'export-pdf' ||
+        action === 'print' ||
         action === 'export-csv' ||
         action === 'undo' ||
         action === 'redo'
@@ -2203,6 +2199,36 @@ function isFilterColumn(input: unknown): boolean {
     }
   }
   return input.values !== undefined || input.blank !== undefined || input.customs !== undefined
+}
+
+function validatePdfRequest(request: unknown): void {
+  if (
+    !isRecord(request) ||
+    typeof request.fileName !== 'string' ||
+    request.fileName.length === 0 ||
+    request.fileName.length > 255 ||
+    typeof request.html !== 'string' ||
+    request.html.length === 0 ||
+    request.html.length > 20_000_000 ||
+    typeof request.landscape !== 'boolean' ||
+    !isPdfPageSize(request.pageSize) ||
+    !isRecord(request.margins) ||
+    !['top', 'bottom', 'left', 'right'].every((edge) => {
+      const value = (request.margins as Record<string, unknown>)[edge]
+      return typeof value === 'number' && value >= 0 && value <= 3
+    }) ||
+    typeof request.scale !== 'number' ||
+    request.scale < 0.1 ||
+    request.scale > 2 ||
+    (request.headerTemplate !== undefined &&
+      !isBoundedString(request.headerTemplate, MAX_PDF_TEMPLATE_CHARS)) ||
+    (request.footerTemplate !== undefined &&
+      !isBoundedString(request.footerTemplate, MAX_PDF_TEMPLATE_CHARS)) ||
+    (request.firstPage !== undefined && !isPdfPageVariant(request.firstPage)) ||
+    (request.evenPages !== undefined && !isPdfPageVariant(request.evenPages))
+  ) {
+    throw new Error('Invalid PDF export request.')
+  }
 }
 
 function isPdfPageSize(input: unknown): boolean {

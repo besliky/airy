@@ -74,6 +74,10 @@ export const IPC_CHANNELS = {
   closeSaveRequest: 'workbook:close-save-request',
   closeSaveResult: 'workbook:close-save-result',
   exportPdf: 'workbook:export-pdf',
+  /** Print dialog preview: the same HTML the PDF export lays out, rendered to PDF bytes (page count) without touching disk */
+  previewPrint: 'workbook:preview-print',
+  /** Print dialog Print: system print dialog over the print HTML */
+  print: 'workbook:print',
   exportCsv: 'workbook:export-csv',
   csvSaveConfirm: 'workbook:csv-save-confirm',
   /** AI create_document: new standalone file in the default folder (no dialog) */

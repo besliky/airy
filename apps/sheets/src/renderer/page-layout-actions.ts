@@ -6,6 +6,7 @@
  * page-layout view), everything lands in the saved file.
  */
 import { isMetafileMime, metafileToDataUrl } from '@airy-office/docx-engine/metafile'
+import type { WorkbookExportPdfRequest } from '../shared/desktop-api'
 import type { WorkbookOperation } from '../domain/workbook-dsl'
 import type { ApplyOutcome } from '../domain/workbook.types'
 
@@ -25,6 +26,7 @@ import { COLOR_SCHEMES, FONT_SCHEMES, rethemeStyles, THEME_PRESETS } from './the
 import { loadVisibleRange } from './univer-sync'
 import {
   buildSheetPrintPayload,
+  PrintError,
   type HeaderFooterPictureImage,
   type PrintWorksheet,
 } from './print-html'
@@ -339,44 +341,85 @@ export function handleApplyHeaderFooter(
   return null
 }
 
-/// Lays the active sheet out as HTML with its Page Layout settings and asks
-/// the main process to render the PDF (hidden window + save dialog).
-export async function handleExportPdf(ctx: PageLayoutContext): Promise<void> {
+/// Page-setup axes the Print dialog overrides for the job at hand (the
+/// workbook's saved setup stays untouched, like Excel's print dialog).
+export interface PrintSetupOverrides {
+  readonly paperSize?: number | undefined
+  readonly orientation?: 'portrait' | 'landscape' | undefined
+  /// Percent; applies when fitToPage is off.
+  readonly scale?: number | undefined
+  readonly fitToPage?: boolean | undefined
+}
+
+/// Lays the active sheet out with its effective Page Layout settings — the
+/// shared base of the PDF export and the Print dialog (which layers the
+/// user's per-job overrides on top). Throws PrintError with a localized
+/// message when the sheet has nothing printable.
+export async function buildActiveSheetPrintRequest(
+  ctx: PageLayoutContext,
+  overrides: PrintSetupOverrides = {},
+): Promise<{
+  request: WorkbookExportPdfRequest
+  effective: {
+    paperSize: number
+    orientation: 'portrait' | 'landscape'
+    scale: number
+    fitToPage: boolean
+  }
+}> {
   const runtime = ctx.univerRef.current
   const worksheet = runtime?.univerAPI.getActiveWorkbook()?.getActiveSheet()
-  if (!runtime || !worksheet) return
+  if (!runtime || !worksheet) throw new PrintError(t('appActiveSheetUnavailable'))
   const state = ctx.lazyWorkbookRef.current
-  if (state && !state.flags.preloadComplete) {
-    ctx.setMessage(t('appPdfNeedsFullLoad'))
-    return
+  if (state && !state.flags.preloadComplete) throw new PrintError(t('appPdfNeedsFullLoad'))
+  const sheetId = worksheet.getSheetId()
+  const journal = state?.editJournal.pageSetup.get(sheetId) ?? {}
+  const fileSetup = state?.sheetFilePageSetups.get(sheetId) ?? null
+  const fileSheet = state?.file.sheets.find((sheet) => sheet.id === sheetId)
+  const setup = resolveEffectivePageSetup(
+    journal,
+    fileSetup,
+    {
+      ...(fileSheet?.printArea === undefined ? {} : { printArea: fileSheet.printArea }),
+      ...(fileSheet?.printTitles === undefined ? {} : { printTitles: fileSheet.printTitles }),
+    },
+    state?.editJournal.structuralOps.get(sheetId) ?? [],
+  )
+  const effective = {
+    ...setup,
+    ...(overrides.paperSize === undefined ? {} : { paperSize: overrides.paperSize }),
+    ...(overrides.orientation === undefined ? {} : { orientation: overrides.orientation }),
+    ...(overrides.scale === undefined ? {} : { scale: overrides.scale }),
+    ...(overrides.fitToPage === undefined ? {} : { fitToPage: overrides.fitToPage }),
   }
-  try {
-    const sheetId = worksheet.getSheetId()
-    const journal = state?.editJournal.pageSetup.get(sheetId) ?? {}
-    const fileSetup = state?.sheetFilePageSetups.get(sheetId) ?? null
-    const fileSheet = state?.file.sheets.find((sheet) => sheet.id === sheetId)
-    const setup = resolveEffectivePageSetup(
-      journal,
-      fileSetup,
-      {
-        ...(fileSheet?.printArea === undefined ? {} : { printArea: fileSheet.printArea }),
-        ...(fileSheet?.printTitles === undefined ? {} : { printTitles: fileSheet.printTitles }),
-      },
-      state?.editJournal.structuralOps.get(sheetId) ?? [],
-    )
-    const baseName = (state?.file.name ?? 'Book1').replace(/\.[^.]+$/, '')
-    ctx.setMessage(t('appPdfRendering'))
-    const pictures = state
-      ? await loadHeaderFooterPictures(state.file.sessionId, setup.headerFooterPictures)
-      : new Map<string, HeaderFooterPictureImage>()
-    const payload = buildSheetPrintPayload(
+  const baseName = (state?.file.name ?? 'Book1').replace(/\.[^.]+$/, '')
+  const pictures = state
+    ? await loadHeaderFooterPictures(state.file.sessionId, effective.headerFooterPictures)
+    : new Map<string, HeaderFooterPictureImage>()
+  return {
+    request: buildSheetPrintPayload(
       worksheet as unknown as PrintWorksheet,
-      setup,
+      effective,
       `${baseName}.pdf`,
       worksheet.getSheetName(),
       pictures,
-    )
-    const result = await window.desktopApi.exportPdf(payload)
+    ),
+    effective: {
+      paperSize: effective.paperSize,
+      orientation: effective.orientation,
+      scale: effective.scale,
+      fitToPage: effective.fitToPage,
+    },
+  }
+}
+
+/// Lays the active sheet out as HTML with its Page Layout settings and asks
+/// the main process to render the PDF (hidden window + save dialog).
+export async function handleExportPdf(ctx: PageLayoutContext): Promise<void> {
+  try {
+    ctx.setMessage(t('appPdfRendering'))
+    const { request } = await buildActiveSheetPrintRequest(ctx)
+    const result = await window.desktopApi.exportPdf(request)
     ctx.setMessage(
       result.canceled ? t('appPdfCanceled') : t('appPdfExported', { path: result.path }),
     )

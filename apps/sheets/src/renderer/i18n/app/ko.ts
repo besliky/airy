@@ -628,6 +628,8 @@ export const ko = {
   appSheetStillIndexing: '시트의 인덱스를 만드는 중입니다 — 잠시 후 다시 시도하십시오.',
   // Print (export PDF)
   appPrintNothing: '이 시트에는 인쇄할 내용이 없습니다.',
+  appPrintFailed: '인쇄 실패: {error}',
+  appPrintPreviewFailed: '인쇄 미리보기를 생성할 수 없습니다.',
   appPrintTooLarge:
     '인쇄 범위가 너무 큽니다 — 페이지 레이아웃 탭에서 더 작은 인쇄 영역을 설정하십시오.',
   appPrintBadArea: '인쇄 영역 "{area}"이(가) 잘못되었습니다.',
@@ -655,6 +657,13 @@ export const ko = {
   appApply: '적용',
   // Ribbon tabs
   appTabHome: '홈',
+  appFileTab: '파일',
+  appFileOpen: '통합 문서 열기',
+  appFileSave: '저장',
+  appFileSaveAs: '다른 이름으로 저장',
+  appFileExportPdf: 'PDF로 내보내기…',
+  appFileExportCsv: 'CSV로 내보내기…',
+  appFilePrint: '인쇄…',
   appTabInsert: '삽입',
   appTabPageLayout: '페이지 레이아웃',
   appTabFormulas: '수식',

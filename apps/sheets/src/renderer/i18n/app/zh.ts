@@ -551,6 +551,8 @@ export const zh = {
   appSheetStillIndexing: '工作表还在索引中——稍后再试。',
   // Print (export PDF)
   appPrintNothing: '该工作表没有可打印的内容。',
+  appPrintFailed: '打印失败:{error}',
+  appPrintPreviewFailed: '无法生成打印预览。',
   appPrintTooLarge: '打印范围太大——请在“页面布局”里设置更小的打印区域。',
   appPrintBadArea: '打印区域 "{area}" 无效。',
   appPrintBadTitles: '打印标题 "{titles}" 无效。',
@@ -577,6 +579,13 @@ export const zh = {
   appApply: '应用',
   // Ribbon tabs
   appTabHome: '开始',
+  appFileTab: '文件',
+  appFileOpen: '打开工作簿',
+  appFileSave: '保存',
+  appFileSaveAs: '另存为',
+  appFileExportPdf: '导出 PDF…',
+  appFileExportCsv: '导出 CSV…',
+  appFilePrint: '打印…',
   appTabInsert: '插入',
   appTabPageLayout: '页面布局',
   appTabFormulas: '公式',

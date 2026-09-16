@@ -1,0 +1,127 @@
+/**
+ * The Print dialog's renderer plumbing: the shared print-request builder
+ * applies the dialog's per-job overrides on top of the sheet's effective
+ * page setup, and the File › Print / Ctrl+P wiring reaches the dialog from
+ * the application menu, the preload allowlist, and the ribbon.
+ */
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { describe, expect, it } from 'vitest'
+
+import {
+  buildActiveSheetPrintRequest,
+  type PageLayoutContext,
+} from '../src/renderer/page-layout-actions'
+import type { PrintWorksheet } from '../src/renderer/print-html'
+import type { UniverRuntime } from '../src/renderer/univer-state'
+
+function fakeWorksheet(): PrintWorksheet {
+  return {
+    getLastRow: () => 2,
+    getLastColumn: () => 1,
+    getRowHeight: () => 20,
+    getColumnWidth: () => 100,
+    getMergedRanges: () => [],
+    getRange: ((row: number, column: number, numRows?: number, numColumns?: number) => ({
+      getDisplayValues: () =>
+        [
+          ['a', '1'],
+          ['b', '2'],
+        ]
+          .slice(row, row + (numRows ?? 1))
+          .map((cells) => cells.slice(column, column + (numColumns ?? 1))),
+      getValues: () => [],
+      getCellStyleData: () => null,
+    })) as PrintWorksheet['getRange'],
+  }
+}
+
+function layoutContext(): PageLayoutContext {
+  const worksheet = fakeWorksheet()
+  const runtime = {
+    univerAPI: {
+      getActiveWorkbook: () => ({
+        getActiveSheet: () => ({
+          ...worksheet,
+          getSheetId: () => 'sheet-1',
+          getSheetName: () => 'Data',
+        }),
+      }),
+    },
+  } as unknown as UniverRuntime
+  return {
+    univerRef: { current: runtime },
+    lazyWorkbookRef: { current: null },
+    setMessage: () => {},
+  } as unknown as PageLayoutContext
+}
+
+const read = (relative: string): string => readFileSync(resolve(__dirname, relative), 'utf8')
+
+describe('buildActiveSheetPrintRequest', () => {
+  it('uses the sheet defaults when no overrides are given', async () => {
+    const { request, effective } = await buildActiveSheetPrintRequest(layoutContext())
+    expect(request.landscape).toBe(false)
+    expect(request.pageSize).toBe('A4')
+    expect(effective).toEqual({
+      paperSize: 9,
+      orientation: 'portrait',
+      scale: 100,
+      fitToPage: false,
+    })
+  })
+
+  it('applies the dialog overrides without touching the saved setup', async () => {
+    const ctx = layoutContext()
+    const { request, effective } = await buildActiveSheetPrintRequest(ctx, {
+      paperSize: 1,
+      orientation: 'landscape',
+      scale: 50,
+    })
+    expect(request.landscape).toBe(true)
+    expect(request.pageSize).toBe('Letter')
+    expect(request.scale).toBe(0.5)
+    expect(effective).toEqual({
+      paperSize: 1,
+      orientation: 'landscape',
+      scale: 50,
+      fitToPage: false,
+    })
+    // A second build without overrides still sees the untouched defaults.
+    const again = await buildActiveSheetPrintRequest(ctx)
+    expect(again.request.landscape).toBe(false)
+    expect(again.effective.paperSize).toBe(9)
+  })
+})
+
+describe('Print dialog wiring', () => {
+  it('the application menu has Print with a Ctrl+P accelerator', () => {
+    const mainSrc = read('../src/main/sheets-main.ts')
+    expect(mainSrc).toMatch(
+      /menuPrint[\s\S]{0,60}accelerator: 'CmdOrCtrl\+P'[\s\S]{0,40}sendMenuAction\('print'\)/,
+    )
+  })
+
+  it('the preload allows the print menu action and the print channels', () => {
+    const preloadSrc = read('../src/preload/index.ts')
+    expect(preloadSrc).toContain("action === 'print'")
+    expect(preloadSrc).toContain('IPC_CHANNELS.previewPrint')
+    expect(preloadSrc).toContain('IPC_CHANNELS.print')
+  })
+
+  it('the menu action and the ribbon command open the print dialog', () => {
+    const appSrc = read('../src/renderer/App.tsx')
+    expect(appSrc).toMatch(/action === 'print'[\s\S]{0,60}setPrintDialogOpen\(true\)/)
+    expect(appSrc).toMatch(/onOpenPrintDialog=\{\(\) => setPrintDialogOpen\(true\)\}/)
+    const ribbonSrc = read('../src/renderer/ribbon-actions.ts')
+    expect(ribbonSrc).toMatch(/command === 'print'[\s\S]{0,50}ctx\.openPrintDialog\(\)/)
+  })
+
+  it('the ribbon renders a File tab dropdown on non-mac platforms', () => {
+    const shellSrc = read('../src/renderer/ExcelShell.tsx')
+    expect(shellSrc).toMatch(/!IS_MAC &&[\s\S]{0,200}ribbon-tab-file/)
+    expect(shellSrc).toContain("t('appFileOpen')")
+    expect(shellSrc).toContain("t('appFileExportPdf')")
+    expect(shellSrc).toContain("t('appFilePrint')")
+  })
+})

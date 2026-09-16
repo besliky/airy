@@ -131,7 +131,7 @@ import { IPC_CHANNELS } from '../shared/ipc-channels'
 import { atomicWriteFile } from './atomic-write'
 import { closeGuardDecision } from './close-guard'
 import { SaveEditsTransferStore } from './save-edits-transfer'
-import { exportPdf } from './pdf-export'
+import { exportPdf, previewPrint, printWorkbook } from './pdf-export'
 import { allowsAutomaticWorkbookRecovery } from './recovery-policy'
 import { setSystemShortDate, shortDatePatternForSystemLocale } from '../shared/short-date'
 import {
@@ -189,6 +189,7 @@ const tMain = createI18n({
     menuSave: '保存',
     menuSaveAs: '另存为…',
     menuExportPdf: '导出 PDF…',
+    menuPrint: '打印…',
     menuClose: '关闭',
     menuQuit: '退出',
     menuEdit: '编辑',
@@ -248,6 +249,7 @@ const tMain = createI18n({
     menuOpenWorkbook: 'Open Workbook…',
     menuSave: 'Save',
     menuSaveAs: 'Save As…',
+    menuPrint: 'Print…',
     menuExportPdf: 'Export PDF…',
     menuClose: 'Close',
     menuQuit: 'Quit',
@@ -311,6 +313,7 @@ const tMain = createI18n({
     menuFile: 'ファイル',
     menuOpenWorkbook: 'ブックを開く…',
     menuSave: '保存',
+    menuPrint: '印刷…',
     menuSaveAs: '名前を付けて保存…',
     menuExportPdf: 'PDF をエクスポート…',
     menuClose: '閉じる',
@@ -375,6 +378,7 @@ const tMain = createI18n({
     autosaveDiscard: '취소',
     menuFile: '파일',
     menuOpenWorkbook: '통합 문서 열기…',
+    menuPrint: '인쇄…',
     menuSave: '저장',
     menuSaveAs: '다른 이름으로 저장…',
     menuExportPdf: 'PDF 내보내기…',
@@ -439,6 +443,7 @@ const tMain = createI18n({
     autosaveRestore: 'Restaurer',
     autosaveDiscard: 'Ignorer',
     menuFile: 'Fichier',
+    menuPrint: 'Imprimer…',
     menuOpenWorkbook: 'Ouvrir un classeur…',
     menuSave: 'Enregistrer',
     menuSaveAs: 'Enregistrer sous…',
@@ -504,6 +509,7 @@ const tMain = createI18n({
       'Es gibt ungespeicherte Änderungen. Automatisch gespeicherte Version wiederherstellen? Nach der Wiederherstellung überschreibt Speichern die Originaldatei.',
     autosaveRestore: 'Wiederherstellen',
     autosaveDiscard: 'Verwerfen',
+    menuPrint: 'Drucken…',
     menuFile: 'Datei',
     menuOpenWorkbook: 'Arbeitsmappe öffnen…',
     menuSave: 'Speichern',
@@ -568,6 +574,7 @@ const tMain = createI18n({
     autosaveFoundBody:
       'Hay cambios sin guardar de la última sesión. ¿Restaurar la versión autoguardada? Tras restaurar, guardar sobrescribirá el archivo original.',
     autosaveRestore: 'Restaurar',
+    menuPrint: 'Imprimir…',
     autosaveDiscard: 'Descartar',
     menuFile: 'Archivo',
     menuOpenWorkbook: 'Abrir libro…',
@@ -631,6 +638,7 @@ const tMain = createI18n({
     autosaveFoundTitle: 'พบเวอร์ชันกู้คืนอัตโนมัติ',
     autosaveFoundBody:
       'มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึกจากครั้งก่อน ต้องการกู้คืนหรือไม่? หลังกู้คืน การบันทึกจะเขียนทับไฟล์ต้นฉบับ',
+    menuPrint: 'พิมพ์…',
     autosaveRestore: 'กู้คืน',
     autosaveDiscard: 'ละทิ้ง',
     menuFile: 'ไฟล์',
@@ -701,6 +709,7 @@ const tMain = createI18n({
     menuSave: 'Simpan',
     menuSaveAs: 'Simpan Sebagai…',
     menuExportPdf: 'Ekspor PDF…',
+    menuPrint: 'Cetak…',
     menuClose: 'Tutup',
     menuQuit: 'Keluar',
     menuEdit: 'Edit',
@@ -756,6 +765,7 @@ const tMain = createI18n({
     errImgBadType: 'Этот файл не является изображением PNG/JPEG/GIF.',
     errDiskChanged: 'Книга была изменена на диске после открытия — используйте «Сохранить как».',
     autosaveFoundTitle: 'Найдена восстановленная версия',
+    menuPrint: 'Печать…',
     autosaveFoundBody:
       'Есть несохранённые изменения из прошлого сеанса. Восстановить автосохранённую версию? После восстановления сохранение перезапишет исходный файл.',
     autosaveRestore: 'Восстановить',
@@ -818,6 +828,7 @@ const tMain = createI18n({
     errImgTooLarge20: 'الصورة تتجاوز 20 ميغابايت ولا يمكن إدراجها.',
     errImgBadType: 'هذا الملف ليس صورة PNG/JPEG/GIF.',
     errDiskChanged: 'تم تغيير المصنف على القرص بعد فتحه — استخدم «حفظ باسم» بدلاً من ذلك.',
+    menuPrint: 'طباعة…',
     autosaveFoundTitle: 'تم العثور على نسخة مستردة',
     autosaveFoundBody:
       'توجد تغييرات غير محفوظة من الجلسة الأخيرة. هل تريد استعادة النسخة المحفوظة تلقائيًا؟ بعد الاستعادة، سيؤدي الحفظ إلى استبدال الملف الأصلي.',
@@ -879,6 +890,7 @@ const tMain = createI18n({
     errImgNotFound: 'Arquivo de imagem não encontrado: {path}',
     errImgTooLarge20: 'A imagem excede 20MB e não pode ser inserida.',
     errImgBadType: 'O arquivo não é uma imagem PNG/JPEG/GIF.',
+    menuPrint: 'Imprimir…',
     errDiskChanged: 'A pasta de trabalho foi alterada no disco após ser aberta — use Salvar Como.',
     autosaveFoundTitle: 'Versão recuperada encontrada',
     autosaveFoundBody:
@@ -943,6 +955,7 @@ const tMain = createI18n({
     errImgNotFound: 'File immagine non trovato: {path}',
     errImgTooLarge20: "L'immagine supera i 20 MB e non può essere inserita.",
     errImgBadType: "Il file non è un'immagine PNG/JPEG/GIF.",
+    menuPrint: 'Stampa…',
     errDiskChanged:
       "La cartella di lavoro è stata modificata sul disco dopo l'apertura — usa Salva con nome.",
     autosaveFoundTitle: 'Trovata versione recuperata',
@@ -1006,6 +1019,7 @@ const tMain = createI18n({
     errNoModel: 'Nie skonfigurowano nazwy modelu',
     errImgAbsPath: 'Ścieżka obrazu musi być bezwzględna.',
     errImgNotFound: 'Nie znaleziono pliku obrazu: {path}',
+    menuPrint: 'Drukuj…',
     errImgTooLarge20: 'Obraz przekracza 20 MB i nie może zostać wstawiony.',
     errImgBadType: 'Plik nie jest obrazem PNG/JPEG/GIF.',
     errDiskChanged: 'Skoroszyt został zmieniony na dysku po otwarciu — użyj polecenia Zapisz jako.',
@@ -1069,6 +1083,7 @@ const tMain = createI18n({
     errAiBusy: 'Služba AI je momentálně zaneprázdněna — zkuste to prosím za chvíli znovu',
     errNoModel: 'Není nakonfigurován název modelu',
     errImgAbsPath: 'Cesta k obrázku musí být absolutní.',
+    menuPrint: 'Tisk…',
     errImgNotFound: 'Soubor obrázku nebyl nalezen: {path}',
     errImgTooLarge20: 'Obrázek překračuje 20 MB a nelze ho vložit.',
     errImgBadType: 'Soubor není obrázek PNG/JPEG/GIF.',
@@ -1133,6 +1148,7 @@ const tMain = createI18n({
     errAiBusy: 'De AI-service is momenteel overbelast — probeer het zo opnieuw',
     errNoModel: 'Geen modelnaam geconfigureerd',
     errImgAbsPath: 'Het afbeeldingspad moet absoluut zijn.',
+    menuPrint: 'Afdrukken…',
     errImgNotFound: 'Afbeeldingsbestand niet gevonden: {path}',
     errImgTooLarge20: 'De afbeelding is groter dan 20 MB en kan niet worden ingevoegd.',
     errImgBadType: 'Het bestand is geen PNG/JPEG/GIF-afbeelding.',
@@ -1195,6 +1211,7 @@ const tMain = createI18n({
     errNotImage: 'bukan jenis imej yang disokong',
     errNoApiKey: 'Kunci API untuk {provider} belum dikonfigurasikan',
     errAiBusy: 'Perkhidmatan AI sedang sibuk — sila cuba lagi sebentar lagi',
+    menuPrint: 'Cetak…',
     errNoModel: 'Nama model belum dikonfigurasikan',
     errImgAbsPath: 'Laluan imej mestilah laluan mutlak.',
     errImgNotFound: 'Fail imej tidak ditemui: {path}',
@@ -1258,6 +1275,7 @@ const tMain = createI18n({
     errImageNoText: 'קבצים מצורפים מסוג תמונה אינם מכילים טקסט; התמונה נשלחת יחד עם הודעת המשתמש',
     errNotImage: 'סוג תמונה שאינו נתמך',
     errNoApiKey: 'לא הוגדר מפתח API עבור {provider}',
+    menuPrint: 'הדפסה…',
     errAiBusy: 'שירות ה-AI עמוס כרגע — נסו שוב בעוד רגע',
     errNoModel: 'לא הוגדר שם מודל',
     errImgAbsPath: 'נתיב התמונה חייב להיות מוחלט.',
@@ -1319,6 +1337,7 @@ const tMain = createI18n({
     errImageNoText: 'छवि अनुलग्नक में टेक्स्ट नहीं होता; छवि उपयोगकर्ता संदेश के साथ भेजी जाती है',
     errNotImage: 'समर्थित छवि प्रकार नहीं है',
     errNoApiKey: '{provider} के लिए कोई API कुंजी कॉन्फ़िगर नहीं है',
+    menuPrint: 'प्रिंट…',
     errAiBusy: 'AI सेवा अभी व्यस्त है — कृपया थोड़ी देर बाद फिर से प्रयास करें',
     errNoModel: 'कोई मॉडल नाम कॉन्फ़िगर नहीं है',
     errImgAbsPath: 'छवि पथ निरपेक्ष होना चाहिए।',
@@ -1381,6 +1400,7 @@ const tMain = createI18n({
     errFileTooLarge: '檔案超過大小上限',
     errParseFailed: '檔案解析失敗',
     errImageNoText: '圖片附件不提供文字,已作為影像隨使用者訊息傳送,直接看圖即可',
+    menuPrint: '列印…',
     errNotImage: '不是支援的圖片類型',
     errNoApiKey: '未設定 {provider} 的 API Key',
     errAiBusy: 'AI 服務目前繁忙，請稍後重試',
@@ -1734,7 +1754,7 @@ export function setSheetsWorkbookOpenedHook(
 
 /** forward an application-menu File command into the sheets renderer */
 export function sendSheetsMenuAction(
-  action: 'open' | 'save' | 'save-as' | 'export-pdf' | 'export-csv' | 'undo' | 'redo',
+  action: 'open' | 'save' | 'save-as' | 'export-pdf' | 'export-csv' | 'print' | 'undo' | 'redo',
 ): void {
   activeSheetsWebContents?.send(IPC_CHANNELS.menuAction, action)
 }
@@ -1889,6 +1909,7 @@ function startCaptureServer(): void {
         action === 'save' ||
         action === 'save-as' ||
         action === 'export-pdf' ||
+        action === 'print' ||
         action === 'export-csv' ||
         action === 'undo' ||
         action === 'redo'
@@ -2684,6 +2705,16 @@ export function registerSheetsIpc(): void {
     const result = await exportPdf(event, request)
     if (!result.canceled && result.path) openGeneratedFile(result.path)
     return result
+  })
+
+  ipcMain.handle(IPC_CHANNELS.previewPrint, async (event, input: unknown) => {
+    sessionFor(event)
+    return previewPrint(event, workbookExportPdfRequestSchema.parse(input))
+  })
+
+  ipcMain.handle(IPC_CHANNELS.print, async (event, input: unknown) => {
+    sessionFor(event)
+    return printWorkbook(event, workbookExportPdfRequestSchema.parse(input))
   })
 
   ipcMain.handle(IPC_CHANNELS.exportCsv, async (event, input: unknown) => {
@@ -3969,6 +4000,11 @@ function installApplicationMenu(): void {
           {
             label: tm('menuExportPdf'),
             click: () => sendMenuAction('export-pdf'),
+          },
+          {
+            label: tm('menuPrint'),
+            accelerator: 'CmdOrCtrl+P',
+            click: () => sendMenuAction('print'),
           },
           {
             label: tm('menuExportCsv'),

@@ -317,6 +317,7 @@ import {
   type RibbonCommandContext,
 } from './ribbon-actions'
 import {
+  buildActiveSheetPrintRequest,
   handleApplyHeaderFooter as handleApplyHeaderFooterImpl,
   handleExportPdf as handleExportPdfImpl,
   handlePageLayoutCommand as handlePageLayoutCommandImpl,
@@ -655,6 +656,7 @@ export function App(): React.JSX.Element {
   /// Non-null while the "Insert Timeline" field picker is open.
   const [timelinePicker, setTimelinePicker] = useState<TimelinePickerState | null>(null)
   const menuActionRef = useRef<(action: MenuAction) => void>(() => {})
+  const [printDialogOpen, setPrintDialogOpen] = useState(false)
   /// Where the user was when a save started: the post-save session swap
   /// reinstalls the workbook, and the install consumes this instead of
   /// resetting the view to the first sheet's A1.
@@ -3380,6 +3382,7 @@ export function App(): React.JSX.Element {
       pivotContext,
       handlePageLayoutCommand: (rest) => handlePageLayoutCommandImpl(pageLayoutContext(), rest),
       handleExportPdf: () => handleExportPdfImpl(pageLayoutContext()),
+      openPrintDialog: () => setPrintDialogOpen(true),
     }
   }
 
@@ -3929,6 +3932,8 @@ export function App(): React.JSX.Element {
       void handleInspectWorkbook()
     } else if (action === 'export-pdf') {
       void handleExportPdfImpl(pageLayoutContext())
+    } else if (action === 'print') {
+      setPrintDialogOpen(true)
     } else if (action === 'export-csv') {
       void handleExportCsvImpl(csvExportContext())
     } else if (action === 'undo' || action === 'redo') {
@@ -4212,6 +4217,16 @@ export function App(): React.JSX.Element {
         onGoToReference={(ref) => goToReferenceImpl(dataToolsContext(), ref)}
         onListDefinedNames={() => listDefinedNamesImpl(dataToolsContext())}
         onApplyFormula={(formula) => handleApplyFormulaImpl(dataToolsContext(), formula)}
+        showPrintDialog={printDialogOpen}
+        onClosePrintDialog={() => setPrintDialogOpen(false)}
+        onOpenPrintDialog={() => setPrintDialogOpen(true)}
+        onOpenWorkbook={() => void handleInspectWorkbook()}
+        onExportPdf={() => void handleExportPdfImpl(pageLayoutContext())}
+        onExportCsv={() => void handleExportCsvImpl(csvExportContext())}
+        onSetStatusMessage={setMessage}
+        buildPrintRequest={(overrides) =>
+          buildActiveSheetPrintRequest(pageLayoutContext(), overrides)
+        }
         getFunctionCatalog={() =>
           buildFunctionCatalog(
             univerRef.current

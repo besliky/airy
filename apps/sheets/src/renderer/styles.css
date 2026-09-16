@@ -5562,3 +5562,163 @@ textarea:focus {
 .menu-select-drop .menu-option-icon:hover {
   background: transparent;
 }
+
+/* Print dialog: preview pane + page setup options (docs/slides pattern) */
+.modal.print-dialog {
+  width: min(880px, calc(100vw - 64px));
+}
+.print-dialog-body {
+  display: flex;
+  gap: 18px;
+  height: min(560px, calc(100vh - 220px));
+}
+.print-preview-pane {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--hover);
+  overflow: hidden;
+}
+.print-preview-pane iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.print-preview-empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.print-options {
+  width: 240px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.print-options fieldset {
+  margin: 0;
+  padding: 8px 10px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.print-options legend {
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.print-options .print-radio {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 7px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.print-options .print-radio input {
+  display: inline-block;
+  width: auto;
+  height: auto;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.print-options .print-radio:has(input:disabled) {
+  opacity: 0.45;
+  cursor: default;
+}
+.print-options .print-select {
+  width: 100%;
+  height: 28px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 0 6px;
+  font-size: 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+.print-options .print-scale-row {
+  margin-left: 20px;
+}
+.print-options .print-scale-input {
+  display: inline-block;
+  width: 64px;
+  height: 26px;
+  margin-right: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 0 6px;
+  font-size: 12px;
+  outline: none;
+  background: var(--surface);
+  color: var(--text);
+}
+.print-options .print-scale-input:focus {
+  border-color: var(--accent);
+}
+.print-page-count {
+  margin-top: auto;
+  padding: 2px 2px 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+/* File tab dropdown (docs/slides pattern; non-mac ribbons only) */
+.ribbon-tabs .file-tab-wrap {
+  -webkit-app-region: no-drag;
+  position: relative;
+}
+.ribbon-tab-file {
+  color: var(--sheets-on-accent);
+  background: var(--accent);
+  border-radius: 4px;
+  padding: 6px 16px;
+  margin-right: 6px;
+}
+.ribbon-tab-file:hover,
+.ribbon-tab-file.open {
+  background: var(--accent-dark);
+}
+.file-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 60;
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: var(--sheets-shadow-menu);
+  padding: 5px;
+}
+.file-menu button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text);
+}
+.file-menu button:hover:not(:disabled) {
+  background: var(--hover);
+}
+.file-menu button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.file-menu-key {
+  color: var(--text-dim);
+  font-size: 12px;
+}
