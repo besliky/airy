@@ -27,7 +27,7 @@ import {
   writeFileSync,
   readdirSync,
 } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type {
   ChatMeta,
   ChatMessage,
@@ -35,7 +35,6 @@ import type {
   ProjectIndex,
   ProjectInfo,
   ProjectSummary,
-  TimelineEntry,
 } from './types.js'
 
 // ────────────────────────────────────────────────────────────
@@ -691,48 +690,5 @@ export class ProjectStore {
     const cur = this.seqCounters.get(oldKey)
     this.seqCounters.delete(oldKey)
     if (cur !== undefined) this.seqCounters.set(newKey, cur)
-  }
-
-  /**
-   * Aggregates messages from all chats in a project, sorted by ts descending,
-   * returning the most recent `limit` entries. Each entry includes the file path
-   * (reverse-looked-up from fileMap by chatId), role, and preview text.
-   */
-  getProjectTimeline(projectId: string, limit = 20): TimelineEntry[] {
-    const index = this.readIndex()
-    // Build the reverse chatId → filePath map (files in this project only); mapping wins, old data falls back to the path hash
-    const chatToFile = new Map<string, string>()
-    for (const [filePath, pid] of Object.entries(index.fileMap)) {
-      if (pid === projectId) {
-        const chatId = index.chatIdByPath?.[filePath] ?? ProjectStore.chatIdForFile(filePath)
-        chatToFile.set(chatId, filePath)
-      }
-    }
-
-    const entries: TimelineEntry[] = []
-    const chats = this.listChats(projectId)
-    for (const { chatId } of chats) {
-      const filePath = chatToFile.get(chatId) ?? ''
-      const msgs = this.loadChat(projectId, chatId, 200)
-      for (const msg of msgs) {
-        entries.push({
-          filePath,
-          fileName: filePath ? basename(filePath) : chatId,
-          chatId,
-          ts: msg.ts,
-          role: msg.role,
-          preview: msg.text.slice(0, 120),
-          seq: msg.seq,
-        })
-      }
-    }
-
-    // Sort by ts descending
-    entries.sort((a, b) => {
-      if (b.ts > a.ts) return 1
-      if (b.ts < a.ts) return -1
-      return b.seq - a.seq
-    })
-    return entries.slice(0, limit)
   }
 }

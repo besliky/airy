@@ -238,7 +238,6 @@ const tMain = createI18n({
     menuWindow: '窗口',
     menuHelp: '帮助',
     menuShortcuts: '键盘快捷键',
-    menuDocsHelp: 'Airy Docs 帮助',
   },
   en: {
     dlgLoadFailed: 'The app window failed to load.',
@@ -340,7 +339,6 @@ const tMain = createI18n({
     menuWindow: 'Window',
     menuHelp: 'Help',
     menuShortcuts: 'Keyboard Shortcuts',
-    menuDocsHelp: 'Airy Docs Help',
   },
   ja: {
     dlgLoadFailed: 'アプリウィンドウの読み込みに失敗しました。',
@@ -442,7 +440,6 @@ const tMain = createI18n({
     menuWindow: 'ウィンドウ',
     menuHelp: 'ヘルプ',
     menuShortcuts: 'キーボードショートカット',
-    menuDocsHelp: 'Airy Docs ヘルプ',
   },
   ko: {
     dlgLoadFailed: '앱 창을 로드하지 못했습니다.',
@@ -545,7 +542,6 @@ const tMain = createI18n({
     menuWindow: '창',
     menuHelp: '도움말',
     menuShortcuts: '키보드 바로 가기',
-    menuDocsHelp: 'Airy Docs 도움말',
   },
   fr: {
     dlgLoadFailed: 'Échec du chargement de la fenêtre principale.',
@@ -649,7 +645,6 @@ const tMain = createI18n({
     menuWindow: 'Fenêtre',
     menuHelp: 'Aide',
     menuShortcuts: 'Raccourcis clavier',
-    menuDocsHelp: 'Aide Airy Docs',
   },
   de: {
     dlgLoadFailed: 'Das Anwendungsfenster konnte nicht geladen werden.',
@@ -753,7 +748,6 @@ const tMain = createI18n({
     menuWindow: 'Fenster',
     menuHelp: 'Hilfe',
     menuShortcuts: 'Tastenkombinationen',
-    menuDocsHelp: 'Airy Docs-Hilfe',
   },
   es: {
     dlgLoadFailed: 'No se pudo cargar la ventana de la aplicación.',
@@ -857,7 +851,6 @@ const tMain = createI18n({
     menuWindow: 'Ventana',
     menuHelp: 'Ayuda',
     menuShortcuts: 'Atajos de teclado',
-    menuDocsHelp: 'Ayuda de Airy Docs',
   },
   th: {
     dlgLoadFailed: 'โหลดหน้าต่างแอปไม่สำเร็จ',
@@ -959,7 +952,6 @@ const tMain = createI18n({
     menuWindow: 'หน้าต่าง',
     menuHelp: 'วิธีใช้',
     menuShortcuts: 'แป้นพิมพ์ลัด',
-    menuDocsHelp: 'วิธีใช้ Airy Docs',
   },
   id: {
     dlgLoadFailed: 'Gagal memuat jendela aplikasi.',
@@ -1062,7 +1054,6 @@ const tMain = createI18n({
     menuWindow: 'Jendela',
     menuHelp: 'Bantuan',
     menuShortcuts: 'Pintasan Papan Ketik',
-    menuDocsHelp: 'Bantuan Airy Docs',
   },
   ru: {
     dlgLoadFailed: 'Не удалось загрузить окно приложения.',
@@ -1165,7 +1156,6 @@ const tMain = createI18n({
     menuWindow: 'Окно',
     menuHelp: 'Справка',
     menuShortcuts: 'Сочетания клавиш',
-    menuDocsHelp: 'Справка Airy Docs',
   },
   ar: {
     dlgLoadFailed: 'فشل تحميل نافذة التطبيق.',
@@ -1268,7 +1258,6 @@ const tMain = createI18n({
     menuWindow: 'نافذة',
     menuHelp: 'تعليمات',
     menuShortcuts: 'اختصارات لوحة المفاتيح',
-    menuDocsHelp: 'تعليمات Airy Docs',
   },
   pt: {
     dlgLoadFailed: 'Falha ao carregar a janela do aplicativo.',
@@ -1371,7 +1360,6 @@ const tMain = createI18n({
     menuWindow: 'Janela',
     menuHelp: 'Ajuda',
     menuShortcuts: 'Atalhos de Teclado',
-    menuDocsHelp: 'Ajuda do Airy Docs',
   },
   it: {
     dlgLoadFailed: 'Impossibile caricare la finestra dell’app.',
@@ -1474,7 +1462,6 @@ const tMain = createI18n({
     menuWindow: 'Finestra',
     menuHelp: 'Aiuto',
     menuShortcuts: 'Scelte rapide da tastiera',
-    menuDocsHelp: 'Guida di Airy Docs',
   },
   pl: {
     dlgLoadFailed: 'Nie udało się załadować okna aplikacji.',
@@ -1577,7 +1564,6 @@ const tMain = createI18n({
     menuWindow: 'Okno',
     menuHelp: 'Pomoc',
     menuShortcuts: 'Skróty klawiaturowe',
-    menuDocsHelp: 'Pomoc Airy Docs',
   },
   cs: {
     dlgLoadFailed: 'Okno aplikace se nepodařilo načíst.',
@@ -1680,7 +1666,6 @@ const tMain = createI18n({
     menuWindow: 'Okno',
     menuHelp: 'Nápověda',
     menuShortcuts: 'Klávesové zkratky',
-    menuDocsHelp: 'Nápověda Airy Docs',
   },
   nl: {
     dlgLoadFailed: 'Het app-venster kon niet worden geladen.',
@@ -1783,7 +1768,6 @@ const tMain = createI18n({
     menuWindow: 'Venster',
     menuHelp: 'Help',
     menuShortcuts: 'Sneltoetsen',
-    menuDocsHelp: 'Airy Docs Help',
   },
   ms: {
     dlgLoadFailed: 'Gagal memuat tetingkap aplikasi.',
@@ -1886,7 +1870,6 @@ const tMain = createI18n({
     menuWindow: 'Tetingkap',
     menuHelp: 'Bantuan',
     menuShortcuts: 'Pintasan Papan Kekunci',
-    menuDocsHelp: 'Bantuan Airy Docs',
   },
   he: {
     dlgLoadFailed: 'טעינת חלון היישום נכשלה.',
@@ -1988,7 +1971,6 @@ const tMain = createI18n({
     menuWindow: 'חלון',
     menuHelp: 'עזרה',
     menuShortcuts: 'קיצורי מקלדת',
-    menuDocsHelp: 'עזרה של Airy Docs',
   },
   hi: {
     dlgLoadFailed: 'ऐप विंडो लोड करने में विफल।',
@@ -2091,7 +2073,6 @@ const tMain = createI18n({
     menuWindow: 'विंडो',
     menuHelp: 'सहायता',
     menuShortcuts: 'कीबोर्ड शॉर्टकट',
-    menuDocsHelp: 'Airy Docs सहायता',
   },
   'zh-TW': {
     dlgLoadFailed: '應用程式視窗載入失敗。',
@@ -2192,7 +2173,6 @@ const tMain = createI18n({
     menuWindow: '視窗',
     menuHelp: '說明',
     menuShortcuts: '鍵盤快速鍵',
-    menuDocsHelp: 'Airy Docs 說明',
   },
 })
 const tm = (key: Parameters<typeof tMain>[1], params?: Parameters<typeof tMain>[2]) =>
@@ -3289,11 +3269,6 @@ export function registerProjectIpc(): void {
   ipcMain.handle('project:moveFile', (_event, args: { filePath: string; projectId: string }) => {
     getProjectStore().moveFileToProject(args.filePath, args.projectId)
   })
-
-  /** Get the project timeline */
-  ipcMain.handle('project:timeline', (_event, args: { projectId: string; limit?: number }) => {
-    return getProjectStore().getProjectTimeline(args.projectId, args.limit ?? 20)
-  })
 }
 
 /** document/attachment/window IPC (everything except the AI proxy above) */
@@ -4331,8 +4306,6 @@ export function buildDocsMenu(): void {
           accelerator: 'CmdOrCtrl+/',
           click: () => sendCommand('shortcuts'),
         },
-        { type: 'separator' },
-        { label: tm('menuDocsHelp'), enabled: false },
       ],
     },
   ]

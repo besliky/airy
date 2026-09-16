@@ -1642,6 +1642,10 @@ export function Home() {
               </ul>
             )}
             <div className="modal-buttons">
+              {/* deleted files move to the OS trash — point the way back */}
+              <button className="btn btn-quiet" onClick={() => void window.aiOffice.openTrash()}>
+                {t('openTrash')}
+              </button>
               <button
                 className="btn btn-secondary"
                 autoFocus

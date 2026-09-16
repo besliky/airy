@@ -224,16 +224,6 @@ export interface ProjectSummaryEntry {
   isDefault: boolean
 }
 
-export interface TimelineEntryItem {
-  filePath: string
-  fileName: string
-  chatId: string
-  ts: string
-  role: 'user' | 'assistant'
-  preview: string
-  seq: number
-}
-
 export interface ProjectHomeApi {
   /** list all projects (with file count + last-active time) */
   listProjects(): Promise<ProjectSummaryEntry[]>
@@ -247,8 +237,6 @@ export interface ProjectHomeApi {
   deleteProject(id: string): Promise<void>
   /** move a file into the given project */
   moveFile(filePath: string, projectId: string): Promise<void>
-  /** fetch the project timeline */
-  getTimeline(projectId: string, limit?: number): Promise<TimelineEntryItem[]>
 }
 
 export const HOME_CHANNELS = {
@@ -300,5 +288,4 @@ export const PROJECT_CHANNELS = {
   rename: 'project:rename',
   delete: 'project:delete',
   moveFile: 'project:moveFile',
-  timeline: 'project:timeline',
 } as const

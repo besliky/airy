@@ -2,7 +2,14 @@ import { join } from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { saveAsSuggestion, showOpenDialogWithMemory, showSaveDialogWithMemory } from '../src/index'
+import {
+  recordDialogDir,
+  readLastDialogDirs,
+  saveAsSuggestion,
+  showOpenDialogWithMemory,
+  showSaveDialogWithMemory,
+  writeLastDialogDir,
+} from '../src/index'
 
 import type { Dialog } from 'electron'
 
@@ -143,5 +150,75 @@ describe('saveAsSuggestion', () => {
     expect(dialog.showSaveDialog).toHaveBeenLastCalledWith({
       defaultPath: join('/work', 'report.docx'),
     })
+  })
+})
+
+describe('persisted dialog directories (lastDialogDirs LRU)', () => {
+  it('moves the scope to the front and keeps other scopes', () => {
+    const base = [
+      { scope: 'a', dir: '/a' },
+      { scope: 'b', dir: '/b' },
+    ]
+    expect(recordDialogDir(base, 'a', '/new')).toEqual([
+      { scope: 'a', dir: '/new' },
+      { scope: 'b', dir: '/b' },
+    ])
+    expect(recordDialogDir(base, 'c', '/c')).toEqual([
+      { scope: 'c', dir: '/c' },
+      { scope: 'a', dir: '/a' },
+      { scope: 'b', dir: '/b' },
+    ])
+  })
+
+  it('caps the list at 10 entries, evicting the least recently used', () => {
+    let entries: Array<{ scope: string; dir: string }> = []
+    for (let i = 0; i < 14; i++) entries = recordDialogDir(entries, `s${i}`, `/d${i}`)
+    expect(entries).toHaveLength(10)
+    expect(entries[0]).toEqual({ scope: 's13', dir: '/d13' })
+    expect(entries.some((e) => e.scope === 's3')).toBe(false)
+    expect(entries.some((e) => e.scope === 's4')).toBe(true)
+  })
+
+  it('round-trips through app-settings.json atomically', async () => {
+    const { mkdtempSync, readFileSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const scratch = mkdtempSync(join(tmpdir(), 'airy-dialog-dirs-'))
+    try {
+      const settingsPath = join(scratch, 'app-settings.json')
+      expect(readLastDialogDirs(settingsPath)).toEqual([]) // absent file
+      writeLastDialogDir(settingsPath, 'shell', '/work')
+      writeLastDialogDir(settingsPath, 'docs', '/docs-dir')
+      // an unrelated setting survives the read-merge-write
+      const raw = JSON.parse(readFileSync(settingsPath, 'utf8')) as Record<string, unknown>
+      expect(raw.lastDialogDirs).toEqual([
+        { scope: 'docs', dir: '/docs-dir' },
+        { scope: 'shell', dir: '/work' },
+      ])
+      expect(readLastDialogDirs(settingsPath)).toEqual([
+        { scope: 'docs', dir: '/docs-dir' },
+        { scope: 'shell', dir: '/work' },
+      ])
+    } finally {
+      rmSync(scratch, { recursive: true, force: true })
+    }
+  })
+
+  it('tolerates malformed persisted values', () => {
+    const { mkdtempSync, writeFileSync, rmSync } = require('node:fs') as typeof import('node:fs')
+    const { tmpdir } = require('node:os') as typeof import('node:os')
+    const scratch = mkdtempSync(join(tmpdir(), 'airy-dialog-dirs-bad-'))
+    try {
+      const settingsPath = join(scratch, 'app-settings.json')
+      writeFileSync(
+        settingsPath,
+        JSON.stringify({
+          lastDialogDirs: ['nope', 42, { scope: '', dir: '/x' }, { scope: 'ok', dir: '/ok' }],
+        }),
+        'utf8',
+      )
+      expect(readLastDialogDirs(settingsPath)).toEqual([{ scope: 'ok', dir: '/ok' }])
+    } finally {
+      rmSync(scratch, { recursive: true, force: true })
+    }
   })
 })

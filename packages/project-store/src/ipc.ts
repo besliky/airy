@@ -8,19 +8,10 @@ import type {
   ChatMeta,
   ChatScope,
   ProjectSummary,
-  TimelineEntry,
   ToolActivity,
 } from './types.js'
 
-export type {
-  ChatAttachment,
-  ChatMessage,
-  ChatMeta,
-  ChatScope,
-  ProjectSummary,
-  TimelineEntry,
-  ToolActivity,
-}
+export type { ChatAttachment, ChatMessage, ChatMeta, ChatScope, ProjectSummary, ToolActivity }
 
 export interface AppendChatArgs {
   projectId: string
@@ -83,11 +74,6 @@ export interface MoveFileArgs {
   projectId: string
 }
 
-export interface GetTimelineArgs {
-  projectId: string
-  limit?: number
-}
-
 /** Project storage API the main process exposes to the renderer */
 export interface ProjectApi {
   /**
@@ -113,5 +99,4 @@ export interface ProjectApi {
   /** Moves a file into the given project */
   moveFile(args: MoveFileArgs): Promise<void>
   /** Gets the project timeline */
-  getTimeline(args: GetTimelineArgs): Promise<TimelineEntry[]>
 }

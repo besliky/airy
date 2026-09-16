@@ -16,7 +16,6 @@ import type {
   RenameResult,
   ProjectHomeApi,
   ProjectSummaryEntry,
-  TimelineEntryItem,
   UiLanguage,
 } from '../shared/home-api'
 import { HOME_CHANNELS, PROJECT_CHANNELS } from '../shared/home-api'
@@ -302,13 +301,6 @@ const projectApi: ProjectHomeApi = {
   },
   async moveFile(filePath, projectId) {
     await ipcRenderer.invoke(PROJECT_CHANNELS.moveFile, { filePath, projectId })
-  },
-  async getTimeline(projectId, limit) {
-    const result: unknown = await ipcRenderer.invoke(PROJECT_CHANNELS.timeline, {
-      projectId,
-      limit,
-    })
-    return Array.isArray(result) ? (result as TimelineEntryItem[]) : []
   },
 }
 

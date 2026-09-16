@@ -1,6 +1,7 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { htmlLang } from '@airy-office/i18n'
+import airyMark from '@airy-office/ui/assets/airy-mark.png'
 import { AppFrame } from './AppFrame'
 import { LocaleProvider } from './locale'
 import '@airy-office/ui/tokens.css'
@@ -15,6 +16,24 @@ installScreenTips()
 // macOS shell window is created with vibrancy; a transparent body lets the
 // editor views' translucent regions (e.g. slides thumbnail pane) show it
 if (navigator.platform.toLowerCase().includes('mac')) document.body.classList.add('vib')
+
+/**
+ * First-paint skeleton: the shell renderer renders nothing until the
+ * language/onboarding/theme IPC round-trips resolve, leaving a blank beat on
+ * slow disks. This paints the shell surface immediately; the spinner only
+ * becomes visible after a short delay, so a fast resolve never flashes it.
+ */
+function StartupSkeleton() {
+  return (
+    <div className="startup-skeleton" aria-hidden="true">
+      <img className="startup-logo" src={airyMark} alt="" />
+      <span className="startup-spinner" />
+    </div>
+  )
+}
+
+const root = createRoot(document.getElementById('root')!)
+root.render(<StartupSkeleton />)
 
 // resolve the persisted language, first-run flag, and theme before first paint
 // so the UI never flashes (home showing briefly before the onboarding overlay)
@@ -33,7 +52,7 @@ void Promise.all([
     if (next === 'system') document.documentElement.removeAttribute('data-theme')
     else document.documentElement.setAttribute('data-theme', next)
   })
-  createRoot(document.getElementById('root')!).render(
+  root.render(
     <React.StrictMode>
       <LocaleProvider initial={lang}>
         <AppFrame initialOnboardingSeen={onboardingSeen} />

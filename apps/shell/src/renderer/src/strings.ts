@@ -7,6 +7,7 @@ export const strings = {
     cloudSortRecent: '最近',
     cloudSortOldest: '最早',
     navTrash: '回收站',
+    openTrash: '打开废纸篓',
     navTrashTip: '删除的文件在系统废纸篓中，可从那里还原',
     secQuickStart: '快速开始',
     secRecent: '最近使用',
@@ -205,6 +206,7 @@ export const strings = {
     cloudSortRecent: 'Recent',
     cloudSortOldest: 'Oldest',
     navTrash: 'Trash',
+    openTrash: 'Open Trash',
     navTrashTip: 'Deleted files go to the system Trash and can be restored there',
     secQuickStart: 'Quick start',
     secRecent: 'Recent',
@@ -404,6 +406,7 @@ export const strings = {
     cloudSortRecent: '新しい順',
     cloudSortOldest: '古い順',
     navTrash: 'ゴミ箱',
+    openTrash: 'ゴミ箱を開く',
     navTrashTip: '削除したファイルはシステムのゴミ箱に移動され、そこから復元できます',
     // Section headings
     secQuickStart: 'クイックスタート',
@@ -615,6 +618,7 @@ export const strings = {
     cloudSortRecent: '최신순',
     cloudSortOldest: '오래된순',
     navTrash: '휴지통',
+    openTrash: '휴지통 열기',
     navTrashTip: '삭제된 파일은 시스템 휴지통으로 이동되며 그곳에서 복원할 수 있습니다',
     // Section headings
     secQuickStart: '빠른 시작',
@@ -822,6 +826,7 @@ export const strings = {
     cloudSortRecent: 'Récents',
     cloudSortOldest: 'Plus anciens',
     navTrash: 'Corbeille',
+    openTrash: 'Ouvrir la corbeille',
     navTrashTip:
       'Les fichiers supprimés sont placés dans la corbeille du système et peuvent y être restaurés',
     // Section headings
@@ -1036,6 +1041,7 @@ export const strings = {
     cloudSortRecent: 'Neueste',
     cloudSortOldest: 'Älteste',
     navTrash: 'Papierkorb',
+    openTrash: 'Papierkorb öffnen',
     navTrashTip:
       'Gelöschte Dateien werden in den System-Papierkorb verschoben und können dort wiederhergestellt werden',
     // Section headings
@@ -1253,6 +1259,7 @@ export const strings = {
     cloudSortRecent: 'Recientes',
     cloudSortOldest: 'Más antiguos',
     navTrash: 'Papelera',
+    openTrash: 'Abrir la papelera',
     navTrashTip:
       'Los archivos eliminados van a la papelera del sistema y pueden restaurarse desde allí',
     // Section headings
@@ -1468,6 +1475,7 @@ export const strings = {
     cloudSortRecent: 'ล่าสุด',
     cloudSortOldest: 'เก่าสุด',
     navTrash: 'ถังขยะ',
+    openTrash: 'เปิดถังขยะ',
     navTrashTip: 'ไฟล์ที่ถูกลบจะถูกย้ายไปยังถังขยะของระบบ และสามารถกู้คืนได้จากที่นั่น',
     // Section headings
     secQuickStart: 'เริ่มต้นอย่างรวดเร็ว',
@@ -1672,6 +1680,7 @@ export const strings = {
     cloudSortRecent: 'Terbaru',
     cloudSortOldest: 'Terlama',
     navTrash: 'Sampah',
+    openTrash: 'Buka Sampah',
     navTrashTip:
       'File yang dihapus akan dipindahkan ke tempat sampah sistem dan dapat dipulihkan dari sana',
     // Section headings
@@ -1883,6 +1892,7 @@ export const strings = {
     cloudSortRecent: 'Сначала новые',
     cloudSortOldest: 'Сначала старые',
     navTrash: 'Корзина',
+    openTrash: 'Открыть корзину',
     navTrashTip: 'Удалённые файлы перемещаются в системную корзину, откуда их можно восстановить',
     // Section headings
     secQuickStart: 'Быстрый старт',
@@ -2095,6 +2105,7 @@ export const strings = {
     cloudSortRecent: 'الأحدث',
     cloudSortOldest: 'الأقدم',
     navTrash: 'سلة المهملات',
+    openTrash: 'فتح سلة المحذوفات',
     navTrashTip: 'تُنقل الملفات المحذوفة إلى سلة مهملات النظام ويمكن استعادتها من هناك',
     // Section headings
     secQuickStart: 'بدء سريع',
@@ -2302,6 +2313,7 @@ export const strings = {
     cloudSortRecent: 'Recentes',
     cloudSortOldest: 'Mais antigos',
     navTrash: 'Lixeira',
+    openTrash: 'Abrir a Lixeira',
     navTrashTip:
       'Os arquivos excluídos vão para a lixeira do sistema e podem ser restaurados de lá',
     secQuickStart: 'Início rápido',
@@ -2505,6 +2517,7 @@ export const strings = {
     cloudSortRecent: 'Recenti',
     cloudSortOldest: 'Meno recenti',
     navTrash: 'Cestino',
+    openTrash: 'Apri il cestino',
     navTrashTip:
       'I file eliminati vengono spostati nel cestino di sistema e possono essere ripristinati da lì',
     secQuickStart: 'Avvio rapido',
@@ -2708,6 +2721,7 @@ export const strings = {
     cloudSortRecent: 'Najnowsze',
     cloudSortOldest: 'Najstarsze',
     navTrash: 'Kosz',
+    openTrash: 'Otwórz kosz',
     navTrashTip: 'Usunięte pliki trafiają do systemowego kosza i można je stamtąd przywrócić',
     secQuickStart: 'Szybki start',
     secRecent: 'Ostatnie',
@@ -2909,6 +2923,7 @@ export const strings = {
     cloudSortRecent: 'Nejnovější',
     cloudSortOldest: 'Nejstarší',
     navTrash: 'Koš',
+    openTrash: 'Otevřít koš',
     navTrashTip: 'Odstraněné soubory se přesunou do systémového koše, odkud je lze obnovit',
     secQuickStart: 'Rychlý start',
     secRecent: 'Nedávné',
@@ -3112,6 +3127,7 @@ export const strings = {
     cloudSortRecent: 'Recent',
     cloudSortOldest: 'Oudste',
     navTrash: 'Prullenbak',
+    openTrash: 'Prullenbak openen',
     navTrashTip:
       'Verwijderde bestanden gaan naar de systeemprullenbak en kunnen daar worden hersteld',
     secQuickStart: 'Snel starten',
@@ -3315,6 +3331,7 @@ export const strings = {
     cloudSortRecent: 'Terbaru',
     cloudSortOldest: 'Terlama',
     navTrash: 'Tong sampah',
+    openTrash: 'Buka Tong Kitar Semula',
     navTrashTip:
       'Fail yang dipadamkan akan dipindahkan ke tong sampah sistem dan boleh dipulihkan dari sana',
     secQuickStart: 'Mula pantas',
@@ -3518,6 +3535,7 @@ export const strings = {
     cloudSortRecent: 'החדשים ביותר',
     cloudSortOldest: 'הישנים ביותר',
     navTrash: 'אשפה',
+    openTrash: 'פתיחת האשפה',
     navTrashTip: 'קבצים שנמחקו עוברים לאשפה של המערכת וניתן לשחזר אותם משם',
     secQuickStart: 'התחלה מהירה',
     secRecent: 'אחרונים',
@@ -3711,6 +3729,7 @@ export const strings = {
     cloudSortRecent: 'हाल के',
     cloudSortOldest: 'सबसे पुराने',
     navTrash: 'ट्रैश',
+    openTrash: 'रीसाइकल बिन खोलें',
     navTrashTip: 'हटाई गई फ़ाइलें सिस्टम ट्रैश में जाती हैं और वहाँ से पुनर्स्थापित की जा सकती हैं',
     secQuickStart: 'त्वरित प्रारंभ',
     secRecent: 'हाल के',
@@ -3913,6 +3932,7 @@ export const strings = {
     cloudSortRecent: '最近',
     cloudSortOldest: '最早',
     navTrash: '垃圾桶',
+    openTrash: '開啟資源回收桶',
     navTrashTip: '刪除的檔案會移至系統垃圾桶，可從那裡還原',
     secQuickStart: '快速開始',
     secRecent: '最近使用',

@@ -27,6 +27,12 @@ export {
   type RecoveryDecision,
 } from './text-recovery'
 export {
+  recordDialogDir,
+  readLastDialogDirs,
+  writeLastDialogDir,
+  type DialogDirEntry,
+} from './dialog-memory'
+export {
   DEFAULT_SAVE_DIR_KEY,
   configuredDefaultSaveDir,
   isUsableSaveDir,

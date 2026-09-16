@@ -75,11 +75,11 @@ describe('writeAppSetting', () => {
 describe('writeAppSettings', () => {
   it('persists onboarding completion and analytics choice together', () => {
     writeFileSync(settingsPath, JSON.stringify({ language: 'en' }))
-    writeAppSettings(settingsPath, { onboardingSeen: true, analyticsEnabled: false })
+    writeAppSettings(settingsPath, { onboardingSeen: true, liveBridge: false })
     expect(JSON.parse(readFileSync(settingsPath, 'utf8'))).toEqual({
       language: 'en',
       onboardingSeen: true,
-      analyticsEnabled: false,
+      liveBridge: false,
     })
   })
 })

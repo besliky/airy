@@ -647,7 +647,6 @@ const projectApi: ProjectApi = {
   renameProject: (args) => ipcRenderer.invoke('project:rename', args),
   deleteProject: (args) => ipcRenderer.invoke('project:delete', args),
   moveFile: (args) => ipcRenderer.invoke('project:moveFile', args),
-  getTimeline: (args) => ipcRenderer.invoke('project:timeline', args),
 }
 contextBridge.exposeInMainWorld('projectApi', projectApi)
 

@@ -113,19 +113,3 @@ export interface ProjectSummary extends ProjectInfo {
 /**
  * Project timeline entry: aggregates messages from all chats in a project, sorted by ts descending
  */
-export interface TimelineEntry {
-  /** Absolute file path (the file this chat belongs to) */
-  filePath: string
-  /** File name (basename) */
-  fileName: string
-  /** chat id */
-  chatId: string
-  /** Message time (UTC ISO) */
-  ts: string
-  /** Message sender */
-  role: 'user' | 'assistant'
-  /** First line of the message text (up to 120 chars) */
-  preview: string
-  /** Message seq within the chat */
-  seq: number
-}
