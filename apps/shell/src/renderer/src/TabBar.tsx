@@ -257,6 +257,27 @@ export function TabBar() {
               // full title (the close button's own tooltip still wins there)
               title={tab.title}
               style={dragStyle}
+              // middle-click closes the tab (Chrome); suppressing the mousedown
+              // default also kills the browser's middle-click autoscroll
+              onMouseDown={(event) => {
+                if (event.button === 1) event.preventDefault()
+              }}
+              onAuxClick={(event) => {
+                if (event.button !== 1) return
+                event.preventDefault()
+                if (tab.closable) void window.aiOfficeTabs.close(tab.id)
+              }}
+              // right-click opens the native per-tab context menu (Close /
+              // Close Others / Close All / Duplicate) — native because the
+              // content area below the strip would cover any DOM dropdown
+              onContextMenu={(event) => {
+                event.preventDefault()
+                void window.aiOfficeTabs.showTabMenu(
+                  Math.round(event.clientX),
+                  Math.round(event.clientY),
+                  tab.id,
+                )
+              }}
               onPointerDown={(event) => {
                 if (event.button !== 0) return
                 if ((event.target as HTMLElement).closest('.tab-close')) return

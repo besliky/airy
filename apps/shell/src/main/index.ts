@@ -196,6 +196,12 @@ import {
   untitledStagingDir,
 } from './untitled-staging'
 import {
+  RESERVED_TAB_DIGITS,
+  switchableDigitsForKind,
+  switchDigitFromInput,
+  tabIndexForDigit,
+} from './tab-accelerators'
+import {
   pruneSession,
   readSessionState,
   serializeSession,
@@ -522,6 +528,12 @@ const tMain = createI18n({
     dlgRendererCrashedDetail: '标签页内容已崩溃（{reason}）。您可以重新加载或关闭该标签页。',
     btnReload: '重新加载',
     btnCloseTab: '关闭标签页',
+    tabCloseOthers: '关闭其他标签页',
+    tabCloseAll: '关闭全部标签页',
+    tabDuplicate: '复制标签页',
+    menuSelectTab: '选择标签页',
+    menuSelectTabN: '标签页 {n}',
+    menuSelectLastTab: '最后一个标签页',
     crashPageBody: '此标签页已意外停止。请在对话框中选择重新加载或关闭该标签页。',
     dlgLoadFailed: '应用窗口加载失败。',
     errUnhandledException: '发生意外错误。应用将尝试继续运行。',
@@ -625,6 +637,12 @@ const tMain = createI18n({
       'The tab content crashed ({reason}). You can reload or close the tab.',
     btnReload: 'Reload',
     btnCloseTab: 'Close Tab',
+    tabCloseOthers: 'Close Others',
+    tabCloseAll: 'Close All',
+    tabDuplicate: 'Duplicate',
+    menuSelectTab: 'Select Tab',
+    menuSelectTabN: 'Tab {n}',
+    menuSelectLastTab: 'Last Tab',
     crashPageBody: 'This tab stopped unexpectedly. Choose Reload or Close Tab in the dialog.',
     dlgLoadFailed: 'The app window failed to load.',
     errUnhandledException: 'An unexpected error occurred. The app will try to keep running.',
@@ -728,6 +746,12 @@ const tMain = createI18n({
       'タブの内容がクラッシュしました（{reason}）。タブを再読み込みするか閉じることができます。',
     btnReload: '再読み込み',
     btnCloseTab: 'タブを閉じる',
+    tabCloseOthers: '他のタブを閉じる',
+    tabCloseAll: 'すべてのタブを閉じる',
+    tabDuplicate: 'タブを複製',
+    menuSelectTab: 'タブを選択',
+    menuSelectTabN: 'タブ {n}',
+    menuSelectLastTab: '最後のタブ',
     crashPageBody:
       'このタブは予期せず停止しました。ダイアログで再読み込みまたはタブを閉じてください。',
     dlgLoadFailed: 'アプリウィンドウの読み込みに失敗しました。',
@@ -831,6 +855,12 @@ const tMain = createI18n({
       '탭 콘텐츠가 중단되었습니다({reason}). 탭을 다시 로드하거나 닫을 수 있습니다.',
     btnReload: '다시 로드',
     btnCloseTab: '탭 닫기',
+    tabCloseOthers: '다른 탭 닫기',
+    tabCloseAll: '모든 탭 닫기',
+    tabDuplicate: '탭 복제',
+    menuSelectTab: '탭 선택',
+    menuSelectTabN: '탭 {n}',
+    menuSelectLastTab: '마지막 탭',
     crashPageBody:
       '이 탭이 예기치 않게 중지되었습니다. 대화상자에서 다시 로드 또는 탭 닫기를 선택하세요.',
     dlgLoadFailed: '앱 창을 로드하지 못했습니다.',
@@ -936,6 +966,12 @@ const tMain = createI18n({
       'Le contenu de cet onglet a planté ({reason}). Vous pouvez le recharger ou le fermer.',
     btnReload: 'Recharger',
     btnCloseTab: 'Fermer cet onglet',
+    tabCloseOthers: 'Fermer les autres',
+    tabCloseAll: 'Tout fermer',
+    tabDuplicate: 'Dupliquer',
+    menuSelectTab: "Sélectionner l'onglet",
+    menuSelectTabN: 'Onglet {n}',
+    menuSelectLastTab: 'Dernier onglet',
     crashPageBody:
       'Arrêt inattendu de cet onglet. Choisissez Recharger ou Fermer cet onglet dans la boîte de dialogue.',
     dlgLoadFailed: 'Échec du chargement de la fenêtre principale.',
@@ -1042,6 +1078,12 @@ const tMain = createI18n({
       'Der Tab-Inhalt ist abgestürzt ({reason}). Sie können den Tab neu laden oder schließen.',
     btnReload: 'Neu laden',
     btnCloseTab: 'Tab schließen',
+    tabCloseOthers: 'Andere schließen',
+    tabCloseAll: 'Alle schließen',
+    tabDuplicate: 'Duplizieren',
+    menuSelectTab: 'Tab auswählen',
+    menuSelectTabN: 'Tab {n}',
+    menuSelectLastTab: 'Letzter Tab',
     crashPageBody:
       'Dieser Tab wurde unerwartet beendet. Wählen Sie im Dialog „Neu laden“ oder „Tab schließen“.',
     dlgLoadFailed: 'Das Anwendungsfenster konnte nicht geladen werden.',
@@ -1148,6 +1190,12 @@ const tMain = createI18n({
       'El contenido de la pestaña falló ({reason}). Puede recargar o cerrar la pestaña.',
     btnReload: 'Recargar',
     btnCloseTab: 'Cerrar pestaña',
+    tabCloseOthers: 'Cerrar las demás',
+    tabCloseAll: 'Cerrar todas',
+    tabDuplicate: 'Duplicar',
+    menuSelectTab: 'Seleccionar pestaña',
+    menuSelectTabN: 'Pestaña {n}',
+    menuSelectLastTab: 'Última pestaña',
     crashPageBody:
       'Esta pestaña se detuvo inesperadamente. Elija Recargar o Cerrar pestaña en el diálogo.',
     dlgLoadFailed: 'No se pudo cargar la ventana de la aplicación.',
@@ -1249,6 +1297,12 @@ const tMain = createI18n({
     dlgRendererCrashedDetail: 'เนื้อหาของแท็บล่ม ({reason}) คุณสามารถโหลดแท็บใหม่หรือปิดแท็บได้',
     btnReload: 'โหลดใหม่',
     btnCloseTab: 'ปิดแท็บ',
+    tabCloseOthers: 'ปิดแท็บอื่นๆ',
+    tabCloseAll: 'ปิดแท็บทั้งหมด',
+    tabDuplicate: 'ทำสำเนาแท็บ',
+    menuSelectTab: 'เลือกแท็บ',
+    menuSelectTabN: 'แท็บ {n}',
+    menuSelectLastTab: 'แท็บสุดท้าย',
     crashPageBody: 'แท็บนี้หยุดทำงานโดยไม่คาดคิด โปรดเลือกโหลดใหม่หรือปิดแท็บในกล่องโต้ตอบ',
     dlgLoadFailed: 'โหลดหน้าต่างแอปไม่สำเร็จ',
     errUnhandledException: 'เกิดข้อผิดพลาดที่ไม่คาดคิด แอปจะพยายามทำงานต่อไป',
@@ -1353,6 +1407,12 @@ const tMain = createI18n({
       'Konten tab mengalami kegagalan ({reason}). Anda dapat memuat ulang atau menutup tab tersebut.',
     btnReload: 'Muat ulang',
     btnCloseTab: 'Tutup tab',
+    tabCloseOthers: 'Tutup Lainnya',
+    tabCloseAll: 'Tutup Semua',
+    tabDuplicate: 'Duplikatkan',
+    menuSelectTab: 'Pilih Tab',
+    menuSelectTabN: 'Tab {n}',
+    menuSelectLastTab: 'Tab Terakhir',
     crashPageBody: 'Tab ini berhenti tanpa diduga. Pilih Muat ulang atau Tutup tab pada dialog.',
     dlgLoadFailed: 'Gagal memuat jendela aplikasi.',
     errUnhandledException: 'Terjadi kesalahan tak terduga. Aplikasi akan mencoba tetap berjalan.',
@@ -1457,6 +1517,12 @@ const tMain = createI18n({
       'Содержимое вкладки аварийно завершилось ({reason}). Можно перезагрузить или закрыть вкладку.',
     btnReload: 'Перезагрузить',
     btnCloseTab: 'Закрыть вкладку',
+    tabCloseOthers: 'Закрыть остальные',
+    tabCloseAll: 'Закрыть все',
+    tabDuplicate: 'Дублировать',
+    menuSelectTab: 'Выбрать вкладку',
+    menuSelectTabN: 'Вкладка {n}',
+    menuSelectLastTab: 'Последняя вкладка',
     crashPageBody:
       'Вкладка неожиданно остановилась. Выберите «Перезагрузить» или «Закрыть вкладку» в диалоге.',
     dlgLoadFailed: 'Не удалось загрузить окно приложения.',
@@ -1559,6 +1625,12 @@ const tMain = createI18n({
       'تعطل محتوى علامة التبويب ({reason}). يمكنك إعادة تحميل علامة التبويب أو إغلاقها.',
     btnReload: 'إعادة التحميل',
     btnCloseTab: 'إغلاق علامة التبويب',
+    tabCloseOthers: 'إغلاق الباقية',
+    tabCloseAll: 'إغلاق الكل',
+    tabDuplicate: 'تكرار',
+    menuSelectTab: 'اختيار علامة تبويب',
+    menuSelectTabN: 'علامة تبويب {n}',
+    menuSelectLastTab: 'آخر علامة تبويب',
     crashPageBody:
       'توقفت علامة التبويب هذه بشكل غير متوقع. اختر إعادة التحميل أو الإغلاق من مربع الحوار.',
     dlgLoadFailed: 'فشل تحميل نافذة التطبيق.',
@@ -1664,6 +1736,12 @@ const tMain = createI18n({
       'O conteúdo da aba falhou ({reason}). Você pode recarregar ou fechar a aba.',
     btnReload: 'Recarregar',
     btnCloseTab: 'Fechar aba',
+    tabCloseOthers: 'Fechar as Outras',
+    tabCloseAll: 'Fechar Todas',
+    tabDuplicate: 'Duplicar',
+    menuSelectTab: 'Selecionar Aba',
+    menuSelectTabN: 'Aba {n}',
+    menuSelectLastTab: 'Última Aba',
     crashPageBody:
       'Esta aba parou inesperadamente. Escolha Recarregar ou Fechar aba na caixa de diálogo.',
     dlgLoadFailed: 'Falha ao carregar a janela do aplicativo.',
@@ -1771,6 +1849,12 @@ const tMain = createI18n({
       'Il contenuto della scheda è andato in crash ({reason}). È possibile ricaricare o chiudere la scheda.',
     btnReload: 'Ricarica',
     btnCloseTab: 'Chiudi scheda',
+    tabCloseOthers: 'Chiudi le altre',
+    tabCloseAll: 'Chiudi tutte',
+    tabDuplicate: 'Duplica',
+    menuSelectTab: 'Seleziona scheda',
+    menuSelectTabN: 'Scheda {n}',
+    menuSelectLastTab: 'Ultima scheda',
     crashPageBody:
       'Questa scheda si è interrotta in modo imprevisto. Scegli Ricarica o Chiudi scheda nella finestra di dialogo.',
     dlgLoadFailed: 'Impossibile caricare la finestra dell’app.',
@@ -1876,6 +1960,12 @@ const tMain = createI18n({
       'Zawartość karty uległa awarii ({reason}). Można ponownie załadować lub zamknąć kartę.',
     btnReload: 'Załaduj ponownie',
     btnCloseTab: 'Zamknij kartę',
+    tabCloseOthers: 'Zamknij pozostałe',
+    tabCloseAll: 'Zamknij wszystkie',
+    tabDuplicate: 'Duplikuj',
+    menuSelectTab: 'Wybierz kartę',
+    menuSelectTabN: 'Karta {n}',
+    menuSelectLastTab: 'Ostatnia karta',
     crashPageBody:
       'Ta karta nieoczekiwanie przestała działać. W oknie dialogowym wybierz opcję ponownego załadowania lub zamknięcia karty.',
     dlgLoadFailed: 'Nie udało się załadować okna aplikacji.',
@@ -1979,6 +2069,12 @@ const tMain = createI18n({
       'Obsah karty selhal ({reason}). Kartu můžete znovu načíst nebo zavřít.',
     btnReload: 'Znovu načíst',
     btnCloseTab: 'Zavřít kartu',
+    tabCloseOthers: 'Zavřít ostatní',
+    tabCloseAll: 'Zavřít vše',
+    tabDuplicate: 'Duplikovat',
+    menuSelectTab: 'Vybrat kartu',
+    menuSelectTabN: 'Karta {n}',
+    menuSelectLastTab: 'Poslední karta',
     crashPageBody:
       'Tato karta se neočekávaně zastavila. V dialogovém okně zvolte Znovu načíst nebo Zavřít kartu.',
     dlgLoadFailed: 'Okno aplikace se nepodařilo načíst.',
@@ -2084,6 +2180,12 @@ const tMain = createI18n({
       'De inhoud van het tabblad is gecrasht ({reason}). U kunt het tabblad opnieuw laden of sluiten.',
     btnReload: 'Opnieuw laden',
     btnCloseTab: 'Tabblad sluiten',
+    tabCloseOthers: 'Andere sluiten',
+    tabCloseAll: 'Alles sluiten',
+    tabDuplicate: 'Dupliceren',
+    menuSelectTab: 'Tabblad selecteren',
+    menuSelectTabN: 'Tabblad {n}',
+    menuSelectLastTab: 'Laatste tabblad',
     crashPageBody:
       'Dit tabblad is onverwacht gestopt. Kies Opnieuw laden of Tabblad sluiten in het dialoogvenster.',
     dlgLoadFailed: 'Het app-venster kon niet worden geladen.',
@@ -2188,6 +2290,12 @@ const tMain = createI18n({
       'Kandungan tab telah rosak ({reason}). Anda boleh memuat semula atau menutup tab tersebut.',
     btnReload: 'Muat semula',
     btnCloseTab: 'Tutup tab',
+    tabCloseOthers: 'Tutup Yang Lain',
+    tabCloseAll: 'Tutup Semua',
+    tabDuplicate: 'Duplikasi',
+    menuSelectTab: 'Pilih Tab',
+    menuSelectTabN: 'Tab {n}',
+    menuSelectLastTab: 'Tab Terakhir',
     crashPageBody:
       'Tab ini berhenti secara tiba-tiba. Pilih Muat semula atau Tutup tab pada dialog.',
     dlgLoadFailed: 'Gagal memuat tetingkap aplikasi.',
@@ -2290,6 +2398,12 @@ const tMain = createI18n({
       'תוכן הכרטיסייה קרס ({reason}). ניתן לטעון מחדש או לסגור את הכרטיסייה.',
     btnReload: 'טעינה מחדש',
     btnCloseTab: 'סגירת הכרטיסייה',
+    tabCloseOthers: 'סגירת האחרות',
+    tabCloseAll: 'סגירת הכול',
+    tabDuplicate: 'שכפול',
+    menuSelectTab: 'בחירת לשונית',
+    menuSelectTabN: 'לשונית {n}',
+    menuSelectLastTab: 'הלשונית האחרונה',
     crashPageBody: 'כרטיסייה זו נעצרה באופן בלתי צפוי. בחרו טעינה מחדש או סגירה בתיבת הדו-שיח.',
     dlgLoadFailed: 'טעינת חלון היישום נכשלה.',
     errUnhandledException: 'אירעה שגיאה בלתי צפויה. היישום ינסה להמשיך לפעול.',
@@ -2394,6 +2508,12 @@ const tMain = createI18n({
       'टैब की सामग्री क्रैश हो गई ({reason})। आप टैब पुनः लोड कर सकते हैं या बंद कर सकते हैं।',
     btnReload: 'पुनः लोड करें',
     btnCloseTab: 'टैब बंद करें',
+    tabCloseOthers: 'अन्य टैब बंद करें',
+    tabCloseAll: 'सभी टैब बंद करें',
+    tabDuplicate: 'टैब डुप्लिकेट करें',
+    menuSelectTab: 'टैब चुनें',
+    menuSelectTabN: 'टैब {n}',
+    menuSelectLastTab: 'अंतिम टैब',
     crashPageBody: 'यह टैब अचानक बंद हो गया। संवाद बॉक्स में पुनः लोड करें या टैब बंद करें चुनें।',
     dlgLoadFailed: 'ऐप विंडो लोड करने में विफल।',
     errUnhandledException: 'अप्रत्याशित त्रुटि हुई। ऐप चलने का प्रयास करेगा।',
@@ -2488,6 +2608,12 @@ const tMain = createI18n({
     dlgRendererCrashedDetail: '分頁內容已當機（{reason}）。您可以重新載入或關閉該分頁。',
     btnReload: '重新載入',
     btnCloseTab: '關閉分頁',
+    tabCloseOthers: '關閉其他分頁',
+    tabCloseAll: '關閉全部分頁',
+    tabDuplicate: '複製分頁',
+    menuSelectTab: '選擇分頁',
+    menuSelectTabN: '分頁 {n}',
+    menuSelectLastTab: '最後一個分頁',
     crashPageBody: '此分頁已意外停止。請在對話框中選擇重新載入或關閉分頁。',
     dlgLoadFailed: '應用程式視窗載入失敗。',
     errUnhandledException: '發生意外錯誤。應用程式將嘗試繼續執行。',
@@ -2777,6 +2903,20 @@ function createShellWindow(): void {
   // dragging the window by the tab strip's blank (draggable) area produces no
   // DOM event anywhere — will-move is the only signal to dismiss popovers
   win.on('will-move', () => broadcastChromePressed())
+  // Ctrl/Cmd+1..8 → tab N, Ctrl/Cmd+9 → last tab. Covers the editor-owned
+  // menus (docs/sheets/slides), which cannot carry shell accelerators; the
+  // digits an editor reserves for its own Word/Excel shortcuts stay untouched
+  win.webContents.on('before-input-event', (event, input) => {
+    const digit = switchDigitFromInput(input)
+    if (digit === null) return
+    const tabs = tabManager?.list() ?? []
+    const activeKind = tabs.find((t) => t.active)?.kind
+    if (activeKind && RESERVED_TAB_DIGITS[activeKind]?.has(digit)) return
+    const index = tabIndexForDigit(digit, tabs.length)
+    if (index === null) return
+    event.preventDefault()
+    tabManager?.activateTab(tabs[index].id)
+  })
   // A detached editor window claims the process-global menu/active-editor targets
   // while focused; take them back when the shell window regains focus
   win.on('focus', () => tabManager?.refreshActiveTargets())
@@ -3850,9 +3990,102 @@ function registerTabsIpc(): void {
         : {}),
     })
   })
+  // per-tab context menu (right-click on a strip tab) — native like the two above
+  ipcMain.handle(TABS_CHANNELS.showTabMenu, (_event, x: unknown, y: unknown, tabId: unknown) => {
+    if (!tabManager || !shellWindow || typeof tabId !== 'string') return
+    const tab = tabManager.tabInfo(tabId)
+    if (!tab) return
+    const closable = tabId !== 'home'
+    const otherTabs = tabManager.list().filter((t) => t.id !== 'home' && t.id !== tabId)
+    const menu = Menu.buildFromTemplate([
+      {
+        label: tm('btnCloseTab'),
+        enabled: closable,
+        click: () => void tabManager?.closeTab(tabId),
+      },
+      {
+        label: tm('tabCloseOthers'),
+        enabled: otherTabs.length > 0,
+        click: () => void closeOtherTabs(tabId),
+      },
+      {
+        label: tm('tabCloseAll'),
+        enabled: otherTabs.length > 0 || closable,
+        click: () => void closeAllTabs(),
+      },
+      { type: 'separator' },
+      {
+        label: tm('tabDuplicate'),
+        // untitled / in-memory / present tabs have no backing file (present
+        // tabs carry no filePath either)
+        enabled: !!tab.filePath,
+        click: () => tabManager?.duplicateTab(tabId),
+      },
+    ])
+    menu.popup({
+      window: shellWindow,
+      ...(typeof x === 'number' && typeof y === 'number'
+        ? { x: Math.round(x), y: Math.round(y) }
+        : {}),
+    })
+  })
+}
+
+/** Close every document tab except the given one (context-menu Close Others) */
+async function closeOtherTabs(keepId: string): Promise<void> {
+  const tabs = tabManager?.list() ?? []
+  for (const tab of tabs) {
+    if (tab.id === 'home' || tab.id === keepId) continue
+    // sequential: each close may run its own unsaved-changes prompt
+    await tabManager?.closeTab(tab.id)
+  }
+}
+
+/** Close every document tab (context-menu Close All); Home always stays */
+async function closeAllTabs(): Promise<void> {
+  const tabs = tabManager?.list() ?? []
+  for (const tab of tabs) {
+    if (tab.id === 'home') continue
+    await tabManager?.closeTab(tab.id)
+  }
 }
 
 // ---- home menu ----
+
+/** switch to the tab a Ctrl/Cmd+digit selects (menu items + before-input-event) */
+function activateTabForDigit(digit: number): void {
+  const tabs = tabManager?.list() ?? []
+  const index = tabIndexForDigit(digit, tabs.length)
+  if (index === null) return
+  tabManager?.activateTab(tabs[index].id)
+}
+
+/**
+ * Window menu for the shell-built tab menus, carrying the Ctrl/Cmd+1..9
+ * tab-switch entries the active kind does not reserve for editor shortcuts
+ * (docs/sheets menus are built by the editors; their free digits still work
+ * through the before-input-event hook).
+ */
+function shellWindowMenu(): MenuItemConstructorOptions {
+  const base = windowMenuTemplate(process.platform, appMenuLabels(currentLang()))
+  const digits = switchableDigitsForKind(currentMenuKind)
+  if (digits.length === 0) return base
+  return {
+    ...base,
+    submenu: [
+      ...((base.submenu as MenuItemConstructorOptions[]) ?? []),
+      { type: 'separator' },
+      {
+        label: tm('menuSelectTab'),
+        submenu: digits.map((digit) => ({
+          label: digit === 9 ? tm('menuSelectLastTab') : tm('menuSelectTabN', { n: digit }),
+          accelerator: `CmdOrCtrl+${digit}`,
+          click: () => activateTabForDigit(digit),
+        })),
+      },
+    ],
+  }
+}
 
 async function openFileViaDialog(): Promise<void> {
   const win = shellWindow ?? BrowserWindow.getFocusedWindow()
@@ -3896,7 +4129,7 @@ function buildHomeMenu(): void {
       ],
     },
     editMenuTemplate(process.platform, appMenuLabels(currentLang())),
-    windowMenuTemplate(process.platform, appMenuLabels(currentLang())),
+    shellWindowMenu(),
     {
       role: 'help',
       label: tm('menuHelp'),
@@ -3984,7 +4217,7 @@ function buildPdfMenu(): void {
       ],
     },
     editMenuTemplate(process.platform, appMenuLabels(currentLang())),
-    windowMenuTemplate(process.platform, appMenuLabels(currentLang())),
+    shellWindowMenu(),
     {
       role: 'help',
       label: tm('menuHelp'),
@@ -4074,7 +4307,7 @@ function buildMarkdownMenu(): void {
       ],
     },
     editMenuTemplate(process.platform, appMenuLabels(currentLang())),
-    windowMenuTemplate(process.platform, appMenuLabels(currentLang())),
+    shellWindowMenu(),
     {
       role: 'help',
       label: tm('menuHelp'),
@@ -4157,7 +4390,7 @@ function buildHtmlMenu(): void {
       ],
     },
     editMenuTemplate(process.platform, appMenuLabels(currentLang())),
-    windowMenuTemplate(process.platform, appMenuLabels(currentLang())),
+    shellWindowMenu(),
     {
       role: 'help',
       label: tm('menuHelp'),

@@ -331,6 +331,9 @@ const tabsApi: TabsApi = {
   async showNewMenu(x, y) {
     await ipcRenderer.invoke(TABS_CHANNELS.showNewMenu, x, y)
   },
+  async showTabMenu(x, y, tabId) {
+    await ipcRenderer.invoke(TABS_CHANNELS.showTabMenu, x, y, tabId)
+  },
   async reorder(id, toIndex) {
     await ipcRenderer.invoke(TABS_CHANNELS.reorder, id, toIndex)
   },

@@ -3,6 +3,7 @@ import { BrowserWindow } from 'electron'
 import type { Rectangle, WebContents, WebContentsView } from 'electron'
 import {
   crashErrorPageUrl,
+  grantRendererFileAccess,
   isRecoverableRendererCrash,
   voidLoad,
 } from '@airy-office/electron-utils'
@@ -12,6 +13,7 @@ import {
   docsQueryDirty,
   markDocsNewBlank,
   queueDocsAiContent,
+  recordRecentFile,
   requestDocsClose,
   setActiveDocsResolver,
   teardownDocsRenderer,
@@ -208,6 +210,48 @@ export class TabManager {
   /** current backing file of the tab owning this webContents (staged-save rebind checks) */
   tabFilePathFor(webContentsId: number): string | undefined {
     return this.tabs.find((t) => t.view?.webContents.id === webContentsId)?.filePath
+  }
+
+  /** full record snapshot for shell-side menus (tab context-menu enablement) */
+  tabInfo(id: string): { id: string; kind: TabKind; filePath?: string } | undefined {
+    const tab = this.tabs.find((t) => t.id === id)
+    return tab ? { id: tab.id, kind: tab.kind, filePath: tab.filePath } : undefined
+  }
+
+  /**
+   * Open the same backing file in a new tab (context-menu Duplicate).
+   * Untitled/in-memory and present tabs have no file — returns false.
+   */
+  duplicateTab(id: string): boolean {
+    const tab = this.tabs.find((t) => t.id === id)
+    if (!tab?.filePath || tab.present) return false
+    // same grants/recents a routed open would apply — but bypassing the
+    // open-by-path dedupe, which would just activate this tab
+    grantRendererFileAccess(tab.filePath)
+    recordRecentFile(tab.filePath)
+    switch (tab.kind) {
+      case 'docs':
+        this.openDocsTab(tab.filePath)
+        break
+      case 'sheets':
+        this.openSheetsTab(tab.filePath)
+        break
+      case 'slides':
+        this.openSlidesTab(tab.filePath)
+        break
+      case 'pdf':
+        this.openPdfTab(tab.filePath)
+        break
+      case 'markdown':
+        this.openMarkdownTab(tab.filePath)
+        break
+      case 'html':
+        this.openHtmlTab(tab.filePath)
+        break
+      default:
+        return false
+    }
+    return true
   }
 
   /** whether any tab currently shows this file (staged-survivor purge at launch) */
