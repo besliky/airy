@@ -59,19 +59,21 @@ import {
   isAiNetworkError,
   isAiOverloadedError,
   chatForProvider,
-  defaultAiSettings,
-  activeProvider,
   NO_PROVIDER_ERROR,
   maxOutputTokensOf,
-  resolveAiSettings,
   setAiUserAgent,
   setRescueFetch,
   streamForProvider,
   type AiProviderId,
   type AiSettings,
   type AiStreamChunk,
-  type LegacyAiSettings,
 } from '@airy-office/ai-provider'
+import {
+  maskedAiSettings,
+  overlayRealAiSecrets,
+  registerAiSettingsCodec,
+  saveAiSettings,
+} from '../../../docs/src/main/ai-settings-store'
 import { shutdownCodexAppServers } from '@airy-office/ai-provider/codex-app-server'
 import { csvToXlsxBuffer, decodeCsvBuffer, sheetCsvToXlsxBuffer } from '../gateway/csv-import'
 import { webSearchTool, imageSearchTool, generateImageTool } from '@airy-office/ai-search'
@@ -1713,20 +1715,6 @@ function pendingRecoveryFor(filePath: string): string | null {
   }
 }
 
-function readJson<T>(path: string, fallback: T): T {
-  try {
-    if (existsSync(path)) return JSON.parse(readFileSync(path, 'utf-8')) as T
-  } catch {
-    /* corrupted state file: fall back to defaults */
-  }
-  return fallback
-}
-
-function writeJson(path: string, value: unknown): void {
-  mkdirSync(join(path, '..'), { recursive: true })
-  writeFileSync(path, JSON.stringify(value, null, 2))
-}
-
 const SETTINGS_PATH = () => userDataPath('ai-settings.json')
 
 // Dev-only automation hooks: a fixed CDP port for driving the app from test
@@ -3028,27 +3016,29 @@ export function registerSheetsAiIpc(): void {
   // Node fetch (undici) direct connections get reset under VPN/tun setups; retry over Chromium's stack
   setRescueFetch((url, init) => net.fetch(url, init))
   setAiUserAgent(`Airy/${app.getVersion()}`)
+  // decode enc: secrets for the ai-search tools reading ai-settings.json
+  registerAiSettingsCodec()
 
   ipcMain.handle(IPC_CHANNELS.aiGetSettings, (event): AiSettings => {
     sessionFor(event)
-    const stored = readJson<Partial<AiSettings> & LegacyAiSettings>(SETTINGS_PATH(), {})
-    const settings = resolveAiSettings(stored, defaultAiSettings())
-    // a stored BYOK provider is honored when usable; half-filled configs fall back to 'none'
-    settings.provider = activeProvider(settings)
-    return settings
+    // keys are masked (sk-…abcd); set-settings and chat/stream overlay the
+    // stored real keys — a renderer never holds full secrets
+    return maskedAiSettings()
   })
 
   ipcMain.handle(IPC_CHANNELS.aiSetSettings, (event, input: unknown) => {
     sessionFor(event)
     const settings = aiSettingsInputSchema.parse(input)
-    writeJson(SETTINGS_PATH(), settings)
+    saveAiSettings(settings as unknown as AiSettings)
   })
 
   ipcMain.handle(IPC_CHANNELS.aiChat, async (event, input: unknown) => {
     sessionFor(event)
     const request = aiChatRequestSchema.parse(input)
-    const provider = request.settings.provider as AiProviderId
-    const config = request.settings.providers[provider]
+    // the renderer only ever saw masked keys — restore the stored real ones
+    const settings = overlayRealAiSecrets(request.settings as unknown as AiSettings)
+    const provider = settings.provider as AiProviderId
+    const config = settings.providers[provider]
     if (provider === 'none') return { ok: false, error: NO_PROVIDER_ERROR }
     if (!config || (provider !== 'codex' && !config.apiKey)) {
       return {
@@ -3074,10 +3064,12 @@ export function registerSheetsAiIpc(): void {
     const entry = sessionFor(event)
     const request = aiStreamRequestSchema.parse(input)
     const { requestId, system, messages } = request
+    // the renderer only ever saw masked keys — restore the stored real ones
+    const settings = overlayRealAiSecrets(request.settings as unknown as AiSettings)
     const tools = request.tools ?? []
-    const maxTokens = request.maxTokens ?? maxOutputTokensOf(request.settings)
-    const provider = request.settings.provider as AiProviderId
-    const config = request.settings.providers[provider]
+    const maxTokens = request.maxTokens ?? maxOutputTokensOf(settings)
+    const provider = settings.provider as AiProviderId
+    const config = settings.providers[provider]
     const send = (chunk: AiStreamChunk) => {
       if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.aiStreamChunk, chunk)
     }

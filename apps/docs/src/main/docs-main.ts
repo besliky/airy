@@ -55,14 +55,11 @@ import {
   isAiNetworkError,
   isAiOverloadedError,
   chatForProvider,
-  defaultAiSettings,
-  activeProvider,
   NO_PROVIDER_ERROR,
   testMediaProvider,
   type AiMediaProviderConfig,
   type AiMediaProviderId,
   type AiSearchProviderId,
-  resolveAiSettings,
   maxOutputTokensOf,
   setAiUserAgent,
   setRescueFetch,
@@ -71,8 +68,15 @@ import {
   type AiSettings,
   type AiStreamChunk,
   type AiStreamRequest,
-  type LegacyAiSettings,
 } from '@airy-office/ai-provider'
+import {
+  maskedAiSettings,
+  overlayRealAiSecrets,
+  realMediaApiKey,
+  realSearchApiKey,
+  registerAiSettingsCodec,
+  saveAiSettings,
+} from './ai-settings-store'
 import {
   isCodexCliCandidatePath,
   listCodexModels,
@@ -2725,17 +2729,18 @@ const activeAiStreams = new Map<string, AbortController>()
  */
 export function registerAiIpc(): void {
   app.once('before-quit', shutdownCodexAppServers)
+  // decode enc: secrets for every ai-settings.json reader in this process
+  // (ai-search tools used by docs/sheets/markdown/html/pdf alike)
+  registerAiSettingsCodec()
   ipcMain.handle('ai:get-settings', (): AiSettings => {
-    const stored = readJson<Partial<AiSettings> & LegacyAiSettings>(SETTINGS_PATH(), {})
-    const settings = resolveAiSettings(stored, defaultAiSettings())
-    // a stored BYOK provider is honored when usable; half-filled or retired
-    // (retired) selections resolve to 'none' and the UI asks for setup
-    settings.provider = activeProvider(settings)
-    return settings
+    // keys are masked (sk-…abcd): a renderer must never hold every provider's
+    // full secret; ai:set-settings and the stream/chat/test paths overlay the
+    // stored real keys onto masked values
+    return maskedAiSettings()
   })
 
   ipcMain.handle('ai:set-settings', (_event, settings: AiSettings) => {
-    writeJson(SETTINGS_PATH(), settings)
+    saveAiSettings(settings)
   })
 
   ipcMain.handle('ai:codex-models', async (_event, cliPath: unknown) => {
@@ -2751,7 +2756,9 @@ export function registerAiIpc(): void {
   })
 
   ipcMain.handle('ai:stream', async (event, request: AiStreamRequest) => {
-    const { requestId, settings, system, messages } = request
+    // the renderer only ever saw masked keys — restore the stored real ones
+    const { requestId, system, messages } = request
+    const settings = overlayRealAiSecrets(request.settings)
     const tools = request.tools ?? []
     const maxTokens = request.maxTokens ?? maxOutputTokensOf(settings)
     const provider = settings.provider
@@ -2890,7 +2897,8 @@ export function registerAiIpc(): void {
   ipcMain.handle('ai:search-test', (_event, input: unknown) => {
     const { provider, apiKey } = (input ?? {}) as { provider?: AiSearchProviderId; apiKey?: string }
     if (!provider) return { ok: false, error: 'No search provider selected' }
-    return testSearchProvider(provider, String(apiKey ?? ''))
+    // masked/empty key from the settings UI → stored real key
+    return testSearchProvider(provider, realSearchApiKey(provider, String(apiKey ?? '')))
   })
 
   // settings-UI connection test for the media provider
@@ -2901,11 +2909,13 @@ export function registerAiIpc(): void {
     }
     if (!provider) return { ok: false, error: 'No media provider selected' }
     if (!config) return { ok: false, error: 'No media provider configuration' }
-    return testMediaProvider(provider, config)
+    return testMediaProvider(provider, realMediaApiKey(provider, config))
   })
 
   ipcMain.handle('ai:chat', async (_event, request: AiChatRequest) => {
-    const { settings, system, user } = request
+    const { system, user } = request
+    // masked keys from the renderer → stored real keys for the test request
+    const settings = overlayRealAiSecrets(request.settings)
     const provider = settings.provider
     const config = settings.providers?.[provider]
     if (provider === 'none') return { ok: false, error: NO_PROVIDER_ERROR }

@@ -12,6 +12,7 @@ import {
   activeMediaConfig,
   analyzeMediaWithProvider,
   defaultAiSettings,
+  decryptStoredAiSettings,
   generateImageWithProvider,
   resolveAiSettings,
   type AiSettings,
@@ -64,7 +65,9 @@ export function readAiSettingsFile(path: string): AiSettings {
   } catch {
     /* corrupted settings file: defaults */
   }
-  return resolveAiSettings(stored, defaultAiSettings())
+  // Encrypted-at-rest keys (enc: prefix) decode through the decrypter the
+  // Electron main process registered; without one they read as empty.
+  return resolveAiSettings(decryptStoredAiSettings(stored), defaultAiSettings())
 }
 
 function errorText(err: unknown): string {

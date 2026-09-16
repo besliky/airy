@@ -308,6 +308,9 @@ function AiModelPane({ t }: { t: TFunc }) {
     touch()
   }
   const save = () => {
+    // apiKey fields hold the MASKED value from ai:get-settings (sk-…abcd).
+    // Re-sending a mask is the "unchanged" signal: the main-side store keeps
+    // the stored key; only a genuinely new value replaces it.
     window.aiOffice
       .setAiSettings?.(settings)
       .then(() => {
@@ -321,6 +324,8 @@ function AiModelPane({ t }: { t: TFunc }) {
   const test = () => {
     setTesting(true)
     setTestResult(null)
+    // the main process overlays the stored real keys onto the masked values
+    // before dialing the provider, so testing needs no plaintext here
     window.aiOffice
       .testAiSettings?.(settings)
       .then((r) => {
