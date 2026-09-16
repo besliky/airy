@@ -310,8 +310,6 @@ export const ja = {
     'この数式は大きな範囲を要素ごとに評価するため、計算でアプリがフリーズします — キャンセルしました。参照範囲を狭めて再試行してください。',
   appPivotSheetNoStructural:
     'このシートにはピボットテーブルが含まれています — 構造の変更には未対応です。',
-  appDeleteSpanFormulas:
-    '削除対象の行/列のみを参照する数式があります — 先にその数式を更新または削除してください。',
   appIconSetUnsupported:
     'このアイコンの組み合わせは xlsx に保存できません。別のアイコンセットを選択してください。',
   appNeedFullLoadSort:

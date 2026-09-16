@@ -299,8 +299,6 @@ export const ko = {
   appFormulaTooExpensive:
     '이 수식은 큰 범위를 요소마다 평가하므로 계산으로 앱이 멈춥니다 — 취소되었습니다. 참조 범위를 줄인 뒤 다시 시도하세요.',
   appPivotSheetNoStructural: '이 시트에는 피벗 테이블이 있어 아직 구조 변경을 지원하지 않습니다.',
-  appDeleteSpanFormulas:
-    '삭제할 행/열만 참조하는 수식이 있습니다 — 먼저 해당 수식을 수정하거나 삭제하세요.',
   appIconSetUnsupported:
     '이 아이콘 조합은 xlsx로 저장할 수 없습니다. 다른 아이콘 집합을 선택하세요.',
   appNeedFullLoadSort:

@@ -315,8 +315,6 @@ export const es = {
     'Esta fórmula evalúa un rango grande elemento por elemento — el cálculo congelaría la aplicación, así que se canceló. Reduzca el rango referenciado y vuelva a intentarlo.',
   appPivotSheetNoStructural:
     'Esta hoja contiene una tabla dinámica — los cambios estructurales aún no se admiten.',
-  appDeleteSpanFormulas:
-    'Una fórmula solo hace referencia a las filas/columnas eliminadas: actualícela o elimínela primero.',
   appIconSetUnsupported:
     'Esta combinación de iconos no se puede guardar en xlsx — elige otro conjunto de iconos.',
   appNeedFullLoadSort:

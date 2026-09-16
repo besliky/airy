@@ -450,7 +450,9 @@ function refreshMergeCount(xml: string): string {
 }
 
 /// Rewrites references to the edited sheet inside another sheet's formulas
-/// (only tokens qualified with the edited sheet's name shift).
+/// (only tokens qualified with the edited sheet's name shift). References the
+/// deletion orphans become `Other!#REF!` — Excel semantics, so a delete that
+/// strands a dependent formula still saves.
 export function shiftCrossSheetFormulas(
   otherWorksheetXml: string,
   editedSheetName: string,
@@ -467,14 +469,15 @@ export function shiftCrossSheetFormulas(
       /<f\b([^>]*[^/>])?>([\s\S]*?)<\/f>/g,
       (_full, attributes: string | undefined, body: string) =>
         `<f${attributes ?? ''}>${escapeXmlText(
-          shiftFormulaText(decodeEntities(body), editedSheetName, shift, axis, true),
+          shiftFormulaText(decodeEntities(body), editedSheetName, shift, axis, true, 'ref-error'),
         )}</f>`,
     )
   }
   return xml
 }
 
-/// Rewrites qualified references in workbook definedNames the same way.
+/// Rewrites qualified references in workbook definedNames the same way
+/// (orphaned references become #REF!, like formula bodies).
 export function shiftDefinedNames(
   workbookXml: string,
   editedSheetName: string,
@@ -488,7 +491,7 @@ export function shiftDefinedNames(
       /(<definedName\b[^>]*>)([\s\S]*?)(<\/definedName>)/g,
       (_full, open: string, body: string, close: string) =>
         `${open}${escapeXmlText(
-          shiftFormulaText(decodeEntities(body), editedSheetName, shift, axis, true),
+          shiftFormulaText(decodeEntities(body), editedSheetName, shift, axis, true, 'ref-error'),
         )}${close}`,
     )
   }
@@ -929,7 +932,7 @@ function assertTableRowMoveSupported(table: TablePartArea, swap: BlockSwap['swap
   }
 }
 
-type Axis = 'row' | 'column'
+export type Axis = 'row' | 'column'
 
 interface Span {
   readonly start: number
@@ -952,7 +955,7 @@ interface BlockSwap {
   readonly swap: { readonly first: Span; readonly second: Span }
 }
 
-type Shift = LinearShift | BlockSwap
+export type Shift = LinearShift | BlockSwap
 
 function axisOf(op: RowColumnOp): Axis {
   return op.kind === 'insert-cols' || op.kind === 'remove-cols' ? 'column' : 'row'
@@ -1246,7 +1249,8 @@ function transformColDefinitions(xml: string, shift: Shift): string {
 
 /// Rewrites `<f>` bodies plus shared/array formula `ref` attributes, and the
 /// `<formula>`/`<formula1>`/`<formula2>` bodies of conditional formatting and
-/// data validation rules.
+/// data validation rules. A reference the deletion orphans becomes #REF!
+/// (Excel semantics); only a wholly-deleted shared/array anchor still aborts.
 function transformFormulas(xml: string, sheetName: string, shift: Shift, axis: Axis): string {
   // Self-closing `<f .../>` must not match — see shiftCrossSheetFormulas.
   let result = xml.replace(
@@ -1254,7 +1258,7 @@ function transformFormulas(xml: string, sheetName: string, shift: Shift, axis: A
     (_full, rawAttributes: string | undefined, body: string) => {
       const attributes = rawAttributes ?? ''
       const rewritten = escapeXmlText(
-        shiftFormulaText(decodeEntities(body), sheetName, shift, axis),
+        shiftFormulaText(decodeEntities(body), sheetName, shift, axis, false, 'ref-error'),
       )
       const newAttributes = attributes.replace(
         /(\bref=")([^"]*)(")/,
@@ -1278,7 +1282,9 @@ function transformFormulas(xml: string, sheetName: string, shift: Shift, axis: A
   result = result.replace(
     /<(formula[12]?)>([\s\S]*?)<\/\1>/g,
     (_full, tag: string, body: string) =>
-      `<${tag}>${escapeXmlText(shiftFormulaText(decodeEntities(body), sheetName, shift, axis))}</${tag}>`,
+      `<${tag}>${escapeXmlText(
+        shiftFormulaText(decodeEntities(body), sheetName, shift, axis, false, 'ref-error'),
+      )}</${tag}>`,
   )
   return result
 }
@@ -1413,17 +1419,27 @@ export const FORMULA_REFERENCE_PATTERN = new RegExp(
   'gu',
 )
 
+/// What a reference that lands wholly inside a deleted range becomes.
+/// `'throw'` keeps the historical fail-closed behavior; `'ref-error'` emits
+/// `#REF!` (bare, sheet qualifier dropped — Excel writes `Other!#REF!`, but
+/// the recalc engine rejects the qualified form while Univer's own rewrite
+/// also emits the bare token), letting deletions that orphan references
+/// succeed like Excel instead of aborting the save.
+export type DeletedReferenceMode = 'throw' | 'ref-error'
+
 /// Shifts A1 references in a formula, preserving `$` markers and other
 /// sheets' qualified references. String literals are left untouched. A
-/// reference fully inside a deleted range aborts (Excel would emit #REF!).
-/// With qualifiedOnly, only references explicitly qualified with sheetName
-/// shift — the mode for rewriting OTHER sheets' formulas.
+/// reference fully inside a deleted range aborts unless deletedRef is
+/// `'ref-error'` (a bare `#REF!` token). With qualifiedOnly, only references
+/// explicitly qualified with sheetName shift — the mode for rewriting OTHER
+/// sheets' formulas.
 export function shiftFormulaText(
   formula: string,
   sheetName: string,
   shift: Shift,
   axis: Axis,
   qualifiedOnly = false,
+  deletedRef: DeletedReferenceMode = 'throw',
 ): string {
   // Formula string literals use "" escaping, so splitting on `"` leaves
   // literal content in the odd-indexed segments.
@@ -1432,7 +1448,7 @@ export function shiftFormulaText(
     .map((segment, index) =>
       index % 2 === 1
         ? segment
-        : shiftFormulaSegment(segment, sheetName, shift, axis, qualifiedOnly),
+        : shiftFormulaSegment(segment, sheetName, shift, axis, qualifiedOnly, deletedRef),
     )
     .join('"')
 }
@@ -1443,6 +1459,7 @@ function shiftFormulaSegment(
   shift: Shift,
   axis: Axis,
   qualifiedOnly: boolean,
+  deletedRef: DeletedReferenceMode,
 ): string {
   return segment.replace(
     FORMULA_REFERENCE_PATTERN,
@@ -1451,6 +1468,7 @@ function shiftFormulaSegment(
       if (qualifier !== undefined && !qualifierMatches(qualifier, sheetName)) return full
       const shifted = shiftReferenceToken(token, shift, axis)
       if (shifted === null) {
+        if (deletedRef === 'ref-error') return `${lead}#REF!`
         throw new StructuralShiftError(
           `A formula references the deleted range (${token}) — deletion aborted.`,
         )

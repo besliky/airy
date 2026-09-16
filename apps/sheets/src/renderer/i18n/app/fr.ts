@@ -326,8 +326,6 @@ export const fr = {
     "Cette formule évalue une grande plage élément par élément — le calcul figerait l'application, elle a donc été annulée. Réduisez la plage référencée et réessayez.",
   appPivotSheetNoStructural:
     'Cette feuille contient un tableau croisé dynamique — les modifications structurelles ne sont pas encore prises en charge.',
-  appDeleteSpanFormulas:
-    'Une formule ne référence que les lignes/colonnes supprimées — mettez-la à jour ou supprimez-la d’abord.',
   appIconSetUnsupported:
     "Cette combinaison d'icônes ne peut pas être enregistrée en xlsx — choisissez un autre jeu d'icônes.",
   appNeedFullLoadSort:

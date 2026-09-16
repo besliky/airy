@@ -311,8 +311,6 @@ export const pl = {
     'Ta formuła ocenia duży zakres element po elemencie — obliczenia zawiesiłyby aplikację, więc ją anulowano. Zawęź zakres odwołań i spróbuj ponownie.',
   appPivotSheetNoStructural:
     'Ten arkusz zawiera tabelę przestawną — zmiany strukturalne nie są jeszcze obsługiwane.',
-  appDeleteSpanFormulas:
-    'Formuła odwołuje się wyłącznie do usuwanych wierszy/kolumn — najpierw ją zaktualizuj lub usuń.',
   appIconSetUnsupported:
     'Tej kombinacji ikon nie można zapisać w pliku xlsx — wybierz inny zestaw ikon.',
   appNeedFullLoadSort:

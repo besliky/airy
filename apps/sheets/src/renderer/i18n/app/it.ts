@@ -318,8 +318,6 @@ export const it = {
     "Questa formula valuta un intervallo grande elemento per elemento — il calcolo bloccherebbe l'app, quindi è stata annullata. Riduci l'intervallo referenziato e riprova.",
   appPivotSheetNoStructural:
     'Questo foglio contiene una tabella pivot — le modifiche strutturali non sono ancora supportate.',
-  appDeleteSpanFormulas:
-    'Una formula fa riferimento solo alle righe/colonne eliminate — aggiornala o rimuovila prima.',
   appIconSetUnsupported:
     'Questa combinazione di icone non può essere salvata in xlsx — scegli un altro set di icone.',
   appNeedFullLoadSort:

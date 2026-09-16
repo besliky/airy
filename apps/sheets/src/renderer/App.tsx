@@ -31,6 +31,7 @@ import {
   installWrapMeasureLifecycle,
 } from './univer-sync'
 import {
+  aiBulkUndoGate,
   installJournalSuppressionUndoFilter,
   installLoadAutoHeightGate,
   journalSuppression,
@@ -40,14 +41,19 @@ import {
   type UniverRuntime,
   type UniverWorksheet,
 } from './univer-state'
-import { applyChangePlan, planFromOps, type OpExecutorContext } from './op-executor'
+import { applyChangePlan, beginUndoBatch, planFromOps, type OpExecutorContext } from './op-executor'
 import { renameChartRefsForSheet } from './workbook-ops'
 import {
   proposeOperations as proposeOperationsImpl,
   runDeterministicPlan as runDeterministicPlanImpl,
-  structuralDeleteFormulaErrorSync,
   type PlanContext,
 } from './plan-operations'
+import {
+  applyCrossSheetRewrites,
+  collectCrossSheetDependentRewrites,
+  deleteSpanSpec,
+  rewriteHarvestedFormulaTexts,
+} from './delete-ref-rewrite'
 import { isNumericIdentifierText } from './cell-warning'
 import { consumePendingUndoCarry, undoStackDepth } from './undo-carry'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
@@ -2323,9 +2329,19 @@ export function App(): React.JSX.Element {
             setMessage(t('appPivotSheetNoStructural'))
             return
           }
-          // The save aborts when a formula references only the deleted span;
-          // reject the removal up front like the AI path does (#1134). The
-          // remove commands act on the selection unless a range is given.
+          // Deleting rows/columns that formulas reference must behave like
+          // Excel: the deletion succeeds and orphaned references become
+          // #REF!. Univer rewrites same-sheet references itself while
+          // executing the command; cross-sheet dependents are Univer's gap —
+          // it leaves their texts stale and relocates the cells. Once the
+          // command completes, re-scan the (relocated) model for qualified
+          // references to the deleted span and rewrite them with the exact
+          // token rewriter the save uses, as journaled set-values commands.
+          // They land as their own undo item on top of the deletion's, so
+          // ⌘Z restores the original formulas and a second ⌘Z the rows
+          // (same-sheet deletions remain Univer's native single-step undo).
+          // A command canceled by a later gate never completes and the
+          // rewrites never run.
           if (sheet && /^sheet\.command\.remove-(row|col)/.test(event.id)) {
             const uiWorkbook = runtime.univerAPI.getActiveWorkbook()
             const range =
@@ -2345,10 +2361,56 @@ export function App(): React.JSX.Element {
                     column: columnLabel(range.startColumn),
                     count: range.endColumn - range.startColumn + 1,
                   }
-              if (structuralDeleteFormulaErrorSync(state, uiWorkbook, removeOp)) {
-                event.cancel = true
-                setMessage(t('appDeleteSpanFormulas'))
-                return
+              const spec = deleteSpanSpec(
+                state,
+                (id) => uiWorkbook.getSheetBySheetId(id)?.getSheetName(),
+                removeOp,
+              )
+              if (collectCrossSheetDependentRewrites(state, uiWorkbook, spec).length > 0) {
+                let settled = false
+                const finish = () => {
+                  if (settled) return
+                  settled = true
+                  disposable.dispose()
+                  clearTimeout(safety)
+                  // One undo item for all the rewrites (the AI path's open
+                  // batch already folds them into its own item).
+                  const batch = aiBulkUndoGate.active ? null : beginUndoBatch(runtime)
+                  try {
+                    applyCrossSheetRewrites(
+                      runtime,
+                      collectCrossSheetDependentRewrites(state, uiWorkbook, spec),
+                    )
+                    rewriteHarvestedFormulaTexts(state, spec)
+                  } catch {
+                    // Best-effort model polish; the save's own #REF!
+                    // emission remains the backstop for file correctness.
+                  } finally {
+                    batch?.settle()
+                  }
+                }
+                const disposable = runtime.univerAPI.addEvent(
+                  runtime.univerAPI.Event.CommandExecuted,
+                  (executed) => {
+                    if (executed.id !== event.id) return
+                    const done = executed.params as
+                      { subUnitId?: string; range?: IRange } | undefined
+                    if (done?.subUnitId !== sheet.id) return
+                    if (
+                      done.range &&
+                      (event.id.includes('remove-row')
+                        ? done.range.startRow !== range.startRow ||
+                          done.range.endRow !== range.endRow
+                        : done.range.startColumn !== range.startColumn ||
+                          done.range.endColumn !== range.endColumn)
+                    )
+                      return
+                    finish()
+                  },
+                )
+                // Safety valve: dispose the one-shot listener if the command
+                // never completes (canceled by a later gate).
+                const safety = setTimeout(finish, 5000)
               }
             }
           }

@@ -298,8 +298,6 @@ export const ms = {
     'Formula ini menilai julat besar bagi setiap elemen — pengiraan akan membekukan aplikasi, jadi ia dibatalkan. Kecilkan julat yang dirujuk dan cuba lagi.',
   appPivotSheetNoStructural:
     'Helaian ini mengandungi Jadual Pangsi — perubahan struktur belum disokong.',
-  appDeleteSpanFormulas:
-    'Ada formula yang hanya merujuk baris/lajur yang dipadam — kemas kini atau padam formula itu dahulu.',
   appIconSetUnsupported: 'Gabungan ikon ini tidak boleh disimpan ke xlsx — pilih set ikon lain.',
   appNeedFullLoadSort:
     'Mengisih, menapis, mengalihkan julat dan memisahkan teks memerlukan mod muat penuh — buku kerja ini terlalu besar dan distrim sebahagian.',

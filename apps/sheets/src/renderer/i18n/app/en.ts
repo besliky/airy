@@ -289,8 +289,6 @@ export const en = {
     'This formula evaluates a large range once per element — the computation would freeze the app, so it was cancelled. Narrow the referenced range and try again.',
   appPivotSheetNoStructural:
     'This sheet contains a PivotTable — structural changes are not supported yet.',
-  appDeleteSpanFormulas:
-    'A formula references only the deleted rows/columns — update or remove it first.',
   appIconSetUnsupported:
     'This icon combination cannot be saved to xlsx — please choose a different icon set.',
   appNeedFullLoadSort:

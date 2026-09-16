@@ -310,8 +310,6 @@ export const nl = {
     'Deze formule evalueert een groot bereik per element — de berekening zou de app laten vastlopen, dus is deze geannuleerd. Verklein het bereik en probeer het opnieuw.',
   appPivotSheetNoStructural:
     'Dit werkblad bevat een draaitabel — structuurwijzigingen worden nog niet ondersteund.',
-  appDeleteSpanFormulas:
-    'Een formule verwijst alleen naar de verwijderde rijen/kolommen — werk deze eerst bij of verwijder deze.',
   appIconSetUnsupported:
     'Deze pictogramcombinatie kan niet worden opgeslagen als xlsx — kies een andere pictogramset.',
   appNeedFullLoadSort:

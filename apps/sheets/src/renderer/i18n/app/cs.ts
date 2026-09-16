@@ -298,8 +298,6 @@ export const cs = {
     'Tento vzorec vyhodnocuje velkou oblast jednou pro každý prvek — výpočet by aplikaci zamrazil, proto byl zrušen. Zúžte odkazovanou oblast a zkuste to znovu.',
   appPivotSheetNoStructural:
     'Tento list obsahuje kontingenční tabulku — strukturální změny zatím nejsou podporovány.',
-  appDeleteSpanFormulas:
-    'Některý vzorec odkazuje pouze na odstraňované řádky/sloupce — nejprve ho upravte nebo odeberte.',
   appIconSetUnsupported:
     'Tuto kombinaci ikon nelze uložit do xlsx — zvolte prosím jinou sadu ikon.',
   appNeedFullLoadSort:

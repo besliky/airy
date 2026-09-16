@@ -316,8 +316,6 @@ export const de = {
     'Diese Formel wertet einen großen Bereich pro Element aus — die Berechnung würde die App einfrieren, daher wurde sie abgebrochen. Verkleinern Sie den referenzierten Bereich und versuchen Sie es erneut.',
   appPivotSheetNoStructural:
     'Dieses Blatt enthält eine PivotTable — Strukturänderungen werden noch nicht unterstützt.',
-  appDeleteSpanFormulas:
-    'Eine Formel verweist nur auf die gelöschten Zeilen/Spalten — aktualisieren oder entfernen Sie sie zuerst.',
   appIconSetUnsupported:
     'Diese Symbolkombination kann nicht als xlsx gespeichert werden — bitte wählen Sie einen anderen Symbolsatz.',
   appNeedFullLoadSort:

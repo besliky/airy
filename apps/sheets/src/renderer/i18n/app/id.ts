@@ -297,8 +297,6 @@ export const id = {
   appFormulaTooExpensive:
     'Rumus ini mengevaluasi rentang besar per elemen — perhitungannya akan membekukan aplikasi, jadi dibatalkan. Persempit rentang yang dirujuk lalu coba lagi.',
   appPivotSheetNoStructural: 'Lembar ini berisi PivotTable — perubahan struktur belum didukung.',
-  appDeleteSpanFormulas:
-    'Ada rumus yang hanya merujuk baris/kolom yang dihapus — perbarui atau hapus rumus itu dahulu.',
   appIconSetUnsupported: 'Kombinasi ikon ini tidak dapat disimpan ke xlsx — pilih set ikon lain.',
   appNeedFullLoadSort:
     'Mengurutkan, memfilter, memindahkan rentang, dan memisahkan teks ke kolom memerlukan mode muat penuh — buku kerja ini terlalu besar dan dimuat sebagian secara streaming.',

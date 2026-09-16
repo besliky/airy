@@ -263,7 +263,6 @@ export const zh = {
   appFormulaTooExpensive:
     '该公式要对大区间做逐元素统计，计算量过大会导致界面卡死——已取消。请缩小引用区间后重试。',
   appPivotSheetNoStructural: '该工作表含数据透视表——暂不支持结构变更。',
-  appDeleteSpanFormulas: '有公式仅引用被删除的行/列——请先更新或删除这些公式。',
   appIconSetUnsupported: '该图标组合无法保存为 xlsx 文件，请换用其他图标集。',
   appNeedFullLoadSort:
     '排序、筛选、移动区域和分列需要完整加载模式——这个工作簿太大，只做了流式加载。',
