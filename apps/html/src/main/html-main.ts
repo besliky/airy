@@ -24,6 +24,7 @@ import {
 } from 'electron'
 import type { WebContents } from 'electron'
 import {
+  TextRecoveryStore,
   configuredDefaultSaveDir,
   contextMenuLabels,
   fetchRemoteImage,
@@ -91,6 +92,10 @@ const tDlg = createI18n({
     filterImages: '图片',
     untitledFile: '未命名文档',
     closeUnsavedMsg: '此文档有未保存的更改。',
+    autosaveFoundTitle: '发现自动恢复版本',
+    autosaveFoundBody: '上次会话有未保存的更改。要恢复自动保存的版本吗?',
+    autosaveRestore: '恢复',
+    autosaveDiscard: '放弃',
     closeUnsavedDetail: '关闭前是否保存？',
     btnSave: '保存',
     btnDontSave: '不保存',
@@ -115,6 +120,11 @@ const tDlg = createI18n({
     filterImages: 'Images',
     untitledFile: 'Untitled',
     closeUnsavedMsg: 'This document has unsaved changes.',
+    autosaveFoundTitle: 'Recovered version found',
+    autosaveFoundBody:
+      'There are unsaved changes from your last session. Restore the autosaved version?',
+    autosaveRestore: 'Restore',
+    autosaveDiscard: 'Discard',
     closeUnsavedDetail: 'Do you want to save them before closing?',
     btnSave: 'Save',
     btnDontSave: "Don't Save",
@@ -139,6 +149,10 @@ const tDlg = createI18n({
     filterImages: '画像',
     untitledFile: '無題',
     closeUnsavedMsg: 'このドキュメントに未保存の変更があります。',
+    autosaveFoundTitle: '自動回復バージョンがあります',
+    autosaveFoundBody: '前回のセッションに未保存の変更があります。自動保存版を復元しますか?',
+    autosaveRestore: '復元',
+    autosaveDiscard: '破棄',
     closeUnsavedDetail: '閉じる前に保存しますか？',
     btnSave: '保存',
     btnDontSave: '保存しない',
@@ -164,6 +178,11 @@ const tDlg = createI18n({
     filterImages: '이미지',
     untitledFile: '제목 없음',
     closeUnsavedMsg: '이 문서에 저장하지 않은 변경 사항이 있습니다.',
+    autosaveFoundTitle: '자동 복구 버전 발견',
+    autosaveFoundBody:
+      '마지막 세션에 저장되지 않은 변경 내용이 있습니다. 자동 저장 버전을 복원할까요?',
+    autosaveRestore: '복원',
+    autosaveDiscard: '취소',
     closeUnsavedDetail: '닫기 전에 저장하시겠습니까?',
     btnSave: '저장',
     btnDontSave: '저장 안 함',
@@ -189,6 +208,11 @@ const tDlg = createI18n({
     filterImages: 'Images',
     untitledFile: 'Sans titre',
     closeUnsavedMsg: 'Ce document contient des modifications non enregistrées.',
+    autosaveFoundTitle: 'Version récupérée trouvée',
+    autosaveFoundBody:
+      'Des modifications non enregistrées existent. Restaurer la version auto-enregistrée ?',
+    autosaveRestore: 'Restaurer',
+    autosaveDiscard: 'Ignorer',
     closeUnsavedDetail: 'Voulez-vous les enregistrer avant de fermer ?',
     btnSave: 'Enregistrer',
     btnDontSave: 'Ne pas enregistrer',
@@ -214,6 +238,11 @@ const tDlg = createI18n({
     filterImages: 'Bilder',
     untitledFile: 'Unbenannt',
     closeUnsavedMsg: 'Dieses Dokument enthält ungespeicherte Änderungen.',
+    autosaveFoundTitle: 'Wiederhergestellte Version gefunden',
+    autosaveFoundBody:
+      'Es gibt ungespeicherte Änderungen. Automatisch gespeicherte Version wiederherstellen?',
+    autosaveRestore: 'Wiederherstellen',
+    autosaveDiscard: 'Verwerfen',
     closeUnsavedDetail: 'Vor dem Schließen speichern?',
     btnSave: 'Speichern',
     btnDontSave: 'Nicht speichern',
@@ -239,6 +268,11 @@ const tDlg = createI18n({
     filterImages: 'Imágenes',
     untitledFile: 'Sin título',
     closeUnsavedMsg: 'Este documento tiene cambios sin guardar.',
+    autosaveFoundTitle: 'Se encontró una versión recuperada',
+    autosaveFoundBody:
+      'Hay cambios sin guardar de la última sesión. ¿Restaurar la versión autoguardada?',
+    autosaveRestore: 'Restaurar',
+    autosaveDiscard: 'Descartar',
     closeUnsavedDetail: '¿Quieres guardarlos antes de cerrar?',
     btnSave: 'Guardar',
     btnDontSave: 'No guardar',
@@ -264,6 +298,10 @@ const tDlg = createI18n({
     filterImages: 'รูปภาพ',
     untitledFile: 'ไม่มีชื่อ',
     closeUnsavedMsg: 'เอกสารนี้มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก',
+    autosaveFoundTitle: 'พบเวอร์ชันกู้คืนอัตโนมัติ',
+    autosaveFoundBody: 'มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึกจากครั้งก่อน ต้องการกู้คืนหรือไม่?',
+    autosaveRestore: 'กู้คืน',
+    autosaveDiscard: 'ละทิ้ง',
     closeUnsavedDetail: 'ต้องการบันทึกก่อนปิดหรือไม่?',
     btnSave: 'บันทึก',
     btnDontSave: 'ไม่บันทึก',
@@ -289,6 +327,11 @@ const tDlg = createI18n({
     filterImages: 'Gambar',
     untitledFile: 'Tanpa judul',
     closeUnsavedMsg: 'Dokumen ini memiliki perubahan yang belum disimpan.',
+    autosaveFoundTitle: 'Versi pemulihan ditemukan',
+    autosaveFoundBody:
+      'Ada perubahan yang belum disimpan dari sesi terakhir. Pulihkan versi tersimpan otomatis?',
+    autosaveRestore: 'Pulihkan',
+    autosaveDiscard: 'Buang',
     closeUnsavedDetail: 'Simpan sebelum menutup?',
     btnSave: 'Simpan',
     btnDontSave: 'Jangan Simpan',
@@ -314,6 +357,11 @@ const tDlg = createI18n({
     filterImages: 'Изображения',
     untitledFile: 'Без названия',
     closeUnsavedMsg: 'В этом документе есть несохранённые изменения.',
+    autosaveFoundTitle: 'Найдена восстановленная версия',
+    autosaveFoundBody:
+      'Есть несохранённые изменения из прошлого сеанса. Восстановить автосохранённую версию?',
+    autosaveRestore: 'Восстановить',
+    autosaveDiscard: 'Отклонить',
     closeUnsavedDetail: 'Сохранить их перед закрытием?',
     btnSave: 'Сохранить',
     btnDontSave: 'Не сохранять',
@@ -339,6 +387,11 @@ const tDlg = createI18n({
     filterImages: 'صور',
     untitledFile: 'بدون عنوان',
     closeUnsavedMsg: 'يحتوي هذا المستند على تغييرات غير محفوظة.',
+    autosaveFoundTitle: 'تم العثور على نسخة مستردة',
+    autosaveFoundBody:
+      'توجد تغييرات غير محفوظة من الجلسة الأخيرة. هل تريد استعادة النسخة المحفوظة تلقائيًا؟',
+    autosaveRestore: 'استعادة',
+    autosaveDiscard: 'تجاهل',
     closeUnsavedDetail: 'هل تريد حفظها قبل الإغلاق؟',
     btnSave: 'حفظ',
     btnDontSave: 'عدم الحفظ',
@@ -364,6 +417,11 @@ const tDlg = createI18n({
     filterImages: 'Imagens',
     untitledFile: 'Sem título',
     closeUnsavedMsg: 'Este documento tem alterações não salvas.',
+    autosaveFoundTitle: 'Versão recuperada encontrada',
+    autosaveFoundBody:
+      'Há alterações não salvas da sua última sessão. Restaurar a versão salva automaticamente?',
+    autosaveRestore: 'Restaurar',
+    autosaveDiscard: 'Descartar',
     closeUnsavedDetail: 'Deseja salvá-las antes de fechar?',
     btnSave: 'Salvar',
     btnDontSave: 'Não Salvar',
@@ -389,6 +447,11 @@ const tDlg = createI18n({
     filterImages: 'Immagini',
     untitledFile: 'Senza titolo',
     closeUnsavedMsg: 'Questo documento contiene modifiche non salvate.',
+    autosaveFoundTitle: 'Trovata versione recuperata',
+    autosaveFoundBody:
+      "Ci sono modifiche non salvate dall'ultima sessione. Ripristinare la versione salvata automaticamente?",
+    autosaveRestore: 'Ripristina',
+    autosaveDiscard: 'Ignora',
     closeUnsavedDetail: 'Vuoi salvarle prima di chiudere?',
     btnSave: 'Salva',
     btnDontSave: 'Non salvare',
@@ -414,6 +477,11 @@ const tDlg = createI18n({
     filterImages: 'Obrazy',
     untitledFile: 'Bez tytułu',
     closeUnsavedMsg: 'Ten dokument ma niezapisane zmiany.',
+    autosaveFoundTitle: 'Znaleziono odzyskaną wersję',
+    autosaveFoundBody:
+      'Istnieją niezapisane zmiany z ostatniej sesji. Przywrócić wersję zapisaną automatycznie?',
+    autosaveRestore: 'Przywróć',
+    autosaveDiscard: 'Odrzuć',
     closeUnsavedDetail: 'Czy zapisać je przed zamknięciem?',
     btnSave: 'Zapisz',
     btnDontSave: 'Nie zapisuj',
@@ -439,6 +507,11 @@ const tDlg = createI18n({
     filterImages: 'Obrázky',
     untitledFile: 'Bez názvu',
     closeUnsavedMsg: 'Tento dokument obsahuje neuložené změny.',
+    autosaveFoundTitle: 'Nalezena obnovená verze',
+    autosaveFoundBody:
+      'Z poslední relace existují neuložené změny. Obnovit automaticky uloženou verzi?',
+    autosaveRestore: 'Obnovit',
+    autosaveDiscard: 'Zahodit',
     closeUnsavedDetail: 'Chcete je před zavřením uložit?',
     btnSave: 'Uložit',
     btnDontSave: 'Neukládat',
@@ -464,6 +537,11 @@ const tDlg = createI18n({
     filterImages: 'Afbeeldingen',
     untitledFile: 'Naamloos',
     closeUnsavedMsg: 'Dit document bevat niet-opgeslagen wijzigingen.',
+    autosaveFoundTitle: 'Herstelde versie gevonden',
+    autosaveFoundBody:
+      'Er zijn niet-opgeslagen wijzigingen van uw laatste sessie. De automatisch opgeslagen versie herstellen?',
+    autosaveRestore: 'Herstellen',
+    autosaveDiscard: 'Negeren',
     closeUnsavedDetail: 'Wilt u ze opslaan voordat u sluit?',
     btnSave: 'Opslaan',
     btnDontSave: 'Niet opslaan',
@@ -489,6 +567,11 @@ const tDlg = createI18n({
     filterImages: 'Imej',
     untitledFile: 'Tanpa tajuk',
     closeUnsavedMsg: 'Dokumen ini mempunyai perubahan yang belum disimpan.',
+    autosaveFoundTitle: 'Versi pulihan ditemui',
+    autosaveFoundBody:
+      'Terdapat perubahan yang belum disimpan daripada sesi terakhir anda. Pulihkan versi yang disimpan secara automatik?',
+    autosaveRestore: 'Pulihkan',
+    autosaveDiscard: 'Buang',
     closeUnsavedDetail: 'Simpan sebelum menutup?',
     btnSave: 'Simpan',
     btnDontSave: 'Jangan Simpan',
@@ -514,6 +597,10 @@ const tDlg = createI18n({
     filterImages: 'תמונות',
     untitledFile: 'ללא שם',
     closeUnsavedMsg: 'במסמך הזה יש שינויים שלא נשמרו.',
+    autosaveFoundTitle: 'נמצאה גרסה משוחזרת',
+    autosaveFoundBody: 'קיימים שינויים שלא נשמרו מהפעלה הקודמת. לשחזר את הגרסה שנשמרה אוטומטית?',
+    autosaveRestore: 'שחזר',
+    autosaveDiscard: 'התעלם',
     closeUnsavedDetail: 'האם לשמור אותם לפני הסגירה?',
     btnSave: 'שמירה',
     btnDontSave: 'אל תשמור',
@@ -539,6 +626,11 @@ const tDlg = createI18n({
     filterImages: 'छवियाँ',
     untitledFile: 'शीर्षकहीन',
     closeUnsavedMsg: 'इस दस्तावेज़ में सहेजे नहीं गए परिवर्तन हैं।',
+    autosaveFoundTitle: 'पुनर्प्राप्त संस्करण मिला',
+    autosaveFoundBody:
+      'आपके पिछले सत्र से सहेजे नहीं गए परिवर्तन हैं। स्वतः सहेजा गया संस्करण पुनर्स्थापित करें?',
+    autosaveRestore: 'पुनर्स्थापित करें',
+    autosaveDiscard: 'छोड़ें',
     closeUnsavedDetail: 'क्या बंद करने से पहले उन्हें सहेजना चाहते हैं?',
     btnSave: 'सहेजें',
     btnDontSave: 'न सहेजें',
@@ -564,6 +656,10 @@ const tDlg = createI18n({
     filterImages: '圖片',
     untitledFile: '未命名文件',
     closeUnsavedMsg: '此文件有未儲存的變更。',
+    autosaveFoundTitle: '發現自動復原版本',
+    autosaveFoundBody: '上次工作階段有未儲存的變更。要復原自動儲存的版本嗎?',
+    autosaveRestore: '復原',
+    autosaveDiscard: '放棄',
     closeUnsavedDetail: '關閉前是否儲存？',
     btnSave: '儲存',
     btnDontSave: '不儲存',
@@ -584,6 +680,10 @@ const tDlg = createI18n({
 })
 type DlgKey =
   | 'dlgSaveTitle'
+  | 'autosaveFoundTitle'
+  | 'autosaveFoundBody'
+  | 'autosaveRestore'
+  | 'autosaveDiscard'
   | 'filterHtml'
   | 'dlgPickImage'
   | 'filterImages'
@@ -926,6 +1026,41 @@ export function htmlIsDirty(webContentsId: number): boolean {
   return dirtyByWc.has(webContentsId)
 }
 
+// ── Crash recovery: dirty renderers push a copy every 30s
+// (html:write-recovery); a normal save cleans it up; open offers Restore/Discard ──
+
+const readTextDecoded = async (path: string) =>
+  decodeHtmlText(await readFile(path), legacyCharsetForLang(getUiLang()))
+
+const recoveryStore = new TextRecoveryStore(join(app.getPath('userData'), 'html-autosave'), {
+  write: (target, text) => atomicWriteFile(target, Buffer.from(text, 'utf8')),
+  readOriginal: readTextDecoded,
+})
+
+/** Restore/Discard prompt for a recovery copy newer than the opened file */
+async function promptHtmlRecovery(parent: BrowserWindow | null): Promise<'restore' | 'discard'> {
+  const options = {
+    type: 'question' as const,
+    buttons: [tm('autosaveRestore'), tm('autosaveDiscard')],
+    defaultId: 0,
+    cancelId: 1,
+    message: tm('autosaveFoundTitle'),
+    detail: tm('autosaveFoundBody'),
+  }
+  const r =
+    parent && !parent.isDestroyed()
+      ? await dialog.showMessageBox(parent, options)
+      : await dialog.showMessageBox(options)
+  return r.response === 0 ? 'restore' : 'discard'
+}
+
+/** drop the recovery copy for a clean tab's file (in-flight-write race guarded by the store) */
+function clearHtmlRecoveryFor(wcId: number): void {
+  if (dirtyByWc.has(wcId)) return
+  const path = savePathByWc.get(wcId)
+  if (path) recoveryStore.clear(path)
+}
+
 export function htmlFilePath(webContentsId: number): string | undefined {
   return savePathByWc.get(webContentsId)
 }
@@ -974,6 +1109,9 @@ export async function requestHtmlClose(
       if (discarded.errors.length > 0) {
         console.warn('[html] pending asset discard incomplete:', discarded.errors)
       }
+      // the user explicitly declined to keep the edits — the crash-recovery
+      // copy must not resurrect them on the next open
+      recoveryStore.clear(documentPath)
     }
     return true
   }
@@ -1189,9 +1327,25 @@ function registerHtmlIpc(): void {
     if (typeof path !== 'string' || !allowedByWc.get(e.sender.id)?.has(path)) {
       throw new Error('html: path not granted to this view')
     }
-    // Honor the document's own <meta charset>, then BOM/UTF-8, then
-    // detection — a plain utf8 read mojibakes every legacy-encoded page.
-    return decodeHtmlText(await readFile(path), legacyCharsetForLang(getUiLang()))
+    // A recovery copy newer than the file (crash with unsaved edits) is
+    // offered as Restore/Discard before the file's own bytes are served.
+    // The copy is UTF-8 by construction, but the shared decoder handles it.
+    return recoveryStore.maybeRecover(path, () =>
+      promptHtmlRecovery(BrowserWindow.fromWebContents(e.sender)),
+    )
+  })
+
+  // crash-recovery copy push: dirty renderers serialize and send every ~30s
+  ipcMain.handle(HTML_CHANNELS.writeRecovery, async (e, path: unknown, text: unknown) => {
+    if (
+      typeof path !== 'string' ||
+      typeof text !== 'string' ||
+      !allowedByWc.get(e.sender.id)?.has(path)
+    ) {
+      return
+    }
+    mkdirSync(join(app.getPath('userData'), 'html-autosave'), { recursive: true })
+    await recoveryStore.writeCopy(path, text)
   })
 
   ipcMain.handle(
@@ -1273,6 +1427,11 @@ function registerHtmlIpc(): void {
             console.warn('[html] source asset reconciliation incomplete:', sourceResolved.errors)
           }
         }
+        // the persisted file now carries these edits — its recovery copy must
+        // not re-offer them; a save-as also retires the old file's copy
+        recoveryStore.clear(target)
+        if (currentPath && resolve(currentPath) !== resolve(target))
+          recoveryStore.clear(currentPath)
         if (isNewPath) fileSavedHook?.(e.sender, target)
         return done({
           ok: true,
@@ -1555,6 +1714,7 @@ function grantAndTrack(wc: WebContents, openPath?: string | null): void {
   }
   installExternalLinkOpener(wc)
   wc.once('destroyed', () => {
+    clearHtmlRecoveryFor(wcId)
     closePresentViewsOf(wcId)
     openPathByWc.delete(wcId)
     allowedByWc.delete(wcId)

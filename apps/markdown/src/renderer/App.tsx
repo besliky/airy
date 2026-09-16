@@ -209,9 +209,12 @@ export default function App() {
       try {
         const path = await window.markdownApi.consumePending()
         if (cancelled) return
+        let recovered = false
         if (path) {
-          const raw = await window.markdownApi.readFile(path)
+          const opened = await window.markdownApi.readFile(path)
           if (cancelled) return
+          recovered = opened.recovered
+          const raw = opened.text
           const envelope = parseDocText(raw)
           envelopeRef.current = envelope
           setImageBaseDir(dirOf(path))
@@ -231,6 +234,9 @@ export default function App() {
         }
         statusRef.current = 'ready'
         setStatus('ready')
+        // a restored recovery copy exists only in memory — keep the document
+        // dirty so a close still prompts and only Save persists it
+        if (recovered) markDirty()
       } catch (err) {
         console.error('[markdown] load failed:', err)
         if (!cancelled) {
@@ -242,7 +248,8 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [editor])
+    // markDirty is a stable callback; listing it would re-run the load
+  }, [editor, markDirty])
 
   const onFrontmatterChange = useCallback(
     (inner: string) => {
@@ -252,6 +259,39 @@ export default function App() {
     },
     [markDirty],
   )
+
+  // Crash-recovery copy: while dirty, push the serialized text every 30s (and
+  // on blur) so a crash costs at most half a minute of edits; a normal save
+  // or an explicit discard clears the copy main-side.
+  useEffect(() => {
+    let writing = false
+    const tick = async () => {
+      const current = editorRef.current
+      if (
+        writing ||
+        !current ||
+        !dirtyRef.current ||
+        !filePathRef.current ||
+        statusRef.current !== 'ready'
+      )
+        return
+      writing = true
+      try {
+        const text = serializeDocText(envelopeRef.current, current.getMarkdown())
+        await window.markdownApi.writeRecovery(filePathRef.current, text)
+      } catch {
+        // best-effort: the next tick retries
+      } finally {
+        writing = false
+      }
+    }
+    const id = window.setInterval(tick, 30_000)
+    window.addEventListener('blur', tick)
+    return () => {
+      window.clearInterval(id)
+      window.removeEventListener('blur', tick)
+    }
+  }, [])
 
   /** Serialize and write to disk; false when canceled/failed (caller keeps the tab open) */
   const doSave = useCallback(async (mode: SaveMode, suggestedName?: string): Promise<boolean> => {

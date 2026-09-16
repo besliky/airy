@@ -44,11 +44,16 @@ function makeFakeView(): FakeView {
   }
 }
 
-vi.mock('electron', () => ({ BrowserWindow: class {} }))
+vi.mock('electron', () => ({
+  BrowserWindow: class {},
+  // markdown/html module-level recovery stores resolve their userData dir
+  app: { getPath: () => '/tmp/airy-tab-manager-test' },
+}))
 
 const createDocsView = vi.fn(() => makeFakeView())
 const docsQueryDirty = vi.fn(() => Promise.resolve(false))
 const markDocsNewBlank = vi.fn()
+const recordRecentFile = vi.fn()
 const requestDocsClose = vi.fn(() => Promise.resolve(true))
 const setActiveDocsResolver = vi.fn()
 const teardownDocsRenderer = vi.fn()
@@ -57,6 +62,7 @@ vi.mock('../../docs/src/main/docs-main', () => ({
   createDocsView: (...args: unknown[]) => createDocsView(...(args as [])),
   docsQueryDirty: (...args: unknown[]) => docsQueryDirty(...(args as [])),
   markDocsNewBlank: (...args: unknown[]) => markDocsNewBlank(...args),
+  recordRecentFile: (...args: unknown[]) => recordRecentFile(...args),
   requestDocsClose: (...args: unknown[]) => requestDocsClose(...(args as [])),
   setActiveDocsResolver: (...args: unknown[]) => setActiveDocsResolver(...args),
   teardownDocsRenderer: (...args: unknown[]) => teardownDocsRenderer(...args),

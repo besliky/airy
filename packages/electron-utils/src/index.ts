@@ -21,6 +21,12 @@ export {
 } from './dialog-memory'
 export { ALL_OPEN_EXTENSIONS, OPEN_EXTENSION_GROUPS } from './open-filters'
 export {
+  TextRecoveryStore,
+  shouldOfferTextRecovery,
+  textRecoveryPathFor,
+  type RecoveryDecision,
+} from './text-recovery'
+export {
   DEFAULT_SAVE_DIR_KEY,
   configuredDefaultSaveDir,
   isUsableSaveDir,

@@ -71,6 +71,13 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('@airy-office/electron-utils', () => ({
+  TextRecoveryStore: class {
+    clear(): void {}
+    async writeCopy(): Promise<void> {}
+    async maybeRecover(_p: unknown, _r: unknown) {
+      return { text: '', recovered: false }
+    }
+  },
   configuredDefaultSaveDir: vi.fn(() => tmpdir()),
   contextMenuLabels: vi.fn(() => ({})),
   installContextMenu: vi.fn(),

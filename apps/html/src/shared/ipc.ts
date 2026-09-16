@@ -9,6 +9,7 @@ export const HTML_CHANNELS = {
   presentFullScreen: 'html:present-fullscreen',
   presentNewTab: 'html:present-new-tab',
   readFile: 'html:read-file',
+  writeRecovery: 'html:write-recovery',
   save: 'html:save',
   saveRequest: 'html:save-request',
   saveRequestAck: 'html:save-request-ack',
@@ -165,7 +166,9 @@ export interface HtmlApi {
   /** Take the md path pending for this view (queued at tab creation); null = new untitled document */
   consumePending(): Promise<string | null>
   /** Read the file as UTF-8 text. Only paths granted to this view are allowed */
-  readFile(path: string): Promise<string>
+  readFile(path: string): Promise<{ text: string; recovered: boolean }>
+  /** crash-recovery copy push (dirty renderers, every ~30s and on blur) */
+  writeRecovery(path: string, text: string): Promise<void>
   /** Push the current buffer so html-preview:// serves it to the preview iframe */
   updatePreview(text: string): void
   /** The html-preview:// URL bound to this view (a present tab gets its owner's URL) */

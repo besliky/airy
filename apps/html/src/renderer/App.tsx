@@ -212,7 +212,9 @@ export default function App() {
           window.htmlApi.consumePending(),
           window.htmlApi.getPreviewInfo(),
         ])
-        const raw = pending ? await window.htmlApi.readFile(pending) : ''
+        const opened = pending ? await window.htmlApi.readFile(pending) : null
+        const raw = opened?.text ?? ''
+        const recovered = opened?.recovered === true
         if (cancelled) return
         const doc = parseDocText(raw)
         envelopeRef.current = doc.envelope
@@ -224,7 +226,10 @@ export default function App() {
         pushedVersionRef.current = map0.version
         setPath(pending)
         setText(doc.text)
-        setSavedText(doc.text)
+        // a restored recovery copy differs from the disk file on purpose:
+        // keeping savedText at the disk bytes leaves the document dirty, so a
+        // close still prompts and only Save persists the recovery
+        setSavedText(recovered ? '' : doc.text)
         setPreviewUrl(info.url)
         setStatus('ready')
       } catch (err) {
@@ -242,6 +247,35 @@ export default function App() {
     if (status !== 'ready') return
     window.htmlApi.setDirty(dirty || pendingCount > 0)
   }, [dirty, pendingCount, status])
+
+  // Crash-recovery copy: while dirty, push the serialized text every 30s (and
+  // on blur) so a crash costs at most half a minute of edits; a normal save
+  // or an explicit discard clears the copy main-side.
+  useEffect(() => {
+    if (status !== 'ready') return
+    let writing = false
+    const tick = async () => {
+      if (writing || !pathRef.current || textRef.current === savedTextRef.current) return
+      writing = true
+      try {
+        const serialized = serializeDocText({
+          text: textRef.current,
+          envelope: envelopeRef.current,
+        })
+        await window.htmlApi.writeRecovery(pathRef.current, serialized)
+      } catch {
+        // best-effort: the next tick retries
+      } finally {
+        writing = false
+      }
+    }
+    const id = window.setInterval(tick, 30_000)
+    window.addEventListener('blur', tick)
+    return () => {
+      window.clearInterval(id)
+      window.removeEventListener('blur', tick)
+    }
+  }, [status])
 
   const pushPreview = useCallback(
     (nextText: string) => {
