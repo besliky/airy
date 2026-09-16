@@ -178,6 +178,10 @@ export const strings = {
     // Language / tab strip
     language: '语言',
     closeTab: '关闭标签',
+    errFileNotFound: '文件不存在或已被移动。',
+    errPermissionDenied: '没有访问该文件的权限。',
+    errFileLocked: '文件正被其他程序占用，请关闭后重试。',
+    errTooManyFiles: '打开的文件过多，请稍后重试。',
     tabList: '全部标签',
     newTab: '新建标签页',
     // First-run onboarding
@@ -370,6 +374,10 @@ export const strings = {
     daysAgo: '{n}d ago',
     language: 'Language',
     closeTab: 'Close tab',
+    errFileNotFound: 'The file does not exist or has been moved.',
+    errPermissionDenied: 'Permission denied for this file.',
+    errFileLocked: 'The file is open in another program. Close it and try again.',
+    errTooManyFiles: 'Too many files are open. Try again shortly.',
     tabList: 'All tabs',
     newTab: 'New tab',
     // First-run onboarding
@@ -576,6 +584,10 @@ export const strings = {
     // Language / tab strip
     language: '言語',
     closeTab: 'タブを閉じる',
+    errFileNotFound: 'ファイルが存在しないか、移動されました。',
+    errPermissionDenied: 'このファイルへのアクセスが拒否されました。',
+    errFileLocked: 'ファイルが他のプログラムで開いています。閉じてから再試行してください。',
+    errTooManyFiles: '開いているファイルが多すぎます。しばらくしてから再試行してください。',
     tabList: 'すべてのタブ',
     newTab: '新しいタブ',
     // First-run onboarding
@@ -780,6 +792,10 @@ export const strings = {
     // Language / tab strip
     language: '언어',
     closeTab: '탭 닫기',
+    errFileNotFound: '파일이 없거나 이동되었습니다.',
+    errPermissionDenied: '이 파일에 대한 액세스 권한이 없습니다.',
+    errFileLocked: '파일이 다른 프로그램에서 열려 있습니다. 닫고 다시 시도하세요.',
+    errTooManyFiles: '열려 있는 파일이 너무 많습니다. 잠시 후 다시 시도하세요.',
     tabList: '모든 탭',
     newTab: '새 탭',
     // First-run onboarding
@@ -989,6 +1005,10 @@ export const strings = {
     // Language / tab strip
     language: 'Langue',
     closeTab: "Fermer l'onglet",
+    errFileNotFound: "Le fichier n'existe pas ou a été déplacé.",
+    errPermissionDenied: 'Accès refusé à ce fichier.',
+    errFileLocked: 'Le fichier est ouvert dans un autre programme. Fermez-le puis réessayez.',
+    errTooManyFiles: 'Trop de fichiers sont ouverts. Réessayez dans un instant.',
     tabList: 'Tous les onglets',
     newTab: 'Nouvel onglet',
     // First-run onboarding
@@ -1201,6 +1221,11 @@ export const strings = {
     // Language / tab strip
     language: 'Sprache',
     closeTab: 'Tab schließen',
+    errFileNotFound: 'Die Datei ist nicht vorhanden oder wurde verschoben.',
+    errPermissionDenied: 'Zugriff auf diese Datei verweigert.',
+    errFileLocked:
+      'Die Datei ist in einem anderen Programm geöffnet. Schließen Sie es und versuchen Sie es erneut.',
+    errTooManyFiles: 'Zu viele Dateien sind geöffnet. Versuchen Sie es bald erneut.',
     tabList: 'Alle Tabs',
     newTab: 'Neuer Tab',
     // First-run onboarding
@@ -1412,6 +1437,10 @@ export const strings = {
     // Language / tab strip
     language: 'Idioma',
     closeTab: 'Cerrar pestaña',
+    errFileNotFound: 'El archivo no existe o se ha movido.',
+    errPermissionDenied: 'Permiso denegado para este archivo.',
+    errFileLocked: 'El archivo está abierto en otro programa. Ciérralo e inténtalo de nuevo.',
+    errTooManyFiles: 'Hay demasiados archivos abiertos. Inténtalo de nuevo en un momento.',
     tabList: 'Todas las pestañas',
     newTab: 'Nueva pestaña',
     // First-run onboarding
@@ -1614,6 +1643,10 @@ export const strings = {
     // Language / tab strip
     language: 'ภาษา',
     closeTab: 'ปิดแท็บ',
+    errFileNotFound: 'ไฟล์ไม่มีอยู่หรือถูกย้ายไปแล้ว',
+    errPermissionDenied: 'ไม่มีสิทธิ์เข้าถึงไฟล์นี้',
+    errFileLocked: 'ไฟล์ถูกเปิดในโปรแกรมอื่นอยู่ ปิดแล้วลองอีกครั้ง',
+    errTooManyFiles: 'เปิดไฟล์มากเกินไป โปรดลองอีกครั้งในอีกครู่',
     tabList: 'แท็บทั้งหมด',
     newTab: 'แท็บใหม่',
     // First-run onboarding
@@ -1819,6 +1852,10 @@ export const strings = {
     // Language / tab strip
     language: 'Bahasa',
     closeTab: 'Tutup tab',
+    errFileNotFound: 'Berkas tidak ada atau telah dipindahkan.',
+    errPermissionDenied: 'Akses ke berkas ini ditolak.',
+    errFileLocked: 'Berkas sedang dibuka di program lain. Tutup lalu coba lagi.',
+    errTooManyFiles: 'Terlalu banyak berkas terbuka. Coba lagi sebentar lagi.',
     tabList: 'Semua tab',
     newTab: 'Tab baru',
     // First-run onboarding
@@ -2027,6 +2064,10 @@ export const strings = {
     // Language / tab strip
     language: 'Язык',
     closeTab: 'Закрыть вкладку',
+    errFileNotFound: 'Файл не существует или был перемещён.',
+    errPermissionDenied: 'Доступ к файлу запрещён.',
+    errFileLocked: 'Файл открыт в другой программе. Закройте её и повторите попытку.',
+    errTooManyFiles: 'Открыто слишком много файлов. Повторите попытку позже.',
     tabList: 'Все вкладки',
     newTab: 'Новая вкладка',
     // First-run onboarding
@@ -2231,6 +2272,10 @@ export const strings = {
     // Language / tab strip
     language: 'اللغة',
     closeTab: 'إغلاق علامة التبويب',
+    errFileNotFound: 'الملف غير موجود أو تم نقله.',
+    errPermissionDenied: 'تم رفض الوصول إلى هذا الملف.',
+    errFileLocked: 'الملف مفتوح في برنامج آخر. أغلقه ثم أعد المحاولة.',
+    errTooManyFiles: 'عدد الملفات المفتوحة كبير جدًا. أعد المحاولة بعد قليل.',
     tabList: 'كل علامات التبويب',
     newTab: 'علامة تبويب جديدة',
     // First-run onboarding
@@ -2430,6 +2475,10 @@ export const strings = {
     daysAgo: 'há {n} dias',
     language: 'Idioma',
     closeTab: 'Fechar guia',
+    errFileNotFound: 'O arquivo não existe ou foi movido.',
+    errPermissionDenied: 'Acesso negado a este arquivo.',
+    errFileLocked: 'O arquivo está aberto em outro programa. Feche-o e tente novamente.',
+    errTooManyFiles: 'Há muitos arquivos abertos. Tente novamente em instantes.',
     tabList: 'Todas as guias',
     newTab: 'Nova guia',
     // First-run onboarding
@@ -2629,6 +2678,10 @@ export const strings = {
     daysAgo: '{n} giorni fa',
     language: 'Lingua',
     closeTab: 'Chiudi scheda',
+    errFileNotFound: 'Il file non esiste o è stato spostato.',
+    errPermissionDenied: 'Accesso negato a questo file.',
+    errFileLocked: 'Il file è aperto in un altro programma. Chiudilo e riprova.',
+    errTooManyFiles: 'Troppi file aperti. Riprova tra poco.',
     tabList: 'Tutte le schede',
     newTab: 'Nuova scheda',
     // First-run onboarding
@@ -2826,6 +2879,10 @@ export const strings = {
     daysAgo: '{n} dni temu',
     language: 'Język',
     closeTab: 'Zamknij kartę',
+    errFileNotFound: 'Plik nie istnieje lub został przeniesiony.',
+    errPermissionDenied: 'Brak dostępu do tego pliku.',
+    errFileLocked: 'Plik jest otwarty w innym programie. Zamknij go i spróbuj ponownie.',
+    errTooManyFiles: 'Otwarto zbyt wiele plików. Spróbuj ponownie za chwilę.',
     tabList: 'Wszystkie karty',
     newTab: 'Nowa karta',
     // First-run onboarding
@@ -3012,6 +3069,10 @@ export const strings = {
     daysAgo: 'před {n} dny',
     language: 'Jazyk',
     closeTab: 'Zavřít kartu',
+    errFileNotFound: 'Soubor neexistuje nebo byl přesunut.',
+    errPermissionDenied: 'Přístup k tomuto souboru byl odepřen.',
+    errFileLocked: 'Soubor je otevřený v jiném programu. Zavřete ho a zkuste to znovu.',
+    errTooManyFiles: 'Je otevřeno příliš mnoho souborů. Zkuste to za chvíli znovu.',
     tabList: 'Všechny karty',
     newTab: 'Nová karta',
     // First-run onboarding
@@ -3224,6 +3285,10 @@ export const strings = {
     daysAgo: '{n} dagen geleden',
     language: 'Taal',
     closeTab: 'Tabblad sluiten',
+    errFileNotFound: 'Het bestand bestaat niet of is verplaatst.',
+    errPermissionDenied: 'Toegang tot dit bestand geweigerd.',
+    errFileLocked: 'Het bestand is geopend in een ander programma. Sluit het en probeer opnieuw.',
+    errTooManyFiles: 'Er zijn te veel bestanden open. Probeer het zo opnieuw.',
     tabList: 'Alle tabbladen',
     newTab: 'Nieuw tabblad',
     // First-run onboarding
@@ -3423,6 +3488,10 @@ export const strings = {
     daysAgo: '{n} hari lalu',
     language: 'Bahasa',
     closeTab: 'Tutup tab',
+    errFileNotFound: 'Fail tidak wujud atau telah dipindahkan.',
+    errPermissionDenied: 'Akses kepada fail ini ditolak.',
+    errFileLocked: 'Fail dibuka dalam program lain. Tutup dan cuba lagi.',
+    errTooManyFiles: 'Terlalu banyak fail dibuka. Cuba lagi sebentar lagi.',
     tabList: 'Semua tab',
     newTab: 'Tab baharu',
     // First-run onboarding
@@ -3614,6 +3683,10 @@ export const strings = {
     daysAgo: 'לפני {n} ימים',
     language: 'שפה',
     closeTab: 'סגירת כרטיסייה',
+    errFileNotFound: 'הקובץ אינו קיים או הועבר.',
+    errPermissionDenied: 'הגישה לקובץ זה נדחתה.',
+    errFileLocked: 'הקובץ פתוח בתוכנית אחרת. סגרו אותה ונסו שוב.',
+    errTooManyFiles: 'יותר מדי קבצים פתוחים. נסו שוב בעוד רגע.',
     tabList: 'כל הכרטיסיות',
     newTab: 'כרטיסייה חדשה',
     // First-run onboarding
@@ -3810,6 +3883,10 @@ export const strings = {
     daysAgo: '{n} दिन पहले',
     language: 'भाषा',
     closeTab: 'टैब बंद करें',
+    errFileNotFound: 'फ़ाइल मौजूद नहीं है या ले जाई गई है।',
+    errPermissionDenied: 'इस फ़ाइल तक पहुँच अस्वीकृत है।',
+    errFileLocked: 'फ़ाइल किसी अन्य प्रोग्राम में खुली है। बंद करके पुनः प्रयास करें।',
+    errTooManyFiles: 'बहुत अधिक फ़ाइलें खुली हैं। थोड़ी देर बाद पुनः प्रयास करें।',
     tabList: 'सभी टैब',
     newTab: 'नया टैब',
     // First-run onboarding
@@ -3999,6 +4076,10 @@ export const strings = {
     daysAgo: '{n} 天前',
     language: '語言',
     closeTab: '關閉分頁',
+    errFileNotFound: '檔案不存在或已被移動。',
+    errPermissionDenied: '沒有存取此檔案的權限。',
+    errFileLocked: '檔案正被其他程式佔用，請關閉後再試一次。',
+    errTooManyFiles: '開啟的檔案過多，請稍後再試一次。',
     tabList: '全部分頁',
     newTab: '新分頁',
     // First-run onboarding

@@ -24,6 +24,7 @@ import type {
   AiSearchSettings,
   AiSettings,
 } from '@airy-office/ai-provider'
+import { showErrorToast } from './error-toast'
 import { useI18n } from './locale'
 import type { StringKey, TFunc } from './locale'
 import type { AiCatalogEntry, UiTheme } from '../../shared/home-api'
@@ -318,7 +319,7 @@ function AiModelPane({ t }: { t: TFunc }) {
         setSaved(true)
       })
       .catch((error) => {
-        window.alert(error instanceof Error ? error.message : String(error))
+        showErrorToast(error, t)
       })
   }
   const test = () => {
@@ -583,7 +584,7 @@ function AiMediaPane({ t }: { t: TFunc }) {
         setSaved(true)
       })
       .catch((error) => {
-        window.alert(error instanceof Error ? error.message : String(error))
+        showErrorToast(error, t)
       })
   }
   // every distinct BYOK vendor the four blocks point at is checked once; first failure wins

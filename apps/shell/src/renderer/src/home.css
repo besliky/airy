@@ -1870,6 +1870,49 @@ body.vib .home {
   }
 }
 
+/* ── transient toast (error feedback instead of raw window.alert) ── */
+.app-toast {
+  position: fixed;
+  top: 52px;
+  left: 50%;
+  z-index: 1000;
+  display: flex;
+  max-width: min(560px, 80vw);
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: var(--shadow-menu);
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+  pointer-events: none;
+}
+
+.app-toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.app-toast.error {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.app-toast-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

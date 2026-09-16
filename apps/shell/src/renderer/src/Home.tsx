@@ -15,6 +15,7 @@ import type {
 } from '../../shared/home-api'
 import { useDismissablePopover } from '@airy-office/ui'
 import { fileCountKey, visiblePageCount } from './counts'
+import { showErrorToast } from './error-toast'
 import { useI18n } from './locale'
 import type { I18n, StringKey } from './locale'
 import { SettingsModal } from './SettingsModal'
@@ -198,7 +199,7 @@ function ProjectPanel({ projects, selectedId, onSelect, onRefresh }: ProjectPane
     try {
       await window.aiOfficeProject?.createProject(name)
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error))
+      showErrorToast(error, t)
       return
     }
     onRefresh()
@@ -213,7 +214,7 @@ function ProjectPanel({ projects, selectedId, onSelect, onRefresh }: ProjectPane
     try {
       await window.aiOfficeProject?.renameProject(id, name)
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error))
+      showErrorToast(error, t)
       return
     }
     onRefresh()
@@ -234,7 +235,7 @@ function ProjectPanel({ projects, selectedId, onSelect, onRefresh }: ProjectPane
     try {
       await window.aiOfficeProject?.deleteProject(id)
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error))
+      showErrorToast(error, t)
       return
     }
     if (selectedId === id) onSelect(null)
@@ -944,7 +945,7 @@ export function Home() {
     if (!value || value === baseName(entry)) return
     const newName = entry.ext ? `${value}.${entry.ext}` : value
     void window.aiOffice.renameFile(entry.path, newName).then((result) => {
-      if (!result.ok) window.alert(result.error ?? t('renameFailed'))
+      if (!result.ok) showErrorToast(result.error || t('renameFailed'), t)
       refresh()
     })
   }
@@ -955,7 +956,7 @@ export function Home() {
     try {
       await window.aiOfficeProject?.moveFile(filePath, targetProjectId)
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error))
+      showErrorToast(error, t)
       return
     }
     refresh()
@@ -976,7 +977,7 @@ export function Home() {
         await window.aiOfficeProject?.moveFile(path, targetProjectId)
       }
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error))
+      showErrorToast(error, t)
     } finally {
       // A bulk move can fail after earlier paths succeeded; reload to restore
       // unmoved rows while keeping successfully moved rows out of this project.
