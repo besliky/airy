@@ -20,7 +20,22 @@ All application windows run with the full Electron renderer lockdown:
   enforces a protocol allowlist (http/https; pdf link annotations additionally
   allow mailto). `file:`, `javascript:`, and custom schemes are always rejected.
 - No API keys are hardcoded. AI requests go only to the provider the user
-  configures; user-supplied keys stay in the local settings store.
+  configures; user-supplied keys stay in the local settings store, encrypted
+  at rest with the OS keychain (Electron safeStorage) whenever one is
+  available, and the settings file is user-readable only (mode 0600).
+
+## Updater Posture
+
+The in-app updater (Windows NSIS and Linux AppImage; deb installs notify
+only, macOS is off) polls the fork's GitHub Releases feed
+(`github.com/besliky/airy`) and never acts silently: the deferred startup
+check only raises an availability dialog, the download starts only from its
+"Download" button, and the staged update is installed only through the
+explicit "Install and Restart" choice — or, at the user's picking, on quit.
+Release artifacts are unsigned (no code-signing certificate), so update
+integrity rests on GitHub TLS plus electron-updater's `latest.yml` sha512
+verification rather than OS signature checks; `publisherName` /
+`verifyUpdateCodeSignature` cannot be set for unsigned builds.
 
 ## Threat Model: AI-Generated Layout Scripts (slides)
 

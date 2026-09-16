@@ -48,10 +48,16 @@ Airy is an independent fork of
 agent-driven document work, and it diverges in three ways:
 
 1. **De-Genspark.** The Genspark account login, the `genspark` AI provider,
-   the `gsk` CLI search backend, the `@genspark/cli` dependency, the
+   the `gsk` CLI search backend, the `@genspark/cli` dependency, upstream's
    auto-updater, and usage analytics are removed. AI in the app is
    bring-your-own-key only. `tools/check-no-genspark.mjs` guards against
-   Genspark network endpoints and dependencies coming back.
+   Genspark network endpoints and dependencies coming back. In upstream's
+   updater's place the fork ships its own GitHub-Releases updater
+   (`apps/shell/src/main/updater/`, Windows and AppImage): it checks
+   `github.com/besliky/airy` shortly after startup but only notifies — the
+   download and the install (with restart) each need explicit consent, deb
+   installs get a click-through notice, and macOS stays off. Releases are
+   unsigned; see [SECURITY.md](SECURITY.md) for the updater posture.
 2. **MCP server.** `packages/mcp-server` (`@airy-office/mcp`, bin
    `airy-mcp`) exposes the document engines to coding agents over MCP —
    see [docs/COPILOT.md](docs/COPILOT.md).
