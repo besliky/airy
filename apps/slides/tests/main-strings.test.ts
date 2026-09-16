@@ -10,12 +10,12 @@ import { mainStrings } from '../src/main/i18n/strings-main'
 const locales = Object.keys(mainStrings) as Array<keyof typeof mainStrings>
 const referenceKeys = Object.keys(mainStrings.zh).sort()
 
-/** placeholders like {n}, {pages}, {ext} embedded in a template */
+/** placeholders like {n}, {name}, {pages} embedded in a template */
 function placeholdersOf(template: string): string[] {
   return (template.match(/\{[a-zA-Z0-9]+\}/g) ?? []).sort()
 }
 
-describe('main-process locale tables', () => {
+describe('slides main-process locale tables', () => {
   it('includes the expected UI languages', () => {
     expect(locales).toContain('zh')
     expect(locales).toContain('en')
