@@ -97,3 +97,11 @@ export {
   rendererMayReadPath,
   resetRendererFileGrants,
 } from './renderer-file-access'
+export {
+  forgetWitnessedDrops,
+  mayGrantAttachmentRead,
+  recordWitnessedDrops,
+  resetWitnessedDrops,
+  witnessedDroppedPath,
+  WITNESS_DROP_CHANNEL,
+} from './witnessed-drops'

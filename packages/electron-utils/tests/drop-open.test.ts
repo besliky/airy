@@ -6,6 +6,7 @@ import {
   installDropOpenBridge,
   partitionDropPayload,
 } from '../src/drop-open'
+import { WITNESS_DROP_CHANNEL } from '../src/witnessed-drops'
 
 // ---- electron mock (module under test imports ipcRenderer/webUtils eagerly) ----
 
@@ -158,10 +159,10 @@ describe('installDropOpenBridge', () => {
     resetInstallFlag()
   }
 
-  it('registers exactly one dragover and one drop listener', () => {
+  it('registers the witness listeners plus one dragover and one bubble drop listener', () => {
     const win = install()
     try {
-      expect(win.recorded.map((r) => r.type)).toEqual(['dragover', 'drop'])
+      expect(win.recorded.map((r) => r.type)).toEqual(['drop', 'paste', 'dragover', 'drop'])
     } finally {
       uninstall(win)
     }
@@ -171,7 +172,7 @@ describe('installDropOpenBridge', () => {
     const win = install()
     try {
       installDropOpenBridge()
-      expect(win.recorded.length).toBe(2)
+      expect(win.recorded.length).toBe(4)
     } finally {
       uninstall(win)
     }
@@ -225,14 +226,37 @@ describe('installDropOpenBridge', () => {
     }
   })
 
-  it('stays silent when the page already handled the drop', async () => {
+  it('stays silent on the open channel when the page already handled the drop', async () => {
     electronMocks.getPathForFile.mockImplementation((f: { name: string }) => `/tmp/${f.name}`)
     const win = install()
     try {
       const ev = fileDrag(['report.docx'], true)
       win.fire('drop', ev)
       await Promise.resolve()
-      expect(electronMocks.send).not.toHaveBeenCalled()
+      // the witness still records the drop (capture phase), but the page's
+      // claim keeps the open router out of it
+      expect(electronMocks.send).toHaveBeenCalledWith(WITNESS_DROP_CHANNEL, ['/tmp/report.docx'])
+      expect(electronMocks.send).not.toHaveBeenCalledWith(DROP_OPEN_CHANNEL, expect.anything())
+    } finally {
+      uninstall(win)
+    }
+  })
+
+  it('witnesses resolved paste files too', async () => {
+    electronMocks.getPathForFile.mockImplementation((f: { name: string }) => `/tmp/${f.name}`)
+    const win = install()
+    try {
+      const ev = {
+        defaultPrevented: false,
+        preventDefault: vi.fn(),
+        clipboardData: { files: [{ name: 'sheet.xlsx' }] },
+      }
+      win.fire('paste', ev)
+      await Promise.resolve()
+      expect(electronMocks.send).toHaveBeenCalledWith(WITNESS_DROP_CHANNEL, ['/tmp/sheet.xlsx'])
+      // a witnessed paste never becomes an open and never cancels the event
+      expect(electronMocks.send).not.toHaveBeenCalledWith(DROP_OPEN_CHANNEL, expect.anything())
+      expect(ev.preventDefault).not.toHaveBeenCalled()
     } finally {
       uninstall(win)
     }

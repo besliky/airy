@@ -12,6 +12,8 @@
 /// the way. Text/media drags without OS files are untouched.
 import { ipcRenderer, webUtils } from 'electron'
 
+import { WITNESS_DROP_CHANNEL } from './witnessed-drops'
+
 export const DROP_OPEN_CHANNEL = 'app:open-dropped-files'
 
 /** Extensions routed by apps/shell routeDocumentPath — keep in sync there and
@@ -106,15 +108,33 @@ export function installDropOpenBridge(): void {
   if (typeof window === 'undefined' || holder[INSTALLED]) return
   holder[INSTALLED] = true
 
+  // Consent witness for the files:add attachment channel: record every OS
+  // file that really lands in this window — including drops a page drop zone
+  // claims (capture runs before page handlers and only observes). The main
+  // process lets files:add widen its read allowlist only for witnessed paths
+  // (see witnessed-drops.ts), so a compromised page cannot self-grant.
+  const witness = (files: FileList | null | undefined): void => {
+    if (!files || files.length === 0) return
+    const paths: string[] = []
+    for (const file of Array.from(files)) {
+      const path = tryResolvePath(file, (f) => webUtils.getPathForFile(f))
+      if (path) paths.push(path)
+    }
+    if (paths.length > 0) ipcRenderer.send(WITNESS_DROP_CHANNEL, paths.slice(0, 20))
+  }
+  window.addEventListener('drop', (ev) => witness(ev.dataTransfer?.files), { capture: true })
+  // Files pasted with a local path (a copied file) ride the same witness.
+  window.addEventListener('paste', (ev) => witness(ev.clipboardData?.files), { capture: true })
+
   // Without a canceled dragover Chromium never fires `drop`; canceling here is
   // what lets a document-drag land anywhere that isn't already a drop zone.
-  window.addEventListener('dragover', (ev: DragEvent) => {
+  window.addEventListener('dragover', (ev) => {
     if (ev.defaultPrevented) return
     if (!ev.dataTransfer?.types.includes('Files')) return
     ev.preventDefault()
   })
 
-  window.addEventListener('drop', (ev: DragEvent) => {
+  window.addEventListener('drop', (ev) => {
     // first: something in the page already claimed this drop (image insert,
     // AI attachments...) — never second-guess it
     if (ev.defaultPrevented) return

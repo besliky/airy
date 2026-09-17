@@ -41,6 +41,7 @@ import {
   COPILOT_GUIDE_URL,
   DOCS_README_URL,
   installNavigationGuard,
+  forgetWitnessedDrops,
   isPathInsideDir,
   openHelpUrl,
   rendererMayReadPath,
@@ -400,6 +401,7 @@ function trackSlidesWebContents(wc: WebContents): void {
     sessions.delete(wc.id)
     pendingByWc.delete(wc.id)
     exportPicksByWc.delete(wc.id)
+    forgetWitnessedDrops(wc.id)
     lastSlidePaste.delete(wc.id)
     closeSaveWaiters.get(wc.id)?.(false)
     closeSaveWaiters.delete(wc.id)

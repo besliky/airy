@@ -10,8 +10,11 @@ import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import {
   grantRendererFileAccess,
+  mayGrantAttachmentRead,
+  recordWitnessedDrops,
   rendererMayReadPath,
   showOpenDialogWithMemory,
+  WITNESS_DROP_CHANNEL,
 } from '@airy-office/electron-utils'
 import { parseFileToText } from '@airy-office/file-parse'
 import type {
@@ -103,15 +106,20 @@ function statAttachment(filePath: string): { meta?: AttachmentMeta; error?: stri
   }
 }
 
-function collectAttachments(paths: string[]): AttachmentAddResult {
+function collectAttachments(
+  paths: string[],
+  mayGrant?: (p: string) => boolean,
+): AttachmentAddResult {
   const accepted: AttachmentMeta[] = []
   const rejected: string[] = []
   for (const p of paths) {
     const { meta, error } = statAttachment(p)
-    // accepted = user-chosen attachment (dialog pick or drag-drop): its
-    // folder joins the renderer read allowlist for the read channels
+    // accepted = user-chosen attachment: its folder joins the renderer read
+    // allowlist — unconditionally for trusted main-side origins (dialog
+    // picks, pasted temp files), and only with a witnessed user drop/paste
+    // for renderer-named paths (see slides:files-add below)
     if (meta) {
-      grantRendererFileAccess(p)
+      if (!mayGrant || mayGrant(p)) grantRendererFileAccess(p)
       accepted.push(meta)
     } else if (error) rejected.push(error)
   }
@@ -175,7 +183,17 @@ export function registerAttachmentIpc(): void {
     return collectAttachments(r.filePaths)
   })
 
-  ipcMain.handle('slides:files-add', (_e, paths: string[]) => collectAttachments(paths))
+  // Witnessed drops/pastes feed the files-add grant policy (preload-world
+  // listeners only — page code cannot forge these records)
+  ipcMain.on(WITNESS_DROP_CHANNEL, (event, paths: unknown) =>
+    recordWitnessedDrops(event.sender.id, paths),
+  )
+
+  ipcMain.handle('slides:files-add', (event, paths: string[]) =>
+    // renderer-named paths grant only when really dropped/pasted into this
+    // renderer or already inside a granted directory
+    collectAttachments(paths, (p) => mayGrantAttachmentRead(event.sender.id, p)),
+  )
 
   ipcMain.handle(
     'slides:files-read',

@@ -28,14 +28,18 @@ import {
   configuredDefaultSaveDir,
   contextMenuLabels,
   fetchRemoteImage,
+  forgetWitnessedDrops,
   grantRendererFileAccess,
   installContextMenu,
   installNavigationGuard,
+  mayGrantAttachmentRead,
+  recordWitnessedDrops,
   rendererMayReadPath,
   safeExternalUrl,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
   voidLoad,
+  WITNESS_DROP_CHANNEL,
 } from '@airy-office/electron-utils'
 import { createI18n, getUiLang } from '@airy-office/i18n'
 import { generateImageTool } from '@airy-office/ai-search'
@@ -787,15 +791,20 @@ function statAttachment(filePath: string): { meta?: AttachmentMeta; error?: stri
   }
 }
 
-function collectAttachments(paths: string[]): AttachmentAddResult {
+function collectAttachments(
+  paths: string[],
+  mayGrant?: (p: string) => boolean,
+): AttachmentAddResult {
   const accepted: AttachmentMeta[] = []
   const rejected: string[] = []
   for (const p of paths) {
     const { meta, error } = statAttachment(p)
-    // accepted = user-chosen attachment (dialog pick or drag-drop): its
-    // folder joins the renderer read allowlist for the read channels
+    // accepted = user-chosen attachment: its folder joins the renderer read
+    // allowlist — unconditionally for trusted main-side origins (dialog
+    // picks, pasted temp files), and only with a witnessed user drop/paste
+    // for renderer-named paths (see the filesAdd handler)
     if (meta) {
-      grantRendererFileAccess(p)
+      if (!mayGrant || mayGrant(p)) grantRendererFileAccess(p)
       accepted.push(meta)
     } else if (error) rejected.push(error)
   }
@@ -1465,8 +1474,19 @@ function registerHtmlIpc(): void {
     return collectAttachments(picked.filePaths)
   })
 
-  ipcMain.handle(HTML_CHANNELS.filesAdd, (_e, paths: unknown) =>
-    collectAttachments(Array.isArray(paths) ? paths.filter((p) => typeof p === 'string') : []),
+  // Witnessed drops/pastes feed the files-add grant policy (preload-world
+  // listeners only — page code cannot forge these records)
+  ipcMain.on(WITNESS_DROP_CHANNEL, (event, paths: unknown) =>
+    recordWitnessedDrops(event.sender.id, paths),
+  )
+
+  ipcMain.handle(HTML_CHANNELS.filesAdd, (event, paths: unknown) =>
+    // renderer-named paths grant only when really dropped/pasted into this
+    // renderer or already inside a granted directory
+    collectAttachments(
+      Array.isArray(paths) ? paths.filter((p) => typeof p === 'string') : [],
+      (p) => mayGrantAttachmentRead(event.sender.id, p),
+    ),
   )
 
   ipcMain.handle(
@@ -1730,6 +1750,7 @@ function grantAndTrack(wc: WebContents, openPath?: string | null): void {
   wc.once('destroyed', () => {
     clearHtmlRecoveryFor(wcId)
     closePresentViewsOf(wcId)
+    forgetWitnessedDrops(wcId)
     openPathByWc.delete(wcId)
     allowedByWc.delete(wcId)
     savePathByWc.delete(wcId)
