@@ -1,10 +1,24 @@
 import { describe, expect, it } from 'vitest'
+import { homeStrings } from '../src/renderer/src/i18n/strings-home'
+import { settingsStrings } from '../src/renderer/src/i18n/strings-settings'
+import { onboardingStrings } from '../src/renderer/src/i18n/strings-onboarding'
+import { miscStrings } from '../src/renderer/src/i18n/strings-misc'
 import { strings } from '../src/renderer/src/strings'
 
 /**
- * Home-screen locale tables (src/renderer/src/strings.ts): zh defines the key
- * set; every other locale must cover exactly the same keys with real content.
+ * Renderer locale tables. The dictionary is sharded per domain
+ * (src/renderer/src/i18n/<domain>/<lang>.ts aggregated by the
+ * strings-<domain>.ts files): zh defines each domain's key set; every other
+ * locale shard must cover exactly those keys with real content and matching
+ * {placeholder} sets. The aggregated table must be the exact union.
  */
+
+const shards = {
+  home: homeStrings,
+  settings: settingsStrings,
+  onboarding: onboardingStrings,
+  misc: miscStrings,
+}
 
 const locales = Object.keys(strings) as Array<keyof typeof strings>
 const referenceKeys = Object.keys(strings.zh).sort()
@@ -13,6 +27,41 @@ const referenceKeys = Object.keys(strings.zh).sort()
 function placeholdersOf(template: string): string[] {
   return (template.match(/\{[a-zA-Z0-9]+\}/g) ?? []).sort()
 }
+
+describe('renderer locale shards', () => {
+  it('covers every domain with every shard sharing the same locale set', () => {
+    const shardLocales = Object.entries(shards).map(
+      ([name, dict]) => `${name}:${Object.keys(dict).length}`,
+    )
+    expect(shardLocales.every((entry) => entry.endsWith(`:${locales.length}`))).toBe(true)
+  })
+
+  it.each(Object.entries(shards))(
+    'shard %s has exactly the zh key set per locale',
+    (_name, dict) => {
+      const zhKeys = Object.keys(dict.zh).sort()
+      expect(zhKeys.length).toBeGreaterThan(0)
+      for (const locale of Object.keys(dict)) {
+        expect(Object.keys(dict[locale as keyof typeof dict]).sort(), locale).toEqual(zhKeys)
+      }
+    },
+  )
+
+  it.each(Object.entries(shards))('shard %s has no empty values', (_name, dict) => {
+    for (const [locale, table] of Object.entries(dict)) {
+      const empty = Object.entries(table).filter(
+        ([, value]) => typeof value !== 'string' || value.trim().length === 0,
+      )
+      expect(empty, `${locale} has empty values`).toEqual([])
+    }
+  })
+
+  it('aggregates to exactly the union of the shard key sets', () => {
+    const union = Object.values(shards).flatMap((dict) => Object.keys(dict.zh))
+    expect(union.length).toBe(new Set(union).size) // no cross-shard duplicates
+    expect([...union].sort()).toEqual(referenceKeys)
+  })
+})
 
 describe('home-screen locale tables', () => {
   it('includes the expected UI languages', () => {
