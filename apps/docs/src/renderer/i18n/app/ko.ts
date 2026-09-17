@@ -232,6 +232,9 @@ export const ko = {
   // Status bar / word count
   appPageOf: '{current}/{total} 페이지',
   appWordCountTitle: '단어 개수',
+  appZoomIn: '확대',
+  appZoomOut: '축소',
+  appZoomLabel: '확대/축소',
   appWordCountN: '단어 {n}개',
   appStatPages: '페이지 수',
   appStatWords: '단어 수',
@@ -244,6 +247,8 @@ export const ko = {
   // Navigation pane
   appNavTitle: '탐색',
   appNavNoHeadings: '문서에 제목이 없습니다',
+  appNavSearch: '제목 검색',
+  appNavNoMatch: '일치하는 제목이 없습니다',
   // Ruler
   appTabTypeTip: '탭 종류: {type}(클릭하여 전환)',
   appTabStopTitle: '{type} 탭 @ {pos}cm',

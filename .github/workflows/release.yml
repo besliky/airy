@@ -142,3 +142,61 @@ jobs:
           name: airy-windows
           path: apps/shell/release
           if-no-files-found: error
+
+  # macOS installers: same tag/publish flow as the other platforms, unsigned
+  # (no APPLE_* secrets on this repo). build/notarize-dmg.js no-ops without
+  # credentials and electron-builder skips signing when no identity is
+  # present, matching the contributor-build behavior documented in
+  # CONTRIBUTING.md — the dmg/zip carry the same unsigned caveat as the
+  # Windows and Linux artifacts. The sidecar ships as a lipo fat binary
+  # (native:build:universal) because the mac extraResources path is shared
+  # by both arch packages when AIRY_MAC_X64 flips on later.
+  build-macos:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Setup Rust
+        # stable + both Apple targets: the universal sidecar build compiles
+        # x86_64-apple-darwin and aarch64-apple-darwin and lipo-merges them.
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, 2026-07
+        with:
+          toolchain: stable
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
+
+      - name: Cache cargo (xlsx-sidecar)
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: apps/sheets/native/xlsx-engine
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and publish (macos)
+        if: ${{ github.event_name == 'push' || inputs.publish == true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run release:mac
+
+      - name: Build and package (macos, no publish)
+        if: ${{ !(github.event_name == 'push' || inputs.publish == true) }}
+        run: npm run notices && npm run build:all && npm run native:build:universal -w @airy-office/sheets && npm run release:mac -w @airy-office/shell -- --publish never
+
+      - name: Upload artifacts (macos)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: airy-macos
+          path: apps/shell/release
+          if-no-files-found: error

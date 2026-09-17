@@ -9,6 +9,7 @@ import {
   codexAppServerLaunchArgs,
   codexAppServerOutputSchema,
   codexThreadStartParams,
+  isCodexCliCandidatePath,
   parseCodexAppServerTurn,
   resolveCodexCliPath,
   waitForTurn,
@@ -93,6 +94,78 @@ describe('Codex app-server bridge', () => {
           env: {},
         }),
       ).resolves.toBe(join(current, 'codex.exe'))
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('honors a configured existing codex binary outside the managed tree', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'airy-codex-custom-'))
+    try {
+      const custom = join(root, 'codex')
+      await writeFile(custom, '')
+      await expect(resolveCodexCliPath(custom, { platform: 'linux', env: {} })).resolves.toBe(
+        custom,
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('refuses to spawn an arbitrary configured executable', async () => {
+    // /bin/sh exists on POSIX: before the allowlist it was returned and spawned.
+    const resolved = await resolveCodexCliPath('/bin/sh', { platform: 'linux', env: {} }).catch(
+      () => null,
+    )
+    expect(resolved).not.toBe('/bin/sh')
+    const nc = await resolveCodexCliPath('/usr/bin/nc', { platform: 'linux', env: {} }).catch(
+      () => null,
+    )
+    expect(nc).not.toBe('/usr/bin/nc')
+  })
+
+  it('rejects relative and non-codex configured paths regardless of existence', async () => {
+    // Basename alone passes for a bare relative 'codex'; relativity is rejected
+    // by the isAbsolute guard in resolveCodexCliPath, asserted below.
+    expect(isCodexCliCandidatePath('codex', 'linux')).toBe(true)
+    expect(isCodexCliCandidatePath('/opt/evil/notepad.exe', 'linux')).toBe(false)
+    expect(isCodexCliCandidatePath('/opt/evil/codex.sh', 'linux')).toBe(false)
+    expect(isCodexCliCandidatePath('/opt/evil/codex.exe', 'linux')).toBe(false)
+    expect(isCodexCliCandidatePath('/opt/evil/codex.exe', 'win32')).toBe(true)
+    expect(isCodexCliCandidatePath('C:\\tools\\CODEX.EXE', 'win32')).toBe(true)
+    // batch shims are not allowlisted: spawn runs without a shell and modern
+    // Node rejects .cmd/.bat with EINVAL, so they can never execute
+    expect(isCodexCliCandidatePath('C:\\tools\\codex.cmd', 'win32')).toBe(false)
+    expect(isCodexCliCandidatePath('C:\\tools\\codex.bat', 'win32')).toBe(false)
+    expect(isCodexCliCandidatePath('C:\\Windows\\system32\\cmd.exe', 'win32')).toBe(false)
+    expect(isCodexCliCandidatePath('/bin/sh', 'darwin')).toBe(false)
+
+    // A relative configured value must never be returned (spawn would resolve
+    // it against PATH/cwd, letting e.g. plain 'sh' execute).
+    const relative = await resolveCodexCliPath('sh', { platform: 'linux', env: {} }).catch(
+      () => null,
+    )
+    expect(relative).not.toBe('sh')
+  })
+
+  it('accepts only allowlisted win32 executable names when resolving', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'airy-codex-win32-'))
+    try {
+      const good = join(root, 'codex.exe')
+      await writeFile(good, '')
+      await expect(resolveCodexCliPath(good, { platform: 'win32', env: {} })).resolves.toBe(good)
+
+      // Placed outside the managed tree so only the basename allowlist rejects it.
+      const managedRoot = join(root, 'managed')
+      const evil = join(root, 'evil.exe')
+      await mkdir(managedRoot)
+      await writeFile(evil, '')
+      const resolved = await resolveCodexCliPath(evil, {
+        platform: 'win32',
+        managedInstallRoot: managedRoot,
+        env: {},
+      }).catch(() => null)
+      expect(resolved).not.toBe(evil)
     } finally {
       await rm(root, { recursive: true, force: true })
     }

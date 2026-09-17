@@ -20,7 +20,7 @@
 }
 
 .ui-screentip-kbd {
-  margin-left: 6px;
+  margin-inline-start: 6px;
   color: var(--text-tertiary);
 }
 

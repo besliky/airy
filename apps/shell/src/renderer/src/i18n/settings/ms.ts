@@ -1,0 +1,78 @@
+import type { zh } from './zh'
+
+export const ms = {
+  versionLabel: 'Versi',
+  theme: 'Tema',
+  themeLight: 'Cerah',
+  themeDark: 'Gelap',
+  themeSystem: 'Ikut Sistem',
+  setAuthorName: 'Nama penulis',
+  setAuthorNameDesc: 'Digunakan untuk komen dan perubahan dijejak.',
+  setAuthorNamePlaceholder: 'Pengguna',
+  saveLocation: 'Lokasi simpanan',
+  setAutoSave: 'Simpan automatik semua dokumen',
+  setAutoSaveDesc:
+    'Hidupkan Simpan Automatik secara lalai dalam setiap editor. Anda masih boleh mematikannya untuk satu tetingkap.',
+  setRestoreSession: 'Pulihkan sesi sebelumnya',
+  setRestoreSessionDesc: 'Membuka semula fail yang dibuka ketika Airy terakhir ditutup atau ranap.',
+  setLiveBridge: 'Copilot live bridge',
+  setLiveBridgeDesc:
+    'Membenarkan ejen pengekodan (MCP) menyambung ke aplikasi ini untuk membaca dan mengedit dokumen terbuka. Digunakan oleh alat seperti Claude, Cursor atau airy-mcp.',
+  setLiveBridgeEnvDisabled:
+    'Dipaksa dimatikan oleh pemboleh ubah persekitaran AIRY_DISABLE_BRIDGE=1; suis ini tidak memberi kesan sehingga ia dibuang.',
+  setAiFontSize: 'Saiz teks panel AI',
+  aiFontSizeDefault: 'Lalai',
+  aiFontSizeLarge: 'Besar',
+  aiFontSizeXLarge: 'Sangat besar',
+  aiFontSizeCustom: 'Tersuai',
+  setAiSpellcheck: 'Semakan ejaan dalam sembang AI',
+  setAiSpellcheckDesc: 'Gariskan perkataan yang salah ejaan semasa menaip dalam kotak sembang AI.',
+  settings: 'Tetapan',
+  setSecGeneral: 'Umum',
+  setSecAbout: 'Perihal',
+  setSecAiModel: 'Model AI',
+  setAiProvider: 'Penyedia',
+  setAiModelId: 'Model',
+  setAiApiKey: 'Kunci API',
+  setAiKeyHint: 'Disimpan pada peranti ini sahaja.',
+  setAiBaseUrl: 'Base URL',
+  setAiBaseUrlHint: 'Biarkan kosong untuk endpoint rasmi.',
+  setAiNoneHint: 'Tiada penyedia AI dikonfigurasi. Pilih penyedia dan masukkan kunci API.',
+  setAiCodexPath: 'Fail boleh laku Codex',
+  setAiCodexPathHint:
+    'Isi hanya untuk pemasangan tersuai; biarkan kosong untuk pengesanan automatik.',
+  setAiCodexAutoPlaceholder: 'Kesan automatik (disyorkan)',
+  setAiCodexHint:
+    'Menggunakan Codex CLI yang telah log masuk secara setempat; tiada kunci API diperlukan.',
+  setAiByokNote:
+    'Sembang memakai kunci anda sendiri. Penjanaan imej dan analisis media mengikuti bahagian "Media AI"; carian web memakai kunci berasingan atau sumber percuma.',
+  setAiSave: 'Simpan',
+  setAiSaved: 'Disimpan',
+  setAiTest: 'Uji sambungan',
+  setAiTesting: 'Menguji…',
+  setAiTestOk: 'Sambungan berjaya',
+  setAiTestFail: 'Sambungan gagal',
+  setAiMaxTokens: 'Token output maks.',
+  setAiMaxTokensDesc:
+    'Belanjawan output untuk satu pusingan. Model penaakulan menghabiskannya untuk berfikir; jika habis, balasan datang kosong — tingkatkan nilai ini.',
+  setSecAiMedia: 'Media & Carian AI',
+  setAiSearchSerperHint: 'Serper menyediakan carian web dan imej dengan kunci anda.',
+  setAiSearchTavilyHint:
+    'Tavily menyediakan carian web dengan kunci anda; carian imej menggunakan sumber percuma.',
+  setAiCapImage: 'Penjanaan imej',
+  setAiCapAnalysis: 'Analisis imej',
+  setAiCapVideo: 'Analisis video',
+  setAiCapSearch: 'Carian web',
+  setAiSharedKeyHint:
+    'Kunci dan Base URL pembekal dikongsi oleh semua keupayaan; isi sekali sahaja.',
+  setGithub: 'Sumber Terbuka',
+  starPromptTitle: 'Suka Airy?',
+  starPromptTitleN: 'Anda telah membuka {n} dokumen dengan Airy',
+  starPromptBody:
+    'Airy percuma dan sumber terbuka. Bintang di GitHub ialah sokongan terbaik untuk pasukan kami.',
+  starPromptGo: 'Beri Bintang',
+  starPromptDone: 'Sudah',
+  starPromptLater: 'Kemudian',
+  setChange: 'Tukar',
+  language: 'Bahasa',
+} satisfies Record<keyof typeof zh, string>

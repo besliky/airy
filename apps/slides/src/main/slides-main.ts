@@ -22,23 +22,40 @@ import type { WebContents } from 'electron'
 import { execFile } from 'node:child_process'
 import { readFile, writeFile, rm, stat, mkdir, open } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, realpathSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { cleanupExpiredGeneratedPages } from './generated-page-temp'
+import {
+  exportDirInsidePick,
+  exportFileMatchesPick,
+  realPathOrDeepestExisting,
+  resolveExportImagePaths,
+} from './export-targets'
 import { exportSlidesPdf } from './pdf-export'
 import {
+  ALL_OPEN_EXTENSIONS,
+  OPEN_EXTENSION_GROUPS,
   appMenuLabels,
+  configuredAuthorName,
   configuredDefaultSaveDir,
   contextMenuLabels,
   fetchRemoteImage,
+  grantRendererFileAccess,
   installContextMenu,
+  COPILOT_GUIDE_URL,
+  DOCS_README_URL,
   installNavigationGuard,
+  forgetRendererFileAccess,
+  forgetWitnessedDrops,
+  openHelpUrl,
+  rendererMayReadPath,
   safeExternalUrl,
   saveAsSuggestion,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
   toggleDevToolsItem,
+  voidLoad,
 } from '@airy-office/electron-utils'
 import {
   resolveGroupChildId,
@@ -131,6 +148,7 @@ import type {
   SetLinkOp,
   CopyElementsOp,
   DeleteCommentOp,
+  ResolveCommentsOp,
   DeleteElementOp,
   EditBackgroundOp,
   EditFillOp,
@@ -226,6 +244,7 @@ import {
   type Session,
 } from './session-state'
 import { registerAiIpc, registerSlidesOnlyAiIpc } from './ai-ipc'
+import { trackSlidesRenderer, untrackSlidesRenderer, isSlidesRenderer } from './slides-renderers'
 import { listPrivateFontFaces, getPrivateFontData, registerEmbeddedFonts } from './fonts'
 import { listMetafileFonts } from './metafile-fonts'
 import {
@@ -281,6 +300,12 @@ export { registerAiIpc } from './ai-ipc'
 let pendingOpenPath: string | null = null
 /** tab mode: each view queues its own path; the renderer consumes it after mounting */
 const pendingByWc = new Map<number, string>()
+/**
+ * Last picked export destination per webContents (slides:pick-export-dir /
+ * slides:pick-export-pdf-path): the export channels are confined to it, so
+ * a renderer cannot name an arbitrary write target.
+ */
+const exportPicksByWc = new Map<number, { dir?: string; pdfPath?: string }>()
 /**
  * Renderer freeze watchdog: the freeze is sporadic and has never
  * reproduced under instrumentation, so when it does happen, capture the
@@ -354,8 +379,19 @@ async function handleRendererFreeze(wc: WebContents): Promise<void> {
   }
 }
 
+/**
+ * Slides renderers are tracked in slides-renderers.ts (tab views + standalone
+ * windows). The display-media handler below answers for the whole default
+ * session, so every other renderer (docs, sheets, home, …) must be denied:
+ * granting sources[0] unconditionally would hand a live primary-screen
+ * stream to any code that manages to run in one of them. slides:recent uses
+ * the same membership: serving recents re-grants their folders to the asker,
+ * a privilege only slides renderers may claim.
+ */
+
 function trackSlidesWebContents(wc: WebContents): void {
   windowRefs.activeWebContents = wc
+  trackSlidesRenderer(wc.id)
   wc.on('unresponsive', () => void handleRendererFreeze(wc))
   // The AI panel opens links via window.open; route them to the system
   // browser instead of spawning an in-app window with remote content.
@@ -371,10 +407,14 @@ function trackSlidesWebContents(wc: WebContents): void {
     else untitledRecovery.delete(wc.id)
     sessions.delete(wc.id)
     pendingByWc.delete(wc.id)
+    exportPicksByWc.delete(wc.id)
+    forgetWitnessedDrops(wc.id)
+    forgetRendererFileAccess(wc.id)
     lastSlidePaste.delete(wc.id)
     closeSaveWaiters.get(wc.id)?.(false)
     closeSaveWaiters.delete(wc.id)
     autoSavePrefByWc.delete(wc.id)
+    untrackSlidesRenderer(wc.id)
     if (windowRefs.activeWebContents === wc) windowRefs.activeWebContents = null
   })
 }
@@ -413,8 +453,14 @@ function syncAttachedPaths(session: Session, path: string): void {
 
 const RECENT_PATH = () => join(app.getPath('userData'), 'slides-recent.json')
 
-/** Comment author name: system username, falling back to a generic "User" label. */
+/**
+ * Comment author name: the shell-configured author name (Settings → General),
+ * falling back to the system username, then a generic "User" label. Read per
+ * call so a live settings change applies to the next comment without a reopen.
+ */
 function commentAuthorName(): string {
+  const configured = configuredAuthorName(app)
+  if (configured) return configured
   try {
     return userInfo().username || 'User'
   } catch {
@@ -1041,11 +1087,20 @@ export function registerSlidesIpc(): void {
   ipcMain.handle('app:get-language', () => getUiLang())
 
   // Screen recording: source dispatch for the renderer's navigator.mediaDevices.getDisplayMedia.
-  // macOS prefers the system picker (with its permission flow), falling back to the first screen.
+  // Scoped to slides renderers only (slides-renderers registry): the handler
+  // answers for the whole default session, and answering any other renderer
+  // would grant it a live screen stream with no prompt. macOS prefers the
+  // system picker (with its permission flow), falling back to the first screen.
   void app.whenReady().then(() => {
     try {
       electronSession.defaultSession.setDisplayMediaRequestHandler(
-        (_request, callback) => {
+        (request, callback) => {
+          // frame null on torn-down renderers; fromFrame null when unknown
+          const wc = request.frame ? webContents.fromFrame(request.frame) : null
+          if (!wc || !isSlidesRenderer(wc.id)) {
+            callback({})
+            return
+          }
           desktopCapturer
             .getSources({ types: ['screen', 'window'] })
             .then((sources) => {
@@ -1093,11 +1148,17 @@ export function registerSlidesIpc(): void {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
-  ipcMain.handle('slides:font-install-local', async () => {
-    const r = await showOpenDialogWithMemory(dialog, dialogParent(), {
-      properties: ['openFile', 'multiSelections'],
-      filters: [{ name: 'Fonts', extensions: ['ttf', 'otf', 'ttc', 'otc'] }],
-    })
+  ipcMain.handle('slides:font-install-local', async (e) => {
+    const r = await showOpenDialogWithMemory(
+      dialog,
+      dialogParent(),
+      {
+        properties: ['openFile', 'multiSelections'],
+        filters: [{ name: 'Fonts', extensions: ['ttf', 'otf', 'ttc', 'otc'] }],
+      },
+      undefined,
+      e.sender.id,
+    )
     if (r.canceled || !r.filePaths.length) return { families: [] }
     const families = installLocalFontFiles(r.filePaths)
     if (families.length) afterFontsChanged()
@@ -1149,18 +1210,38 @@ export function registerSlidesIpc(): void {
 
   ipcMain.handle('slides:open', async (e, fitWidthPx: number) => {
     const parent = dialogParent()
+    // In the shell, File > Open offers every document type (like Home's
+    // browse); standalone keeps the presentation-only filter.
     const options = {
       properties: ['openFile' as const],
-      filters: [{ name: 'PowerPoint', extensions: ['pptx', 'ppt'] }],
+      filters: slidesOpenPathRouter
+        ? [
+            { name: tm('filterSupported'), extensions: [...ALL_OPEN_EXTENSIONS] },
+            { name: tm('filterWord'), extensions: [...OPEN_EXTENSION_GROUPS.word] },
+            { name: tm('filterExcel'), extensions: [...OPEN_EXTENSION_GROUPS.excel] },
+            { name: tm('filterPpt'), extensions: [...OPEN_EXTENSION_GROUPS.ppt] },
+            { name: tm('filterPdf'), extensions: [...OPEN_EXTENSION_GROUPS.pdf] },
+            { name: tm('filterMarkdown'), extensions: [...OPEN_EXTENSION_GROUPS.markdown] },
+            { name: tm('filterHtml'), extensions: [...OPEN_EXTENSION_GROUPS.html] },
+          ]
+        : [{ name: tm('filterPpt'), extensions: ['pptx', 'ppt'] }],
     }
-    const r = await showOpenDialogWithMemory(dialog, parent, options)
+    const r = await showOpenDialogWithMemory(dialog, parent, options, undefined, e.sender.id)
     if (r.canceled || !r.filePaths[0]) return null
+    // another editor's file: the shell routes it to the right tab
+    if (slidesOpenPathRouter && !/\.(pptx|ppt)$/i.test(r.filePaths[0])) {
+      slidesOpenPathRouter(r.filePaths[0])
+      return null
+    }
     if (await rejectLegacyPpt(r.filePaths[0])) return null
     return openAndBuild(e.sender, r.filePaths[0], fitWidthPx)
   })
 
   ipcMain.handle('slides:open-path', async (e, path: string, fitWidthPx: number) => {
     if (!path || !existsSync(path)) return null
+    // renderer-named path: only granted directories (shell-routed opens,
+    // dialog picks, recents served by slides:recent) may be parsed
+    if (!rendererMayReadPath(e.sender.id, path)) return null
     if (await rejectLegacyPpt(path)) return null
     return openAndBuild(e.sender, path, fitWidthPx)
   })
@@ -2037,16 +2118,22 @@ export function registerSlidesIpc(): void {
     if (op.kind === 'image') {
       let source: { bytes: Uint8Array; ext: string } | { mediaPath: string }
       if (op.pick !== false) {
-        const r = await showOpenDialogWithMemory(dialog, dialogParent(), {
-          title: tm('dlgInsertImage'),
-          properties: ['openFile' as const],
-          filters: [
-            {
-              name: tm('filterImages'),
-              extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff'],
-            },
-          ],
-        })
+        const r = await showOpenDialogWithMemory(
+          dialog,
+          dialogParent(),
+          {
+            title: tm('dlgInsertImage'),
+            properties: ['openFile' as const],
+            filters: [
+              {
+                name: tm('filterImages'),
+                extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff'],
+              },
+            ],
+          },
+          undefined,
+          e.sender.id,
+        )
         if (r.canceled || !r.filePaths[0]) return null
         const bytes = await readFile(r.filePaths[0])
         source = {
@@ -2128,16 +2215,22 @@ export function registerSlidesIpc(): void {
       bytes = new Uint8Array(Buffer.from(op.source.base64, 'base64'))
       ext = op.source.ext.toLowerCase()
     } else {
-      const r = await showOpenDialogWithMemory(dialog, dialogParent(), {
-        title: tm('dlgInsertImage'),
-        properties: ['openFile' as const],
-        filters: [
-          {
-            name: tm('filterImages'),
-            extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff'],
-          },
-        ],
-      })
+      const r = await showOpenDialogWithMemory(
+        dialog,
+        dialogParent(),
+        {
+          title: tm('dlgInsertImage'),
+          properties: ['openFile' as const],
+          filters: [
+            {
+              name: tm('filterImages'),
+              extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff'],
+            },
+          ],
+        },
+        undefined,
+        e.sender.id,
+      )
       if (r.canceled || !r.filePaths[0]) return null
       bytes = new Uint8Array(await readFile(r.filePaths[0]))
       ext = r.filePaths[0].split('.').pop()!.toLowerCase()
@@ -2173,17 +2266,23 @@ export function registerSlidesIpc(): void {
   })
 
   // Replace picture: the renderer swaps the bytes in place through replacePictureBytes
-  ipcMain.handle('slides:pick-picture-file', async () => {
-    const r = await showOpenDialogWithMemory(dialog, dialogParent(), {
-      title: tm('dlgReplacePicture'),
-      properties: ['openFile' as const],
-      filters: [
-        {
-          name: tm('filterImages'),
-          extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff'],
-        },
-      ],
-    })
+  ipcMain.handle('slides:pick-picture-file', async (e) => {
+    const r = await showOpenDialogWithMemory(
+      dialog,
+      dialogParent(),
+      {
+        title: tm('dlgReplacePicture'),
+        properties: ['openFile' as const],
+        filters: [
+          {
+            name: tm('filterImages'),
+            extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff'],
+          },
+        ],
+      },
+      undefined,
+      e.sender.id,
+    )
     if (r.canceled || !r.filePaths[0]) return null
     const filePath = r.filePaths[0]
     return {
@@ -2207,7 +2306,7 @@ export function registerSlidesIpc(): void {
         },
       ],
     }
-    const r = await showOpenDialogWithMemory(dialog, parent, options)
+    const r = await showOpenDialogWithMemory(dialog, parent, options, undefined, e.sender.id)
     if (r.canceled || !r.filePaths[0]) return null
     const filePath = r.filePaths[0]
     const bytes = await readFile(filePath)
@@ -2694,6 +2793,7 @@ export function registerSlidesIpc(): void {
           find: op.find,
           replace: op.replace,
           matchCase: op.matchCase,
+          wholeWord: op.wholeWord,
           firstOnly: op.firstOnly,
           slideIndex: op.slideIndex,
           elementId: op.elementId,
@@ -3355,7 +3455,7 @@ export function registerSlidesIpc(): void {
         properties: ['openFile' as const],
         filters,
       }
-      const r = await showOpenDialogWithMemory(dialog, parent, options)
+      const r = await showOpenDialogWithMemory(dialog, parent, options, undefined, e.sender.id)
       if (r.canceled || !r.filePaths[0]) return null
       const filePath = r.filePaths[0]
       const bytes = await readFile(filePath)
@@ -3518,7 +3618,7 @@ export function registerSlidesIpc(): void {
       properties: ['openFile' as const],
       filters: [{ name: tm('filter3d'), extensions: ['glb', 'gltf'] }],
     }
-    const r = await showOpenDialogWithMemory(dialog, parent, options)
+    const r = await showOpenDialogWithMemory(dialog, parent, options, undefined, e.sender.id)
     if (r.canceled || !r.filePaths[0]) return null
     const filePath = r.filePaths[0]
     const bytes = await readFile(filePath)
@@ -3858,6 +3958,7 @@ export function registerSlidesIpc(): void {
           target: { slide: op.slideIndex },
           author: commentAuthorName(),
           text: op.text,
+          ...(op.parent ? { parent: op.parent } : {}),
         },
       ],
     })
@@ -3870,6 +3971,10 @@ export function registerSlidesIpc(): void {
     const session = sessions.get(e.sender.id)
     const slide = session?.opened.deck.slides[op.slideIndex]
     if (!session || !slide) return null
+    // cascade: deleting a thread head removes its replies too (one undo step)
+    const replies = getSlideComments(session.opened.archive, slide.path)
+      .filter((c) => c.parentId?.authorId === op.authorId && c.parentId.idx === op.idx)
+      .map((c) => ({ authorId: c.authorId, idx: c.idx }))
     const r = sessionTxn(session, {
       ops: [
         {
@@ -3878,7 +3983,32 @@ export function registerSlidesIpc(): void {
           authorId: op.authorId,
           idx: op.idx,
         },
+        ...replies.map((ref) => ({
+          op: 'deleteComment',
+          target: { slide: op.slideIndex },
+          authorId: ref.authorId,
+          idx: ref.idx,
+        })),
       ],
+    })
+    if (!r) return null
+    session.metaDirty = true
+    return getSlideComments(session.opened.archive, slide.path)
+  })
+
+  ipcMain.handle('slides:resolve-comments', (e, op: ResolveCommentsOp) => {
+    const session = sessions.get(e.sender.id)
+    const slide = session?.opened.deck.slides[op.slideIndex]
+    if (!session || !slide || !op.refs?.length) return null
+    // one transaction = one undo step for the whole thread flip
+    const r = sessionTxn(session, {
+      ops: op.refs.map((ref) => ({
+        op: 'resolveComment',
+        target: { slide: op.slideIndex },
+        authorId: ref.authorId,
+        idx: ref.idx,
+        done: op.done,
+      })),
     })
     if (!r) return null
     session.metaDirty = true
@@ -3986,11 +4116,16 @@ export function registerSlidesIpc(): void {
     const session = sessions.get(e.sender.id)
     if (!session) return { ok: false, error: 'no file open' }
     const parent = dialogParent()
-    const options = {
-      defaultPath: saveAsSuggestion(session.path, defaultName),
-      filters: [{ name: 'PowerPoint', extensions: ['pptx'] }],
-    }
-    const r = await showSaveDialogWithMemory(dialog, parent, options, getDraftsDir())
+    const r = await showSaveDialogWithMemory(
+      dialog,
+      parent,
+      {
+        defaultPath: saveAsSuggestion(session.path, defaultName),
+        filters: [{ name: 'PowerPoint', extensions: ['pptx'] }],
+      },
+      getDraftsDir(),
+      e.sender.id,
+    )
     if (r.canceled || !r.filePath) return { ok: false }
     try {
       await savePptxToFile(session.opened, r.filePath)
@@ -4013,28 +4148,54 @@ export function registerSlidesIpc(): void {
 
   // ── Export (PDF / images): the renderer renders hi-res PNGs with offscreen Konva; the main process handles dialogs/writing ──
 
-  ipcMain.handle('slides:pick-export-dir', async () => {
+  ipcMain.handle('slides:pick-export-dir', async (e) => {
     const parent = dialogParent()
     const options = {
       title: tm('dlgPickExportDir'),
       buttonLabel: tm('btnExport'),
       properties: ['openDirectory' as const, 'createDirectory' as const],
     }
-    const r = await showOpenDialogWithMemory(dialog, parent, options)
-    return r.canceled || !r.filePaths[0] ? null : r.filePaths[0]
+    const r = await showOpenDialogWithMemory(dialog, parent, options, undefined, e.sender.id)
+    const picked = r.canceled || !r.filePaths[0] ? null : r.filePaths[0]
+    const picks = exportPicksByWc.get(e.sender.id) ?? {}
+    if (!picked) {
+      // a canceled pick must not leave the previous directory usable —
+      // exporting requires a fresh successful pick
+      delete picks.dir
+      if (picks.pdfPath === undefined) exportPicksByWc.delete(e.sender.id)
+      else exportPicksByWc.set(e.sender.id, picks)
+      return null
+    }
+    try {
+      // store the PHYSICAL directory: a later symlink swap of the picked
+      // folder must not keep containment passing by spelling
+      picks.dir = realpathSync(picked)
+    } catch {
+      return null
+    }
+    exportPicksByWc.set(e.sender.id, picks)
+    return picked
   })
 
   ipcMain.handle(
     'slides:export-images',
-    async (_e, op: ExportImagesOp): Promise<ExportImagesResult> => {
+    async (e, op: ExportImagesOp): Promise<ExportImagesResult> => {
       try {
-        // Zero-padding width follows the total page count (3 digits for ≥100 pages)
-        const pad = op.pngsBase64.length >= 100 ? 3 : 2
-        const paths: string[] = []
-        for (let i = 0; i < op.pngsBase64.length; i++) {
-          const p = join(op.dir, `${op.baseName}-${String(i + 1).padStart(pad, '0')}.png`)
-          await writeFile(p, Buffer.from(op.pngsBase64[i], 'base64'))
-          paths.push(p)
+        const pickedDir = exportPicksByWc.get(e.sender.id)?.dir
+        // the renderer must export into the directory it picked (or a
+        // subdirectory of it) with a single-segment base name; the target is
+        // re-resolved physically so a symlink swapped in after the pick fails
+        if (
+          !pickedDir ||
+          !op.dir ||
+          !exportDirInsidePick(pickedDir, op.dir, (p) => realpathSync(p))
+        ) {
+          return { ok: false, error: tm('errExportDestNotPicked') }
+        }
+        const paths = resolveExportImagePaths(op.dir, op.baseName, op.pngsBase64.length)
+        if (!paths) return { ok: false, error: tm('errExportDestNotPicked') }
+        for (let i = 0; i < paths.length; i++) {
+          await writeFile(paths[i], Buffer.from(op.pngsBase64[i], 'base64'))
         }
         return { ok: true, paths }
       } catch (err) {
@@ -4043,21 +4204,49 @@ export function registerSlidesIpc(): void {
     },
   )
 
-  ipcMain.handle('slides:pick-export-pdf-path', async (_e, defaultName: string) => {
+  ipcMain.handle('slides:pick-export-pdf-path', async (e, defaultName: string) => {
     const parent = dialogParent()
     const options = {
       title: tm('dlgExportPdf'),
       defaultPath: defaultName,
       filters: [{ name: 'PDF', extensions: ['pdf'] }],
     }
-    const r = await showSaveDialogWithMemory(dialog, parent, options, getDraftsDir())
-    return r.canceled || !r.filePath ? null : r.filePath
+    const r = await showSaveDialogWithMemory(dialog, parent, options, getDraftsDir(), e.sender.id)
+    const picked = r.canceled || !r.filePath ? null : r.filePath
+    const picks = exportPicksByWc.get(e.sender.id) ?? {}
+    if (!picked) {
+      // a canceled pick must not keep the previous file usable — exporting
+      // requires a fresh successful pick
+      delete picks.pdfPath
+      if (picks.dir === undefined) exportPicksByWc.delete(e.sender.id)
+      else exportPicksByWc.set(e.sender.id, picks)
+      return null
+    }
+    try {
+      // a fresh target may not exist yet: resolve through its deepest
+      // existing ancestor so the stored value is the physical file location
+      picks.pdfPath = realPathOrDeepestExisting(picked, (p) => realpathSync(p))
+    } catch {
+      return null
+    }
+    exportPicksByWc.set(e.sender.id, picks)
+    return picked
   })
 
-  ipcMain.handle('slides:export-pdf', async (_e, op: ExportPdfOp): Promise<ExportPdfResult> => {
+  ipcMain.handle('slides:export-pdf', async (e, op: ExportPdfOp): Promise<ExportPdfResult> => {
+    // the PDF must land exactly on the file the user picked for this tab,
+    // physically re-resolved (a symlink swap after the pick must not pass)
+    const pickedFile = exportPicksByWc.get(e.sender.id)?.pdfPath
+    if (!pickedFile || !exportFileMatchesPick(pickedFile, op.filePath, (p) => realpathSync(p))) {
+      return { ok: false, error: tm('errExportDestNotPicked') }
+    }
     return exportSlidesPdf({
       ...op,
-      createWindow: () => new BrowserWindow({ show: false, webPreferences: { sandbox: true } }),
+      createWindow: () =>
+        new BrowserWindow({
+          show: false,
+          webPreferences: { sandbox: true, javascript: false },
+        }),
       openExportedPdf,
     })
   })
@@ -4087,14 +4276,13 @@ export function registerSlidesIpc(): void {
               skipTaskbar: true,
             }
           : {}),
-        webPreferences: { sandbox: true },
+        webPreferences: { sandbox: true, javascript: false },
       })
       try {
         await win.loadURL('data:text/html;base64,' + Buffer.from(html, 'utf8').toString('base64'))
-        await win.webContents.executeJavaScript(
-          'Promise.all([document.fonts.ready, ...Array.from(document.images).map((i) => i.decode().catch(() => {}))])',
-          true,
-        )
+        // The window is scripting-disabled (javascript: false, like sheets'
+        // print flow): the load promise resolves at onload with every
+        // data:-URL image loaded, and print rasterizes the decoded result.
         // Chromium attaches the native Windows print dialog to the window being printed.
         // If that owner is hidden, the dialog is hidden too and the layout buttons appear inert.
         if (process.platform === 'win32') {
@@ -4122,7 +4310,18 @@ export function registerSlidesIpc(): void {
     },
   )
 
-  ipcMain.handle('slides:recent', () => readRecent())
+  ipcMain.handle('slides:recent', async (e) => {
+    // recents are the user's own decks: serving them also (re)grants their
+    // folders to the asking renderer so slides:open-path works for last
+    // session's files. The grant makes the channel privileged — any
+    // webContents in this shared process could otherwise enumerate recents
+    // and self-grant their folders — so only slides renderers may ask
+    // (same membership as the display-media handler)
+    if (!isSlidesRenderer(e.sender.id)) throw new Error('Untrusted IPC sender.')
+    const recent = await readRecent()
+    for (const p of recent) grantRendererFileAccess(p, e.sender.id)
+    return recent
+  })
 
   // ── Show fullscreen: macOS native fullscreen is an animated Space transition, so
   // the slideshow would render windowed for ~1s mid-flight. Instead one call covers
@@ -4268,6 +4467,8 @@ export function createSlidesWindow(openPath?: string | null): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 840,
+    minWidth: 720,
+    minHeight: 550,
     title: 'Airy Slides',
     ...(process.platform === 'darwin'
       ? { titleBarStyle: 'hiddenInset' as const }
@@ -4305,8 +4506,11 @@ export function createSlidesWindow(openPath?: string | null): BrowserWindow {
     })
   })
 
-  if (runtime.rendererDevUrl) win.loadURL(runtime.rendererDevUrl)
-  else if (runtime.rendererFilePath) win.loadFile(runtime.rendererFilePath)
+  if (runtime.rendererDevUrl) {
+    voidLoad(win.loadURL(runtime.rendererDevUrl), 'slides standalone renderer')
+  } else if (runtime.rendererFilePath) {
+    voidLoad(win.loadFile(runtime.rendererFilePath), 'slides standalone renderer')
+  }
 
   if (openPath) {
     win.setTitle(basename(openPath))
@@ -4359,9 +4563,12 @@ export function createSlidesView(openPath?: string | null): WebContentsView {
     // append via URL so a dev URL that already carries query params stays valid
     const devUrl = new URL(runtime.rendererDevUrl)
     devUrl.searchParams.set('mode', 'tab')
-    void view.webContents.loadURL(devUrl.toString())
+    voidLoad(view.webContents.loadURL(devUrl.toString()), 'slides tab renderer')
   } else if (runtime.rendererFilePath)
-    void view.webContents.loadFile(runtime.rendererFilePath, { query: { mode: 'tab' } })
+    voidLoad(
+      view.webContents.loadFile(runtime.rendererFilePath, { query: { mode: 'tab' } }),
+      'slides tab renderer',
+    )
   return view
 }
 
@@ -4371,10 +4578,27 @@ export function setSlidesExtraFileMenuItems(items: Electron.MenuItemConstructorO
   extraFileMenuItems = items
 }
 
+/** shell-injected File-menu head items (the suite's New submenu) — Office
+ *  convention puts New before Open */
+let fileMenuHeadItems: Electron.MenuItemConstructorOptions[] = []
+export function setSlidesFileMenuHeadItems(items: Electron.MenuItemConstructorOptions[]): void {
+  fileMenuHeadItems = items
+}
+
 /** Tab mode: Cmd+W closes the current tab rather than the whole shell window */
 let closeActiveTabHook: (() => void) | null = null
 export function setSlidesCloseTabHook(fn: (() => void) | null): void {
   closeActiveTabHook = fn
+}
+
+/**
+ * Shell-mode File > Open routing: when the suite-wide open dialog (all
+ * document types) picks a non-presentation file, hand it to the shell's
+ * extension router instead of failing to parse it here. Null in standalone.
+ */
+let slidesOpenPathRouter: ((path: string) => boolean) | null = null
+export function setSlidesOpenPathRouter(fn: ((path: string) => boolean) | null): void {
+  slidesOpenPathRouter = fn
 }
 
 export function buildSlidesMenu(): Menu {
@@ -4390,6 +4614,10 @@ export function buildSlidesMenu(): Menu {
     {
       label: tm('menuFile'),
       submenu: [
+        // the suite's New submenu stays before Open (Office convention)
+        ...(fileMenuHeadItems.length > 0
+          ? [...fileMenuHeadItems, { type: 'separator' as const }]
+          : []),
         { label: tm('menuOpen'), accelerator: 'CmdOrCtrl+O', click: () => send('open') },
         {
           // Detached second editor window on the same saved file: it attaches to
@@ -4414,15 +4642,19 @@ export function buildSlidesMenu(): Menu {
         { label: tm('menuExportImages'), click: () => send('export-images') },
         { label: tm('menuPrint'), accelerator: 'CmdOrCtrl+P', click: () => send('print') },
         { type: 'separator' },
+        // Ctrl/Cmd+W closes the active tab everywhere (shell tab mode) or the
+        // window (standalone); Ctrl/Cmd+Q quits the whole app on Windows/Linux
+        // (macOS gets it from the app menu)
         closeActiveTabHook
           ? {
-              label: isMac ? tm('menuClose') : tm('menuQuit'),
-              accelerator: isMac ? 'CmdOrCtrl+W' : 'CmdOrCtrl+Q',
+              label: tm('menuClose'),
+              accelerator: 'CmdOrCtrl+W',
               click: () => closeActiveTabHook?.(),
             }
           : isMac
             ? { role: 'close' as const, label: tm('menuClose') }
             : { role: 'quit' as const, label: tm('menuQuit') },
+        ...(closeActiveTabHook && !isMac ? [{ role: 'quit' as const, label: tm('menuQuit') }] : []),
       ],
     },
     {
@@ -4451,6 +4683,20 @@ export function buildSlidesMenu(): Menu {
         },
         { type: 'separator' },
         toggleDevToolsItem(labels),
+      ],
+    },
+    {
+      role: 'help',
+      label: tm('menuHelp'),
+      submenu: [
+        {
+          label: tm('menuShortcuts'),
+          accelerator: 'CmdOrCtrl+/',
+          click: () => send('shortcuts'),
+        },
+        { type: 'separator' },
+        { label: tm('menuOnlineDocs'), click: () => void openHelpUrl(DOCS_README_URL) },
+        { label: tm('menuCopilotGuide'), click: () => void openHelpUrl(COPILOT_GUIDE_URL) },
       ],
     },
   ]

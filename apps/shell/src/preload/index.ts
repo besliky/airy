@@ -16,7 +16,6 @@ import type {
   RenameResult,
   ProjectHomeApi,
   ProjectSummaryEntry,
-  TimelineEntryItem,
   UiLanguage,
 } from '../shared/home-api'
 import { HOME_CHANNELS, PROJECT_CHANNELS } from '../shared/home-api'
@@ -162,6 +161,32 @@ const homeApi: HomeApi = {
     if (typeof on !== 'boolean') throw new Error('Invalid AutoSave default.')
     await ipcRenderer.invoke(HOME_CHANNELS.setAutoSaveDefault, on)
   },
+  async getLiveBridgeEnabled() {
+    return (await ipcRenderer.invoke(HOME_CHANNELS.getLiveBridgeEnabled)) === true
+  },
+  async setLiveBridgeEnabled(on) {
+    if (typeof on !== 'boolean') throw new Error('Invalid live bridge flag.')
+    return (await ipcRenderer.invoke(HOME_CHANNELS.setLiveBridgeEnabled, on)) === true
+  },
+  async getLiveBridgeEnvDisabled() {
+    return (await ipcRenderer.invoke(HOME_CHANNELS.getLiveBridgeEnvDisabled)) === true
+  },
+  async getRestoreSession() {
+    return (await ipcRenderer.invoke(HOME_CHANNELS.getRestoreSession)) === true
+  },
+  async setRestoreSession(on) {
+    if (typeof on !== 'boolean') throw new Error('Invalid session restore flag.')
+    await ipcRenderer.invoke(HOME_CHANNELS.setRestoreSession, on)
+  },
+  async getAuthorName() {
+    const result: unknown = await ipcRenderer.invoke(HOME_CHANNELS.getAuthorName)
+    return typeof result === 'string' ? result : ''
+  },
+  async setAuthorName(name) {
+    if (typeof name !== 'string') throw new Error('Invalid author name.')
+    const result: unknown = await ipcRenderer.invoke(HOME_CHANNELS.setAuthorName, name)
+    return typeof result === 'string' ? result : ''
+  },
   async getAiPanelPrefs() {
     return normalizeAiPanelPrefs(await ipcRenderer.invoke(HOME_CHANNELS.getAiPanelPrefs))
   },
@@ -289,13 +314,6 @@ const projectApi: ProjectHomeApi = {
   async moveFile(filePath, projectId) {
     await ipcRenderer.invoke(PROJECT_CHANNELS.moveFile, { filePath, projectId })
   },
-  async getTimeline(projectId, limit) {
-    const result: unknown = await ipcRenderer.invoke(PROJECT_CHANNELS.timeline, {
-      projectId,
-      limit,
-    })
-    return Array.isArray(result) ? (result as TimelineEntryItem[]) : []
-  },
 }
 
 contextBridge.exposeInMainWorld('aiOfficeProject', projectApi)
@@ -317,6 +335,9 @@ const tabsApi: TabsApi = {
   async showNewMenu(x, y) {
     await ipcRenderer.invoke(TABS_CHANNELS.showNewMenu, x, y)
   },
+  async showTabMenu(x, y, tabId) {
+    await ipcRenderer.invoke(TABS_CHANNELS.showTabMenu, x, y, tabId)
+  },
   async reorder(id, toIndex) {
     await ipcRenderer.invoke(TABS_CHANNELS.reorder, id, toIndex)
   },
@@ -336,6 +357,15 @@ const tabsApi: TabsApi = {
 }
 
 contextBridge.exposeInMainWorld('aiOfficeTabs', tabsApi)
+
+// The crashed-Home error page (a data: URL the main process loads when the
+// Home renderer dies) cannot reach any other API surface — this one channel
+// is its Reload button.
+contextBridge.exposeInMainWorld('airyHomeCrash', {
+  reload: (): void => {
+    ipcRenderer.send(HOME_CHANNELS.crashReload)
+  },
+})
 
 // open documents dragged from the OS anywhere over Home or the tab strip
 installDropOpenBridge()

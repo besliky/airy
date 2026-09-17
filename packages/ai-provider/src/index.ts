@@ -54,6 +54,20 @@ export {
   resolveAiSearchSettings,
 } from './search-settings'
 export {
+  ENCRYPTED_SECRET_PREFIX,
+  MASKED_SECRET_PLACEHOLDER,
+  decryptStoredAiSettings,
+  encryptStoredAiSettings,
+  isEncryptedSecret,
+  isMaskedSecret,
+  maskAiSettingsSecrets,
+  maskSecret,
+  overlayAiSettingsSecrets,
+  overlaySecret,
+  setAiSecretDecrypter,
+} from './settings-secrets'
+export type { SecretDecrypter, SecretEncrypter } from './settings-secrets'
+export {
   analyzeMediaWithProvider,
   generateImageWithProvider,
   sniffImageMime,

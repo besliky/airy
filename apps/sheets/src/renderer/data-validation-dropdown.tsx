@@ -1,6 +1,8 @@
 import type { PointerEvent as ReactPointerEvent } from 'react'
 
 import type { UniverRuntime, UniverWorksheet } from './univer-state'
+// module-level t: Univer mounts this chrome in its own React root, outside the app's I18n context
+import { t } from './i18n/locale'
 
 const DROPDOWN_COMPONENT_KEY = 'airy-active-data-validation-dropdown'
 const INPUT_MESSAGE_COMPONENT_KEY = 'airy-active-data-validation-input-message'
@@ -140,7 +142,7 @@ function DataValidationDropdownButton({
     <button
       type="button"
       className="data-validation-dropdown-button"
-      aria-label="Open dropdown"
+      aria-label={t('appOpenDropdown')}
       tabIndex={-1}
       onPointerDown={(event) => openActiveDataValidationDropdown(runtime, event)}
     >

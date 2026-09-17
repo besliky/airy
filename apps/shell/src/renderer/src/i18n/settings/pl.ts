@@ -1,0 +1,78 @@
+import type { zh } from './zh'
+
+export const pl = {
+  versionLabel: 'Wersja',
+  theme: 'Motyw',
+  themeLight: 'Jasny',
+  themeDark: 'Ciemny',
+  themeSystem: 'Zgodnie z systemem',
+  setAuthorName: 'Nazwa autora',
+  setAuthorNameDesc: 'Używana w komentarzach i śledzonych zmianach.',
+  setAuthorNamePlaceholder: 'Użytkownik',
+  saveLocation: 'Lokalizacja zapisu',
+  setAutoSave: 'Automatycznie zapisuj wszystkie dokumenty',
+  setAutoSaveDesc:
+    'Włącza autozapis domyślnie w każdym edytorze. Nadal możesz go wyłączyć dla pojedynczego okna.',
+  setRestoreSession: 'Przywróć poprzednią sesję',
+  setRestoreSessionDesc:
+    'Przy uruchomieniu ponownie otwiera pliki otwarte podczas ostatniego zamknięcia lub awarii.',
+  setLiveBridge: 'Mostek Copilot na żywo',
+  setLiveBridgeDesc:
+    'Pozwala agentom kodowania (MCP) łączyć się z tą aplikacją, aby czytać i edytować otwarte dokumenty. Używane przez narzędzia takie jak Claude, Cursor czy airy-mcp.',
+  setLiveBridgeEnvDisabled:
+    'Wymuszone wyłączenie zmienną środowiskową AIRY_DISABLE_BRIDGE=1; ten przełącznik nie działa, dopóki nie zostanie usunięta.',
+  setAiFontSize: 'Rozmiar tekstu panelu AI',
+  aiFontSizeDefault: 'Domyślny',
+  aiFontSizeLarge: 'Duży',
+  aiFontSizeXLarge: 'Bardzo duży',
+  aiFontSizeCustom: 'Niestandardowy',
+  setAiSpellcheck: 'Sprawdzanie pisowni w czacie AI',
+  setAiSpellcheckDesc: 'Podkreśla błędnie napisane słowa podczas pisania w polu czatu AI.',
+  settings: 'Ustawienia',
+  setSecGeneral: 'Ogólne',
+  setSecAbout: 'O aplikacji',
+  setSecAiModel: 'Model AI',
+  setAiProvider: 'Dostawca',
+  setAiModelId: 'Model',
+  setAiApiKey: 'Klucz API',
+  setAiKeyHint: 'Przechowywany tylko na tym urządzeniu.',
+  setAiBaseUrl: 'Base URL',
+  setAiBaseUrlHint: 'Pozostaw puste, aby użyć oficjalnego punktu końcowego.',
+  setAiNoneHint: 'Nie skonfigurowano dostawcy AI. Wybierz dostawcę i wpisz jego klucz API.',
+  setAiCodexPath: 'Plik wykonywalny Codex',
+  setAiCodexPathHint:
+    'Ustaw tylko dla instalacji niestandardowej; pozostaw puste, aby wykryć automatycznie.',
+  setAiCodexAutoPlaceholder: 'Wykryj automatycznie (zalecane)',
+  setAiCodexHint: 'Używa lokalnie zalogowanego Codex CLI; klucz API nie jest potrzebny.',
+  setAiByokNote:
+    'Czaty używają własnego klucza. Generowanie obrazów i analiza mediów zgodnie z sekcją „Media AI”; wyszukiwanie w sieci używa własnych kluczy lub darmowych źródeł.',
+  setAiSave: 'Zapisz',
+  setAiSaved: 'Zapisano',
+  setAiTest: 'Testuj połączenie',
+  setAiTesting: 'Testowanie…',
+  setAiTestOk: 'Połączenie działa',
+  setAiTestFail: 'Połączenie nie powiodło się',
+  setAiMaxTokens: 'Maks. tokeny wyjścia',
+  setAiMaxTokensDesc:
+    'Budżet wyjścia na jedną turę. Modele rozumowania zużywają go na myślenie; gdy się wyczerpie, odpowiedź przychodzi pusta — zwiększ tę wartość.',
+  setSecAiMedia: 'Media i wyszukiwanie AI',
+  setAiSearchSerperHint: 'Serper zapewnia wyszukiwanie w sieci i obrazów z Twoim kluczem.',
+  setAiSearchTavilyHint:
+    'Tavily zapewnia wyszukiwanie w sieci z Twoim kluczem; wyszukiwanie obrazów używa darmowych źródeł.',
+  setAiCapImage: 'Generowanie obrazów',
+  setAiCapAnalysis: 'Analiza obrazów',
+  setAiCapVideo: 'Analiza wideo',
+  setAiCapSearch: 'Wyszukiwanie w sieci',
+  setAiSharedKeyHint:
+    'Klucz i bazowy URL dostawcy są wspólne dla wszystkich funkcji; wpisz je raz.',
+  setGithub: 'Open source',
+  starPromptTitle: 'Podoba Ci się Airy?',
+  starPromptTitleN: 'Otwarto już {n} dokumentów w Airy',
+  starPromptBody:
+    'Airy jest darmowy i open source. Gwiazdka na GitHubie to najlepsze wsparcie dla zespołu.',
+  starPromptGo: 'Daj gwiazdkę',
+  starPromptDone: 'Już zrobione',
+  starPromptLater: 'Później',
+  setChange: 'Zmień',
+  language: 'Język',
+} satisfies Record<keyof typeof zh, string>

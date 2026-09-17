@@ -210,6 +210,71 @@ describe('setFont google-parity fields', () => {
     ).toBe(false)
   })
 
+  it('keeps allowed link schemes and trims the url', () => {
+    for (const url of [
+      'https://example.com/a?b=1',
+      'http://example.com',
+      'mailto:user@example.com',
+      '#section-2',
+      'docs/page.html',
+      '  https://example.com/padded  ',
+    ]) {
+      const editor = createEditor([para([text('link text')])])
+      const outcome = executeOps(editor, [
+        { op: 'setFont', target: { nodeType: 'docParagraph' }, link: { url } },
+      ])
+      expect(outcome.ok).toBe(true)
+      expect(outcome.results[0].droppedLinks).toBeUndefined()
+      const child = editor.state.doc.child(0).child(0)
+      expect(child.marks.find((m) => m.type.name === 'link')?.attrs.href).toBe(url.trim())
+    }
+  })
+
+  it('drops disallowed link schemes but keeps the other font changes', () => {
+    for (const url of [
+      'javascript:alert(1)',
+      'JAVASCRIPT:alert(1)',
+      'file:///etc/passwd',
+      'data:text/html,<script>1</script>',
+      'vbscript:msgbox',
+    ]) {
+      const editor = createEditor([para([text('plain text')])])
+      const outcome = executeOps(editor, [
+        {
+          op: 'setFont',
+          target: { nodeType: 'docParagraph' },
+          bold: true,
+          link: { url },
+        },
+      ])
+      expect(outcome.ok).toBe(true)
+      expect(outcome.results[0].droppedLinks).toBe(1)
+      const child = editor.state.doc.child(0).child(0)
+      // no link mark persisted, the run keeps the other styling
+      expect(child.marks.some((m) => m.type.name === 'link')).toBe(false)
+      expect(child.marks.some((m) => m.type.name === 'bold')).toBe(true)
+    }
+  })
+
+  it('setMatchedFont drops a disallowed link scheme and reports it', () => {
+    const editor = createEditor([para([text('one two one')])])
+    const outcome = executeOps(editor, [
+      {
+        op: 'setMatchedFont',
+        text: 'one',
+        link: { url: 'javascript:alert(1)' },
+        italic: true,
+      },
+    ])
+    expect(outcome.ok).toBe(true)
+    expect(outcome.results[0].droppedLinks).toBe(2)
+    editor.state.doc.child(0).forEach((child) => {
+      if (!child.isText || child.text !== 'one') return
+      expect(child.marks.some((m) => m.type.name === 'link')).toBe(false)
+      expect(child.marks.some((m) => m.type.name === 'italic')).toBe(true)
+    })
+  })
+
   it('rejects a bad baselineOffset value', () => {
     const editor = createEditor([para([text('x')])])
     const outcome = executeOps(editor, [

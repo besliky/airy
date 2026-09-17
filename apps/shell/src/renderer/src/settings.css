@@ -89,7 +89,7 @@
   font-weight: 400;
   color: var(--text-primary);
   cursor: pointer;
-  text-align: left;
+  text-align: start;
 }
 
 .set-nav-item svg {
@@ -182,7 +182,7 @@
 .set-field-value {
   font-size: 14px;
   color: var(--text-secondary);
-  text-align: right;
+  text-align: end;
   user-select: text;
   word-break: break-all;
 }
@@ -331,7 +331,7 @@
   display: inline-flex;
   width: 16px;
   height: 16px;
-  margin-right: 8px;
+  margin-inline-end: 8px;
   color: var(--text-primary);
 }
 
@@ -416,7 +416,7 @@
 .set-num-input {
   width: 64px;
   min-width: 0;
-  text-align: right;
+  text-align: end;
 }
 
 .set-input:focus {
@@ -439,7 +439,7 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
-  margin-right: auto; /* status hugs the left edge, action buttons stay right */
+  margin-inline-end: auto; /* status hugs the start edge, action buttons stay at the end */
   padding: 4px 10px 4px 8px;
   border: 1px solid var(--border-subtle);
   border-radius: 999px;

@@ -37,6 +37,17 @@ const api: DesktopApi = {
     ipcRenderer.on('app:auto-save-default-changed', listener)
     return () => ipcRenderer.removeListener('app:auto-save-default-changed', listener)
   },
+  getAuthorName: async () => {
+    const result: unknown = await ipcRenderer.invoke('app:get-author-name')
+    return typeof result === 'string' ? result : ''
+  },
+  onAuthorNameChanged: (handler) => {
+    const listener = (_event: IpcRendererEvent, name: unknown) => {
+      if (typeof name === 'string') handler(name)
+    }
+    ipcRenderer.on('app:author-name-changed', listener)
+    return () => ipcRenderer.removeListener('app:author-name-changed', listener)
+  },
   getAiPanelPrefs: () => ipcRenderer.invoke('app:get-ai-panel-prefs'),
   onAiPanelPrefsChanged: (handler) => {
     const listener = (_event: IpcRendererEvent, prefs: AiPanelPrefs) => handler(prefs)
@@ -181,7 +192,8 @@ const api: DesktopApi = {
       requestId: number,
       method: string,
       params: unknown,
-    ) => handler(requestId, method, params)
+      clientId?: string,
+    ) => handler(requestId, method, params, clientId)
     ipcRenderer.on(BRIDGE_INVOKE_CHANNEL, listener)
     return () => ipcRenderer.removeListener(BRIDGE_INVOKE_CHANNEL, listener)
   },
@@ -200,7 +212,6 @@ const projectApi: ProjectApi = {
   renameProject: (args) => ipcRenderer.invoke('project:rename', args),
   deleteProject: (args) => ipcRenderer.invoke('project:delete', args),
   moveFile: (args) => ipcRenderer.invoke('project:moveFile', args),
-  getTimeline: (args) => ipcRenderer.invoke('project:timeline', args),
 }
 
 contextBridge.exposeInMainWorld('desktop', api)

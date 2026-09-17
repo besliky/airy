@@ -1,15 +1,44 @@
 // Unit tests for the headless docx session: parse model, read formats,
 // insert_content, apply_ops semantics (validation-forward, atomicity),
 // byte-preservation, mtime fencing and path confinement.
-import { mkdtemp, readFile, writeFile, rm, mkdir } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile, rm, mkdir, stat } from 'node:fs/promises'
+import { readdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import JSZip from 'jszip'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { DocxSession, FencingError } from '../src/docx/session.js'
-import { resolveConfined } from '../src/docx/paths.js'
+// the EPERM-fallback tests steer `link` through this vi.fn (pass-through to
+// the real fs/promises link by default, like the sheets promote tests do for
+// copyFile)
+const { linkMock, actualLink, captureActual } = vi.hoisted(() => {
+  let actual: ((...args: never[]) => Promise<void>) | undefined
+  const passthrough = ((...args: never[]) => actual!(...args)) as (
+    ...args: never[]
+  ) => Promise<void>
+  return {
+    linkMock: vi.fn(passthrough),
+    captureActual: (fn: (...args: never[]) => Promise<void>) => {
+      actual = fn
+    },
+    actualLink: passthrough,
+  }
+})
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  captureActual((...args: Parameters<typeof actual.link>) => actual.link(...args) as Promise<void>)
+  return { ...actual, link: linkMock }
+})
+
+import {
+  assertSaveTargetFree,
+  DocxSession,
+  FencingError,
+  promoteNewFileExclusively,
+} from '../src/docx/session.js'
+import { resolveConfined, WORKSPACE_ROOT_ENV } from '../src/docx/paths.js'
+import type { Target } from '../src/docx/ops.js'
 import { parseRestrictedHtml, blocksToHtml } from '../src/docx/html.js'
 import { buildFixtureDocx } from './helpers/docx-fixture.js'
 
@@ -117,6 +146,30 @@ describe('restricted HTML parsing', () => {
       { type: 'paragraph', runs: [{ text: 'kept' }] },
     ])
   })
+
+  it('drops disallowed link schemes and keeps allowed ones (renderer href policy)', () => {
+    const blocks = parseRestrictedHtml(
+      '<p><a href="javascript:alert(1)">js</a> <a href="file:///etc/passwd">file</a> ' +
+        '<a href="data:text/html,hi">data</a> <a href=" https://example.com/a ">https</a> ' +
+        '<a href="mailto:a@b.c">mail</a> <a href="#frag">frag</a> ' +
+        '<a href="docs/next.md">rel</a></p>',
+    )
+    const runs = (blocks[0] as unknown as { runs: Array<Record<string, unknown>> }).runs
+    const links = runs
+      .map((r) => (r.link as { href?: string } | undefined)?.href)
+      .filter((h): h is string => h !== undefined)
+    // disallowed schemes leave no link at all — their text survives as plain runs
+    expect(links).not.toContain('javascript:alert(1)')
+    expect(links).not.toContain('file:///etc/passwd')
+    expect(links).not.toContain('data:text/html,hi')
+    expect(runs.map((r) => r.text).join('')).toContain('js')
+    expect(runs.map((r) => r.text).join('')).toContain('data')
+    // allowed schemes survive, with surrounding whitespace trimmed
+    expect(links).toContain('https://example.com/a')
+    expect(links).toContain('mailto:a@b.c')
+    expect(links).toContain('#frag')
+    expect(links).toContain('docs/next.md')
+  })
 })
 
 describe('insert_content', () => {
@@ -144,6 +197,30 @@ describe('insert_content', () => {
     const session = await openSession()
     expect(() => session.insertContent('   ', 0)).toThrow(/did not parse/)
   })
+
+  it('writes no external rel for dropped-scheme anchors; allowed hrefs persist', async () => {
+    const session = await openSession()
+    session.insertContent(
+      '<p><a href="javascript:alert(1)">js</a> <a href="file:///etc/passwd">file</a> ' +
+        '<a href="data:text/html,hi">data</a> <a href="https://example.com/ok">ok</a></p>',
+      0,
+    )
+    await session.save()
+    const zip = await JSZip.loadAsync(new Uint8Array(await readFile(docPath)))
+    const rels = await zip.file('word/_rels/document.xml.rels')!.async('string')
+    // the engine writes every link run as an external rel target: the dropped
+    // schemes must not appear there, the allowed https href must
+    expect(rels).not.toContain('javascript:')
+    expect(rels).not.toContain('file:')
+    expect(rels).not.toContain('data:')
+    expect(rels).toContain('https://example.com/ok')
+    // degraded anchors still carry their text; only the allowed link reads back
+    // as an anchor (at: 0 inserts after block 0, so the new block is index 1)
+    const inserted = session.readDocument({ blocks: [1] })
+    expect(inserted).toContain('js')
+    expect(inserted).toContain('<a href="https://example.com/ok">ok</a>')
+    expect(inserted).not.toContain('javascript:')
+  })
 })
 
 describe('apply_ops', () => {
@@ -164,6 +241,44 @@ describe('apply_ops', () => {
     const session = await openSession()
     expect(() => session.applyOps([{ op: 'nope' }])).toThrow(/unknown op/)
     expect(() => session.applyOps([])).toThrow(/non-empty/)
+  })
+
+  it('accepts both nodeType vocabularies with identical matching', async () => {
+    // the renderer spellings (docHeading/docParagraph/docListItem) are
+    // aliases of the headless canonical names, not separate block kinds: the
+    // same batch in either vocabulary must produce the same document
+    const canonical = await openSession()
+    const aliased = await openSession()
+    const canonicalOut = canonical.applyOps([
+      { op: 'setFont', target: { nodeType: 'paragraph' }, bold: true },
+      { op: 'setFont', target: { nodeType: 'heading' }, underline: true },
+      { op: 'clearList', target: { nodeType: 'listItem' } },
+    ])
+    const aliasOut = aliased.applyOps([
+      { op: 'setFont', target: { nodeType: 'docParagraph' }, bold: true },
+      { op: 'setFont', target: { nodeType: 'docHeading' }, underline: true },
+      { op: 'clearList', target: { nodeType: 'docListItem' } },
+    ])
+    expect(aliasOut.results.map((r) => r.matched)).toEqual(
+      canonicalOut.results.map((r) => r.matched),
+    )
+    expect(aliasOut.results.map((r) => r.changed)).toEqual(
+      canonicalOut.results.map((r) => r.changed),
+    )
+    // fixture: 2 paragraphs, 1 heading, 3 list items (2 bullets + 1 numbered)
+    expect(canonicalOut.results.map((r) => r.matched)).toEqual([2, 1, 3])
+    expect(aliased.readDocument()).toBe(canonical.readDocument())
+  })
+
+  it('unknown nodeType errors list the accepted spellings', async () => {
+    const session = await openSession()
+    // the wire accepts arbitrary strings; the validator must reject and explain
+    const bogus = 'docImage' as unknown as Target['nodeType']
+    expect(() =>
+      session.applyOps([{ op: 'setFont', target: { nodeType: bogus }, bold: true }]),
+    ).toThrow(
+      /unknown nodeType "docImage".*heading\|docHeading.*paragraph\|docParagraph.*listItem\|docListItem.*image/,
+    )
   })
 
   it('findReplace rewrites text inside runs', async () => {
@@ -302,6 +417,26 @@ describe('save: byte preservation and fencing', () => {
     expect(Buffer.compare(await readFile(docPath), await buildFixtureDocx())).toBe(0)
   })
 
+  it('refuses save-as over an existing unrelated file unless overwrite is set', async () => {
+    const session = await openSession()
+    session.insertContent('<p>edit</p>', 0)
+    const other = join(root, 'other.docx')
+    await writeFile(other, "someone else's document")
+    await expect(session.save(other)).rejects.toThrow(/already exists/)
+    await expect(session.save(other)).rejects.toThrow(/overwrite: true/)
+    // the refusal left the existing file untouched
+    expect(await readFile(other, 'utf8')).toBe("someone else's document")
+    // explicit consent replaces it
+    await expect(session.save(other, 'docx', { overwrite: true })).resolves.toMatchObject({
+      path: other,
+    })
+    expect(await readFile(other, 'utf8')).not.toBe("someone else's document")
+    // the session's own opened file still saves without overwrite (fencing path)
+    await expect(session.save(docPath)).resolves.toMatchObject({ path: docPath })
+    // repeat save-as onto the session's own last output keeps working
+    await expect(session.save(other)).resolves.toMatchObject({ path: other })
+  })
+
   it('refuses to save when the file changed on disk since open', async () => {
     const session = await openSession()
     session.insertContent('<p>edit</p>', 0)
@@ -324,6 +459,101 @@ describe('save: byte preservation and fencing', () => {
   })
 })
 
+describe('assertSaveTargetFree (clobber guard)', () => {
+  it('guards a converted session sibling like an explicit save-as', async () => {
+    const sibling = join(root, 'legacy.docx')
+    await writeFile(sibling, "someone else's document")
+    // a converted session owns its temp .docx and the .doc origin, never the sibling
+    const owned = [join(root, 'temp-converted.docx'), join(root, 'legacy.doc')]
+    // default save onto the pre-existing sibling: refused, file untouched
+    await expect(assertSaveTargetFree(sibling, owned, undefined)).rejects.toThrow(/already exists/)
+    await expect(assertSaveTargetFree(sibling, owned, undefined)).rejects.toThrow(/overwrite: true/)
+    expect(await readFile(sibling, 'utf8')).toBe("someone else's document")
+    // explicit consent replaces it
+    await expect(assertSaveTargetFree(sibling, owned, true)).resolves.toBeUndefined()
+    // once saved, the sibling is the session's own output: repeat saves pass
+    await expect(
+      assertSaveTargetFree(sibling, [...owned, sibling], undefined),
+    ).resolves.toBeUndefined()
+    // a fresh (not yet existing) sibling target is allowed
+    await expect(
+      assertSaveTargetFree(join(root, 'fresh.docx'), owned, undefined),
+    ).resolves.toBeUndefined()
+  })
+
+  it('lets native default saves (the opened file) through without overwrite', async () => {
+    await expect(assertSaveTargetFree(docPath, [docPath], undefined)).resolves.toBeUndefined()
+  })
+})
+
+describe('promoteNewFileExclusively (TOCTOU guard)', () => {
+  it('refuses an existing target with the clobber error and cleans the temp', async () => {
+    const tmp = join(root, '.new.docx.airy-test')
+    const target = join(root, 'new.docx')
+    await writeFile(tmp, 'new bytes')
+    // a file created between the guard's stat and the write (the TOCTOU
+    // window) must surface the actionable error, not be silently replaced
+    await writeFile(target, 'created in the stat/write window')
+    const error = await promoteNewFileExclusively(tmp, target).then(
+      () => null,
+      (e: Error) => e,
+    )
+    expect(error).toBeInstanceOf(Error)
+    expect(error?.message).toContain('already exists')
+    expect(error?.message).toContain('overwrite: true')
+    expect(await readFile(target, 'utf8')).toBe('created in the stat/write window')
+    await expect(stat(tmp)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('links a fresh target atomically and removes the temp', async () => {
+    const tmp = join(root, '.fresh.docx.airy-test')
+    const target = join(root, 'fresh.docx')
+    await writeFile(tmp, 'fresh bytes')
+    await expect(promoteNewFileExclusively(tmp, target)).resolves.toBeUndefined()
+    expect(await readFile(target, 'utf8')).toBe('fresh bytes')
+    await expect(stat(tmp)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('EPERM from link with an existing target still surfaces the clobber error', async () => {
+    const tmp = join(root, '.eperm-exist.docx.airy-test')
+    const target = join(root, 'eperm-exist.docx')
+    await writeFile(tmp, 'new bytes')
+    await writeFile(target, 'created in the stat/write window')
+    // exFAT/FAT/network shares refuse hard links outright: the guard must
+    // degrade to stat + clobber error, never a silent replace
+    linkMock.mockImplementation(async () => {
+      throw Object.assign(new Error('EPERM: operation not permitted, link'), { code: 'EPERM' })
+    })
+    try {
+      const error = await promoteNewFileExclusively(tmp, target).then(
+        () => null,
+        (e: Error) => e,
+      )
+      expect(error?.message).toContain('already exists')
+      expect(await readFile(target, 'utf8')).toBe('created in the stat/write window')
+      await expect(stat(tmp)).rejects.toMatchObject({ code: 'ENOENT' })
+    } finally {
+      linkMock.mockImplementation(actualLink)
+    }
+  })
+
+  it('EPERM from link with a missing target falls back to the atomic rename', async () => {
+    const tmp = join(root, '.eperm-missing.docx.airy-test')
+    const target = join(root, 'eperm-missing.docx')
+    await writeFile(tmp, 'fallback bytes')
+    linkMock.mockImplementation(async () => {
+      throw Object.assign(new Error('EPERM: operation not permitted, link'), { code: 'EPERM' })
+    })
+    try {
+      await expect(promoteNewFileExclusively(tmp, target)).resolves.toBeUndefined()
+      expect(await readFile(target, 'utf8')).toBe('fallback bytes')
+      await expect(stat(tmp)).rejects.toMatchObject({ code: 'ENOENT' })
+    } finally {
+      linkMock.mockImplementation(actualLink)
+    }
+  })
+})
+
 describe('path confinement', () => {
   it('rejects absolute paths outside the root', () => {
     expect(() => resolveConfined('/etc/passwd', root)).toThrow(/outside the workspace root/)
@@ -339,6 +569,205 @@ describe('path confinement', () => {
   it('allows paths inside the root and resolves relative ones against it', () => {
     expect(resolveConfined('a.docx', root)).toBe(join(root, 'a.docx'))
     expect(resolveConfined(join(root, 'sub', 'a.docx'), root)).toBe(join(root, 'sub', 'a.docx'))
+  })
+
+  it('rejects symlinks inside the root that point outside (real-path check)', async () => {
+    // the outside target must exist: the real-path check only resolves when
+    // every path component is present (a dangling link falls back lexical)
+    const outsideDir = join(root, '..', 'airy-outside-target')
+    await mkdir(outsideDir)
+    await writeFile(join(outsideDir, 'secret.docx'), 'outside bytes')
+    try {
+      symlinkSync(outsideDir, join(root, 'escape'), 'dir')
+    } catch (e) {
+      // creating symlinks needs privileges on some platforms (Windows without
+      // developer mode); confinement of the lexical path is still covered above
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === 'EPERM' || code === 'EACCES') return
+      throw e
+    }
+    try {
+      // the link itself lives inside the root but resolves outside: rejected
+      expect(() => resolveConfined(join(root, 'escape', 'secret.docx'), root)).toThrow(
+        /outside the workspace root/,
+      )
+      // a relative hop through the link is rejected the same way
+      expect(() => resolveConfined('escape/secret.docx', root)).toThrow(
+        /outside the workspace root/,
+      )
+      // end to end: opening through the link is refused
+      await expect(DocxSession.open(join(root, 'escape', 'secret.docx'), root)).rejects.toThrow(
+        /outside the workspace root/,
+      )
+    } finally {
+      await rm(outsideDir, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a save-as to a NEW file through an out-pointing directory symlink', async () => {
+    // the escape target directory must exist: the confinement check resolves
+    // the deepest existing ancestor, so only a live link can pin the tail
+    // outside the root
+    const outsideDir = join(root, '..', 'airy-outside-new')
+    await mkdir(outsideDir)
+    try {
+      symlinkSync(outsideDir, join(root, 'escape'), 'dir')
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === 'EPERM' || code === 'EACCES') return
+      throw e
+    }
+    try {
+      // the candidate file itself does not exist — the lexical fallback would
+      // let it pass; the ancestor walk must catch the out-pointing link
+      expect(() => resolveConfined('escape/new.docx', root)).toThrow(/outside the workspace root/)
+      expect(() => resolveConfined(join(root, 'escape', 'new.docx'), root)).toThrow(
+        /outside the workspace root/,
+      )
+      // end to end: a save-as through the link refuses and writes nothing outside
+      const session = await openSession()
+      await expect(session.save(join(root, 'escape', 'new.docx'))).rejects.toThrow(
+        /outside the workspace root/,
+      )
+      expect(readdirSync(outsideDir)).toEqual([])
+      await expect(readFile(join(outsideDir, 'new.docx'))).rejects.toThrow(/ENOENT/)
+    } finally {
+      await rm(outsideDir, { recursive: true, force: true })
+    }
+  })
+  it('refuses a save-as onto an EXISTING symlink that points outside the root', async () => {
+    // the target path itself is a file symlink to an outside document: the
+    // real-path check resolves it (it exists) and refuses
+    const outsideDir = join(root, '..', 'airy-outside-link-target')
+    await mkdir(outsideDir)
+    await writeFile(join(outsideDir, 'secret.docx'), 'outside bytes')
+    try {
+      symlinkSync(join(outsideDir, 'secret.docx'), join(root, 'linked.docx'), 'file')
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === 'EPERM' || code === 'EACCES') return
+      throw e
+    }
+    try {
+      expect(() => resolveConfined(join(root, 'linked.docx'), root)).toThrow(
+        /outside the workspace root/,
+      )
+      // end to end: save-as onto the link refuses and never touches the target
+      const session = await openSession()
+      await expect(session.save(join(root, 'linked.docx'))).rejects.toThrow(
+        /outside the workspace root/,
+      )
+      expect(await readFile(join(outsideDir, 'secret.docx'), 'utf8')).toBe('outside bytes')
+    } finally {
+      await rm(join(root, 'linked.docx'), { force: true })
+      await rm(outsideDir, { recursive: true, force: true })
+    }
+  })
+
+  it('refuses a fresh save-as through a multi-hop symlink chain (a -> b -> outside)', async () => {
+    const outsideDir = join(root, '..', 'airy-outside-chain')
+    await mkdir(outsideDir)
+    try {
+      symlinkSync(outsideDir, join(root, 'hop-b'), 'dir')
+      symlinkSync(join(root, 'hop-b'), join(root, 'hop-a'), 'dir')
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === 'EPERM' || code === 'EACCES') return
+      throw e
+    }
+    try {
+      // the candidate file does not exist under the chain; the deepest
+      // existing ancestor walk must follow BOTH hops out of the root
+      expect(() => resolveConfined('hop-a/new.docx', root)).toThrow(/outside the workspace root/)
+      expect(() => resolveConfined(join(root, 'hop-a', 'new.docx'), root)).toThrow(
+        /outside the workspace root/,
+      )
+      const session = await openSession()
+      await expect(session.save(join(root, 'hop-a', 'new.docx'))).rejects.toThrow(
+        /outside the workspace root/,
+      )
+      expect(readdirSync(outsideDir)).toEqual([])
+    } finally {
+      await rm(join(root, 'hop-a'), { force: true })
+      await rm(join(root, 'hop-b'), { force: true })
+      await rm(outsideDir, { recursive: true, force: true })
+    }
+  })
+
+  it('allows a fresh in-root save-as: nested dirs and deep missing chains', async () => {
+    const session = await openSession()
+    session.insertContent('<p>fresh</p>', 0)
+    // an existing subdirectory with a new file inside stays allowed
+    await mkdir(join(root, 'sub'), { recursive: true })
+    const nested = await session.save(join(root, 'sub', 'new.docx'))
+    expect(nested.path).toBe(join(root, 'sub', 'new.docx'))
+    // a deep chain where only the root exists resolves back inside it (allowed)
+    const deep = join(root, 'a', 'b', 'c', 'new.docx')
+    expect(resolveConfined(deep, root)).toBe(deep)
+    await expect(session.save(deep)).resolves.toMatchObject({ path: deep })
+  })
+
+  it('keeps symlinks usable when they resolve back inside the root', async () => {
+    const inner = join(root, 'inner')
+    await mkdir(inner)
+    await writeFile(join(inner, 'real.docx'), await buildFixtureDocx())
+    try {
+      symlinkSync(inner, join(root, 'alias'), 'dir')
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === 'EPERM' || code === 'EACCES') return
+      throw e
+    }
+    // opening through the in-root alias works and addresses the real file
+    const session = await DocxSession.open(join(root, 'alias', 'real.docx'), root)
+    expect(session.meta().blockCount).toBe(7)
+  })
+
+  it('keeps save-as working through a symlink-spelled AIRY_WORKSPACE_ROOT', async () => {
+    const realRoot = await mkdtemp(join(tmpdir(), 'airy-docx-real-'))
+    const link = join(root, 'rootlink')
+    try {
+      symlinkSync(realRoot, link, 'dir')
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === 'EPERM' || code === 'EACCES') {
+        await rm(realRoot, { recursive: true, force: true })
+        return
+      }
+      throw e
+    }
+    const previous = process.env[WORKSPACE_ROOT_ENV]
+    process.env[WORKSPACE_ROOT_ENV] = link
+    try {
+      // the physical root and the env-spelled root differ; before the
+      // deepest-ancestor fix every fresh save-as under the link was refused
+      // (physical root vs lexical candidate failed the prefix check)
+      await writeFile(join(realRoot, 'doc.docx'), await buildFixtureDocx())
+      const session = await DocxSession.open('doc.docx')
+      session.insertContent('<p>fresh</p>', 0)
+      const saved = await session.save(join(link, 'nested', 'fresh.docx'))
+      expect(saved.path).toBe(join(link, 'nested', 'fresh.docx'))
+      // a path outside the link's target still refuses
+      await expect(session.save(join(root, 'escape.docx'))).rejects.toThrow(
+        /outside the workspace root/,
+      )
+    } finally {
+      if (previous === undefined) delete process.env[WORKSPACE_ROOT_ENV]
+      else process.env[WORKSPACE_ROOT_ENV] = previous
+      await rm(realRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('folds case in the confinement compare on Windows-like platforms', () => {
+    const realPlatform = process.platform
+    try {
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      // drive-letter case differences must not reject a confined path
+      expect(resolveConfined(join(root, 'a.docx'), root)).toBe(join(root, 'a.docx'))
+      expect(resolveConfined(root.toUpperCase(), root.toUpperCase())).toBe(root.toUpperCase())
+    } finally {
+      Object.defineProperty(process, 'platform', { value: realPlatform })
+    }
   })
 
   it('open and save enforce confinement end to end', async () => {

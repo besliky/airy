@@ -179,9 +179,10 @@ string clears them. Notes never affect the canvas.
 
 ### addComment
 
-`{text,author}`
+`{text,author,parent?}`
 
-Adds a review comment to the page.
+Adds a review comment to the page. `parent` (`{authorId,idx}`) makes the new
+comment a reply in that thread.
 
 ```json
 {
@@ -201,4 +202,15 @@ comments on the page (both come from the comments pane data).
 
 ```json
 { "op": "deleteComment", "target": { "slide": 0 }, "authorId": 0, "idx": 0 }
+```
+
+### resolveComment
+
+`{authorId,idx,done}`
+
+Marks a comment resolved (`done: true`) or reopens it (`done: false`); the
+resolve state is stored in the file's commentsExtended part.
+
+```json
+{ "op": "resolveComment", "target": { "slide": 0 }, "authorId": 0, "idx": 1, "done": true }
 ```

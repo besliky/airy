@@ -87,11 +87,15 @@ export async function startBridgeServer(options: {
   }
   const dispatcher = createBridgeDispatcher(methodMap, { timeoutMs })
   const clients = new Set<Socket>()
+  // per-server connection counter: each socket gets a stable identity for the
+  // lifetime of the connection (bridge turn ownership in the renderer)
+  let nextConnectionId = 0
 
   const server = createNetServer((socket) => {
     clients.add(socket)
     const gate = createHandshakeGate(token)
     const framer = new NdjsonFramer()
+    const clientId = `conn-${(nextConnectionId += 1)}`
     let closed = false
     // responses are chained per connection: request N+1 only starts after N's
     // response was written — the FIFO contract, even when handlers are async
@@ -134,7 +138,7 @@ export async function startBridgeServer(options: {
         }
         const request = parsed.value
         chain = chain
-          .then(() => dispatcher.call(request))
+          .then(() => dispatcher.call(request, { clientId }))
           .then(write, (err: unknown) => {
             // dispatcher.call never rejects, but a write failure must not break the chain
             write(

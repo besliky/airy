@@ -5,6 +5,7 @@ export const cs = {
   ribbonAiRewriteConfirm:
     'Tato akce volá asistenta AI: spotřebovává kredity a může přepsat celý obsah. Pokračovat? (Znovu se už nezeptáme.)',
   ribbonTabFile: 'Soubor',
+  ribbonTabsLabel: 'Karty pásu karet',
   ribbonTabHome: 'Domů',
   ribbonTabInsert: 'Vložení',
   ribbonTabDraw: 'Kreslení',

@@ -5,6 +5,7 @@ export const ms = {
   ribbonAiRewriteConfirm:
     'Tindakan ini memanggil AI: menggunakan kredit dan mungkin menulis semula keseluruhan kandungan. Teruskan? (Tidak akan ditanya lagi.)',
   ribbonTabFile: 'Fail',
+  ribbonTabsLabel: 'Tab reben',
   ribbonTabHome: 'Laman Utama',
   ribbonTabInsert: 'Sisip',
   ribbonTabDraw: 'Lukis',

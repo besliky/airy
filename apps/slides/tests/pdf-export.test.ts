@@ -5,7 +5,7 @@ import { basename, dirname, join } from 'node:path'
 import { PNG } from 'pngjs'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { exportSlidesPdf, type PdfExportWindow } from '../src/main/pdf-export'
+import { buildPdfExportHtml, exportSlidesPdf, type PdfExportWindow } from '../src/main/pdf-export'
 
 const roots: string[] = []
 
@@ -41,6 +41,12 @@ function deterministicNoisePngBase64(): string {
   return PNG.sync.write(png).toString('base64')
 }
 
+/** minimal vector slide with real text, like the renderer's renderSlideSvg output */
+const vectorSlide = (label: string): string =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="100%" height="100%">` +
+  `<rect width="1600" height="900" fill="#123456"/>` +
+  `<text x="80" y="120" font-family="Carlito" font-size="44.00" fill="#ffffff">${label}</text></svg>`
+
 class TestPdfWindow implements PdfExportWindow {
   loadedPath: string | null = null
   loadedHtml = ''
@@ -48,8 +54,6 @@ class TestPdfWindow implements PdfExportWindow {
   tempDirectoryExistedAtDestroy: boolean | null = null
   shouldFailLoad = false
   shouldFailPrint = false
-  executedScript: string | null = null
-  executedWithUserGesture: boolean | undefined
   printOptions: Electron.PrintToPDFOptions | null = null
 
   async loadFile(path: string): Promise<void> {
@@ -59,10 +63,6 @@ class TestPdfWindow implements PdfExportWindow {
   }
 
   webContents = {
-    executeJavaScript: async (script: string, userGesture?: boolean): Promise<void> => {
-      this.executedScript = script
-      this.executedWithUserGesture = userGesture
-    },
     printToPDF: async (options: Electron.PrintToPDFOptions): Promise<Buffer> => {
       this.printOptions = options
       if (this.shouldFailPrint) throw new Error('print failed')
@@ -77,7 +77,29 @@ class TestPdfWindow implements PdfExportWindow {
 }
 
 describe('slides PDF export', () => {
-  it('loads a temporary HTML file containing all PNGs, writes the PDF, then removes the directory', async () => {
+  it('builds vector pages with selectable text and raster fallback pages side by side', () => {
+    const html = buildPdfExportHtml(
+      [
+        { svg: vectorSlide('Quarterly <Review>') },
+        { pngBase64: singlePixelPngBase64() },
+        { svg: vectorSlide('Second page') },
+      ],
+      13.333,
+      7.5,
+    )
+    // vector pages keep real text (becomes selectable PDF text through printToPDF)
+    expect(html).toContain('<svg xmlns="http://www.w3.org/2000/svg"')
+    expect(html).toContain('<text x="80" y="120"')
+    expect(html).toContain('Quarterly <Review>')
+    expect(html).toContain('Second page')
+    // raster fallback still embeds the bitmap
+    expect(html).toContain(`data:image/png;base64,${singlePixelPngBase64()}`)
+    expect((html.match(/<div class="page">/g) ?? []).length).toBe(3)
+    expect(html).toContain('@page { size: 13.333in 7.5in; margin: 0; }')
+    expect(html).toContain('.page svg { display: block; width: 100%; height: 100%; }')
+  })
+
+  it('loads a temporary HTML file containing all pages, writes the PDF, then removes the directory', async () => {
     const win = new TestPdfWindow()
     const filePath = await outputPath()
     const opened: string[] = []
@@ -90,7 +112,11 @@ describe('slides PDF export', () => {
     expect(decodedSecondPng.height).toBeGreaterThan(0)
 
     const result = await exportSlidesPdf({
-      pngsBase64: [firstPng, secondPng],
+      pages: [
+        { svg: vectorSlide('Vector page') },
+        { pngBase64: firstPng },
+        { pngBase64: secondPng },
+      ],
       widthPx: 1600,
       heightPx: 900,
       filePath,
@@ -101,12 +127,12 @@ describe('slides PDF export', () => {
     expect(result).toEqual({ ok: true, path: filePath })
     expect(basename(win.loadedPath!)).toBe('slides.html')
     expect(basename(dirname(win.loadedPath!))).toMatch(/^airy-slides-pdf-/)
+    expect(win.loadedHtml).toContain('<text x="80" y="120"')
+    expect(win.loadedHtml).toContain('Vector page')
     expect(win.loadedHtml).toContain(`data:image/png;base64,${firstPng}`)
     expect(win.loadedHtml.length).toBeGreaterThan(chromiumDataUrlLimit)
-    expect(win.loadedHtml.endsWith(`${secondPng}"></div></body></html>`)).toBe(true)
     expect(win.loadedHtml).toContain('@page { size: 13.333in 7.5in; margin: 0; }')
-    expect(win.executedScript).toContain('document.fonts.ready')
-    expect(win.executedWithUserGesture).toBe(true)
+    // the hidden window is scripting-disabled; readiness rides on loadFile's onload
     expect(win.printOptions).toEqual({
       landscape: false,
       printBackground: true,
@@ -126,7 +152,7 @@ describe('slides PDF export', () => {
     win.shouldFailLoad = true
 
     const result = await exportSlidesPdf({
-      pngsBase64: ['png'],
+      pages: [{ svg: vectorSlide('x') }],
       widthPx: 4,
       heightPx: 3,
       filePath: await outputPath(),
@@ -145,7 +171,7 @@ describe('slides PDF export', () => {
     win.shouldFailPrint = true
 
     const result = await exportSlidesPdf({
-      pngsBase64: ['png'],
+      pages: [{ svg: vectorSlide('x') }],
       widthPx: 4,
       heightPx: 3,
       filePath: await outputPath(),

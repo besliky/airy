@@ -73,6 +73,39 @@ describe('bridge command handler', () => {
     expect(result.context).toContain('Body paragraph')
   })
 
+  it('inserts at the end of the document by default (not at the cursor)', async () => {
+    // two blocks with the selection in the first: the bridge contract
+    // (live_apply_ops documents "html inserted at the end") must win over
+    // the embedded pipeline's cursor default
+    const editor = new Editor({
+      element: document.createElement('div'),
+      extensions: editorExtensions,
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'docParagraph',
+            attrs: { docxIndex: null },
+            content: [{ type: 'text', text: 'First' }],
+          },
+          {
+            type: 'docParagraph',
+            attrs: { docxIndex: null },
+            content: [{ type: 'text', text: 'Second' }],
+          },
+        ],
+      },
+    })
+    liveEditors.push(editor)
+    const handler = makeHandler(editor)
+    const reply = await handler('insert_content', { html: '<p>Inserted by bridge</p>' })
+    expect(reply.ok).toBe(true)
+    expect(editor.state.doc.childCount).toBe(3)
+    expect(editor.state.doc.child(0).textContent).toBe('First')
+    expect(editor.state.doc.child(1).textContent).toBe('Second')
+    expect(editor.state.doc.child(2).textContent).toBe('Inserted by bridge')
+  })
+
   it('inserts content and undo reverts exactly that turn', async () => {
     const editor = makeEditor()
     const handler = makeHandler(editor)
@@ -154,5 +187,64 @@ describe('bridge command handler', () => {
     const reply = await handler('insert_content', { html: '<p></p>' })
     expect(reply.ok).toBe(false)
     if (!reply.ok) expect(reply.error.code).toBe('invalid_params')
+  })
+})
+
+describe('bridge turn ownership (multiple copilot clients)', () => {
+  const isBold = (editor: Editor) =>
+    editor.state.doc.child(0).firstChild?.marks.some((m) => m.type.name === 'bold') ?? false
+
+  it('auto-rollback (ownTurnsOnly) refuses to revert another client turn', async () => {
+    const editor = makeEditor()
+    const handler = makeHandler(editor)
+    // client A inserts; client B then makes the LATEST turn
+    await handler('insert_content', { html: '<p>From A</p>', afterBlockIndex: 0 }, 'conn-1')
+    await handler(
+      'apply_ops',
+      { ops: [{ op: 'setFont', target: { blockIndexes: [0] }, bold: true }] },
+      'conn-2',
+    )
+    // A's automatic rollback must not silently revert B's turn
+    const guarded = await handler('undo', { ownTurnsOnly: true }, 'conn-1')
+    expect(guarded).toMatchObject({ ok: false, error: { code: 'turn_owned_by_other' } })
+    if (!guarded.ok) expect(guarded.error.message).toContain('conn-2')
+    expect(isBold(editor)).toBe(true)
+    // B's own guarded undo reverts B's turn (A's insert survives)
+    const own = await handler('undo', { ownTurnsOnly: true }, 'conn-2')
+    expect(own).toEqual({ ok: true, result: { undone: true } })
+    expect(isBold(editor)).toBe(false)
+    expect(editor.state.doc.child(1).textContent).toBe('From A')
+  })
+
+  it('explicit undo may revert another client turn and reports whose it was', async () => {
+    const editor = makeEditor()
+    const handler = makeHandler(editor)
+    await handler('insert_content', { html: '<p>From B</p>', afterBlockIndex: 0 }, 'conn-2')
+    // live_undo is the user's explicit choice: allowed across clients, and
+    // the result says whose turn was reverted
+    const explicit = await handler('undo', {}, 'conn-1')
+    expect(explicit).toEqual({
+      ok: true,
+      result: { undone: true, revertedTurnOf: 'conn-2', anotherClient: true },
+    })
+    expect(editor.state.doc.childCount).toBe(1)
+    // undoing the requester's own turn is not flagged as another client's
+    await handler('insert_content', { html: '<p>x</p>', afterBlockIndex: 0 }, 'conn-1')
+    const own = await handler('undo', {}, 'conn-1')
+    expect(own).toEqual({ ok: true, result: { undone: true } })
+  })
+
+  it('callers without a connection id share the legacy single-client identity', async () => {
+    const editor = makeEditor()
+    const handler = makeHandler(editor)
+    await handler('insert_content', { html: '<p>legacy</p>', afterBlockIndex: 0 })
+    // anonymous auto-rollback of the anonymous turn still works (legacy path)
+    const own = await handler('undo', { ownTurnsOnly: true })
+    expect(own).toEqual({ ok: true, result: { undone: true } })
+    // but a stamped client cannot silently revert the anonymous turn
+    await handler('insert_content', { html: '<p>legacy 2</p>', afterBlockIndex: 0 })
+    const guarded = await handler('undo', { ownTurnsOnly: true }, 'conn-1')
+    expect(guarded).toMatchObject({ ok: false, error: { code: 'turn_owned_by_other' } })
+    expect(editor.state.doc.childCount).toBe(2)
   })
 })

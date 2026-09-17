@@ -221,6 +221,9 @@ export const zh = {
   // Status bar / word count
   appPageOf: '第 {current} 页,共 {total} 页',
   appWordCountTitle: '字数统计',
+  appZoomIn: '放大',
+  appZoomOut: '缩小',
+  appZoomLabel: '缩放',
   appWordCountN: '{n} 个字',
   appStatPages: '页数',
   appStatWords: '字数',
@@ -233,6 +236,8 @@ export const zh = {
   // Navigation pane
   appNavTitle: '导航',
   appNavNoHeadings: '文档中没有标题',
+  appNavSearch: '搜索标题',
+  appNavNoMatch: '没有匹配的标题',
   // Ruler
   appTabTypeTip: '制表位类型: {type}（点击切换）',
   appTabStopTitle: '{type}制表位 @ {pos}cm',

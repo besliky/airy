@@ -1,0 +1,79 @@
+import type { zh } from './zh'
+
+export const es = {
+  versionLabel: 'Versión',
+  theme: 'Tema',
+  themeLight: 'Claro',
+  themeDark: 'Oscuro',
+  themeSystem: 'Seguir el sistema',
+  setAuthorName: 'Nombre del autor',
+  setAuthorNameDesc: 'Se usa en comentarios y cambios controlados.',
+  setAuthorNamePlaceholder: 'Usuario',
+  saveLocation: 'Ubicación de guardado',
+  setAutoSave: 'Guardar automáticamente todos los documentos',
+  setAutoSaveDesc:
+    'Activa el autoguardado de forma predeterminada en todos los editores. Aún puedes desactivarlo en una ventana concreta.',
+  setRestoreSession: 'Restaurar la sesión anterior',
+  setRestoreSessionDesc:
+    'Reabre al iniciar los archivos que estaban abiertos al cerrar o fallar por última vez.',
+  setLiveBridge: 'Puente Copilot en vivo',
+  setLiveBridgeDesc:
+    'Permite que los agentes de código (MCP) se conecten a esta aplicación para leer y editar documentos abiertos. Lo usan herramientas como Claude, Cursor o airy-mcp.',
+  setLiveBridgeEnvDisabled:
+    'Desactivado a la fuerza por la variable de entorno AIRY_DISABLE_BRIDGE=1; este interruptor no tiene efecto hasta que se elimine.',
+  setAiFontSize: 'Tamaño del texto del panel de IA',
+  aiFontSizeDefault: 'Predeterminado',
+  aiFontSizeLarge: 'Grande',
+  aiFontSizeXLarge: 'Muy grande',
+  aiFontSizeCustom: 'Personalizado',
+  setAiSpellcheck: 'Corrección ortográfica en el chat de IA',
+  setAiSpellcheckDesc: 'Subraya las palabras mal escritas al escribir en el cuadro del chat de IA.',
+  settings: 'Configuración',
+  setSecGeneral: 'General',
+  setSecAbout: 'Acerca de',
+  setSecAiModel: 'Modelo de IA',
+  setAiProvider: 'Proveedor',
+  setAiModelId: 'Modelo',
+  setAiApiKey: 'Clave de API',
+  setAiKeyHint: 'Se guarda solo en este dispositivo.',
+  setAiBaseUrl: 'Base URL',
+  setAiBaseUrlHint: 'Deja vacío para usar el endpoint oficial.',
+  setAiNoneHint:
+    'No hay ningún proveedor configurado. Elige un proveedor e introduce su clave de API.',
+  setAiCodexPath: 'Ejecutable de Codex',
+  setAiCodexPathHint:
+    'Indícalo solo para una instalación personalizada; déjalo vacío para detectarlo automáticamente.',
+  setAiCodexAutoPlaceholder: 'Detección automática (recomendado)',
+  setAiCodexHint: 'Usa la CLI de Codex con sesión local; no se necesita clave de API.',
+  setAiByokNote:
+    'Los chats usan tu propia clave. La generación de imágenes y el análisis de medios siguen la sección «Medios de IA»; la búsqueda web usa sus propias claves o fuentes gratuitas.',
+  setAiSave: 'Guardar',
+  setAiSaved: 'Guardado',
+  setAiTest: 'Probar conexión',
+  setAiTesting: 'Probando…',
+  setAiTestOk: 'Conexión correcta',
+  setAiTestFail: 'Error de conexión',
+  setAiMaxTokens: 'Tokens de salida máx.',
+  setAiMaxTokensDesc:
+    'Presupuesto de salida por turno. Los modelos de razonamiento lo gastan en pensar; si se agota, la respuesta llega vacía: suba este valor.',
+  setSecAiMedia: 'Medios de IA y búsqueda',
+  setAiSearchSerperHint: 'Serper ofrece búsqueda web y de imágenes con tu clave.',
+  setAiSearchTavilyHint:
+    'Tavily ofrece búsqueda web con tu clave; la búsqueda de imágenes recurre a fuentes gratuitas.',
+  setAiCapImage: 'Generación de imágenes',
+  setAiCapAnalysis: 'Análisis de imágenes',
+  setAiCapVideo: 'Análisis de vídeo',
+  setAiCapSearch: 'Búsqueda web',
+  setAiSharedKeyHint:
+    'La clave y la URL base de un proveedor se comparten entre capacidades; introdúcelas una sola vez.',
+  setGithub: 'Código abierto',
+  starPromptTitle: '¿Te gusta Airy?',
+  starPromptTitleN: 'Has abierto {n} documentos con Airy',
+  starPromptBody:
+    'Airy es gratuito y de código abierto. Una estrella en GitHub es la mejor forma de apoyar al equipo.',
+  starPromptGo: 'Dar una estrella',
+  starPromptDone: 'Ya la di',
+  starPromptLater: 'Más tarde',
+  setChange: 'Cambiar',
+  language: 'Idioma',
+} satisfies Record<keyof typeof zh, string>

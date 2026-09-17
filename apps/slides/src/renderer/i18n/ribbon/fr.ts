@@ -6,6 +6,7 @@ export const fr = {
     "Cette action fait appel à l'IA : elle consomme des crédits et peut réécrire tout le contenu. Continuer ? (Vous ne serez plus averti.)",
   // tabs
   ribbonTabFile: 'Fichier',
+  ribbonTabsLabel: 'Onglets du ruban',
   ribbonTabHome: 'Accueil',
   ribbonTabInsert: 'Insertion',
   ribbonTabDraw: 'Dessin',

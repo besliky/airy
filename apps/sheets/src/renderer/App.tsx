@@ -31,6 +31,7 @@ import {
   installWrapMeasureLifecycle,
 } from './univer-sync'
 import {
+  aiBulkUndoGate,
   installJournalSuppressionUndoFilter,
   installLoadAutoHeightGate,
   journalSuppression,
@@ -40,14 +41,18 @@ import {
   type UniverRuntime,
   type UniverWorksheet,
 } from './univer-state'
-import { applyChangePlan, planFromOps, type OpExecutorContext } from './op-executor'
+import { applyChangePlan, beginUndoBatch, planFromOps, type OpExecutorContext } from './op-executor'
 import { renameChartRefsForSheet } from './workbook-ops'
 import {
   proposeOperations as proposeOperationsImpl,
   runDeterministicPlan as runDeterministicPlanImpl,
-  structuralDeleteFormulaErrorSync,
   type PlanContext,
 } from './plan-operations'
+import {
+  collectCrossSheetDependentRewrites,
+  deleteSpanSpec,
+  finishCrossSheetRewrites,
+} from './delete-ref-rewrite'
 import { isNumericIdentifierText } from './cell-warning'
 import { consumePendingUndoCarry, undoStackDepth } from './undo-carry'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
@@ -67,7 +72,7 @@ import {
   type IRange,
   type IStyleData,
 } from '@univerjs/core'
-import { FormulaExecutedStateType } from '@univerjs/engine-formula'
+import { FormulaExecutedStateType, IFunctionService } from '@univerjs/engine-formula'
 import { IFindReplaceService } from '@univerjs/find-replace'
 import { UniverSheetsConditionalFormattingPreset } from '@univerjs/preset-sheets-conditional-formatting'
 import UniverPresetSheetsConditionalFormattingEnUS from '@univerjs/preset-sheets-conditional-formatting/locales/en-US'
@@ -268,6 +273,8 @@ import {
 } from './formula-view'
 import { installCachedValueFallbackInterceptor } from './formula-cached-fallback'
 import { installSupportedFunctionProbe } from './function-registry-probe'
+import { buildFunctionCatalog } from './function-catalog'
+import { CURATED_FUNCTIONS } from './InsertFunctionDialog'
 import { installCellFilenameFunction } from './cell-function'
 import { installFormulaLexerFix } from './formula-lexer-fix'
 import { installFormulaNewlineDisplay } from './formula-newline-display'
@@ -309,6 +316,7 @@ import {
   type RibbonCommandContext,
 } from './ribbon-actions'
 import {
+  buildActiveSheetPrintRequest,
   handleApplyHeaderFooter as handleApplyHeaderFooterImpl,
   handleExportPdf as handleExportPdfImpl,
   handlePageLayoutCommand as handlePageLayoutCommandImpl,
@@ -357,7 +365,8 @@ import { lastSurvivingScreenLine, netAxisDelta, screenToFile } from './view-tran
 import { selectionFormatEquals, toSelectionFormat, type SelectionFormat } from './selection-format'
 import { ExcelShell } from './ExcelShell'
 import { RecoveryDialog } from './RecoveryDialog'
-import { ToastHost } from './toast'
+import { ToastHost } from '@airy-office/ui'
+import { ShortcutsDialog } from './ShortcutsDialog'
 import { AdvancedFilterDialog, type AdvancedFilterColumn } from './AdvancedFilterDialog'
 import { EquationDialog } from './EquationDialog'
 import { IconsDialog } from './IconsDialog'
@@ -419,6 +428,24 @@ function dateTextKind(value: string): 'date-like' | 'text' {
   dateTextKinds.set(value, kind)
   return kind
 }
+
+/// The merged Univer en-US locale tree: every preset pack plus the app's
+/// sheets-ui patches. Shared by createUniver and the Insert Function
+/// catalog (sheets-formula.functionList descriptions).
+const UNIVER_EN_US_LOCALE = mergeLocales(
+  UniverPresetSheetsCoreEnUS,
+  UniverPresetSheetsConditionalFormattingEnUS,
+  UniverPresetSheetsFilterEnUS,
+  UniverPresetSheetsDataValidationEnUS,
+  UniverPresetSheetsNoteEnUS,
+  UniverPresetSheetsFindReplaceEnUS,
+  UniverPresetSheetsSortEnUS,
+  UniverPresetSheetsTableEnUS,
+  numberAsTextAlertLocale(UniverPresetSheetsCoreEnUS),
+  // last wins per namespace: feed the alert-patched pack through so
+  // both sheets-ui patches survive the shallow merge
+  insertRowsBelowLocale(numberAsTextAlertLocale(UniverPresetSheetsCoreEnUS)),
+)
 
 export function App(): React.JSX.Element {
   const adapterRef = useRef(new InMemoryWorkbookAdapter(initialSnapshot))
@@ -629,6 +656,9 @@ export function App(): React.JSX.Element {
   /// Non-null while the "Insert Timeline" field picker is open.
   const [timelinePicker, setTimelinePicker] = useState<TimelinePickerState | null>(null)
   const menuActionRef = useRef<(action: MenuAction) => void>(() => {})
+  const [printDialogOpen, setPrintDialogOpen] = useState(false)
+  /// Help > Keyboard Shortcuts reference dialog.
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   /// Where the user was when a save started: the post-save session swap
   /// reinstalls the workbook, and the install consumes this instead of
   /// resetting the view to the first sheet's A1.
@@ -1368,22 +1398,7 @@ export function App(): React.JSX.Element {
       theme: greenTheme,
       darkMode: isDarkTheme(),
       locale: LocaleType.EN_US,
-      locales: {
-        [LocaleType.EN_US]: mergeLocales(
-          UniverPresetSheetsCoreEnUS,
-          UniverPresetSheetsConditionalFormattingEnUS,
-          UniverPresetSheetsFilterEnUS,
-          UniverPresetSheetsDataValidationEnUS,
-          UniverPresetSheetsNoteEnUS,
-          UniverPresetSheetsFindReplaceEnUS,
-          UniverPresetSheetsSortEnUS,
-          UniverPresetSheetsTableEnUS,
-          numberAsTextAlertLocale(UniverPresetSheetsCoreEnUS),
-          // last wins per namespace: feed the alert-patched pack through so
-          // both sheets-ui patches survive the shallow merge
-          insertRowsBelowLocale(numberAsTextAlertLocale(UniverPresetSheetsCoreEnUS)),
-        ),
-      },
+      locales: { [LocaleType.EN_US]: UNIVER_EN_US_LOCALE },
       presets: [
         UniverSheetsCorePreset({
           container: 'univer-container',
@@ -1492,10 +1507,11 @@ export function App(): React.JSX.Element {
     // The window always starts blank now; still consume the one-shot
     // new-blank flag so it doesn't leak into the next workbook open.
     void window.desktopApi?.consumeNewBlankWorkbook?.()
-    // Pull any shell-queued workbook ourselves: the shell's 'open' nudge loop
-    // gives up after 30s, and on slow dev cold starts Univer mounts later than
-    // that — the tab would strand as a blank in-memory workbook (no save, no
-    // shapes) with the queued file silently never opened.
+    // Pull any shell-queued workbook ourselves: delivery is the menu-ready
+    // handshake with at most 2 bounded resends, and on slow dev cold starts
+    // Univer mounts after those — the tab would strand as a blank in-memory
+    // workbook (no save, no shapes) with the queued file silently never
+    // opened.
     void window.desktopApi?.hasQueuedWorkbook?.().then((queued) => {
       if (queued) void handleInspectWorkbook()
     })
@@ -2323,9 +2339,20 @@ export function App(): React.JSX.Element {
             setMessage(t('appPivotSheetNoStructural'))
             return
           }
-          // The save aborts when a formula references only the deleted span;
-          // reject the removal up front like the AI path does (#1134). The
-          // remove commands act on the selection unless a range is given.
+          // Deleting rows/columns that formulas reference must behave like
+          // Excel: the deletion succeeds and orphaned references become
+          // #REF!. Univer rewrites same-sheet references itself while
+          // executing the command; cross-sheet dependents are Univer's gap —
+          // it leaves their texts stale and relocates the cells. Once the
+          // command completes, re-scan the (relocated) model for qualified
+          // references to the deleted span and rewrite them with the exact
+          // token rewriter the save uses, as journaled set-values commands.
+          // They land as their own undo item on top of the deletion's, so
+          // ⌘Z restores the original formulas and a second ⌘Z the rows
+          // (same-sheet deletions remain Univer's native single-step undo).
+          // CommandExecuted fires even for declined commands and the safety
+          // valve fires on cancel/throw, so the rewrites apply only after
+          // verifying the deletion actually landed in the model.
           if (sheet && /^sheet\.command\.remove-(row|col)/.test(event.id)) {
             const uiWorkbook = runtime.univerAPI.getActiveWorkbook()
             const range =
@@ -2345,10 +2372,68 @@ export function App(): React.JSX.Element {
                     column: columnLabel(range.startColumn),
                     count: range.endColumn - range.startColumn + 1,
                   }
-              if (structuralDeleteFormulaErrorSync(state, uiWorkbook, removeOp)) {
-                event.cancel = true
-                setMessage(t('appDeleteSpanFormulas'))
-                return
+              const spec = deleteSpanSpec(
+                state,
+                (id) => uiWorkbook.getSheetBySheetId(id)?.getSheetName(),
+                removeOp,
+              )
+              if (collectCrossSheetDependentRewrites(state, uiWorkbook, spec).length > 0) {
+                // Span size and sheet row/column count before the command
+                // runs — the landed check compares against them once the
+                // command settles.
+                const isRow = event.id.includes('remove-row')
+                const spanCount = isRow
+                  ? range.endRow - range.startRow + 1
+                  : range.endColumn - range.startColumn + 1
+                const spanSheet = uiWorkbook.getSheetBySheetId(sheet.id)
+                const countBefore = spanSheet
+                  ? isRow
+                    ? spanSheet.getMaxRows()
+                    : spanSheet.getMaxColumns()
+                  : undefined
+                let settled = false
+                const finish = () => {
+                  if (settled) return
+                  settled = true
+                  disposable.dispose()
+                  clearTimeout(safety)
+                  // Verifies the deletion landed (CommandExecuted fires even
+                  // for declined commands; the safety valve fires on
+                  // cancel/throw) before re-collecting from the relocated
+                  // model and applying the rewrites under one undo item (the
+                  // AI path's open batch already folds them into its own).
+                  finishCrossSheetRewrites({
+                    runtime,
+                    state,
+                    workbook: uiWorkbook,
+                    spec,
+                    countBefore,
+                    spanCount,
+                    beginBatch: aiBulkUndoGate.active ? null : () => beginUndoBatch(runtime),
+                  })
+                }
+                const disposable = runtime.univerAPI.addEvent(
+                  runtime.univerAPI.Event.CommandExecuted,
+                  (executed) => {
+                    if (executed.id !== event.id) return
+                    const done = executed.params as
+                      { subUnitId?: string; range?: IRange } | undefined
+                    if (done?.subUnitId !== sheet.id) return
+                    if (
+                      done.range &&
+                      (event.id.includes('remove-row')
+                        ? done.range.startRow !== range.startRow ||
+                          done.range.endRow !== range.endRow
+                        : done.range.startColumn !== range.startColumn ||
+                          done.range.endColumn !== range.endColumn)
+                    )
+                      return
+                    finish()
+                  },
+                )
+                // Safety valve: dispose the one-shot listener if the command
+                // never completes (canceled by a later gate).
+                const safety = setTimeout(finish, 5000)
               }
             }
           }
@@ -2511,6 +2596,25 @@ export function App(): React.JSX.Element {
     const unsubscribeMenu =
       window.desktopApi?.onMenuAction((action) => menuActionRef.current(action)) ??
       (() => undefined)
+    // Excel parity: Cmd/Ctrl+Y redo rides the same action the ⇧⌘Z menu
+    // accelerator sends — an Electron menu item carries a single accelerator,
+    // so the second chord forwards from here; focused text fields keep their
+    // native redo through the same menuAction branch.
+    const onRedoKey = (event: KeyboardEvent): void => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey &&
+        !event.altKey &&
+        event.code === 'KeyY'
+      ) {
+        event.preventDefault()
+        menuActionRef.current('redo')
+      }
+    }
+    window.addEventListener('keydown', onRedoKey, true)
+    // Subscription live: tell the shell once so a queued workbook's 'open'
+    // action is flushed now instead of waiting for the bounded retry resends.
+    window.desktopApi?.menuActionsReady?.()
     // Close guard chose Save: run the journal save and report the outcome.
     const unsubscribeCloseSave =
       window.desktopApi?.onCloseSaveRequest?.(() => void closeSaveRef.current()) ??
@@ -2656,6 +2760,7 @@ export function App(): React.JSX.Element {
     )
     return () => {
       unsubscribeMenu()
+      window.removeEventListener('keydown', onRedoKey, true)
       unsubscribeCloseSave()
       offThemeChanged?.()
       undoRedoSub.unsubscribe()
@@ -3313,6 +3418,7 @@ export function App(): React.JSX.Element {
       pivotContext,
       handlePageLayoutCommand: (rest) => handlePageLayoutCommandImpl(pageLayoutContext(), rest),
       handleExportPdf: () => handleExportPdfImpl(pageLayoutContext()),
+      openPrintDialog: () => setPrintDialogOpen(true),
     }
   }
 
@@ -3862,6 +3968,10 @@ export function App(): React.JSX.Element {
       void handleInspectWorkbook()
     } else if (action === 'export-pdf') {
       void handleExportPdfImpl(pageLayoutContext())
+    } else if (action === 'print') {
+      setPrintDialogOpen(true)
+    } else if (action === 'shortcuts') {
+      setShortcutsOpen(true)
     } else if (action === 'export-csv') {
       void handleExportCsvImpl(csvExportContext())
     } else if (action === 'undo' || action === 'redo') {
@@ -4004,6 +4114,7 @@ export function App(): React.JSX.Element {
   return (
     <>
       <ToastHost />
+      {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       {recoveryPrompt && (
         <RecoveryDialog
           prompt={recoveryPrompt}
@@ -4145,6 +4256,25 @@ export function App(): React.JSX.Element {
         onGoToReference={(ref) => goToReferenceImpl(dataToolsContext(), ref)}
         onListDefinedNames={() => listDefinedNamesImpl(dataToolsContext())}
         onApplyFormula={(formula) => handleApplyFormulaImpl(dataToolsContext(), formula)}
+        showPrintDialog={printDialogOpen}
+        onClosePrintDialog={() => setPrintDialogOpen(false)}
+        onOpenPrintDialog={() => setPrintDialogOpen(true)}
+        onOpenWorkbook={() => void handleInspectWorkbook()}
+        onExportPdf={() => void handleExportPdfImpl(pageLayoutContext())}
+        onExportCsv={() => void handleExportCsvImpl(csvExportContext())}
+        onSetStatusMessage={setMessage}
+        buildPrintRequest={(overrides) =>
+          buildActiveSheetPrintRequest(pageLayoutContext(), overrides)
+        }
+        getFunctionCatalog={() =>
+          buildFunctionCatalog(
+            univerRef.current
+              ? univerRef.current.univer.__getInjector().get(IFunctionService)
+              : null,
+            UNIVER_EN_US_LOCALE,
+            CURATED_FUNCTIONS,
+          )
+        }
         onCreateSubtotal={(config) => handleCreateSubtotalImpl(dataToolsContext(), config)}
         onCreateConsolidate={(config) => handleCreateConsolidateImpl(dataToolsContext(), config)}
         onGetConsolidateDefault={() => consolidateDefaultReferenceImpl(dataToolsContext())}

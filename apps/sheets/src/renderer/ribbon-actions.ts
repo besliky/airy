@@ -132,6 +132,8 @@ export interface RibbonCommandContext {
   pivotContext: () => PivotActionContext
   handlePageLayoutCommand: (rest: string) => void
   handleExportPdf: () => Promise<void>
+  /// File › Print (and Ctrl+P): opens the print dialog.
+  openPrintDialog: () => void
 }
 
 /// Resolves interned style references and merges row/col/sheet styles —
@@ -1075,7 +1077,9 @@ export function handleRibbonCommand(ctx: RibbonCommandContext, command: string):
     ctx.handlePageLayoutCommand(command.slice('page-layout:'.length))
     return
   }
-  if (command === 'export-pdf') {
+  if (command === 'print') {
+    ctx.openPrintDialog()
+  } else if (command === 'export-pdf') {
     void ctx.handleExportPdf()
     return
   }

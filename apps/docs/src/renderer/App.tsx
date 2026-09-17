@@ -1,3 +1,4 @@
+import { clampDocZoom } from './zoom-clamp'
 import { DOC_CSS_COMMITTED_EVENT } from './editor/cjk-punct-shrink'
 import {
   useCallback,
@@ -153,7 +154,7 @@ import { FindPanel } from './components/FindPanel'
 import { Ribbon } from './components/Ribbon'
 import { computeFormatState } from './components/ribbon-format-state'
 import { IconRedo, IconSave, IconUndo } from './components/icons'
-import { ToastHost } from './components/toast'
+import { ToastHost } from '@airy-office/ui'
 import {
   AI_REWRITE_ACK_KEY,
   LinkInsertModal,
@@ -245,6 +246,7 @@ import {
   deleteComment as deleteCommentImpl,
   deleteNote as deleteNoteImpl,
   editComment as editCommentImpl,
+  effectiveAuthorName,
   handleRevision as handleRevisionImpl,
   removeInks as removeInksImpl,
   replyToComment as replyToCommentImpl,
@@ -785,6 +787,8 @@ export function App() {
     entries: CompareEntry[]
   } | null>(null)
   const [autoSave, setAutoSave] = useAutoSavePref('aidocs.autoSave', window.desktop)
+  /** author name configured in the shell (Settings → General); '' = unset */
+  const [authorName, setAuthorName] = useState('')
   // tab closed but this renderer kept alive (shell freeze workaround): go inert
   const [tornDown, setTornDown] = useState(false)
   const [aiPreset, setAiPreset] = useState<{
@@ -1149,7 +1153,7 @@ export function App() {
       const rect = scrollContainerRef.current?.getBoundingClientRect()
       const anchor = rect ? { vx: e.clientX - rect.left, vy: e.clientY - rect.top } : null
       setZoom((z) => {
-        const next = Math.min(200, Math.max(50, z - e.deltaY * 0.6))
+        const next = clampDocZoom(z - e.deltaY * 0.6)
         if (next !== z) zoomAnchorRef.current = anchor
         return next
       })
@@ -1235,7 +1239,30 @@ export function App() {
     if (!editor) return
     const storage = editor.storage.trackChanges as TrackChangesStorage
     storage.enabled = trackChanges
-  }, [editor, trackChanges])
+    // revision marks carry the configured author (fallback: localized default)
+    storage.author = effectiveAuthorName(authorName, t('editorDefaultAuthor'))
+  }, [editor, trackChanges, authorName, lang])
+
+  // author name (Settings → General in the shell): read once, then follow live
+  // changes so open documents stamp new comments / revisions without a reopen
+  useEffect(() => {
+    let alive = true
+    window.desktop
+      .getAuthorName()
+      .then((name) => {
+        if (alive && typeof name === 'string') setAuthorName(name)
+      })
+      .catch(() => {
+        /* standalone dev without the shell: keep the localized default */
+      })
+    const off = window.desktop.onAuthorNameChanged((name) => {
+      if (alive && typeof name === 'string') setAuthorName(name)
+    })
+    return () => {
+      alive = false
+      off()
+    }
+  }, [])
 
   // window title follows the document, so the OS window list and Switch Window show file names
   useEffect(() => {
@@ -1925,6 +1952,7 @@ export function App() {
     doc,
     dirtyRef,
     setStatus,
+    authorName,
     notePrompt,
     setNotePrompt,
     footnotes,
@@ -2038,7 +2066,7 @@ export function App() {
       // whole page = the entire page visible, so it must fit both dimensions;
       // floor, not round: rounding up would push the page past the pane edge
       const next = mode === 'width' ? wFit : Math.min(wFit, hFit)
-      const applied = Math.min(200, Math.max(50, Math.floor(next)))
+      const applied = clampDocZoom(Math.floor(next))
       lastFitRef.current = { mode, value: applied }
       setZoom(applied)
     },
@@ -4016,10 +4044,10 @@ export function App() {
           editor?.chain().focus().redo().run()
           break
         case 'zoom-in':
-          setZoom((z) => Math.min(200, Math.round(z) + 10))
+          setZoom((z) => clampDocZoom(Math.round(z) + 10))
           break
         case 'zoom-out':
-          setZoom((z) => Math.max(50, Math.round(z) - 10))
+          setZoom((z) => clampDocZoom(Math.round(z) - 10))
           break
         case 'zoom-100':
           setZoom(100)
@@ -4393,9 +4421,9 @@ export function App() {
       getComments: () => bridgeCtxRef.current.comments,
       getHf: () => bridgeCtxRef.current.hf,
     })
-    return window.desktop.onBridgeInvoke((requestId, method, params) => {
-      void handleCommand(method, (params as Record<string, unknown>) ?? {}).then((result) =>
-        window.desktop.reportBridgeResult(requestId, result),
+    return window.desktop.onBridgeInvoke((requestId, method, params, clientId) => {
+      void handleCommand(method, (params as Record<string, unknown>) ?? {}, clientId).then(
+        (result) => window.desktop.reportBridgeResult(requestId, result),
       )
     })
   }, [])
@@ -5008,12 +5036,19 @@ export function App() {
                 </>
               )}
               {!doc && t('appReady')}
-              {status && <span className="status-msg"> — {status}</span>}
+              {status && (
+                <span className="status-msg" role="status" aria-live="polite">
+                  {' '}
+                  — {status}
+                </span>
+              )}
             </div>
             <div className="status-right">
               <button
                 className="zoom-btn"
-                onClick={() => setZoom((z) => Math.max(50, Math.round(z) - 10))}
+                data-tip={t('appZoomOut')}
+                aria-label={t('appZoomOut')}
+                onClick={() => setZoom((z) => clampDocZoom(Math.round(z) - 10))}
               >
                 −
               </button>
@@ -5021,14 +5056,17 @@ export function App() {
                 className="zoom-slider"
                 type="range"
                 min={50}
-                max={200}
+                max={400}
                 step={10}
+                aria-label={t('appZoomLabel')}
                 value={Math.round(zoom)}
                 onChange={(e) => setZoom(Number(e.target.value))}
               />
               <button
                 className="zoom-btn"
-                onClick={() => setZoom((z) => Math.min(200, Math.round(z) + 10))}
+                data-tip={t('appZoomIn')}
+                aria-label={t('appZoomIn')}
+                onClick={() => setZoom((z) => clampDocZoom(Math.round(z) + 10))}
               >
                 +
               </button>

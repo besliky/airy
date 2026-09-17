@@ -19,6 +19,31 @@ import {
   type TableModel,
 } from '@airy-office/docx-engine'
 
+// ---- link href policy (mirrors the renderer's sanitizeLinkHref) ----
+
+/**
+ * Whitelist for anchor hrefs: http(s), mailto, in-document fragments and
+ * plain relative references. Everything else — javascript:, file:, data:,
+ * vbscript: … — is dropped so tool input cannot persist a dangerous scheme
+ * into the document (the engine writes every link run as an external rel
+ * target unfiltered). Returns null to mean "keep the text, drop the link",
+ * the same degradation as an <a> without href.
+ *
+ * This mirrors sanitizeLinkHref in apps/docs/src/renderer/ai/doc-utils.ts
+ * (including the whitespace trim); the mcp-server is pure TS and must not
+ * import from the apps, so the small policy lives here too — keep the two in
+ * sync when the renderer policy changes.
+ */
+function sanitizeHref(raw: string | undefined | null): string | null {
+  const href = (raw ?? '').trim()
+  if (!href) return null
+  if (/^(https?|mailto):/i.test(href)) return href
+  if (href.startsWith('#')) return href
+  // anything else with a scheme is not allowed; scheme-less values are relative refs
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return null
+  return href
+}
+
 // ---- parsing: restricted HTML -> session content ----
 
 /** Content produced by one insert: paragraph-ish blocks plus one table fragment. */
@@ -105,7 +130,8 @@ function parseAttrs(raw: string): Record<string, string> {
   const re = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*(?:=\s*("([^"]*)"|'([^']*)'|[^\s"'>]+))?/g
   let m: RegExpExecArray | null
   while ((m = re.exec(raw)) !== null) {
-    if (m[1]) attrs[m[1].toLowerCase()] = decodeHtmlText(m[2] ?? '')
+    // m[2] is the whole quoted alternative; the inner groups carry the value
+    if (m[1]) attrs[m[1].toLowerCase()] = decodeHtmlText(m[3] ?? m[4] ?? m[2] ?? '')
   }
   return attrs
 }
@@ -220,7 +246,8 @@ function inlineRuns(el: OpenEl, marks: Marks): Run[] {
       return walkChildren(node, { ...m, strike: true })
     if (tag === 'code') return walkChildren(node, { ...m, mono: true })
     if (tag === 'a') {
-      const href = node.attrs['href']
+      // disallowed schemes degrade to plain text, exactly like a missing href
+      const href = sanitizeHref(node.attrs['href'])
       return href ? walkChildren(node, { ...m, href }) : walkChildren(node, m)
     }
     walkChildren(node, m)

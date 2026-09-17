@@ -4,7 +4,7 @@
 // stubbed and the save gateway mocked (the real gateway needs the sidecar
 // binary; see xlsx-integration.test.ts). LibreOffice is mocked absent so the
 // .doc read-only fallback is deterministic.
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -13,12 +13,18 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../src/xlsx/save.js', () => ({
-  saveWorkbookViaSidecar: vi.fn(async (request: { targetPath: string }) => {
-    await writeFile(request.targetPath, 'saved-xlsx-bytes')
-    return { touchedEntries: [], removedEntries: [], addedEntries: [] }
-  }),
-}))
+vi.mock('../src/xlsx/save.js', async (importOriginal) => {
+  // keep the re-exported gateway schemas (the registry's tool input uses
+  // them); only the save call itself is mocked
+  const original = await importOriginal<typeof import('../src/xlsx/save.js')>()
+  return {
+    ...original,
+    saveWorkbookViaSidecar: vi.fn(async (request: { targetPath: string }) => {
+      await writeFile(request.targetPath, 'saved-xlsx-bytes')
+      return { touchedEntries: [], removedEntries: [], addedEntries: [] }
+    }),
+  }
+})
 
 vi.mock('../src/import/soffice.js', () => ({
   SOFFICE_FILTERS: { docx: 'MS Word 2007 XML', doc: 'MS Word 97', odt: 'writer8', ods: 'calc8' },
@@ -166,6 +172,37 @@ describe('multi-format document tools over MCP', () => {
       const after = await call(client, 'read_workbook', { handle })
       expect(after.isError).toBe(true)
       expect(text(after)).toContain('Unknown document handle')
+    } finally {
+      await close()
+    }
+  })
+
+  it('save_document refuses to clobber an existing file unless overwrite is passed', async () => {
+    const { client, close } = await connectSession()
+    try {
+      await writeFile(join(root, 'precious.xlsx'), 'unrelated workbook')
+      const book = await call(client, 'open_document', { path: 'book.xlsx' })
+      const handle = String(book.structuredContent?.handle)
+
+      const refused = await call(client, 'save_document', { handle, path: 'precious.xlsx' })
+      expect(refused.isError).toBe(true)
+      expect(text(refused)).toContain('already exists')
+      expect(text(refused)).toContain('overwrite: true')
+      expect(await readFile(join(root, 'precious.xlsx'), 'utf8')).toBe('unrelated workbook')
+
+      const forced = await call(client, 'save_document', {
+        handle,
+        path: 'precious.xlsx',
+        overwrite: true,
+      })
+      expect(forced.isError).toBeFalsy()
+      expect(forced.structuredContent?.path).toBe(join(root, 'precious.xlsx'))
+
+      // saving without a path (the session's own file) needs no overwrite
+      const inPlace = await call(client, 'save_document', { handle })
+      expect(inPlace.isError).toBeFalsy()
+      expect(inPlace.structuredContent?.path).toBe(join(root, 'book.xlsx'))
+      await call(client, 'close_document', { handle })
     } finally {
       await close()
     }

@@ -18,7 +18,8 @@
   --text: #242424;
   --text-primary: #232425;
   --text-secondary: #606366;
-  --text-tertiary: #909499;
+  /* WCAG AA: >=4.5:1 on --surface (#ffffff); was #909499 (3.05:1) */
+  --text-tertiary: #72767b;
   --text-muted: #878e96;
   --text-dim: #605e5c;
   --hover: #f5f5f5;
@@ -29,7 +30,8 @@
   --bg-hover-strong: #e8eaee;
   --bg-hover-accent: #e0e4ea;
   --bg-content: #fafafa;
-  --icon-muted: #b9bfc7;
+  /* WCAG non-text: >=3:1 on --surface (#ffffff); was #b9bfc7 (1.85:1) */
+  --icon-muted: #8d939a;
   --danger: #d13438;
   --danger-bg: #fdf3f3;
   --search-hit-bg: #ffe28a;
@@ -57,7 +59,8 @@
   --color-brand-secondary: #0f7fff;
   --color-text-primary: #232425;
   --color-text-secondary: #606366;
-  --color-text-tertiary: #909499;
+  /* WCAG AA: >=4.5:1 on --color-bg-page (#ffffff); was #909499 (3.05:1) */
+  --color-text-tertiary: #72767b;
   --color-bg-page: #ffffff;
   --color-bg-subtle: #f5f5f5;
   --color-border-default: #eaeaea;
@@ -103,7 +106,7 @@
   --bg-hover-strong: #444;
   --bg-hover-accent: #444;
   --bg-content: #1a1a1a;
-  --icon-muted: #666;
+  --icon-muted: #707070;
   --danger: #d13438;
   --danger-bg: #3a2020;
   --search-hit-bg: #745a1e;
@@ -161,7 +164,7 @@
     --bg-hover-strong: #444;
     --bg-hover-accent: #444;
     --bg-content: #1a1a1a;
-    --icon-muted: #666;
+    --icon-muted: #707070;
     --danger: #d13438;
     --danger-bg: #3a2020;
     --search-hit-bg: #745a1e;

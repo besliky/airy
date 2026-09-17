@@ -310,8 +310,6 @@ export const ja = {
     'この数式は大きな範囲を要素ごとに評価するため、計算でアプリがフリーズします — キャンセルしました。参照範囲を狭めて再試行してください。',
   appPivotSheetNoStructural:
     'このシートにはピボットテーブルが含まれています — 構造の変更には未対応です。',
-  appDeleteSpanFormulas:
-    '削除対象の行/列のみを参照する数式があります — 先にその数式を更新または削除してください。',
   appIconSetUnsupported:
     'このアイコンの組み合わせは xlsx に保存できません。別のアイコンセットを選択してください。',
   appNeedFullLoadSort:
@@ -655,6 +653,8 @@ export const ja = {
   appSheetStillIndexing: 'シートのインデックスを作成中です — しばらくしてからお試しください。',
   // Print (export PDF)
   appPrintNothing: 'このシートには印刷できる内容がありません。',
+  appPrintFailed: '印刷に失敗しました:{error}',
+  appPrintPreviewFailed: '印刷プレビューを生成できませんでした。',
   appPrintTooLarge:
     '印刷範囲が大きすぎます — 「ページレイアウト」タブでより小さい印刷範囲を設定してください。',
   appPrintBadArea: '印刷範囲 "{area}" が無効です。',
@@ -682,6 +682,16 @@ export const ja = {
   appApply: '適用',
   // Ribbon tabs
   appTabHome: 'ホーム',
+  appRibbonTabs: 'リボンのタブ',
+  appWorkbookCommands: 'ブックのコマンド',
+  appOpenDropdown: 'ドロップダウンを開く',
+  appFileTab: 'ファイル',
+  appFileOpen: 'ワークシートを開く',
+  appFileSave: '保存',
+  appFileSaveAs: '名前を付けて保存',
+  appFileExportPdf: 'PDF としてエクスポート…',
+  appFileExportCsv: 'CSV としてエクスポート…',
+  appFilePrint: '印刷…',
   appTabInsert: '挿入',
   appTabPageLayout: 'ページレイアウト',
   appTabFormulas: '数式',
@@ -1377,4 +1387,27 @@ export const ja = {
   appFindTitle: '検索と選択 ⌘F',
   appReplace: '置換',
   appGoTo: 'ジャンプ',
+  scTitle: 'キーボード ショートカット',
+  scFilter: 'ショートカットを検索…',
+  scNone: '一致するショートカットはありません。',
+  scGroupFile: 'ファイル',
+  scGroupWorkbook: 'ブック',
+  scGroupSelection: '選択範囲',
+  scOpen: '開く…',
+  scSave: '保存',
+  scSaveAs: '名前を付けて保存…',
+  scPrint: '印刷',
+  scUndo: '元に戻す',
+  scRedo: 'やり直す',
+  scNextSheet: '次のシート',
+  scPrevSheet: '前のシート',
+  scFirstCell: '先頭セル (A1)',
+  scLastUsedCell: '最終使用セル',
+  scRowStart: '行の先頭',
+  scSelectColumn: '列全体を選択',
+  scSelectRow: '行全体を選択',
+  scHideRows: '行を非表示',
+  scUnhideRows: '行の再表示',
+  scHideColumns: '列を非表示',
+  scUnhideColumns: '列の再表示',
 } satisfies Record<keyof typeof zh, string>

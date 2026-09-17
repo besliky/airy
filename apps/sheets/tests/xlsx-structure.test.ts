@@ -209,10 +209,42 @@ describe('cross-sheet reference rewriting', () => {
     expect(shifted).not.toContain('&lt;v&gt;')
   })
 
-  it('fails closed when a qualified reference lands in a deleted range', () => {
-    expect(() =>
-      shiftCrossSheetFormulas(otherSheet, SHEET, [{ kind: 'remove-rows', index: 7, count: 1 }]),
-    ).toThrow(StructuralShiftError)
+  it('emits a bare #REF! when a qualified reference lands in a deleted range', () => {
+    // Data!A5:A10 and Data!$A$8 are wholly inside the deleted rows; the local
+    // A5 (other sheet) stays.
+    const shifted = shiftCrossSheetFormulas(otherSheet, SHEET, [
+      { kind: 'remove-rows', index: 4, count: 7 },
+    ])
+    expect(shifted).toContain('<f>SUM(#REF!)+#REF!+A5</f>')
+  })
+
+  it('clips qualified ranges that straddle the deleted span', () => {
+    const shifted = shiftCrossSheetFormulas(otherSheet, SHEET, [
+      { kind: 'remove-rows', index: 7, count: 1 },
+    ])
+    expect(shifted).toContain('<f>SUM(Data!A5:A9)+#REF!+A5</f>')
+  })
+
+  it('rewrites cross-sheet CF/DV formula bodies; unrelated ones stay byte-identical', () => {
+    const rulesSheet =
+      '<worksheet><sheetData/>' +
+      '<conditionalFormatting sqref="A1:A5"><cfRule type="expression" priority="1">' +
+      '<formula>Data!$D$7&gt;100</formula></cfRule></conditionalFormatting>' +
+      '<dataValidations count="2">' +
+      '<dataValidation type="list" allowBlank="1" sqref="B1"><formula1>Data!$A$2:$A$9</formula1></dataValidation>' +
+      '<dataValidation type="whole" allowBlank="1" sqref="C1"><formula1>Other!$A$2:$A$9</formula1><formula2>Data!$D$7</formula2></dataValidation>' +
+      '</dataValidations></worksheet>'
+    // deleting sheet row 7 (0-based 6) on Data
+    const shifted = shiftCrossSheetFormulas(rulesSheet, SHEET, [
+      { kind: 'remove-rows', index: 6, count: 1 },
+    ])
+    // wholly-inside qualified refs become the bare #REF! token, like <f> bodies
+    expect(shifted).toContain('<formula>#REF!&gt;100</formula>')
+    expect(shifted).toContain('<formula2>#REF!</formula2>')
+    // a straddling list source clips to the survivors (rows 2..9 minus 7)
+    expect(shifted).toContain('<formula1>Data!$A$2:$A$8</formula1>')
+    // references qualified to a third sheet are untouched
+    expect(shifted).toContain('<formula1>Other!$A$2:$A$9</formula1>')
   })
 
   it('shifts defined names', () => {
@@ -223,6 +255,66 @@ describe('cross-sheet reference rewriting', () => {
     ])
     expect(shifted).toContain('<definedName name="x">Data!$A$11</definedName>')
     expect(shifted).toContain('<definedName name="y">Other!$A$8</definedName>')
+  })
+
+  it('turns defined names orphaned by a deletion into #REF!', () => {
+    const workbook =
+      '<workbook><definedNames><definedName name="x">Data!$A$8</definedName><definedName name="y">Other!$A$8</definedName></definedNames></workbook>'
+    const shifted = shiftDefinedNames(workbook, SHEET, [
+      { kind: 'remove-rows', index: 7, count: 1 },
+    ])
+    expect(shifted).toContain('<definedName name="x">#REF!</definedName>')
+    expect(shifted).toContain('<definedName name="y">Other!$A$8</definedName>')
+  })
+})
+
+describe('deleted-reference #REF! emission (Excel semantics)', () => {
+  it('shiftFormulaText default still fails closed', () => {
+    expect(() =>
+      shiftFormulaText(
+        'A5*2',
+        SHEET,
+        { boundary: 4, delta: -2, deleted: { start: 4, end: 5 } },
+        'row',
+      ),
+    ).toThrow(StructuralShiftError)
+  })
+
+  it('whole-range references become the bare #REF! token (qualifier dropped)', () => {
+    expect(
+      shiftFormulaText(
+        'SUM(Other!A5:A9)+$B$8',
+        'Other',
+        { boundary: 4, delta: -6, deleted: { start: 4, end: 9 } },
+        'row',
+        true,
+        'ref-error',
+      ),
+    ).toBe('SUM(#REF!)+$B$8')
+    expect(
+      shiftFormulaText(
+        'SUM(A5:A9)+B8',
+        SHEET,
+        { boundary: 4, delta: -6, deleted: { start: 4, end: 9 } },
+        'row',
+        false,
+        'ref-error',
+      ),
+    ).toBe('SUM(#REF!)+#REF!')
+  })
+
+  it('own-sheet formulas rewrite through applyStructuralOps instead of aborting the save', async () => {
+    // Rows 1-2 vanish; B4's formula (which lands at B2) references $A$2 —
+    // wholly inside the deleted span — and becomes #REF!, while the
+    // whole-column SUM(B:B), the cross-sheet Other!B9, and the "A1" literal
+    // survive untouched.
+    const xml = applyStructuralOps(
+      await fixtureWorksheet(),
+      [{ kind: 'remove-rows', index: 0, count: 2 }],
+      SHEET,
+    )
+    expect(xml).toContain('<f>#REF!+Other!B9+SUM(B:B)&amp;"A1"</f>')
+    expect(xml).toContain('<row r="2"><c r="B2">')
   })
 })
 
@@ -681,21 +773,26 @@ describe('structural save integration', () => {
     expect(other).toContain('<f>Data!A8</f>')
   })
 
-  it('still fails closed when a cross-sheet reference is deleted', async () => {
+  it('saves with #REF! when a cross-sheet reference is deleted (Excel semantics)', async () => {
     const zip = await JSZip.loadAsync(await buildStructureFixture())
     zip.file(
       'xl/worksheets/sheet2.xml',
-      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><f>Data!A1</f><v>1</v></c></row></sheetData></worksheet>',
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><f>Data!A1</f><v>1</v></c><c r="B1"><f>Data!A1+Data!A10</f><v>2</v></c></row></sheetData></worksheet>',
       { createFolders: false },
     )
     const buffer = await zip.generateAsync({ type: 'nodebuffer' })
-    await expect(
-      applyCellEditsToXlsx(
-        buffer,
-        [],
-        [{ sheetName: SHEET, ops: [{ kind: 'remove-rows', index: 0, count: 1 }] }],
-      ),
-    ).rejects.toThrow('deleted range')
+    const mutation = await applyCellEditsToXlsx(
+      buffer,
+      [],
+      [{ sheetName: SHEET, ops: [{ kind: 'remove-rows', index: 0, count: 1 }] }],
+    )
+    // Untouched parts of the package survive byte-for-byte.
+    expect(() => assertOnlyTouchedEntriesChanged(mutation)).not.toThrow()
+    const saved = await JSZip.loadAsync(mutation.buffer)
+    const other = await saved.file('xl/worksheets/sheet2.xml')?.async('text')
+    expect(other).toContain('<f>#REF!</f>')
+    // the partially-overlapping second formula keeps its surviving term
+    expect(other).toContain('<f>#REF!+Data!A9</f>')
   })
 
   const anchoredTable =

@@ -19,6 +19,7 @@ import { BridgeClientError, sharedLiveBridge } from '../live/client.js'
 import { getSession, removeSession, storeSession, type DocumentSession } from '../sessions/store.js'
 import { TextSession } from '../sessions/text.js'
 import { XlsxSession, type XlsxSessionMeta } from '../xlsx/session.js'
+import { richRunSchema, workbookStyleEditSchema } from '../xlsx/save.js'
 import { SERVER_NAME } from '../version.js'
 
 /** text + mirrored JSON content, the repo's standard tool output shape */
@@ -32,8 +33,68 @@ function content(payload: object, text?: string) {
 
 const OPS_GUIDE = [
   'Each op is a flat record { op, target?, ...fields }; fields are patches: present = set, null = clear, absent = keep.',
-  'Target conditions (AND, at least one): nodeType ("heading"|"paragraph"|"listItem"|"image"), headingLevel (1-6), containsText (+ matchCase: false), blockIndexes[].',
+  'Target conditions (AND, at least one): nodeType ("heading"|"paragraph"|"listItem"|"image"; the renderer spellings "docHeading"|"docParagraph"|"docListItem" are accepted aliases), headingLevel (1-6), containsText (+ matchCase: false), blockIndexes[].',
   ...opSignatures().map((s) => `- ${s}`),
+].join('\n')
+
+/** one agent-issued cell edit: sheet + A1 ref + value/formula/style patches */
+const CELL_EDIT_SCHEMA = z
+  .object({
+    sheet: z
+      .union([z.string().min(1), z.number().int().min(0)])
+      .describe('Sheet name or 0-based index (from the read_workbook overview)'),
+    ref: z.string().min(1).max(16).describe('Single cell in A1 notation, e.g. "B2"'),
+    value: z
+      .union([z.string().max(32_767), z.number().finite(), z.boolean(), z.null()])
+      .optional()
+      .describe('Constant to store (null clears the value); ignored when formula is given'),
+    formula: z
+      .string()
+      .min(1)
+      .max(8_192)
+      .optional()
+      .describe(
+        'Formula, with or without the leading "="; written without a cached result so ' +
+          'apps recalculate on open',
+      ),
+    style: workbookStyleEditSchema
+      .optional()
+      .describe(
+        'Style patch (bold, italic, fillColor "#RRGGBB", fontColor, numberFormat, ' +
+          'horizontalAlignment, borders, ...): only the given keys change, the rest of the ' +
+          "cell's format survives",
+      ),
+    rich: z
+      .array(richRunSchema)
+      .max(1_000)
+      .optional()
+      .describe(
+        'Rich-text runs for a string value ({ text, bold, italic, underline, strikethrough, ' +
+          'color?, size?, family?, vertAlign? }); the joined run text becomes the cell value',
+      ),
+    styleReset: z
+      .boolean()
+      .optional()
+      .describe('Reset the cell to the default style before applying the style patch'),
+  })
+  .strict()
+  .refine(
+    (edit) =>
+      edit.value !== undefined ||
+      edit.formula !== undefined ||
+      edit.style !== undefined ||
+      edit.rich !== undefined ||
+      edit.styleReset !== undefined,
+    { message: 'A cell edit needs at least one of value, formula, style, rich or styleReset.' },
+  )
+
+/** ops the embedded live registry accepts beyond the headless guide (kept in
+ * sync with the apps/docs/src/renderer/ai/ops.ts signatures) */
+const LIVE_OPS_EXTRAS = [
+  'Live-only extras accepted by the embedded registry in addition to the ops above:',
+  '- setImageProperties <target nodeType "image"> widthPx? heightPx? align? ("left"|"center"|"right"|null) — image blocks only; giving one dimension scales the other proportionally',
+  '- insertToc afterBlockIndex (-1 = document start) — insert a TOC field built from the current headings; Word computes page numbers on open (fails when the document has no headings)',
+  '- setFont / setMatchedFont additionally accept link: { url } | null over this bridge.',
 ].join('\n')
 
 export function registerTools(server: McpServer): void {
@@ -73,7 +134,9 @@ export function registerTools(server: McpServer): void {
       title: 'Open document',
       description:
         'Open a document and return a session handle for the other document tools. Supported ' +
-        'formats: .docx and .xlsx/.xlsm open natively (fully editable); .xls and .ods import via ' +
+        'formats: .docx and .xlsx/.xlsm open natively (docx fully editable via insert_content/' +
+        'apply_ops; workbooks editable in cell values, formulas and styles via apply_workbook_ops ' +
+        '— charts, pivots and sheet structure are not editable headlessly); .xls and .ods import via ' +
         'conversion (editable as .xlsx; styling is lost — see warnings); .doc and .odt convert to ' +
         '.docx via LibreOffice when installed (editable; save_document format "origin" exports ' +
         'back); without LibreOffice a .doc still opens read-only as extracted text (editable: ' +
@@ -185,6 +248,72 @@ export function registerTools(server: McpServer): void {
   )
 
   server.registerTool(
+    'apply_workbook_ops',
+    {
+      title: 'Apply workbook edits',
+      description:
+        'Apply a batch of cell edits to an open workbook session (.xlsx/.xlsm/.xls/.ods). Each ' +
+        'edit targets one cell by sheet (name or index) and A1 ref and may set a value (string / ' +
+        'number / boolean / null), a formula (stored without a cached result, so spreadsheet apps ' +
+        'recalculate on open), a style patch (bold, fillColor "#RRGGBB", numberFormat, borders, ' +
+        '...), rich-text runs, or a combination. Fields are patches: a value/formula edit replaces ' +
+        "the cell's content, a style edit replaces only the cell's format, and later edits to the " +
+        'same cell win per channel. The batch is validated up front (unknown sheets, bad refs, ' +
+        'malformed edits reject the whole batch); dryRun reports without journaling. Edits are ' +
+        'journaled in memory; persist with save_document, which keeps untouched zip entries ' +
+        'byte-identical (xl/workbook.xml excepted — it gains the fullCalcOnLoad recalc flag ' +
+        'when the source lacks it). Cell values, formulas and styles only — charts, pivots, merged ranges and ' +
+        'sheet structure are not editable headlessly.',
+      inputSchema: {
+        handle: z.string().min(1).describe('Session handle from open_document'),
+        edits: z
+          .array(CELL_EDIT_SCHEMA)
+          .min(1)
+          .max(100)
+          .describe('Batch of cell edits, journaled in order'),
+        dryRun: z
+          .boolean()
+          .optional()
+          .describe('Validate and report the batch without journaling anything'),
+      },
+      annotations: {
+        destructiveHint: false,
+      },
+    },
+    async ({ handle, edits, dryRun }) => {
+      const session = requireWorkbookSession(handle)
+      // journal per sheet (first-appearance order keeps the batch's order)
+      const bySheet = new Map<string | number, typeof edits>()
+      for (const edit of edits) {
+        const group = bySheet.get(edit.sheet) ?? []
+        group.push(edit)
+        bySheet.set(edit.sheet, group)
+      }
+      const batches = [...bySheet.entries()].map(([sheet, group]) => ({
+        sheet,
+        cells: group.map(({ sheet: _sheet, ...cell }) => cell),
+      }))
+      // validate the whole batch up front so a bad edit rejects everything
+      // (setCells in dry-run mode parses every sheet name and ref)
+      for (const batch of batches) session.setCells(batch, true)
+      // report the journal's merged entry count: several edits to one cell
+      // collapse into a single journaled entry
+      let journaled = 0
+      if (dryRun !== true) {
+        for (const batch of batches) journaled += session.setCells(batch, false).merged
+      } else {
+        journaled = edits.length
+      }
+      const meta = session.meta()
+      return content(
+        { journaled, dirty: meta.dirty, dryRun: dryRun === true },
+        `Journaled ${journaled} cell edit(s)${dryRun === true ? ' (dry run, nothing applied)' : ''}; ` +
+          'persist with save_document.',
+      )
+    },
+  )
+
+  server.registerTool(
     'insert_content',
     {
       title: 'Insert content',
@@ -193,7 +322,9 @@ export function registerTools(server: McpServer): void {
         'features needed). Supported tags: p, h1-h6, ul, ol, li (nested lists allowed), strong/b, ' +
         'em/i, u, s, a[href], br, blockquote, pre, table/tr/th/td (header row styled, cells plain ' +
         'text). Unknown tags keep their text; markdown fences and plain text are tolerated (blank ' +
-        'lines split paragraphs). Insertion happens in memory; persist with save_document.',
+        'lines split paragraphs). Link policy: a[href] accepts http/https, mailto, #fragment and ' +
+        'scheme-less relative hrefs only — anchors with any other scheme (javascript:, file:, ' +
+        'data:, …) degrade to plain text. Insertion happens in memory; persist with save_document.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
         html: z.string().min(1).describe('Restricted HTML fragment to insert'),
@@ -269,10 +400,17 @@ export function registerTools(server: McpServer): void {
         'session overwrites the file it was opened from (refusing with a clear error when the ' +
         'file changed on disk since open — reopen and re-apply in that case), while sessions ' +
         'imported from .xls/.ods/.doc/.odt write a fresh sibling file with the native extension ' +
-        'next to the original (the original stays untouched). format "origin" instead exports ' +
+        'next to the original (the original stays untouched; when that sibling already exists ' +
+        'the save is refused like any save-as target). An explicit path that already ' +
+        'exists on disk is refused with an error unless it is a file the session itself opened ' +
+        'or saved — pass overwrite: true to replace it. format "origin" instead exports ' +
         'back to the original .doc/.odt/.ods through LibreOffice (best-effort; .xls output is ' +
-        'not supported — use the default .xlsx save). Untouched parts of the document are kept ' +
-        'byte-identical; a save with zero edits writes the original bytes back verbatim. Returns ' +
+        'not supported — use the default .xlsx save). Byte preservation differs by format: docx ' +
+        'saves keep untouched parts byte-identical and a zero-edit save writes the original bytes ' +
+        'back verbatim; xlsx saves keep untouched zip entries byte-identical except ' +
+        'xl/workbook.xml, which is rewritten when needed to force recalculation on open (the ' +
+        'fullCalcOnLoad flag) — so even a zero-edit xlsx save may touch that one entry, and for ' +
+        'workbooks the unchanged result flag reflects the edit journal, not the bytes. Returns ' +
         'the absolute path.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
@@ -281,6 +419,13 @@ export function registerTools(server: McpServer): void {
           .min(1)
           .optional()
           .describe('Optional save-as path (workspace-confined); default: see description'),
+        overwrite: z
+          .boolean()
+          .optional()
+          .describe(
+            'Allow replacing an existing file at path (default false: an existing unrelated ' +
+              'file is refused)',
+          ),
         format: z
           .enum(['docx', 'xlsx', 'origin'])
           .optional()
@@ -293,7 +438,7 @@ export function registerTools(server: McpServer): void {
         destructiveHint: true,
       },
     },
-    async ({ handle, path, format }) => {
+    async ({ handle, path, overwrite, format }) => {
       const session = getSession(handle)
       if (session instanceof TextSession) {
         throw new Error(
@@ -301,17 +446,22 @@ export function registerTools(server: McpServer): void {
             'Install LibreOffice to open the document as an editable converted .docx session.',
         )
       }
+      const saveOptions = overwrite === undefined ? {} : { overwrite }
       if (session instanceof XlsxSession) {
         if (format === 'docx') {
           throw new Error(
             'format "docx" is not valid for a workbook session; use "xlsx" or "origin".',
           )
         }
-        const result = await session.save(path, format === 'origin' ? 'origin' : 'xlsx')
+        const result = await session.save(
+          path,
+          format === 'origin' ? 'origin' : 'xlsx',
+          saveOptions,
+        )
         return content(
           result,
           `Saved ${result.bytes} bytes to ${result.path} (${result.format})` +
-            `${result.unchanged ? ' — no changes: bytes round-tripped verbatim' : ''}` +
+            `${result.unchanged ? ' — no journaled changes: untouched entries preserved (xl/workbook.xml may gain the fullCalcOnLoad recalc flag)' : ''}` +
             `${result.warnings.length > 0 ? `. ${result.warnings.join(' ')}` : ''}`,
         )
       }
@@ -320,7 +470,7 @@ export function registerTools(server: McpServer): void {
           'format "xlsx" is not valid for a text document session; use "docx" or "origin".',
         )
       }
-      const result = await session.save(path, format === 'origin' ? 'origin' : 'docx')
+      const result = await session.save(path, format === 'origin' ? 'origin' : 'docx', saveOptions)
       return content(
         result,
         `Saved ${result.bytes} bytes to ${result.path}${result.unchanged ? ' (no changes: bytes round-tripped verbatim)' : ''}`,
@@ -436,10 +586,16 @@ export function registerTools(server: McpServer): void {
         'Edit the ACTIVE document in the running Airy app in one go: insert a restricted-HTML ' +
         'fragment and/or apply canonical edit ops. When both are given the html is inserted first (at the ' +
         'end of the document, so block indexes from live_get_context stay valid) and the ops then run against ' +
-        'the result — a single call can add a section and format it. The user sees the change immediately; ' +
+        'the result — a single call can add a section and format it. When the ops batch fails after the ' +
+        'html was inserted, the insert turn is automatically rolled back with an undo, so a failed call ' +
+        "leaves the document at its pre-call state; the automatic rollback only reverts THIS client's turn — " +
+        'when another copilot client edited the document in between, it refuses (turn_owned_by_other) and the ' +
+        'error says the insert remains (call live_undo manually to revert everything). If the rollback undo ' +
+        'itself fails, the error says the edit may be partially applied — call live_undo to revert the ' +
+        'insert. The user sees the change immediately; ' +
         'tracked changes are authored as "Airy Copilot" when the app has track changes on. Each bridge call ' +
         'is one undo step, so undo a combined edit with live_undo twice. ' +
-        `Operations:\n${OPS_GUIDE}`,
+        `Operations:\n${OPS_GUIDE}\n${LIVE_OPS_EXTRAS}`,
       inputSchema: {
         ops: z
           .array(z.record(z.string(), z.unknown()))
@@ -463,11 +619,42 @@ export function registerTools(server: McpServer): void {
       }
       const bridge = sharedLiveBridge()
       const applied: Record<string, unknown> = {}
+      let inserted = false
       try {
-        if (html !== undefined) applied.insert = await bridge.call('insert_content', { html })
+        if (html !== undefined) {
+          applied.insert = await bridge.call('insert_content', { html })
+          inserted = true
+        }
         if (ops !== undefined) applied.ops = await bridge.call('apply_ops', { ops })
       } catch (err) {
-        throw new Error(describeBridgeFailure(err), { cause: err })
+        if (!inserted) throw new Error(describeBridgeFailure(err), { cause: err })
+        // the html landed but the ops batch failed: revert the insert turn so
+        // the document is not left half-edited. ownTurnsOnly guards the undo
+        // to THIS client's turn — with another copilot client connected, the
+        // last turn may be theirs and reverting it silently would destroy
+        // their edit while reporting "back at its pre-call state".
+        let rollbackNote: string
+        try {
+          await bridge.call('undo', { ownTurnsOnly: true })
+          rollbackNote =
+            ' — the inserted html was rolled back with an undo; the document is back at its ' +
+            'pre-call state (nothing was applied).'
+        } catch (undoErr) {
+          if (
+            undoErr instanceof BridgeClientError &&
+            undoErr.bridgeCode === 'turn_owned_by_other'
+          ) {
+            rollbackNote =
+              ` — the inserted html was NOT rolled back: ${describeBridgeFailure(undoErr)}. ` +
+              "The insert is still applied; reverting the other client's turn is a deliberate " +
+              'choice — call live_undo manually if that is intended.'
+          } else {
+            rollbackNote =
+              ` — the inserted html could NOT be rolled back (${describeBridgeFailure(undoErr)}); ` +
+              'the edit may be partially applied, call live_undo to revert the insert.'
+          }
+        }
+        throw new Error(describeBridgeFailure(err) + rollbackNote, { cause: err })
       }
       const parts = [
         ...(applied.insert !== undefined ? ['inserted content'] : []),
@@ -484,7 +671,9 @@ export function registerTools(server: McpServer): void {
       description:
         'Revert the last live bridge turn in the active document of the running Airy app (one ' +
         'live_apply_ops / live_undo step). Refuses with nothing_to_undo when the agent made no edits yet, ' +
-        'and with stale_document when the user edited the document since — fetch fresh context instead.',
+        'and with stale_document when the user edited the document since — fetch fresh context instead. ' +
+        'When several copilot clients are connected, the last turn may belong to another client: undoing ' +
+        'it is allowed (an explicit choice) and the result says whose turn was reverted (anotherClient).',
       inputSchema: {},
       annotations: {
         destructiveHint: true,
@@ -498,7 +687,10 @@ export function registerTools(server: McpServer): void {
       } catch (err) {
         throw new Error(describeBridgeFailure(err), { cause: err })
       }
-      return content(asRecord(result) ?? { undone: true }, 'Undid the last live bridge turn.')
+      const record = asRecord(result) ?? { undone: true }
+      const note =
+        record.anotherClient === true ? ' Undone turn was made by another copilot client.' : ''
+      return content(record, `Undid the last live bridge turn.${note}`)
     },
   )
 }
@@ -512,6 +704,19 @@ function requireDocxSession(handle: string): DocxSession {
     throw new Error(
       'insert_content/apply_ops are only available for editable .docx sessions ' +
         `(this handle is a "${session.meta().kind}" session).`,
+    )
+  }
+  return session
+}
+
+/** Workbook-only tools (apply_workbook_ops) reject other session kinds clearly. */
+function requireWorkbookSession(handle: string): XlsxSession {
+  const session: DocumentSession = getSession(handle)
+  if (!(session instanceof XlsxSession)) {
+    throw new Error(
+      'apply_workbook_ops is only available for workbook sessions ' +
+        `(this handle is a "${session.meta().kind}" session; ` +
+        'use insert_content/apply_ops for text documents).',
     )
   }
   return session

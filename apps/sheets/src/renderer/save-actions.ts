@@ -24,7 +24,7 @@ import {
 import { activeCsvSheet, handleExportCsv, serializeActiveSheetCsv } from './csv-export'
 import { t } from './i18n/locale'
 import { abortStagedEditsTransfer, stageEditsForSave, type StagedEdits } from './save-edits-staging'
-import { showToast } from './toast-bus'
+import { showToast } from '@airy-office/ui/toast-bus'
 import { captureUndoCarry, hasPendingUndoCarry, stashUndoCarry } from './undo-carry'
 import {
   collectCfStates,

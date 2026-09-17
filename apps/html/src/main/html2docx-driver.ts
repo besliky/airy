@@ -4,6 +4,20 @@
  * Protocol (device metrics, network idle, screenshots), so the export sees
  * the document exactly as the preview does: scripts on, assets through
  * html-asset://, no preload and no Node.
+ *
+ * Why the hidden window needs JavaScript at all: the DOCX conversion is a
+ * measurement pass — html2docx lays the authored page out, measures element
+ * boxes/overflow through the live DOM, and reads those metrics back to size
+ * tables, page breaks, and images in the .docx. Without script execution the
+ * page never finishes laying out (or measures wrong) and the export degrades
+ * to guesswork. The exported content is user-authored HTML for the user's
+ * own document, so the window runs it in a hardened throwaway context
+ * instead: full renderer lockdown (sandbox, contextIsolation,
+ * nodeIntegration: false), NO preload (no IPC surface, no Airy APIs), window
+ * opens denied, beforeunload suppressed, JS dialogs auto-dismissed, network
+ * and navigation observable only through CDP, and the caller destroys the
+ * window under a watchdog timeout — the same hostile-content posture the
+ * slides HTML export documents in SECURITY.md.
  */
 import { BrowserWindow } from 'electron'
 import type { Debugger, WebContents } from 'electron'

@@ -1,0 +1,78 @@
+import type { zh } from './zh'
+
+export const en = {
+  versionLabel: 'Version',
+  theme: 'Theme',
+  themeLight: 'Light',
+  themeDark: 'Dark',
+  themeSystem: 'Follow System',
+  setAuthorName: 'Author name',
+  setAuthorNameDesc: 'Used for comments and tracked changes.',
+  setAuthorNamePlaceholder: 'User',
+  saveLocation: 'Save Location',
+  setAutoSave: 'Auto-save all documents',
+  setAutoSaveDesc:
+    'Turn on AutoSave by default in every editor. You can still switch it off for a single window.',
+  setRestoreSession: 'Restore previous session',
+  setRestoreSessionDesc: 'Reopen the files that were open when Airy last closed or crashed.',
+  setLiveBridge: 'Copilot live bridge',
+  setLiveBridgeDesc:
+    'Let coding agents (MCP) attach to this app to read and edit open documents. Used by tools like Claude, Cursor or airy-mcp.',
+  setLiveBridgeEnvDisabled:
+    'Pinned off by the AIRY_DISABLE_BRIDGE=1 environment variable; this switch has no effect until it is removed.',
+  setAiFontSize: 'AI panel text size',
+  aiFontSizeDefault: 'Default',
+  aiFontSizeLarge: 'Large',
+  aiFontSizeXLarge: 'Extra large',
+  aiFontSizeCustom: 'Custom',
+  setAiSpellcheck: 'Spell check in AI chat',
+  setAiSpellcheckDesc: 'Underline misspelled words while typing in the AI chat input.',
+  settings: 'Settings',
+  setSecGeneral: 'General',
+  setSecAbout: 'About',
+  setSecAiModel: 'AI Model',
+  setAiProvider: 'Provider',
+  setAiModelId: 'Model',
+  setAiApiKey: 'API Key',
+  setAiKeyHint: 'Stored only on this device.',
+  setAiBaseUrl: 'Base URL',
+  setAiBaseUrlHint: 'Leave empty for the official endpoint.',
+  setAiNoneHint:
+    'No provider configured yet. Pick a provider and enter its API key to use AI features.',
+  setAiCodexPath: 'Codex executable',
+  setAiCodexPathHint: 'Only set this for a custom install; leave blank to auto-detect.',
+  setAiCodexAutoPlaceholder: 'Auto-detect (recommended)',
+  setAiCodexHint:
+    'Automatically finds the current signed-in Codex CLI after updates; a custom path is optional. No API key is needed.',
+  setAiByokNote:
+    'Chats use your own key. Image generation and media analysis follow the AI Media section; web search uses its own keys or free sources.',
+  setAiSave: 'Save',
+  setAiSaved: 'Saved',
+  setAiTest: 'Test connection',
+  setAiTesting: 'Testing…',
+  setAiTestOk: 'Connection OK',
+  setAiTestFail: 'Connection failed',
+  setAiMaxTokens: 'Max output tokens',
+  setAiMaxTokensDesc:
+    'Output budget for one turn. Reasoning models spend part of it thinking, so an answer can come back empty once the budget runs out; raise this value if that happens.',
+  setSecAiMedia: 'AI Media & Search',
+  setAiSearchSerperHint: 'Serper serves both web and image search with your key.',
+  setAiSearchTavilyHint:
+    'Tavily serves web search with your key; image search falls back to free sources.',
+  setAiCapImage: 'Image generation',
+  setAiCapAnalysis: 'Image analysis',
+  setAiCapVideo: 'Video analysis',
+  setAiCapSearch: 'Web search',
+  setAiSharedKeyHint:
+    "A vendor's key and base URL are shared across capabilities; enter them once.",
+  setGithub: 'Open Source',
+  starPromptTitle: 'Enjoying Airy?',
+  starPromptTitleN: "You've opened {n} documents with Airy",
+  starPromptBody:
+    'Airy is free and open source. A star on GitHub is the best way to support the team.',
+  starPromptGo: 'Star on GitHub',
+  starPromptDone: 'Already starred',
+  starPromptLater: 'Maybe later',
+  setChange: 'Change',
+  language: 'Language',
+} satisfies Record<keyof typeof zh, string>

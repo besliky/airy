@@ -16,6 +16,8 @@ import type { ChartStyleInfo } from '@airy-office/pptx-render'
 import {
   useDismissablePopover,
   useRibbonCollapse,
+  useRibbonTablist,
+  ribbonPanelProps,
   Dropdown,
   RibbonCollapseButton,
   THEME_COLORS,
@@ -1697,6 +1699,26 @@ export function Ribbon({
     tableOpen,
   }
 
+  // WAI-ARIA tabs: the tab strip is a tablist (roving tabindex, automatic
+  // activation on arrow keys), the command band below is its tabpanel. The
+  // File button opens a menu rather than switching tabs, so it stays outside.
+  const stripTabs: readonly string[] = [
+    ...TABS.filter((tb) => tb !== 'file'),
+    ...(contextTab ? [contextTab] : []),
+  ]
+  const selectRibbonTab = (name: string) => {
+    collapse.onTabPress(tab === name)
+    setTab(name as MainTab | ContextTab)
+    setFileOpen(false)
+  }
+  const ribbonTablist = useRibbonTablist({
+    tabs: stripTabs,
+    activeTab: tab,
+    idPrefix: 'slides-ribbon',
+    label: t('ribbonTabsLabel'),
+    onSelect: selectRibbonTab,
+  })
+
   return (
     <div className={`ribbon ${collapse.rootClass}`} ref={collapse.rootRef}>
       <div
@@ -1830,36 +1852,38 @@ export function Ribbon({
           />
         </label>
         <span className="qa-sep" aria-hidden="true" />
-        {TABS.filter((tb) => tb !== 'file').map((tb) => (
-          <button
-            key={tb}
-            className={`ribbon-tab ${tab === tb ? 'active' : ''}`}
-            onClick={() => {
-              collapse.onTabPress(tab === tb)
-              setTab(tb)
-              setFileOpen(false)
-            }}
-          >
-            {t(TAB_LABEL[tb])}
-          </button>
-        ))}
-        {contextTab && (
-          <button
-            key={contextTab}
-            className={`ribbon-tab ribbon-tab-context ${tab === contextTab ? 'active' : ''}`}
-            onClick={() => {
-              collapse.onTabPress(tab === contextTab)
-              setTab(contextTab)
-            }}
-            data-tip={t(TAB_LABEL[contextTab])}
-          >
-            {t(TAB_LABEL[contextTab])}
-          </button>
-        )}
+        <div className="ribbon-tablist" {...ribbonTablist.tablistProps}>
+          {TABS.filter((tb) => tb !== 'file').map((tb) => (
+            <button
+              key={tb}
+              className={`ribbon-tab ${tab === tb ? 'active' : ''}`}
+              {...ribbonTablist.tabProps(tb)}
+              onClick={() => selectRibbonTab(tb)}
+            >
+              {t(TAB_LABEL[tb])}
+            </button>
+          ))}
+          {contextTab && (
+            <button
+              key={contextTab}
+              className={`ribbon-tab ribbon-tab-context ${tab === contextTab ? 'active' : ''}`}
+              {...ribbonTablist.tabProps(contextTab)}
+              onClick={() => selectRibbonTab(contextTab)}
+              data-tip={t(TAB_LABEL[contextTab])}
+            >
+              {t(TAB_LABEL[contextTab])}
+            </button>
+          )}
+        </div>
         <span className="ribbon-tabs-spacer" />
       </div>
 
-      <div className="ribbon-body" data-ribbon-body="" ref={bodyRef}>
+      <div
+        className="ribbon-body"
+        data-ribbon-body=""
+        ref={bodyRef}
+        {...ribbonPanelProps('slides-ribbon', tab)}
+      >
         {tab === 'home' ? (
           <RibbonHomeTab rb={tabCtx} />
         ) : tab === 'insert' ? (

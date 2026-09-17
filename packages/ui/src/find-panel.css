@@ -5,7 +5,7 @@
 .find-panel {
   position: absolute;
   top: 8px;
-  right: 20px;
+  inset-inline-end: 20px;
   z-index: 60;
   -webkit-app-region: no-drag;
   background: var(--surface);

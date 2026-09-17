@@ -61,7 +61,11 @@ vi.mock('../src/main/save-pdf', async (importOriginal) => {
 })
 
 vi.mock('electron', () => ({
-  app: { on: vi.fn(), whenReady: vi.fn(() => new Promise(() => {})) },
+  app: {
+    on: vi.fn(),
+    whenReady: vi.fn(() => new Promise(() => {})),
+    getPath: () => '/tmp/airy-pdf-test-user-data',
+  },
   dialog: {},
   shell: {},
   BrowserWindow: class {},
@@ -92,7 +96,7 @@ afterEach(() => {
 })
 
 describe('in-place PDF page operation writes', () => {
-  it('removes the .gensave temp when an insert-page rename fails', async () => {
+  it('removes the temp file when an insert-page rename fails', async () => {
     dir = mkdtempSync(join(tmpdir(), 'pdf-page-write-'))
     const path = join(dir, 'doc.pdf')
     const doc = await PDFDocument.create()
@@ -116,6 +120,6 @@ describe('in-place PDF page operation writes', () => {
 
     expect(result.ok).toBe(false)
     expect(readFileSync(preserved)).toEqual(original)
-    expect(readdirSync(dir).filter((name) => name.includes('.gensave-'))).toEqual([])
+    expect(readdirSync(dir).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
 })

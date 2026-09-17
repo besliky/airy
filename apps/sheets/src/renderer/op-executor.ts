@@ -47,7 +47,6 @@ import {
   collectStreamedFormulaPrecedents,
   lazyGateFailure,
   streamedRefSheetList,
-  structuralDeleteFormulaError,
   type StreamedRefSheet,
 } from './plan-operations'
 import { aiBulkUndoGate, journalSuppression } from './univer-state'
@@ -202,77 +201,6 @@ export async function prefetchOpImages(
   return imageData
 }
 
-/**
- * Names the formula a batch's first row/column-shifting delete would strand,
- * so the caller rejects before ANY op runs (the save-time guard would otherwise abort at
- * ⌘S). Only the FIRST shifting op is checked: pre-batch formula texts are
- * exact for it, while any later delete sees coordinates an earlier shift
- * already moved (a stale check would false-reject); those keep the save-time
- * guard as the backstop. Table row/column deletes are whole-sheet deletes
- * underneath, so they translate to the same span check.
- */
-export async function precheckStructuralDeletes(
-  state: LazyWorkbookState,
-  workbook: ActiveWorkbook,
-  ops: readonly PlannedOp[],
-): Promise<string | null> {
-  const deleteSpanOf = (
-    op: PlannedOp,
-  ):
-    | { op: 'delete_rows'; sheetId: string; row: number; count: number }
-    | { op: 'delete_cols'; sheetId: string; column: string; count: number }
-    | 'shifts'
-    | null => {
-    if (op.op === 'delete_rows' || op.op === 'delete_cols') return op
-    if (op.op === 'delete_table_row' || op.op === 'delete_table_column') {
-      const entry = state.editJournal.tableAdds.find(
-        (table) =>
-          table.sheetId === op.sheetId && table.name.toLowerCase() === op.tableName.toLowerCase(),
-      )
-      if (!entry) return 'shifts'
-      // mirrors applyAiTableRowDelete/applyAiTableColumnDelete addressing
-      return op.op === 'delete_table_row'
-        ? {
-            op: 'delete_rows',
-            sheetId: op.sheetId,
-            row: entry.area.startRow + op.row + 1,
-            count: op.count ?? 1,
-          }
-        : {
-            op: 'delete_cols',
-            sheetId: op.sheetId,
-            column: columnLabel(entry.area.startColumn + op.column - 1),
-            count: op.count ?? 1,
-          }
-    }
-    if (
-      op.op === 'insert_rows' ||
-      op.op === 'insert_cols' ||
-      op.op === 'add_table_row' ||
-      op.op === 'add_table_column'
-    ) {
-      return 'shifts'
-    }
-    return null
-  }
-  for (const op of ops) {
-    const translated = deleteSpanOf(op)
-    if (translated === null) continue
-    if (translated !== 'shifts') {
-      const spanError = await structuralDeleteFormulaError(state, workbook, translated)
-      if (spanError) return spanError
-    }
-    break
-  }
-  return null
-}
-
-/**
- * All commands of one batch merge into a single undo item (⌘Z / [Undo] rolls
- * back the whole batch in one step). Disposing pushes the batched item
- * through the undo gate, so the success path must settle before reading
- * `aiBulkUndoGate.dropped`.
- */
 export function beginUndoBatch(runtime: UniverRuntime): { settle(): void } {
   const batchUnitId = runtime.univerAPI.getActiveWorkbook()?.getId()
   const undoBatching = batchUnitId
@@ -362,8 +290,6 @@ async function applyChangePlanNow(
   let imageData: Map<string, LoadedImage>
   try {
     imageData = await prefetchOpImages(plannedOps)
-    const spanError = await precheckStructuralDeletes(state, workbook, plannedOps)
-    if (spanError) throw new Error(options.userFacing ? t('appDeleteSpanFormulas') : spanError)
   } catch (error: unknown) {
     const reason = error instanceof Error ? error.message : t('appCannotReadImage')
     setMessage(reason)

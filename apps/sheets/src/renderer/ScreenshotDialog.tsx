@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { ScreenSourcesResult } from '../shared/desktop-api'
 import { useI18n } from './i18n/locale'
@@ -25,15 +25,30 @@ export function ScreenshotDialog({
   const [refreshTick, setRefreshTick] = useState(0)
   const [capturingId, setCapturingId] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
+  // single-use consent token from the latest enumeration; the main process
+  // lets exactly one full-res capture through per enumeration round
+  const tokenRef = useRef('')
+
+  // Picker lifecycle: the main process enumerates capture sources only inside
+  // an announced, rate-limited picker session (capture-consent.ts). Mount =
+  // session open, unmount = close (drops any live token).
+  useEffect(() => {
+    window.desktopApi.capturePickerState(true)
+    return () => {
+      window.desktopApi.capturePickerState(false)
+    }
+  }, [])
 
   useEffect(() => {
     let stale = false
     setState({ phase: 'loading' })
     setFailed(false)
+    tokenRef.current = ''
     window.desktopApi
       .captureScreenSources()
       .then((result) => {
         if (stale) return
+        tokenRef.current = result.captureToken
         if (result.status === 'denied') setState({ phase: 'denied' })
         else setState({ phase: 'ready', sources: result.sources })
       })
@@ -52,7 +67,7 @@ export function ScreenshotDialog({
     setCapturingId(id)
     setFailed(false)
     window.desktopApi
-      .captureScreenSource({ id })
+      .captureScreenSource({ id, captureToken: tokenRef.current })
       .then((result) => {
         if (!result) {
           setFailed(true)

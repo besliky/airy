@@ -3,7 +3,7 @@
 // which the tests drive through a linked InMemoryTransport pair — the same
 // in-process pattern as server.test.ts / docx-tools.test.ts, so the full
 // tool -> client -> socket -> dispatcher path runs per call.
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -238,6 +238,99 @@ describe('live tools over MCP', () => {
     }
   })
 
+  it('live_apply_ops rolls the html insert back when the ops batch fails', async () => {
+    if (process.platform === 'win32') return
+    const handle = await startBridge({
+      insert_content: () => 'inserted 1 block(s)',
+      apply_ops: () => {
+        throw new MockBridgeMethodError('invalid_params', 'op #1 bogus: unknown op "nope"')
+      },
+      undo: () => ({ undone: true }),
+    })
+    const { client, close } = await connectSession()
+    try {
+      const result = await call(client, 'live_apply_ops', {
+        html: '<p>draft section</p>',
+        ops: [{ op: 'nope' }],
+      })
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('unknown op "nope"')
+      expect(text(result)).toContain('rolled back')
+      expect(text(result)).toContain('pre-call state')
+      // the insert was undone over the bridge before the error surfaced
+      expect(handle.requests.map((r) => r.method)).toEqual(['insert_content', 'apply_ops', 'undo'])
+    } finally {
+      await close()
+    }
+  })
+
+  it('live_apply_ops reports a partial edit when the rollback undo fails too', async () => {
+    if (process.platform === 'win32') return
+    const handle = await startBridge({
+      insert_content: () => 'inserted 1 block(s)',
+      apply_ops: () => {
+        throw new MockBridgeMethodError('invalid_params', 'op #1 bogus: unknown op "nope"')
+      },
+      undo: () => {
+        throw new MockBridgeMethodError(
+          'stale_document',
+          'the document changed since the last bridge turn',
+        )
+      },
+    })
+    const { client, close } = await connectSession()
+    try {
+      const result = await call(client, 'live_apply_ops', {
+        html: '<p>draft section</p>',
+        ops: [{ op: 'nope' }],
+      })
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('could NOT be rolled back')
+      expect(text(result)).toContain('partially applied')
+      expect(text(result)).toContain('live_undo')
+      expect(handle.requests.map((r) => r.method)).toEqual(['insert_content', 'apply_ops', 'undo'])
+    } finally {
+      await close()
+    }
+  })
+
+  it('live_apply_ops stays honest when the rollback would revert another client', async () => {
+    if (process.platform === 'win32') return
+    // two copilot clients on one document: the app's undo handler refuses
+    // the auto-rollback because the latest turn belongs to the other client
+    const handle = await startBridge({
+      insert_content: () => 'inserted 1 block(s)',
+      apply_ops: () => {
+        throw new MockBridgeMethodError('invalid_params', 'op #1 bogus: unknown op "nope"')
+      },
+      undo: () => {
+        throw new MockBridgeMethodError(
+          'turn_owned_by_other',
+          'the last bridge turn belongs to another copilot client (conn-2); the automatic rollback refuses to revert it',
+        )
+      },
+    })
+    const { client, close } = await connectSession()
+    try {
+      const result = await call(client, 'live_apply_ops', {
+        html: '<p>draft section</p>',
+        ops: [{ op: 'nope' }],
+      })
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('unknown op "nope"')
+      // honest about the document state: the insert REMAINS, no false
+      // "back at its pre-call state"
+      expect(text(result)).not.toContain('pre-call state')
+      expect(text(result)).toContain('another copilot client')
+      expect(text(result)).toContain('still applied')
+      expect(text(result)).toContain('live_undo')
+      // the rollback asked for an own-turn-only undo
+      expect(handle.requests[2]).toMatchObject({ method: 'undo', params: { ownTurnsOnly: true } })
+    } finally {
+      await close()
+    }
+  })
+
   it('live_apply_ops rejects a call with neither ops nor html', async () => {
     if (process.platform === 'win32') return
     await startBridge({})
@@ -445,5 +538,128 @@ describe('live bridge client (direct)', () => {
     expect(results).toEqual(['slow-result', 'fast-result'])
     // the client never overlaps requests: slow resolves first despite the delay
     expect(settled).toEqual(['slow', 'fast'])
+  })
+})
+
+describe('live bridge candidate fallback', () => {
+  it('falls back to the next candidate when the first socket is unreachable', async () => {
+    if (process.platform === 'win32') return
+    // candidate layout under a fake home: 'Airy' holds a stale file pointing
+    // at a socket that no longer exists; 'Airy Dev' holds the live bridge
+    const home = join(dir, 'fallback-home')
+    const staleDir = join(home, '.config', 'Airy')
+    const liveDir = join(home, '.config', 'Airy Dev')
+    mkdirSync(staleDir, { recursive: true })
+    mkdirSync(liveDir, { recursive: true })
+    mkdirSync(join(dir, 'live'), { recursive: true })
+    const live = await startMockBridge({ dir: join(dir, 'live'), methods: PING_METHODS })
+    bridge = live
+    writeFileSync(
+      join(staleDir, 'airy-bridge.json'),
+      JSON.stringify({
+        socketPath: join(dir, 'gone.sock'),
+        token: 'f'.repeat(64),
+        pid: process.pid,
+        protocolVersion: 1,
+      }),
+      'utf8',
+    )
+    writeFileSync(
+      join(liveDir, 'airy-bridge.json'),
+      JSON.stringify({
+        socketPath: live.socketPath,
+        token: live.info.token,
+        pid: live.info.pid,
+        protocolVersion: 1,
+      }),
+      'utf8',
+    )
+    const bridgeClient = createLiveBridge({ env: {}, homeDir: home, platform: 'linux' })
+    expect(await bridgeClient.call('ping')).toEqual({
+      pong: true,
+      protocolVersion: 1,
+      pid: 4242,
+    })
+  })
+
+  it('throws on a live-but-unauthorized first candidate instead of falling through', async () => {
+    if (process.platform === 'win32') return
+    // candidate 1 ('Airy'): a LIVE server, but its info file carries a wrong
+    // token — an authorization problem on a reachable bridge, not a dead
+    // socket; silently advancing to candidate 2 would target a different
+    // bridge than the one the first file describes
+    const home = join(dir, 'unauth-home')
+    const firstDir = join(home, '.config', 'Airy')
+    const secondDir = join(home, '.config', 'Airy Dev')
+    mkdirSync(firstDir, { recursive: true })
+    mkdirSync(secondDir, { recursive: true })
+    mkdirSync(join(dir, 'live3'), { recursive: true })
+    const live = await startMockBridge({ dir: join(dir, 'live3'), methods: PING_METHODS })
+    bridge = live
+    writeFileSync(
+      join(firstDir, 'airy-bridge.json'),
+      JSON.stringify({
+        socketPath: live.socketPath,
+        token: '0'.repeat(64),
+        pid: process.pid,
+        protocolVersion: 1,
+      }),
+      'utf8',
+    )
+    writeFileSync(
+      join(secondDir, 'airy-bridge.json'),
+      JSON.stringify({
+        socketPath: live.socketPath,
+        token: live.info.token,
+        pid: live.info.pid,
+        protocolVersion: 1,
+      }),
+      'utf8',
+    )
+    const bridgeClient = createLiveBridge({ env: {}, homeDir: home, platform: 'linux' })
+    const err = await bridgeClient.call('ping').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(BridgeClientError)
+    expect((err as BridgeClientError).code).toBe('bridge_unauthorized')
+  })
+
+  it('skips a stale file whose app pid is dead even before connecting', async () => {
+    if (process.platform === 'win32') return
+    const home = join(dir, 'deadpid-home')
+    const staleDir = join(home, '.config', 'Airy')
+    const liveDir = join(home, '.config', 'Airy Dev')
+    mkdirSync(staleDir, { recursive: true })
+    mkdirSync(liveDir, { recursive: true })
+    mkdirSync(join(dir, 'live2'), { recursive: true })
+    const live = await startMockBridge({ dir: join(dir, 'live2'), methods: PING_METHODS })
+    bridge = live
+    writeFileSync(
+      join(staleDir, 'airy-bridge.json'),
+      JSON.stringify({
+        socketPath: live.socketPath,
+        token: '0'.repeat(64),
+        pid: 424242,
+        protocolVersion: 1,
+      }),
+      'utf8',
+    )
+    writeFileSync(
+      join(liveDir, 'airy-bridge.json'),
+      JSON.stringify({
+        socketPath: live.socketPath,
+        token: live.info.token,
+        pid: live.info.pid,
+        protocolVersion: 1,
+      }),
+      'utf8',
+    )
+    // pid 424242 is not alive, so the stale candidate (wrong token!) is
+    // skipped and the live one wins — without the probe this would be
+    // bridge_unauthorized
+    const bridgeClient = createLiveBridge({ env: {}, homeDir: home, platform: 'linux' })
+    expect(await bridgeClient.call('ping')).toEqual({
+      pong: true,
+      protocolVersion: 1,
+      pid: 4242,
+    })
   })
 })

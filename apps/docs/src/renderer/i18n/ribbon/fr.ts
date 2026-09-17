@@ -5,6 +5,7 @@ export const fr = {
   ribbonAiRewriteConfirm:
     "Cette action fait appel à l'IA : elle consomme des crédits et peut réécrire tout le contenu. Continuer ? (Vous ne serez plus averti.)",
   ribbonTabFile: 'Fichier',
+  ribbonTabsLabel: 'Onglets du ruban',
   ribbonTabHome: 'Accueil',
   ribbonTabInsert: 'Insertion',
   ribbonTabDraw: 'Dessin',

@@ -1,12 +1,26 @@
 import { basename } from 'node:path'
 import { BrowserWindow } from 'electron'
-import type { Rectangle, WebContents, WebContentsView } from 'electron'
+import type {
+  Event as ElectronEvent,
+  Input,
+  Rectangle,
+  WebContents,
+  WebContentsView,
+} from 'electron'
+import {
+  crashErrorPageUrl,
+  forgetRendererFileAccess,
+  grantRendererFileAccess,
+  isRecoverableRendererCrash,
+  voidLoad,
+} from '@airy-office/electron-utils'
 
 import {
   createDocsView,
   docsQueryDirty,
   markDocsNewBlank,
   queueDocsAiContent,
+  recordRecentFile,
   requestDocsClose,
   setActiveDocsResolver,
   teardownDocsRenderer,
@@ -43,6 +57,7 @@ import {
   setActiveSlidesWebContents,
   slidesIsDirty,
 } from '../../../slides/src/main/slides-main'
+import { tabSwitchTargetForInput } from './tab-accelerators'
 import type { TabKind, TabSummary } from '../shared/tabs-api'
 
 interface TabRecord {
@@ -54,6 +69,16 @@ interface TabRecord {
   filePath?: string
   /** chrome-free Present tab: no file, no editor menu or save/export targets */
   present?: boolean
+  /** renderer crashed (oom/crashed): awaiting the user's Reload/Close decision */
+  crashed?: boolean
+}
+
+/** Renderer-crash recovery hooks, supplied by the shell (localized prompt + error page). */
+export interface TabCrashUi {
+  /** body text for the in-tab error page shown while awaiting the decision */
+  errorPageBody: () => string
+  /** notified once per crash; the shell shows the Reload/Close dialog */
+  onCrash: (info: { id: string; kind: TabKind; title: string; reason: string }) => void
 }
 
 /** must match the tab strip's rendered height (apps/shell/src/renderer/src/TabBar.tsx) */
@@ -78,6 +103,11 @@ export class TabManager {
   private readonly bleedWcIds = new Set<number>()
   /** tabs mid unsaved-changes prompt, so a second close click doesn't stack dialogs */
   private readonly closingIds = new Set<string>()
+  /** live before-input-event handlers per view webContents id (detach on close) */
+  private readonly acceleratorHandlers = new Map<
+    number,
+    (event: ElectronEvent, input: Input) => void
+  >()
 
   constructor(
     private readonly shellWindow: BrowserWindow,
@@ -85,6 +115,8 @@ export class TabManager {
     private readonly applyMenuFor: (kind: TabKind) => void,
     /** localized placeholder title for a tab that has no file yet */
     private readonly untitledTitleFor?: (kind: TabKind) => string,
+    /** renderer-crash recovery (error page + Reload/Close prompt), shell-provided */
+    private readonly crashUi?: TabCrashUi,
   ) {
     // Layout once synchronously for macOS/Windows (bounds are already correct),
     // then once more on the next tick. On Linux/X11, `resize` fires before the
@@ -136,6 +168,69 @@ export class TabManager {
     })
   }
 
+  /**
+   * Crash recovery: a renderer lost to oom/crashed would otherwise stay as a
+   * blank zombie tab. Replace its content with an error page and hand the
+   * decision to the shell (Reload restarts the renderer, Close drops the
+   * tab). Intentional teardown reasons never prompt.
+   */
+  private watchRendererCrash(id: string, view: WebContentsView): void {
+    view.webContents.on('render-process-gone', (_event, details) => {
+      if (!isRecoverableRendererCrash(details.reason)) return
+      const tab = this.tabs.find((t) => t.id === id)
+      if (!tab || tab.crashed) return
+      tab.crashed = true
+      if (this.htmlFullScreenId === id) {
+        this.htmlFullScreenId = null
+        this.layout()
+      }
+      voidLoad(
+        view.webContents.loadURL(crashErrorPageUrl(this.crashUi?.errorPageBody() ?? '')),
+        `crash error page for tab ${id}`,
+      )
+      this.crashUi?.onCrash({ id, kind: tab.kind, title: tab.title, reason: details.reason })
+    })
+  }
+
+  /** whether a tab's renderer crashed and is awaiting recovery (observability for tests) */
+  isTabCrashed(id: string): boolean {
+    return this.tabs.find((t) => t.id === id)?.crashed === true
+  }
+
+  /**
+   * Ctrl/Cmd+1..8 → tab N, Ctrl/Cmd+9 → last tab, inside THIS view. Editor
+   * tabs are sibling WebContentsViews with their own webContents — when one
+   * has keyboard focus, keydowns never reach the before-input-event hook the
+   * shell registers on its own (Home) webContents, and the editor-built menus
+   * carry no digit accelerators. So every view gets the same hook here, at
+   * creation, sharing the pure decision in tab-accelerators.ts (reserved
+   * digits of the ACTIVE tab's kind stay with the editor). Detached on close
+   * (docs views outlive their tab). Standalone editor windows are not hooked:
+   * they are owned by the editor mains, own no tab strip, and the shell's tab
+   * manager cannot be reached from them without cross-module plumbing for a
+   * switch the user could not see.
+   */
+  private watchTabAccelerators(view: WebContentsView): void {
+    const handler = (event: ElectronEvent, input: Input): void => {
+      const target = tabSwitchTargetForInput(input, this.list())
+      if (target === null) return
+      event.preventDefault()
+      this.activateTab(target)
+    }
+    this.acceleratorHandlers.set(view.webContents.id, handler)
+    view.webContents.on('before-input-event', handler)
+  }
+
+  /** drop a closed view's accelerator hook (webContents may outlive the tab) */
+  private detachTabAccelerators(wc: WebContents): void {
+    // webContents.close() already dropped everything; this matters for the
+    // docs teardown path, which detaches the view without destroying it
+    const handler = this.acceleratorHandlers.get(wc.id)
+    if (!handler) return
+    this.acceleratorHandlers.delete(wc.id)
+    if (!wc.isDestroyed()) wc.removeListener('before-input-event', handler)
+  }
+
   /** re-fit the active tab's view after a window resize */
   layout(): void {
     // Deferred resize layouts can land after the shell window was closed.
@@ -154,6 +249,90 @@ export class TabManager {
     }))
   }
 
+  /** id of the active tab (session persistence) */
+  activeTabId(): string {
+    return this.activeId
+  }
+
+  /** current backing file of the tab owning this webContents (staged-save rebind checks) */
+  tabFilePathFor(webContentsId: number): string | undefined {
+    return this.tabs.find((t) => t.view?.webContents.id === webContentsId)?.filePath
+  }
+
+  /** Grant the tab's renderer read access to `filePath`'s folder (per-sender
+   *  allowlist — a shell-routed open belongs to the tab that loads it). */
+  grantTabFile(tabId: string | undefined, filePath: string): void {
+    if (!tabId) return
+    const wc = this.tabs.find((t) => t.id === tabId)?.view?.webContents
+    if (wc) grantRendererFileAccess(filePath, wc.id)
+  }
+
+  /** full record snapshot for shell-side menus (tab context-menu enablement) */
+  tabInfo(id: string): { id: string; kind: TabKind; filePath?: string } | undefined {
+    const tab = this.tabs.find((t) => t.id === id)
+    return tab ? { id: tab.id, kind: tab.kind, filePath: tab.filePath } : undefined
+  }
+
+  /**
+   * Open the same backing file in a new tab (context-menu Duplicate).
+   * Untitled/in-memory and present tabs have no file — returns false.
+   */
+  duplicateTab(id: string): boolean {
+    const tab = this.tabs.find((t) => t.id === id)
+    if (!tab?.filePath || tab.present) return false
+    // same recents a routed open would apply — but bypassing the open-by-path
+    // dedupe, which would just activate this tab. The read grant goes to the
+    // NEW tab's renderer (captured once it exists below).
+    recordRecentFile(tab.filePath)
+    let newId: string | undefined
+    switch (tab.kind) {
+      case 'docs':
+        newId = this.openDocsTab(tab.filePath)
+        break
+      case 'sheets':
+        newId = this.openSheetsTab(tab.filePath)
+        break
+      case 'slides':
+        newId = this.openSlidesTab(tab.filePath)
+        break
+      case 'pdf':
+        newId = this.openPdfTab(tab.filePath)
+        break
+      case 'markdown':
+        newId = this.openMarkdownTab(tab.filePath)
+        break
+      case 'html':
+        newId = this.openHtmlTab(tab.filePath)
+        break
+      default:
+        return false
+    }
+    this.grantTabFile(newId, tab.filePath)
+    return true
+  }
+
+  /** whether any tab currently shows this file (staged-survivor purge at launch) */
+  hasTabForPath(path: string): boolean {
+    return this.tabs.some((t) => t.filePath === path)
+  }
+
+  /**
+   * Fired after a tab was removed (per-tab close — a whole-window quit closes
+   * the window instead, so this does not fire there). The shell uses it to
+   * delete staged untitled files when their tab closes without a first save.
+   */
+  onTabClosed?: (tab: { id: string; kind: TabKind; filePath?: string }) => void
+
+  /** file-backed tabs in strip order (session persistence; untitled/present tabs have no file) */
+  sessionTabs(): Array<{ id: string; kind: TabKind; filePath: string | undefined }> {
+    return this.tabs.map((t) => ({ id: t.id, kind: t.kind, filePath: t.filePath }))
+  }
+
+  /** the tab showing this file for a given kind, if any (session restore activation) */
+  findTabIdByPath(kind: TabKind, path: string): string | undefined {
+    return this.tabs.find((t) => t.kind === kind && t.filePath === path)?.id
+  }
+
   openHomeTab(): void {
     this.activateTab(HOME_ID)
   }
@@ -169,6 +348,8 @@ export class TabManager {
     this.shellWindow.contentView.addChildView(view)
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
+    this.watchRendererCrash(id, view)
+    this.watchTabAccelerators(view)
     this.tabs.push({
       id,
       kind: 'docs',
@@ -191,6 +372,8 @@ export class TabManager {
     this.shellWindow.contentView.addChildView(view)
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
+    this.watchRendererCrash(id, view)
+    this.watchTabAccelerators(view)
     this.tabs.push({
       id,
       kind: 'sheets',
@@ -208,6 +391,8 @@ export class TabManager {
     this.shellWindow.contentView.addChildView(view)
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
+    this.watchRendererCrash(id, view)
+    this.watchTabAccelerators(view)
     this.tabs.push({
       id,
       kind: 'slides',
@@ -225,17 +410,21 @@ export class TabManager {
     this.shellWindow.contentView.addChildView(view)
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
+    this.watchRendererCrash(id, view)
+    this.watchTabAccelerators(view)
     this.tabs.push({ id, kind: 'pdf', view, title: basename(openPath), filePath: openPath })
     this.activateTab(id)
     return id
   }
 
-  /** Remount the tab's renderer so it re-reads its file from disk (View > Reload). */
+  /** Remount the tab's renderer so it re-reads its file from disk (View > Reload;
+   *  also the crash-recovery "Reload" action — clears the crashed state). */
   reloadTab(id: string): void {
     const tab = this.tabs.find((t) => t.id === id)
     const wc = tab?.view?.webContents
     if (!wc || wc.isDestroyed()) return
     if (tab.kind === 'pdf') clearPdfDirty(wc.id)
+    tab.crashed = false
     wc.reload()
   }
 
@@ -245,6 +434,8 @@ export class TabManager {
     this.shellWindow.contentView.addChildView(view)
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
+    this.watchRendererCrash(id, view)
+    this.watchTabAccelerators(view)
     this.tabs.push({
       id,
       kind: 'markdown',
@@ -262,6 +453,8 @@ export class TabManager {
     this.shellWindow.contentView.addChildView(view)
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
+    this.watchRendererCrash(id, view)
+    this.watchTabAccelerators(view)
     this.tabs.push({
       id,
       kind: 'html',
@@ -280,6 +473,8 @@ export class TabManager {
     this.shellWindow.contentView.addChildView(view)
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
+    this.watchRendererCrash(id, view)
+    this.watchTabAccelerators(view)
     this.tabs.push({
       id,
       kind: 'html',
@@ -478,6 +673,9 @@ export class TabManager {
     if (idx < 0) return
     if (this.htmlFullScreenId === id) this.htmlFullScreenId = null
     const [removed] = this.tabs.splice(idx, 1)
+    // the tab's renderer is going away: its per-sender read grants go with it
+    if (removed.view) forgetRendererFileAccess(removed.view.webContents.id)
+    this.onTabClosed?.({ id: removed.id, kind: removed.kind, filePath: removed.filePath })
     if (this.activeId === id) {
       const fallback = this.tabs[idx - 1] ?? this.tabs[0]
       this.activateTab(fallback.id)
@@ -487,6 +685,7 @@ export class TabManager {
     if (removed.view) {
       removed.view.setVisible(false)
       this.shellWindow.contentView.removeChildView(removed.view)
+      this.detachTabAccelerators(removed.view.webContents)
       if (removed.kind === 'docs') {
         // webContents.close()/.destroy() on a closed docs tab wedges Electron's whole
         // UI thread in a native modal run loop (reproduced consistently; survives

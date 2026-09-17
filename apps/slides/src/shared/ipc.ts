@@ -375,6 +375,7 @@ export interface FindReplaceOp {
   find: string
   replace: string
   matchCase?: boolean
+  wholeWord?: boolean
   firstOnly?: boolean
   slideIndex?: number
   elementId?: string
@@ -893,10 +894,12 @@ export interface SetNotesOp {
   text: string
 }
 
-/** Add a comment (the author is the system username fetched by the main process). */
+/** Add a comment (the author is the system username fetched by the main process); parentRef makes it a reply. */
 export interface AddCommentOp {
   slideIndex: number
   text: string
+  /** reply target: the parent comment's (authorId, idx) */
+  parent?: { authorId: number; idx: number }
 }
 
 /** Delete a comment: uniquely located by (authorId, idx). */
@@ -904,6 +907,13 @@ export interface DeleteCommentOp {
   slideIndex: number
   authorId: number
   idx: number
+}
+
+/** Resolve / reopen comments (one IPC = one undo step, typically a whole thread). */
+export interface ResolveCommentsOp {
+  slideIndex: number
+  refs: Array<{ authorId: number; idx: number }>
+  done: boolean
 }
 
 // ── New insert capabilities (charts / SmartArt / icons / audio-video / 3D / links / header-footer) ──
@@ -1087,11 +1097,19 @@ export interface ExportImagesResult {
 }
 
 /** Export as PDF: the main process loads each page PNG in a hidden window then printToPDF. */
+/** One exported page: the vector slide (preferred) or the 2x raster fallback. */
+export interface PdfPage {
+  /** self-contained inline SVG (real text → selectable in the PDF) */
+  svg?: string
+  /** base64 PNG (without the data: prefix) when SVG assembly failed for the slide */
+  pngBase64?: string
+}
+
 export interface ExportPdfOp {
   /** Target pdf absolute path (chosen via pickExportPdfPath) */
   filePath: string
-  /** base64 per page PNG (without the data: prefix), in page order */
-  pngsBase64: string[]
+  /** one entry per exported slide, in page order */
+  pages: PdfPage[]
   /** Rendered pixel width/height of the slide page (used to compute the PDF page aspect ratio) */
   widthPx: number
   heightPx: number
@@ -1151,6 +1169,7 @@ export type MenuCommand =
   | 'export-pdf'
   | 'export-images'
   | 'print'
+  | 'shortcuts'
   | 'zoom-in'
   | 'zoom-out'
   | 'zoom-reset'
@@ -1472,10 +1491,12 @@ export interface SlidesApi {
   setNotes: (op: SetNotesOp) => Promise<boolean>
   /** All comments on a page (in add order) */
   getComments: (slideIndex: number) => Promise<SlideComment[]>
-  /** Add a comment; returns the page's updated comment list, null on failure */
+  /** Add a comment (or a reply, with parent); returns the page's updated comment list, null on failure */
   addComment: (op: AddCommentOp) => Promise<SlideComment[] | null>
   /** Delete a comment; returns the page's updated comment list, null on failure */
   deleteComment: (op: DeleteCommentOp) => Promise<SlideComment[] | null>
+  /** Resolve / reopen comments (one undo step); returns the page's updated comment list, null on failure */
+  resolveComments: (op: ResolveCommentsOp) => Promise<SlideComment[] | null>
   /** System clipboard while text-editing (webContents.cut/copy/paste, for menu command echo) */
   nativeClipboard: (op: 'cut' | 'copy' | 'paste') => Promise<void>
   /** Nestable history transaction; all edits between begin/end become one undo step.

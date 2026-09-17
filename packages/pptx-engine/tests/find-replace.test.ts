@@ -82,4 +82,31 @@ describe('replaceAllInDeck', () => {
       '2=2 c',
     )
   })
+
+  it('wholeWord skips embedded occurrences (Unicode word chars on either side)', () => {
+    const deck = deckWith(sp('<a:r><a:t>cat cats catalog cat. cat- concatenated</a:t></a:r>'))
+    const r = replaceAllInDeck(deck, 'cat', 'dog', { wholeWord: true })
+    // the standalone "cat", "cat." and "cat-" qualify; "cats"/"catalog"/"concatenated" do not
+    expect(r.count).toBe(3)
+    expect((deck.slides[0]!.elements[0] as TextElement).text!.paragraphs[0]!.runs[0]!.text).toBe(
+      'dog cats catalog dog. dog- concatenated',
+    )
+  })
+
+  it('wholeWord treats CJK neighbors as word characters', () => {
+    const deck = deckWith(sp('<a:r><a:t>リンゴappleゴリラ</a:t></a:r>'))
+    // \p{L} covers Han/Hiragana/Katakana: "apple" is embedded, not whole
+    expect(replaceAllInDeck(deck, 'apple', 'orange', { wholeWord: true }).count).toBe(0)
+    const deck2 = deckWith(sp('<a:r><a:t>リンゴ apple ゴリラ</a:t></a:r>'))
+    expect(replaceAllInDeck(deck2, 'apple', 'orange', { wholeWord: true }).count).toBe(1)
+  })
+
+  it('wholeWord composes with matchCase', () => {
+    const deck = deckWith(sp('<a:r><a:t>Cat catalog cat</a:t></a:r>'))
+    const r = replaceAllInDeck(deck, 'cat', 'dog', { wholeWord: true, matchCase: true })
+    expect(r.count).toBe(1)
+    expect((deck.slides[0]!.elements[0] as TextElement).text!.paragraphs[0]!.runs[0]!.text).toBe(
+      'Cat catalog dog',
+    )
+  })
 })

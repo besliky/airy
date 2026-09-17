@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { createI18n, htmlLang, type Lang, type Params } from '@airy-office/i18n'
+import { createI18n, htmlDir, htmlLang, type Lang, type Params } from '@airy-office/i18n'
 import { strings } from './strings'
 
 const translate = createI18n(strings)
@@ -23,6 +23,7 @@ export function LocaleProvider({ initial, children }: { initial: Lang; children:
       setLang: (next) => {
         setLangState(next)
         document.documentElement.lang = htmlLang(next)
+        document.documentElement.dir = htmlDir(next)
         void window.aiOffice.setLanguage(next)
       },
     }),

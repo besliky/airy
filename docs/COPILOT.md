@@ -100,9 +100,11 @@ under 5 s, logs on stderr, reads carry `readOnlyHint`.
 
 ## Run the MCP server from an installed Airy app
 
-The Windows and Linux installers bundle the built server as
-`resources/mcp/index.js` next to the app binary, and the app itself doubles
-as its Node runtime: with `ELECTRON_RUN_AS_NODE=1`, `Airy.exe` / `airy`
+Every installer — Windows, Linux and macOS — bundles the built server as
+`resources/mcp/index.js` next to the app binary (on mac:
+`Airy.app/Contents/Resources/mcp/index.js`), and the app itself doubles
+as its Node runtime: with `ELECTRON_RUN_AS_NODE=1`, `Airy.exe` / `airy` /
+`Airy.app/Contents/MacOS/Airy`
 runs any script exactly like `node` (same Node line the bundle targets, and
 `process.resourcesPath` still points at the install's `resources` dir, so
 the xlsx sidecar in `resources/native` is found automatically). A machine
@@ -120,6 +122,28 @@ changeable directory), so the default location is
       "command": "C:\\Users\\<you>\\AppData\\Local\\Programs\\Airy\\Airy.exe",
       "env": { "ELECTRON_RUN_AS_NODE": "1" },
       "args": ["C:\\Users\\<you>\\AppData\\Local\\Programs\\Airy\\resources\\mcp\\index.js"]
+    }
+  }
+}
+```
+
+**macOS (dmg).** Drag the app to `/Applications`; the binary is
+`/Applications/Airy.app/Contents/MacOS/Airy`, the server
+`/Applications/Airy.app/Contents/Resources/mcp/index.js`. ZCode
+(`~/.zcode/cli/config.json`):
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "airy": {
+        "type": "stdio",
+        "command": "/Applications/Airy.app/Contents/MacOS/Airy",
+        "env": { "ELECTRON_RUN_AS_NODE": "1" },
+        "args": ["/Applications/Airy.app/Contents/Resources/mcp/index.js"],
+        "enabled": true,
+        "timeoutMs": 60000
+      }
     }
   }
 }
@@ -168,16 +192,17 @@ of which copy of the server connects to it.
 
 Headless (no app required):
 
-| Tool             | Signature (short)                                                                              |
-| ---------------- | ---------------------------------------------------------------------------------------------- |
-| `ping`           | `()` — liveness probe                                                                          |
-| `open_document`  | `(path)` — open `.docx/.xlsx/.xlsm/.xls/.ods/.doc/.odt`, returns a session handle + meta       |
-| `read_document`  | `(handle, blocks? \| range?)` — block overview or full restricted HTML for text documents      |
-| `read_workbook`  | `(handle, sheet?, range?)` — sheet overview or a pipe table of an A1 range                     |
-| `insert_content` | `(handle, html, at?)` — insert a restricted-HTML fragment after block `at`                     |
-| `apply_ops`      | `(handle, ops, dryRun?)` — validated, atomic batch of canonical edit ops (max 100)             |
-| `save_document`  | `(handle, path?, format?)` — atomic save; `format: "origin"` exports back to the legacy format |
-| `close_document` | `(handle)` — close the session, clean up temp files                                            |
+| Tool                 | Signature (short)                                                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ping`               | `()` — liveness probe                                                                                                                                          |
+| `open_document`      | `(path)` — open `.docx/.xlsx/.xlsm/.xls/.ods/.doc/.odt`, returns a session handle + meta                                                                       |
+| `read_document`      | `(handle, blocks? \| range?)` — block overview or full restricted HTML for text documents                                                                      |
+| `read_workbook`      | `(handle, sheet?, range?)` — sheet overview or a pipe table of an A1 range                                                                                     |
+| `insert_content`     | `(handle, html, at?)` — insert a restricted-HTML fragment after block `at`                                                                                     |
+| `apply_ops`          | `(handle, ops, dryRun?)` — validated, atomic batch of canonical edit ops (max 100)                                                                             |
+| `apply_workbook_ops` | `(handle, edits, dryRun?)` — validated batch of cell edits: value / formula / style / rich text (max 100)                                                      |
+| `save_document`      | `(handle, path?, overwrite?, format?)` — atomic save; refuses existing targets without `overwrite: true`; `format: "origin"` exports back to the legacy format |
+| `close_document`     | `(handle)` — close the session, clean up temp files                                                                                                            |
 
 Live (app running; always target the _active_ tab):
 
@@ -188,10 +213,35 @@ Live (app running; always target the _active_ tab):
 | `live_apply_ops`   | `(ops?, html?)` — one combined edit turn (html first, then ops)      |
 | `live_undo`        | `()` — revert the last agent turn                                    |
 
+In `live_apply_ops` the html is inserted at the **end** of the document, so
+block indexes from `live_get_context` stay valid when the ops run — the ops
+address the pre-insert numbering.
+
 Edit ops are flat records targeting blocks by `nodeType` / `headingLevel` /
 `containsText` / `blockIndexes`; `apply_ops` output includes the full
 signature list. Block indexes shift after inserts — re-read before further
-addressing.
+addressing (the live html insert is the carve-out: it appends at the end, so
+earlier indexes are unaffected). Both `nodeType` vocabularies are accepted
+everywhere, headless and live: the ops-guide names (`heading` / `paragraph` /
+`listItem` / `image`) and the renderer's canonical names (`docHeading` /
+`docParagraph` / `docListItem` / `image`) target the same blocks.
+
+The live bridge additionally accepts the embedded registry's extra ops —
+`setImageProperties` (resize/align image blocks) and `insertToc` (insert a
+TOC field after a block) — and `setFont` / `setMatchedFont` gain a
+`link: { url } | null` field. Live `apply_ops` / `insert_content` only work
+on the ACTIVE tab when it is a **docs** document; a sheets/slides/pdf tab in
+front answers `not_docs_tab` (use the headless workbook tools for
+spreadsheets).
+
+Workbook editing goes through `apply_workbook_ops`: one batch of cell edits,
+each targeting a single cell by sheet (name or index) and A1 ref with a
+value, a formula (stored without a cached result, so apps recalculate on
+open), a style patch (`bold`, `fillColor`, `numberFormat`, borders, ...),
+rich-text runs, or a combination. Formulas win over values; later edits to
+the same cell win per channel (content replaces content, style replaces
+style). Charts, pivots, merged ranges and sheet structure are **not**
+editable headlessly.
 
 ## Live mode
 
@@ -210,8 +260,17 @@ each connect, so an app restart (new token) never authorizes a stale
 connection. Per-call timeout is 30 s. Live edits are visible immediately;
 with track changes on they are authored as "Airy Copilot", and each bridge
 call is one undo step (`live_undo` after a combined `html` + `ops` call
-needs two undos). A `stale_document` error means the user edited the
-document since your last `live_get_context` — fetch fresh context.
+needs two undos). A combined `live_apply_ops` whose ops batch fails after
+the html was inserted rolls the insert back with an automatic undo — the
+document ends at its pre-call state (or the error says the edit may be
+partially applied and to call `live_undo`). A `stale_document` error means
+the user edited the document since your last `live_get_context` — fetch
+fresh context. Bridge turns are attributed to the connection that made
+them: the automatic rollback after a failed combined `live_apply_ops` only
+reverts that client's own turn — when another copilot client edited in
+between it refuses (`turn_owned_by_other`) and the error says the insert
+remains. An explicit `live_undo` may still revert another client's turn (a
+deliberate choice) and its result says whose turn it was (`anotherClient`).
 
 `AIRY_DISABLE_BRIDGE=1` turns the bridge off in the app entirely.
 
@@ -236,22 +295,50 @@ document since your last `live_get_context` — fetch fresh context.
 | `.doc`            | via soffice → editable `.docx`; without soffice → read-only text | `.docx`; `format: "origin"` best-effort `.doc` via soffice                                              |
 | `.odt`            | via soffice → editable `.docx` (without soffice: clear error)    | `.docx`; `format: "origin"` best-effort `.odt` via soffice                                              |
 
+Byte preservation differs by format. `docx` saves keep untouched parts
+byte-identical, and a zero-edit save writes the original bytes back verbatim.
+`xlsx` saves keep untouched zip entries byte-identical **except
+`xl/workbook.xml`**: the save gateway always ensures the `fullCalcOnLoad`
+flag so edited formulas recalculate on open, so even a zero-edit workbook
+save may rewrite that one entry — and the save result's `unchanged` flag is
+journal-based for workbooks (no edits journaled), not a byte guarantee.
+
 Headless slides, PDF, Markdown and HTML tools are planned (backlog).
+
+Reads are bounded to keep tool answers inside the ~30k-character MCP budget:
+`read_document` truncates its output at 30,000 characters (the block
+overview tightens previews and elides the middle first; a selected-blocks
+read tells you to narrow the range), `read_document`'s `blocks` parameter
+accepts at most 200 indexes per call, and `read_workbook` ranges cap at
+20,000 cells (split larger ranges into smaller reads).
 
 ## Security model
 
 - **Path confinement.** Every input and output path must resolve inside the
-  workspace root (`AIRY_WORKSPACE_ROOT`, default the server's cwd);
-  traversal that escapes the root is rejected with a clear error.
+  workspace root (`AIRY_WORKSPACE_ROOT`, default the server's cwd); traversal
+  that escapes the root is rejected with a clear error. Symlinks are resolved
+  for both the root and the candidate before the check, so a link that lives
+  inside the root but points outside cannot smuggle paths out (links that
+  resolve back inside the root stay usable). On Windows the comparison folds
+  case, matching the case-insensitive filesystem — `c:\users\...` and
+  `C:\Users\...` are the same path. Confinement is checked at resolution
+  time: a racing local attacker with write access inside the root (swapping a
+  checked directory for a symlink before the write lands) is out of scope.
 - **Token, not location.** The bridge socket and its info file are `0600`;
   every bridge call must carry the current per-session token, which is
   reread from disk on every connect. The bridge listens on a local
   socket/named pipe only — no network surface.
-- **No silent overwrites.** `save_document` is atomic (temp + rename) and
-  fenced: saving over the opened file refuses with an error when the file
-  changed on disk since it was opened (an external writer — another editor,
-  sync client, or the Airy app itself). The remedy is to reopen and reapply,
-  or to use the `live_*` tools when the document is open in the app.
+- **No silent overwrites.** `save_document` is atomic (temp + promote) and
+  double-fenced: saving over the opened file refuses with an error when the
+  file changed on disk since it was opened (an external writer — another
+  editor, sync client, or the Airy app itself), and an explicit save-as to a
+  path that already exists is refused unless it is a file the session itself
+  opened or saved — pass `overwrite: true` to replace an unrelated file. A
+  guarded fresh target is promoted with an exclusive link, so a file that
+  appears between the existence check and the write cannot be silently
+  replaced either. The
+  remedy for a fence error is to reopen and reapply, or to use the `live_*`
+  tools when the document is open in the app.
 - **Read-only until save.** Opening and editing never touch the original
   file; converted imports write a new sibling file and leave the original
   untouched.

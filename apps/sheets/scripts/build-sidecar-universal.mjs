@@ -8,7 +8,7 @@
 //
 // Dev builds stay on plain `native:build` (host arch only, no extra rustup
 // targets required); this script is only called by the release packaging
-// paths (root dist:mac and mac-build.yml). It needs both targets installed:
+// paths (root dist:mac/release:mac and the release.yml macos job). It needs both targets installed:
 //   rustup target add x86_64-apple-darwin aarch64-apple-darwin
 
 import { execFileSync } from 'node:child_process'

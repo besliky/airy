@@ -20,7 +20,39 @@ All application windows run with the full Electron renderer lockdown:
   enforces a protocol allowlist (http/https; pdf link annotations additionally
   allow mailto). `file:`, `javascript:`, and custom schemes are always rejected.
 - No API keys are hardcoded. AI requests go only to the provider the user
-  configures; user-supplied keys stay in the local settings store.
+  configures; user-supplied keys stay in the local settings store, encrypted
+  at rest with the OS keychain (Electron safeStorage) whenever one is
+  available, and the settings file is user-readable only (mode 0600).
+- Known residual: the sheets Insert → Screenshot picker. Electron offers no
+  native multi-source picker on Windows/Linux, so consent is enforced as
+  bounded + session-bound rather than per-frame: enumeration only inside an
+  announced picker session, per-tab rate limits, single-use short-lived
+  capture tokens, and an audit log. A compromised sheets renderer can still
+  capture full-resolution frames at the rate limit; macOS additionally gates
+  this behind the OS screen-recording permission, Windows and Linux do not.
+- Known residual: user-side link href storage. AI/bridge/ops insert paths
+  sanitize hrefs through a scheme whitelist, but three user-driven paths
+  store raw hrefs for fidelity — pasted HTML, the Insert-Link dialog, and
+  loading an existing docx. Opening any link still goes through the
+  `safeExternalUrl` gate (http/https/mailto only), so a stored
+  `javascript:` href is inert data, never executed. Relatedly, the slides
+  `files:add` attachment flow stats up to 50 renderer-named paths per call
+  before the witnessed-drop grant decision, acting as a bounded file-metadata
+  oracle (existence/size/extension); the folder grant itself still requires a
+  witnessed user drop or paste.
+
+## Updater Posture
+
+The in-app updater (Windows NSIS and Linux AppImage; deb installs notify
+only, macOS is off) polls the fork's GitHub Releases feed
+(`github.com/besliky/airy`) and never acts silently: the deferred startup
+check only raises an availability dialog, the download starts only from its
+"Download" button, and the staged update is installed only through the
+explicit "Install and Restart" choice — or, at the user's picking, on quit.
+Release artifacts are unsigned (no code-signing certificate), so update
+integrity rests on GitHub TLS plus electron-updater's `latest.yml` sha512
+verification rather than OS signature checks; `publisherName` /
+`verifyUpdateCodeSignature` cannot be set for unsigned builds.
 
 ## Threat Model: AI-Generated Layout Scripts (slides)
 

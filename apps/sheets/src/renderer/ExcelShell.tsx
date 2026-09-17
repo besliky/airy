@@ -5,8 +5,10 @@ import {
   RibbonCollapseButton,
   SHAPE_GALLERY_GROUPS,
   ShapePreview,
+  ribbonPanelProps,
   useDismissablePopover,
   useRibbonCollapse,
+  useRibbonTablist,
 } from '@airy-office/ui'
 
 import {
@@ -54,6 +56,10 @@ import {
 import type { GoalSeekResult } from './goal-seek'
 import { GoalSeekDialog } from './GoalSeekDialog'
 import { InsertFunctionDialog } from './InsertFunctionDialog'
+import { PrintDialog } from './PrintDialog'
+import type { PrintSetupOverrides } from './page-layout-actions'
+import type { WorkbookExportPdfRequest } from '../shared/desktop-api'
+import type { CatalogFunction } from './function-catalog'
 import { SubtotalDialog, type SubtotalConfig } from './SubtotalDialog'
 import { ConsolidateDialog } from './ConsolidateDialog'
 import type { ConsolidateConfig } from './consolidate'
@@ -80,6 +86,9 @@ const TAB_LABEL: Record<RibbonTab, StringKey> = {
   View: 'appTabView',
   'Chart Design': 'appTabChartDesign',
 }
+
+/** DOM id prefix shared by the tablist in ExcelShell and the band's tabpanel */
+const RIBBON_ID_PREFIX = 'sheets-ribbon'
 
 export interface SelectedChartRibbon {
   readonly title: string
@@ -274,6 +283,30 @@ interface ExcelShellProps {
   readonly onGoToReference: (ref: string) => string | null
   readonly onListDefinedNames: () => readonly { name: string; ref: string }[]
   readonly onApplyFormula: (formula: string) => string | null
+  /// Builds the Insert Function catalog from the live Univer registry;
+  /// called when the dialog opens (the registry must have landed by then).
+  readonly getFunctionCatalog: () => readonly CatalogFunction[]
+  /// Print dialog visibility (File › Print / Ctrl+P).
+  readonly showPrintDialog: boolean
+  readonly onClosePrintDialog: () => void
+  /// File-tab actions (non-mac ribbons show a File dropdown, like docs and
+  /// slides; macOS keeps the application menu).
+  readonly onOpenWorkbook: () => void
+  readonly onExportPdf: () => void
+  readonly onExportCsv: () => void
+  readonly onOpenPrintDialog: () => void
+  /// Surfaces print failures in the status bar.
+  readonly onSetStatusMessage: (message: string) => void
+  /// Lays the active sheet out for the print dialog; see page-layout-actions.
+  readonly buildPrintRequest: (overrides: PrintSetupOverrides) => Promise<{
+    request: WorkbookExportPdfRequest
+    effective: {
+      paperSize: number
+      orientation: 'portrait' | 'landscape'
+      scale: number
+      fitToPage: boolean
+    }
+  }>
   readonly onCreateSubtotal: (config: SubtotalConfig) => string | null
   readonly onCreateConsolidate: (config: ConsolidateConfig) => string | null
   /// Prefill for the Consolidate reference input (current multi-cell selection).
@@ -344,6 +377,15 @@ export function ExcelShell({
   onGoToReference,
   onListDefinedNames,
   onApplyFormula,
+  getFunctionCatalog,
+  showPrintDialog,
+  onClosePrintDialog,
+  onOpenPrintDialog,
+  onOpenWorkbook,
+  onExportPdf,
+  onExportCsv,
+  onSetStatusMessage,
+  buildPrintRequest,
   onCreateSubtotal,
   onCreateConsolidate,
   onGetConsolidateDefault,
@@ -398,6 +440,25 @@ export function ExcelShell({
   const [pivotEditSeed, setPivotEditSeed] = useState<PivotEditSeed | null>(null)
   /** null = closed; string = open on that catalog category ('All' for the plain button) */
   const [insertFunctionCat, setInsertFunctionCat] = useState<string | null>(null)
+  const [fileMenuOpen, setFileMenuOpen] = useState(false)
+  /// File tab dropdown a11y/ dismissal: the wrap hosts both the toggle and
+  /// the panel so outside presses close, and Escape hands focus back.
+  const fileTabWrapRef = useRef<HTMLDivElement | null>(null)
+  const fileTabButtonRef = useRef<HTMLButtonElement | null>(null)
+  useDismissablePopover(fileMenuOpen, () => setFileMenuOpen(false), {
+    inside: () => [fileTabWrapRef.current],
+  })
+  useEffect(() => {
+    if (!fileMenuOpen) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      event.stopPropagation()
+      setFileMenuOpen(false)
+      fileTabButtonRef.current?.focus()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [fileMenuOpen])
   const [showSubtotalDialog, setShowSubtotalDialog] = useState(false)
   const [showGoalSeek, setShowGoalSeek] = useState(false)
   const [showConsolidateDialog, setShowConsolidateDialog] = useState(false)
@@ -506,15 +567,99 @@ export function ExcelShell({
     ? [...ribbonTabs, 'Chart Design']
     : ribbonTabs
   const saveAsTitle = `${t('appSaveAs')} (${platformShortcuts('⇧⌘S')})`
+  // WAI-ARIA tabs: the tab strip is a tablist (roving tabindex, automatic
+  // activation on arrow keys); the Ribbon band renders the tabpanel
+  const selectRibbonTab = (name: string) => {
+    collapse.onTabPress(name === activeTab)
+    setActiveTab(name as RibbonTab)
+  }
+  const ribbonTablist = useRibbonTablist({
+    tabs: visibleTabs as readonly string[],
+    activeTab,
+    idPrefix: RIBBON_ID_PREFIX,
+    label: t('appRibbonTabs'),
+    onSelect: selectRibbonTab,
+  })
 
   return (
     <main className={`app-shell ${isCopilotOpen ? '' : 'copilot-collapsed'}`}>
       <header className={`excel-header ${collapse.rootClass}`} ref={collapse.rootRef}>
         <nav
           className={`ribbon-tabs ${IN_TAB ? '' : IS_MAC ? 'ribbon-tabs-mac' : 'ribbon-tabs-win'}`}
-          aria-label="Workbook commands"
+          aria-label={t('appWorkbookCommands')}
           onDoubleClick={collapse.onTabsDoubleClick}
         >
+          {!IS_MAC && (
+            <div className="file-tab-wrap" ref={fileTabWrapRef}>
+              <button
+                type="button"
+                ref={fileTabButtonRef}
+                className={`ribbon-tab ribbon-tab-file ${fileMenuOpen ? 'open' : ''}`}
+                aria-haspopup="true"
+                aria-expanded={fileMenuOpen}
+                onClick={() => setFileMenuOpen((open) => !open)}
+              >
+                {t('appFileTab')}
+              </button>
+              {fileMenuOpen && (
+                <div className="file-menu">
+                  <button
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      onOpenWorkbook()
+                    }}
+                  >
+                    {t('appFileOpen')} <span className="file-menu-key">Ctrl+O</span>
+                  </button>
+                  <button
+                    disabled={!canSave}
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      onSave()
+                    }}
+                  >
+                    {t('appFileSave')} <span className="file-menu-key">Ctrl+S</span>
+                  </button>
+                  <button
+                    disabled={!canSaveAs}
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      onSaveAs()
+                    }}
+                  >
+                    {t('appFileSaveAs')} <span className="file-menu-key">Ctrl+Shift+S</span>
+                  </button>
+                  <button
+                    disabled={!canSave}
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      onExportPdf()
+                    }}
+                  >
+                    {t('appFileExportPdf')}
+                  </button>
+                  <button
+                    disabled={!canSave}
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      onExportCsv()
+                    }}
+                  >
+                    {t('appFileExportCsv')}
+                  </button>
+                  <button
+                    disabled={!canSave}
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      onOpenPrintDialog()
+                    }}
+                  >
+                    {t('appFilePrint')} <span className="file-menu-key">Ctrl+P</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <button
             type="button"
             className="qa-btn"
@@ -568,18 +713,18 @@ export function ExcelShell({
             />
           </label>
           <span className="qa-sep" aria-hidden="true" />
-          {visibleTabs.map((tab) => (
-            <button
-              className={`${tab === activeTab ? 'active' : ''} ${tab === 'Chart Design' ? 'contextual' : ''}`}
-              key={tab}
-              onClick={() => {
-                collapse.onTabPress(tab === activeTab)
-                setActiveTab(tab)
-              }}
-            >
-              {t(TAB_LABEL[tab])}
-            </button>
-          ))}
+          <div className="ribbon-tablist" {...ribbonTablist.tablistProps}>
+            {visibleTabs.map((tab) => (
+              <button
+                className={`${tab === activeTab ? 'active' : ''} ${tab === 'Chart Design' ? 'contextual' : ''}`}
+                key={tab}
+                {...ribbonTablist.tabProps(tab)}
+                onClick={() => selectRibbonTab(tab)}
+              >
+                {t(TAB_LABEL[tab])}
+              </button>
+            ))}
+          </div>
           <span className="ribbon-tabs-spacer" />
           <span className="workbook-status" role="status" aria-live="polite">
             {statusMessage}
@@ -684,7 +829,7 @@ export function ExcelShell({
             <button
               className="name-box-goto"
               data-tip={t('appGoToButtonTitle')}
-              aria-label="Go To"
+              aria-label={t('appGoToButtonTitle')}
               onClick={() => setShowGoTo(true)}
             >
               ▾
@@ -823,11 +968,19 @@ export function ExcelShell({
           onClose={() => setShowGoalSeek(false)}
         />
       )}
+      {showPrintDialog && (
+        <PrintDialog
+          buildRequest={buildPrintRequest}
+          onClose={onClosePrintDialog}
+          setStatus={onSetStatusMessage}
+        />
+      )}
       {insertFunctionCat !== null && (
         <InsertFunctionDialog
           targetLabel={onGetActiveCell()}
           onApply={onApplyFormula}
           initialCategory={insertFunctionCat}
+          getCatalog={getFunctionCatalog}
           onClose={() => setInsertFunctionCat(null)}
         />
       )}
@@ -894,10 +1047,11 @@ function NameBox({
   return (
     <input
       className={`name-box${error === null ? '' : ' invalid'}`}
-      aria-label="Name Box"
+      aria-label={t('appNameBoxTitle')}
       data-tip={error ?? t('appNameBoxTitle')}
       placeholder="A1"
       spellCheck={false}
+      dir="ltr"
       value={draft ?? activeCellA1}
       onFocus={(event) => {
         setDraft(activeCellA1)
@@ -968,7 +1122,7 @@ function SortDialog({
       <div
         className="format-cells-dialog sort-dialog"
         role="dialog"
-        aria-label="Custom sort"
+        aria-label={t('appCustomSort')}
         onClick={(event) => event.stopPropagation()}
       >
         <header>{t('appSort')}</header>
@@ -1036,7 +1190,7 @@ function RemoveDuplicatesDialog({
       <div
         className="format-cells-dialog sort-dialog"
         role="dialog"
-        aria-label="Remove duplicates"
+        aria-label={t('appRemoveDuplicates')}
         onClick={(event) => event.stopPropagation()}
       >
         <header>{t('appRemoveDuplicates')}</header>
@@ -1201,7 +1355,7 @@ function LinkDialog({
       <div
         className="format-cells-dialog link-dialog"
         role="dialog"
-        aria-label="Insert link"
+        aria-label={t(currentTarget ? 'appEditLinkTitle' : 'appInsertLinkTitle')}
         onClick={(event) => event.stopPropagation()}
       >
         <header>{t(currentTarget ? 'appEditLinkTitle' : 'appInsertLinkTitle')}</header>
@@ -1414,7 +1568,11 @@ function Ribbon({
       },
     ]
     return (
-      <div className="ribbon" data-ribbon-body="">
+      <div
+        className="ribbon"
+        data-ribbon-body=""
+        {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}
+      >
         <RibbonGroup label={t('appGroupChartLayouts')}>
           {canEditChart ? (
             largeMenu(t('appAddChartElement'), '📊', t('appAddChartElementTitle'), elementOptions)
@@ -1533,7 +1691,11 @@ function Ribbon({
 
   if (activeTab === 'Insert') {
     return (
-      <div className="ribbon" data-ribbon-body="">
+      <div
+        className="ribbon"
+        data-ribbon-body=""
+        {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}
+      >
         <RibbonGroup label={t('appGroupTables')}>
           <RibbonButton
             large
@@ -1804,7 +1966,11 @@ function Ribbon({
       narrow: t('appMarginNarrow'),
     } as const
     return (
-      <div className="ribbon" data-ribbon-body="">
+      <div
+        className="ribbon"
+        data-ribbon-body=""
+        {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}
+      >
         <RibbonGroup label={t('appGroupThemes')}>
           {largeMenu(
             t('appGroupThemes'),
@@ -1987,7 +2153,11 @@ function Ribbon({
       />
     )
     return (
-      <div className="ribbon" data-ribbon-body="">
+      <div
+        className="ribbon"
+        data-ribbon-body=""
+        {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}
+      >
         <RibbonGroup label={t('appGroupFunctionLibrary')}>
           <RibbonButton
             large
@@ -2154,7 +2324,11 @@ function Ribbon({
 
   if (activeTab === 'Data') {
     return (
-      <div className="ribbon" data-ribbon-body="">
+      <div
+        className="ribbon"
+        data-ribbon-body=""
+        {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}
+      >
         <RibbonGroup label={t('appPivotTable')}>
           <RibbonButton
             large
@@ -2311,7 +2485,11 @@ function Ribbon({
 
   if (activeTab === 'View') {
     return (
-      <div className="ribbon" data-ribbon-body="">
+      <div
+        className="ribbon"
+        data-ribbon-body=""
+        {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}
+      >
         <RibbonGroup label={t('appGroupWorkbookViews')}>
           <RibbonButton
             large
@@ -2408,7 +2586,11 @@ function Ribbon({
 
   if (activeTab === 'Review') {
     return (
-      <div className="ribbon" data-ribbon-body="">
+      <div
+        className="ribbon"
+        data-ribbon-body=""
+        {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}
+      >
         <RibbonGroup label={t('appGroupProofing')}>
           <RibbonButton
             large
@@ -2533,7 +2715,7 @@ function Ribbon({
     ? fontSizes
     : [...fontSizes, echoSize].sort((a, b) => a - b)
   return (
-    <div className="ribbon" data-ribbon-body="">
+    <div className="ribbon" data-ribbon-body="" {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}>
       <RibbonGroup label={t('appGroupAiAssistant')}>
         <button
           className={`ribbon-tool as-button large ai-entry ${aiOpen ? 'active' : ''}`}

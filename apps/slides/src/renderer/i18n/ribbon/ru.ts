@@ -6,6 +6,7 @@ export const ru = {
     'Это действие вызывает ИИ: расходуются кредиты, и всё содержимое может быть переписано. Продолжить? (Вопрос больше не появится.)',
   // tabs
   ribbonTabFile: 'Файл',
+  ribbonTabsLabel: 'Вкладки ленты',
   ribbonTabHome: 'Главная',
   ribbonTabInsert: 'Вставка',
   ribbonTabDraw: 'Рисование',

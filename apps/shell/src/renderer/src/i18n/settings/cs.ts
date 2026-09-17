@@ -1,0 +1,79 @@
+import type { zh } from './zh'
+
+export const cs = {
+  versionLabel: 'Verze',
+  theme: 'Motiv',
+  themeLight: 'Světlý',
+  themeDark: 'Tmavý',
+  themeSystem: 'Podle systému',
+  setAuthorName: 'Jméno autora',
+  setAuthorNameDesc: 'Používá se pro komentáře a sledované změny.',
+  setAuthorNamePlaceholder: 'Uživatel',
+  saveLocation: 'Umístění pro ukládání',
+  setAutoSave: 'Automaticky ukládat všechny dokumenty',
+  setAutoSaveDesc:
+    'Zapne automatické ukládání ve všech editorech jako výchozí. Pro jednotlivé okno ho lze stále vypnout.',
+  setRestoreSession: 'Obnovit předchozí relaci',
+  setRestoreSessionDesc:
+    'Při spuštění znovu otevře soubory otevřené při posledním ukončení nebo pádu.',
+  setLiveBridge: 'Živý most Copilot',
+  setLiveBridgeDesc:
+    'Umožňuje kódovacím agentům (MCP) připojit se k této aplikaci a číst či upravovat otevřené dokumenty. Používají ho nástroje jako Claude, Cursor nebo airy-mcp.',
+  setLiveBridgeEnvDisabled:
+    'Vynuceně vypnuto proměnnou prostředí AIRY_DISABLE_BRIDGE=1; tento přepínač nemá žádný účinek, dokud ji neodstraníte.',
+  setAiFontSize: 'Velikost textu panelu AI',
+  aiFontSizeDefault: 'Výchozí',
+  aiFontSizeLarge: 'Velké',
+  aiFontSizeXLarge: 'Extra velké',
+  aiFontSizeCustom: 'Vlastní',
+  setAiSpellcheck: 'Kontrola pravopisu v chatu AI',
+  setAiSpellcheckDesc: 'Podtrhávat překlepy při psaní do vstupního pole chatu AI.',
+  settings: 'Nastavení',
+  setSecGeneral: 'Obecné',
+  setSecAbout: 'O aplikaci',
+  setSecAiModel: 'Model AI',
+  setAiProvider: 'Poskytovatel',
+  setAiModelId: 'Model',
+  setAiApiKey: 'Klíč API',
+  setAiKeyHint: 'Ukládá se pouze na tomto zařízení.',
+  setAiBaseUrl: 'Základní URL',
+  setAiBaseUrlHint: 'Pro oficiální koncový bod ponechte prázdné.',
+  setAiNoneHint:
+    'Není nakonfigurován žádný poskytovatel AI. Vyberte poskytovatele a zadejte jeho klíč API.',
+  setAiCodexPath: 'Spustitelný soubor Codex',
+  setAiCodexPathHint: 'Vyplňte jen u vlastní instalace; prázdné pole znamená automatickou detekci.',
+  setAiCodexAutoPlaceholder: 'Nechte prázdné pro automatickou detekci (doporučeno)',
+  setAiCodexHint:
+    'Automaticky najde a použije aktuální Codex CLI, po aktualizaci není třeba nic měnit; lze zadat i vlastní cestu. API klíč není potřeba.',
+  setAiByokNote:
+    'Chaty používají vlastní klíč. Generování obrázků a analýza médií se řídí sekcí „Média AI“; webové vyhledávání používá vlastní klíče nebo bezplatné zdroje.',
+  setAiSave: 'Uložit',
+  setAiSaved: 'Uloženo',
+  setAiTest: 'Otestovat připojení',
+  setAiTesting: 'Testování…',
+  setAiTestOk: 'Připojení funguje',
+  setAiTestFail: 'Připojení se nezdařilo',
+  setAiMaxTokens: 'Max. počet výstupních tokenů',
+  setAiMaxTokensDesc:
+    'Rozpočet výstupu na jeden tah. Modely s uvažováním jeho část spotřebují na přemýšlení, takže po vyčerpání rozpočtu může být odpověď prázdná; v takovém případě hodnotu zvyšte.',
+  setSecAiMedia: 'AI média a vyhledávání',
+  setAiSearchSerperHint: 'Serper zajišťuje webové i obrázkové vyhledávání s vaším klíčem.',
+  setAiSearchTavilyHint:
+    'Tavily zajišťuje webové vyhledávání s vaším klíčem; obrázkové vyhledávání použije bezplatné zdroje.',
+  setAiCapImage: 'Generování obrázků',
+  setAiCapAnalysis: 'Analýza obrázků',
+  setAiCapVideo: 'Analýza videí',
+  setAiCapSearch: 'Webové vyhledávání',
+  setAiSharedKeyHint:
+    'Klíč a základní URL jednoho poskytovatele se sdílejí mezi funkcemi; zadejte je jen jednou.',
+  setGithub: 'Open source',
+  starPromptTitle: 'Líbí se vám Airy?',
+  starPromptTitleN: 'V Airy jste otevřeli už {n} dokumentů',
+  starPromptBody:
+    'Airy je zdarma a open source. Hvězdička na GitHubu je nejlepší způsob, jak tým podpořit.',
+  starPromptGo: 'Dát hvězdičku na GitHubu',
+  starPromptDone: 'Hvězdička už udělena',
+  starPromptLater: 'Možná později',
+  setChange: 'Změnit',
+  language: 'Jazyk',
+} satisfies Record<keyof typeof zh, string>

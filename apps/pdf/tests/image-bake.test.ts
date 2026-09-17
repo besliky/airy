@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { cropRect, flipPixels, multiplyAlpha } from '../src/renderer/image-bake'
-import type { PixelImage } from '../src/renderer/cutout'
+import type { PixelImage } from '@airy-office/ui'
 
 /** 2×2 test image; each pixel r=index, g=100+index, b=200+index, a=40+index */
 const img2x2 = (): PixelImage => {

@@ -6,6 +6,7 @@ export const id = {
     'Tindakan ini memanggil AI: menghabiskan kredit dan dapat menulis ulang seluruh konten. Lanjutkan? (Tidak akan ditanya lagi.)',
   // tabs
   ribbonTabFile: 'File',
+  ribbonTabsLabel: 'Tab pita',
   ribbonTabHome: 'Beranda',
   ribbonTabInsert: 'Sisipkan',
   ribbonTabDraw: 'Menggambar',

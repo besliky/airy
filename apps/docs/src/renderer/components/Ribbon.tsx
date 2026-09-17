@@ -38,8 +38,10 @@ import {
   Dropdown,
   RibbonCollapseButton,
   isSymbolFontFamily,
+  ribbonPanelProps,
   useDismissablePopover,
   useRibbonCollapse,
+  useRibbonTablist,
 } from '@airy-office/ui'
 import { HIGHLIGHT_CSS } from '../editor/extensions'
 import { applyCase, type CaseMode } from '../editor/case-transform'
@@ -1915,6 +1917,30 @@ function RibbonInner({
     </button>
   )
 
+  // WAI-ARIA tabs: the tab strip is a tablist (roving tabindex, automatic
+  // activation on arrow keys), the command band below is its tabpanel. The
+  // File button opens a menu rather than switching tabs, so it stays outside.
+  const stripTabs: readonly RibbonTab[] = [
+    ...TABS.filter((name) => name !== 'file'),
+    ...(inTable ? TABLE_TABS : []),
+    ...(inImage ? IMAGE_TABS : []),
+    ...(inShape ? SHAPE_TABS : []),
+  ]
+  const selectRibbonTab = (name: string) => {
+    collapse.onTabPress(tab === name)
+    if ((TABS as readonly string[]).includes(name))
+      lastRegularTab.current = name as (typeof TABS)[number]
+    setTab(name as RibbonTab)
+    setDropdown(null)
+  }
+  const ribbonTablist = useRibbonTablist({
+    tabs: stripTabs,
+    activeTab: tab,
+    idPrefix: 'docs-ribbon',
+    label: t('ribbonTabsLabel'),
+    onSelect: selectRibbonTab,
+  })
+
   return (
     <div className={`ribbon ${collapse.rootClass}`} ref={collapse.rootRef}>
       <div
@@ -1962,68 +1988,57 @@ function RibbonInner({
           </div>
         )}
         {quickActions}
-        {TABS.filter((tabName) => tabName !== 'file').map((tabName) => (
-          <button
-            key={tabName}
-            className={`ribbon-tab ${tab === tabName ? 'active' : ''}`}
-            onClick={() => {
-              collapse.onTabPress(tab === tabName)
-              lastRegularTab.current = tabName
-              setTab(tabName)
-              setDropdown(null)
-            }}
-          >
-            {t(TAB_LABEL_KEYS[tabName])}
-          </button>
-        ))}
-        {/* contextual tabs render as plain tabs appended to the row, like current Word */}
-        {inTable &&
-          TABLE_TABS.map((tableTab) => (
+        <div className="ribbon-tablist" {...ribbonTablist.tablistProps}>
+          {TABS.filter((tabName) => tabName !== 'file').map((tabName) => (
             <button
-              key={tableTab}
-              className={`ribbon-tab ${tab === tableTab ? 'active' : ''}`}
-              onClick={() => {
-                collapse.onTabPress(tab === tableTab)
-                setTab(tableTab)
-                setDropdown(null)
-              }}
+              key={tabName}
+              className={`ribbon-tab ${tab === tabName ? 'active' : ''}`}
+              {...ribbonTablist.tabProps(tabName)}
+              onClick={() => selectRibbonTab(tabName)}
             >
-              {t(TAB_LABEL_KEYS[tableTab])}
+              {t(TAB_LABEL_KEYS[tabName])}
             </button>
           ))}
-        {inImage &&
-          IMAGE_TABS.map((imageTab) => (
-            <button
-              key={imageTab}
-              className={`ribbon-tab ${tab === imageTab ? 'active' : ''}`}
-              onClick={() => {
-                collapse.onTabPress(tab === imageTab)
-                setTab(imageTab)
-                setDropdown(null)
-              }}
-            >
-              {t(TAB_LABEL_KEYS[imageTab])}
-            </button>
-          ))}
-        {inShape &&
-          SHAPE_TABS.map((shapeTab) => (
-            <button
-              key={shapeTab}
-              className={`ribbon-tab ${tab === shapeTab ? 'active' : ''}`}
-              onClick={() => {
-                collapse.onTabPress(tab === shapeTab)
-                setTab(shapeTab)
-                setDropdown(null)
-              }}
-            >
-              {t(TAB_LABEL_KEYS[shapeTab])}
-            </button>
-          ))}
+          {/* contextual tabs render as plain tabs appended to the row, like current Word */}
+          {inTable &&
+            TABLE_TABS.map((tableTab) => (
+              <button
+                key={tableTab}
+                className={`ribbon-tab ${tab === tableTab ? 'active' : ''}`}
+                {...ribbonTablist.tabProps(tableTab)}
+                onClick={() => selectRibbonTab(tableTab)}
+              >
+                {t(TAB_LABEL_KEYS[tableTab])}
+              </button>
+            ))}
+          {inImage &&
+            IMAGE_TABS.map((imageTab) => (
+              <button
+                key={imageTab}
+                className={`ribbon-tab ${tab === imageTab ? 'active' : ''}`}
+                {...ribbonTablist.tabProps(imageTab)}
+                onClick={() => selectRibbonTab(imageTab)}
+              >
+                {t(TAB_LABEL_KEYS[imageTab])}
+              </button>
+            ))}
+          {inShape &&
+            SHAPE_TABS.map((shapeTab) => (
+              <button
+                key={shapeTab}
+                className={`ribbon-tab ${tab === shapeTab ? 'active' : ''}`}
+                {...ribbonTablist.tabProps(shapeTab)}
+                onClick={() => selectRibbonTab(shapeTab)}
+              >
+                {t(TAB_LABEL_KEYS[shapeTab])}
+              </button>
+            ))}
+        </div>
         <span className="ribbon-tabs-spacer" />
         {trailingActions}
       </div>
 
-      <div className="ribbon-body" data-ribbon-body="">
+      <div className="ribbon-body" data-ribbon-body="" {...ribbonPanelProps('docs-ribbon', tab)}>
         {tab === 'shapeFormat' && inShape ? (
           <div className="table-ribbon-body">
             <div className="ribbon-group">

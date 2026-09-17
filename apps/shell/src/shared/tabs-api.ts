@@ -25,6 +25,12 @@ export interface TabsApi {
    * as showMenu.
    */
   showNewMenu(x: number, y: number): Promise<void>
+  /**
+   * pop up the native context menu for one tab (Close / Close Others /
+   * Close All / Duplicate) at (x, y) in window CSS coordinates. Native for
+   * the same reason as showMenu.
+   */
+  showTabMenu(x: number, y: number, tabId: string): Promise<void>
   /** move a tab to a new index in the strip; Home stays pinned at index 0 */
   reorder(id: string, toIndex: number): Promise<void>
   /** subscribe to tab list changes (open/close/activate/title updates); returns unsubscribe */
@@ -47,6 +53,7 @@ export const TABS_CHANNELS = {
   close: 'tabs:close',
   showMenu: 'tabs:show-menu',
   showNewMenu: 'tabs:show-new-menu',
+  showTabMenu: 'tabs:show-tab-menu',
   reorder: 'tabs:reorder',
   changed: 'tabs:changed',
   chromePressed: 'tabs:chrome-pressed',

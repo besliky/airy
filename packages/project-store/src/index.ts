@@ -7,7 +7,6 @@ export type {
   ProjectIndex,
   ProjectInfo,
   ProjectSummary,
-  TimelineEntry,
   ToolActivity,
 } from './types.js'
 export type {

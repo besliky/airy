@@ -17,6 +17,7 @@ export type BridgeErrorCode =
   | 'no_active_document'
   | 'tab_closed'
   | 'stale_document'
+  | 'turn_owned_by_other'
   | 'invalid_params'
   | 'nothing_to_undo'
   | 'timeout'
@@ -48,6 +49,7 @@ const BRIDGE_ERROR_CODES: readonly BridgeErrorCode[] = [
   'no_active_document',
   'tab_closed',
   'stale_document',
+  'turn_owned_by_other',
   'invalid_params',
   'nothing_to_undo',
   'timeout',

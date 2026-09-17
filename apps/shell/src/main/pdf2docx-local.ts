@@ -1,98 +1,158 @@
 /**
  * Local PDF → Word conversion for the shell's pdf tabs (pdf2docx P4).
- * Loads the shared PDFium wasm with the same lazy-singleton pattern as
- * apps/pdf/src/main/text-edit.ts and runs the pure @airy-office/pdf2docx
- * pipeline in the main process. Imported by relative path (like the other
+ * The CPU-bound wasm pipeline runs in an Electron utilityProcess
+ * (pdf2docx-worker.ts) so page-by-page conversion no longer stalls the main
+ * process between callbacks (menus, IPC, window events). Without Electron
+ * (vitest, plain node) it degrades to the shared in-process core. The pdf →
+ * pptx/xlsx exporters still convert in the main process and share this
+ * module's ensurePdfium singleton. Imported by relative path (like the other
  * sibling app modules) so the bundled shell main carries the package inline.
  */
-import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { convertPdfToDocx, PdfLoadError } from '../../../../packages/pdf2docx/src'
-import type { ConvertResult, OcrEngine, PdfiumModule } from '../../../../packages/pdf2docx/src'
-import {
-  createVisionOcrEngine,
-  createWindowsOcrEngine,
-} from '../../../../packages/pdf2docx/src/ocr-vision'
-import { pdfiumWasmPath } from '../../../pdf/src/main/wasm-path'
+import { PdfLoadError } from '../../../../packages/pdf2docx/src'
+import type { ConvertResult, PdfLoadErrorCode } from '../../../../packages/pdf2docx/src'
+import { convertPdfFileToDocxInProcess, ensurePdfium } from './pdf2docx-core'
 
 export type { ConvertResult, PageResult } from '../../../../packages/pdf2docx/src'
 export { PdfLoadError } from '../../../../packages/pdf2docx/src'
+export { ensurePdfium }
+
+/** Minimal shape of Electron's utilityProcess child used by the client. */
+export interface PdfWorkerChild {
+  postMessage(message: unknown): void
+  on(event: 'message', listener: (message: unknown) => void): PdfWorkerChild
+  once(event: 'exit', listener: (code: number) => void): PdfWorkerChild
+  kill(): void
+}
+export type PdfWorkerFork = (modulePath: string) => PdfWorkerChild
+
+interface WorkerMessage {
+  id: number
+  type: 'progress' | 'done' | 'error'
+  page?: number
+  total?: number
+  result?: ConvertResult
+  message?: string
+  pdfLoadError?: { code: PdfLoadErrorCode; pdfiumError: number }
+}
+
+/** Live workers, so a crash or app quit cannot leave stragglers behind. */
+const liveWorkers = new Set<PdfWorkerChild>()
+let conversionSequence = 0
+
+/** The bundled worker entry sits next to the main bundle (electron.vite extra
+ *  main entry); resolved relative to this file so dev and packaged both work. */
+function workerModulePath(): string {
+  return join(dirname(fileURLToPath(import.meta.url)), 'pdf2docx-worker.js')
+}
 
 /**
- * Local OCR engine for scanned pages (platform system OCR; see
- * packages/pdf2docx/src/ocr.ts) — macOS Vision on darwin, Windows.Media.Ocr
- * on win32. Optional by design: when the helper binary is absent (Linux, or
- * a build without it) the engine resolves null and scanned pages keep the
- * full-page-image fallback.
- *
- * Packaged: Resources/ocr/<helper> (electron-builder extraResources).
- * Dev: the compiled helper in the repo (packages/pdf2docx/ocr-helper/).
+ * Run one conversion in a freshly forked worker via the promise RPC. A fresh
+ * process per conversion keeps failure isolation (a crashed worker rejects
+ * only its own conversion) and makes the extra wasm init irrelevant next to
+ * the conversion itself. Exported for tests, which fake `fork` at this
+ * boundary.
  */
-let ocrEngine: OcrEngine | null | undefined
-function ensureOcrEngine(): OcrEngine | null {
-  if (ocrEngine !== undefined) return ocrEngine
-  const here = dirname(fileURLToPath(import.meta.url))
-  const helper = process.platform === 'darwin' ? 'vision-ocr' : 'win-ocr.exe'
-  const create = process.platform === 'darwin' ? createVisionOcrEngine : createWindowsOcrEngine
-  const candidates = [
-    ...(process.resourcesPath ? [join(process.resourcesPath, 'ocr', helper)] : []),
-    join(here, '../../../../packages/pdf2docx/ocr-helper', helper),
-  ]
-  ocrEngine = null
-  for (const path of candidates) {
-    const engine = create(path)
-    if (engine) {
-      ocrEngine = engine
-      break
+export function convertPdfFileToDocxVia(
+  fork: PdfWorkerFork,
+  pdfPath: string,
+  onProgress?: (page: number, total: number) => void,
+  password?: string,
+): Promise<ConvertResult> {
+  const id = ++conversionSequence
+  const child = fork(workerModulePath())
+  liveWorkers.add(child)
+  return new Promise<ConvertResult>((resolve, reject) => {
+    let settled = false
+    const settle = (run: () => void) => {
+      if (settled) return
+      settled = true
+      liveWorkers.delete(child)
+      run()
+    }
+    child.on('message', (raw) => {
+      const message = raw as WorkerMessage
+      if (message?.id !== id) return
+      if (message.type === 'progress') {
+        onProgress?.(message.page!, message.total!)
+      } else if (message.type === 'done') {
+        settle(() => resolve(message.result!))
+      } else if (message.type === 'error') {
+        settle(() => {
+          const detail = message.pdfLoadError
+          reject(
+            detail
+              ? new PdfLoadError(detail.code, detail.pdfiumError)
+              : new Error(message.message ?? 'PDF conversion failed'),
+          )
+        })
+      }
+    })
+    child.once('exit', (code) => {
+      settle(() =>
+        reject(
+          new Error(
+            `The PDF conversion worker exited unexpectedly (code ${code}). ` +
+              'Retry the conversion; if it persists, the PDFium runtime may be missing or damaged.',
+          ),
+        ),
+      )
+    })
+    child.postMessage({
+      id,
+      type: 'convert',
+      pdfPath,
+      ...(password !== undefined ? { password } : {}),
+    })
+  })
+}
+
+/** Electron's utilityProcess.fork, when actually running under Electron. */
+async function electronFork(): Promise<PdfWorkerFork | null> {
+  try {
+    const electron = (await import('electron')) as unknown as
+      typeof import('electron') | { default?: unknown }
+    const candidate = (electron as { utilityProcess?: { fork?: unknown } }).utilityProcess
+    if (candidate && typeof candidate.fork === 'function') {
+      const fork = candidate.fork.bind(candidate) as (
+        modulePath: string,
+        args: readonly string[],
+        options: { serviceName: string },
+      ) => PdfWorkerChild
+      return (modulePath: string) => fork(modulePath, [], { serviceName: 'pdf2docx' })
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/** Kill any in-flight conversion workers (app quit, teardown). */
+export function disposePdfConversionWorkers(): void {
+  for (const child of liveWorkers) {
+    try {
+      child.kill()
+    } catch {
+      /* already gone */
     }
   }
-  return ocrEngine
+  liveWorkers.clear()
 }
 
-let pdfiumPromise: Promise<PdfiumModule> | null = null
-
-/** Load the wasm bytes ourselves: the bundled main process must not rely on
- *  the package's own file resolution (see apps/pdf text-edit.ts). Exported so
- *  the pptx exporter (pdf2pptx-local.ts) shares the same wasm singleton. */
-export function ensurePdfium(): Promise<PdfiumModule> {
-  pdfiumPromise ??= (async () => {
-    const { init } = (await import('@embedpdf/pdfium')) as unknown as {
-      init(overrides: object): Promise<object>
-    }
-    const raw = readFileSync(pdfiumWasmPath())
-    // exact slice: Buffer.buffer may be a shared pool larger than the file
-    const wasmBinary = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)
-    // thisProgram: emscripten's synthetic environ writes process.argv[1] via
-    // ASCII-asserting stringToAscii; a document path with CJK characters handed
-    // to the packaged app by a Windows file association aborts init (same fix
-    // as apps/pdf/src/main/text-edit.ts loadPdfium)
-    const wrapped = (await init({ wasmBinary, thisProgram: 'airy-pdf' })) as {
-      pdfium?: unknown
-    }
-    const m = (wrapped.pdfium ?? wrapped) as PdfiumModule & { _PDFiumExt_Init(): void }
-    m._PDFiumExt_Init()
-    return m
-  })()
-  return pdfiumPromise
-}
-
-/** Convert a PDF file on disk to docx bytes, fully locally. */
+/**
+ * Convert a PDF file on disk to docx bytes, fully locally. Runs the wasm
+ * pipeline in a utilityProcess under Electron; without Electron (tests, plain
+ * node) it runs the identical shared core in-process.
+ */
 export async function convertPdfFileToDocxLocal(
   pdfPath: string,
   onProgress?: (page: number, total: number) => void,
   password?: string,
 ): Promise<ConvertResult> {
-  const pdfium = await ensurePdfium()
-  const bytes = readFileSync(pdfPath)
-  const pdf = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  const ocr = ensureOcrEngine()
-  return convertPdfToDocx(pdf, {
-    pdfium,
-    ...(ocr ? { ocr } : {}),
-    ...(onProgress !== undefined ? { onProgress } : {}),
-    ...(password !== undefined ? { password } : {}),
-  })
+  const fork = await electronFork()
+  if (!fork) return convertPdfFileToDocxInProcess(pdfPath, onProgress, password)
+  return convertPdfFileToDocxVia(fork, pdfPath, onProgress, password)
 }
 
 /**

@@ -1,0 +1,40 @@
+import type { en } from './en'
+
+/** Fill Form strings (ja); missing keys fall back to the en base. */
+export const ja = {
+  ribbonTabFillForm: 'フォーム入力',
+  formPreviousField: '前のフィールド',
+  formNextField: '次のフィールド',
+  formFieldProgress: '{current} / {total}',
+  insertText: 'テキストを挿入',
+  insertTextHint: '検索可能なテキストを PDF に挿入',
+  insertTextTitle: 'テキストを挿入',
+  editInsertedText: '挿入したテキストを編集',
+  deleteInsertedText: '挿入したテキストを削除',
+  insertedTextDeleted: '挿入したテキストを削除しました',
+  textInsertSkipped: 'ページ {pages} のテキストを保存できませんでした',
+  textInsertNoFont:
+    'このテキストを描画できるフォントがインストールされていません（絵文字や特殊記号は非対応）',
+  formComplete: '入力を完了',
+  formMissingRequired: '必須フィールドが {count} 個未入力です',
+  formCompleteDone: 'フォーム入力チェックに合格しました',
+  formSignField: 'クリックして署名',
+  formAddText: 'テキストを追加',
+  formAddTextHint: 'テキストを入力し、ページをクリックして配置',
+  formAddTextTitle: 'PDF にテキストを追加',
+  formEditText: 'テキストを編集',
+  formAddTextPlaceholder: '配置するテキストを入力',
+  formTextSize: 'フォント サイズ',
+  formTextColor: '色',
+  formTextAlign: '配置',
+  formAlignLeft: '左',
+  formAlignCenter: '中央',
+  formAlignRight: '右',
+  formAddCheck: 'チェック',
+  formAddCheckHint: 'ページをクリックしてチェック マークを配置',
+  formAddCross: 'バツ印',
+  formAddCrossHint: 'ページをクリックしてバツ印を配置',
+  formPlaceStaticHint: 'クリックして配置します。選択後に移動やサイズ変更ができます',
+  formXfaWarning:
+    'この PDF には XFA が含まれます。現在は AcroForm のみ対応のため、保存時に XFA データが保持されない場合があります。',
+} as const satisfies Partial<Record<keyof typeof en, string>>

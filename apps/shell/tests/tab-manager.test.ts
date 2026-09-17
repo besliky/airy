@@ -10,10 +10,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 interface FakeWebContents {
   id: number
   on: ReturnType<typeof vi.fn>
+  removeListener: ReturnType<typeof vi.fn>
   close: ReturnType<typeof vi.fn>
   reload: ReturnType<typeof vi.fn>
+  loadURL: ReturnType<typeof vi.fn>
   isDestroyed: ReturnType<typeof vi.fn>
-  listeners: Map<string, () => void>
+  listeners: Map<string, (event?: unknown, details?: unknown) => void>
 }
 
 interface FakeView {
@@ -33,8 +35,12 @@ function makeFakeView(): FakeView {
       on: vi.fn((event: string, handler: () => void) => {
         listeners.set(event, handler)
       }),
+      removeListener: vi.fn((event: string, handler: () => void) => {
+        if (listeners.get(event) === handler) listeners.delete(event)
+      }),
       close: vi.fn(),
       reload: vi.fn(),
+      loadURL: vi.fn(() => Promise.resolve()),
       isDestroyed: vi.fn(() => false),
     },
     setVisible: vi.fn(),
@@ -42,11 +48,16 @@ function makeFakeView(): FakeView {
   }
 }
 
-vi.mock('electron', () => ({ BrowserWindow: class {} }))
+vi.mock('electron', () => ({
+  BrowserWindow: class {},
+  // markdown/html module-level recovery stores resolve their userData dir
+  app: { getPath: () => '/tmp/airy-tab-manager-test' },
+}))
 
 const createDocsView = vi.fn(() => makeFakeView())
 const docsQueryDirty = vi.fn(() => Promise.resolve(false))
 const markDocsNewBlank = vi.fn()
+const recordRecentFile = vi.fn()
 const requestDocsClose = vi.fn(() => Promise.resolve(true))
 const setActiveDocsResolver = vi.fn()
 const teardownDocsRenderer = vi.fn()
@@ -55,6 +66,7 @@ vi.mock('../../docs/src/main/docs-main', () => ({
   createDocsView: (...args: unknown[]) => createDocsView(...(args as [])),
   docsQueryDirty: (...args: unknown[]) => docsQueryDirty(...(args as [])),
   markDocsNewBlank: (...args: unknown[]) => markDocsNewBlank(...args),
+  recordRecentFile: (...args: unknown[]) => recordRecentFile(...args),
   requestDocsClose: (...args: unknown[]) => requestDocsClose(...(args as [])),
   setActiveDocsResolver: (...args: unknown[]) => setActiveDocsResolver(...args),
   teardownDocsRenderer: (...args: unknown[]) => teardownDocsRenderer(...args),
@@ -518,5 +530,145 @@ describe('dirty-tab queries (shell close guard)', () => {
     manager.openSheetsTab()
     manager.openDocsTab('/tmp/a.docx')
     expect(manager.docsTabs().map((t) => t.id)).toEqual(['t1', 't3'])
+  })
+})
+
+describe('tab-switch accelerators', () => {
+  const chord = (code: string, over: Record<string, unknown> = {}) =>
+    ({
+      type: 'keyDown',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: false,
+      code,
+      ...over,
+    }) as never
+
+  function emitKey(view: FakeView, input: unknown): { preventDefault: () => void } {
+    const handler = view.webContents.listeners.get('before-input-event')
+    expect(handler).toBeDefined()
+    const event = { preventDefault: vi.fn() }
+    handler!(event, input)
+    return event
+  }
+
+  it('attaches the before-input-event hook to every editor view', () => {
+    manager.openDocsTab()
+    manager.openSheetsTab()
+    manager.openSlidesTab()
+    for (const factory of [createDocsView, createSheetsView, createSlidesView]) {
+      const view = lastCreatedView(factory)
+      expect(view.webContents.on).toHaveBeenCalledWith('before-input-event', expect.any(Function))
+    }
+  })
+
+  it('switches tabs from a keydown inside an editor view', () => {
+    const docsId = manager.openDocsTab()
+    manager.openSheetsTab()
+    const sheetsView = lastCreatedView(createSheetsView) // active, owns keyboard focus
+
+    const event = emitKey(sheetsView, chord('Digit2'))
+    expect(event.preventDefault).toHaveBeenCalledTimes(1)
+    expect(manager.list().find((t) => t.id === docsId)?.active).toBe(true)
+  })
+
+  it('keeps digits the active editor kind reserves', () => {
+    manager.openHomeTab()
+    manager.openDocsTab() // docs is active and reserves Ctrl+1
+    const docsView = lastCreatedView(createDocsView)
+
+    const event = emitKey(docsView, chord('Digit1'))
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(manager.list()[0].active).toBe(false)
+  })
+
+  it('detaches the hook when the tab closes (docs views outlive their tab)', async () => {
+    const id = manager.openDocsTab()
+    const view = lastCreatedView(createDocsView)
+    await manager.closeTab(id)
+
+    expect(view.webContents.removeListener).toHaveBeenCalledWith(
+      'before-input-event',
+      expect.any(Function),
+    )
+    expect(view.webContents.listeners.has('before-input-event')).toBe(false)
+  })
+})
+
+describe('renderer crash recovery', () => {
+  function makeCrashManager() {
+    const onCrash = vi.fn()
+    const errorPageBody = vi.fn(() => 'This tab stopped unexpectedly.')
+    const manager = new TabManager(
+      shellWindow as never,
+      () => onChanged(),
+      (kind) => applyMenuFor(kind),
+      undefined,
+      { errorPageBody, onCrash },
+    )
+    return { manager, onCrash, errorPageBody }
+  }
+
+  function emitCrash(view: FakeView, reason: string): void {
+    const handler = view.webContents.listeners.get('render-process-gone')
+    expect(handler).toBeDefined()
+    handler!({}, { reason })
+  }
+
+  it('marks a crashed tab, shows the error page and notifies the shell', () => {
+    const { manager, onCrash } = makeCrashManager()
+    const id = manager.openDocsTab('/tmp/report.docx')
+    const view = lastCreatedView(createDocsView)
+    expect(manager.isTabCrashed(id)).toBe(false)
+
+    emitCrash(view, 'oom')
+
+    expect(manager.isTabCrashed(id)).toBe(true)
+    expect(onCrash).toHaveBeenCalledWith({
+      id,
+      kind: 'docs',
+      title: 'report.docx',
+      reason: 'oom',
+    })
+    // in-tab error state replaces the dead renderer content
+    expect(view.webContents.loadURL).toHaveBeenCalledTimes(1)
+    const url = view.webContents.loadURL.mock.calls[0]![0] as string
+    expect(url.startsWith('data:text/html;charset=utf-8,')).toBe(true)
+    expect(decodeURIComponent(url)).toContain('This tab stopped unexpectedly.')
+  })
+
+  it('reloadTab clears the crashed state and restarts the renderer', () => {
+    const { manager } = makeCrashManager()
+    const id = manager.openDocsTab()
+    const view = lastCreatedView(createDocsView)
+    emitCrash(view, 'crashed')
+
+    manager.reloadTab(id)
+
+    expect(manager.isTabCrashed(id)).toBe(false)
+    expect(view.webContents.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores intentional teardown reasons', () => {
+    const { manager, onCrash } = makeCrashManager()
+    manager.openDocsTab()
+    const view = lastCreatedView(createDocsView)
+
+    emitCrash(view, 'clean-exit')
+
+    expect(onCrash).not.toHaveBeenCalled()
+    expect(view.webContents.loadURL).not.toHaveBeenCalled()
+  })
+
+  it('prompts only once for a repeated crash signal', () => {
+    const { manager, onCrash } = makeCrashManager()
+    const id = manager.openDocsTab()
+    const view = lastCreatedView(createDocsView)
+    emitCrash(view, 'oom')
+    emitCrash(view, 'oom')
+
+    expect(onCrash).toHaveBeenCalledTimes(1)
+    expect(manager.isTabCrashed(id)).toBe(true)
   })
 })

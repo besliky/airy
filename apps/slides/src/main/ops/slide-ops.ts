@@ -28,6 +28,7 @@ import {
   pasteSlide,
   promoteSlideBackground,
   removeSection,
+  setSlideCommentResolved,
   renameSection,
   replaceAllInDeck,
   resetSlideBackground,
@@ -544,6 +545,7 @@ register({
   apply(op, ctx): OpRecord {
     const { count } = replaceAllInDeck(ctx.opened.deck, String(op.find), String(op.replace), {
       matchCase: op.matchCase as boolean | undefined,
+      wholeWord: op.wholeWord as boolean | undefined,
       firstOnly: op.firstOnly as boolean | undefined,
       slideIndex: op.slideIndex as number | undefined,
       elementId: op.elementId as string | undefined,
@@ -637,16 +639,53 @@ register({
       throw new GuidedError('op "addComment" needs "text".')
     if (typeof op.author !== 'string' || !op.author)
       throw new GuidedError('op "addComment" needs "author".')
+    if (
+      op.parent !== undefined &&
+      (typeof (op.parent as { authorId?: unknown }).authorId !== 'number' ||
+        typeof (op.parent as { idx?: unknown }).idx !== 'number')
+    ) {
+      throw new GuidedError('op "addComment": "parent" needs numeric authorId and idx.')
+    }
   },
   apply(op, ctx): OpRecord {
     const { index } = resolveSlide(ctx, op)
     const added = addSlideComment(ctx.opened, index, {
       author: String(op.author),
       text: String(op.text),
+      ...(op.parent ? { parent: op.parent as { authorId: number; idx: number } } : {}),
     })
     if (!added)
       throw new GuidedError(`op "addComment": the comment could not be added to slide ${index}.`)
     return { op, after: added }
+  },
+})
+
+register({
+  name: 'resolveComment',
+  validate(op, ctx) {
+    resolveSlide(ctx, op)
+    if (typeof op.authorId !== 'number' || typeof op.idx !== 'number') {
+      throw new GuidedError('op "resolveComment" needs "authorId" and "idx".')
+    }
+    if (typeof op.done !== 'boolean') {
+      throw new GuidedError('op "resolveComment" needs a boolean "done".')
+    }
+  },
+  apply(op, ctx): OpRecord {
+    const { index } = resolveSlide(ctx, op)
+    if (
+      !setSlideCommentResolved(
+        ctx.opened,
+        index,
+        { authorId: op.authorId as number, idx: op.idx as number },
+        op.done === true,
+      )
+    ) {
+      throw new GuidedError(
+        `op "resolveComment": no comment (author ${op.authorId}, #${op.idx}) on slide ${index}.`,
+      )
+    }
+    return { op, after: { done: op.done === true } }
   },
 })
 

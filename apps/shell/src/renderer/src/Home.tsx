@@ -15,6 +15,7 @@ import type {
 } from '../../shared/home-api'
 import { useDismissablePopover } from '@airy-office/ui'
 import { fileCountKey, visiblePageCount } from './counts'
+import { showErrorToast } from './error-toast'
 import { useI18n } from './locale'
 import type { I18n, StringKey } from './locale'
 import { SettingsModal } from './SettingsModal'
@@ -198,7 +199,7 @@ function ProjectPanel({ projects, selectedId, onSelect, onRefresh }: ProjectPane
     try {
       await window.aiOfficeProject?.createProject(name)
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error))
+      showErrorToast(error, t)
       return
     }
     onRefresh()
@@ -213,7 +214,7 @@ function ProjectPanel({ projects, selectedId, onSelect, onRefresh }: ProjectPane
     try {
       await window.aiOfficeProject?.renameProject(id, name)
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error))
+      showErrorToast(error, t)
       return
     }
     onRefresh()
@@ -234,7 +235,7 @@ function ProjectPanel({ projects, selectedId, onSelect, onRefresh }: ProjectPane
     try {
       await window.aiOfficeProject?.deleteProject(id)
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error))
+      showErrorToast(error, t)
       return
     }
     if (selectedId === id) onSelect(null)
@@ -660,12 +661,22 @@ export function Home() {
   }, [view, filter])
 
   useEffect(() => {
+    // A short trailing debounce collapses rapid focus churn (alt-tab bounce,
+    // devtools toggling) into one refresh; the main process also caches stats
+    // briefly, so the focus handler is cheap either way.
+    let timer: number | undefined
     const onFocus = () => {
-      reloadRef.current(true)
-      setProjectTick((n) => n + 1)
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        reloadRef.current(true)
+        setProjectTick((n) => n + 1)
+      }, 150)
     }
     window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [])
 
   const hasMore = entries.length < listTotal
@@ -944,7 +955,7 @@ export function Home() {
     if (!value || value === baseName(entry)) return
     const newName = entry.ext ? `${value}.${entry.ext}` : value
     void window.aiOffice.renameFile(entry.path, newName).then((result) => {
-      if (!result.ok) window.alert(result.error ?? t('renameFailed'))
+      if (!result.ok) showErrorToast(result.error || t('renameFailed'), t)
       refresh()
     })
   }
@@ -955,7 +966,7 @@ export function Home() {
     try {
       await window.aiOfficeProject?.moveFile(filePath, targetProjectId)
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error))
+      showErrorToast(error, t)
       return
     }
     refresh()
@@ -976,7 +987,7 @@ export function Home() {
         await window.aiOfficeProject?.moveFile(path, targetProjectId)
       }
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error))
+      showErrorToast(error, t)
     } finally {
       // A bulk move can fail after earlier paths succeeded; reload to restore
       // unmoved rows while keeping successfully moved rows out of this project.
@@ -1641,6 +1652,10 @@ export function Home() {
               </ul>
             )}
             <div className="modal-buttons">
+              {/* deleted files move to the OS trash — point the way back */}
+              <button className="btn btn-quiet" onClick={() => void window.aiOffice.openTrash()}>
+                {t('openTrash')}
+              </button>
               <button
                 className="btn btn-secondary"
                 autoFocus

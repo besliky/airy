@@ -5,6 +5,7 @@ export const pt = {
   ribbonAiRewriteConfirm:
     'Esta ação chama a IA: consome créditos e pode reescrever todo o conteúdo. Continuar? (Não será perguntado novamente.)',
   ribbonTabFile: 'Arquivo',
+  ribbonTabsLabel: 'Guias da faixa de opções',
   ribbonTabHome: 'Página Inicial',
   ribbonTabInsert: 'Inserir',
   ribbonTabDraw: 'Desenhar',

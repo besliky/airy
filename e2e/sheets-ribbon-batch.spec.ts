@@ -54,7 +54,7 @@ test.describe('sheets: ribbon batch-1 features', () => {
       await sheets.mouse.down()
       await sheets.mouse.move(origin.x + 87 + 43, origin.y + 24 * 2 + 12, { steps: 8 })
       await sheets.mouse.up()
-      await sheets.getByRole('button', { name: 'Formulas' }).click()
+      await sheets.getByRole('tab', { name: 'Formulas' }).click()
       await sheets.locator('span.styles-row', { hasText: 'Create from Selection' }).click()
       await sheets.getByRole('option', { name: 'From top row' }).click()
       await expect(status).toContainText('Created 2 names', { timeout: 5_000 })
@@ -82,7 +82,7 @@ test.describe('sheets: ribbon batch-1 features', () => {
       await sheets.getByRole('option', { name: /Automatic/ }).click()
 
       // ── View > Zoom to Selection reports the new zoom ──
-      await sheets.getByRole('button', { name: 'View', exact: true }).click()
+      await sheets.getByRole('tab', { name: 'View', exact: true }).click()
       await sheets.getByRole('button', { name: 'Zoom to Selection' }).click()
       await expect(status).toContainText('%')
 
@@ -110,7 +110,7 @@ test.describe('sheets: ribbon batch-1 features', () => {
     try {
       const sheets = await waitForPageWithUrl(second.app, 'sheets/out')
       await waitForWorkbook(sheets)
-      await sheets.getByRole('button', { name: 'View', exact: true }).click()
+      await sheets.getByRole('tab', { name: 'View', exact: true }).click()
       const headingsBox = sheets
         .locator('button.check-item', { hasText: 'Headings' })
         .locator('.check-box')
@@ -152,13 +152,13 @@ test.describe('sheets: ribbon batch-2 features', () => {
       await sheets.waitForTimeout(500)
 
       // ── Formulas > Error Checking finds and selects D1 ──
-      await sheets.getByRole('button', { name: 'Formulas' }).click()
+      await sheets.getByRole('tab', { name: 'Formulas' }).click()
       await sheets.getByRole('button', { name: 'Error Checking' }).click()
       await expect(status).toContainText('1 errors — at D1: #DIV/0!')
       await expect(sheets.locator('.name-box')).toHaveValue('D1')
 
       // ── Data > What-If > Goal Seek: D2 = 40 by changing D3 ──
-      await sheets.getByRole('button', { name: 'Data', exact: true }).click()
+      await sheets.getByRole('tab', { name: 'Data', exact: true }).click()
       await sheets.locator('.ribbon-tool', { hasText: 'What-If Analysis' }).click()
       await sheets.getByRole('option', { name: 'Goal Seek' }).click()
       const dialog = sheets.getByRole('dialog', { name: 'Goal Seek' })
@@ -221,13 +221,13 @@ test.describe('sheets: ribbon batch-3 features', () => {
 
       // ── Page Layout > Breaks: insert a break at B3 ──
       await sheets.mouse.click(origin.x + 87 + 43, origin.y + 24 * 2 + 12)
-      await sheets.getByRole('button', { name: 'Page Layout' }).click()
+      await sheets.getByRole('tab', { name: 'Page Layout' }).click()
       await sheets.locator('.ribbon-tool', { hasText: 'Breaks' }).click()
       await sheets.getByRole('option', { name: 'Insert Page Break' }).click()
       await expect(status).toContainText('page break inserted')
 
       // ── View > Page Break Preview: watermark overlay appears ──
-      await sheets.getByRole('button', { name: 'View', exact: true }).click()
+      await sheets.getByRole('tab', { name: 'View', exact: true }).click()
       await sheets.getByRole('button', { name: 'Page Break Preview' }).click()
       await expect(status).toContainText('Page Break Preview on.')
       await expect(sheets.locator('.page-break-watermark').first()).toBeVisible()
@@ -243,7 +243,7 @@ test.describe('sheets: ribbon batch-3 features', () => {
       await expect(fxBar).toBeVisible()
 
       // ── Review > Protect Workbook toggles the structure lock ──
-      await sheets.getByRole('button', { name: 'Review', exact: true }).click()
+      await sheets.getByRole('tab', { name: 'Review', exact: true }).click()
       await sheets.getByRole('button', { name: 'Protect Workbook' }).click()
       await expect(status).toContainText('Workbook structure protection will be written')
 
@@ -257,7 +257,7 @@ test.describe('sheets: ribbon batch-3 features', () => {
       await expect(status).toContainText('1 allow-edit range')
 
       // ── Page Layout > Themes: apply Indigo (grid recolors live) ──
-      await sheets.getByRole('button', { name: 'Page Layout' }).click()
+      await sheets.getByRole('tab', { name: 'Page Layout' }).click()
       await sheets.locator('.ribbon-tool', { hasText: 'Themes' }).click()
       await sheets.getByRole('option', { name: 'Indigo' }).click()
       await expect(status).toContainText('Theme "Indigo" applied')

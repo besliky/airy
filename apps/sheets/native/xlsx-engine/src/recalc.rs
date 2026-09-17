@@ -436,6 +436,56 @@ mod tests {
             .clone()
     }
 
+
+/// Deleting rows/columns that formulas reference now succeeds and writes
+/// Excel-style #REF! into the affected formulas (the gateway rewrites
+/// orphaned references to the bare #REF! token — the qualified
+/// `Sheet!#REF!` form is not parseable here). The sidecar must round-trip
+/// those formulas: parse them, evaluate to the #REF! error, and keep
+/// reporting them as formulas on recalc.
+#[test]
+fn ref_error_formulas_survive_the_recalc_round_trip() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ref-error.xlsx");
+    write_fixture(
+        &path,
+        &[
+            ("A1", "10"),
+            ("A2", "20"),
+            ("A3", "=SUM(#REF!)"),
+            ("A4", "=#REF!+1"),
+            ("A5", "=SUM(#REF!)+Sheet1!A1"),
+        ],
+    );
+    let mut cache = RecalcCache::new();
+    let result = recalc_cells(
+        &mut cache,
+        &path,
+        &[],
+        &[RecalcRead {
+            sheet: "Sheet1".into(),
+            range: CellRange {
+                start_row: 2,
+                end_row: 4,
+                start_column: 0,
+                end_column: 0,
+            },
+        }],
+    )
+    .unwrap();
+    let by_row = |row: u32| {
+        result
+            .cells
+            .iter()
+            .find(|cell| cell.row == row)
+            .map(|cell| (cell.formatted.clone(), cell.is_formula))
+            .unwrap()
+    };
+    assert_eq!(by_row(2), ("#REF!".to_owned(), true));
+    assert_eq!(by_row(3), ("#REF!".to_owned(), true));
+    assert_eq!(by_row(4), ("#REF!".to_owned(), true));
+}
+
     #[test]
     fn keeps_at_most_one_heavy_model_resident() {
         let mut cache = RecalcCache::new();

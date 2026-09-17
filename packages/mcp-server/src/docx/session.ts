@@ -13,7 +13,17 @@
 // DOMParser-based HTML branch) is not portable without a view, so the ops
 // vocabulary here is reimplemented against the engine model directly.
 import { randomUUID } from 'node:crypto'
-import { copyFile, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  copyFile,
+  link,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 
@@ -125,6 +135,88 @@ export class FencingError extends Error {
   }
 }
 
+/** the actionable clobber error shared by the guard and the exclusive promote */
+export function saveTargetExistsError(target: string): Error {
+  return new Error(
+    `Refusing to save: "${target}" already exists and is not a file this session opened or ` +
+      'saved. Pass overwrite: true to replace it (the existing file will be lost).',
+  )
+}
+
+/**
+ * Save-as clobber guard shared by the docx and xlsx sessions: refuse a target
+ * that already exists on disk unless it is one of the session's own files
+ * (the opened/backing file, a previous save's output) or the caller passed
+ * overwrite. Default targets are guarded by the same rule: a native session
+ * defaults to the file it opened (owned, so repeat saves keep working),
+ * while a session converted from .xls/.ods/.doc/.odt defaults to a FRESH
+ * sibling the session neither opened nor saved — a pre-existing sibling must
+ * not be clobbered without consent.
+ */
+export async function assertSaveTargetFree(
+  target: string,
+  owned: ReadonlyArray<string | null>,
+  overwrite: boolean | undefined,
+): Promise<void> {
+  if (overwrite === true) return
+  if (owned.some((path) => path !== null && path === target)) return
+  let exists = true
+  try {
+    await stat(target)
+  } catch {
+    exists = false
+  }
+  if (exists) throw saveTargetExistsError(target)
+}
+
+/**
+ * Promote a temp file onto a guarded (fresh) save-as target WITHOUT replacing
+ * an existing file: fs.link fails with EEXIST atomically, closing the window
+ * between assertSaveTargetFree's stat and the write (TOCTOU) — a file
+ * another writer created in that window surfaces the same actionable
+ * overwrite error instead of being silently replaced by a rename. Saves that
+ * replace by intent (same-file, the session's own output, overwrite:true)
+ * keep using rename.
+ *
+ * exFAT/FAT/network shares do not support hard links, so link fails there
+ * with EPERM/EACCES: on those codes the target is stat-checked and, when
+ * still missing, promoted with the plain atomic rename instead. Trade-off
+ * (accepted, link-less volumes only): rename REPLACES an existing file, so
+ * the exclusive-create guarantee narrows to that stat — a file another
+ * writer creates between the stat and the rename would be clobbered.
+ * Volumes that do support links keep the race-free guarantee.
+ */
+export async function promoteNewFileExclusively(tmp: string, target: string): Promise<void> {
+  try {
+    await link(tmp, target)
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code
+    if (code === 'EEXIST') {
+      await rm(tmp, { force: true })
+      throw saveTargetExistsError(target)
+    }
+    if (code === 'EPERM' || code === 'EACCES') {
+      const targetExists = await stat(target).then(
+        () => true,
+        (statError: NodeJS.ErrnoException) => {
+          if (statError.code === 'ENOENT') return false
+          throw statError
+        },
+      )
+      if (targetExists) {
+        await rm(tmp, { force: true })
+        throw saveTargetExistsError(target)
+      }
+      // the docx save's own atomic promote (rename consumes the temp file)
+      await rename(tmp, target)
+      return
+    }
+    await rm(tmp, { force: true })
+    throw e
+  }
+  await rm(tmp, { force: true })
+}
+
 interface FileStamp {
   mtimeMs: number
   size: number
@@ -143,6 +235,8 @@ export class DocxSession {
   private pending = emptyNumbering()
   private baseline: FileStamp | null
   private savedPath: string | null = null
+  /** every target this session has written (repeat save-as needs no overwrite) */
+  private readonly savedTargets = new Set<string>()
 
   private constructor(
     handle: string,
@@ -400,14 +494,25 @@ export class DocxSession {
    * mtime/size fencing: saving over the file this session opened refuses when
    * the file changed on disk since open (external writer), with a clear error.
    *
+   * Save-as clobber guard: a target (explicit or default) that already exists
+   * on disk is refused unless it is the file this session opened (or last
+   * saved) or `overwrite` is true — a converted session's fresh sibling
+   * default target is guarded like any save-as, while the native default
+   * (the opened file) keeps working unchanged.
+   *
    * Default target: the opened .docx; for sessions converted from .doc/.odt a
    * fresh sibling .docx next to the original. format:'origin' exports the
    * edited document back to the original .doc/.odt through LibreOffice
    * (best-effort) instead.
    */
-  async save(rawPath?: string, format: 'docx' | 'origin' = 'docx'): Promise<SaveResult> {
+  async save(
+    rawPath?: string,
+    format: 'docx' | 'origin' = 'docx',
+    options: { overwrite?: boolean } = {},
+  ): Promise<SaveResult> {
     if (format === 'origin') return this.saveToOrigin()
     const target = resolveConfined(rawPath ?? this.defaultTarget(), this.root)
+    await assertSaveTargetFree(target, [this.path, ...this.savedTargets], options.overwrite)
     if (target === this.path && this.baseline) {
       let current: FileStamp
       try {
@@ -426,7 +531,14 @@ export class DocxSession {
     await mkdir(dirname(target), { recursive: true })
     const tmp = join(dirname(target), `.${target.split('/').pop() ?? 'doc'}.airy-${randomUUID()}`)
     await writeFile(tmp, bytes)
-    await rename(tmp, target)
+    // a fresh (guarded) target promotes exclusively: a file created between
+    // the guard's stat and this write surfaces the clobber error instead of
+    // being silently replaced; targets this session owns replace by intent
+    if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
+      await rename(tmp, target)
+    } else {
+      await promoteNewFileExclusively(tmp, target)
+    }
 
     // refresh the fence so chained saves keep working
     if (target === this.path) {
@@ -438,6 +550,7 @@ export class DocxSession {
       }
     }
     this.savedPath = target
+    this.savedTargets.add(target)
     return {
       path: target,
       bytes: bytes.byteLength,
@@ -529,6 +642,7 @@ export class DocxSession {
       await copyFile(output, tmpTarget)
       await rename(tmpTarget, this.origin.path)
       this.savedPath = this.origin.path
+      this.savedTargets.add(this.origin.path)
       const info = await stat(this.origin.path)
       return {
         path: this.origin.path,

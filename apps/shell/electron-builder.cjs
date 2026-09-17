@@ -186,8 +186,9 @@ function assertModuleTreesPresent() {
     '../pdf/out',
     '../markdown/out',
     '../html/out',
-    // MCP copilot server bundled for win/linux below; checked here because
-    // gen-third-party-notices loads this config before build:all has run
+    // MCP copilot server bundled for win/linux/mac below; checked here
+    // because gen-third-party-notices loads this config before build:all
+    // has run
     '../../packages/mcp-server/dist/index.js',
   ]) {
     if (!existsSync(join(__dirname, rel))) {
@@ -388,6 +389,15 @@ const config = {
       {
         from: '../sheets/native/xlsx-engine/target/release/xlsx-sidecar',
         to: 'native/xlsx-sidecar',
+      },
+      // MCP copilot server, same entry as win/linux (the esbuild bundle is
+      // plain JS, so the one source serves every arch pack — unlike the
+      // sidecar above, no lipo/fat build is needed). On mac it lands in
+      // Airy.app/Contents/Resources/mcp/index.js and the app binary doubles
+      // as its Node runtime (ELECTRON_RUN_AS_NODE=1 Airy.app/Contents/MacOS/Airy).
+      {
+        from: '../../packages/mcp-server/dist',
+        to: 'mcp',
       },
     ],
   },

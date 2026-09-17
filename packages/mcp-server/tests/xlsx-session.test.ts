@@ -2,7 +2,7 @@
 // A1 parsing, read rendering, the cell-edit journal and the save/origin
 // matrix — all against a stub sidecar IO and a mocked save module (the real
 // gateway save needs the sidecar binary; covered by the integration file).
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -31,6 +31,7 @@ vi.mock('../src/import/soffice.js', () => ({
 }))
 
 import { XlsxSession, parseA1Range } from '../src/xlsx/session.js'
+import { FencingError } from '../src/docx/session.js'
 import { makeStubIo } from './helpers/stub-sidecar.js'
 
 let root: string
@@ -232,6 +233,45 @@ describe('XlsxSession journal + save matrix', () => {
     expect(io.calls.open).toEqual([join(root, 'book.xlsx'), join(root, 'book.xlsx')])
   })
 
+  it('refuses an in-place save when the backing file changed on disk since open', async () => {
+    const { session } = await nativeSession()
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 'edit' }] })
+    // external writer rewrites the backing file between open and save
+    await writeFile(join(root, 'book.xlsx'), 'externally rewritten bytes')
+    await expect(session.save()).rejects.toThrow(FencingError)
+    await expect(session.save()).rejects.toThrow(/changed on disk/)
+    // the refusal left the external writer's file untouched
+    expect(await readFile(join(root, 'book.xlsx'), 'utf8')).toBe('externally rewritten bytes')
+  })
+
+  it('refreshes the fence after a successful in-place save (chained saves work)', async () => {
+    const { session } = await nativeSession()
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 'one' }] })
+    await session.save()
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 'two' }] })
+    await expect(session.save()).resolves.toMatchObject({ path: join(root, 'book.xlsx') })
+  })
+
+  it('refuses save-as over an existing unrelated file unless overwrite is set', async () => {
+    const { session } = await nativeSession()
+    const other = join(root, 'other.xlsx')
+    await writeFile(other, 'unrelated workbook bytes')
+    await expect(session.save(other)).rejects.toThrow(/already exists/)
+    await expect(session.save(other)).rejects.toThrow(/overwrite: true/)
+    // the refusal left the existing file untouched
+    expect(await readFile(other, 'utf8')).toBe('unrelated workbook bytes')
+    // explicit consent replaces it
+    await expect(session.save(other, 'xlsx', { overwrite: true })).resolves.toMatchObject({
+      path: other,
+      format: 'xlsx',
+    })
+    expect(await readFile(other, 'utf8')).toBe('saved-xlsx-bytes')
+    // the session's own backing file still saves without overwrite (fencing path)
+    await expect(session.save()).resolves.toMatchObject({ path: join(root, 'book.xlsx') })
+    // repeat save-as onto the session's own last output keeps working
+    await expect(session.save(other)).resolves.toMatchObject({ path: other })
+  })
+
   it('defaults .xls imports to a sibling .xlsx and leaves the origin untouched', async () => {
     const legacyPath = join(root, 'legacy.xls')
     await writeFile(legacyPath, 'legacy-bytes')
@@ -239,6 +279,43 @@ describe('XlsxSession journal + save matrix', () => {
     const result = await session.save()
     expect(result.path).toBe(join(root, 'legacy.xlsx'))
     expect(result.warnings[0]).toMatch(/original .*\.xls.* left untouched/)
+  })
+
+  it('refuses a converted session default save onto a pre-existing sibling', async () => {
+    const legacyPath = join(root, 'legacy.xls')
+    await writeFile(legacyPath, 'legacy-bytes')
+    const session = await XlsxSession.open(legacyPath, root, makeStubIo())
+    const sibling = join(root, 'legacy.xlsx')
+    await writeFile(sibling, 'pre-existing sibling bytes')
+    // the sibling is not a file the session opened or saved: the default
+    // save must not silently clobber it
+    await expect(session.save()).rejects.toThrow(/already exists/)
+    await expect(session.save()).rejects.toThrow(/overwrite: true/)
+    expect(await readFile(sibling, 'utf8')).toBe('pre-existing sibling bytes')
+    // explicit consent replaces it
+    await expect(session.save(undefined, 'xlsx', { overwrite: true })).resolves.toMatchObject({
+      path: sibling,
+    })
+    expect(await readFile(sibling, 'utf8')).toBe('saved-xlsx-bytes')
+    // after the first save the sibling is the session's own output
+    await expect(session.save()).resolves.toMatchObject({ path: sibling })
+  })
+
+  it('asks the gateway for an exclusive promote only on guarded fresh targets', async () => {
+    const { session } = await nativeSession()
+    // a fresh save-as target promotes exclusively (TOCTOU-safe)
+    await session.save(join(root, 'fresh.xlsx'))
+    expect(saveCalls[0]?.exclusiveTarget).toBe(true)
+    // in-place saves replace the session's own backing file by intent
+    saveCalls.length = 0
+    await session.save()
+    expect(saveCalls[0]?.exclusiveTarget).toBe(false)
+    // explicit overwrite consent replaces by intent
+    saveCalls.length = 0
+    const other = join(root, 'other.xlsx')
+    await writeFile(other, 'unrelated bytes')
+    await session.save(other, 'xlsx', { overwrite: true })
+    expect(saveCalls[0]?.exclusiveTarget).toBe(false)
   })
 
   it('format origin: .xls refuses with the save-as-.xlsx cascade', async () => {

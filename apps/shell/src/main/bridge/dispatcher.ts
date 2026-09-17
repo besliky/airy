@@ -14,10 +14,20 @@ export type BridgeMethodHandler = (
   params: Record<string, unknown>,
   /** aborts when the per-call timeout fires, so round-trips can drop waiters */
   signal: AbortSignal,
+  /** per-connection context the server stamps onto every dispatched call */
+  context: BridgeCallContext,
 ) => unknown | Promise<unknown>
 
+/** identity of the calling bridge connection, stable for its lifetime */
+export interface BridgeCallContext {
+  readonly clientId: string
+}
+
+/** fallback for direct dispatcher callers (tests) with no connection identity */
+export const LOCAL_BRIDGE_CALLER: BridgeCallContext = { clientId: 'local' }
+
 export interface BridgeDispatcher {
-  call(request: BridgeRequest): Promise<BridgeResponse>
+  call(request: BridgeRequest, context?: BridgeCallContext): Promise<BridgeResponse>
 }
 
 export const DEFAULT_BRIDGE_TIMEOUT_MS = 30_000
@@ -54,7 +64,7 @@ export function createBridgeDispatcher(
 ): BridgeDispatcher {
   const timeoutMs = options.timeoutMs ?? DEFAULT_BRIDGE_TIMEOUT_MS
   return {
-    async call(request: BridgeRequest): Promise<BridgeResponse> {
+    async call(request: BridgeRequest, context?: BridgeCallContext): Promise<BridgeResponse> {
       // parseRequestLine already screens this; re-check so a dispatcher wired
       // to another transport stays version-safe
       if (request.protocol_version !== BRIDGE_PROTOCOL_VERSION) {
@@ -74,7 +84,8 @@ export function createBridgeDispatcher(
       }
       try {
         const result = await withTimeout(
-          (signal) => Promise.resolve(handler(request.params ?? {}, signal)),
+          (signal) =>
+            Promise.resolve(handler(request.params ?? {}, signal, context ?? LOCAL_BRIDGE_CALLER)),
           timeoutMs,
           () => {},
         )

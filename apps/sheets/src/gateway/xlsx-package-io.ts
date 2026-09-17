@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { closeSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
-import { copyFile, mkdir, mkdtemp, rename, rm, stat, unlink } from 'node:fs/promises'
+import { copyFile, link, mkdir, mkdtemp, rename, rm, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 
@@ -82,6 +82,14 @@ export interface StreamingSaveRequest {
   readonly sourcePath: string
   readonly targetPath: string
   readonly edits: readonly CellEdit[]
+  /**
+   * Promote via an exclusive link instead of a replacing rename: when the
+   * target appears between the caller's clobber guard and the write (TOCTOU),
+   * the save aborts with SaveTargetExistsError rather than silently
+   * replacing the file. Set only for guarded fresh targets — callers that
+   * replace by intent (in-place saves, overwrite consent) keep the default.
+   */
+  readonly exclusiveTarget?: boolean | undefined
   readonly bulkConstantFills?: readonly BulkConstantFill[] | undefined
   readonly structuralOps?: readonly SheetStructuralOps[] | undefined
   readonly chartEdits?: readonly WorkbookChartEdit[] | undefined
@@ -197,7 +205,11 @@ export async function saveWorkbookViaSidecar(
     }
     assertManifestPreserved(plan, result.beforeEntries, result.afterEntries)
 
-    await promoteFileAtomically(temporaryTarget, request.targetPath)
+    if (request.exclusiveTarget === true) {
+      await promoteFileExclusively(temporaryTarget, request.targetPath)
+    } else {
+      await promoteFileAtomically(temporaryTarget, request.targetPath)
+    }
     return {
       touchedEntries: plan.touchedEntries,
       removedEntries: plan.removedEntries,
@@ -209,6 +221,63 @@ export async function saveWorkbookViaSidecar(
   } finally {
     await rm(workDir, { recursive: true, force: true })
   }
+}
+
+/**
+ * Raised by the exclusive promote when the target appeared between the
+ * caller's clobber guard and the write: the save is aborted instead of
+ * silently replacing a file another writer created in that window (TOCTOU).
+ */
+export class SaveTargetExistsError extends Error {
+  constructor(readonly path: string) {
+    super(`The save target already exists: ${path}`)
+    this.name = 'SaveTargetExistsError'
+  }
+}
+
+/**
+ * Link-based promote for guarded (fresh) save targets: fs.link fails with
+ * EEXIST atomically when the target exists, so it cannot silently replace a
+ * file that appeared after the caller's existence check. Saves that replace
+ * by intent use promoteFileAtomically.
+ *
+ * exFAT/FAT/network shares do not support hard links, so link fails there
+ * with EPERM/EACCES: on those codes the target is stat-checked and, when
+ * still missing, promoted through the atomic rename machinery instead.
+ * Trade-off (accepted, link-less volumes only): rename REPLACES an existing
+ * file, so the exclusive-create guarantee narrows to that stat — a file
+ * another writer creates in the window between the stat and the rename
+ * would be clobbered. Volumes that do support links keep the full
+ * race-free guarantee.
+ */
+export async function promoteFileExclusively(temporaryPath: string, path: string): Promise<void> {
+  await syncFileBestEffort(temporaryPath)
+  try {
+    await link(temporaryPath, path)
+  } catch (error: unknown) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'EEXIST') {
+      await rm(temporaryPath, { force: true })
+      throw new SaveTargetExistsError(path)
+    }
+    if (code === 'EPERM' || code === 'EACCES') {
+      const targetExists = await stat(path).then(
+        () => true,
+        (statError: NodeJS.ErrnoException) => {
+          if (statError.code === 'ENOENT') return false
+          throw statError
+        },
+      )
+      if (targetExists) {
+        await rm(temporaryPath, { force: true })
+        throw new SaveTargetExistsError(path)
+      }
+      await promoteFileAtomically(temporaryPath, path)
+      return
+    }
+    throw error
+  }
+  await unlink(temporaryPath).catch(() => {})
 }
 
 function createSidecarEntrySource(

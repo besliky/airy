@@ -21,21 +21,23 @@ import {
   AiTimeoutError,
   isAiNetworkError,
   isAiOverloadedError,
-  defaultAiSettings,
-  activeProvider,
   NO_PROVIDER_ERROR,
   maxOutputTokensOf,
-  resolveAiSettings,
   setAiUserAgent,
   setRescueFetch,
   streamForProvider,
   type AiSettings,
   type AiStreamChunk,
   type AiStreamRequest,
-  type LegacyAiSettings,
 } from '@airy-office/ai-provider'
+import {
+  maskedAiSettings,
+  overlayRealAiSecrets,
+  registerAiSettingsCodec,
+  saveAiSettings,
+} from '../../../docs/src/main/ai-settings-store'
 import { shutdownCodexAppServers } from '@airy-office/ai-provider/codex-app-server'
-import { fetchRemoteImage } from '@airy-office/electron-utils'
+import { fetchRemoteImage, rendererMayReadPath } from '@airy-office/electron-utils'
 import {
   webSearchTool,
   imageSearchTool,
@@ -102,17 +104,17 @@ export function registerAiIpc(): void {
   // Node fetch (undici) direct connections get reset under VPN/tun setups; retry over Chromium's stack
   setRescueFetch((url, init) => net.fetch(url, init))
   setAiUserAgent(`Airy/${app.getVersion()}`)
+  // decode enc: secrets for every ai-settings.json reader (ai-search tools)
+  registerAiSettingsCodec()
 
   ipcMain.handle('ai:get-settings', (): AiSettings => {
-    const stored = readJson<Partial<AiSettings> & LegacyAiSettings>(AI_SETTINGS_PATH(), {})
-    const settings = resolveAiSettings(stored, defaultAiSettings())
-    // a stored BYOK provider is honored when usable; half-filled or retired selections resolve to 'none'
-    settings.provider = activeProvider(settings)
-    return settings
+    // keys are masked (sk-…abcd); ai:set-settings and stream/test overlay the
+    // stored real keys — a renderer never holds full secrets
+    return maskedAiSettings()
   })
 
   ipcMain.handle('ai:set-settings', (_event, settings: AiSettings) => {
-    writeJson(AI_SETTINGS_PATH(), settings)
+    saveAiSettings(settings)
   })
 
   ipcMain.handle('ai:log-run-failure', (_event, entry: AiRunFailure) => {
@@ -120,7 +122,9 @@ export function registerAiIpc(): void {
   })
 
   ipcMain.handle('ai:stream', async (event, request: AiStreamRequest) => {
-    const { requestId, settings, system, messages } = request
+    const { requestId, system, messages } = request
+    // the renderer only ever saw masked keys — restore the stored real ones
+    const settings = overlayRealAiSecrets(request.settings)
     const tools = request.tools ?? []
     const maxTokens = request.maxTokens ?? maxOutputTokensOf(settings)
     const provider = settings.provider
@@ -239,7 +243,7 @@ export function registerSlidesOnlyAiIpc(): void {
   ipcMain.handle(
     'ai:generate-image',
     async (
-      _event,
+      event,
       op: {
         prompt: string
         model?: string
@@ -248,25 +252,37 @@ export function registerSlidesOnlyAiIpc(): void {
         imageSize?: string
       },
     ) => {
-      return generateImageTool(AI_SETTINGS_PATH(), {
-        prompt: String(op.prompt),
-        model: op.model ? String(op.model) : undefined,
-        referenceImageUrls: Array.isArray(op.referenceImageUrls)
-          ? op.referenceImageUrls.map(String)
-          : undefined,
-        aspectRatio: op.aspectRatio ? String(op.aspectRatio) : undefined,
-        imageSize: op.imageSize ? String(op.imageSize) : undefined,
-      })
+      return generateImageTool(
+        AI_SETTINGS_PATH(),
+        {
+          prompt: String(op.prompt),
+          model: op.model ? String(op.model) : undefined,
+          referenceImageUrls: Array.isArray(op.referenceImageUrls)
+            ? op.referenceImageUrls.map(String)
+            : undefined,
+          aspectRatio: op.aspectRatio ? String(op.aspectRatio) : undefined,
+          imageSize: op.imageSize ? String(op.imageSize) : undefined,
+        },
+        // local reference files must come from granted directories (dialog
+        // picks, shell-routed opens, attachments); file:// generated-store
+        // and https URLs are unaffected
+        { mayReadFile: (candidate) => rendererMayReadPath(event.sender.id, candidate) },
+      )
     },
   )
 
   ipcMain.handle(
     'ai:analyze-media',
-    async (_event, op: { mediaUrls: string[]; requirements: string }) => {
-      return analyzeMediaTool(AI_SETTINGS_PATH(), {
-        mediaUrls: (op.mediaUrls ?? []).map(String),
-        requirements: String(op.requirements ?? ''),
-      })
+    async (event, op: { mediaUrls: string[]; requirements: string }) => {
+      return analyzeMediaTool(
+        AI_SETTINGS_PATH(),
+        {
+          mediaUrls: (op.mediaUrls ?? []).map(String),
+          requirements: String(op.requirements ?? ''),
+        },
+        // local media must come from granted directories; see ai:generate-image
+        { mayReadFile: (candidate) => rendererMayReadPath(event.sender.id, candidate) },
+      )
     },
   )
 

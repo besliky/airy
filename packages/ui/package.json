@@ -7,6 +7,7 @@
   "description": "Shared renderer UI components for the office apps (AI panel composer, icons); styling stays per-app via the shared class names",
   "exports": {
     ".": "./src/index.ts",
+    "./toast-bus": "./src/toast-bus.ts",
     "./ai-panel-prefs": "./src/ai-panel-prefs.ts",
     "./tokens.css": "./src/tokens.css",
     "./screentip.css": "./src/screentip.css",

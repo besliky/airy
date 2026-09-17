@@ -5,6 +5,7 @@ export const ru = {
   ribbonAiRewriteConfirm:
     'Это действие вызывает ИИ: расходуются кредиты, и всё содержимое может быть переписано. Продолжить? (Вопрос больше не появится.)',
   ribbonTabFile: 'Файл',
+  ribbonTabsLabel: 'Вкладки ленты',
   ribbonTabHome: 'Главная',
   ribbonTabInsert: 'Вставка',
   ribbonTabDraw: 'Рисование',

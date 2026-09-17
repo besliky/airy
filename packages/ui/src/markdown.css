@@ -12,7 +12,7 @@
 .ai-md-table td {
   border: 1px solid var(--border);
   padding: 4px 10px;
-  text-align: left;
+  text-align: start;
   vertical-align: top;
 }
 .ai-md-table th {

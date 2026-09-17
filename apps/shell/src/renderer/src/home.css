@@ -148,7 +148,7 @@ body.vib .home {
   font-size: 14px;
   color: var(--text);
   cursor: pointer;
-  text-align: left;
+  text-align: start;
 }
 
 .nav-item:hover {
@@ -170,7 +170,7 @@ body.vib .home {
 }
 
 .nav-count {
-  margin-left: auto;
+  margin-inline-start: auto;
   min-width: 22px;
   text-align: center;
   font-size: 12px;
@@ -250,7 +250,7 @@ body.vib .home {
 
 .account-chevron {
   flex-shrink: 0;
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--text-muted);
 }
 
@@ -525,12 +525,8 @@ body.vib .home {
   color: var(--text-tertiary);
 }
 
-/* segmented control: gray track, active segment = white card */
-/* segmented filter control: gray track, active segment = white card.
-   One shared 40px rail for the recents page and the cloud projects
-   toolbar (where it lines up with the 40px refresh button and search box). */
-.filter-pills,
-.cloud-seg {
+/* segmented filter control: gray track, active segment = white card */
+.filter-pills {
   display: flex;
   align-items: center;
   height: 40px;
@@ -540,8 +536,7 @@ body.vib .home {
   flex-shrink: 0;
 }
 
-.filter-pill,
-.cloud-seg button {
+.filter-pill {
   padding: 7px 15px;
   border: none;
   border-radius: 8px;
@@ -555,13 +550,11 @@ body.vib .home {
   white-space: nowrap;
 }
 
-.filter-pill:hover,
-.cloud-seg button:hover {
+.filter-pill:hover {
   color: var(--text);
 }
 
-.filter-pill.active,
-.cloud-seg button.active {
+.filter-pill.active {
   background: var(--surface);
   color: var(--text);
   font-weight: 600;
@@ -607,7 +600,7 @@ body.vib .home {
 .selection-count {
   font-size: 14px;
   color: var(--text);
-  margin-right: 4px;
+  margin-inline-end: 4px;
 }
 
 .selection-action {
@@ -933,6 +926,19 @@ body.vib .home {
   background: var(--color-error);
   border: none;
   color: #fff;
+}
+
+/* quiet text button for secondary modal actions (e.g. Open Trash) */
+.btn-quiet {
+  margin-right: auto;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
 }
 
 .btn-danger:hover:not(:disabled) {
@@ -1471,62 +1477,7 @@ body.vib .home {
   padding-top: 1px;
 }
 
-/* ── Cloud-style projects (removed; styles kept for the shared rail) ── */
-
-/* fixed header: the content column never scrolls; only .cloud-scroll does */
-/* whole page scrolls (same as the recents page) so the wheel works anywhere;
-   no bottom padding: the list runs flush to the window edge */
-.content:has(.cloud-projects) {
-  padding: 40px 36px 0;
-}
-
-.cloud-projects .proj-empty {
-  flex: 1;
-}
-
-/* pinned while the page scrolls (wheel still works anywhere); the ::before
-   covers the seam left by the content's 40px top padding */
-.cloud-hero {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  background: var(--bg-content);
-  padding-bottom: 12px;
-}
-
-.cloud-hero::before {
-  content: '';
-  position: absolute;
-  top: -40px;
-  left: -36px;
-  right: -36px;
-  height: 40px;
-  background: var(--bg-content);
-}
-
-.cloud-hero-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.cloud-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--text);
-}
-
-.cloud-subtitle {
-  margin: 8px 0 0;
-  font-size: 14px;
-  color: var(--text-muted);
-}
+/* ── Project panel: WPS-style sortable column header + sort popover ── */
 
 .cloud-sort-menu {
   position: absolute;
@@ -1568,88 +1519,10 @@ body.vib .home {
   font-weight: 600;
 }
 
-.cloud-controls {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-top: 26px;
-}
-
-.cloud-search {
-  /* sits at the toolbar's right edge, flush with the table below */
-  flex: 1;
-  max-width: 520px;
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  height: 40px;
-  padding: 0 13px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--text-muted);
-}
-
-.cloud-search:focus-within {
-  border-color: var(--accent);
-}
-
-.cloud-search input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: 14px;
-  color: var(--text);
-}
-
 /* placeholder color follows the suite convention (AI input boxes):
    tertiary text, not the browser's UA default */
-.cloud-search input::placeholder,
 .proj-rename-input::placeholder {
   color: var(--text-tertiary);
-}
-
-/* .cloud-seg styles live with .filter-pills (shared segmented control). */
-
-/* the toolbar → table gap lives in the sticky hero's padding-bottom so the
-   pinned header paints over rows scrolling underneath */
-.cloud-scroll {
-  margin-top: 0;
-}
-
-/* Projects list styled like the recent-files table: bordered
-   rounded container, column header, grid rows with hairline dividers */
-.cloud-table {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-}
-
-.cloud-columns,
-.cloud-row {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 110px;
-  align-items: center;
-  gap: 12px;
-  padding: 0 16px;
-}
-
-.cloud-columns {
-  padding-top: 11px;
-  padding-bottom: 11px;
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--text-secondary);
-}
-
-/* header label starts at the icon column so it lines up with the file badges */
-.cloud-columns .col-name {
-  grid-column: 1 / 3;
 }
 
 /* WPS-style sortable column header: label + direction arrow, click opens
@@ -1679,116 +1552,12 @@ body.vib .home {
   background: var(--bg-hover);
 }
 
-.cloud-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.cloud-list li + li {
-  border-top: 1px solid var(--border-subtle);
-}
-
-.cloud-row {
-  width: 100%;
-  /* matches the recent-file rows: 14px paddings + a 26px control column */
-  min-height: 54px;
-  padding-top: 14px;
-  padding-bottom: 14px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-  color: var(--text);
-}
-
-.cloud-list li:last-child .cloud-row {
-  border-radius: 0 0 12px 12px;
-}
-
-.cloud-row:hover {
-  background: var(--surface-subtle);
-}
-
-.cloud-row:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-/* title + trailing external icon; the icon hugs the text and survives truncation */
-.cloud-row-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-}
-
-.cloud-row-title {
-  flex: 0 1 auto;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cloud-row-time {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-/* always visible so rows read as external links; darkens on hover */
-.cloud-row-external {
-  flex-shrink: 0;
-  color: #c9ced4;
-}
-
-.cloud-row:hover .cloud-row-external,
-.cloud-row:focus-visible .cloud-row-external {
-  color: var(--text-secondary);
-}
-
 /* right-aligned to match the sidebar count column (22px, centered digits) */
 .nav-external {
   flex-shrink: 0;
   margin-left: auto;
   margin-right: 4px;
   color: var(--text-muted);
-}
-
-.cloud-refresh-btn {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* sits in the toolbar next to the 40px filter tabs / search box */
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: 10px;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.cloud-refresh-btn:hover:not(:disabled) {
-  background: var(--surface-subtle);
-}
-
-.cloud-refresh-btn.syncing svg {
-  animation: cloud-refresh-spin 0.9s linear infinite;
-  color: var(--text-muted);
-}
-
-@keyframes cloud-refresh-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* Drag-over affordance while OS files hover anywhere over the window (the
@@ -1868,6 +1637,99 @@ body.vib .home {
   .recent-size {
     display: none;
   }
+}
+
+/* ── startup skeleton (first paint while the boot IPC resolves) ── */
+.startup-skeleton {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: var(--bg-content);
+}
+
+.startup-logo {
+  width: 44px;
+  height: 44px;
+}
+
+/* the spinner only appears after a delay: when the boot IPC resolves fast,
+   the skeleton is replaced before this ever paints (no flash) */
+.startup-spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--text-secondary);
+  opacity: 0;
+  animation:
+    startup-spin 0.8s linear infinite,
+    startup-appear 0.2s ease 0.45s forwards;
+}
+
+@keyframes startup-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes startup-appear {
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .startup-spinner {
+    /* no spinning under reduced motion; the delayed appear still avoids a flash */
+    animation: startup-appear 0.01ms 0.45s forwards;
+  }
+}
+
+/* ── transient toast (error feedback instead of raw window.alert) ── */
+.app-toast {
+  position: fixed;
+  top: 52px;
+  left: 50%;
+  z-index: 1000;
+  display: flex;
+  max-width: min(560px, 80vw);
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: var(--shadow-menu);
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+  pointer-events: none;
+}
+
+.app-toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.app-toast.error {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.app-toast-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
 }
 
 @media (prefers-reduced-motion: reduce) {

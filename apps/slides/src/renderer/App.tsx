@@ -87,8 +87,9 @@ import { CutoutDialog } from './components/CutoutDialog'
 import { useAutoSavePref, type AiScopeQuoteData, type WordArtPreset } from '@airy-office/ui'
 import type { ChartPresetDef, IconDef, SmartArtDef } from './insert-presets'
 import { AiryMark, IconAiBeautify, IconAiFactCheck, IconAiImage } from './components/icons'
-import { ToastHost } from './components/toast'
-import { showToast } from './components/toast-bus'
+import { ToastHost } from '@airy-office/ui'
+import { ShortcutsDialog } from './components/ShortcutsDialog'
+import { showToast } from '@airy-office/ui/toast-bus'
 import { t, useI18n } from './i18n/locale'
 import { AiPanel } from './ai/AiPanel'
 import { ChartDataDialog } from './components/ChartDataDialog'
@@ -663,6 +664,38 @@ export function App() {
     setZoom(z)
   }, [slide, fitZoom])
 
+  // Find navigation: scroll the hit into view once the switched slide has
+  // committed (element-granularity jumps used to leave off-screen hits unseen)
+  const [findFocus, setFindFocus] = useState<{
+    slide: number
+    box: { x: number; y: number; w: number; h: number }
+  } | null>(null)
+  useEffect(() => {
+    if (!findFocus) return
+    const rel = stageRelRef.current
+    const wrap = stageWrapRef.current
+    const sl = slides[findFocus.slide]
+    if (rel && wrap && sl && sl.widthPx > 0) {
+      const r = rel.getBoundingClientRect()
+      const scale = r.width / sl.widthPx
+      const left = r.left + findFocus.box.x * scale
+      const top = r.top + findFocus.box.y * scale
+      const right = left + findFocus.box.w * scale
+      const bottom = top + findFocus.box.h * scale
+      const view = wrap.getBoundingClientRect()
+      const pad = 48
+      let dx = 0
+      let dy = 0
+      if (right > view.right - pad) dx = right - (view.right - pad)
+      else if (left < view.left + pad) dx = left - (view.left + pad)
+      if (bottom > view.bottom - pad) dy = bottom - (view.bottom - pad)
+      else if (top < view.top + pad) dy = top - (view.top + pad)
+      if (dx) wrap.scrollLeft += dx
+      if (dy) wrap.scrollTop += dy
+    }
+    setFindFocus(null)
+  }, [findFocus, slides])
+
   // measure the stage content's unscaled layout size (offsetWidth ignores the
   // transform); slide-size changes are the only thing that alters it
   useLayoutEffect(() => {
@@ -915,6 +948,8 @@ export function App() {
   const exportPdf = useCallback(() => fileActions.exportPdf(ctxRef.current), [])
 
   const [printDlgOpen, setPrintDlgOpen] = useState(false)
+  /// Help > Keyboard Shortcuts reference dialog.
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   /** Whether focus is in a text input (input/textarea/contentEditable) — these cases use native undo/delete */
   const inTextField = () => {
@@ -1813,12 +1848,27 @@ export function App() {
   }, [hasDoc, current, path, annotationsNonce])
 
   const addComment = useCallback(
-    async (text: string) => {
-      const r = await window.slidesApi.addComment({ slideIndex: current, text })
+    async (text: string, parent?: SlideComment) => {
+      const r = await window.slidesApi.addComment({
+        slideIndex: current,
+        text,
+        ...(parent ? { parent: { authorId: parent.authorId, idx: parent.idx } } : {}),
+      })
       if (r) {
         setComments(r)
         setDirty(true)
         setStatus(t('appStatusCommentAdded'))
+      }
+    },
+    [current],
+  )
+
+  const resolveComments = useCallback(
+    async (refs: Array<{ authorId: number; idx: number }>, done: boolean) => {
+      const r = await window.slidesApi.resolveComments({ slideIndex: current, refs, done })
+      if (r) {
+        setComments(r)
+        setDirty(true)
       }
     },
     [current],
@@ -2072,6 +2122,7 @@ export function App() {
       else if (cmd === 'export-pdf') void exportPdf()
       else if (cmd === 'export-images') void exportImages()
       else if (cmd === 'print') setPrintDlgOpen(true)
+      else if (cmd === 'shortcuts') setShortcutsOpen(true)
       // Through the preview path so the zoom pivots on the viewport center, not the scroll origin
       else if (cmd === 'zoom-in') previewZoom((z) => Math.min(z * 1.15, 3))
       else if (cmd === 'zoom-out') previewZoom((z) => Math.max(z / 1.15, 0.25))
@@ -2812,6 +2863,7 @@ export function App() {
   return (
     <div className="app">
       <ToastHost />
+      {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       <Ribbon
         hasDoc={!!slide}
         deckEmpty={deckEmpty}
@@ -2962,7 +3014,8 @@ export function App() {
         commentsOpen={showComments}
         onToggleComments={() => (showComments ? setShowComments(false) : openComments(false))}
         onNewComment={() => openComments(true)}
-        commentCount={comments.length}
+        /** thread-aware badge: replies count into their thread, not as new markers */
+        commentCount={comments.filter((c) => !c.parentId).length}
         onInsertIcon={(def, color) => void insertIcon(def, color)}
         onInsertChart={(kind) => void insertChart(kind)}
         onInsertSmartArt={(def) => void insertSmartArt(def)}
@@ -3950,6 +4003,8 @@ export function App() {
                     comments={comments}
                     focusNonce={commentsFocusNonce}
                     onAdd={(text) => void addComment(text)}
+                    onReply={(text, parent) => void addComment(text, parent)}
+                    onResolve={(refs, done) => void resolveComments(refs, done)}
                     onDelete={(c) => void deleteComment(c)}
                     onCollapse={() => setShowComments(false)}
                   />
@@ -3967,7 +4022,12 @@ export function App() {
               ) : (
                 t('appStatusBarReady')
               )}
-              {status && <span className="status-msg"> — {status}</span>}
+              {status && (
+                <span className="status-msg" role="status" aria-live="polite">
+                  {' '}
+                  — {status}
+                </span>
+              )}
             </div>
             <div className="status-right">
               {hasDoc && (
@@ -4091,9 +4151,12 @@ export function App() {
       {findOpen && (
         <FindReplaceDialog
           slides={slides}
-          onNavigate={(si, id) => {
+          current={current}
+          stageRel={stageRelRef}
+          onNavigate={(si, id, focus) => {
             setCurrent(si)
             setSelectedIds([id])
+            if (focus) setFindFocus({ slide: si, box: focus })
           }}
           onReplaced={(all) => {
             setSlides(all)
@@ -4215,6 +4278,7 @@ function ZoomControls({
   readonly onPreview: (z: number | ((current: number) => number)) => void
 }) {
   const [live, setLive] = useState(() => Math.round(zoom * 100))
+  const { t } = useI18n()
   // adopt outside commits (fit, pinch, menu) once they land
   useEffect(() => setLive(Math.round(zoom * 100)), [zoom])
   // Buttons go through the preview path too: the zoom pivots on the viewport center and
@@ -4225,7 +4289,12 @@ function ZoomControls({
   }
   return (
     <>
-      <button className="zoom-btn" onClick={() => step(-1)}>
+      <button
+        className="zoom-btn"
+        data-tip={t('appZoomOut')}
+        aria-label={t('appZoomOut')}
+        onClick={() => step(-1)}
+      >
         −
       </button>
       <input
@@ -4234,6 +4303,7 @@ function ZoomControls({
         min={25}
         max={300}
         step={5}
+        aria-label={t('appZoomLabel')}
         style={{ '--zoom-pct': `${((live - 25) / 275) * 100}%` } as React.CSSProperties}
         value={live}
         onChange={(e) => {
@@ -4242,7 +4312,12 @@ function ZoomControls({
           onPreview(v / 100)
         }}
       />
-      <button className="zoom-btn" onClick={() => step(1)}>
+      <button
+        className="zoom-btn"
+        data-tip={t('appZoomIn')}
+        aria-label={t('appZoomIn')}
+        onClick={() => step(1)}
+      >
         +
       </button>
       <span className="zoom-value">{live}%</span>

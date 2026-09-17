@@ -1,7 +1,7 @@
 {
   "name": "@airy-office/shell",
   "productName": "Airy",
-  "version": "0.9.3",
+  "version": "0.10.0",
   "license": "Apache-2.0",
   "homepage": "https://github.com/besliky/airy",
   "private": true,
@@ -18,7 +18,8 @@
     "dist:win": "electron-vite build && electron-builder --win",
     "dist:linux": "electron-vite build && electron-builder --linux",
     "release:win": "electron-vite build && electron-builder --win nsis",
-    "release:linux": "electron-vite build && electron-builder --linux AppImage deb"
+    "release:linux": "electron-vite build && electron-builder --linux AppImage deb",
+    "release:mac": "electron-vite build && electron-builder --mac dmg zip"
   },
   "devDependencies": {
     "@airy-office/agent-core": "*",

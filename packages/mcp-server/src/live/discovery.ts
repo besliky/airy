@@ -94,20 +94,56 @@ export interface DiscoveredBridge {
   path: string
 }
 
+/** default pid probe: signal 0 — ESRCH means dead, EPERM means alive (other user) */
+function defaultIsProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+export interface DiscoveryOptions {
+  env?: NodeJS.ProcessEnv
+  platform?: NodeJS.Platform
+  homeDir?: string
+  /** override the pid liveness probe (tests) */
+  isProcessAlive?: (pid: number) => boolean
+}
+
 /**
- * The first readable info file among the candidates, or null when the bridge
- * is not discoverable. Missing/unreadable/malformed candidates are skipped.
+ * Every readable, plausibly-live info file among the candidates, in search
+ * order. A file whose embedded pid is no longer alive (the app crashed
+ * without cleanup) is skipped: it must not shadow a live app whose file sits
+ * further down the list (e.g. a stale `Airy/airy-bridge.json` in front of a
+ * live `Airy Dev` one). Missing/unreadable/malformed candidates are skipped.
  */
-export async function discoverBridgeInfo(
-  options: { env?: NodeJS.ProcessEnv; platform?: NodeJS.Platform; homeDir?: string } = {},
-): Promise<DiscoveredBridge | null> {
+export async function discoverBridgeInfos(
+  options: DiscoveryOptions = {},
+): Promise<DiscoveredBridge[]> {
+  const probe = options.isProcessAlive ?? defaultIsProcessAlive
+  const found: DiscoveredBridge[] = []
   for (const path of candidateBridgeInfoPaths(options)) {
     try {
       const info = parseInfoFile(await readFile(path, 'utf8'))
-      if (info) return { info, path }
+      if (!info) continue
+      if (!probe(info.pid)) continue
+      found.push({ info, path })
     } catch {
       // missing or unreadable — try the next candidate
     }
   }
-  return null
+  return found
+}
+
+/**
+ * The first live info file among the candidates, or null when the bridge is
+ * not discoverable.
+ */
+export async function discoverBridgeInfo(
+  options: DiscoveryOptions = {},
+): Promise<DiscoveredBridge | null> {
+  const [first] = await discoverBridgeInfos(options)
+  return first ?? null
 }

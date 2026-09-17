@@ -4,7 +4,7 @@ import type { Transaction } from '@tiptap/pm/state'
 import { generateTocFieldXml, type TocEntry } from '@airy-office/docx-engine'
 import { isEastAsianFontName } from '../font-list'
 import { t } from '../i18n/locale'
-import { blockRangePositions, isTrackedDeleted, liveText } from './doc-utils'
+import { blockRangePositions, isTrackedDeleted, liveText, sanitizeLinkHref } from './doc-utils'
 
 /**
  * Canonical edit ops for the document. The model (apply_ops) and, later, the
@@ -34,6 +34,27 @@ export interface Target {
   scope?: 'selection' | 'document'
   /** explicit ProseMirror range standing in for the selection (UI callers that captured a range earlier) */
   range?: { from: number; to: number }
+}
+
+/**
+ * The MCP server's ops guide documents the headless vocabulary
+ * (heading/paragraph/listItem), and the live bridge forwards agent ops
+ * verbatim — so both spellings must target the same blocks. Aliases are
+ * normalized to the canonical PM node type names at validation time; the
+ * canonical names (docHeading/docParagraph/docListItem/image) keep working
+ * unchanged (the embedded AI panel and the ribbon use them).
+ */
+export function normalizeNodeType(nodeType: string): string {
+  switch (nodeType) {
+    case 'heading':
+      return 'docHeading'
+    case 'paragraph':
+      return 'docParagraph'
+    case 'listItem':
+      return 'docListItem'
+    default:
+      return nodeType
+  }
 }
 
 export interface FontFields {
@@ -101,6 +122,8 @@ export interface OpResult {
   skippedProtected: number
   /** targets skipped because the text is a pending tracked deletion */
   skippedDeleted?: number
+  /** link fields dropped because the URL scheme is not allowed (text kept, no link mark) */
+  droppedLinks?: number
   detail?: string
 }
 
@@ -193,7 +216,11 @@ function validateTarget(target: unknown, where: string): string | null {
   if (!target || typeof target !== 'object') return `${where}: missing target`
   const tg = target as Target
   if (tg.nodeType !== undefined && !NODE_TYPES.includes(tg.nodeType)) {
-    return `${where}: unknown nodeType "${String(tg.nodeType)}"`
+    return (
+      `${where}: unknown nodeType "${String(tg.nodeType)}" ` +
+      `(accepted: ${NODE_TYPES.join(', ')} or the MCP ops-guide aliases ` +
+      'heading/paragraph/listItem)'
+    )
   }
   if (
     tg.headingLevel !== undefined &&
@@ -550,7 +577,8 @@ function buildTextMarkPatch(op: Op): Record<string, unknown> {
   return patch
 }
 
-/** apply the op's mark-level font fields to [from, to) of a block's text nodes */
+/** apply the op's mark-level font fields to [from, to) of a block's text nodes;
+ *  returns 1 when the link field was dropped (disallowed URL scheme) */
 function applyFontRange(
   env: RunEnv,
   op: Op,
@@ -560,19 +588,25 @@ function applyFontRange(
   to: number,
   node: PmDocNode,
   contentFrom: number,
-): void {
+): number {
   const { tr, schema } = env
   for (const k of boolKeys) {
     const markType = schema.marks[BOOL_MARK_TYPES[k]]
     if (op[k]) tr.addMark(from, to, markType.create())
     else tr.removeMark(from, to, markType)
   }
+  let droppedLinks = 0
   if (op.link !== undefined) {
-    const url = (op.link as { url?: string } | null)?.url
-    if (url) tr.addMark(from, to, schema.marks.link.create({ href: url, rId: null }))
+    const raw = (op.link as { url?: string } | null)?.url
+    // same policy as the HTML path (sanitizeLinkHref): http(s)/mailto/fragment/
+    // relative survive, everything else (javascript:, file:, data:, …) is
+    // dropped — the other font changes still apply, the text just stays plain
+    const href = sanitizeLinkHref(raw ?? null)
+    if (raw && href === null) droppedLinks = 1
+    else if (href !== null) tr.addMark(from, to, schema.marks.link.create({ href, rId: null }))
     else tr.removeMark(from, to, schema.marks.link)
   }
-  if (Object.keys(markPatch).length === 0) return
+  if (Object.keys(markPatch).length === 0) return droppedLinks
   // merge per text node: only the given attrs change, the rest survive
   node.forEach((child, offset) => {
     if (!child.isText) return
@@ -586,6 +620,7 @@ function applyFontRange(
     if (empty) tr.removeMark(childFrom, childTo, schema.marks.docTextStyle)
     else tr.addMark(childFrom, childTo, schema.marks.docTextStyle.create(merged))
   })
+  return droppedLinks
 }
 
 function runSetFont(op: Op, env: RunEnv): OpResult {
@@ -595,6 +630,7 @@ function runSetFont(op: Op, env: RunEnv): OpResult {
   const markPatch = buildTextMarkPatch(op)
   let changed = 0
   let skippedProtected = 0
+  let droppedLinks = 0
   for (const b of matched) {
     if (b.node.type.name === 'docProtected') {
       skippedProtected++
@@ -604,14 +640,21 @@ function runSetFont(op: Op, env: RunEnv): OpResult {
     const contentFrom = b.pos + 1
     const from = b.clip?.from ?? contentFrom
     const to = b.clip?.to ?? contentFrom + b.node.content.size
-    if (from < to) applyFontRange(env, op, boolKeys, markPatch, from, to, b.node, contentFrom)
+    if (from < to)
+      droppedLinks += applyFontRange(env, op, boolKeys, markPatch, from, to, b.node, contentFrom)
     const after = tr.doc.nodeAt(b.pos)
     if (after && !after.eq(before)) {
       changed++
       markChanged(tr, b.pos, ctx)
     }
   }
-  return { op: 'setFont', matched: matched.length, changed, skippedProtected }
+  return {
+    op: 'setFont',
+    matched: matched.length,
+    changed,
+    skippedProtected,
+    ...(droppedLinks > 0 ? { droppedLinks } : {}),
+  }
 }
 
 function runSetParagraphFormat(op: Op, env: RunEnv): OpResult {
@@ -799,6 +842,7 @@ function runSetMatchedFont(op: Op, env: RunEnv): OpResult {
   let styledCount = 0
   let skippedProtected = 0
   let skippedDeleted = 0
+  let droppedLinks = 0
 
   for (const b of blocks) {
     if (b.node.type.name === 'docProtected') {
@@ -818,7 +862,16 @@ function runSetMatchedFont(op: Op, env: RunEnv): OpResult {
         if (struck) {
           skippedDeleted++
         } else if (insideClip(b, from, to)) {
-          applyFontRange(env, op, boolKeys, markPatch, from, to, b.node, contentFrom)
+          droppedLinks += applyFontRange(
+            env,
+            op,
+            boolKeys,
+            markPatch,
+            from,
+            to,
+            b.node,
+            contentFrom,
+          )
           styledCount++
           touched.add(b.index)
         }
@@ -836,6 +889,7 @@ function runSetMatchedFont(op: Op, env: RunEnv): OpResult {
     changed: touched.size,
     skippedProtected,
     skippedDeleted,
+    ...(droppedLinks > 0 ? { droppedLinks } : {}),
     detail: String(styledCount),
   }
 }
@@ -1029,7 +1083,7 @@ function runInsertToc(op: Op, env: RunEnv): OpResult {
 // ---- op definitions ----
 
 const FONT_SIGNATURE_FIELDS =
-  'bold?, italic?, underline?, strike?, color?: "#RRGGBB"|null, highlight?, fontSize?: pt|null, fontFamily?: string|null, baseline?: "superscript"|"subscript"|"none"|null, link?: {url}|null'
+  'bold?, italic?, underline?, strike?, color?: "#RRGGBB"|null, highlight?, fontSize?: pt|null, fontFamily?: string|null, baseline?: "superscript"|"subscript"|"none"|null, link?: {url}|null (url scheme must be http/https/mailto, a #fragment, or relative; anything else is dropped and the text stays plain)'
 
 register({
   name: 'setFont',
@@ -1344,6 +1398,14 @@ export function executeOps(editor: Editor, ops: unknown, ctx: OpContext = {}): E
       return
     }
     const op = raw as Op
+    // ops-guide aliases (heading/paragraph/listItem) normalize to the
+    // canonical node type names before validation and matching
+    if (op.target && typeof op.target.nodeType === 'string') {
+      op.target = {
+        ...op.target,
+        nodeType: normalizeNodeType(op.target.nodeType) as Target['nodeType'],
+      }
+    }
     const def = REGISTRY.get(op.op)
     if (!def || (def.hidden && ctx.source !== 'ui')) {
       errors.push(`${where}: unknown op "${op.op}". Supported ops: [${opNames().join(', ')}]`)

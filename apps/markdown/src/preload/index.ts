@@ -10,6 +10,7 @@ import type { AutoSaveDefault, ExportFormat, MarkdownApi, SaveMode, UiTheme } fr
 const api: MarkdownApi = {
   consumePending: () => ipcRenderer.invoke(MARKDOWN_CHANNELS.consumePending),
   readFile: (path) => ipcRenderer.invoke(MARKDOWN_CHANNELS.readFile, path),
+  writeRecovery: (path, text) => ipcRenderer.invoke(MARKDOWN_CHANNELS.writeRecovery, path, text),
   save: (request) => ipcRenderer.invoke(MARKDOWN_CHANNELS.save, request),
   setDirty: (dirty) => ipcRenderer.send(MARKDOWN_CHANNELS.dirtyChanged, dirty),
   onSaveRequest: (handler) => {

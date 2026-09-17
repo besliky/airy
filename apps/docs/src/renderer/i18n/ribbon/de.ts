@@ -5,6 +5,7 @@ export const de = {
   ribbonAiRewriteConfirm:
     'Diese Aktion ruft die KI auf: Sie verbraucht Guthaben und kann den gesamten Inhalt umschreiben. Fortfahren? (Sie werden nicht erneut gefragt.)',
   ribbonTabFile: 'Datei',
+  ribbonTabsLabel: 'Menüband-Registerkarten',
   ribbonTabHome: 'Start',
   ribbonTabInsert: 'Einfügen',
   ribbonTabDraw: 'Zeichnen',

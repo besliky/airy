@@ -5,6 +5,7 @@ import type { AiSettings, AiStreamChunk, AiStreamRequest } from '@airy-office/ai
 export const MARKDOWN_CHANNELS = {
   consumePending: 'markdown:consume-pending',
   readFile: 'markdown:read-file',
+  writeRecovery: 'markdown:write-recovery',
   save: 'markdown:save',
   saveRequest: 'markdown:save-request',
   saveRequestAck: 'markdown:save-request-ack',
@@ -120,7 +121,9 @@ export interface MarkdownApi {
   /** Take the md path pending for this view (queued at tab creation); null = new untitled document */
   consumePending(): Promise<string | null>
   /** Read the file as UTF-8 text. Only paths granted to this view are allowed */
-  readFile(path: string): Promise<string>
+  readFile(path: string): Promise<{ text: string; recovered: boolean }>
+  /** crash-recovery copy push (dirty renderers, every ~30s and on blur) */
+  writeRecovery(path: string, text: string): Promise<void>
   /**
    * Write the document text. With a granted file path the write is atomic
    * (tmp + rename); untitled documents and mode 'saveAs' go through a main-process

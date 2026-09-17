@@ -12,6 +12,7 @@ import {
   BRIDGE_INFO_NAME,
   candidateBridgeInfoPaths,
   discoverBridgeInfo,
+  discoverBridgeInfos,
 } from '../src/live/discovery.js'
 
 let home: string
@@ -108,7 +109,12 @@ describe('candidate info-file paths', () => {
 describe('discoverBridgeInfo', () => {
   it('returns null when no candidate exists', async () => {
     expect(
-      await discoverBridgeInfo({ env: noOverrides, platform: 'linux', homeDir: home }),
+      await discoverBridgeInfo({
+        env: noOverrides,
+        platform: 'linux',
+        homeDir: home,
+        isProcessAlive: () => true,
+      }),
     ).toBeNull()
   })
 
@@ -118,6 +124,7 @@ describe('discoverBridgeInfo', () => {
         env: { ...noOverrides, [BRIDGE_INFO_FILE_ENV]: join(home, 'missing.json') },
         platform: 'linux',
         homeDir: home,
+        isProcessAlive: () => true,
       }),
     ).toBeNull()
   })
@@ -126,7 +133,12 @@ describe('discoverBridgeInfo', () => {
     const [, second, third] = BRIDGE_APP_NAME_CANDIDATES
     const secondPath = await writeLinuxCandidate(second, JSON.stringify(validInfo()))
     await writeLinuxCandidate(third, JSON.stringify({ ...validInfo(), pid: 3 }))
-    const found = await discoverBridgeInfo({ env: noOverrides, platform: 'linux', homeDir: home })
+    const found = await discoverBridgeInfo({
+      env: noOverrides,
+      platform: 'linux',
+      homeDir: home,
+      isProcessAlive: () => true,
+    })
     expect(found?.path).toBe(secondPath)
     expect(found?.info).toEqual(validInfo())
   })
@@ -135,7 +147,12 @@ describe('discoverBridgeInfo', () => {
     const [first, second] = BRIDGE_APP_NAME_CANDIDATES
     await writeLinuxCandidate(first, '{not json')
     const secondPath = await writeLinuxCandidate(second, JSON.stringify(validInfo()))
-    const found = await discoverBridgeInfo({ env: noOverrides, platform: 'linux', homeDir: home })
+    const found = await discoverBridgeInfo({
+      env: noOverrides,
+      platform: 'linux',
+      homeDir: home,
+      isProcessAlive: () => true,
+    })
     expect(found?.path).toBe(secondPath)
     expect(found?.info.socketPath).toBe('/run/airy-bridge.sock')
   })
@@ -152,9 +169,56 @@ describe('discoverBridgeInfo', () => {
     ]) {
       await writeLinuxCandidate(first, payload)
       expect(
-        await discoverBridgeInfo({ env: noOverrides, platform: 'linux', homeDir: home }),
+        await discoverBridgeInfo({
+          env: noOverrides,
+          platform: 'linux',
+          homeDir: home,
+          isProcessAlive: () => true,
+        }),
       ).toBeNull()
       await rm(join(home, '.config'), { recursive: true, force: true })
     }
+  })
+})
+
+describe('stale-pid filtering', () => {
+  it('skips a candidate whose app pid is dead and takes the next live one', async () => {
+    const [first, second] = BRIDGE_APP_NAME_CANDIDATES
+    await writeLinuxCandidate(first, JSON.stringify({ ...validInfo(), pid: 424242 }))
+    const secondPath = await writeLinuxCandidate(second, JSON.stringify({ ...validInfo(), pid: 7 }))
+    const found = await discoverBridgeInfo({
+      env: noOverrides,
+      platform: 'linux',
+      homeDir: home,
+      isProcessAlive: (pid) => pid === 7,
+    })
+    expect(found?.path).toBe(secondPath)
+  })
+
+  it('lists every live candidate in order via discoverBridgeInfos', async () => {
+    const [first, second, third] = BRIDGE_APP_NAME_CANDIDATES
+    await writeLinuxCandidate(first, JSON.stringify({ ...validInfo(), pid: 424242 }))
+    await writeLinuxCandidate(second, JSON.stringify({ ...validInfo(), pid: 7 }))
+    await writeLinuxCandidate(third, JSON.stringify({ ...validInfo(), pid: 9 }))
+    const all = await discoverBridgeInfos({
+      env: noOverrides,
+      platform: 'linux',
+      homeDir: home,
+      isProcessAlive: (pid) => pid !== 424242,
+    })
+    expect(all.map((entry) => entry.info.pid)).toEqual([7, 9])
+  })
+
+  it('returns nothing when every candidate belongs to a dead app', async () => {
+    const [first] = BRIDGE_APP_NAME_CANDIDATES
+    await writeLinuxCandidate(first, JSON.stringify({ ...validInfo(), pid: 424242 }))
+    expect(
+      await discoverBridgeInfo({
+        env: noOverrides,
+        platform: 'linux',
+        homeDir: home,
+        isProcessAlive: () => false,
+      }),
+    ).toBeNull()
   })
 })

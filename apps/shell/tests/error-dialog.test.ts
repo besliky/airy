@@ -38,13 +38,18 @@ beforeEach(async () => {
 describe('showErrorDialog', () => {
   it('uses the async parented message box, never the blocking showErrorBox', () => {
     const win = fakeWindow()
-    showErrorDialog(win, 'Could not create the new document', new Error('spawn EACCES'))
+    showErrorDialog(
+      win,
+      'Could not create the new document',
+      Object.assign(new Error('spawn EACCES'), { code: 'EACCES' }),
+    )
     expect(showErrorBox).not.toHaveBeenCalled()
     expect(showMessageBox).toHaveBeenCalledTimes(1)
     expect(showMessageBox).toHaveBeenCalledWith(win, {
       type: 'error',
       message: 'Could not create the new document',
-      detail: 'spawn EACCES',
+      // known errno → friendly localized prefix + raw text in the detail
+      detail: '没有访问该文件的权限。\n\nspawn EACCES',
     })
   })
 

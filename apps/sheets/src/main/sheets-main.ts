@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
-import { basename, dirname, isAbsolute, join } from 'node:path'
+import { basename, dirname, isAbsolute, join, sep } from 'node:path'
 
 import {
   app,
@@ -36,19 +36,32 @@ import type {
 } from 'electron'
 import { z } from 'zod'
 import {
+  ALL_OPEN_EXTENSIONS,
+  OPEN_EXTENSION_GROUPS,
   appMenuLabels,
   buildPrintableHtml,
   configuredDefaultSaveDir,
+  COPILOT_GUIDE_URL,
+  DOCS_README_URL,
   contextMenuLabels,
   fetchRemoteImage,
+  forgetRendererFileAccess,
+  forgetWitnessedDrops,
+  grantRendererFileAccess,
   installContextMenu,
   installNavigationGuard,
+  mayGrantAttachmentRead,
   printHtmlToPdf,
+  recordWitnessedDrops,
+  rendererMayReadPath,
+  openHelpUrl,
   safeExternalUrl,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
   viewMenuTemplate,
   windowMenuTemplate,
+  voidLoad,
+  WITNESS_DROP_CHANNEL,
 } from '@airy-office/electron-utils'
 import { createI18n, getUiLang, normalizeLang, setUiLang } from '@airy-office/i18n'
 import { ProjectStore } from '@airy-office/project-store'
@@ -59,19 +72,21 @@ import {
   isAiNetworkError,
   isAiOverloadedError,
   chatForProvider,
-  defaultAiSettings,
-  activeProvider,
   NO_PROVIDER_ERROR,
   maxOutputTokensOf,
-  resolveAiSettings,
   setAiUserAgent,
   setRescueFetch,
   streamForProvider,
   type AiProviderId,
   type AiSettings,
   type AiStreamChunk,
-  type LegacyAiSettings,
 } from '@airy-office/ai-provider'
+import {
+  maskedAiSettings,
+  overlayRealAiSecrets,
+  registerAiSettingsCodec,
+  saveAiSettings,
+} from '../../../docs/src/main/ai-settings-store'
 import { shutdownCodexAppServers } from '@airy-office/ai-provider/codex-app-server'
 import { csvToXlsxBuffer, decodeCsvBuffer, sheetCsvToXlsxBuffer } from '../gateway/csv-import'
 import { webSearchTool, imageSearchTool, generateImageTool } from '@airy-office/ai-search'
@@ -121,10 +136,12 @@ import {
   type WorkbookSaveRequest,
 } from '../shared/desktop-api'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
-import { atomicWriteFile } from './atomic-write'
+import { atomicWriteFile } from '@airy-office/electron-utils'
+import { CaptureConsentTracker } from './capture-consent'
 import { closeGuardDecision } from './close-guard'
+import { checkMergeSourcePaths } from './merge-source-policy'
 import { SaveEditsTransferStore } from './save-edits-transfer'
-import { exportPdf } from './pdf-export'
+import { exportPdf, previewPrint, printWorkbook } from './pdf-export'
 import { allowsAutomaticWorkbookRecovery } from './recovery-policy'
 import { setSystemShortDate, shortDatePatternForSystemLocale } from '../shared/short-date'
 import {
@@ -149,6 +166,11 @@ const tMain = createI18n({
     filterXlsm: 'Excel 启用宏的工作簿',
     dlgAddAttachment: '添加附件',
     filterSupported: '支持的文件',
+    filterWord: 'Word 文档',
+    filterPpt: 'PowerPoint 演示文稿',
+    filterPdf: 'PDF 文档',
+    filterMarkdown: 'Markdown 文档',
+    filterHtml: 'HTML 文档',
     filterAll: '所有文件',
     errUnsupportedExt: '暂不支持 .{ext} 类型',
     errNotFile: '不是文件',
@@ -165,7 +187,11 @@ const tMain = createI18n({
     errImgAbsPath: '图片路径必须是绝对路径。',
     errImgNotFound: '找不到图片文件: {path}',
     errImgTooLarge20: '图片超过 20MB,不支持插入。',
+    errImgNotGranted: '图片不在本应用可读取的目录内（请先添加为附件或打开所在目录）。',
     errImgBadType: '该文件不是 PNG/JPEG/GIF 图片。',
+    errMergeUnsupportedExt: '不支持的合并来源: .{ext}',
+    errMergeNotFound: '找不到合并来源文件。',
+    errMergeNotGranted: '合并来源不在本应用可读取的目录内（请先添加为附件或打开所在目录）。',
     errDiskChanged: '工作簿在打开后被磁盘上的改动覆盖——请改用另存为。',
     autosaveFoundTitle: '发现自动恢复版本',
     autosaveFoundBody:
@@ -173,10 +199,15 @@ const tMain = createI18n({
     autosaveRestore: '恢复',
     autosaveDiscard: '放弃',
     menuFile: '文件',
+    menuHelp: '帮助',
+    menuShortcuts: '键盘快捷键',
+    menuOnlineDocs: '在线文档',
+    menuCopilotGuide: 'Copilot 指南（MCP）',
     menuOpenWorkbook: '打开工作簿…',
     menuSave: '保存',
     menuSaveAs: '另存为…',
     menuExportPdf: '导出 PDF…',
+    menuPrint: '打印…',
     menuClose: '关闭',
     menuQuit: '退出',
     menuEdit: '编辑',
@@ -204,6 +235,11 @@ const tMain = createI18n({
     filterXlsm: 'Excel Macro-Enabled Workbooks',
     dlgAddAttachment: 'Add Attachments',
     filterSupported: 'Supported Files',
+    filterWord: 'Word Documents',
+    filterPpt: 'PowerPoint Presentations',
+    filterPdf: 'PDF Documents',
+    filterMarkdown: 'Markdown Documents',
+    filterHtml: 'HTML Documents',
     filterAll: 'All Files',
     errUnsupportedExt: '.{ext} files are not supported',
     errNotFile: 'not a file',
@@ -220,7 +256,13 @@ const tMain = createI18n({
     errImgAbsPath: 'Image path must be absolute.',
     errImgNotFound: 'Image file not found: {path}',
     errImgTooLarge20: 'Image exceeds 20MB and cannot be inserted.',
+    errImgNotGranted:
+      'The image is outside the folders this app may read (attach it or open its folder first).',
     errImgBadType: 'The file is not a PNG/JPEG/GIF image.',
+    errMergeUnsupportedExt: 'Unsupported merge source: .{ext}',
+    errMergeNotFound: 'Merge source not found.',
+    errMergeNotGranted:
+      'The merge source is outside the folders this app may read (attach the file or open its folder first).',
     errDiskChanged: 'The workbook changed on disk after it was opened — use Save As instead.',
     autosaveFoundTitle: 'Recovered version found',
     autosaveFoundBody:
@@ -228,9 +270,14 @@ const tMain = createI18n({
     autosaveRestore: 'Restore',
     autosaveDiscard: 'Discard',
     menuFile: 'File',
+    menuHelp: 'Help',
+    menuShortcuts: 'Keyboard Shortcuts',
+    menuOnlineDocs: 'Online Documentation',
+    menuCopilotGuide: 'Copilot Guide (MCP)',
     menuOpenWorkbook: 'Open Workbook…',
     menuSave: 'Save',
     menuSaveAs: 'Save As…',
+    menuPrint: 'Print…',
     menuExportPdf: 'Export PDF…',
     menuClose: 'Close',
     menuQuit: 'Quit',
@@ -261,6 +308,11 @@ const tMain = createI18n({
     filterXlsm: 'Excel マクロ有効ブック',
     dlgAddAttachment: '添付ファイルを追加',
     filterSupported: 'サポートされているファイル',
+    filterWord: 'Word 文書',
+    filterPpt: 'PowerPoint プレゼンテーション',
+    filterPdf: 'PDF ドキュメント',
+    filterMarkdown: 'Markdown ドキュメント',
+    filterHtml: 'HTML ドキュメント',
     filterAll: 'すべてのファイル',
     errUnsupportedExt: '.{ext} 形式には対応していません',
     errNotFile: 'ファイルではありません',
@@ -278,7 +330,13 @@ const tMain = createI18n({
     errImgAbsPath: '画像パスは絶対パスで指定してください。',
     errImgNotFound: '画像ファイルが見つかりません: {path}',
     errImgTooLarge20: '画像が 20MB を超えているため挿入できません。',
+    errImgNotGranted:
+      '画像はこのアプリが読み取り可能なフォルダの範囲外です（先に添付するか、そのフォルダを開いてください）。',
     errImgBadType: 'このファイルは PNG/JPEG/GIF 画像ではありません。',
+    errMergeUnsupportedExt: '結合できないソース形式です: .{ext}',
+    errMergeNotFound: '結合元のファイルが見つかりません。',
+    errMergeNotGranted:
+      '結合元はこのアプリが読み取り可能なフォルダーにありません（先に添付するか、フォルダーを開いてください）。',
     errDiskChanged:
       'ブックを開いた後にディスク上で変更されています — 名前を付けて保存を使用してください。',
     autosaveFoundTitle: '自動回復バージョンがあります',
@@ -287,8 +345,13 @@ const tMain = createI18n({
     autosaveRestore: '復元',
     autosaveDiscard: '破棄',
     menuFile: 'ファイル',
+    menuHelp: 'ヘルプ',
+    menuShortcuts: 'キーボード ショートカット',
+    menuOnlineDocs: 'オンライン ドキュメント',
+    menuCopilotGuide: 'Copilot ガイド (MCP)',
     menuOpenWorkbook: 'ブックを開く…',
     menuSave: '保存',
+    menuPrint: '印刷…',
     menuSaveAs: '名前を付けて保存…',
     menuExportPdf: 'PDF をエクスポート…',
     menuClose: '閉じる',
@@ -321,6 +384,11 @@ const tMain = createI18n({
     filterXlsm: 'Excel 매크로 사용 통합 문서',
     dlgAddAttachment: '첨부 파일 추가',
     filterSupported: '지원되는 파일',
+    filterWord: 'Word 문서',
+    filterPpt: 'PowerPoint 프레젠테이션',
+    filterPdf: 'PDF 문서',
+    filterMarkdown: 'Markdown 문서',
+    filterHtml: 'HTML 문서',
     filterAll: '모든 파일',
     errUnsupportedExt: '.{ext} 형식은 지원되지 않습니다',
     errNotFile: '파일이 아닙니다',
@@ -338,7 +406,13 @@ const tMain = createI18n({
     errImgAbsPath: '이미지 경로는 절대 경로여야 합니다.',
     errImgNotFound: '이미지 파일을 찾을 수 없습니다: {path}',
     errImgTooLarge20: '이미지가 20MB를 초과하여 삽입할 수 없습니다.',
+    errImgNotGranted:
+      '이미지가 이 앱이 읽을 수 있는 폴더 범위 밖에 있습니다(먼저 첨부하거나 해당 폴더를 여세요).',
     errImgBadType: '이 파일은 PNG/JPEG/GIF 이미지가 아닙니다.',
+    errMergeUnsupportedExt: '병합할 수 없는 소스 형식입니다: .{ext}',
+    errMergeNotFound: '병합 원본 파일을 찾을 수 없습니다.',
+    errMergeNotGranted:
+      '병합 원본이 이 앱이 읽을 수 있는 폴더에 없습니다(먼저 첨부하거나 해당 폴더를 여세요).',
     errDiskChanged:
       '통합 문서가 열린 후 디스크에서 변경되었습니다. 다른 이름으로 저장을 사용하세요.',
     autosaveFoundTitle: '자동 복구 버전 발견',
@@ -347,7 +421,12 @@ const tMain = createI18n({
     autosaveRestore: '복원',
     autosaveDiscard: '취소',
     menuFile: '파일',
+    menuHelp: '도움말',
+    menuShortcuts: '키보드 바로 가기',
+    menuOnlineDocs: '온라인 설명서',
+    menuCopilotGuide: 'Copilot 가이드(MCP)',
     menuOpenWorkbook: '통합 문서 열기…',
+    menuPrint: '인쇄…',
     menuSave: '저장',
     menuSaveAs: '다른 이름으로 저장…',
     menuExportPdf: 'PDF 내보내기…',
@@ -381,6 +460,11 @@ const tMain = createI18n({
     filterXlsm: 'Classeurs Excel prenant en charge les macros',
     dlgAddAttachment: 'Ajouter des pièces jointes',
     filterSupported: 'Fichiers pris en charge',
+    filterWord: 'Documents Word',
+    filterPpt: 'Présentations PowerPoint',
+    filterPdf: 'Documents PDF',
+    filterMarkdown: 'Documents Markdown',
+    filterHtml: 'Documents HTML',
     filterAll: 'Tous les fichiers',
     errUnsupportedExt: 'Les fichiers .{ext} ne sont pas pris en charge',
     errNotFile: "n'est pas un fichier",
@@ -398,7 +482,13 @@ const tMain = createI18n({
     errImgAbsPath: "Le chemin de l'image doit être absolu.",
     errImgNotFound: 'Fichier image introuvable : {path}',
     errImgTooLarge20: "L'image dépasse 20 Mo et ne peut pas être insérée.",
+    errImgNotGranted:
+      "L'image est en dehors des dossiers lisibles par cette application (joignez-la ou ouvrez son dossier d'abord).",
     errImgBadType: "Ce fichier n'est pas une image PNG/JPEG/GIF.",
+    errMergeUnsupportedExt: 'Source de fusion non prise en charge : .{ext}',
+    errMergeNotFound: 'Fichier source de fusion introuvable.',
+    errMergeNotGranted:
+      "La source de fusion se trouve hors des dossiers lisibles par cette application (joignez d'abord le fichier ou ouvrez son dossier).",
     errDiskChanged:
       'Le classeur a été modifié sur le disque après son ouverture — utilisez Enregistrer sous.',
     autosaveFoundTitle: 'Version récupérée trouvée',
@@ -407,6 +497,11 @@ const tMain = createI18n({
     autosaveRestore: 'Restaurer',
     autosaveDiscard: 'Ignorer',
     menuFile: 'Fichier',
+    menuHelp: 'Aide',
+    menuShortcuts: 'Raccourcis clavier',
+    menuOnlineDocs: 'Documentation en ligne',
+    menuCopilotGuide: 'Guide Copilot (MCP)',
+    menuPrint: 'Imprimer…',
     menuOpenWorkbook: 'Ouvrir un classeur…',
     menuSave: 'Enregistrer',
     menuSaveAs: 'Enregistrer sous…',
@@ -442,6 +537,11 @@ const tMain = createI18n({
     filterXlsm: 'Excel-Arbeitsmappen mit Makros',
     dlgAddAttachment: 'Anlagen hinzufügen',
     filterSupported: 'Unterstützte Dateien',
+    filterWord: 'Word-Dokumente',
+    filterPpt: 'PowerPoint-Präsentationen',
+    filterPdf: 'PDF-Dokumente',
+    filterMarkdown: 'Markdown-Dokumente',
+    filterHtml: 'HTML-Dokumente',
     filterAll: 'Alle Dateien',
     errUnsupportedExt: '.{ext}-Dateien werden nicht unterstützt',
     errNotFile: 'keine Datei',
@@ -459,7 +559,13 @@ const tMain = createI18n({
     errImgAbsPath: 'Der Bildpfad muss absolut sein.',
     errImgNotFound: 'Bilddatei nicht gefunden: {path}',
     errImgTooLarge20: 'Das Bild überschreitet 20 MB und kann nicht eingefügt werden.',
+    errImgNotGranted:
+      'Das Bild liegt außerhalb der Ordner, die diese App lesen darf (erst anhängen oder den Ordner öffnen).',
     errImgBadType: 'Die Datei ist kein PNG/JPEG/GIF-Bild.',
+    errMergeUnsupportedExt: 'Nicht unterstützte Zusammenführungsquelle: .{ext}',
+    errMergeNotFound: 'Zusammenführungsquelle nicht gefunden.',
+    errMergeNotGranted:
+      'Die Zusammenführungsquelle liegt außerhalb der Ordner, die diese App lesen darf (Datei zuerst anhängen oder ihren Ordner öffnen).',
     errDiskChanged:
       'Die Arbeitsmappe wurde nach dem Öffnen auf dem Datenträger geändert — verwenden Sie stattdessen „Speichern unter“.',
     autosaveFoundTitle: 'Wiederhergestellte Version gefunden',
@@ -467,7 +573,12 @@ const tMain = createI18n({
       'Es gibt ungespeicherte Änderungen. Automatisch gespeicherte Version wiederherstellen? Nach der Wiederherstellung überschreibt Speichern die Originaldatei.',
     autosaveRestore: 'Wiederherstellen',
     autosaveDiscard: 'Verwerfen',
+    menuPrint: 'Drucken…',
     menuFile: 'Datei',
+    menuHelp: 'Hilfe',
+    menuShortcuts: 'Tastenkombinationen',
+    menuOnlineDocs: 'Online-Dokumentation',
+    menuCopilotGuide: 'Copilot-Leitfaden (MCP)',
     menuOpenWorkbook: 'Arbeitsmappe öffnen…',
     menuSave: 'Speichern',
     menuSaveAs: 'Speichern unter…',
@@ -502,6 +613,11 @@ const tMain = createI18n({
     filterXlsm: 'Libros de Excel habilitados para macros',
     dlgAddAttachment: 'Agregar datos adjuntos',
     filterSupported: 'Archivos compatibles',
+    filterWord: 'Documentos de Word',
+    filterPpt: 'Presentaciones de PowerPoint',
+    filterPdf: 'Documentos PDF',
+    filterMarkdown: 'Documentos Markdown',
+    filterHtml: 'Documentos HTML',
     filterAll: 'Todos los archivos',
     errUnsupportedExt: 'Los archivos .{ext} no son compatibles',
     errNotFile: 'no es un archivo',
@@ -520,14 +636,25 @@ const tMain = createI18n({
     errImgAbsPath: 'La ruta de la imagen debe ser absoluta.',
     errImgNotFound: 'No se encontró el archivo de imagen: {path}',
     errImgTooLarge20: 'La imagen supera los 20 MB y no se puede insertar.',
+    errImgNotGranted:
+      'La imagen está fuera de las carpetas que esta app puede leer (adjúntala o abre su carpeta primero).',
     errImgBadType: 'El archivo no es una imagen PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'Origen de combinación no admitido: .{ext}',
+    errMergeNotFound: 'No se encontró el archivo de origen de la combinación.',
+    errMergeNotGranted:
+      'El origen de la combinación está fuera de las carpetas que esta app puede leer (adjunta antes el archivo o abre su carpeta).',
     errDiskChanged: 'El libro cambió en el disco después de abrirse; usa Guardar como en su lugar.',
     autosaveFoundTitle: 'Se encontró una versión recuperada',
     autosaveFoundBody:
       'Hay cambios sin guardar de la última sesión. ¿Restaurar la versión autoguardada? Tras restaurar, guardar sobrescribirá el archivo original.',
     autosaveRestore: 'Restaurar',
+    menuPrint: 'Imprimir…',
     autosaveDiscard: 'Descartar',
     menuFile: 'Archivo',
+    menuHelp: 'Ayuda',
+    menuShortcuts: 'Atajos de teclado',
+    menuOnlineDocs: 'Documentación en línea',
+    menuCopilotGuide: 'Guía de Copilot (MCP)',
     menuOpenWorkbook: 'Abrir libro…',
     menuSave: 'Guardar',
     menuSaveAs: 'Guardar como…',
@@ -562,6 +689,11 @@ const tMain = createI18n({
     filterXlsm: 'เวิร์กบุ๊ก Excel ที่เปิดใช้งานแมโคร',
     dlgAddAttachment: 'เพิ่มสิ่งที่แนบ',
     filterSupported: 'ไฟล์ที่รองรับ',
+    filterWord: 'เอกสาร Word',
+    filterPpt: 'งานนำเสนอ PowerPoint',
+    filterPdf: 'เอกสาร PDF',
+    filterMarkdown: 'เอกสาร Markdown',
+    filterHtml: 'เอกสาร HTML',
     filterAll: 'ไฟล์ทั้งหมด',
     errUnsupportedExt: 'ไม่รองรับไฟล์ชนิด .{ext}',
     errNotFile: 'ไม่ใช่ไฟล์',
@@ -579,14 +711,24 @@ const tMain = createI18n({
     errImgAbsPath: 'เส้นทางรูปภาพต้องเป็นเส้นทางแบบสัมบูรณ์',
     errImgNotFound: 'ไม่พบไฟล์รูปภาพ: {path}',
     errImgTooLarge20: 'รูปภาพเกิน 20MB ไม่สามารถแทรกได้',
+    errImgNotGranted: 'รูปภาพอยู่นอกโฟลเดอร์ที่แอปนี้อ่านได้ (แนบไฟล์หรือเปิดโฟลเดอร์นั้นก่อน)',
     errImgBadType: 'ไฟล์นี้ไม่ใช่รูปภาพ PNG/JPEG/GIF',
+    errMergeUnsupportedExt: 'ไม่รองรับชนิดไฟล์ต้นทางสำหรับผสาน: .{ext}',
+    errMergeNotFound: 'ไม่พบไฟล์ต้นทางสำหรับผสาน',
+    errMergeNotGranted:
+      'ไฟล์ต้นทางอยู่นอกโฟลเดอร์ที่แอปนี้อ่านได้ (แนบไฟล์หรือเปิดโฟลเดอร์นั้นก่อน)',
     errDiskChanged: 'เวิร์กบุ๊กถูกเปลี่ยนแปลงบนดิสก์หลังจากเปิด — โปรดใช้บันทึกเป็นแทน',
     autosaveFoundTitle: 'พบเวอร์ชันกู้คืนอัตโนมัติ',
     autosaveFoundBody:
       'มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึกจากครั้งก่อน ต้องการกู้คืนหรือไม่? หลังกู้คืน การบันทึกจะเขียนทับไฟล์ต้นฉบับ',
+    menuPrint: 'พิมพ์…',
     autosaveRestore: 'กู้คืน',
     autosaveDiscard: 'ละทิ้ง',
     menuFile: 'ไฟล์',
+    menuHelp: 'วิธีใช้',
+    menuShortcuts: 'แป้นพิมพ์ลัด',
+    menuOnlineDocs: 'เอกสารออนไลน์',
+    menuCopilotGuide: 'คู่มือ Copilot (MCP)',
     menuOpenWorkbook: 'เปิดเวิร์กบุ๊ก…',
     menuSave: 'บันทึก',
     menuSaveAs: 'บันทึกเป็น…',
@@ -621,6 +763,11 @@ const tMain = createI18n({
     filterXlsm: 'Buku kerja Excel dengan makro aktif',
     dlgAddAttachment: 'Tambahkan lampiran',
     filterSupported: 'File yang didukung',
+    filterWord: 'Dokumen Word',
+    filterPpt: 'Presentasi PowerPoint',
+    filterPdf: 'Dokumen PDF',
+    filterMarkdown: 'Dokumen Markdown',
+    filterHtml: 'Dokumen HTML',
     filterAll: 'Semua file',
     errUnsupportedExt: 'File .{ext} tidak didukung',
     errNotFile: 'bukan file',
@@ -637,7 +784,13 @@ const tMain = createI18n({
     errImgAbsPath: 'Jalur gambar harus berupa jalur absolut.',
     errImgNotFound: 'File gambar tidak ditemukan: {path}',
     errImgTooLarge20: 'Gambar melebihi 20MB dan tidak dapat disisipkan.',
+    errImgNotGranted:
+      'Gambar berada di luar folder yang boleh dibaca aplikasi ini (lampirkan dulu atau buka foldernya).',
     errImgBadType: 'File ini bukan gambar PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'Sumber penggabungan tidak didukung: .{ext}',
+    errMergeNotFound: 'File sumber penggabungan tidak ditemukan.',
+    errMergeNotGranted:
+      'Sumber penggabungan berada di luar folder yang dapat dibaca aplikasi ini (lampirkan dulu file atau buka foldernya).',
     errDiskChanged: 'Buku kerja berubah di disk setelah dibuka — gunakan Simpan Sebagai.',
     autosaveFoundTitle: 'Versi pemulihan ditemukan',
     autosaveFoundBody:
@@ -645,10 +798,15 @@ const tMain = createI18n({
     autosaveRestore: 'Pulihkan',
     autosaveDiscard: 'Buang',
     menuFile: 'File',
+    menuHelp: 'Bantuan',
+    menuShortcuts: 'Pintasan keyboard',
+    menuOnlineDocs: 'Dokumentasi daring',
+    menuCopilotGuide: 'Panduan Copilot (MCP)',
     menuOpenWorkbook: 'Buka Buku Kerja…',
     menuSave: 'Simpan',
     menuSaveAs: 'Simpan Sebagai…',
     menuExportPdf: 'Ekspor PDF…',
+    menuPrint: 'Cetak…',
     menuClose: 'Tutup',
     menuQuit: 'Keluar',
     menuEdit: 'Edit',
@@ -679,6 +837,11 @@ const tMain = createI18n({
     filterXlsm: 'Книги Excel с поддержкой макросов',
     dlgAddAttachment: 'Добавить вложения',
     filterSupported: 'Поддерживаемые файлы',
+    filterWord: 'Документы Word',
+    filterPpt: 'Презентации PowerPoint',
+    filterPdf: 'Документы PDF',
+    filterMarkdown: 'Документы Markdown',
+    filterHtml: 'Документы HTML',
     filterAll: 'Все файлы',
     errUnsupportedExt: 'Файлы .{ext} не поддерживаются',
     errNotFile: 'не является файлом',
@@ -696,14 +859,25 @@ const tMain = createI18n({
     errImgAbsPath: 'Путь к изображению должен быть абсолютным.',
     errImgNotFound: 'Файл изображения не найден: {path}',
     errImgTooLarge20: 'Изображение превышает 20 МБ и не может быть вставлено.',
+    errImgNotGranted:
+      'Изображение находится вне папок, доступных приложению для чтения (сначала прикрепите его или откройте его папку).',
     errImgBadType: 'Этот файл не является изображением PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'Неподдерживаемый источник объединения: .{ext}',
+    errMergeNotFound: 'Файл источника объединения не найден.',
+    errMergeNotGranted:
+      'Источник объединения находится вне папок, доступных приложению для чтения (сначала прикрепите файл или откройте его папку).',
     errDiskChanged: 'Книга была изменена на диске после открытия — используйте «Сохранить как».',
     autosaveFoundTitle: 'Найдена восстановленная версия',
+    menuPrint: 'Печать…',
     autosaveFoundBody:
       'Есть несохранённые изменения из прошлого сеанса. Восстановить автосохранённую версию? После восстановления сохранение перезапишет исходный файл.',
     autosaveRestore: 'Восстановить',
     autosaveDiscard: 'Отклонить',
     menuFile: 'Файл',
+    menuHelp: 'Справка',
+    menuShortcuts: 'Сочетания клавиш',
+    menuOnlineDocs: 'Документация в сети',
+    menuCopilotGuide: 'Руководство по Copilot (MCP)',
     menuOpenWorkbook: 'Открыть книгу…',
     menuSave: 'Сохранить',
     menuSaveAs: 'Сохранить как…',
@@ -738,6 +912,11 @@ const tMain = createI18n({
     filterXlsm: 'مصنفات Excel ممكّنة بوحدات الماكرو',
     dlgAddAttachment: 'إضافة مرفقات',
     filterSupported: 'الملفات المدعومة',
+    filterWord: 'مستندات Word',
+    filterPpt: 'عروض PowerPoint التقديمية',
+    filterPdf: 'مستندات PDF',
+    filterMarkdown: 'مستندات Markdown',
+    filterHtml: 'مستندات HTML',
     filterAll: 'كل الملفات',
     errUnsupportedExt: 'ملفات .{ext} غير مدعومة',
     errNotFile: 'ليس ملفًا',
@@ -754,14 +933,25 @@ const tMain = createI18n({
     errImgAbsPath: 'يجب أن يكون مسار الصورة مسارًا مطلقًا.',
     errImgNotFound: 'لم يتم العثور على ملف الصورة: {path}',
     errImgTooLarge20: 'الصورة تتجاوز 20 ميغابايت ولا يمكن إدراجها.',
+    errImgNotGranted:
+      'الصورة خارج المجلدات التي يمكن لهذا التطبيق قراءتها (أرفقها أو افتح مجلدها أولاً).',
     errImgBadType: 'هذا الملف ليس صورة PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'مصدر دمج غير مدعوم: .{ext}',
+    errMergeNotFound: 'لم يتم العثور على ملف مصدر الدمج.',
+    errMergeNotGranted:
+      'مصدر الدمج خارج المجلدات التي يمكن لهذا التطبيق قراءتها (أرفق الملف أو افتح مجلده أولاً).',
     errDiskChanged: 'تم تغيير المصنف على القرص بعد فتحه — استخدم «حفظ باسم» بدلاً من ذلك.',
+    menuPrint: 'طباعة…',
     autosaveFoundTitle: 'تم العثور على نسخة مستردة',
     autosaveFoundBody:
       'توجد تغييرات غير محفوظة من الجلسة الأخيرة. هل تريد استعادة النسخة المحفوظة تلقائيًا؟ بعد الاستعادة، سيؤدي الحفظ إلى استبدال الملف الأصلي.',
     autosaveRestore: 'استعادة',
     autosaveDiscard: 'تجاهل',
     menuFile: 'ملف',
+    menuHelp: 'مساعدة',
+    menuShortcuts: 'اختصارات لوحة المفاتيح',
+    menuOnlineDocs: 'الدокументات عبر الإنترنت',
+    menuCopilotGuide: 'دليل Copilot (MCP)',
     menuOpenWorkbook: 'فتح مصنف…',
     menuSave: 'حفظ',
     menuSaveAs: 'حفظ باسم…',
@@ -794,6 +984,11 @@ const tMain = createI18n({
     filterXlsm: 'Pastas de Trabalho Habilitadas para Macro do Excel',
     dlgAddAttachment: 'Adicionar Anexos',
     filterSupported: 'Arquivos Compatíveis',
+    filterWord: 'Documentos do Word',
+    filterPpt: 'Apresentações do PowerPoint',
+    filterPdf: 'Documentos PDF',
+    filterMarkdown: 'Documentos Markdown',
+    filterHtml: 'Documentos HTML',
     filterAll: 'Todos os Arquivos',
     errUnsupportedExt: 'arquivos .{ext} não são suportados',
     errNotFile: 'não é um arquivo',
@@ -811,7 +1006,14 @@ const tMain = createI18n({
     errImgAbsPath: 'O caminho da imagem deve ser absoluto.',
     errImgNotFound: 'Arquivo de imagem não encontrado: {path}',
     errImgTooLarge20: 'A imagem excede 20MB e não pode ser inserida.',
+    errImgNotGranted:
+      'A imagem está fora das pastas que este app pode ler (anexe-a ou abra a pasta primeiro).',
     errImgBadType: 'O arquivo não é uma imagem PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'Origem de mesclagem sem suporte: .{ext}',
+    errMergeNotFound: 'Arquivo de origem da mesclagem não encontrado.',
+    errMergeNotGranted:
+      'A origem da mesclagem está fora das pastas que este app pode ler (anexe antes o arquivo ou abra a pasta).',
+    menuPrint: 'Imprimir…',
     errDiskChanged: 'A pasta de trabalho foi alterada no disco após ser aberta — use Salvar Como.',
     autosaveFoundTitle: 'Versão recuperada encontrada',
     autosaveFoundBody:
@@ -819,6 +1021,10 @@ const tMain = createI18n({
     autosaveRestore: 'Restaurar',
     autosaveDiscard: 'Descartar',
     menuFile: 'Arquivo',
+    menuHelp: 'Ajuda',
+    menuShortcuts: 'Atalhos de teclado',
+    menuOnlineDocs: 'Documentação online',
+    menuCopilotGuide: 'Guia do Copilot (MCP)',
     menuOpenWorkbook: 'Abrir Pasta de Trabalho…',
     menuSave: 'Salvar',
     menuSaveAs: 'Salvar Como…',
@@ -853,6 +1059,11 @@ const tMain = createI18n({
     filterXlsm: 'Cartelle di lavoro di Excel con attivazione macro',
     dlgAddAttachment: 'Aggiungi allegati',
     filterSupported: 'File supportati',
+    filterWord: 'Documenti Word',
+    filterPpt: 'Presentazioni PowerPoint',
+    filterPdf: 'Documenti PDF',
+    filterMarkdown: 'Documenti Markdown',
+    filterHtml: 'Documenti HTML',
     filterAll: 'Tutti i file',
     errUnsupportedExt: 'i file .{ext} non sono supportati',
     errNotFile: 'non è un file',
@@ -870,7 +1081,14 @@ const tMain = createI18n({
     errImgAbsPath: "Il percorso dell'immagine deve essere assoluto.",
     errImgNotFound: 'File immagine non trovato: {path}',
     errImgTooLarge20: "L'immagine supera i 20 MB e non può essere inserita.",
+    errImgNotGranted:
+      "L'immagine è fuori dalle cartelle che questa app può leggere (allegala o apri prima la sua cartella).",
     errImgBadType: "Il file non è un'immagine PNG/JPEG/GIF.",
+    errMergeUnsupportedExt: 'Origine di unione non supportata: .{ext}',
+    errMergeNotFound: "File di origine dell'unione non trovato.",
+    errMergeNotGranted:
+      "L'origine dell'unione è fuori dalle cartelle leggibili da questa app (allega prima il file o apri la sua cartella).",
+    menuPrint: 'Stampa…',
     errDiskChanged:
       "La cartella di lavoro è stata modificata sul disco dopo l'apertura — usa Salva con nome.",
     autosaveFoundTitle: 'Trovata versione recuperata',
@@ -879,6 +1097,10 @@ const tMain = createI18n({
     autosaveRestore: 'Ripristina',
     autosaveDiscard: 'Ignora',
     menuFile: 'File',
+    menuHelp: 'Aiuto',
+    menuShortcuts: 'Scorciatoie da tastiera',
+    menuOnlineDocs: 'Documentazione online',
+    menuCopilotGuide: 'Guida Copilot (MCP)',
     menuOpenWorkbook: 'Apri cartella di lavoro…',
     menuSave: 'Salva',
     menuSaveAs: 'Salva con nome…',
@@ -913,6 +1135,11 @@ const tMain = createI18n({
     filterXlsm: 'Skoroszyty programu Excel z obsługą makr',
     dlgAddAttachment: 'Dodaj załączniki',
     filterSupported: 'Obsługiwane pliki',
+    filterWord: 'Dokumenty programu Word',
+    filterPpt: 'Prezentacje programu PowerPoint',
+    filterPdf: 'Dokumenty PDF',
+    filterMarkdown: 'Dokumenty Markdown',
+    filterHtml: 'Dokumenty HTML',
     filterAll: 'Wszystkie pliki',
     errUnsupportedExt: 'pliki .{ext} nie są obsługiwane',
     errNotFile: 'to nie jest plik',
@@ -929,8 +1156,15 @@ const tMain = createI18n({
     errNoModel: 'Nie skonfigurowano nazwy modelu',
     errImgAbsPath: 'Ścieżka obrazu musi być bezwzględna.',
     errImgNotFound: 'Nie znaleziono pliku obrazu: {path}',
+    menuPrint: 'Drukuj…',
+    errImgNotGranted:
+      'Obraz znajduje się poza folderami, które ta aplikacja może odczytać (najpierw załącz go lub otwórz jego folder).',
     errImgTooLarge20: 'Obraz przekracza 20 MB i nie może zostać wstawiony.',
     errImgBadType: 'Plik nie jest obrazem PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'Nieobsługiwane źródło scalania: .{ext}',
+    errMergeNotFound: 'Nie znaleziono pliku źródłowego scalania.',
+    errMergeNotGranted:
+      'Źródło scalania znajduje się poza folderami, które ta aplikacja może odczytać (najpierw załącz plik lub otwórz jego folder).',
     errDiskChanged: 'Skoroszyt został zmieniony na dysku po otwarciu — użyj polecenia Zapisz jako.',
     autosaveFoundTitle: 'Znaleziono odzyskaną wersję',
     autosaveFoundBody:
@@ -938,6 +1172,10 @@ const tMain = createI18n({
     autosaveRestore: 'Przywróć',
     autosaveDiscard: 'Odrzuć',
     menuFile: 'Plik',
+    menuHelp: 'Pomoc',
+    menuShortcuts: 'Skróty klawiszowe',
+    menuOnlineDocs: 'Dokumentacja online',
+    menuCopilotGuide: 'Przewodnik Copilot (MCP)',
     menuOpenWorkbook: 'Otwórz skoroszyt…',
     menuSave: 'Zapisz',
     menuSaveAs: 'Zapisz jako…',
@@ -972,6 +1210,11 @@ const tMain = createI18n({
     filterXlsm: 'Sešity Excelu s podporou maker',
     dlgAddAttachment: 'Přidat přílohy',
     filterSupported: 'Podporované soubory',
+    filterWord: 'Dokumenty Word',
+    filterPpt: 'Prezentace PowerPoint',
+    filterPdf: 'Dokumenty PDF',
+    filterMarkdown: 'Dokumenty Markdown',
+    filterHtml: 'Dokumenty HTML',
     filterAll: 'Všechny soubory',
     errUnsupportedExt: 'soubory .{ext} nejsou podporovány',
     errNotFile: 'není soubor',
@@ -987,9 +1230,16 @@ const tMain = createI18n({
     errAiBusy: 'Služba AI je momentálně zaneprázdněna — zkuste to prosím za chvíli znovu',
     errNoModel: 'Není nakonfigurován název modelu',
     errImgAbsPath: 'Cesta k obrázku musí být absolutní.',
+    menuPrint: 'Tisk…',
     errImgNotFound: 'Soubor obrázku nebyl nalezen: {path}',
     errImgTooLarge20: 'Obrázek překračuje 20 MB a nelze ho vložit.',
+    errImgNotGranted:
+      'Obrázek leží mimo složky, které může tato aplikace číst (nejprve jej připojte nebo otevřete jeho složku).',
     errImgBadType: 'Soubor není obrázek PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'Nepodporovaný zdroj sloučení: .{ext}',
+    errMergeNotFound: 'Zdrojový soubor sloučení nebyl nalezen.',
+    errMergeNotGranted:
+      'Zdroj sloučení leží mimo složky, které může tato aplikace číst (nejprve soubor připojte nebo otevřete jeho složku).',
     errDiskChanged: 'Sešit byl po otevření změněn na disku — použijte místo toho Uložit jako.',
     autosaveFoundTitle: 'Nalezena obnovená verze',
     autosaveFoundBody:
@@ -997,6 +1247,10 @@ const tMain = createI18n({
     autosaveRestore: 'Obnovit',
     autosaveDiscard: 'Zahodit',
     menuFile: 'Soubor',
+    menuHelp: 'Nápověda',
+    menuShortcuts: 'Klávesové zkratky',
+    menuOnlineDocs: 'Online dokumentace',
+    menuCopilotGuide: 'Průvodce Copilotem (MCP)',
     menuOpenWorkbook: 'Otevřít sešit…',
     menuSave: 'Uložit',
     menuSaveAs: 'Uložit jako…',
@@ -1031,6 +1285,11 @@ const tMain = createI18n({
     filterXlsm: "Excel-werkmappen met macro's",
     dlgAddAttachment: 'Bijlagen toevoegen',
     filterSupported: 'Ondersteunde bestanden',
+    filterWord: 'Word-documenten',
+    filterPpt: 'PowerPoint-presentaties',
+    filterPdf: 'PDF-documenten',
+    filterMarkdown: 'Markdown-documenten',
+    filterHtml: 'HTML-documenten',
     filterAll: 'Alle bestanden',
     errUnsupportedExt: '.{ext}-bestanden worden niet ondersteund',
     errNotFile: 'geen bestand',
@@ -1046,9 +1305,16 @@ const tMain = createI18n({
     errAiBusy: 'De AI-service is momenteel overbelast — probeer het zo opnieuw',
     errNoModel: 'Geen modelnaam geconfigureerd',
     errImgAbsPath: 'Het afbeeldingspad moet absoluut zijn.',
+    menuPrint: 'Afdrukken…',
     errImgNotFound: 'Afbeeldingsbestand niet gevonden: {path}',
     errImgTooLarge20: 'De afbeelding is groter dan 20 MB en kan niet worden ingevoegd.',
+    errImgNotGranted:
+      'De afbeelding ligt buiten de mappen die deze app mag lezen (voeg haar eerst toe of open de map).',
     errImgBadType: 'Het bestand is geen PNG/JPEG/GIF-afbeelding.',
+    errMergeUnsupportedExt: 'Niet-ondersteunde samenvoegbron: .{ext}',
+    errMergeNotFound: 'Samenvoegbronbestand niet gevonden.',
+    errMergeNotGranted:
+      'De samenvoegbron ligt buiten de mappen die deze app mag lezen (voeg eerst het bestand toe of open de map).',
     errDiskChanged:
       'De werkmap is op de schijf gewijzigd nadat deze was geopend — gebruik Opslaan als.',
     autosaveFoundTitle: 'Herstelde versie gevonden',
@@ -1057,6 +1323,10 @@ const tMain = createI18n({
     autosaveRestore: 'Herstellen',
     autosaveDiscard: 'Negeren',
     menuFile: 'Bestand',
+    menuHelp: 'Help',
+    menuShortcuts: 'Sneltoetsen',
+    menuOnlineDocs: 'Online documentatie',
+    menuCopilotGuide: 'Copilot-gids (MCP)',
     menuOpenWorkbook: 'Werkmap openen…',
     menuSave: 'Opslaan',
     menuSaveAs: 'Opslaan als…',
@@ -1091,6 +1361,11 @@ const tMain = createI18n({
     filterXlsm: 'Buku Kerja Excel Didayakan Makro',
     dlgAddAttachment: 'Tambah Lampiran',
     filterSupported: 'Fail yang Disokong',
+    filterWord: 'Dokumen Word',
+    filterPpt: 'Persembahan PowerPoint',
+    filterPdf: 'Dokumen PDF',
+    filterMarkdown: 'Dokumen Markdown',
+    filterHtml: 'Dokumen HTML',
     filterAll: 'Semua Fail',
     errUnsupportedExt: 'fail .{ext} tidak disokong',
     errNotFile: 'bukan fail',
@@ -1103,11 +1378,18 @@ const tMain = createI18n({
     errNotImage: 'bukan jenis imej yang disokong',
     errNoApiKey: 'Kunci API untuk {provider} belum dikonfigurasikan',
     errAiBusy: 'Perkhidmatan AI sedang sibuk — sila cuba lagi sebentar lagi',
+    menuPrint: 'Cetak…',
     errNoModel: 'Nama model belum dikonfigurasikan',
     errImgAbsPath: 'Laluan imej mestilah laluan mutlak.',
     errImgNotFound: 'Fail imej tidak ditemui: {path}',
     errImgTooLarge20: 'Imej melebihi 20MB dan tidak boleh disisipkan.',
+    errImgNotGranted:
+      'Imej berada di luar folder yang boleh dibaca oleh aplikasi ini (lampirkan dahulu atau buka foldernya).',
     errImgBadType: 'Fail ini bukan imej PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'Sumber cantuman tidak disokong: .{ext}',
+    errMergeNotFound: 'Fail sumber cantuman tidak dijumpai.',
+    errMergeNotGranted:
+      'Sumber cantuman berada di luar folder yang boleh dibaca oleh aplikasi ini (lampirkan dahulu fail atau buka foldernya).',
     errDiskChanged: 'Buku kerja telah diubah pada cakera selepas dibuka — gunakan Simpan Sebagai.',
     autosaveFoundTitle: 'Versi pulihan ditemui',
     autosaveFoundBody:
@@ -1115,6 +1397,10 @@ const tMain = createI18n({
     autosaveRestore: 'Pulihkan',
     autosaveDiscard: 'Buang',
     menuFile: 'Fail',
+    menuHelp: 'Bantuan',
+    menuShortcuts: 'Pintasan papan kekunci',
+    menuOnlineDocs: 'Dokumentasi dalam talian',
+    menuCopilotGuide: 'Panduan Copilot (MCP)',
     menuOpenWorkbook: 'Buka Buku Kerja…',
     menuSave: 'Simpan',
     menuSaveAs: 'Simpan Sebagai…',
@@ -1150,6 +1436,11 @@ const tMain = createI18n({
     filterXlsm: 'חוברות עבודה של Excel מותאמות מאקרו',
     dlgAddAttachment: 'הוספת קבצים מצורפים',
     filterSupported: 'קבצים נתמכים',
+    filterWord: 'מסמכי Word',
+    filterPpt: 'מצגות PowerPoint',
+    filterPdf: 'מסמכי PDF',
+    filterMarkdown: 'מסמכי Markdown',
+    filterHtml: 'מסמכי HTML',
     filterAll: 'כל הקבצים',
     errUnsupportedExt: 'קובצי .{ext} אינם נתמכים',
     errNotFile: 'אינו קובץ',
@@ -1161,12 +1452,19 @@ const tMain = createI18n({
     errImageNoText: 'קבצים מצורפים מסוג תמונה אינם מכילים טקסט; התמונה נשלחת יחד עם הודעת המשתמש',
     errNotImage: 'סוג תמונה שאינו נתמך',
     errNoApiKey: 'לא הוגדר מפתח API עבור {provider}',
+    menuPrint: 'הדפסה…',
     errAiBusy: 'שירות ה-AI עמוס כרגע — נסו שוב בעוד רגע',
     errNoModel: 'לא הוגדר שם מודל',
     errImgAbsPath: 'נתיב התמונה חייב להיות מוחלט.',
     errImgNotFound: 'קובץ התמונה לא נמצא: {path}',
     errImgTooLarge20: 'התמונה חורגת מ-20MB ולא ניתן להוסיף אותה.',
+    errImgNotGranted:
+      'התמונה נמצאת מחוץ לתיקיות שהאפליקציה הזו יכולה לקרוא (צרפו אותה או פתחו קודם את התיקייה שלה).',
     errImgBadType: 'הקובץ אינו תמונת PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'מקור מיזוג לא נתמך: .{ext}',
+    errMergeNotFound: 'קובץ מקור המיזוג לא נמצא.',
+    errMergeNotGranted:
+      'מקור המיזוג נמצא מחוץ לתיקיות שהאפליקציה הזו יכולה לקרוא (צרף קודם את הקובץ או פתח את התיקייה שלו).',
     errDiskChanged: 'חוברת העבודה השתנתה בדיסק לאחר פתיחתה — השתמש בשמירה בשם.',
     autosaveFoundTitle: 'נמצאה גרסה משוחזרת',
     autosaveFoundBody:
@@ -1174,6 +1472,10 @@ const tMain = createI18n({
     autosaveRestore: 'שחזר',
     autosaveDiscard: 'התעלם',
     menuFile: 'קובץ',
+    menuHelp: 'עזרה',
+    menuShortcuts: 'קיצורי מקלדת',
+    menuOnlineDocs: 'תיעוד מקוון',
+    menuCopilotGuide: 'מדריך Copilot (MCP)',
     menuOpenWorkbook: 'פתיחת חוברת עבודה…',
     menuSave: 'שמירה',
     menuSaveAs: 'שמירה בשם…',
@@ -1206,6 +1508,11 @@ const tMain = createI18n({
     filterXlsm: 'Excel मैक्रो-सक्षम कार्यपुस्तिकाएँ',
     dlgAddAttachment: 'अनुलग्नक जोड़ें',
     filterSupported: 'समर्थित फ़ाइलें',
+    filterWord: 'Word दस्तावेज़',
+    filterPpt: 'PowerPoint प्रस्तुतियाँ',
+    filterPdf: 'PDF दस्तावेज़',
+    filterMarkdown: 'Markdown दस्तावेज़',
+    filterHtml: 'HTML दस्तावेज़',
     filterAll: 'सभी फ़ाइलें',
     errUnsupportedExt: '.{ext} फ़ाइलें समर्थित नहीं हैं',
     errNotFile: 'फ़ाइल नहीं है',
@@ -1217,12 +1524,19 @@ const tMain = createI18n({
     errImageNoText: 'छवि अनुलग्नक में टेक्स्ट नहीं होता; छवि उपयोगकर्ता संदेश के साथ भेजी जाती है',
     errNotImage: 'समर्थित छवि प्रकार नहीं है',
     errNoApiKey: '{provider} के लिए कोई API कुंजी कॉन्फ़िगर नहीं है',
+    menuPrint: 'प्रिंट…',
     errAiBusy: 'AI सेवा अभी व्यस्त है — कृपया थोड़ी देर बाद फिर से प्रयास करें',
     errNoModel: 'कोई मॉडल नाम कॉन्फ़िगर नहीं है',
     errImgAbsPath: 'छवि पथ निरपेक्ष होना चाहिए।',
     errImgNotFound: 'छवि फ़ाइल नहीं मिली: {path}',
     errImgTooLarge20: 'छवि 20MB से अधिक है और सम्मिलित नहीं की जा सकती।',
+    errImgNotGranted:
+      'छवि इस ऐप के पढ़ने योग्य फ़ोल्डरों के बाहर है (पहले इसे संलग्न करें या इसका फ़ोल्डर खोलें)।',
     errImgBadType: 'यह फ़ाइल PNG/JPEG/GIF छवि नहीं है।',
+    errMergeUnsupportedExt: 'असमर्थित मर्ज स्रोत: .{ext}',
+    errMergeNotFound: 'मर्ज स्रोत फ़ाइल नहीं मिली।',
+    errMergeNotGranted:
+      'मर्ज स्रोत उन फ़ोल्डरों के बाहर है जिन्हें यह ऐप पढ़ सकता है (पहले फ़ाइल संलग्न करें या उसका फ़ोल्डर खोलें)',
     errDiskChanged:
       'खोले जाने के बाद कार्यपुस्तिका डिस्क पर बदल गई — इसके बजाय इस रूप में सहेजें का उपयोग करें।',
     autosaveFoundTitle: 'पुनर्प्राप्त संस्करण मिला',
@@ -1231,6 +1545,10 @@ const tMain = createI18n({
     autosaveRestore: 'पुनर्स्थापित करें',
     autosaveDiscard: 'छोड़ें',
     menuFile: 'फ़ाइल',
+    menuHelp: 'सहायता',
+    menuShortcuts: 'कीबोर्ड शॉर्टकट',
+    menuOnlineDocs: 'ऑनलाइन दस्तावेज़',
+    menuCopilotGuide: 'Copilot गाइड (MCP)',
     menuOpenWorkbook: 'कार्यपुस्तिका खोलें…',
     menuSave: 'सहेजें',
     menuSaveAs: 'इस रूप में सहेजें…',
@@ -1265,6 +1583,11 @@ const tMain = createI18n({
     filterXlsm: 'Excel 啟用巨集的活頁簿',
     dlgAddAttachment: '新增附件',
     filterSupported: '支援的檔案',
+    filterWord: 'Word 文件',
+    filterPpt: 'PowerPoint 簡報',
+    filterPdf: 'PDF 文件',
+    filterMarkdown: 'Markdown 文件',
+    filterHtml: 'HTML 文件',
     filterAll: '所有檔案',
     errUnsupportedExt: '暫不支援 .{ext} 類型',
     errNotFile: '不是檔案',
@@ -1274,6 +1597,7 @@ const tMain = createI18n({
     errFileTooLarge: '檔案超過大小上限',
     errParseFailed: '檔案解析失敗',
     errImageNoText: '圖片附件不提供文字,已作為影像隨使用者訊息傳送,直接看圖即可',
+    menuPrint: '列印…',
     errNotImage: '不是支援的圖片類型',
     errNoApiKey: '未設定 {provider} 的 API Key',
     errAiBusy: 'AI 服務目前繁忙，請稍後重試',
@@ -1281,7 +1605,11 @@ const tMain = createI18n({
     errImgAbsPath: '圖片路徑必須是絕對路徑。',
     errImgNotFound: '找不到圖片檔案: {path}',
     errImgTooLarge20: '圖片超過 20MB,不支援插入。',
+    errImgNotGranted: '圖片不在本應用程式可讀取的目錄內（請先附加或開啟所在資料夾）。',
     errImgBadType: '該檔案不是 PNG/JPEG/GIF 圖片。',
+    errMergeUnsupportedExt: '不支援的合併來源: .{ext}',
+    errMergeNotFound: '找不到合併來源檔案。',
+    errMergeNotGranted: '合併來源不在本應用程式可讀取的資料夾內（請先附加檔案或開啟所在資料夾）。',
     errDiskChanged: '活頁簿在開啟後被磁碟上的變更覆蓋——請改用另存新檔。',
     autosaveFoundTitle: '發現自動復原版本',
     autosaveFoundBody:
@@ -1289,6 +1617,10 @@ const tMain = createI18n({
     autosaveRestore: '復原',
     autosaveDiscard: '放棄',
     menuFile: '檔案',
+    menuHelp: '說明',
+    menuShortcuts: '鍵盤快速鍵',
+    menuOnlineDocs: '線上說明文件',
+    menuCopilotGuide: 'Copilot 指南（MCP）',
     menuOpenWorkbook: '開啟活頁簿…',
     menuSave: '儲存',
     menuSaveAs: '另存新檔…',
@@ -1479,6 +1811,8 @@ interface SheetsTabSession {
 const MAX_REMOTE_IMAGE_BYTES = 20 * 1024 * 1024
 
 const sheetsTabs = new Map<number, SheetsTabSession>()
+/** Per-tab screenshot-picker consent (state machine + rate limits, capture-consent.ts) */
+const captureConsent = new CaptureConsentTracker()
 let activeSheetsWebContents: WebContents | null = null
 let pastedTempCleanupStarted = false
 
@@ -1511,7 +1845,7 @@ function dialogParent(event: IpcMainInvokeEvent): BrowserWindow | undefined {
 }
 
 async function openFileDialog(event: IpcMainInvokeEvent, options: OpenDialogOptions) {
-  return showOpenDialogWithMemory(dialog, dialogParent(event), options)
+  return showOpenDialogWithMemory(dialog, dialogParent(event), options, undefined, event.sender.id)
 }
 
 async function saveFileDialog(event: IpcMainInvokeEvent, options: SaveDialogOptions) {
@@ -1522,6 +1856,7 @@ async function saveFileDialog(event: IpcMainInvokeEvent, options: SaveDialogOpti
     dialogParent(event),
     options,
     configuredDefaultSaveDir(app),
+    event.sender.id,
   )
 }
 
@@ -1539,6 +1874,9 @@ function registerSheetsSession(webContents: WebContents, client: XlsxSidecarClie
   webContents.once('destroyed', () => {
     const entry = sheetsTabs.get(webContents.id)
     sheetsTabs.delete(webContents.id)
+    captureConsent.forget(webContents.id)
+    forgetWitnessedDrops(webContents.id)
+    forgetRendererFileAccess(webContents.id)
     if (entry) {
       // Free pending chunked-save uploads with the tab (the sweep timer's
       // closure would otherwise keep them reachable until the idle expiry).
@@ -1590,6 +1928,20 @@ export function markSheetsUntitledPath(path: string): void {
   untitledWorkbookPaths.add(path)
 }
 
+/** userData folder where the shell stages untitled workbooks until their first save */
+const UNTITLED_STAGING_DIR = () => join(app.getPath('userData'), 'untitled-staging')
+
+/**
+ * Whether a workbook is a shell-staged untitled (path-derived, so a workbook
+ * restored by session recovery after a crash still counts): its first save
+ * must open the Save dialog anchored in the default save folder
+ * (suggestSaveAs), and a content-derived auto-rename moves it into that
+ * folder rather than within the staging directory.
+ */
+function isStagedUntitledWorkbook(path: string): boolean {
+  return path.startsWith(UNTITLED_STAGING_DIR() + sep)
+}
+
 /** Sanitize an AI-provided sheet name into a safe filename base: strip illegal path chars, collapse whitespace, cap length; null if invalid. (Mirrors slides' draft naming.) */
 function sanitizeAutoRenameBase(raw: string): string | null {
   const cleaned = raw
@@ -1613,9 +1965,26 @@ export function setSheetsWorkbookOpenedHook(
 
 /** forward an application-menu File command into the sheets renderer */
 export function sendSheetsMenuAction(
-  action: 'open' | 'save' | 'save-as' | 'export-pdf' | 'export-csv' | 'undo' | 'redo',
+  action:
+    | 'open'
+    | 'save'
+    | 'save-as'
+    | 'export-pdf'
+    | 'export-csv'
+    | 'print'
+    | 'undo'
+    | 'redo'
+    | 'shortcuts',
 ): void {
   activeSheetsWebContents?.send(IPC_CHANNELS.menuAction, action)
+}
+
+/** shell hook: the sheets renderer's menu-action subscription went live (once
+ *  per renderer, right after Univer mounts) — flush any queued workbook action
+ *  that was sent before the subscription existed. */
+let menuReadyHook: ((contents: WebContents) => void) | null = null
+export function setSheetsMenuReadyHook(fn: ((contents: WebContents) => void) | null): void {
+  menuReadyHook = fn
 }
 
 // ---- AI settings persistence (main process avoids renderer CORS for the chat/stream proxy) ----
@@ -1713,20 +2082,6 @@ function pendingRecoveryFor(filePath: string): string | null {
   }
 }
 
-function readJson<T>(path: string, fallback: T): T {
-  try {
-    if (existsSync(path)) return JSON.parse(readFileSync(path, 'utf-8')) as T
-  } catch {
-    /* corrupted state file: fall back to defaults */
-  }
-  return fallback
-}
-
-function writeJson(path: string, value: unknown): void {
-  mkdirSync(join(path, '..'), { recursive: true })
-  writeFileSync(path, JSON.stringify(value, null, 2))
-}
-
 const SETTINGS_PATH = () => userDataPath('ai-settings.json')
 
 // Dev-only automation hooks: a fixed CDP port for driving the app from test
@@ -1782,6 +2137,7 @@ function startCaptureServer(): void {
         action === 'save' ||
         action === 'save-as' ||
         action === 'export-pdf' ||
+        action === 'print' ||
         action === 'export-csv' ||
         action === 'undo' ||
         action === 'redo'
@@ -1907,9 +2263,12 @@ export function createSheetsView(options: { includeAiHandlers?: boolean } = {}):
     // append via URL so a dev URL that already carries query params stays valid
     const devUrl = new URL(runtime.rendererUrl)
     devUrl.searchParams.set('mode', 'tab')
-    void view.webContents.loadURL(devUrl.toString())
+    voidLoad(view.webContents.loadURL(devUrl.toString()), 'sheets tab renderer')
   } else {
-    void view.webContents.loadFile(runtime.rendererFile, { query: { mode: 'tab' } })
+    voidLoad(
+      view.webContents.loadFile(runtime.rendererFile, { query: { mode: 'tab' } }),
+      'sheets tab renderer',
+    )
   }
   return view
 }
@@ -1997,13 +2356,23 @@ function statAttachment(filePath: string): { meta?: AttachmentMeta; error?: stri
   }
 }
 
-function collectAttachments(paths: string[]): AttachmentAddResult {
+function collectAttachments(
+  paths: string[],
+  senderId: number,
+  mayGrant?: (p: string) => boolean,
+): AttachmentAddResult {
   const accepted: AttachmentMeta[] = []
   const rejected: string[] = []
   for (const p of paths) {
     const { meta, error } = statAttachment(p)
-    if (meta) accepted.push(meta)
-    else if (error) rejected.push(error)
+    // accepted = user-chosen attachment: its folder joins THIS renderer's
+    // read allowlist — unconditionally for trusted main-side origins (dialog
+    // picks, pasted temp files), and only with a witnessed user drop/paste
+    // for renderer-named paths (see the filesAdd handler)
+    if (meta) {
+      if (!mayGrant || mayGrant(p)) grantRendererFileAccess(p, senderId)
+      accepted.push(meta)
+    } else if (error) rejected.push(error)
   }
   return { accepted, rejected }
 }
@@ -2186,13 +2555,18 @@ export function registerSheetsIpc(): void {
   })
 
   /**
-   * Is a shell-queued workbook still waiting to be opened? The shell's 'open'
-   * nudge loop gives up after 30s; on slow dev cold starts (vite compiles the
-   * renderer on demand) Univer mounts later than that and the queued path
-   * would strand the tab as a blank in-memory workbook. The renderer polls
-   * this once it is ready and triggers the open itself.
+   * Is a shell-queued workbook still waiting to be opened? Delivery is the
+   * queued-workbook-delivery handshake (apps/shell/src/main/
+   * queued-workbook-delivery.ts): the shell sends 'open' once, the
+   * renderer's one-time menu-ready signal flushes it immediately, and a
+   * bounded resend loop (at most 2) covers a stale preload that never
+   * signals ready. On slow dev cold starts Univer still mounts after those
+   * resends, so the renderer polls this once it is ready and triggers the
+   * open itself — otherwise the tab would strand as a blank in-memory
+   * workbook with the queued file silently never opened.
    */
   ipcMain.handle('sheets:has-queued-workbook', (event) => queuedWorkbookPaths.has(event.sender.id))
+  ipcMain.on(IPC_CHANNELS.menuReady, (event) => menuReadyHook?.(event.sender))
 
   ipcMain.handle(IPC_CHANNELS.selectWorkbook, async (event) => {
     const entry = sessionFor(event)
@@ -2201,12 +2575,27 @@ export function registerSheetsIpc(): void {
     // retry loop stops re-sending 'open' for the same file
     queuedWorkbookPaths.delete(event.sender.id)
     if (!path) {
-      const selection = await openFileDialog(event, {
-        properties: ['openFile'],
-        filters: [{ name: tm('filterSpreadsheets'), extensions: ['xlsx', 'xlsm', 'xls', 'csv'] }],
-      })
+      // In the shell, File > Open offers every document type (like Home's
+      // browse); standalone keeps the spreadsheet-only filter.
+      const filters = sheetsOpenPathRouter
+        ? [
+            { name: tm('filterSupported'), extensions: [...ALL_OPEN_EXTENSIONS] },
+            { name: tm('filterWord'), extensions: [...OPEN_EXTENSION_GROUPS.word] },
+            { name: tm('filterSpreadsheets'), extensions: ['xlsx', 'xlsm', 'xls', 'csv'] },
+            { name: tm('filterPpt'), extensions: [...OPEN_EXTENSION_GROUPS.ppt] },
+            { name: tm('filterPdf'), extensions: [...OPEN_EXTENSION_GROUPS.pdf] },
+            { name: tm('filterMarkdown'), extensions: [...OPEN_EXTENSION_GROUPS.markdown] },
+            { name: tm('filterHtml'), extensions: [...OPEN_EXTENSION_GROUPS.html] },
+          ]
+        : [{ name: tm('filterSpreadsheets'), extensions: ['xlsx', 'xlsm', 'xls', 'csv'] }]
+      const selection = await openFileDialog(event, { properties: ['openFile'], filters })
       if (selection.canceled || !selection.filePaths[0]) return null
       path = selection.filePaths[0]
+      // another editor's file: the shell routes it to the right tab
+      if (sheetsOpenPathRouter && !/\.(xlsx|xlsm|xls|csv)$/i.test(path)) {
+        sheetsOpenPathRouter(path)
+        return null
+      }
     }
     const prepared = await prepareWorkbookForOpen(
       entry.client,
@@ -2256,63 +2645,68 @@ export function registerSheetsIpc(): void {
   // (workbookOpenedHook) — these sessions exist only to be read from and
   // closed by the renderer's merge routine.
   /** Open the given spreadsheet paths as merge-source sessions; cleans up
-   *  everything already opened when a later file fails or the tab dies. */
-  const openMergeSources = async (
-    event: Electron.IpcMainInvokeEvent,
-    paths: readonly string[],
-  ): Promise<unknown[] | null> => {
-    const entry = sessionFor(event)
-    const opened: { sessionId: string }[] = []
-    const closeOpened = async () => {
-      for (const { sessionId } of opened) {
-        const session = entry.sessions.get(sessionId)
-        entry.sessions.delete(sessionId)
-        if (session !== undefined) {
-          await cleanupSessionResources({
-            tempRoot: app.getPath('temp'),
-            snapshotPath: session.snapshotPath,
-            importTempDir: session.importTempDir,
-            closeSidecar: () => entry.client.close(sessionId),
-          })
-        }
-      }
-    }
-    try {
-      for (const path of paths) {
-        const prepared = await prepareWorkbookForOpen(
-          entry.client,
-          path,
-          event.sender,
-          dialogParent(event),
-          { skipRecoveryPrompt: true },
-        )
-        if (event.sender.isDestroyed()) {
-          if (prepared.importTempDir !== undefined) {
-            await cleanupImportTempDirectory(app.getPath('temp'), prepared.importTempDir)
+   *  everything already opened when a later file fails or the tab dies. */ const openMergeSources =
+    async (
+      event: Electron.IpcMainInvokeEvent,
+      paths: readonly string[],
+    ): Promise<unknown[] | null> => {
+      const entry = sessionFor(event)
+      const opened: { sessionId: string }[] = []
+      const closeOpened = async () => {
+        for (const { sessionId } of opened) {
+          const session = entry.sessions.get(sessionId)
+          entry.sessions.delete(sessionId)
+          if (session !== undefined) {
+            await cleanupSessionResources({
+              tempRoot: app.getPath('temp'),
+              snapshotPath: session.snapshotPath,
+              importTempDir: session.importTempDir,
+              closeSidecar: () => entry.client.close(sessionId),
+            })
           }
-          break
         }
-        const result = await openWorkbookSession(entry.client, prepared.openPath, entry.sessions, {
-          suggestSaveAs: prepared.suggestSaveAs,
-          csvImport: prepared.csvImport,
-          csvSourcePath: prepared.csvSourcePath,
-          importTempDir: prepared.importTempDir,
-          restoreTarget: prepared.restoreTarget,
-        })
-        opened.push(result as { sessionId: string })
-        if (event.sender.isDestroyed()) break
       }
-    } catch (error) {
-      // a later file failing must not strand the sessions already opened
-      await closeOpened()
-      throw error
+      try {
+        for (const path of paths) {
+          const prepared = await prepareWorkbookForOpen(
+            entry.client,
+            path,
+            event.sender,
+            dialogParent(event),
+            { skipRecoveryPrompt: true },
+          )
+          if (event.sender.isDestroyed()) {
+            if (prepared.importTempDir !== undefined) {
+              await cleanupImportTempDirectory(app.getPath('temp'), prepared.importTempDir)
+            }
+            break
+          }
+          const result = await openWorkbookSession(
+            entry.client,
+            prepared.openPath,
+            entry.sessions,
+            {
+              suggestSaveAs: prepared.suggestSaveAs,
+              csvImport: prepared.csvImport,
+              csvSourcePath: prepared.csvSourcePath,
+              importTempDir: prepared.importTempDir,
+              restoreTarget: prepared.restoreTarget,
+            },
+          )
+          opened.push(result as { sessionId: string })
+          if (event.sender.isDestroyed()) break
+        }
+      } catch (error) {
+        // a later file failing must not strand the sessions already opened
+        await closeOpened()
+        throw error
+      }
+      if (event.sender.isDestroyed()) {
+        await closeOpened()
+        return null
+      }
+      return opened.length > 0 ? opened : null
     }
-    if (event.sender.isDestroyed()) {
-      await closeOpened()
-      return null
-    }
-    return opened.length > 0 ? opened : null
-  }
 
   ipcMain.handle(IPC_CHANNELS.selectWorkbooksForMerge, async (event) => {
     const selection = await openFileDialog(event, {
@@ -2323,15 +2717,28 @@ export function registerSheetsIpc(): void {
     return openMergeSources(event, selection.filePaths)
   })
 
-  const MERGE_SOURCE_EXTS = new Set(['xlsx', 'xlsm', 'xls', 'csv'])
   ipcMain.handle(IPC_CHANNELS.openWorkbooksForMerge, async (event, input: unknown) => {
     const paths = z.array(z.string().min(1)).min(1).max(20).parse(input)
-    for (const path of paths) {
-      const ext = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
-      if (!MERGE_SOURCE_EXTS.has(ext)) throw new Error(`Unsupported merge source: ${ext}`)
-      if (!existsSync(path)) throw new Error('Merge source not found.')
+    // Renderer-named paths get the same read policy as files:* / read-local-
+    // image: only files in directories granted to THIS tab (dialog picks,
+    // shell-routed opens, accepted attachments, witnessed drops) may be read.
+    // The legit callers keep working: the ribbon merges dialog-picked files
+    // (selectWorkbooksForMerge above) and the AI tool merges accepted
+    // attachments — both grant the file's folder before this runs.
+    const checked = checkMergeSourcePaths(paths, {
+      homeDir: app.getPath('home'),
+      mayRead: (path) => rendererMayReadPath(event.sender.id, path),
+      exists: (path) => existsSync(path),
+    })
+    if ('rejection' in checked) {
+      const rejection = checked.rejection
+      if (rejection.kind === 'ext') {
+        throw new Error(tm('errMergeUnsupportedExt', { ext: rejection.ext }))
+      }
+      if (rejection.kind === 'missing') throw new Error(tm('errMergeNotFound'))
+      throw new Error(tm('errMergeNotGranted'))
     }
-    return openMergeSources(event, paths)
+    return openMergeSources(event, checked.resolved)
   })
 
   ipcMain.handle(IPC_CHANNELS.readWorkbookRange, async (event, input: unknown) => {
@@ -2448,6 +2855,10 @@ export function registerSheetsIpc(): void {
       ? join(app.getPath('home'), request.path.slice(2))
       : request.path
     if (!isAbsolute(resolved)) throw new Error(tm('errImgAbsPath'))
+    // same confinement as the files:* handlers: only files in granted
+    // directories (dialog picks, shell-routed opens, accepted attachments)
+    // may be read back — an AI-proposed arbitrary path is not a grant
+    if (!rendererMayReadPath(event.sender.id, resolved)) throw new Error(tm('errImgNotGranted'))
     const info = await stat(resolved).catch(() => null)
     if (!info?.isFile()) throw new Error(tm('errImgNotFound', { path: request.path }))
     if (info.size > 20 * 1024 * 1024) throw new Error(tm('errImgTooLarge20'))
@@ -2459,14 +2870,33 @@ export function registerSheetsIpc(): void {
     return localImageResultSchema.parse({ mediaType, base64: bytes.toString('base64') })
   })
 
+  // Picker lifecycle signal: the renderer's ScreenshotDialog announces open/
+  // close so enumeration only happens inside a (rate-limited) picker session.
+  ipcMain.on(IPC_CHANNELS.capturePickerState, (event, open: unknown) => {
+    try {
+      sessionFor(event)
+    } catch {
+      return // not a sheets tab: ignore
+    }
+    if (open === true) captureConsent.pickerOpened(event.sender.id, Date.now())
+    else captureConsent.pickerClosed(event.sender.id)
+  })
+
   ipcMain.handle(IPC_CHANNELS.captureScreenSources, async (event) => {
     sessionFor(event)
+    // Consent gate: enumeration only inside an open picker session, bounded by
+    // the per-tab session/enumeration rate limits (see capture-consent.ts).
+    // Refusals fail closed with the denied status (no sources, no token).
+    const gate = captureConsent.beginEnumeration(event.sender.id, Date.now())
+    if (!gate.ok) {
+      return screenSourcesResultSchema.parse({ status: 'denied', sources: [], captureToken: '' })
+    }
     // macOS gates desktopCapturer behind the Screen Recording permission and
     // returns black frames instead of failing; surface a real denied state.
     if (process.platform === 'darwin') {
       const status = systemPreferences.getMediaAccessStatus('screen')
       if (status !== 'granted' && status !== 'not-determined') {
-        return screenSourcesResultSchema.parse({ status: 'denied', sources: [] })
+        return screenSourcesResultSchema.parse({ status: 'denied', sources: [], captureToken: '' })
       }
     }
     const sources = await desktopCapturer.getSources({
@@ -2478,28 +2908,41 @@ export function registerSheetsIpc(): void {
       process.platform === 'darwin' &&
       systemPreferences.getMediaAccessStatus('screen') !== 'granted'
     ) {
-      return screenSourcesResultSchema.parse({ status: 'denied', sources: [] })
+      return screenSourcesResultSchema.parse({ status: 'denied', sources: [], captureToken: '' })
     }
     // In tab mode the sheets renderer is a WebContentsView, so fromWebContents
     // on the sender is null; the shell window is the one to exclude.
     const selfWindow = sheetsShellWindow ?? BrowserWindow.fromWebContents(event.sender)
     const selfId = selfWindow?.getMediaSourceId()
+    const listed = sources.filter((source) => source.id !== selfId)
+    // Enumeration issues a short-lived single-use token bound to this tab; the
+    // full-res capture must redeem it for one listed source. A new
+    // enumeration replaces the grant.
+    const grant = captureConsent.issueGrant(
+      event.sender.id,
+      listed.map((source) => source.id),
+      Date.now(),
+    )
     return screenSourcesResultSchema.parse({
       status: 'ok',
-      sources: sources
-        .filter((source) => source.id !== selfId)
-        .map((source) => ({
-          id: source.id,
-          name: source.name,
-          kind: source.id.startsWith('screen') ? 'screen' : 'window',
-          thumbnail: source.thumbnail.isEmpty() ? '' : source.thumbnail.toDataURL(),
-        })),
+      captureToken: grant.token,
+      sources: listed.map((source) => ({
+        id: source.id,
+        name: source.name,
+        kind: source.id.startsWith('screen') ? 'screen' : 'window',
+        thumbnail: source.thumbnail.isEmpty() ? '' : source.thumbnail.toDataURL(),
+      })),
     })
   })
 
   ipcMain.handle(IPC_CHANNELS.captureScreenSource, async (event, input: unknown) => {
     sessionFor(event)
     const request = screenCaptureRequestSchema.parse(input)
+    // Consent gate: exactly one full-res frame per enumeration round, for a
+    // source the enumeration listed, within the grant's TTL.
+    if (!captureConsent.redeem(event.sender.id, request.captureToken, request.id, Date.now())) {
+      return null
+    }
     // desktopCapturer only ever returns thumbnails, so a full-res capture is
     // a re-listing with the thumbnail sized to the largest physical display.
     const displays = screen.getAllDisplays()
@@ -2555,6 +2998,16 @@ export function registerSheetsIpc(): void {
     const result = await exportPdf(event, request)
     if (!result.canceled && result.path) openGeneratedFile(result.path)
     return result
+  })
+
+  ipcMain.handle(IPC_CHANNELS.previewPrint, async (event, input: unknown) => {
+    sessionFor(event)
+    return previewPrint(event, workbookExportPdfRequestSchema.parse(input))
+  })
+
+  ipcMain.handle(IPC_CHANNELS.print, async (event, input: unknown) => {
+    sessionFor(event)
+    return printWorkbook(event, workbookExportPdfRequestSchema.parse(input))
   })
 
   ipcMain.handle(IPC_CHANNELS.exportCsv, async (event, input: unknown) => {
@@ -2899,10 +3352,19 @@ export function registerSheetsIpc(): void {
       const entry = sessionFor(event)
       const validatedSessionId = z.string().uuid().parse(sessionId)
       const session = entry.sessions.get(validatedSessionId)
-      if (!session || !untitledWorkbookPaths.has(session.path)) return { renamed: false }
+      // staged untitled paths qualify too (a crash-restored one is not in the set)
+      if (
+        !session ||
+        (!untitledWorkbookPaths.has(session.path) && !isStagedUntitledWorkbook(session.path))
+      )
+        return { renamed: false }
       const base = sanitizeAutoRenameBase(z.string().min(1).max(100).parse(baseName))
       if (!base) return { renamed: false }
-      const dir = dirname(session.path)
+      // A staged untitled workbook renames into the default save folder, not
+      // within the staging directory (dirname of the staged path).
+      const dir = isStagedUntitledWorkbook(session.path)
+        ? configuredDefaultSaveDir(app)
+        : dirname(session.path)
       let target = join(dir, `${base}.xlsx`)
       for (let i = 2; existsSync(target) && i < 100; i++) target = join(dir, `${base}-${i}.xlsx`)
       if (existsSync(target) || target === session.path) return { renamed: false }
@@ -2943,12 +3405,24 @@ export function registerSheetsIpc(): void {
       properties: ['openFile', 'multiSelections'],
     })
     if (selection.canceled || selection.filePaths.length === 0) return null
-    return collectAttachments(selection.filePaths)
+    return collectAttachments(selection.filePaths, event.sender.id)
   })
+
+  // Witnessed drops/pastes feed the files-add grant policy (preload-world
+  // listeners only — page code cannot forge these records)
+  ipcMain.on(WITNESS_DROP_CHANNEL, (event, paths: unknown) =>
+    recordWitnessedDrops(event.sender.id, paths),
+  )
 
   ipcMain.handle(IPC_CHANNELS.filesAdd, (event, paths: unknown): AttachmentAddResult => {
     sessionFor(event)
-    return collectAttachments(z.array(z.string().min(1).max(1024)).max(50).parse(paths))
+    // renderer-named paths grant only when really dropped/pasted into this
+    // renderer or already inside a granted directory
+    return collectAttachments(
+      z.array(z.string().min(1).max(1024)).max(50).parse(paths),
+      event.sender.id,
+      (p) => mayGrantAttachmentRead(event.sender.id, p),
+    )
   })
 
   ipcMain.handle(
@@ -2966,6 +3440,10 @@ export function registerSheetsIpc(): void {
       if (!ATTACHMENT_EXTS.has(ext)) return { ok: false, error: tm('errUnsupportedExt', { ext }) }
       if (ATTACHMENT_IMAGE_EXTS.has(ext)) {
         return { ok: false, error: tm('errImageNoText') }
+      }
+      // only attachments from granted directories (see collectAttachments)
+      if (!rendererMayReadPath(event.sender.id, validatedPath)) {
+        return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
       }
       try {
         const text = await extractAttachmentText(validatedPath)
@@ -2993,6 +3471,10 @@ export function registerSheetsIpc(): void {
     const ext = name.split('.').pop()?.toLowerCase() ?? ''
     const mime = ATTACHMENT_IMAGE_MIME[ext]
     if (!mime) return { ok: false, error: `${name}: ${tm('errNotImage')}` }
+    // only attachments from granted directories (see collectAttachments)
+    if (!rendererMayReadPath(event.sender.id, validatedPath)) {
+      return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
+    }
     try {
       const stat = statSync(validatedPath)
       if (stat.size > ATTACHMENT_IMAGE_MAX_BYTES) {
@@ -3012,7 +3494,7 @@ export function registerSheetsIpc(): void {
       sessionFor(event)
       const filePath = savePastedImage(data, ext)
       return filePath
-        ? collectAttachments([filePath])
+        ? collectAttachments([filePath], event.sender.id)
         : { accepted: [], rejected: [tm('errNotImage')] }
     },
   )
@@ -3028,27 +3510,29 @@ export function registerSheetsAiIpc(): void {
   // Node fetch (undici) direct connections get reset under VPN/tun setups; retry over Chromium's stack
   setRescueFetch((url, init) => net.fetch(url, init))
   setAiUserAgent(`Airy/${app.getVersion()}`)
+  // decode enc: secrets for the ai-search tools reading ai-settings.json
+  registerAiSettingsCodec()
 
   ipcMain.handle(IPC_CHANNELS.aiGetSettings, (event): AiSettings => {
     sessionFor(event)
-    const stored = readJson<Partial<AiSettings> & LegacyAiSettings>(SETTINGS_PATH(), {})
-    const settings = resolveAiSettings(stored, defaultAiSettings())
-    // a stored BYOK provider is honored when usable; half-filled configs fall back to 'none'
-    settings.provider = activeProvider(settings)
-    return settings
+    // keys are masked (sk-…abcd); set-settings and chat/stream overlay the
+    // stored real keys — a renderer never holds full secrets
+    return maskedAiSettings()
   })
 
   ipcMain.handle(IPC_CHANNELS.aiSetSettings, (event, input: unknown) => {
     sessionFor(event)
     const settings = aiSettingsInputSchema.parse(input)
-    writeJson(SETTINGS_PATH(), settings)
+    saveAiSettings(settings as unknown as AiSettings)
   })
 
   ipcMain.handle(IPC_CHANNELS.aiChat, async (event, input: unknown) => {
     sessionFor(event)
     const request = aiChatRequestSchema.parse(input)
-    const provider = request.settings.provider as AiProviderId
-    const config = request.settings.providers[provider]
+    // the renderer only ever saw masked keys — restore the stored real ones
+    const settings = overlayRealAiSecrets(request.settings as unknown as AiSettings)
+    const provider = settings.provider as AiProviderId
+    const config = settings.providers[provider]
     if (provider === 'none') return { ok: false, error: NO_PROVIDER_ERROR }
     if (!config || (provider !== 'codex' && !config.apiKey)) {
       return {
@@ -3074,10 +3558,12 @@ export function registerSheetsAiIpc(): void {
     const entry = sessionFor(event)
     const request = aiStreamRequestSchema.parse(input)
     const { requestId, system, messages } = request
+    // the renderer only ever saw masked keys — restore the stored real ones
+    const settings = overlayRealAiSecrets(request.settings as unknown as AiSettings)
     const tools = request.tools ?? []
-    const maxTokens = request.maxTokens ?? maxOutputTokensOf(request.settings)
-    const provider = request.settings.provider as AiProviderId
-    const config = request.settings.providers[provider]
+    const maxTokens = request.maxTokens ?? maxOutputTokensOf(settings)
+    const provider = settings.provider as AiProviderId
+    const config = settings.providers[provider]
     const send = (chunk: AiStreamChunk) => {
       if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.aiStreamChunk, chunk)
     }
@@ -3716,6 +4202,11 @@ async function prepareWorkbookForOpen(
 }> {
   const extension = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
   if (extension !== 'csv' && extension !== 'xls') {
+    // A shell-staged untitled workbook: the first save must ask where the
+    // file should live (default save folder), like a converted .xls import.
+    if (isStagedUntitledWorkbook(path)) {
+      return { openPath: path, suggestSaveAs: join(configuredDefaultSaveDir(app), basename(path)) }
+    }
     // Unsaved work from a lost session: offer the recovery copy. Restoring
     // opens it with restoreTarget pointing back at the original, so a plain
     // Save writes straight back over the file the user opened — the restore
@@ -3765,10 +4256,28 @@ export function setSheetsExtraFileMenuItems(items: MenuItemConstructorOptions[])
   extraFileMenuItems = items
 }
 
+/** shell-injected File-menu head items (the suite's New submenu) — Office
+ *  convention puts New before Open */
+let fileMenuHeadItems: MenuItemConstructorOptions[] = []
+
+export function setSheetsFileMenuHeadItems(items: MenuItemConstructorOptions[]): void {
+  fileMenuHeadItems = items
+}
+
 /** tab mode: closes the sheets tab instead of the whole shell window (Cmd+W / role:'close') */
 let closeActiveTabHook: (() => void) | null = null
 export function setSheetsCloseTabHook(fn: (() => void) | null): void {
   closeActiveTabHook = fn
+}
+
+/**
+ * Shell-mode File > Open routing: when the suite-wide open dialog (all
+ * document types) picks a non-spreadsheet file, hand it to the shell's
+ * extension router instead of failing to parse it here. Null in standalone.
+ */
+let sheetsOpenPathRouter: ((path: string) => boolean) | null = null
+export function setSheetsOpenPathRouter(fn: ((path: string) => boolean) | null): void {
+  sheetsOpenPathRouter = fn
 }
 
 /// The ribbon has no File tab; file commands live in
@@ -3782,6 +4291,10 @@ function installApplicationMenu(): void {
       {
         label: tm('menuFile'),
         submenu: [
+          // the suite's New submenu stays before Open (Office convention)
+          ...(fileMenuHeadItems.length > 0
+            ? [...fileMenuHeadItems, { type: 'separator' as const }]
+            : []),
           {
             label: tm('menuOpenWorkbook'),
             accelerator: 'CmdOrCtrl+O',
@@ -3806,19 +4319,30 @@ function installApplicationMenu(): void {
             click: () => sendMenuAction('export-pdf'),
           },
           {
+            label: tm('menuPrint'),
+            accelerator: 'CmdOrCtrl+P',
+            click: () => sendMenuAction('print'),
+          },
+          {
             label: tm('menuExportCsv'),
             click: () => sendMenuAction('export-csv'),
           },
           { type: 'separator' },
+          // Ctrl/Cmd+W closes the active tab everywhere (shell tab mode) or the
+          // window (standalone); Ctrl/Cmd+Q quits the whole app on Windows/Linux
+          // (macOS gets it from the app menu)
           closeActiveTabHook
             ? {
-                label: process.platform === 'darwin' ? tm('menuClose') : tm('menuQuit'),
-                accelerator: process.platform === 'darwin' ? 'CmdOrCtrl+W' : 'CmdOrCtrl+Q',
+                label: tm('menuClose'),
+                accelerator: 'CmdOrCtrl+W',
                 click: () => closeActiveTabHook?.(),
               }
             : process.platform === 'darwin'
               ? { role: 'close' as const, label: tm('menuClose') }
               : { role: 'quit' as const, label: tm('menuQuit') },
+          ...(closeActiveTabHook && process.platform !== 'darwin'
+            ? [{ role: 'quit' as const, label: tm('menuQuit') }]
+            : []),
         ],
       },
       {
@@ -3846,6 +4370,20 @@ function installApplicationMenu(): void {
       },
       viewMenuTemplate(labels),
       windowMenuTemplate(process.platform, labels),
+      {
+        role: 'help',
+        label: tm('menuHelp'),
+        submenu: [
+          {
+            label: tm('menuShortcuts'),
+            accelerator: 'CmdOrCtrl+/',
+            click: () => sendSheetsMenuAction('shortcuts'),
+          },
+          { type: 'separator' },
+          { label: tm('menuOnlineDocs'), click: () => void openHelpUrl(DOCS_README_URL) },
+          { label: tm('menuCopilotGuide'), click: () => void openHelpUrl(COPILOT_GUIDE_URL) },
+        ],
+      },
     ]),
   )
 }

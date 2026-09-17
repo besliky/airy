@@ -24,6 +24,7 @@ import type {
   AiSearchSettings,
   AiSettings,
 } from '@airy-office/ai-provider'
+import { showErrorToast } from './error-toast'
 import { useI18n } from './locale'
 import type { StringKey, TFunc } from './locale'
 import type { AiCatalogEntry, UiTheme } from '../../shared/home-api'
@@ -72,6 +73,11 @@ const AI_FONT_SIZE_OPTIONS = [
   { value: 'xlarge', labelKey: 'aiFontSizeXLarge' },
   { value: 'custom', labelKey: 'aiFontSizeCustom' },
 ] as const satisfies readonly { value: AiFontSize; labelKey: StringKey }[]
+
+/** mirrors AUTHOR_NAME_MAX in @airy-office/electron-utils (not importable here:
+ *  that module reads app-settings.json through node:fs); the main process
+ *  re-sanitizes whatever arrives over IPC */
+const AUTHOR_NAME_INPUT_MAX = 60
 
 /** GitHub-style abbreviated stargazer count (2591 → "2.6k") — the number is
  * social proof, not a metric; the cached/exact value would only look stale */
@@ -308,6 +314,9 @@ function AiModelPane({ t }: { t: TFunc }) {
     touch()
   }
   const save = () => {
+    // apiKey fields hold the MASKED value from ai:get-settings (sk-…abcd).
+    // Re-sending a mask is the "unchanged" signal: the main-side store keeps
+    // the stored key; only a genuinely new value replaces it.
     window.aiOffice
       .setAiSettings?.(settings)
       .then(() => {
@@ -315,12 +324,14 @@ function AiModelPane({ t }: { t: TFunc }) {
         setSaved(true)
       })
       .catch((error) => {
-        window.alert(error instanceof Error ? error.message : String(error))
+        showErrorToast(error, t)
       })
   }
   const test = () => {
     setTesting(true)
     setTestResult(null)
+    // the main process overlays the stored real keys onto the masked values
+    // before dialing the provider, so testing needs no plaintext here
     window.aiOffice
       .testAiSettings?.(settings)
       .then((r) => {
@@ -578,7 +589,7 @@ function AiMediaPane({ t }: { t: TFunc }) {
         setSaved(true)
       })
       .catch((error) => {
-        window.alert(error instanceof Error ? error.message : String(error))
+        showErrorToast(error, t)
       })
   }
   // every distinct BYOK vendor the four blocks point at is checked once; first failure wins
@@ -900,6 +911,14 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [theme, setTheme] = useState<UiTheme>('system')
   const [saveDir, setSaveDir] = useState('')
   const [autoSaveOn, setAutoSaveOn] = useState(false)
+  const [restoreSessionOn, setRestoreSessionOn] = useState(true)
+  const [liveBridgeOn, setLiveBridgeOn] = useState(true)
+  /** AIRY_DISABLE_BRIDGE=1 pins the bridge off; the toggle becomes a no-op with a note */
+  const [bridgeEnvOff, setBridgeEnvOff] = useState(false)
+  /** configured author name ('' = unset, editors use their localized default) */
+  const [authorName, setAuthorName] = useState('')
+  /** free-typed value of the author-name input; committed on blur / Enter */
+  const [authorNameDraft, setAuthorNameDraft] = useState<string | null>(null)
   const [aiPrefs, setAiPrefs] = useState<AiPanelPrefs>(DEFAULT_AI_PANEL_PREFS)
   const [appVersion, setAppVersion] = useState('')
   const [githubStars, setGithubStars] = useState<number | null>(null)
@@ -914,6 +933,18 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     })
     void window.aiOffice.getAutoSaveDefault?.().then((v) => {
       if (alive) setAutoSaveOn(v.on)
+    })
+    void window.aiOffice.getRestoreSession?.().then((v) => {
+      if (alive) setRestoreSessionOn(v)
+    })
+    void window.aiOffice.getAuthorName?.().then((v) => {
+      if (alive && typeof v === 'string') setAuthorName(v)
+    })
+    void window.aiOffice.getLiveBridgeEnabled?.().then((v) => {
+      if (alive) setLiveBridgeOn(v)
+    })
+    void window.aiOffice.getLiveBridgeEnvDisabled?.().then((v) => {
+      if (alive) setBridgeEnvOff(v)
     })
     void window.aiOffice.getAiPanelPrefs?.().then((prefs) => {
       if (alive) setAiPrefs(prefs)
@@ -953,6 +984,21 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     void window.aiOffice.pickDefaultSaveDir?.().then((dir) => {
       if (dir) setSaveDir(dir)
     })
+  }
+
+  /** commit the author-name input: trim + cap what was typed, drop a no-op
+   *  edit; the main process sanitizes again and broadcasts to open editors */
+  const commitAuthorName = () => {
+    if (authorNameDraft === null) return
+    setAuthorNameDraft(null)
+    const next = authorNameDraft.trim().slice(0, AUTHOR_NAME_INPUT_MAX)
+    if (next === authorName) return
+    void window.aiOffice
+      .setAuthorName?.(next)
+      .then((stored) => {
+        if (typeof stored === 'string') setAuthorName(stored)
+      })
+      .catch(() => {})
   }
 
   return (
@@ -1021,6 +1067,31 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       label: t(opt.labelKey),
                     }))}
                     onPick={(v) => applyTheme(v as UiTheme)}
+                  />
+                </div>
+                <div className="set-field">
+                  <div className="set-field-text">
+                    <div className="set-field-stack">
+                      <label className="set-field-label" htmlFor="set-author-name">
+                        {t('setAuthorName')}
+                      </label>
+                      <div className="set-field-desc">{t('setAuthorNameDesc')}</div>
+                    </div>
+                  </div>
+                  <input
+                    id="set-author-name"
+                    className="set-input"
+                    type="text"
+                    value={authorNameDraft ?? authorName}
+                    placeholder={t('setAuthorNamePlaceholder')}
+                    maxLength={AUTHOR_NAME_INPUT_MAX}
+                    spellCheck={false}
+                    autoComplete="off"
+                    onChange={(e) => setAuthorNameDraft(e.target.value)}
+                    onBlur={commitAuthorName}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur()
+                    }}
                   />
                 </div>
                 <div className="set-field">
@@ -1094,6 +1165,54 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       const next = !autoSaveOn
                       setAutoSaveOn(next)
                       void window.aiOffice.setAutoSaveDefault?.(next).catch(() => {})
+                    }}
+                  />
+                </div>
+                <div className="set-field">
+                  <div className="set-field-text">
+                    <div className="set-field-stack">
+                      <div className="set-field-label">{t('setRestoreSession')}</div>
+                      <div className="set-field-desc">{t('setRestoreSessionDesc')}</div>
+                    </div>
+                  </div>
+                  <button
+                    className="set-switch"
+                    role="switch"
+                    aria-checked={restoreSessionOn}
+                    aria-label={t('setRestoreSession')}
+                    onClick={() => {
+                      const next = !restoreSessionOn
+                      setRestoreSessionOn(next)
+                      // read on the next launch; open tabs are unaffected
+                      void window.aiOffice.setRestoreSession?.(next).catch(() => {})
+                    }}
+                  />
+                </div>
+                <div className="set-field">
+                  <div className="set-field-text">
+                    <div className="set-field-stack">
+                      <div className="set-field-label">{t('setLiveBridge')}</div>
+                      <div className="set-field-desc">{t('setLiveBridgeDesc')}</div>
+                      {bridgeEnvOff && (
+                        <div className="set-field-desc">{t('setLiveBridgeEnvDisabled')}</div>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    className="set-switch"
+                    role="switch"
+                    aria-checked={liveBridgeOn}
+                    aria-label={t('setLiveBridge')}
+                    onClick={() => {
+                      const next = !liveBridgeOn
+                      setLiveBridgeOn(next)
+                      // the main process starts/stops the socket server live
+                      // and resolves the EFFECTIVE state (an env override can
+                      // veto the change — the switch then snaps back)
+                      void window.aiOffice
+                        .setLiveBridgeEnabled?.(next)
+                        .then((resolved) => setLiveBridgeOn(resolved))
+                        .catch(() => {})
                     }}
                   />
                 </div>

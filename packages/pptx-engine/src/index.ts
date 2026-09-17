@@ -245,6 +245,8 @@ export {
   getSlideComments,
   addSlideComment,
   deleteSlideComment,
+  setSlideCommentResolved,
+  type CommentRef,
   type SlideComment,
 } from './comments'
 export {
@@ -2908,6 +2910,8 @@ export function setElementFont(slide: Slide, elementId: string, patch: ElementFo
 
 export interface ReplaceOptions {
   matchCase?: boolean
+  /** only replace whole-word matches (Unicode word chars around the hit disqualify it) */
+  wholeWord?: boolean
   /** Replace only the first match (the "Replace" button; default replaces all) */
   firstOnly?: boolean
   /** Restrict to one slide/element (the "Replace" button acts on the currently hit element) */
@@ -2930,7 +2934,14 @@ export function replaceAllInDeck(
   opts: ReplaceOptions = {},
 ): { count: number; changedSlides: number[] } {
   if (!find) return { count: 0, changedSlides: [] }
-  const re = new RegExp(escapeRegExp(find), opts.matchCase ? 'g' : 'gi')
+  const body = escapeRegExp(find)
+  // whole-word via Unicode-aware lookarounds (same \p{L}\p{N}_ word definition
+  // as the docs FindPanel); the u flag is required for the property escapes and
+  // only added then, so plain replaces keep their exact former semantics
+  const re = new RegExp(
+    opts.wholeWord ? `(?<![\\p{L}\\p{N}_])${body}(?![\\p{L}\\p{N}_])` : body,
+    opts.wholeWord ? (opts.matchCase ? 'gu' : 'giu') : opts.matchCase ? 'g' : 'gi',
+  )
   let budget = opts.firstOnly ? 1 : Infinity
   let count = 0
   const changed = new Set<number>()

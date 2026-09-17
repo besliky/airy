@@ -151,11 +151,16 @@ const desktopApi: DesktopApi = {
     }
     return result as { mediaType: 'image/png' | 'image/jpeg' | 'image/gif'; base64: string }
   },
+  /** Screenshot picker lifecycle: true when the dialog opens, false when it closes */
+  capturePickerState(open: boolean) {
+    ipcRenderer.send(IPC_CHANNELS.capturePickerState, open)
+  },
   async captureScreenSources() {
     const result: unknown = await ipcRenderer.invoke(IPC_CHANNELS.captureScreenSources)
     if (
       !isRecord(result) ||
       (result.status !== 'ok' && result.status !== 'denied') ||
+      typeof result.captureToken !== 'string' ||
       !Array.isArray(result.sources)
     ) {
       throw new Error('Invalid screen sources response.')
@@ -163,11 +168,18 @@ const desktopApi: DesktopApi = {
     return result as ScreenSourcesResult
   },
   async captureScreenSource(request) {
-    if (!isRecord(request) || typeof request.id !== 'string' || request.id.length === 0) {
+    if (
+      !isRecord(request) ||
+      typeof request.id !== 'string' ||
+      request.id.length === 0 ||
+      typeof request.captureToken !== 'string' ||
+      request.captureToken.length === 0
+    ) {
       throw new Error('Invalid screen capture request.')
     }
     const result: unknown = await ipcRenderer.invoke(IPC_CHANNELS.captureScreenSource, {
       id: request.id,
+      captureToken: request.captureToken,
     })
     if (result === null) return null
     if (
@@ -270,33 +282,7 @@ const desktopApi: DesktopApi = {
     return result as { renamed: boolean; name?: string }
   },
   async exportPdf(request) {
-    if (
-      !isRecord(request) ||
-      typeof request.fileName !== 'string' ||
-      request.fileName.length === 0 ||
-      request.fileName.length > 255 ||
-      typeof request.html !== 'string' ||
-      request.html.length === 0 ||
-      request.html.length > 20_000_000 ||
-      typeof request.landscape !== 'boolean' ||
-      !isPdfPageSize(request.pageSize) ||
-      !isRecord(request.margins) ||
-      !['top', 'bottom', 'left', 'right'].every((edge) => {
-        const value = (request.margins as Record<string, unknown>)[edge]
-        return typeof value === 'number' && value >= 0 && value <= 3
-      }) ||
-      typeof request.scale !== 'number' ||
-      request.scale < 0.1 ||
-      request.scale > 2 ||
-      (request.headerTemplate !== undefined &&
-        !isBoundedString(request.headerTemplate, MAX_PDF_TEMPLATE_CHARS)) ||
-      (request.footerTemplate !== undefined &&
-        !isBoundedString(request.footerTemplate, MAX_PDF_TEMPLATE_CHARS)) ||
-      (request.firstPage !== undefined && !isPdfPageVariant(request.firstPage)) ||
-      (request.evenPages !== undefined && !isPdfPageVariant(request.evenPages))
-    ) {
-      throw new Error('Invalid PDF export request.')
-    }
+    validatePdfRequest(request)
     const result: unknown = await ipcRenderer.invoke(IPC_CHANNELS.exportPdf, request)
     if (
       !isRecord(result) ||
@@ -306,6 +292,27 @@ const desktopApi: DesktopApi = {
       throw new Error('Invalid PDF export response.')
     }
     return result as { canceled: true } | { canceled: false; path: string }
+  },
+  async previewPrint(request) {
+    validatePdfRequest(request)
+    const result: unknown = await ipcRenderer.invoke(IPC_CHANNELS.previewPrint, request)
+    if (
+      !isRecord(result) ||
+      typeof result.ok !== 'boolean' ||
+      (result.ok === true && typeof result.pageCount !== 'number') ||
+      (result.ok === false && typeof result.error !== 'string')
+    ) {
+      throw new Error('Invalid print preview response.')
+    }
+    return result as { ok: true; pageCount: number } | { ok: false; error: string }
+  },
+  async printWorkbook(request) {
+    validatePdfRequest(request)
+    const result: unknown = await ipcRenderer.invoke(IPC_CHANNELS.print, request)
+    if (!isRecord(result) || typeof result.ok !== 'boolean') {
+      throw new Error('Invalid print response.')
+    }
+    return result as { ok: boolean; error?: string }
   },
   async exportCsv(request) {
     if (
@@ -396,14 +403,19 @@ const desktopApi: DesktopApi = {
         action === 'save' ||
         action === 'save-as' ||
         action === 'export-pdf' ||
+        action === 'print' ||
         action === 'export-csv' ||
         action === 'undo' ||
-        action === 'redo'
+        action === 'redo' ||
+        action === 'shortcuts'
       )
         callback(action)
     }
     ipcRenderer.on(IPC_CHANNELS.menuAction, listener)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.menuAction, listener)
+  },
+  menuActionsReady() {
+    ipcRenderer.send(IPC_CHANNELS.menuReady)
   },
   onWorkbookRenamed(callback) {
     const listener = (_event: unknown, newName: unknown): void => {
@@ -647,7 +659,6 @@ const projectApi: ProjectApi = {
   renameProject: (args) => ipcRenderer.invoke('project:rename', args),
   deleteProject: (args) => ipcRenderer.invoke('project:delete', args),
   moveFile: (args) => ipcRenderer.invoke('project:moveFile', args),
-  getTimeline: (args) => ipcRenderer.invoke('project:timeline', args),
 }
 contextBridge.exposeInMainWorld('projectApi', projectApi)
 
@@ -2204,6 +2215,36 @@ function isFilterColumn(input: unknown): boolean {
     }
   }
   return input.values !== undefined || input.blank !== undefined || input.customs !== undefined
+}
+
+function validatePdfRequest(request: unknown): void {
+  if (
+    !isRecord(request) ||
+    typeof request.fileName !== 'string' ||
+    request.fileName.length === 0 ||
+    request.fileName.length > 255 ||
+    typeof request.html !== 'string' ||
+    request.html.length === 0 ||
+    request.html.length > 20_000_000 ||
+    typeof request.landscape !== 'boolean' ||
+    !isPdfPageSize(request.pageSize) ||
+    !isRecord(request.margins) ||
+    !['top', 'bottom', 'left', 'right'].every((edge) => {
+      const value = (request.margins as Record<string, unknown>)[edge]
+      return typeof value === 'number' && value >= 0 && value <= 3
+    }) ||
+    typeof request.scale !== 'number' ||
+    request.scale < 0.1 ||
+    request.scale > 2 ||
+    (request.headerTemplate !== undefined &&
+      !isBoundedString(request.headerTemplate, MAX_PDF_TEMPLATE_CHARS)) ||
+    (request.footerTemplate !== undefined &&
+      !isBoundedString(request.footerTemplate, MAX_PDF_TEMPLATE_CHARS)) ||
+    (request.firstPage !== undefined && !isPdfPageVariant(request.firstPage)) ||
+    (request.evenPages !== undefined && !isPdfPageVariant(request.evenPages))
+  ) {
+    throw new Error('Invalid PDF export request.')
+  }
 }
 
 function isPdfPageSize(input: unknown): boolean {

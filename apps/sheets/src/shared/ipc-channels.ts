@@ -74,12 +74,17 @@ export const IPC_CHANNELS = {
   closeSaveRequest: 'workbook:close-save-request',
   closeSaveResult: 'workbook:close-save-result',
   exportPdf: 'workbook:export-pdf',
+  /** Print dialog preview: the same HTML the PDF export lays out, rendered to PDF bytes (page count) without touching disk */
+  previewPrint: 'workbook:preview-print',
+  /** Print dialog Print: system print dialog over the print HTML */
+  print: 'workbook:print',
   exportCsv: 'workbook:export-csv',
   csvSaveConfirm: 'workbook:csv-save-confirm',
   /** AI create_document: new standalone file in the default folder (no dialog) */
   createDocument: 'workbook:create-document',
   openExternal: 'shell:open-external',
   menuAction: 'menu:action',
+  menuReady: 'menu:ready',
   aiGetSettings: 'ai:get-settings',
   aiSetSettings: 'ai:set-settings',
   aiChat: 'ai:chat',
@@ -94,6 +99,8 @@ export const IPC_CHANNELS = {
   // the shell; avoids collisions)
   captureScreenSources: 'sheets:capture-screen-sources',
   captureScreenSource: 'sheets:capture-screen-source',
+  /** Picker lifecycle signal (true = dialog opened, false = closed) feeding the capture consent machine */
+  capturePickerState: 'sheets:capture-picker-state',
   filesPick: 'sheets:files-pick',
   filesAdd: 'sheets:files-add',
   filesAddPastedImage: 'sheets:files-add-pasted-image',

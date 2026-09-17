@@ -263,7 +263,10 @@ const worksheetMetadataSchema = z
       .default([]),
   })
   .strict()
-const richRunSchema = z
+/// Exported for the MCP server's apply_workbook_ops input schema, so the
+/// agent-accepted rich-run shape cannot drift from what the save gateway
+/// serializes.
+export const richRunSchema = z
   .object({
     text: z.string(),
     bold: z.boolean(),
@@ -2182,6 +2185,9 @@ export const localImageResultSchema = z
 export const screenSourcesResultSchema = z
   .object({
     status: z.enum(['ok', 'denied']),
+    /// Single-use consent token for one full-res capture of a listed source
+    /// (empty when denied — no enumeration happened).
+    captureToken: z.string(),
     sources: z.array(
       z
         .object({
@@ -2199,6 +2205,8 @@ export const screenSourcesResultSchema = z
 export const screenCaptureRequestSchema = z
   .object({
     id: z.string().min(1).max(256),
+    /// Consent token from the enumeration the source was listed in.
+    captureToken: z.string().min(16).max(128),
   })
   .strict()
 
@@ -2587,6 +2595,24 @@ export const workbookExportPdfResultSchema = z.union([
 export type WorkbookExportPdfRequest = z.infer<typeof workbookExportPdfRequestSchema>
 export type WorkbookExportPdfResult = z.infer<typeof workbookExportPdfResultSchema>
 
+/// Print dialog preview: the same request the PDF export sends, answered
+/// with the rendered page count only — the dialog previews the print HTML
+/// itself, so no PDF bytes cross the IPC boundary, nothing is written to
+/// disk, and no save dialog appears.
+export const workbookPrintPreviewResultSchema = z.union([
+  z.object({ ok: z.literal(true), pageCount: z.number().int().positive().max(100_000) }).strict(),
+  z.object({ ok: z.literal(false), error: z.string().min(1) }).strict(),
+])
+
+/// Print dialog Print: hands the print HTML to the system print dialog
+/// (ok=false without an error means the user canceled there).
+export const workbookPrintResultSchema = z
+  .object({ ok: z.boolean(), error: z.string().min(1).optional() })
+  .strict()
+
+export type WorkbookPrintPreviewResult = z.infer<typeof workbookPrintPreviewResultSchema>
+export type WorkbookPrintResult = z.infer<typeof workbookPrintResultSchema>
+
 /// CSV export of the active sheet: the renderer serializes display values,
 /// the main process runs the loss warning + save dialog and writes the bytes.
 export const workbookExportCsvRequestSchema = z
@@ -2761,6 +2787,9 @@ export interface DesktopApi {
   readWorkbookMedia(request: WorkbookMediaRequest): Promise<WorkbookMediaResult>
   readPivotDefinition(request: WorkbookPivotRequest): Promise<WorkbookPivotDefinition>
   readLocalImage(request: LocalImageRequest): Promise<LocalImageResult>
+  /// Screenshot picker lifecycle: true when the dialog opens, false on close.
+  /// The main process only enumerates capture sources inside an open session.
+  capturePickerState(open: boolean): void
   captureScreenSources(): Promise<ScreenSourcesResult>
   /// null when the source vanished between listing and capture.
   captureScreenSource(request: ScreenCaptureRequest): Promise<ScreenCaptureResult | null>
@@ -2783,6 +2812,10 @@ export interface DesktopApi {
     baseName: string,
   ): Promise<{ renamed: boolean; name?: string }>
   exportPdf(request: WorkbookExportPdfRequest): Promise<WorkbookExportPdfResult>
+  /** Print dialog preview: the print HTML rendered to PDF bytes + page count */
+  previewPrint(request: WorkbookExportPdfRequest): Promise<WorkbookPrintPreviewResult>
+  /** Print dialog Print: system print dialog over the print HTML */
+  printWorkbook(request: WorkbookExportPdfRequest): Promise<WorkbookPrintResult>
   exportCsv(request: WorkbookExportCsvRequest): Promise<WorkbookExportCsvResult>
   /// First Save of a CSV session: native "keep this format?" dialog.
   confirmCsvSave(): Promise<'csv' | 'xlsx' | 'cancel'>
@@ -2793,6 +2826,10 @@ export interface DesktopApi {
   openExternal(url: string): Promise<void>
   /// Application-menu File commands (Open/Save/Save As); returns unsubscribe.
   onMenuAction(callback: (action: MenuAction) => void): () => void
+  /// One-time signal that onMenuAction above is live (sent right after the
+  /// subscription is installed, post-Univer-mount) so the shell can flush any
+  /// queued workbook action instead of blind-resending it.
+  menuActionsReady(): void
   /// The open workbook was renamed on disk (renamed in the shell Home list);
   /// emits the new file name.
   onWorkbookRenamed(callback: (newName: string) => void): () => void
@@ -2809,8 +2846,9 @@ export interface DesktopApi {
   /// Returns true once when this tab was opened via "New Spreadsheet" from the
   /// shell home.
   consumeNewBlankWorkbook(): Promise<boolean>
-  /// Is a shell-queued workbook path still waiting to be opened? (The shell's
-  /// 'open' nudge loop can time out on slow cold starts; the renderer pulls.)
+  /// Is a shell-queued workbook path still waiting to be opened? (Delivery
+  /// is the menu-ready handshake with at most 2 bounded resends; the
+  /// renderer pulls in case those are spent before Univer mounts.)
   hasQueuedWorkbook(): Promise<boolean>
   getAiSettings(): Promise<AiSettings>
   setAiSettings(settings: AiSettings): Promise<void>
@@ -2842,7 +2880,16 @@ export interface DesktopApi {
   getPathForFile(file: File): string
 }
 
-export type MenuAction = 'open' | 'save' | 'save-as' | 'export-pdf' | 'export-csv' | 'undo' | 'redo'
+export type MenuAction =
+  | 'open'
+  | 'save'
+  | 'save-as'
+  | 'export-pdf'
+  | 'export-csv'
+  | 'print'
+  | 'undo'
+  | 'redo'
+  | 'shortcuts'
 
 export interface WebSearchResult {
   results: Array<{ title: string; url: string; snippet: string }>

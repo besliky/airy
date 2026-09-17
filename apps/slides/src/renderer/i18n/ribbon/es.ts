@@ -6,6 +6,7 @@ export const es = {
     'Esta acción llama a la IA: consume créditos y puede reescribir todo el contenido. ¿Continuar? (No se volverá a preguntar.)',
   // tabs
   ribbonTabFile: 'Archivo',
+  ribbonTabsLabel: 'Pestañas de la cinta',
   ribbonTabHome: 'Inicio',
   ribbonTabInsert: 'Insertar',
   ribbonTabDraw: 'Dibujar',

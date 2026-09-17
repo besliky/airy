@@ -55,7 +55,7 @@ test.describe('sheets: Insert → Equation and Checkbox', () => {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
       await waitForWorkbook(sheets)
 
-      await sheets.getByRole('button', { name: 'Insert', exact: true }).click()
+      await sheets.getByRole('tab', { name: 'Insert', exact: true }).click()
       await sheets.getByRole('button', { name: 'Equation' }).click()
       const dialog = sheets.getByRole('dialog', { name: 'Insert Equation' })
       await expect(dialog).toBeVisible()
@@ -97,7 +97,7 @@ test.describe('sheets: Insert → Equation and Checkbox', () => {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
       await waitForWorkbook(sheets)
 
-      await sheets.getByRole('button', { name: 'Insert', exact: true }).click()
+      await sheets.getByRole('tab', { name: 'Insert', exact: true }).click()
       // DV edits are gated until the sheet's own file rules are installed
       // (indexing complete), so retry until the rule lands in the saved file.
       await expect(async () => {
@@ -155,7 +155,7 @@ test.describe('sheets: Insert → Timeline', () => {
       await sheets.mouse.click(b5.x, b5.y)
       await sheets.keyboard.up('Shift')
 
-      await sheets.getByRole('button', { name: 'Insert', exact: true }).click()
+      await sheets.getByRole('tab', { name: 'Insert', exact: true }).click()
       await sheets.getByRole('button', { name: 'PivotTable', exact: true }).click()
       const pivotDialog = sheets.getByRole('dialog', { name: 'Create PivotTable' })
       await expect(pivotDialog).toBeVisible()
@@ -178,7 +178,7 @@ test.describe('sheets: Insert → Timeline', () => {
       const e1 = cellPoint(origin, 0, 4)
       await expect(async () => {
         await sheets.mouse.click(e1.x, e1.y)
-        await sheets.getByRole('button', { name: 'Insert', exact: true }).click()
+        await sheets.getByRole('tab', { name: 'Insert', exact: true }).click()
         await sheets.getByRole('button', { name: 'Timeline' }).click()
         await expect(picker).toBeVisible({ timeout: 2_000 })
       }).toPass({ timeout: 30_000 })

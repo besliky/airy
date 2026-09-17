@@ -203,6 +203,9 @@ export interface DesktopApi {
   /** shell-wide AutoSave default (see useAutoSavePref) */
   getAutoSaveDefault(): Promise<AutoSaveDefault>
   onAutoSaveDefaultChanged(handler: (value: AutoSaveDefault) => void): () => void
+  /** author display name for new comments and revision marks (Settings → General in the shell; '' = unset, use the localized default) */
+  getAuthorName(): Promise<string>
+  onAuthorNameChanged(handler: (name: string) => void): () => void
   /** AI panel text size + chat-input spellcheck (Settings → General in the shell) */
   getAiPanelPrefs(): Promise<AiPanelPrefs>
   onAiPanelPrefsChanged(handler: (prefs: AiPanelPrefs) => void): () => void
@@ -372,8 +375,12 @@ export interface DesktopApi {
   /** keep the native View menu's checkbox items in sync with renderer state */
   reportViewMenuState(state: { aiSidebar: boolean; darkCanvas: boolean }): void
   /** live bridge (Airy Copilot): a command arrived from the shell's local
-   *  socket server; reply once via reportBridgeResult with the same requestId */
-  onBridgeInvoke(handler: (requestId: number, method: string, params: unknown) => void): () => void
+   *  socket server; reply once via reportBridgeResult with the same requestId.
+   *  clientId identifies the calling bridge connection (bridge turn ownership);
+   *  undefined when the sender does not stamp one */
+  onBridgeInvoke(
+    handler: (requestId: number, method: string, params: unknown, clientId?: string) => void,
+  ): () => void
   reportBridgeResult(requestId: number, result: BridgeCommandResult): void
 }
 

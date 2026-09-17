@@ -1,6 +1,6 @@
 {
   "name": "airy",
-  "version": "0.1.0",
+  "version": "0.10.0",
   "private": true,
   "description": "Airy: open-source office suite with an MCP copilot for CLI coding agents (fork of GenOffice)",
   "license": "Apache-2.0",
@@ -24,8 +24,8 @@
     "check:english-comments": "node tools/check-english-comments.mjs",
     "lint": "eslint .",
     "fixtures": "npm run fixtures -w @airy-office/docx-engine",
-    "test": "npm run test -w @airy-office/i18n && npm run test -w @airy-office/electron-utils && npm run test -w @airy-office/font-metrics && npm run test -w @airy-office/docx-engine && npm run test -w @airy-office/pdf2docx && npm run test -w @airy-office/html2docx && npm run test -w @airy-office/file-parse && npm run test -w @airy-office/pptx-engine && npm run test -w @airy-office/pptx-render && npm run test -w @airy-office/ai-search && npm run test -w @airy-office/agent-core && npm run test -w @airy-office/ai-provider && npm run test -w @airy-office/project-store && npm run test -w @airy-office/ui && npm run test -w @airy-office/mcp && npm run test -w @airy-office/docs && npm run test -w @airy-office/sheets && npm run test -w @airy-office/shell && npm run test -w @airy-office/slides && npm run test -w @airy-office/pdf && npm run test -w @airy-office/markdown && npm run test -w @airy-office/html",
-    "typecheck": "npm run typecheck -w @airy-office/i18n && npm run typecheck -w @airy-office/electron-utils && npm run typecheck -w @airy-office/font-metrics && npm run typecheck -w @airy-office/docx-engine && npm run typecheck -w @airy-office/pdf2docx && npm run typecheck -w @airy-office/html2docx && npm run typecheck -w @airy-office/file-parse && npm run typecheck -w @airy-office/pptx-engine && npm run typecheck -w @airy-office/pptx-render && npm run typecheck -w @airy-office/ai-search && npm run typecheck -w @airy-office/agent-core && npm run typecheck -w @airy-office/ai-provider && npm run typecheck -w @airy-office/project-store && npm run typecheck -w @airy-office/ui && npm run typecheck -w @airy-office/mcp && npm run typecheck -w @airy-office/docs && npm run typecheck -w @airy-office/sheets && npm run typecheck -w @airy-office/shell && npm run typecheck -w @airy-office/slides && npm run typecheck -w @airy-office/pdf && npm run typecheck -w @airy-office/markdown && npm run typecheck -w @airy-office/html",
+    "test": "node tools/run-workspaces.mjs test",
+    "typecheck": "node tools/run-workspaces.mjs typecheck",
     "predev": "node tools/build-stale-preloads.mjs",
     "dev": "concurrently -k -n docs,sheets,slides,pdf,markdown,html,shell -c blue,green,yellow,red,cyan,white,magenta \"npm run dev:renderer -w @airy-office/docs\" \"npm run dev:renderer -w @airy-office/sheets\" \"npm run dev:renderer -w @airy-office/slides\" \"npm run dev:renderer -w @airy-office/pdf\" \"npm run dev:renderer -w @airy-office/markdown\" \"npm run dev:renderer -w @airy-office/html\" \"DOCS_RENDERER_URL=http://localhost:5173 SHEETS_RENDERER_URL=http://localhost:5174 SLIDES_RENDERER_URL=http://localhost:5175 PDF_RENDERER_URL=http://localhost:5176 MARKDOWN_RENDERER_URL=http://localhost:5177 HTML_RENDERER_URL=http://localhost:5178 npm run dev -w @airy-office/shell\"",
     "dev:docs": "npm run dev -w @airy-office/docs",
@@ -40,7 +40,8 @@
     "dist:win": "npm run notices && npm run build:all && npm run dist:win -w @airy-office/shell",
     "dist:linux": "npm run notices && npm run build:all && npm run dist:linux -w @airy-office/shell",
     "release:win": "npm run notices && npm run build:all && npm run release:win -w @airy-office/shell -- --publish always",
-    "release:linux": "npm run notices && npm run build:all && npm run release:linux -w @airy-office/shell -- --publish always"
+    "release:linux": "npm run notices && npm run build:all && npm run release:linux -w @airy-office/shell -- --publish always",
+    "release:mac": "npm run notices && npm run build:all && npm run native:build:universal -w @airy-office/sheets && npm run release:mac -w @airy-office/shell -- --publish always"
   },
   "dependencies": {
     "ws": "^8.21.1"
@@ -56,7 +57,6 @@
     "eslint": "^10.8.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.8.0",
-    "pixelmatch": "^7.2.0",
     "playwright-core": "^1.61.1",
     "pngjs": "^7.0.0",
     "prettier": "^3.9.6",

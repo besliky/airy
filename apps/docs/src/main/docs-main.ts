@@ -28,15 +28,29 @@ import {
   configuredDefaultSaveDir,
   contextMenuLabels,
   fetchRemoteImage,
+  forgetRendererFileAccess,
+  forgetWitnessedDrops,
+  grantRendererFileAccess,
   installContextMenu,
   installNavigationGuard,
+  mayGrantAttachmentRead,
+  parseAttachmentPaths,
   printHtmlToPdf,
+  recordWitnessedDrops,
+  rendererMayReadPath,
+  COPILOT_GUIDE_URL,
+  DOCS_README_URL,
+  openHelpUrl,
   safeExternalUrl,
   saveAsSuggestion,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
   toggleDevToolsItem,
+  ALL_OPEN_EXTENSIONS,
+  OPEN_EXTENSION_GROUPS,
+  voidLoad,
   windowMenuTemplate,
+  WITNESS_DROP_CHANNEL,
 } from '@airy-office/electron-utils'
 import { configureMetricsCache, familyVerticalMetrics } from '@airy-office/font-metrics'
 import { createI18n, getUiLang, normalizeLang, setUiLang } from '@airy-office/i18n'
@@ -55,14 +69,11 @@ import {
   isAiNetworkError,
   isAiOverloadedError,
   chatForProvider,
-  defaultAiSettings,
-  activeProvider,
   NO_PROVIDER_ERROR,
   testMediaProvider,
   type AiMediaProviderConfig,
   type AiMediaProviderId,
   type AiSearchProviderId,
-  resolveAiSettings,
   maxOutputTokensOf,
   setAiUserAgent,
   setRescueFetch,
@@ -71,9 +82,20 @@ import {
   type AiSettings,
   type AiStreamChunk,
   type AiStreamRequest,
-  type LegacyAiSettings,
 } from '@airy-office/ai-provider'
-import { listCodexModels, shutdownCodexAppServers } from '@airy-office/ai-provider/codex-app-server'
+import {
+  maskedAiSettings,
+  overlayRealAiSecrets,
+  realMediaApiKey,
+  realSearchApiKey,
+  registerAiSettingsCodec,
+  saveAiSettings,
+} from './ai-settings-store'
+import {
+  isCodexCliCandidatePath,
+  listCodexModels,
+  shutdownCodexAppServers,
+} from '@airy-office/ai-provider/codex-app-server'
 import {
   generateImageTool,
   testSearchProvider,
@@ -95,7 +117,8 @@ import type {
 } from '../shared/ipc'
 import { ATTACHMENT_IMAGE_EXTS } from '../shared/ipc'
 import { findDocxPath } from '../shared/open-file'
-import { atomicWriteFile, looksLikeZip } from './atomic-write'
+import { isDocsRenderer, trackDocsRenderer, untrackDocsRenderer } from './docs-renderers'
+import { atomicWriteFile, looksLikeZip } from '@airy-office/electron-utils'
 import {
   commitDocPasswordSave,
   currentDocPasswordIntentRevision,
@@ -127,6 +150,7 @@ const isDev = !!process.env.ELECTRON_RENDERER_URL
 
 const tMain = createI18n({
   zh: {
+    dlgLoadFailed: '应用窗口加载失败。',
     dlgOpenDoc: '打开文档',
     filterWord: 'Word 文档',
     dlgSaveAs: '另存为',
@@ -148,6 +172,12 @@ const tMain = createI18n({
     filterImages: '图片',
     dlgAddAttachment: '添加附件',
     filterSupported: '支持的文件',
+    filterExcel: 'Excel 工作簿',
+    filterPpt: 'PowerPoint 演示文稿',
+    filterPdf: 'PDF 文档',
+    filterMarkdown: 'Markdown 文档',
+    filterHtml: 'HTML 文档',
+    menuQuit: '退出',
     filterAll: '所有文件',
     dlgExportPdf: '导出为 PDF',
     dlgExportHtml: '导出为 HTML',
@@ -218,9 +248,11 @@ const tMain = createI18n({
     menuWindow: '窗口',
     menuHelp: '帮助',
     menuShortcuts: '键盘快捷键',
-    menuDocsHelp: 'Airy Docs 帮助',
+    menuOnlineDocs: '在线文档',
+    menuCopilotGuide: 'Copilot 指南（MCP）',
   },
   en: {
+    dlgLoadFailed: 'The app window failed to load.',
     dlgOpenDoc: 'Open Document',
     filterWord: 'Word Documents',
     dlgSaveAs: 'Save As',
@@ -243,6 +275,12 @@ const tMain = createI18n({
     filterImages: 'Images',
     dlgAddAttachment: 'Add Attachments',
     filterSupported: 'Supported Files',
+    filterExcel: 'Excel Workbooks',
+    filterPpt: 'PowerPoint Presentations',
+    filterPdf: 'PDF Documents',
+    filterMarkdown: 'Markdown Documents',
+    filterHtml: 'HTML Documents',
+    menuQuit: 'Quit',
     filterAll: 'All Files',
     dlgExportPdf: 'Export as PDF',
     dlgExportHtml: 'Export as HTML',
@@ -313,9 +351,11 @@ const tMain = createI18n({
     menuWindow: 'Window',
     menuHelp: 'Help',
     menuShortcuts: 'Keyboard Shortcuts',
-    menuDocsHelp: 'Airy Docs Help',
+    menuOnlineDocs: 'Online Documentation',
+    menuCopilotGuide: 'Copilot Guide (MCP)',
   },
   ja: {
+    dlgLoadFailed: 'アプリウィンドウの読み込みに失敗しました。',
     dlgOpenDoc: '文書を開く',
     filterWord: 'Word 文書',
     dlgSaveAs: '名前を付けて保存',
@@ -337,6 +377,12 @@ const tMain = createI18n({
     filterImages: '画像',
     dlgAddAttachment: '添付ファイルの追加',
     filterSupported: 'サポートされているファイル',
+    filterExcel: 'Excel ブック',
+    filterPpt: 'PowerPoint プレゼンテーション',
+    filterPdf: 'PDF ドキュメント',
+    filterMarkdown: 'Markdown ドキュメント',
+    filterHtml: 'HTML ドキュメント',
+    menuQuit: '終了',
     filterAll: 'すべてのファイル',
     dlgExportPdf: 'PDF としてエクスポート',
     dlgExportHtml: 'HTML としてエクスポート',
@@ -408,9 +454,11 @@ const tMain = createI18n({
     menuWindow: 'ウィンドウ',
     menuHelp: 'ヘルプ',
     menuShortcuts: 'キーボードショートカット',
-    menuDocsHelp: 'Airy Docs ヘルプ',
+    menuOnlineDocs: 'オンライン ドキュメント',
+    menuCopilotGuide: 'Copilot ガイド (MCP)',
   },
   ko: {
+    dlgLoadFailed: '앱 창을 로드하지 못했습니다.',
     dlgOpenDoc: '문서 열기',
     filterWord: 'Word 문서',
     dlgSaveAs: '다른 이름으로 저장',
@@ -433,6 +481,12 @@ const tMain = createI18n({
     filterImages: '그림',
     dlgAddAttachment: '첨부 파일 추가',
     filterSupported: '지원되는 파일',
+    filterExcel: 'Excel 통합 문서',
+    filterPpt: 'PowerPoint 프레젠테이션',
+    filterPdf: 'PDF 문서',
+    filterMarkdown: 'Markdown 문서',
+    filterHtml: 'HTML 문서',
+    menuQuit: '끝내기',
     filterAll: '모든 파일',
     dlgExportPdf: 'PDF로 내보내기',
     dlgExportHtml: 'HTML로 내보내기',
@@ -504,9 +558,11 @@ const tMain = createI18n({
     menuWindow: '창',
     menuHelp: '도움말',
     menuShortcuts: '키보드 바로 가기',
-    menuDocsHelp: 'Airy Docs 도움말',
+    menuOnlineDocs: '온라인 설명서',
+    menuCopilotGuide: 'Copilot 가이드(MCP)',
   },
   fr: {
+    dlgLoadFailed: 'Échec du chargement de la fenêtre principale.',
     dlgOpenDoc: 'Ouvrir un document',
     filterWord: 'Documents Word',
     dlgSaveAs: 'Enregistrer sous',
@@ -530,6 +586,12 @@ const tMain = createI18n({
     filterImages: 'Images',
     dlgAddAttachment: 'Ajouter des pièces jointes',
     filterSupported: 'Fichiers pris en charge',
+    filterExcel: 'Classeurs Excel',
+    filterPpt: 'Présentations PowerPoint',
+    filterPdf: 'Documents PDF',
+    filterMarkdown: 'Documents Markdown',
+    filterHtml: 'Documents HTML',
+    menuQuit: 'Quitter',
     filterAll: 'Tous les fichiers',
     dlgExportPdf: 'Exporter au format PDF',
     dlgExportHtml: 'Exporter au format HTML',
@@ -601,9 +663,11 @@ const tMain = createI18n({
     menuWindow: 'Fenêtre',
     menuHelp: 'Aide',
     menuShortcuts: 'Raccourcis clavier',
-    menuDocsHelp: 'Aide Airy Docs',
+    menuOnlineDocs: 'Documentation en ligne',
+    menuCopilotGuide: 'Guide Copilot (MCP)',
   },
   de: {
+    dlgLoadFailed: 'Das Anwendungsfenster konnte nicht geladen werden.',
     dlgOpenDoc: 'Dokument öffnen',
     filterWord: 'Word-Dokumente',
     dlgSaveAs: 'Speichern unter',
@@ -627,6 +691,12 @@ const tMain = createI18n({
     filterImages: 'Bilder',
     dlgAddAttachment: 'Anlagen hinzufügen',
     filterSupported: 'Unterstützte Dateien',
+    filterExcel: 'Excel-Arbeitsmappen',
+    filterPpt: 'PowerPoint-Präsentationen',
+    filterPdf: 'PDF-Dokumente',
+    filterMarkdown: 'Markdown-Dokumente',
+    filterHtml: 'HTML-Dokumente',
+    menuQuit: 'Beenden',
     filterAll: 'Alle Dateien',
     dlgExportPdf: 'Als PDF exportieren',
     dlgExportHtml: 'Als HTML exportieren',
@@ -698,9 +768,11 @@ const tMain = createI18n({
     menuWindow: 'Fenster',
     menuHelp: 'Hilfe',
     menuShortcuts: 'Tastenkombinationen',
-    menuDocsHelp: 'Airy Docs-Hilfe',
+    menuOnlineDocs: 'Online-Dokumentation',
+    menuCopilotGuide: 'Copilot-Leitfaden (MCP)',
   },
   es: {
+    dlgLoadFailed: 'No se pudo cargar la ventana de la aplicación.',
     dlgOpenDoc: 'Abrir documento',
     filterWord: 'Documentos de Word',
     dlgSaveAs: 'Guardar como',
@@ -723,6 +795,12 @@ const tMain = createI18n({
     filterImages: 'Imágenes',
     dlgAddAttachment: 'Agregar datos adjuntos',
     filterSupported: 'Archivos compatibles',
+    filterExcel: 'Libros de Excel',
+    filterPpt: 'Presentaciones de PowerPoint',
+    filterPdf: 'Documentos PDF',
+    filterMarkdown: 'Documentos Markdown',
+    filterHtml: 'Documentos HTML',
+    menuQuit: 'Salir',
     filterAll: 'Todos los archivos',
     dlgExportPdf: 'Exportar como PDF',
     dlgExportHtml: 'Exportar como HTML',
@@ -795,9 +873,11 @@ const tMain = createI18n({
     menuWindow: 'Ventana',
     menuHelp: 'Ayuda',
     menuShortcuts: 'Atajos de teclado',
-    menuDocsHelp: 'Ayuda de Airy Docs',
+    menuOnlineDocs: 'Documentación en línea',
+    menuCopilotGuide: 'Guía de Copilot (MCP)',
   },
   th: {
+    dlgLoadFailed: 'โหลดหน้าต่างแอปไม่สำเร็จ',
     dlgOpenDoc: 'เปิดเอกสาร',
     filterWord: 'เอกสาร Word',
     dlgSaveAs: 'บันทึกเป็น',
@@ -819,6 +899,12 @@ const tMain = createI18n({
     filterImages: 'รูปภาพ',
     dlgAddAttachment: 'เพิ่มสิ่งที่แนบ',
     filterSupported: 'ไฟล์ที่รองรับ',
+    filterExcel: 'เวิร์กบุ๊ก Excel',
+    filterPpt: 'งานนำเสนอ PowerPoint',
+    filterPdf: 'เอกสาร PDF',
+    filterMarkdown: 'เอกสาร Markdown',
+    filterHtml: 'เอกสาร HTML',
+    menuQuit: 'ออก',
     filterAll: 'ไฟล์ทั้งหมด',
     dlgExportPdf: 'ส่งออกเป็น PDF',
     dlgExportHtml: 'ส่งออกเป็น HTML',
@@ -890,9 +976,11 @@ const tMain = createI18n({
     menuWindow: 'หน้าต่าง',
     menuHelp: 'วิธีใช้',
     menuShortcuts: 'แป้นพิมพ์ลัด',
-    menuDocsHelp: 'วิธีใช้ Airy Docs',
+    menuOnlineDocs: 'เอกสารออนไลน์',
+    menuCopilotGuide: 'คู่มือ Copilot (MCP)',
   },
   id: {
+    dlgLoadFailed: 'Gagal memuat jendela aplikasi.',
     dlgOpenDoc: 'Buka Dokumen',
     filterWord: 'Dokumen Word',
     dlgSaveAs: 'Simpan Sebagai',
@@ -915,6 +1003,12 @@ const tMain = createI18n({
     filterImages: 'Gambar',
     dlgAddAttachment: 'Tambahkan Lampiran',
     filterSupported: 'File yang Didukung',
+    filterExcel: 'Buku Kerja Excel',
+    filterPpt: 'Presentasi PowerPoint',
+    filterPdf: 'Dokumen PDF',
+    filterMarkdown: 'Dokumen Markdown',
+    filterHtml: 'Dokumen HTML',
+    menuQuit: 'Keluar',
     filterAll: 'Semua File',
     dlgExportPdf: 'Ekspor sebagai PDF',
     dlgExportHtml: 'Ekspor sebagai HTML',
@@ -986,9 +1080,11 @@ const tMain = createI18n({
     menuWindow: 'Jendela',
     menuHelp: 'Bantuan',
     menuShortcuts: 'Pintasan Papan Ketik',
-    menuDocsHelp: 'Bantuan Airy Docs',
+    menuOnlineDocs: 'Dokumentasi daring',
+    menuCopilotGuide: 'Panduan Copilot (MCP)',
   },
   ru: {
+    dlgLoadFailed: 'Не удалось загрузить окно приложения.',
     dlgOpenDoc: 'Открыть документ',
     filterWord: 'Документы Word',
     dlgSaveAs: 'Сохранить как',
@@ -1011,6 +1107,12 @@ const tMain = createI18n({
     filterImages: 'Изображения',
     dlgAddAttachment: 'Добавить вложения',
     filterSupported: 'Поддерживаемые файлы',
+    filterExcel: 'Книги Excel',
+    filterPpt: 'Презентации PowerPoint',
+    filterPdf: 'Документы PDF',
+    filterMarkdown: 'Документы Markdown',
+    filterHtml: 'Документы HTML',
+    menuQuit: 'Выход',
     filterAll: 'Все файлы',
     dlgExportPdf: 'Экспорт в PDF',
     dlgExportHtml: 'Экспорт в HTML',
@@ -1082,9 +1184,11 @@ const tMain = createI18n({
     menuWindow: 'Окно',
     menuHelp: 'Справка',
     menuShortcuts: 'Сочетания клавиш',
-    menuDocsHelp: 'Справка Airy Docs',
+    menuOnlineDocs: 'Документация в сети',
+    menuCopilotGuide: 'Руководство по Copilot (MCP)',
   },
   ar: {
+    dlgLoadFailed: 'فشل تحميل نافذة التطبيق.',
     dlgOpenDoc: 'فتح مستند',
     filterWord: 'مستندات Word',
     dlgSaveAs: 'حفظ باسم',
@@ -1107,6 +1211,12 @@ const tMain = createI18n({
     filterImages: 'الصور',
     dlgAddAttachment: 'إضافة مرفقات',
     filterSupported: 'الملفات المدعومة',
+    filterExcel: 'مصنفات Excel',
+    filterPpt: 'عروض PowerPoint التقديمية',
+    filterPdf: 'مستندات PDF',
+    filterMarkdown: 'مستندات Markdown',
+    filterHtml: 'مستندات HTML',
+    menuQuit: 'إنهاء',
     filterAll: 'كل الملفات',
     dlgExportPdf: 'تصدير بتنسيق PDF',
     dlgExportHtml: 'تصدير بتنسيق HTML',
@@ -1178,9 +1288,11 @@ const tMain = createI18n({
     menuWindow: 'نافذة',
     menuHelp: 'تعليمات',
     menuShortcuts: 'اختصارات لوحة المفاتيح',
-    menuDocsHelp: 'تعليمات Airy Docs',
+    menuOnlineDocs: 'الدокументات عبر الإنترنت',
+    menuCopilotGuide: 'دليل Copilot (MCP)',
   },
   pt: {
+    dlgLoadFailed: 'Falha ao carregar a janela do aplicativo.',
     dlgOpenDoc: 'Abrir Documento',
     filterWord: 'Documentos do Word',
     dlgSaveAs: 'Salvar Como',
@@ -1203,6 +1315,12 @@ const tMain = createI18n({
     filterImages: 'Imagens',
     dlgAddAttachment: 'Adicionar Anexos',
     filterSupported: 'Arquivos Compatíveis',
+    filterExcel: 'Pastas de trabalho do Excel',
+    filterPpt: 'Apresentações do PowerPoint',
+    filterPdf: 'Documentos PDF',
+    filterMarkdown: 'Documentos Markdown',
+    filterHtml: 'Documentos HTML',
+    menuQuit: 'Sair',
     filterAll: 'Todos os Arquivos',
     dlgExportPdf: 'Exportar como PDF',
     dlgExportHtml: 'Exportar como HTML',
@@ -1274,9 +1392,11 @@ const tMain = createI18n({
     menuWindow: 'Janela',
     menuHelp: 'Ajuda',
     menuShortcuts: 'Atalhos de Teclado',
-    menuDocsHelp: 'Ajuda do Airy Docs',
+    menuOnlineDocs: 'Documentação online',
+    menuCopilotGuide: 'Guia do Copilot (MCP)',
   },
   it: {
+    dlgLoadFailed: 'Impossibile caricare la finestra dell’app.',
     dlgOpenDoc: 'Apri documento',
     filterWord: 'Documenti Word',
     dlgSaveAs: 'Salva con nome',
@@ -1299,6 +1419,12 @@ const tMain = createI18n({
     filterImages: 'Immagini',
     dlgAddAttachment: 'Aggiungi allegati',
     filterSupported: 'File supportati',
+    filterExcel: 'Cartelle di lavoro Excel',
+    filterPpt: 'Presentazioni PowerPoint',
+    filterPdf: 'Documenti PDF',
+    filterMarkdown: 'Documenti Markdown',
+    filterHtml: 'Documenti HTML',
+    menuQuit: 'Esci',
     filterAll: 'Tutti i file',
     dlgExportPdf: 'Esporta come PDF',
     dlgExportHtml: 'Esporta come HTML',
@@ -1370,9 +1496,11 @@ const tMain = createI18n({
     menuWindow: 'Finestra',
     menuHelp: 'Aiuto',
     menuShortcuts: 'Scelte rapide da tastiera',
-    menuDocsHelp: 'Guida di Airy Docs',
+    menuOnlineDocs: 'Documentazione online',
+    menuCopilotGuide: 'Guida Copilot (MCP)',
   },
   pl: {
+    dlgLoadFailed: 'Nie udało się załadować okna aplikacji.',
     dlgOpenDoc: 'Otwórz dokument',
     filterWord: 'Dokumenty programu Word',
     dlgSaveAs: 'Zapisz jako',
@@ -1395,6 +1523,12 @@ const tMain = createI18n({
     filterImages: 'Obrazy',
     dlgAddAttachment: 'Dodaj załączniki',
     filterSupported: 'Obsługiwane pliki',
+    filterExcel: 'Skoroszyty programu Excel',
+    filterPpt: 'Prezentacje programu PowerPoint',
+    filterPdf: 'Dokumenty PDF',
+    filterMarkdown: 'Dokumenty Markdown',
+    filterHtml: 'Dokumenty HTML',
+    menuQuit: 'Zakończ',
     filterAll: 'Wszystkie pliki',
     dlgExportPdf: 'Eksportuj jako PDF',
     dlgExportHtml: 'Eksportuj jako HTML',
@@ -1466,9 +1600,11 @@ const tMain = createI18n({
     menuWindow: 'Okno',
     menuHelp: 'Pomoc',
     menuShortcuts: 'Skróty klawiaturowe',
-    menuDocsHelp: 'Pomoc Airy Docs',
+    menuOnlineDocs: 'Dokumentacja online',
+    menuCopilotGuide: 'Przewodnik Copilot (MCP)',
   },
   cs: {
+    dlgLoadFailed: 'Okno aplikace se nepodařilo načíst.',
     dlgOpenDoc: 'Otevřít dokument',
     filterWord: 'Dokumenty Wordu',
     dlgSaveAs: 'Uložit jako',
@@ -1491,6 +1627,12 @@ const tMain = createI18n({
     filterImages: 'Obrázky',
     dlgAddAttachment: 'Přidat přílohy',
     filterSupported: 'Podporované soubory',
+    filterExcel: 'Sešity Excel',
+    filterPpt: 'Prezentace PowerPoint',
+    filterPdf: 'Dokumenty PDF',
+    filterMarkdown: 'Dokumenty Markdown',
+    filterHtml: 'Dokumenty HTML',
+    menuQuit: 'Ukončit',
     filterAll: 'Všechny soubory',
     dlgExportPdf: 'Exportovat jako PDF',
     dlgExportHtml: 'Exportovat jako HTML',
@@ -1562,9 +1704,11 @@ const tMain = createI18n({
     menuWindow: 'Okno',
     menuHelp: 'Nápověda',
     menuShortcuts: 'Klávesové zkratky',
-    menuDocsHelp: 'Nápověda Airy Docs',
+    menuOnlineDocs: 'Online dokumentace',
+    menuCopilotGuide: 'Průvodce Copilotem (MCP)',
   },
   nl: {
+    dlgLoadFailed: 'Het app-venster kon niet worden geladen.',
     dlgOpenDoc: 'Document openen',
     filterWord: 'Word-documenten',
     dlgSaveAs: 'Opslaan als',
@@ -1587,6 +1731,12 @@ const tMain = createI18n({
     filterImages: 'Afbeeldingen',
     dlgAddAttachment: 'Bijlagen toevoegen',
     filterSupported: 'Ondersteunde bestanden',
+    filterExcel: 'Excel-werkmappen',
+    filterPpt: 'PowerPoint-presentaties',
+    filterPdf: 'PDF-documenten',
+    filterMarkdown: 'Markdown-documenten',
+    filterHtml: 'HTML-documenten',
+    menuQuit: 'Afsluiten',
     filterAll: 'Alle bestanden',
     dlgExportPdf: 'Exporteren als PDF',
     dlgExportHtml: 'Exporteren als HTML',
@@ -1658,9 +1808,11 @@ const tMain = createI18n({
     menuWindow: 'Venster',
     menuHelp: 'Help',
     menuShortcuts: 'Sneltoetsen',
-    menuDocsHelp: 'Airy Docs Help',
+    menuOnlineDocs: 'Online documentatie',
+    menuCopilotGuide: 'Copilot-gids (MCP)',
   },
   ms: {
+    dlgLoadFailed: 'Gagal memuat tetingkap aplikasi.',
     dlgOpenDoc: 'Buka Dokumen',
     filterWord: 'Dokumen Word',
     dlgSaveAs: 'Simpan Sebagai',
@@ -1683,6 +1835,12 @@ const tMain = createI18n({
     filterImages: 'Imej',
     dlgAddAttachment: 'Tambah Lampiran',
     filterSupported: 'Fail yang Disokong',
+    filterExcel: 'Buku Kerja Excel',
+    filterPpt: 'Persembahan PowerPoint',
+    filterPdf: 'Dokumen PDF',
+    filterMarkdown: 'Dokumen Markdown',
+    filterHtml: 'Dokumen HTML',
+    menuQuit: 'Keluar',
     filterAll: 'Semua Fail',
     dlgExportPdf: 'Eksport sebagai PDF',
     dlgExportHtml: 'Eksport sebagai HTML',
@@ -1754,9 +1912,11 @@ const tMain = createI18n({
     menuWindow: 'Tetingkap',
     menuHelp: 'Bantuan',
     menuShortcuts: 'Pintasan Papan Kekunci',
-    menuDocsHelp: 'Bantuan Airy Docs',
+    menuOnlineDocs: 'Dokumentasi dalam talian',
+    menuCopilotGuide: 'Panduan Copilot (MCP)',
   },
   he: {
+    dlgLoadFailed: 'טעינת חלון היישום נכשלה.',
     dlgOpenDoc: 'פתיחת מסמך',
     filterWord: 'מסמכי Word',
     dlgSaveAs: 'שמירה בשם',
@@ -1778,6 +1938,12 @@ const tMain = createI18n({
     filterImages: 'תמונות',
     dlgAddAttachment: 'הוספת קבצים מצורפים',
     filterSupported: 'קבצים נתמכים',
+    filterExcel: 'חוברות עבודה של Excel',
+    filterPpt: 'מצגות PowerPoint',
+    filterPdf: 'מסמכי PDF',
+    filterMarkdown: 'מסמכי Markdown',
+    filterHtml: 'מסמכי HTML',
+    menuQuit: 'יציאה',
     filterAll: 'כל הקבצים',
     dlgExportPdf: 'ייצוא כ-PDF',
     dlgExportHtml: 'ייצוא כ-HTML',
@@ -1849,9 +2015,11 @@ const tMain = createI18n({
     menuWindow: 'חלון',
     menuHelp: 'עזרה',
     menuShortcuts: 'קיצורי מקלדת',
-    menuDocsHelp: 'עזרה של Airy Docs',
+    menuOnlineDocs: 'תיעוד מקוון',
+    menuCopilotGuide: 'מדריך Copilot (MCP)',
   },
   hi: {
+    dlgLoadFailed: 'ऐप विंडो लोड करने में विफल।',
     dlgOpenDoc: 'दस्तावेज़ खोलें',
     filterWord: 'Word दस्तावेज़',
     dlgSaveAs: 'इस रूप में सहेजें',
@@ -1874,6 +2042,12 @@ const tMain = createI18n({
     filterImages: 'छवियाँ',
     dlgAddAttachment: 'अनुलग्नक जोड़ें',
     filterSupported: 'समर्थित फ़ाइलें',
+    filterExcel: 'Excel वर्कबुक',
+    filterPpt: 'PowerPoint प्रस्तुतियाँ',
+    filterPdf: 'PDF दस्तावेज़',
+    filterMarkdown: 'Markdown दस्तावेज़',
+    filterHtml: 'HTML दस्तावेज़',
+    menuQuit: 'बाहर निकलें',
     filterAll: 'सभी फ़ाइलें',
     dlgExportPdf: 'PDF के रूप में निर्यात करें',
     dlgExportHtml: 'HTML के रूप में निर्यात करें',
@@ -1945,9 +2119,11 @@ const tMain = createI18n({
     menuWindow: 'विंडो',
     menuHelp: 'सहायता',
     menuShortcuts: 'कीबोर्ड शॉर्टकट',
-    menuDocsHelp: 'Airy Docs सहायता',
+    menuOnlineDocs: 'ऑनलाइन दस्तावेज़',
+    menuCopilotGuide: 'Copilot गाइड (MCP)',
   },
   'zh-TW': {
+    dlgLoadFailed: '應用程式視窗載入失敗。',
     dlgOpenDoc: '開啟文件',
     filterWord: 'Word 文件',
     dlgSaveAs: '另存新檔',
@@ -1969,6 +2145,12 @@ const tMain = createI18n({
     filterImages: '圖片',
     dlgAddAttachment: '新增附件',
     filterSupported: '支援的檔案',
+    filterExcel: 'Excel 活頁簿',
+    filterPpt: 'PowerPoint 簡報',
+    filterPdf: 'PDF 文件',
+    filterMarkdown: 'Markdown 文件',
+    filterHtml: 'HTML 文件',
+    menuQuit: '結束',
     filterAll: '所有檔案',
     dlgExportPdf: '匯出為 PDF',
     dlgExportHtml: '匯出為 HTML',
@@ -2039,7 +2221,8 @@ const tMain = createI18n({
     menuWindow: '視窗',
     menuHelp: '說明',
     menuShortcuts: '鍵盤快速鍵',
-    menuDocsHelp: 'Airy Docs 說明',
+    menuOnlineDocs: '線上說明文件',
+    menuCopilotGuide: 'Copilot 指南（MCP）',
   },
 })
 const tm = (key: Parameters<typeof tMain>[1], params?: Parameters<typeof tMain>[2]) =>
@@ -2115,13 +2298,19 @@ function dialogParent(event: IpcMainInvokeEvent): BrowserWindow | undefined {
 }
 
 async function openDialog(event: IpcMainInvokeEvent, options: OpenDialogOptions) {
-  return showOpenDialogWithMemory(dialog, dialogParent(event), options)
+  return showOpenDialogWithMemory(dialog, dialogParent(event), options, undefined, event.sender.id)
 }
 
 async function saveDialog(event: IpcMainInvokeEvent, options: SaveDialogOptions) {
   // before any pick is remembered, bare-name suggestions anchor in the
   // configurable default save folder instead of Electron's Downloads pin
-  return showSaveDialogWithMemory(dialog, dialogParent(event), options, defaultSaveDir())
+  return showSaveDialogWithMemory(
+    dialog,
+    dialogParent(event),
+    options,
+    defaultSaveDir(),
+    event.sender.id,
+  )
 }
 
 /** default folder where new files land on their first (silent) save; shared with the other editors via shell. User-configurable (app-settings.json), falls back to <Documents>/Airy. */
@@ -2142,10 +2331,13 @@ export function uniquePathIn(dir: string, fileName: string): string {
 export function openExternalDocx(filePath: string | null): void {
   if (!filePath || !/\.docx$/i.test(filePath)) return
   const win = BrowserWindow.getFocusedWindow() ?? mainWindow
+  // OS-level open (file association / dock / argv): user-intended — granted
+  // to the renderer that actually loads it (per-sender allowlist)
   if (!rendererReady || !win) {
     pendingOpenPath = filePath
     return
   }
+  grantRendererFileAccess(filePath, win.webContents.id)
   void loadDocx(filePath, win.webContents.id)
     .then((result) => {
       if (!result || win.isDestroyed()) return
@@ -2630,13 +2822,23 @@ function statAttachment(filePath: string): { meta?: AttachmentMeta; error?: stri
   }
 }
 
-function collectAttachments(paths: string[]): AttachmentAddResult {
+function collectAttachments(
+  paths: string[],
+  senderId: number,
+  mayGrant?: (p: string) => boolean,
+): AttachmentAddResult {
   const accepted: AttachmentMeta[] = []
   const rejected: string[] = []
   for (const p of paths) {
     const { meta, error } = statAttachment(p)
-    if (meta) accepted.push(meta)
-    else if (error) rejected.push(error)
+    // accepted = user-chosen attachment: its folder joins the renderer read
+    // allowlist — unconditionally for trusted main-side origins (dialog
+    // picks, pasted temp files), and only with a witnessed user drop/paste
+    // for renderer-named paths (see files:add below)
+    if (meta) {
+      if (!mayGrant || mayGrant(p)) grantRendererFileAccess(p, senderId)
+      accepted.push(meta)
+    } else if (error) rejected.push(error)
   }
   return { accepted, rejected }
 }
@@ -2721,25 +2923,36 @@ const activeAiStreams = new Map<string, AbortController>()
  */
 export function registerAiIpc(): void {
   app.once('before-quit', shutdownCodexAppServers)
+  // decode enc: secrets for every ai-settings.json reader in this process
+  // (ai-search tools used by docs/sheets/markdown/html/pdf alike)
+  registerAiSettingsCodec()
   ipcMain.handle('ai:get-settings', (): AiSettings => {
-    const stored = readJson<Partial<AiSettings> & LegacyAiSettings>(SETTINGS_PATH(), {})
-    const settings = resolveAiSettings(stored, defaultAiSettings())
-    // a stored BYOK provider is honored when usable; half-filled or retired
-    // (retired) selections resolve to 'none' and the UI asks for setup
-    settings.provider = activeProvider(settings)
-    return settings
+    // keys are masked (sk-…abcd): a renderer must never hold every provider's
+    // full secret; ai:set-settings and the stream/chat/test paths overlay the
+    // stored real keys onto masked values
+    return maskedAiSettings()
   })
 
   ipcMain.handle('ai:set-settings', (_event, settings: AiSettings) => {
-    writeJson(SETTINGS_PATH(), settings)
+    saveAiSettings(settings)
   })
 
   ipcMain.handle('ai:codex-models', async (_event, cliPath: unknown) => {
+    // The path is renderer-supplied: reject non-codex executables up front so a
+    // compromised renderer cannot ask the main process to spawn an arbitrary
+    // binary (resolveCodexCliPath re-checks before anything is spawned).
+    if (typeof cliPath === 'string' && cliPath.trim() && !isCodexCliCandidatePath(cliPath)) {
+      throw new Error(
+        'Custom Codex CLI path rejected: the executable must be named codex (codex.exe/.cmd/.bat on Windows).',
+      )
+    }
     return listCodexModels(typeof cliPath === 'string' ? cliPath : undefined)
   })
 
   ipcMain.handle('ai:stream', async (event, request: AiStreamRequest) => {
-    const { requestId, settings, system, messages } = request
+    // the renderer only ever saw masked keys — restore the stored real ones
+    const { requestId, system, messages } = request
+    const settings = overlayRealAiSecrets(request.settings)
     const tools = request.tools ?? []
     const maxTokens = request.maxTokens ?? maxOutputTokensOf(settings)
     const provider = settings.provider
@@ -2878,7 +3091,8 @@ export function registerAiIpc(): void {
   ipcMain.handle('ai:search-test', (_event, input: unknown) => {
     const { provider, apiKey } = (input ?? {}) as { provider?: AiSearchProviderId; apiKey?: string }
     if (!provider) return { ok: false, error: 'No search provider selected' }
-    return testSearchProvider(provider, String(apiKey ?? ''))
+    // masked/empty key from the settings UI → stored real key
+    return testSearchProvider(provider, realSearchApiKey(provider, String(apiKey ?? '')))
   })
 
   // settings-UI connection test for the media provider
@@ -2889,11 +3103,13 @@ export function registerAiIpc(): void {
     }
     if (!provider) return { ok: false, error: 'No media provider selected' }
     if (!config) return { ok: false, error: 'No media provider configuration' }
-    return testMediaProvider(provider, config)
+    return testMediaProvider(provider, realMediaApiKey(provider, config))
   })
 
   ipcMain.handle('ai:chat', async (_event, request: AiChatRequest) => {
-    const { settings, system, user } = request
+    const { system, user } = request
+    // masked keys from the renderer → stored real keys for the test request
+    const settings = overlayRealAiSecrets(request.settings)
     const provider = settings.provider
     const config = settings.providers?.[provider]
     if (provider === 'none') return { ok: false, error: NO_PROVIDER_ERROR }
@@ -3116,11 +3332,6 @@ export function registerProjectIpc(): void {
   ipcMain.handle('project:moveFile', (_event, args: { filePath: string; projectId: string }) => {
     getProjectStore().moveFileToProject(args.filePath, args.projectId)
   })
-
-  /** Get the project timeline */
-  ipcMain.handle('project:timeline', (_event, args: { projectId: string; limit?: number }) => {
-    return getProjectStore().getProjectTimeline(args.projectId, args.limit ?? 20)
-  })
 }
 
 /** document/attachment/window IPC (everything except the AI proxy above) */
@@ -3139,16 +3350,41 @@ export function registerDocsIpc(): void {
   )
 
   ipcMain.handle('docs:open', async (event) => {
+    // In the shell, File > Open offers every document type (like Home's
+    // browse); standalone keeps the Word-only filter.
+    const filters = docsOpenPathRouter
+      ? [
+          { name: tm('filterSupported'), extensions: [...ALL_OPEN_EXTENSIONS] },
+          { name: tm('filterWord'), extensions: [...OPEN_EXTENSION_GROUPS.word] },
+          { name: tm('filterExcel'), extensions: [...OPEN_EXTENSION_GROUPS.excel] },
+          { name: tm('filterPpt'), extensions: [...OPEN_EXTENSION_GROUPS.ppt] },
+          { name: tm('filterPdf'), extensions: [...OPEN_EXTENSION_GROUPS.pdf] },
+          { name: tm('filterMarkdown'), extensions: [...OPEN_EXTENSION_GROUPS.markdown] },
+          { name: tm('filterHtml'), extensions: [...OPEN_EXTENSION_GROUPS.html] },
+        ]
+      : [{ name: tm('filterWord'), extensions: ['docx'] }]
     const result = await openDialog(event, {
       title: tm('dlgOpenDoc'),
-      filters: [{ name: tm('filterWord'), extensions: ['docx'] }],
+      filters,
       properties: ['openFile'],
     })
     if (result.canceled || result.filePaths.length === 0) return null
-    return loadDocx(result.filePaths[0], event.sender.id)
+    const picked = result.filePaths[0]
+    // another editor's file: the shell routes it to the right tab
+    if (docsOpenPathRouter && !/\.docx$/i.test(picked)) {
+      docsOpenPathRouter(picked)
+      return null
+    }
+    return loadDocx(picked, event.sender.id)
   })
 
-  ipcMain.handle('docs:open-path', (event, filePath: string) => loadDocx(filePath, event.sender.id))
+  // renderer-named path: only files inside a granted directory (dialog pick,
+  // shell-routed open, pending open queued by main) may be parsed
+  ipcMain.handle('docs:open-path', (event, filePath: string) =>
+    typeof filePath === 'string' && rendererMayReadPath(event.sender.id, filePath)
+      ? loadDocx(filePath, event.sender.id)
+      : null,
+  )
 
   // Review > Protect > Encrypt with Password: set/clear the open password.
   // Takes effect on the next save (docs:save / save-as / save-new all consult the store).
@@ -3441,9 +3677,18 @@ export function registerDocsIpc(): void {
       createAiDocument(request),
   )
 
-  ipcMain.handle('docs:recent', () =>
-    readJson<string[]>(RECENT_PATH(), []).filter((p) => existsSync(p)),
-  )
+  ipcMain.handle('docs:recent', (event) => {
+    // recents are the user's own documents: serving them also (re)grants
+    // their folders to the asking renderer so docs:open-path works for last
+    // session's files. The grant makes the channel privileged — any
+    // webContents in this shared process could otherwise enumerate recents
+    // and self-grant their folders — so only docs renderers may ask
+    // (same membership check as win:new)
+    if (!isDocsRenderer(event.sender.id)) throw new Error('Untrusted IPC sender.')
+    const recent = readJson<string[]>(RECENT_PATH(), []).filter((p) => existsSync(p))
+    for (const p of recent) grantRendererFileAccess(p, event.sender.id)
+    return recent
+  })
 
   ipcMain.handle('docs:pick-image', async (event) => {
     const result = await openDialog(event, {
@@ -3473,15 +3718,31 @@ export function registerDocsIpc(): void {
       properties: ['openFile', 'multiSelections'],
     })
     if (result.canceled || result.filePaths.length === 0) return null
-    return collectAttachments(result.filePaths)
+    return collectAttachments(result.filePaths, event.sender.id)
   })
 
-  ipcMain.handle('files:add', (_event, paths: string[]) => collectAttachments(paths))
+  // Witnessed drops/pastes feed the files:add grant policy (preload-world
+  // listeners only — page code cannot forge these records)
+  ipcMain.on(WITNESS_DROP_CHANNEL, (event, paths: unknown) =>
+    recordWitnessedDrops(event.sender.id, paths),
+  )
+
+  ipcMain.handle('files:add', (event, raw: unknown): AttachmentAddResult => {
+    // same shape policy as sheets' zod gate: a bounded list of non-empty,
+    // bounded strings — anything else processes nothing (fail closed)
+    const paths = parseAttachmentPaths(raw)
+    if (!paths) return { accepted: [], rejected: [] }
+    // renderer-named paths grant only when really dropped/pasted into this
+    // renderer or already inside a granted directory
+    return collectAttachments(paths, event.sender.id, (p) =>
+      mayGrantAttachmentRead(event.sender.id, p),
+    )
+  })
 
   ipcMain.handle(
     'files:read',
     async (
-      _event,
+      event,
       filePath: string,
       offset: number,
       maxChars: number,
@@ -3492,6 +3753,9 @@ export function registerDocsIpc(): void {
       if (ATTACHMENT_IMAGE_EXTS.has(ext)) {
         return { ok: false, error: tm('errImageNoText') }
       }
+      // only attachments from granted directories (see collectAttachments)
+      if (!rendererMayReadPath(event.sender.id, filePath))
+        return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
       try {
         const text = await extractAttachmentText(filePath)
         const start = Math.max(0, Math.floor(offset) || 0)
@@ -3510,11 +3774,14 @@ export function registerDocsIpc(): void {
   )
 
   // image attachments read raw bytes → base64; AiPanel puts them into the user message's images for multimodal
-  ipcMain.handle('files:read-image', (_event, filePath: string): AttachmentImageResult => {
+  ipcMain.handle('files:read-image', (event, filePath: string): AttachmentImageResult => {
     const name = basename(filePath)
     const ext = name.split('.').pop()?.toLowerCase() ?? ''
     const mime = ATTACHMENT_IMAGE_MIME[ext]
     if (!mime) return { ok: false, error: `${name}: ${tm('errNotImage')}` }
+    // only attachments from granted directories (see collectAttachments)
+    if (!rendererMayReadPath(event.sender.id, filePath))
+      return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
     try {
       const stat = statSync(filePath)
       if (stat.size > ATTACHMENT_IMAGE_MAX_BYTES) {
@@ -3529,10 +3796,10 @@ export function registerDocsIpc(): void {
   // clipboard-pasted images (screenshots and other bitmaps with no local path): saved to a temp file then use the regular attachment path
   ipcMain.handle(
     'files:add-pasted-image',
-    (_event, data: unknown, ext: unknown): AttachmentAddResult => {
+    (event, data: unknown, ext: unknown): AttachmentAddResult => {
       const filePath = savePastedImage(data, ext)
       return filePath
-        ? collectAttachments([filePath])
+        ? collectAttachments([filePath], event.sender.id)
         : { accepted: [], rejected: [tm('errNotImage')] }
     },
   )
@@ -3727,7 +3994,12 @@ export function registerDocsIpc(): void {
     },
   )
 
-  ipcMain.handle('win:new', (_event, openPath: string | null) => {
+  ipcMain.handle('win:new', (event, openPath: string | null) => {
+    // process-global channel: only docs renderers may spawn docs tabs or
+    // windows (the ribbon's New Tab button is the only caller); the shell's
+    // openTab hook routes a renderer-named path through the same
+    // grant+dedupe confinement an OS-level open uses
+    if (!isDocsRenderer(event.sender.id)) throw new Error('Untrusted IPC sender.')
     // A pathless new tab/window starts as a blank document, not the start screen
     const path = openPath ?? undefined
     if (shellHooks) shellHooks.openTab(path, path ? undefined : { newBlank: true })
@@ -3775,6 +4047,16 @@ interface DocsShellHooks {
 let shellHooks: DocsShellHooks | null = null
 export function setDocsShellHooks(hooks: DocsShellHooks | null): void {
   shellHooks = hooks
+}
+
+/**
+ * Shell-mode File > Open routing: when the suite-wide open dialog (all
+ * document types) picks a non-.docx file, hand it to the shell's extension
+ * router instead of failing to parse it here. Null in standalone mode.
+ */
+let docsOpenPathRouter: ((path: string) => boolean) | null = null
+export function setDocsOpenPathRouter(fn: ((path: string) => boolean) | null): void {
+  docsOpenPathRouter = fn
 }
 
 /** After writing an exported/AI-generated file: open it in the right tab
@@ -3883,6 +4165,14 @@ export function setDocsExtraFileMenuItems(items: MenuItemConstructorOptions[]): 
   extraFileMenuItems = items
 }
 
+/** shell-injected File-menu head items (the suite's New submenu) — Office
+ *  convention puts New before Open */
+let fileMenuHeadItems: MenuItemConstructorOptions[] = []
+
+export function setDocsFileMenuHeadItems(items: MenuItemConstructorOptions[]): void {
+  fileMenuHeadItems = items
+}
+
 /** Shell-installed gate: inside the shell the docs menu may only take over the
  * application menu while a docs tab is active — internal rebuilds (pushRecent
  * after opening/saving any file) must not clobber another tab's menu.
@@ -3941,12 +4231,22 @@ export function buildDocsMenu(): void {
             else markDocsNewBlank(createDocsWindow().webContents.id)
           },
         },
+        // the suite's New submenu stays before Open (Office convention)
+        ...(fileMenuHeadItems.length > 0
+          ? [{ type: 'separator' as const }, ...fileMenuHeadItems]
+          : []),
         { label: tm('menuOpen'), accelerator: 'CmdOrCtrl+O', click: () => sendCommand('open') },
         { label: tm('menuOpenRecent'), submenu: recentSubmenu },
         ...(extraFileMenuItems.length > 0
           ? [{ type: 'separator' as const }, ...extraFileMenuItems]
           : []),
         { type: 'separator' },
+        { label: tm('menuSave'), accelerator: 'CmdOrCtrl+S', click: () => sendCommand('save') },
+        {
+          label: tm('menuSaveAs'),
+          accelerator: 'Shift+CmdOrCtrl+S',
+          click: () => sendCommand('save-as'),
+        },
         shellHooks
           ? {
               label: tm('menuClose'),
@@ -3954,12 +4254,6 @@ export function buildDocsMenu(): void {
               click: () => shellHooks?.closeActiveTab(),
             }
           : { role: 'close' as const, label: tm('menuClose') },
-        { label: tm('menuSave'), accelerator: 'CmdOrCtrl+S', click: () => sendCommand('save') },
-        {
-          label: tm('menuSaveAs'),
-          accelerator: 'Shift+CmdOrCtrl+S',
-          click: () => sendCommand('save-as'),
-        },
         { type: 'separator' },
         { label: tm('menuPageSetup'), click: () => sendCommand('page-setup') },
         { label: tm('menuExportPdf'), click: () => sendCommand('export-pdf') },
@@ -3971,6 +4265,10 @@ export function buildDocsMenu(): void {
           // printed sheet is exactly one editor page (WYSIWYG), then invokes docs:print
           click: () => sendCommand('print'),
         },
+        // macOS gets Quit from the app menu; Ctrl/Cmd+Q must quit everywhere
+        ...(process.platform === 'darwin'
+          ? []
+          : [{ type: 'separator' as const }, { role: 'quit' as const, label: tm('menuQuit') }]),
       ],
     },
     {
@@ -4110,7 +4408,8 @@ export function buildDocsMenu(): void {
           click: () => sendCommand('shortcuts'),
         },
         { type: 'separator' },
-        { label: tm('menuDocsHelp'), enabled: false },
+        { label: tm('menuOnlineDocs'), click: () => void openHelpUrl(DOCS_README_URL) },
+        { label: tm('menuCopilotGuide'), click: () => void openHelpUrl(COPILOT_GUIDE_URL) },
       ],
     },
   ]
@@ -4154,6 +4453,11 @@ export function createDocsWindow(openPath?: string): BrowserWindow {
   // captured up front: webContents is already destroyed inside the 'closed' handler
   const webContentsId = win.webContents.id
   if (openPath) pendingWindowOpens.set(webContentsId, openPath)
+  trackDocsRenderer(webContentsId)
+  win.webContents.once('destroyed', () => {
+    untrackDocsRenderer(webContentsId)
+    forgetRendererFileAccess(webContentsId)
+  })
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     const target = safeExternalUrl(url)
@@ -4161,11 +4465,23 @@ export function createDocsWindow(openPath?: string): BrowserWindow {
     return { action: 'deny' }
   })
 
-  if (runtime.rendererUrl) {
-    void win.loadURL(runtime.rendererUrl)
-  } else {
-    void win.loadFile(runtime.rendererFile)
-  }
+  // A rejected load must not escape as an unhandled rejection: surface it
+  // (parented async dialog — same pattern as the shell's error dialog).
+  const winLoad = runtime.rendererUrl
+    ? win.loadURL(runtime.rendererUrl)
+    : win.loadFile(runtime.rendererFile)
+  winLoad.catch((err: unknown) => {
+    console.error('[docs] window load failed:', err)
+    if (!win.isDestroyed()) {
+      void dialog
+        .showMessageBox(win, {
+          type: 'error',
+          message: tm('dlgLoadFailed'),
+          detail: err instanceof Error ? err.message : String(err),
+        })
+        .catch(() => undefined)
+    }
+  })
   // close guard for standalone-window mode (tab mode goes through the same flow via the shell's tab-manager/window-close path)
   let closeConfirmed = false
   win.on('close', (event) => {
@@ -4388,15 +4704,22 @@ export function createDocsView(openPath?: string): WebContentsView {
     // append via URL so a dev URL that already carries query params stays valid
     const devUrl = new URL(runtime.rendererUrl)
     devUrl.searchParams.set('mode', 'tab')
-    void view.webContents.loadURL(devUrl.toString())
+    voidLoad(view.webContents.loadURL(devUrl.toString()), 'docs tab renderer')
   } else {
-    void view.webContents.loadFile(runtime.rendererFile, { query: { mode: 'tab' } })
+    voidLoad(
+      view.webContents.loadFile(runtime.rendererFile, { query: { mode: 'tab' } }),
+      'docs tab renderer',
+    )
   }
   // view.webContents becomes undefined after destroy, so grab the id beforehand
   const wcId = view.webContents.id
+  trackDocsRenderer(wcId)
   view.webContents.once('destroyed', () => {
     pendingWindowOpens.delete(wcId)
+    untrackDocsRenderer(wcId)
     dropDocWriter(wcId)
+    forgetWitnessedDrops(wcId)
+    forgetRendererFileAccess(wcId)
     closeCheckWaiters.get(wcId)?.({ dirty: false, autoSave: false })
     closeCheckWaiters.delete(wcId)
     closeSaveWaiters.get(wcId)?.(false)

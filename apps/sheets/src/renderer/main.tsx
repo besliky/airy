@@ -1,5 +1,5 @@
 import ReactDOM from 'react-dom/client'
-import { htmlLang, type Lang } from '@airy-office/i18n'
+import { htmlDir, htmlLang, type Lang } from '@airy-office/i18n'
 import { applyAiPanelPrefs, installScreenTips } from '@airy-office/ui'
 
 import '@airy-office/ui/tokens.css'
@@ -68,6 +68,7 @@ async function bootstrap(): Promise<void> {
   }
   setModuleLang(lang)
   document.documentElement.lang = htmlLang(lang)
+  document.documentElement.dir = htmlDir(lang)
   applyTheme(theme)
   await loadCellFonts()
   window.desktopApi?.onThemeChanged(applyTheme)

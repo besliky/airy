@@ -43,6 +43,9 @@ export interface AutoSaveDefault {
   updatedAt: number
 }
 
+/** whether the Copilot live bridge (local socket for coding agents via MCP) starts */
+export type LiveBridgeEnabled = boolean
+
 /** a recent file entry shown on the home screen; type derives from the extension */
 export interface RecentEntry {
   path: string
@@ -133,6 +136,20 @@ export interface HomeApi {
   getAutoSaveDefault(): Promise<AutoSaveDefault>
   /** persist the AutoSave default; broadcasts 'app:auto-save-default-changed' to all web contents */
   setAutoSaveDefault(on: boolean): Promise<void>
+  /** whether the Copilot live bridge server runs (persisted in userData/app-settings.json, default on) */
+  getLiveBridgeEnabled(): Promise<LiveBridgeEnabled>
+  /** persist and start/stop the live bridge immediately; resolves the effective state */
+  setLiveBridgeEnabled(on: boolean): Promise<LiveBridgeEnabled>
+  /** whether AIRY_DISABLE_BRIDGE=1 pins the bridge off regardless of the preference */
+  getLiveBridgeEnvDisabled(): Promise<boolean>
+  /** whether the previous session's tabs reopen on launch (persisted in userData/app-settings.json, default on) */
+  getRestoreSession(): Promise<boolean>
+  /** persist the session-restore preference (applies on the next launch) */
+  setRestoreSession(on: boolean): Promise<void>
+  /** author display name for comments and tracked changes (persisted in userData/app-settings.json; '' = unset, editors use their default) */
+  getAuthorName(): Promise<string>
+  /** sanitize + persist the author name; broadcasts 'app:author-name-changed' to all web contents; resolves the stored name */
+  setAuthorName(name: string): Promise<string>
   /** AI panel text size + chat-input spellcheck (persisted in userData/app-settings.json) */
   getAiPanelPrefs(): Promise<AiPanelPrefs>
   /** merge + persist; broadcasts 'app:ai-panel-prefs-changed' to all web contents */
@@ -213,16 +230,6 @@ export interface ProjectSummaryEntry {
   isDefault: boolean
 }
 
-export interface TimelineEntryItem {
-  filePath: string
-  fileName: string
-  chatId: string
-  ts: string
-  role: 'user' | 'assistant'
-  preview: string
-  seq: number
-}
-
 export interface ProjectHomeApi {
   /** list all projects (with file count + last-active time) */
   listProjects(): Promise<ProjectSummaryEntry[]>
@@ -236,8 +243,6 @@ export interface ProjectHomeApi {
   deleteProject(id: string): Promise<void>
   /** move a file into the given project */
   moveFile(filePath: string, projectId: string): Promise<void>
-  /** fetch the project timeline */
-  getTimeline(projectId: string, limit?: number): Promise<TimelineEntryItem[]>
 }
 
 export const HOME_CHANNELS = {
@@ -259,6 +264,9 @@ export const HOME_CHANNELS = {
   duplicateFile: 'home:duplicate-file',
   deleteFiles: 'home:delete-files',
   openTrash: 'home:open-trash',
+  /// fire-and-forget: the crashed-Home error page's Reload button (data: URL
+  /// page — it cannot reach any other API surface)
+  crashReload: 'home:crash-reload',
   getLanguage: 'home:get-language',
   setLanguage: 'home:set-language',
   getAppVersion: 'home:get-app-version',
@@ -268,6 +276,13 @@ export const HOME_CHANNELS = {
   setTheme: 'home:set-theme',
   getAutoSaveDefault: 'home:get-auto-save-default',
   setAutoSaveDefault: 'home:set-auto-save-default',
+  getLiveBridgeEnabled: 'home:get-live-bridge-enabled',
+  setLiveBridgeEnabled: 'home:set-live-bridge-enabled',
+  getLiveBridgeEnvDisabled: 'home:get-live-bridge-env-disabled',
+  getRestoreSession: 'home:get-restore-session',
+  setRestoreSession: 'home:set-restore-session',
+  getAuthorName: 'home:get-author-name',
+  setAuthorName: 'home:set-author-name',
   getAiPanelPrefs: 'home:get-ai-panel-prefs',
   setAiPanelPrefs: 'home:set-ai-panel-prefs',
   getDefaultSaveDir: 'home:get-default-save-dir',
@@ -285,5 +300,4 @@ export const PROJECT_CHANNELS = {
   rename: 'project:rename',
   delete: 'project:delete',
   moveFile: 'project:moveFile',
-  timeline: 'project:timeline',
 } as const

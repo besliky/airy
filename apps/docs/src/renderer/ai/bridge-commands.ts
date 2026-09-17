@@ -4,7 +4,12 @@
 // for insert_content/apply_ops (one ProseMirror transaction each, same
 // stale-guard and tracked-changes behavior), and the AI panel's snapshot
 // rollback for undo. One bridge call = one "turn"; undo reverts exactly the
-// last turn and refuses when the user has edited since.
+// last turn and refuses when the user has edited since. Turns are stamped
+// with the calling bridge connection's id: the automatic rollback after a
+// failed turn (params.ownTurnsOnly) only reverts the requester's OWN turn —
+// with two copilot clients on one document it must never silently revert the
+// other client's edit (that is a turn_owned_by_other error instead; an
+// explicit undo stays allowed and reports whose turn it reverted).
 import type { Editor, JSONContent } from '@tiptap/core'
 import type { Node as PmNode } from '@tiptap/pm/model'
 import { BLANK_BULLET_NUM_ID, BLANK_ORDERED_NUM_ID, type Block } from '@airy-office/docx-engine'
@@ -50,6 +55,8 @@ interface BridgeTurn {
   before: JSONContent
   /** the doc node right after the mutation — undo only runs while it is still current */
   afterDoc: PmNode
+  /** id of the bridge connection that made the turn (turn ownership) */
+  owner: string
 }
 
 const fail = (code: string, message: string): BridgeCommandResult => ({
@@ -73,11 +80,22 @@ function executionError(exec: ToolExecution): BridgeCommandResult {
 /**
  * Build the per-tab bridge command handler. The handler owns one slot of
  * bridge-undo state; App.tsx keeps a single instance alive per document.
+ *
+ * `clientId` is the calling bridge connection's identity (stamped by the
+ * shell's bridge server, one per socket). Callers without one — the embedded
+ * AI panel context, tests, older preloads — share the 'unknown' identity,
+ * which matches the previous single-client behavior.
  */
 export function createBridgeCommandHandler(
   deps: BridgeCommandDeps,
-): (method: string, params: Record<string, unknown>) => Promise<BridgeCommandResult> {
+): (
+  method: string,
+  params: Record<string, unknown>,
+  clientId?: string,
+) => Promise<BridgeCommandResult> {
   let lastTurn: BridgeTurn | null = null
+  const connectionId = (clientId?: string): string =>
+    typeof clientId === 'string' && clientId !== '' ? clientId : 'unknown'
 
   const track = (): { author: string } | undefined =>
     (deps.isTrackChangesOn?.() ?? persistedTrackChanges())
@@ -111,7 +129,7 @@ export function createBridgeCommandHandler(
     )
   }
 
-  return async (method, params) => {
+  return async (method, params, clientId) => {
     if (
       method !== 'get_context' &&
       method !== 'apply_ops' &&
@@ -148,6 +166,17 @@ export function createBridgeCommandHandler(
           'the document changed since the last bridge turn; undoing would discard those edits — fetch fresh context before editing',
         )
       }
+      const caller = connectionId(clientId)
+      // the automatic rollback after a failed turn may only revert the
+      // requester's OWN turn: with several copilot clients connected, the
+      // last turn may belong to another client and reverting it silently
+      // would destroy their edit while reporting "back at its pre-call state"
+      if (params.ownTurnsOnly === true && turn.owner !== caller) {
+        return fail(
+          'turn_owned_by_other',
+          `the last bridge turn belongs to another copilot client (${turn.owner}); the automatic rollback refuses to revert it — undo without ownTurnsOnly to revert it intentionally`,
+        )
+      }
       const run = editor
         .chain()
         .setMeta(TABLE_TRAILING_SKIP, true)
@@ -157,7 +186,16 @@ export function createBridgeCommandHandler(
       if (!run) return fail('internal', 'undo failed to apply the pre-turn snapshot')
       // the rewound doc is the new freshness baseline for the client
       markDocSeen(editor)
-      return { ok: true, result: { undone: true } }
+      // an explicit undo may legitimately revert another client's turn (the
+      // user asked for it) — the result says whose turn it was
+      const revertedOther = turn.owner !== caller
+      return {
+        ok: true,
+        result: {
+          undone: true,
+          ...(revertedOther ? { revertedTurnOf: turn.owner, anotherClient: true } : {}),
+        },
+      }
     }
 
     // mutating commands: snapshot first so one undo reverts the whole turn
@@ -166,13 +204,18 @@ export function createBridgeCommandHandler(
       method === 'insert_content'
         ? await runTool(editor, state, 'insert_content', {
             html: String(params.html ?? ''),
+            // the bridge contract (live_apply_ops) inserts at the END of the
+            // document so block indexes from get_context stay valid — the
+            // embedded pipeline's cursor default only applies to panel
+            // callers, which pass their own afterBlockIndex
             ...(params.afterBlockIndex !== undefined
               ? { afterBlockIndex: params.afterBlockIndex }
-              : {}),
+              : { afterBlockIndex: editor.state.doc.childCount - 1 }),
           })
         : await runTool(editor, state, 'apply_ops', { ops: params.ops })
     if (exec.isError) return executionError(exec)
-    if (exec.mutated) lastTurn = { before, afterDoc: editor.state.doc }
+    if (exec.mutated)
+      lastTurn = { before, afterDoc: editor.state.doc, owner: connectionId(clientId) }
     return { ok: true, result: exec.output }
   }
 }

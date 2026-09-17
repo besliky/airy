@@ -299,8 +299,6 @@ export const ko = {
   appFormulaTooExpensive:
     '이 수식은 큰 범위를 요소마다 평가하므로 계산으로 앱이 멈춥니다 — 취소되었습니다. 참조 범위를 줄인 뒤 다시 시도하세요.',
   appPivotSheetNoStructural: '이 시트에는 피벗 테이블이 있어 아직 구조 변경을 지원하지 않습니다.',
-  appDeleteSpanFormulas:
-    '삭제할 행/열만 참조하는 수식이 있습니다 — 먼저 해당 수식을 수정하거나 삭제하세요.',
   appIconSetUnsupported:
     '이 아이콘 조합은 xlsx로 저장할 수 없습니다. 다른 아이콘 집합을 선택하세요.',
   appNeedFullLoadSort:
@@ -630,6 +628,8 @@ export const ko = {
   appSheetStillIndexing: '시트의 인덱스를 만드는 중입니다 — 잠시 후 다시 시도하십시오.',
   // Print (export PDF)
   appPrintNothing: '이 시트에는 인쇄할 내용이 없습니다.',
+  appPrintFailed: '인쇄 실패: {error}',
+  appPrintPreviewFailed: '인쇄 미리보기를 생성할 수 없습니다.',
   appPrintTooLarge:
     '인쇄 범위가 너무 큽니다 — 페이지 레이아웃 탭에서 더 작은 인쇄 영역을 설정하십시오.',
   appPrintBadArea: '인쇄 영역 "{area}"이(가) 잘못되었습니다.',
@@ -657,6 +657,16 @@ export const ko = {
   appApply: '적용',
   // Ribbon tabs
   appTabHome: '홈',
+  appRibbonTabs: '리본 탭',
+  appWorkbookCommands: '통합 문서 명령',
+  appOpenDropdown: '드롭다운 열기',
+  appFileTab: '파일',
+  appFileOpen: '통합 문서 열기',
+  appFileSave: '저장',
+  appFileSaveAs: '다른 이름으로 저장',
+  appFileExportPdf: 'PDF로 내보내기…',
+  appFileExportCsv: 'CSV로 내보내기…',
+  appFilePrint: '인쇄…',
   appTabInsert: '삽입',
   appTabPageLayout: '페이지 레이아웃',
   appTabFormulas: '수식',
@@ -1350,4 +1360,27 @@ export const ko = {
   appFindTitle: '찾기 및 선택 ⌘F',
   appReplace: '바꾸기',
   appGoTo: '이동',
+  scTitle: '키보드 바로 가기',
+  scFilter: '바로 가기 검색…',
+  scNone: '일치하는 바로 가기가 없습니다.',
+  scGroupFile: '파일',
+  scGroupWorkbook: '통합 문서',
+  scGroupSelection: '선택 영역',
+  scOpen: '열기…',
+  scSave: '저장',
+  scSaveAs: '다른 이름으로 저장…',
+  scPrint: '인쇄',
+  scUndo: '실행 취소',
+  scRedo: '다시 실행',
+  scNextSheet: '다음 시트',
+  scPrevSheet: '이전 시트',
+  scFirstCell: '첫 셀(A1)',
+  scLastUsedCell: '마지막 사용 셀',
+  scRowStart: '행 시작',
+  scSelectColumn: '전체 열 선택',
+  scSelectRow: '전체 행 선택',
+  scHideRows: '행 숨기기',
+  scUnhideRows: '행 표시',
+  scHideColumns: '열 숨기기',
+  scUnhideColumns: '열 표시',
 } satisfies Record<keyof typeof zh, string>

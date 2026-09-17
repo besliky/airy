@@ -26,7 +26,7 @@
   color: var(--text);
   font-family: inherit;
   font-size: 12px;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 
@@ -96,7 +96,7 @@
   padding: 5px 6px;
   font-family: inherit;
   font-size: 12px;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 

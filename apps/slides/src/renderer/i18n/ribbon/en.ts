@@ -5,6 +5,7 @@ export const en = {
   ribbonAiRewriteConfirm:
     'This action calls the AI assistant: it consumes credits and may rewrite the entire content. Continue? (You will not be asked again.)',
   ribbonTabFile: 'File',
+  ribbonTabsLabel: 'Ribbon tabs',
   ribbonTabHome: 'Home',
   ribbonTabInsert: 'Insert',
   ribbonTabDraw: 'Draw',

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Slice } from '@tiptap/pm/model'
-import { setToastEmitter, type ToastData } from '../src/renderer/components/toast-bus'
+import { setToastEmitter, type ToastData } from '@airy-office/ui/toast-bus'
 import { strings } from '../src/renderer/i18n/strings'
 
 // Undestroyed views leave DOMObserver flush timers that fire after jsdom teardown
