@@ -2,7 +2,7 @@
 // insert_content, apply_ops semantics (validation-forward, atomicity),
 // byte-preservation, mtime fencing and path confinement.
 import { mkdtemp, readFile, writeFile, rm, mkdir } from 'node:fs/promises'
-import { symlinkSync } from 'node:fs'
+import { readdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -10,7 +10,7 @@ import JSZip from 'jszip'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { DocxSession, FencingError } from '../src/docx/session.js'
-import { resolveConfined } from '../src/docx/paths.js'
+import { resolveConfined, WORKSPACE_ROOT_ENV } from '../src/docx/paths.js'
 import { parseRestrictedHtml, blocksToHtml } from '../src/docx/html.js'
 import { buildFixtureDocx } from './helpers/docx-fixture.js'
 
@@ -395,6 +395,50 @@ describe('path confinement', () => {
     }
   })
 
+  it('rejects a save-as to a NEW file through an out-pointing directory symlink', async () => {
+    // the escape target directory must exist: the confinement check resolves
+    // the deepest existing ancestor, so only a live link can pin the tail
+    // outside the root
+    const outsideDir = join(root, '..', 'airy-outside-new')
+    await mkdir(outsideDir)
+    try {
+      symlinkSync(outsideDir, join(root, 'escape'), 'dir')
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === 'EPERM' || code === 'EACCES') return
+      throw e
+    }
+    try {
+      // the candidate file itself does not exist — the lexical fallback would
+      // let it pass; the ancestor walk must catch the out-pointing link
+      expect(() => resolveConfined('escape/new.docx', root)).toThrow(/outside the workspace root/)
+      expect(() => resolveConfined(join(root, 'escape', 'new.docx'), root)).toThrow(
+        /outside the workspace root/,
+      )
+      // end to end: a save-as through the link refuses and writes nothing outside
+      const session = await openSession()
+      await expect(session.save(join(root, 'escape', 'new.docx'))).rejects.toThrow(
+        /outside the workspace root/,
+      )
+      expect(readdirSync(outsideDir)).toEqual([])
+      await expect(readFile(join(outsideDir, 'new.docx'))).rejects.toThrow(/ENOENT/)
+    } finally {
+      await rm(outsideDir, { recursive: true, force: true })
+    }
+  })
+  it('allows a fresh in-root save-as: nested dirs and deep missing chains', async () => {
+    const session = await openSession()
+    session.insertContent('<p>fresh</p>', 0)
+    // an existing subdirectory with a new file inside stays allowed
+    await mkdir(join(root, 'sub'), { recursive: true })
+    const nested = await session.save(join(root, 'sub', 'new.docx'))
+    expect(nested.path).toBe(join(root, 'sub', 'new.docx'))
+    // a deep chain where only the root exists resolves back inside it (allowed)
+    const deep = join(root, 'a', 'b', 'c', 'new.docx')
+    expect(resolveConfined(deep, root)).toBe(deep)
+    await expect(session.save(deep)).resolves.toMatchObject({ path: deep })
+  })
+
   it('keeps symlinks usable when they resolve back inside the root', async () => {
     const inner = join(root, 'inner')
     await mkdir(inner)
@@ -409,6 +453,41 @@ describe('path confinement', () => {
     // opening through the in-root alias works and addresses the real file
     const session = await DocxSession.open(join(root, 'alias', 'real.docx'), root)
     expect(session.meta().blockCount).toBe(7)
+  })
+
+  it('keeps save-as working through a symlink-spelled AIRY_WORKSPACE_ROOT', async () => {
+    const realRoot = await mkdtemp(join(tmpdir(), 'airy-docx-real-'))
+    const link = join(root, 'rootlink')
+    try {
+      symlinkSync(realRoot, link, 'dir')
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === 'EPERM' || code === 'EACCES') {
+        await rm(realRoot, { recursive: true, force: true })
+        return
+      }
+      throw e
+    }
+    const previous = process.env[WORKSPACE_ROOT_ENV]
+    process.env[WORKSPACE_ROOT_ENV] = link
+    try {
+      // the physical root and the env-spelled root differ; before the
+      // deepest-ancestor fix every fresh save-as under the link was refused
+      // (physical root vs lexical candidate failed the prefix check)
+      await writeFile(join(realRoot, 'doc.docx'), await buildFixtureDocx())
+      const session = await DocxSession.open('doc.docx')
+      session.insertContent('<p>fresh</p>', 0)
+      const saved = await session.save(join(link, 'nested', 'fresh.docx'))
+      expect(saved.path).toBe(join(link, 'nested', 'fresh.docx'))
+      // a path outside the link's target still refuses
+      await expect(session.save(join(root, 'escape.docx'))).rejects.toThrow(
+        /outside the workspace root/,
+      )
+    } finally {
+      if (previous === undefined) delete process.env[WORKSPACE_ROOT_ENV]
+      else process.env[WORKSPACE_ROOT_ENV] = previous
+      await rm(realRoot, { recursive: true, force: true })
+    }
   })
 
   it('folds case in the confinement compare on Windows-like platforms', () => {
