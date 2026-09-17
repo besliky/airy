@@ -7,13 +7,17 @@ import type { ElectronApplication, Page } from '@playwright/test'
 import { launchShell, closeAndSaveVideo, waitForPageWithUrl } from './helpers'
 
 /**
- * README showcase screenshots. Regenerate with:
+ * README showcase screenshots. Regenerate the committed PNGs with:
  *   npm run build:all && npm run fixtures -w @airy-office/sheets
- *   npm run test:e2e -- screenshots
+ *   UPDATE_SCREENSHOTS=1 npm run test:e2e -- screenshots
  * Captured at a fixed 1440x900 window and 2x device scale for crispness,
  * light theme (the default), and committed under docs/assets/screenshots/.
+ *
+ * Without UPDATE_SCREENSHOTS=1 the captures go to a temp directory: the spec
+ * still proves capture works end to end, but a plain e2e run no longer
+ * dirties the tree by overwriting the committed PNGs.
  */
-const OUT_DIR = resolve(__dirname, '../docs/assets/screenshots')
+const REPO_OUT_DIR = resolve(__dirname, '../docs/assets/screenshots')
 const WINDOW = { width: 1440, height: 900 }
 
 /** deterministic window size for every capture */
@@ -30,7 +34,7 @@ async function fixViewport(app: ElectronApplication): Promise<void> {
  * CDP device-metrics override and always emits a 1x image in Electron, so the
  * raw CDP call is what actually honors `deviceScaleFactor: 2`.
  */
-async function capture(page: Page, name: string): Promise<void> {
+async function capture(page: Page, name: string, outDir: string): Promise<void> {
   const session = await page.context().newCDPSession(page)
   await session.send('Emulation.setDeviceMetricsOverride', {
     width: WINDOW.width,
@@ -39,7 +43,7 @@ async function capture(page: Page, name: string): Promise<void> {
     mobile: false,
   })
   const shot = await session.send('Page.captureScreenshot', { format: 'png' })
-  await writeFile(join(OUT_DIR, `${name}.png`), Buffer.from(shot.data, 'base64'))
+  await writeFile(join(outDir, `${name}.png`), Buffer.from(shot.data, 'base64'))
   await session.send('Emulation.clearDeviceMetricsOverride')
   await session.detach()
 }
@@ -47,7 +51,11 @@ async function capture(page: Page, name: string): Promise<void> {
 test.describe('README screenshots', () => {
   test('home, docs, sheets, and slides showcase captures', async () => {
     test.setTimeout(180_000)
-    await mkdir(OUT_DIR, { recursive: true })
+    const outDir =
+      process.env.UPDATE_SCREENSHOTS === '1'
+        ? REPO_OUT_DIR
+        : await mkdtemp(join(tmpdir(), 'airy-shots-out-'))
+    await mkdir(outDir, { recursive: true })
     const scratch = await mkdtemp(join(tmpdir(), 'airy-shots-'))
 
     // ── Home ──
@@ -56,7 +64,7 @@ test.describe('README screenshots', () => {
       await fixViewport(home.app)
       await home.page.waitForSelector('.home', { timeout: 30_000 })
       await home.page.waitForTimeout(1_000)
-      await capture(home.page, 'home')
+      await capture(home.page, 'home', outDir)
     } finally {
       await closeAndSaveVideo(home, 'shots-home')
     }
@@ -75,7 +83,7 @@ test.describe('README screenshots', () => {
       await editor.locator('.doc-page').first().waitFor({ timeout: 30_000 })
       await editor.evaluate(() => document.fonts.ready.then(() => undefined))
       await editor.waitForTimeout(800)
-      await capture(editor, 'docs')
+      await capture(editor, 'docs', outDir)
     } finally {
       await closeAndSaveVideo(docs, 'shots-docs')
     }
@@ -103,7 +111,7 @@ test.describe('README screenshots', () => {
         { timeout: 30_000 },
       )
       await editor.waitForTimeout(1_500)
-      await capture(editor, 'sheets')
+      await capture(editor, 'sheets', outDir)
     } finally {
       await closeAndSaveVideo(sheets, 'shots-sheets')
     }
@@ -123,7 +131,7 @@ test.describe('README screenshots', () => {
       const editor = await waitForPageWithUrl(slides.app, 'slides/out')
       await editor.waitForSelector('.stage-wrap canvas', { timeout: 30_000 })
       await editor.waitForTimeout(1_500)
-      await capture(editor, 'slides')
+      await capture(editor, 'slides', outDir)
     } finally {
       await closeAndSaveVideo(slides, 'shots-slides')
     }
