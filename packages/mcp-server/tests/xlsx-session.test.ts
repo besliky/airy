@@ -281,6 +281,23 @@ describe('XlsxSession journal + save matrix', () => {
     await expect(session.save()).resolves.toMatchObject({ path: sibling })
   })
 
+  it('asks the gateway for an exclusive promote only on guarded fresh targets', async () => {
+    const { session } = await nativeSession()
+    // a fresh save-as target promotes exclusively (TOCTOU-safe)
+    await session.save(join(root, 'fresh.xlsx'))
+    expect(saveCalls[0]?.exclusiveTarget).toBe(true)
+    // in-place saves replace the session's own backing file by intent
+    saveCalls.length = 0
+    await session.save()
+    expect(saveCalls[0]?.exclusiveTarget).toBe(false)
+    // explicit overwrite consent replaces by intent
+    saveCalls.length = 0
+    const other = join(root, 'other.xlsx')
+    await writeFile(other, 'unrelated bytes')
+    await session.save(other, 'xlsx', { overwrite: true })
+    expect(saveCalls[0]?.exclusiveTarget).toBe(false)
+  })
+
   it('format origin: .xls refuses with the save-as-.xlsx cascade', async () => {
     const legacyPath = join(root, 'legacy.xls')
     await writeFile(legacyPath, 'legacy-bytes')

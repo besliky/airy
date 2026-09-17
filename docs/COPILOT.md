@@ -285,12 +285,15 @@ Headless slides, PDF, Markdown and HTML tools are planned (backlog).
   every bridge call must carry the current per-session token, which is
   reread from disk on every connect. The bridge listens on a local
   socket/named pipe only — no network surface.
-- **No silent overwrites.** `save_document` is atomic (temp + rename) and
+- **No silent overwrites.** `save_document` is atomic (temp + promote) and
   double-fenced: saving over the opened file refuses with an error when the
   file changed on disk since it was opened (an external writer — another
   editor, sync client, or the Airy app itself), and an explicit save-as to a
   path that already exists is refused unless it is a file the session itself
-  opened or saved — pass `overwrite: true` to replace an unrelated file. The
+  opened or saved — pass `overwrite: true` to replace an unrelated file. A
+  guarded fresh target is promoted with an exclusive link, so a file that
+  appears between the existence check and the write cannot be silently
+  replaced either. The
   remedy for a fence error is to reopen and reapply, or to use the `live_*`
   tools when the document is open in the app.
 - **Read-only until save.** Opening and editing never touch the original

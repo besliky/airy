@@ -15,7 +15,7 @@ import { copyFile, mkdtemp, rename, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 
-import { FencingError, assertSaveTargetFree } from '../docx/session.js'
+import { saveTargetExistsError, FencingError, assertSaveTargetFree } from '../docx/session.js'
 import { resolveConfined, workspaceRoot } from '../docx/paths.js'
 import {
   convertViaSoffice,
@@ -24,6 +24,7 @@ import {
   sofficeMissingError,
 } from '../import/soffice.js'
 import {
+  SaveTargetExistsError,
   saveWorkbookViaSidecar,
   type CellEdit,
   type WorkbookRichRun,
@@ -525,12 +526,25 @@ export class XlsxSession {
     await assertSaveTargetFree(target, [this.backingPath, ...this.savedTargets], options.overwrite)
     if (target === this.backingPath) await this.assertBackingUnchanged()
 
-    const result = await saveWorkbookViaSidecar({
-      client: this.io,
-      sourcePath: this.backingPath,
-      targetPath: target,
-      edits: this.edits.map((edit) => ({ ...edit, cell: { ...edit.cell } })),
-    })
+    // a fresh (guarded) target promotes exclusively: a file created between
+    // the guard's stat and the gateway's write surfaces the clobber error
+    // instead of being silently replaced; targets this session owns (or an
+    // overwrite) replace by intent
+    const replacement =
+      options.overwrite === true || target === this.backingPath || this.savedTargets.has(target)
+    let result: Awaited<ReturnType<typeof saveWorkbookViaSidecar>>
+    try {
+      result = await saveWorkbookViaSidecar({
+        client: this.io,
+        sourcePath: this.backingPath,
+        targetPath: target,
+        edits: this.edits.map((edit) => ({ ...edit, cell: { ...edit.cell } })),
+        exclusiveTarget: !replacement,
+      })
+    } catch (e) {
+      if (e instanceof SaveTargetExistsError) throw saveTargetExistsError(target)
+      throw e
+    }
     const bytes = await statOrNull(target)
     const unchanged = this.edits.length === 0
     this.edits.length = 0

@@ -19,7 +19,7 @@ import {
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { promoteFileAtomically } from '../src/gateway/xlsx-package-io'
+import { promoteFileAtomically, promoteFileExclusively } from '../src/gateway/xlsx-package-io'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
@@ -154,5 +154,39 @@ describe('promoteFileAtomically', () => {
     await expect(promoteFileAtomically(temporary, join(dir, 'book.xlsx'))).rejects.toMatchObject({
       code: 'ENOENT',
     })
+  })
+})
+
+describe('promoteFileExclusively', () => {
+  it('creates the target and removes the temp file', async () => {
+    const dir = await scratchDir()
+    const temporary = join(dir, '.new.tmp.xlsx')
+    const target = join(dir, 'book.xlsx')
+    await writeFile(temporary, 'new-bytes')
+    await promoteFileExclusively(temporary, target)
+    expect(await readFile(target, 'utf8')).toBe('new-bytes')
+    await expect(stat(temporary)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('refuses a target that appeared after the caller check (EEXIST) and cleans the temp', async () => {
+    const dir = await scratchDir()
+    const temporary = join(dir, '.new.tmp.xlsx')
+    const target = join(dir, 'book.xlsx')
+    await writeFile(temporary, 'new-bytes')
+    // a writer created the target inside the guard/write window: the link
+    // fails with EEXIST atomically and the save aborts instead of replacing
+    await writeFile(target, 'concurrent bytes')
+    await expect(promoteFileExclusively(temporary, target)).rejects.toThrow(
+      'The save target already exists',
+    )
+    expect(await readFile(target, 'utf8')).toBe('concurrent bytes')
+    await expect(stat(temporary)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('propagates unrelated link errors untouched', async () => {
+    const dir = await scratchDir()
+    await expect(
+      promoteFileExclusively(join(dir, '.missing.tmp.xlsx'), join(dir, 'book.xlsx')),
+    ).rejects.toMatchObject({ code: 'ENOENT' })
   })
 })

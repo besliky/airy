@@ -13,7 +13,17 @@
 // DOMParser-based HTML branch) is not portable without a view, so the ops
 // vocabulary here is reimplemented against the engine model directly.
 import { randomUUID } from 'node:crypto'
-import { copyFile, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  copyFile,
+  link,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 
@@ -125,6 +135,14 @@ export class FencingError extends Error {
   }
 }
 
+/** the actionable clobber error shared by the guard and the exclusive promote */
+export function saveTargetExistsError(target: string): Error {
+  return new Error(
+    `Refusing to save: "${target}" already exists and is not a file this session opened or ` +
+      'saved. Pass overwrite: true to replace it (the existing file will be lost).',
+  )
+}
+
 /**
  * Save-as clobber guard shared by the docx and xlsx sessions: refuse a target
  * that already exists on disk unless it is one of the session's own files
@@ -148,12 +166,27 @@ export async function assertSaveTargetFree(
   } catch {
     exists = false
   }
-  if (exists) {
-    throw new Error(
-      `Refusing to save: "${target}" already exists and is not a file this session opened or ` +
-        'saved. Pass overwrite: true to replace it (the existing file will be lost).',
-    )
+  if (exists) throw saveTargetExistsError(target)
+}
+
+/**
+ * Promote a temp file onto a guarded (fresh) save-as target WITHOUT replacing
+ * an existing file: fs.link fails with EEXIST atomically, closing the window
+ * between assertSaveTargetFree's stat and the write (TOCTOU) — a file
+ * another writer created in that window surfaces the same actionable
+ * overwrite error instead of being silently replaced by a rename. Saves that
+ * replace by intent (same-file, the session's own output, overwrite:true)
+ * keep using rename.
+ */
+export async function promoteNewFileExclusively(tmp: string, target: string): Promise<void> {
+  try {
+    await link(tmp, target)
+  } catch (e) {
+    await rm(tmp, { force: true })
+    if ((e as NodeJS.ErrnoException).code === 'EEXIST') throw saveTargetExistsError(target)
+    throw e
   }
+  await rm(tmp, { force: true })
 }
 
 interface FileStamp {
@@ -470,7 +503,14 @@ export class DocxSession {
     await mkdir(dirname(target), { recursive: true })
     const tmp = join(dirname(target), `.${target.split('/').pop() ?? 'doc'}.airy-${randomUUID()}`)
     await writeFile(tmp, bytes)
-    await rename(tmp, target)
+    // a fresh (guarded) target promotes exclusively: a file created between
+    // the guard's stat and this write surfaces the clobber error instead of
+    // being silently replaced; targets this session owns replace by intent
+    if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
+      await rename(tmp, target)
+    } else {
+      await promoteNewFileExclusively(tmp, target)
+    }
 
     // refresh the fence so chained saves keep working
     if (target === this.path) {

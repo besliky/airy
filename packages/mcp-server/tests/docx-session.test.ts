@@ -1,7 +1,7 @@
 // Unit tests for the headless docx session: parse model, read formats,
 // insert_content, apply_ops semantics (validation-forward, atomicity),
 // byte-preservation, mtime fencing and path confinement.
-import { mkdtemp, readFile, writeFile, rm, mkdir } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile, rm, mkdir, stat } from 'node:fs/promises'
 import { readdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,7 +9,12 @@ import { join } from 'node:path'
 import JSZip from 'jszip'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { assertSaveTargetFree, DocxSession, FencingError } from '../src/docx/session.js'
+import {
+  assertSaveTargetFree,
+  DocxSession,
+  FencingError,
+  promoteNewFileExclusively,
+} from '../src/docx/session.js'
 import { resolveConfined, WORKSPACE_ROOT_ENV } from '../src/docx/paths.js'
 import type { Target } from '../src/docx/ops.js'
 import { parseRestrictedHtml, blocksToHtml } from '../src/docx/html.js'
@@ -408,6 +413,35 @@ describe('assertSaveTargetFree (clobber guard)', () => {
 
   it('lets native default saves (the opened file) through without overwrite', async () => {
     await expect(assertSaveTargetFree(docPath, [docPath], undefined)).resolves.toBeUndefined()
+  })
+})
+
+describe('promoteNewFileExclusively (TOCTOU guard)', () => {
+  it('refuses an existing target with the clobber error and cleans the temp', async () => {
+    const tmp = join(root, '.new.docx.airy-test')
+    const target = join(root, 'new.docx')
+    await writeFile(tmp, 'new bytes')
+    // a file created between the guard's stat and the write (the TOCTOU
+    // window) must surface the actionable error, not be silently replaced
+    await writeFile(target, 'created in the stat/write window')
+    const error = await promoteNewFileExclusively(tmp, target).then(
+      () => null,
+      (e: Error) => e,
+    )
+    expect(error).toBeInstanceOf(Error)
+    expect(error?.message).toContain('already exists')
+    expect(error?.message).toContain('overwrite: true')
+    expect(await readFile(target, 'utf8')).toBe('created in the stat/write window')
+    await expect(stat(tmp)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('links a fresh target atomically and removes the temp', async () => {
+    const tmp = join(root, '.fresh.docx.airy-test')
+    const target = join(root, 'fresh.docx')
+    await writeFile(tmp, 'fresh bytes')
+    await expect(promoteNewFileExclusively(tmp, target)).resolves.toBeUndefined()
+    expect(await readFile(target, 'utf8')).toBe('fresh bytes')
+    await expect(stat(tmp)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 })
 
