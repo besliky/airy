@@ -72,7 +72,7 @@ test.describe('sheets: Insert → Recommended Charts and Icons', () => {
       await sheets.mouse.click(b4.x, b4.y)
       await sheets.keyboard.up('Shift')
 
-      await sheets.getByRole('button', { name: 'Insert', exact: true }).click()
+      await sheets.getByRole('tab', { name: 'Insert', exact: true }).click()
       await sheets.getByRole('button', { name: 'Recommended Charts' }).click()
       const recoDialog = sheets.getByRole('dialog', { name: 'Recommended Charts' })
       await expect(recoDialog).toBeVisible()

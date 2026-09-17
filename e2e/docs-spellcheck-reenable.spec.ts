@@ -45,7 +45,8 @@ test('re-enabling spellcheck respells existing text without user input', async (
     )
 
     const spelling = editor.getByRole('button', { name: 'Spelling' })
-    await editor.getByRole('button', { name: 'Review' }).click()
+    // the ribbon strip is a WAI-ARIA tablist — the Review entry is a role=tab
+    await editor.getByRole('tab', { name: 'Review' }).click()
     await spelling.waitFor()
 
     await spelling.click()

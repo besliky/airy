@@ -30,7 +30,7 @@ test.describe('sheets: manual visual inserts are undoable', () => {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
       await waitForWorkbook(sheets)
 
-      await sheets.getByRole('button', { name: 'Insert', exact: true }).click()
+      await sheets.getByRole('tab', { name: 'Insert', exact: true }).click()
       await sheets.getByRole('button', { name: 'Icons' }).click()
       const dialog = sheets.getByRole('dialog', { name: 'Icons' })
       await expect(dialog).toBeVisible()
@@ -75,7 +75,7 @@ test.describe('sheets: freeze journal follows undo', () => {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
       await waitForWorkbook(sheets)
 
-      await sheets.getByRole('button', { name: 'View', exact: true }).click()
+      await sheets.getByRole('tab', { name: 'View', exact: true }).click()
       await sheets.getByRole('button', { name: 'Freeze Panes' }).click()
       await sheets.getByRole('option', { name: 'Freeze Top Row' }).click()
       await sheets.waitForTimeout(500)
@@ -127,7 +127,7 @@ test.describe('sheets: Data → From Text/CSV', () => {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
       await waitForWorkbook(sheets)
 
-      await sheets.getByRole('button', { name: 'Data', exact: true }).click()
+      await sheets.getByRole('tab', { name: 'Data', exact: true }).click()
       const chooser = sheets.waitForEvent('filechooser')
       await sheets.getByRole('button', { name: 'From Text/CSV' }).click()
       await (await chooser).setFiles(csvPath)
@@ -163,7 +163,7 @@ test.describe('sheets: comment navigation', () => {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
       await waitForWorkbook(sheets)
 
-      await sheets.getByRole('button', { name: 'Review', exact: true }).click()
+      await sheets.getByRole('tab', { name: 'Review', exact: true }).click()
       await sheets.getByRole('button', { name: 'Previous' }).click()
       await expect(sheets.locator('.workbook-status')).toContainText('No comments', {
         timeout: 10_000,

@@ -47,8 +47,10 @@ test.describe('sheets: Insert → Screenshot', () => {
         systemPreferences.getMediaAccessStatus = () => 'granted'
       })
 
-      await sheets.getByRole('button', { name: 'Insert', exact: true }).click()
-      await sheets.getByRole('button', { name: 'Screenshot' }).click()
+      // The ribbon strip is a WAI-ARIA tablist (47456fb): the Insert entry is
+      // a role=tab that reveals the panel holding the Screenshot button.
+      await sheets.getByRole('tab', { name: 'Insert', exact: true }).click()
+      await sheets.getByRole('button', { name: 'Screenshot', exact: true }).click()
       const dialog = sheets.getByRole('dialog', { name: 'Screenshot' })
       await expect(dialog).toBeVisible()
 
