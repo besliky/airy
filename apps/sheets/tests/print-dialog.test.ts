@@ -169,4 +169,18 @@ describe('Print dialog wiring', () => {
     expect(shellSrc).toContain("t('appFileExportPdf')")
     expect(shellSrc).toContain("t('appFilePrint')")
   })
+
+  it('the File tab dropdown is dismissible and labeled as a menu button', () => {
+    const shellSrc = read('../src/renderer/ExcelShell.tsx')
+    // outside press / blur / chrome-press dismissal through the shared hook
+    expect(shellSrc).toMatch(
+      /useDismissablePopover\(fileMenuOpen, \(\) => setFileMenuOpen\(false\)/,
+    )
+    // Escape closes and returns focus to the toggle
+    expect(shellSrc).toMatch(
+      /fileMenuOpen[\s\S]{0,400}event\.key !== 'Escape'[\s\S]{0,300}fileTabButtonRef\.current\?\.focus\(\)/,
+    )
+    // menu-button semantics on the toggle
+    expect(shellSrc).toMatch(/aria-haspopup="true"\s+aria-expanded=\{fileMenuOpen\}/)
+  })
 })

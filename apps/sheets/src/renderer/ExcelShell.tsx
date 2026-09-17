@@ -441,6 +441,24 @@ export function ExcelShell({
   /** null = closed; string = open on that catalog category ('All' for the plain button) */
   const [insertFunctionCat, setInsertFunctionCat] = useState<string | null>(null)
   const [fileMenuOpen, setFileMenuOpen] = useState(false)
+  /// File tab dropdown a11y/ dismissal: the wrap hosts both the toggle and
+  /// the panel so outside presses close, and Escape hands focus back.
+  const fileTabWrapRef = useRef<HTMLDivElement | null>(null)
+  const fileTabButtonRef = useRef<HTMLButtonElement | null>(null)
+  useDismissablePopover(fileMenuOpen, () => setFileMenuOpen(false), {
+    inside: () => [fileTabWrapRef.current],
+  })
+  useEffect(() => {
+    if (!fileMenuOpen) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      event.stopPropagation()
+      setFileMenuOpen(false)
+      fileTabButtonRef.current?.focus()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [fileMenuOpen])
   const [showSubtotalDialog, setShowSubtotalDialog] = useState(false)
   const [showGoalSeek, setShowGoalSeek] = useState(false)
   const [showConsolidateDialog, setShowConsolidateDialog] = useState(false)
@@ -572,10 +590,13 @@ export function ExcelShell({
           onDoubleClick={collapse.onTabsDoubleClick}
         >
           {!IS_MAC && (
-            <div className="file-tab-wrap">
+            <div className="file-tab-wrap" ref={fileTabWrapRef}>
               <button
                 type="button"
+                ref={fileTabButtonRef}
                 className={`ribbon-tab ribbon-tab-file ${fileMenuOpen ? 'open' : ''}`}
+                aria-haspopup="true"
+                aria-expanded={fileMenuOpen}
                 onClick={() => setFileMenuOpen((open) => !open)}
               >
                 {t('appFileTab')}
