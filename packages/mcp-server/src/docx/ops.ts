@@ -54,7 +54,9 @@ export interface NumberingSource {
 // ---- op / target contracts (mirrors the embedded agent's ops.ts) ----
 
 export interface Target {
-  nodeType?: 'heading' | 'paragraph' | 'listItem' | 'image'
+  /** canonical spelling here; the renderer aliases (docHeading/docParagraph/docListItem) normalize onto them */
+  nodeType?:
+    'heading' | 'paragraph' | 'listItem' | 'image' | 'docHeading' | 'docParagraph' | 'docListItem'
   headingLevel?: number
   containsText?: string
   matchCase?: boolean
@@ -105,6 +107,19 @@ const PARA_KEYS = [
   'borders',
 ] as const
 const NODE_TYPES = ['heading', 'paragraph', 'listItem', 'image'] as const
+/** the renderer's canonical spellings, accepted as aliases (both directions documented in docs/COPILOT.md) */
+const NODE_TYPE_ALIASES = new Map([
+  ['docHeading', 'heading'],
+  ['docParagraph', 'paragraph'],
+  ['docListItem', 'listItem'],
+])
+/** all spellings the validator accepts, for error messages */
+const NODE_TYPE_SPELLINGS = [
+  'heading|docHeading',
+  'paragraph|docParagraph',
+  'listItem|docListItem',
+  'image',
+] as const
 const BASELINES = ['superscript', 'subscript', 'none'] as const
 const ALIGNS = ['left', 'center', 'right', 'justify'] as const
 
@@ -201,12 +216,25 @@ function entryText(entry: SessionEntry): string {
     .join('')
 }
 
+/**
+ * Map the renderer's alias spellings onto this registry's canonical node
+ * types — the mirror of the renderer-side normalizeNodeType
+ * (apps/docs/src/renderer/ai/ops.ts), which maps this vocabulary onto the PM
+ * node names. Both spellings therefore target the same blocks in both the
+ * headless and the live registries; unknown spellings pass through unchanged
+ * and are rejected by the validator.
+ */
+export function normalizeNodeType(nodeType: string): string {
+  return NODE_TYPE_ALIASES.get(nodeType) ?? nodeType
+}
+
 function matchTarget(entries: SessionEntry[], target: Target): number[] {
   const out: number[] = []
+  const nodeType = target.nodeType === undefined ? undefined : normalizeNodeType(target.nodeType)
   entries.forEach((entry, index) => {
     if (target.blockIndexes && !target.blockIndexes.includes(index)) return
     const type = entryType(entry)
-    if (target.nodeType && type !== target.nodeType) return
+    if (nodeType && type !== nodeType) return
     if (target.headingLevel !== undefined) {
       if (type !== 'heading') return
       const level =
@@ -897,8 +925,11 @@ register({
 function validateTarget(target: unknown, where: string): string | null {
   if (!target || typeof target !== 'object') return `${where}: missing target`
   const tg = target as Target
-  if (tg.nodeType !== undefined && !(NODE_TYPES as readonly string[]).includes(tg.nodeType)) {
-    return `${where}: unknown nodeType "${String(tg.nodeType)}"`
+  if (
+    tg.nodeType !== undefined &&
+    !(NODE_TYPES as readonly string[]).includes(normalizeNodeType(String(tg.nodeType)))
+  ) {
+    return `${where}: unknown nodeType "${String(tg.nodeType)}" (accepted: ${NODE_TYPE_SPELLINGS.join(', ')})`
   }
   if (
     tg.headingLevel !== undefined &&

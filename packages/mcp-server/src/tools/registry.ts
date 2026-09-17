@@ -33,7 +33,7 @@ function content(payload: object, text?: string) {
 
 const OPS_GUIDE = [
   'Each op is a flat record { op, target?, ...fields }; fields are patches: present = set, null = clear, absent = keep.',
-  'Target conditions (AND, at least one): nodeType ("heading"|"paragraph"|"listItem"|"image"), headingLevel (1-6), containsText (+ matchCase: false), blockIndexes[].',
+  'Target conditions (AND, at least one): nodeType ("heading"|"paragraph"|"listItem"|"image"; the renderer spellings "docHeading"|"docParagraph"|"docListItem" are accepted aliases), headingLevel (1-6), containsText (+ matchCase: false), blockIndexes[].',
   ...opSignatures().map((s) => `- ${s}`),
 ].join('\n')
 

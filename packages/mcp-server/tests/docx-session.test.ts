@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { DocxSession, FencingError } from '../src/docx/session.js'
 import { resolveConfined, WORKSPACE_ROOT_ENV } from '../src/docx/paths.js'
+import type { Target } from '../src/docx/ops.js'
 import { parseRestrictedHtml, blocksToHtml } from '../src/docx/html.js'
 import { buildFixtureDocx } from './helpers/docx-fixture.js'
 
@@ -165,6 +166,44 @@ describe('apply_ops', () => {
     const session = await openSession()
     expect(() => session.applyOps([{ op: 'nope' }])).toThrow(/unknown op/)
     expect(() => session.applyOps([])).toThrow(/non-empty/)
+  })
+
+  it('accepts both nodeType vocabularies with identical matching', async () => {
+    // the renderer spellings (docHeading/docParagraph/docListItem) are
+    // aliases of the headless canonical names, not separate block kinds: the
+    // same batch in either vocabulary must produce the same document
+    const canonical = await openSession()
+    const aliased = await openSession()
+    const canonicalOut = canonical.applyOps([
+      { op: 'setFont', target: { nodeType: 'paragraph' }, bold: true },
+      { op: 'setFont', target: { nodeType: 'heading' }, underline: true },
+      { op: 'clearList', target: { nodeType: 'listItem' } },
+    ])
+    const aliasOut = aliased.applyOps([
+      { op: 'setFont', target: { nodeType: 'docParagraph' }, bold: true },
+      { op: 'setFont', target: { nodeType: 'docHeading' }, underline: true },
+      { op: 'clearList', target: { nodeType: 'docListItem' } },
+    ])
+    expect(aliasOut.results.map((r) => r.matched)).toEqual(
+      canonicalOut.results.map((r) => r.matched),
+    )
+    expect(aliasOut.results.map((r) => r.changed)).toEqual(
+      canonicalOut.results.map((r) => r.changed),
+    )
+    // fixture: 2 paragraphs, 1 heading, 3 list items (2 bullets + 1 numbered)
+    expect(canonicalOut.results.map((r) => r.matched)).toEqual([2, 1, 3])
+    expect(aliased.readDocument()).toBe(canonical.readDocument())
+  })
+
+  it('unknown nodeType errors list the accepted spellings', async () => {
+    const session = await openSession()
+    // the wire accepts arbitrary strings; the validator must reject and explain
+    const bogus = 'docImage' as unknown as Target['nodeType']
+    expect(() =>
+      session.applyOps([{ op: 'setFont', target: { nodeType: bogus }, bold: true }]),
+    ).toThrow(
+      /unknown nodeType "docImage".*heading\|docHeading.*paragraph\|docParagraph.*listItem\|docListItem.*image/,
+    )
   })
 
   it('findReplace rewrites text inside runs', async () => {
