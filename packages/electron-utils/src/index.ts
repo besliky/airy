@@ -16,6 +16,20 @@ export {
 export { GITHUB_REPO_URL } from './github-menu'
 export { atomicWriteFile, looksLikeZip } from './atomic-write'
 export {
+  ASSET_MANIFEST_FILENAME,
+  createAssetLifecycle,
+  extractImageSources,
+  rewriteImageSources,
+  resolveSafeRelativeImagePath,
+  type AssetLifecycle,
+  type AssetLifecycleScope,
+  type AssetRewrite,
+  type OwnedAssetManifest,
+  type OwnedAssetRecord,
+  type PreparedSaveAsAssets,
+  type ReconcileResult,
+} from './asset-lifecycle'
+export {
   saveAsSuggestion,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,

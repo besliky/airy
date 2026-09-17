@@ -70,9 +70,11 @@ vi.mock('electron', () => ({
   },
 }))
 
-vi.mock('@airy-office/electron-utils', async () => {
+vi.mock('@airy-office/electron-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@airy-office/electron-utils')>()
   const { writeFile } = await import('node:fs/promises')
   return {
+    ...actual,
     TextRecoveryStore: class {
       clear(): void {}
       async writeCopy(): Promise<void> {}
