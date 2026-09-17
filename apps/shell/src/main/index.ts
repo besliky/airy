@@ -25,6 +25,7 @@ import {
 } from 'electron'
 import type { MenuItemConstructorOptions, NativeImage, WebContents } from 'electron'
 import { homeHandlerAllowed } from './home-channel-access'
+import { createLiveBridgeToggle } from './live-bridge-toggle'
 import { isHomeSender } from './home-sender-guard'
 import { stringPathsCapped } from './home-paths'
 import {
@@ -1429,27 +1430,21 @@ function liveBridgeEnabled(): boolean {
   return effectiveLiveBridgeEnabled(readAppSettings(APP_SETTINGS_PATH()).liveBridge)
 }
 
-/** persist the preference and bring the bridge up/down right away */
-async function setLiveBridgeEnabled(on: boolean): Promise<boolean> {
-  // env override active: the toggle is a visible no-op — keep the stored
-  // setting untouched (so lifting the override restores the user's choice)
-  // and the server off
-  if (!liveBridgeToggleAllowed()) return liveBridgeEnabled()
-  writeAppSetting(APP_SETTINGS_PATH(), 'liveBridge', on)
-  try {
-    if (on) {
-      await startShellBridge({
-        userDataDir: app.getPath('userData'),
-        getTabManager: () => tabManager,
-      })
-    } else {
-      await stopShellBridge()
-    }
-  } catch (err) {
-    console.error(`bridge server failed to ${on ? 'start' : 'stop'}:`, err)
-  }
-  return liveBridgeEnabled()
-}
+/** serialized toggle: transition the server first, persist only on success
+ *  (see live-bridge-toggle.ts); a failed start rejects the IPC result and
+ *  leaves the previous stored value in place */
+const setLiveBridgeEnabled = createLiveBridgeToggle({
+  isEnabled: () => liveBridgeEnabled(),
+  toggleAllowed: () => liveBridgeToggleAllowed(),
+  persist: (on) => writeAppSetting(APP_SETTINGS_PATH(), 'liveBridge', on),
+  start: async () => {
+    await startShellBridge({
+      userDataDir: app.getPath('userData'),
+      getTabManager: () => tabManager,
+    })
+  },
+  stop: () => stopShellBridge(),
+})
 
 function registerHomeIpc(): void {
   // home:* channels are process-global (the shell bundles every editor's
@@ -1723,7 +1718,10 @@ function registerHomeIpc(): void {
   handleHome(HOME_CHANNELS.getLiveBridgeEnabled, (): LiveBridgeEnabled => liveBridgeEnabled())
   handleHome(HOME_CHANNELS.setLiveBridgeEnabled, (_event, on: unknown) => {
     if (typeof on !== 'boolean') return liveBridgeEnabled()
-    return setLiveBridgeEnabled(on)
+    return setLiveBridgeEnabled(on).catch((err: unknown) => {
+      console.error(`bridge server failed to toggle ${on ? 'on' : 'off'}:`, err)
+      throw err // the Settings switch snaps back; the stored value is unchanged
+    })
   })
   // whether AIRY_DISABLE_BRIDGE=1 pins the bridge off (Settings shows a note)
   handleHome(HOME_CHANNELS.getLiveBridgeEnvDisabled, (): boolean => bridgeEnvDisabled())
