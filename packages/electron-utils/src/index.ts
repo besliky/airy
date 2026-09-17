@@ -13,7 +13,7 @@ export {
   windowMenuTemplate,
   type AppMenuLabels,
 } from './app-menu'
-export { GITHUB_REPO_URL } from './github-menu'
+export { COPILOT_GUIDE_URL, DOCS_README_URL, GITHUB_REPO_URL, openHelpUrl } from './github-menu'
 export { atomicWriteFile, looksLikeZip } from './atomic-write'
 export {
   ASSET_MANIFEST_FILENAME,

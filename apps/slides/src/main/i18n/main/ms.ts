@@ -114,4 +114,8 @@ export const ms = {
   menuZoomIn: 'Zum Masuk',
   menuZoomOut: 'Zum Keluar',
   menuActualSize: 'Saiz Sebenar',
+  menuHelp: 'Bantuan',
+  menuShortcuts: 'Pintasan papan kekunci',
+  menuOnlineDocs: 'Dokumentasi dalam talian',
+  menuCopilotGuide: 'Panduan Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

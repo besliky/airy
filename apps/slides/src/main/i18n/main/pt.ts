@@ -117,4 +117,8 @@ export const pt = {
   menuZoomIn: 'Ampliar',
   menuZoomOut: 'Reduzir',
   menuActualSize: 'Tamanho Real',
+  menuHelp: 'Ajuda',
+  menuShortcuts: 'Atalhos de teclado',
+  menuOnlineDocs: 'Documentação online',
+  menuCopilotGuide: 'Guia do Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

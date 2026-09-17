@@ -115,4 +115,8 @@ export const cs = {
   menuZoomIn: 'Přiblížit',
   menuZoomOut: 'Oddálit',
   menuActualSize: 'Skutečná velikost',
+  menuHelp: 'Nápověda',
+  menuShortcuts: 'Klávesové zkratky',
+  menuOnlineDocs: 'Online dokumentace',
+  menuCopilotGuide: 'Průvodce Copilotem (MCP)',
 } satisfies Record<keyof typeof zh, string>

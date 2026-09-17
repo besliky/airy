@@ -104,4 +104,6 @@ export const th = {
   crashPageBody: 'แท็บนี้หยุดทำงานโดยไม่คาดคิด โปรดเลือกโหลดใหม่หรือปิดแท็บในกล่องโต้ตอบ',
   dlgLoadFailed: 'โหลดหน้าต่างแอปไม่สำเร็จ',
   errUnhandledException: 'เกิดข้อผิดพลาดที่ไม่คาดคิด แอปจะพยายามทำงานต่อไป',
+  menuOnlineDocs: 'เอกสารออนไลน์',
+  menuCopilotGuide: 'คู่มือ Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

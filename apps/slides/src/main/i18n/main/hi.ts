@@ -115,4 +115,8 @@ export const hi = {
   menuZoomIn: 'ज़ूम इन',
   menuZoomOut: 'ज़ूम आउट',
   menuActualSize: 'वास्तविक आकार',
+  menuHelp: 'सहायता',
+  menuShortcuts: 'कीबोर्ड शॉर्टकट',
+  menuOnlineDocs: 'ऑनलाइन दस्तावेज़',
+  menuCopilotGuide: 'Copilot गाइड (MCP)',
 } satisfies Record<keyof typeof zh, string>

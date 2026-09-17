@@ -116,4 +116,8 @@ export const nl = {
   menuZoomIn: 'Inzoomen',
   menuZoomOut: 'Uitzoomen',
   menuActualSize: 'Ware grootte',
+  menuHelp: 'Help',
+  menuShortcuts: 'Sneltoetsen',
+  menuOnlineDocs: 'Online documentatie',
+  menuCopilotGuide: 'Copilot-gids (MCP)',
 } satisfies Record<keyof typeof zh, string>

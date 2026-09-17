@@ -394,7 +394,8 @@ const desktopApi: DesktopApi = {
         action === 'print' ||
         action === 'export-csv' ||
         action === 'undo' ||
-        action === 'redo'
+        action === 'redo' ||
+        action === 'shortcuts'
       )
         callback(action)
     }

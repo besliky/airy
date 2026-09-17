@@ -108,4 +108,6 @@ export const ms = {
   crashPageBody: 'Tab ini berhenti secara tiba-tiba. Pilih Muat semula atau Tutup tab pada dialog.',
   dlgLoadFailed: 'Gagal memuat tetingkap aplikasi.',
   errUnhandledException: 'Ralat tidak dijangka berlaku. Aplikasi akan cuba terus berjalan.',
+  menuOnlineDocs: 'Dokumentasi dalam talian',
+  menuCopilotGuide: 'Panduan Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

@@ -111,4 +111,6 @@ export const ru = {
   dlgLoadFailed: 'Не удалось загрузить окно приложения.',
   errUnhandledException:
     'Произошла непредвиденная ошибка. Приложение попытается продолжить работу.',
+  menuOnlineDocs: 'Документация в сети',
+  menuCopilotGuide: 'Руководство по Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

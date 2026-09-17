@@ -108,4 +108,6 @@ export const ko = {
     '이 탭이 예기치 않게 중지되었습니다. 대화상자에서 다시 로드 또는 탭 닫기를 선택하세요.',
   dlgLoadFailed: '앱 창을 로드하지 못했습니다.',
   errUnhandledException: '예기치 않은 오류가 발생했습니다. 앱은 계속 실행을 시도합니다.',
+  menuOnlineDocs: '온라인 설명서',
+  menuCopilotGuide: 'Copilot 가이드(MCP)',
 } satisfies Record<keyof typeof zh, string>

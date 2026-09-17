@@ -107,4 +107,6 @@ export const en = {
   crashPageBody: 'This tab stopped unexpectedly. Choose Reload or Close Tab in the dialog.',
   dlgLoadFailed: 'The app window failed to load.',
   errUnhandledException: 'An unexpected error occurred. The app will try to keep running.',
+  menuOnlineDocs: 'Online Documentation',
+  menuCopilotGuide: 'Copilot Guide (MCP)',
 } satisfies Record<keyof typeof zh, string>

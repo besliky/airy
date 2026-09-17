@@ -1169,6 +1169,7 @@ export type MenuCommand =
   | 'export-pdf'
   | 'export-images'
   | 'print'
+  | 'shortcuts'
   | 'zoom-in'
   | 'zoom-out'
   | 'zoom-reset'

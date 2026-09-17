@@ -117,4 +117,8 @@ export const id = {
   menuZoomIn: 'Perbesar',
   menuZoomOut: 'Perkecil',
   menuActualSize: 'Ukuran Sebenarnya',
+  menuHelp: 'Bantuan',
+  menuShortcuts: 'Pintasan keyboard',
+  menuOnlineDocs: 'Dokumentasi daring',
+  menuCopilotGuide: 'Panduan Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

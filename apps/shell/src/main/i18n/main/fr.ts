@@ -111,4 +111,6 @@ export const fr = {
   dlgLoadFailed: 'Échec du chargement de la fenêtre principale.',
   errUnhandledException:
     'Une erreur inattendue est survenue. L’application va tenter de continuer.',
+  menuOnlineDocs: 'Documentation en ligne',
+  menuCopilotGuide: 'Guide Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

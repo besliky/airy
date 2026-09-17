@@ -105,4 +105,6 @@ export const he = {
   crashPageBody: 'כרטיסייה זו נעצרה באופן בלתי צפוי. בחרו טעינה מחדש או סגירה בתיבת הדו-שיח.',
   dlgLoadFailed: 'טעינת חלון היישום נכשלה.',
   errUnhandledException: 'אירעה שגיאה בלתי צפויה. היישום ינסה להמשיך לפעול.',
+  menuOnlineDocs: 'תיעוד מקוון',
+  menuCopilotGuide: 'מדריך Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

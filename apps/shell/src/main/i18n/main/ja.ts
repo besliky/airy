@@ -108,4 +108,6 @@ export const ja = {
     'このタブは予期せず停止しました。ダイアログで再読み込みまたはタブを閉じてください。',
   dlgLoadFailed: 'アプリウィンドウの読み込みに失敗しました。',
   errUnhandledException: '予期しないエラーが発生しました。アプリは実行を続行しようとします。',
+  menuOnlineDocs: 'オンライン ドキュメント',
+  menuCopilotGuide: 'Copilot ガイド (MCP)',
 } satisfies Record<keyof typeof zh, string>

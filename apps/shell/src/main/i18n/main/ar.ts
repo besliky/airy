@@ -106,4 +106,6 @@ export const ar = {
     'توقفت علامة التبويب هذه بشكل غير متوقع. اختر إعادة التحميل أو الإغلاق من مربع الحوار.',
   dlgLoadFailed: 'فشل تحميل نافذة التطبيق.',
   errUnhandledException: 'حدث خطأ غير متوقع. سيحاول التطبيق الاستمرار في العمل.',
+  menuOnlineDocs: 'الدокументات عبر الإنترنت',
+  menuCopilotGuide: 'دليل Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

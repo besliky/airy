@@ -367,6 +367,7 @@ import { selectionFormatEquals, toSelectionFormat, type SelectionFormat } from '
 import { ExcelShell } from './ExcelShell'
 import { RecoveryDialog } from './RecoveryDialog'
 import { ToastHost } from '@airy-office/ui'
+import { ShortcutsDialog } from './ShortcutsDialog'
 import { AdvancedFilterDialog, type AdvancedFilterColumn } from './AdvancedFilterDialog'
 import { EquationDialog } from './EquationDialog'
 import { IconsDialog } from './IconsDialog'
@@ -657,6 +658,8 @@ export function App(): React.JSX.Element {
   const [timelinePicker, setTimelinePicker] = useState<TimelinePickerState | null>(null)
   const menuActionRef = useRef<(action: MenuAction) => void>(() => {})
   const [printDialogOpen, setPrintDialogOpen] = useState(false)
+  /// Help > Keyboard Shortcuts reference dialog.
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   /// Where the user was when a save started: the post-save session swap
   /// reinstalls the workbook, and the install consumes this instead of
   /// resetting the view to the first sheet's A1.
@@ -3937,6 +3940,8 @@ export function App(): React.JSX.Element {
       void handleExportPdfImpl(pageLayoutContext())
     } else if (action === 'print') {
       setPrintDialogOpen(true)
+    } else if (action === 'shortcuts') {
+      setShortcutsOpen(true)
     } else if (action === 'export-csv') {
       void handleExportCsvImpl(csvExportContext())
     } else if (action === 'undo' || action === 'redo') {
@@ -4079,6 +4084,7 @@ export function App(): React.JSX.Element {
   return (
     <>
       <ToastHost />
+      {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       {recoveryPrompt && (
         <RecoveryDialog
           prompt={recoveryPrompt}

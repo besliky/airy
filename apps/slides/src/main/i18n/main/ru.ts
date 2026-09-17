@@ -116,4 +116,8 @@ export const ru = {
   menuZoomIn: 'Увеличить',
   menuZoomOut: 'Уменьшить',
   menuActualSize: 'Реальный размер',
+  menuHelp: 'Справка',
+  menuShortcuts: 'Сочетания клавиш',
+  menuOnlineDocs: 'Документация в сети',
+  menuCopilotGuide: 'Руководство по Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

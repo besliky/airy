@@ -98,4 +98,6 @@ export const zh = {
   crashPageBody: '此标签页已意外停止。请在对话框中选择重新加载或关闭该标签页。',
   dlgLoadFailed: '应用窗口加载失败。',
   errUnhandledException: '发生意外错误。应用将尝试继续运行。',
+  menuOnlineDocs: '在线文档',
+  menuCopilotGuide: 'Copilot 指南（MCP）',
 }

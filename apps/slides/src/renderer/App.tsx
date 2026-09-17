@@ -88,6 +88,7 @@ import { useAutoSavePref, type AiScopeQuoteData, type WordArtPreset } from '@air
 import type { ChartPresetDef, IconDef, SmartArtDef } from './insert-presets'
 import { AiryMark, IconAiBeautify, IconAiFactCheck, IconAiImage } from './components/icons'
 import { ToastHost } from '@airy-office/ui'
+import { ShortcutsDialog } from './components/ShortcutsDialog'
 import { showToast } from '@airy-office/ui/toast-bus'
 import { t, useI18n } from './i18n/locale'
 import { AiPanel } from './ai/AiPanel'
@@ -947,6 +948,8 @@ export function App() {
   const exportPdf = useCallback(() => fileActions.exportPdf(ctxRef.current), [])
 
   const [printDlgOpen, setPrintDlgOpen] = useState(false)
+  /// Help > Keyboard Shortcuts reference dialog.
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   /** Whether focus is in a text input (input/textarea/contentEditable) — these cases use native undo/delete */
   const inTextField = () => {
@@ -2119,6 +2122,7 @@ export function App() {
       else if (cmd === 'export-pdf') void exportPdf()
       else if (cmd === 'export-images') void exportImages()
       else if (cmd === 'print') setPrintDlgOpen(true)
+      else if (cmd === 'shortcuts') setShortcutsOpen(true)
       // Through the preview path so the zoom pivots on the viewport center, not the scroll origin
       else if (cmd === 'zoom-in') previewZoom((z) => Math.min(z * 1.15, 3))
       else if (cmd === 'zoom-out') previewZoom((z) => Math.max(z / 1.15, 0.25))
@@ -2859,6 +2863,7 @@ export function App() {
   return (
     <div className="app">
       <ToastHost />
+      {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       <Ribbon
         hasDoc={!!slide}
         deckEmpty={deckEmpty}

@@ -110,4 +110,6 @@ export const es = {
     'Esta pestaña se detuvo inesperadamente. Elija Recargar o Cerrar pestaña en el diálogo.',
   dlgLoadFailed: 'No se pudo cargar la ventana de la aplicación.',
   errUnhandledException: 'Ocurrió un error inesperado. La aplicación intentará seguir funcionando.',
+  menuOnlineDocs: 'Documentación en línea',
+  menuCopilotGuide: 'Guía de Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

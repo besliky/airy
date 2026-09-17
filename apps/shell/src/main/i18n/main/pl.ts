@@ -110,4 +110,6 @@ export const pl = {
     'Ta karta nieoczekiwanie przestała działać. W oknie dialogowym wybierz opcję ponownego załadowania lub zamknięcia karty.',
   dlgLoadFailed: 'Nie udało się załadować okna aplikacji.',
   errUnhandledException: 'Wystąpił nieoczekiwany błąd. Aplikacja spróbuje kontynuować działanie.',
+  menuOnlineDocs: 'Dokumentacja online',
+  menuCopilotGuide: 'Przewodnik Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

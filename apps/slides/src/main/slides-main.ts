@@ -37,7 +37,10 @@ import {
   fetchRemoteImage,
   grantRendererFileAccess,
   installContextMenu,
+  COPILOT_GUIDE_URL,
+  DOCS_README_URL,
   installNavigationGuard,
+  openHelpUrl,
   rendererMayReadPath,
   safeExternalUrl,
   saveAsSuggestion,
@@ -4560,6 +4563,20 @@ export function buildSlidesMenu(): Menu {
         },
         { type: 'separator' },
         toggleDevToolsItem(labels),
+      ],
+    },
+    {
+      role: 'help',
+      label: tm('menuHelp'),
+      submenu: [
+        {
+          label: tm('menuShortcuts'),
+          accelerator: 'CmdOrCtrl+/',
+          click: () => send('shortcuts'),
+        },
+        { type: 'separator' },
+        { label: tm('menuOnlineDocs'), click: () => void openHelpUrl(DOCS_README_URL) },
+        { label: tm('menuCopilotGuide'), click: () => void openHelpUrl(COPILOT_GUIDE_URL) },
       ],
     },
   ]

@@ -111,4 +111,6 @@ export const it = {
     'Questa scheda si è interrotta in modo imprevisto. Scegli Ricarica o Chiudi scheda nella finestra di dialogo.',
   dlgLoadFailed: 'Impossibile caricare la finestra dell’app.',
   errUnhandledException: 'Si è verificato un errore imprevisto. L’app proverà a continuare.',
+  menuOnlineDocs: 'Documentazione online',
+  menuCopilotGuide: 'Guida Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

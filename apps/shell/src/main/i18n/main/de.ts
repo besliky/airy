@@ -111,4 +111,6 @@ export const de = {
   dlgLoadFailed: 'Das Anwendungsfenster konnte nicht geladen werden.',
   errUnhandledException:
     'Ein unerwarteter Fehler ist aufgetreten. Die App versucht weiterzulaufen.',
+  menuOnlineDocs: 'Online-Dokumentation',
+  menuCopilotGuide: 'Copilot-Leitfaden (MCP)',
 } satisfies Record<keyof typeof zh, string>

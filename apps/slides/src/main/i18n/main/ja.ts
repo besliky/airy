@@ -114,4 +114,8 @@ export const ja = {
   menuZoomIn: '拡大',
   menuZoomOut: '縮小',
   menuActualSize: '実際のサイズ',
+  menuHelp: 'ヘルプ',
+  menuShortcuts: 'キーボード ショートカット',
+  menuOnlineDocs: 'オンライン ドキュメント',
+  menuCopilotGuide: 'Copilot ガイド (MCP)',
 } satisfies Record<keyof typeof zh, string>

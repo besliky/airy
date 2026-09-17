@@ -111,4 +111,8 @@ export const zhTW = {
   menuZoomIn: '放大',
   menuZoomOut: '縮小',
   menuActualSize: '實際大小',
+  menuHelp: '說明',
+  menuShortcuts: '鍵盤快速鍵',
+  menuOnlineDocs: '線上說明文件',
+  menuCopilotGuide: 'Copilot 指南（MCP）',
 } satisfies Record<keyof typeof zh, string>

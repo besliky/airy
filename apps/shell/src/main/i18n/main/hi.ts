@@ -109,4 +109,6 @@ export const hi = {
   crashPageBody: 'यह टैब अचानक बंद हो गया। संवाद बॉक्स में पुनः लोड करें या टैब बंद करें चुनें।',
   dlgLoadFailed: 'ऐप विंडो लोड करने में विफल।',
   errUnhandledException: 'अप्रत्याशित त्रुटि हुई। ऐप चलने का प्रयास करेगा।',
+  menuOnlineDocs: 'ऑनलाइन दस्तावेज़',
+  menuCopilotGuide: 'Copilot गाइड (MCP)',
 } satisfies Record<keyof typeof zh, string>

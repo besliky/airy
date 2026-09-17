@@ -107,4 +107,6 @@ export const cs = {
     'Tato karta se neočekávaně zastavila. V dialogovém okně zvolte Znovu načíst nebo Zavřít kartu.',
   dlgLoadFailed: 'Okno aplikace se nepodařilo načíst.',
   errUnhandledException: 'Došlo k neočekávané chybě. Aplikace se pokusí pokračovat.',
+  menuOnlineDocs: 'Online dokumentace',
+  menuCopilotGuide: 'Průvodce Copilotem (MCP)',
 } satisfies Record<keyof typeof zh, string>

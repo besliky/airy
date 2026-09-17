@@ -112,4 +112,8 @@ export const th = {
   menuZoomIn: 'ขยาย',
   menuZoomOut: 'ย่อ',
   menuActualSize: 'ขนาดจริง',
+  menuHelp: 'วิธีใช้',
+  menuShortcuts: 'แป้นพิมพ์ลัด',
+  menuOnlineDocs: 'เอกสารออนไลน์',
+  menuCopilotGuide: 'คู่มือ Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

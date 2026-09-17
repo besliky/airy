@@ -117,4 +117,8 @@ export const de = {
   menuZoomIn: 'Vergrößern',
   menuZoomOut: 'Verkleinern',
   menuActualSize: 'Originalgröße',
+  menuHelp: 'Hilfe',
+  menuShortcuts: 'Tastenkombinationen',
+  menuOnlineDocs: 'Online-Dokumentation',
+  menuCopilotGuide: 'Copilot-Leitfaden (MCP)',
 } satisfies Record<keyof typeof zh, string>

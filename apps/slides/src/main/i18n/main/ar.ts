@@ -113,4 +113,8 @@ export const ar = {
   menuZoomIn: 'تكبير',
   menuZoomOut: 'تصغير',
   menuActualSize: 'الحجم الفعلي',
+  menuHelp: 'مساعدة',
+  menuShortcuts: 'اختصارات لوحة المفاتيح',
+  menuOnlineDocs: 'الدокументات عبر الإنترنت',
+  menuCopilotGuide: 'دليل Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

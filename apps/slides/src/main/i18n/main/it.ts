@@ -118,4 +118,8 @@ export const it = {
   menuZoomIn: 'Ingrandisci',
   menuZoomOut: 'Riduci',
   menuActualSize: 'Dimensioni effettive',
+  menuHelp: 'Aiuto',
+  menuShortcuts: 'Scorciatoie da tastiera',
+  menuOnlineDocs: 'Documentazione online',
+  menuCopilotGuide: 'Guida Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

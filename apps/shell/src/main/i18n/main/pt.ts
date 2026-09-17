@@ -110,4 +110,6 @@ export const pt = {
     'Esta aba parou inesperadamente. Escolha Recarregar ou Fechar aba na caixa de diálogo.',
   dlgLoadFailed: 'Falha ao carregar a janela do aplicativo.',
   errUnhandledException: 'Ocorreu um erro inesperado. O aplicativo tentará continuar funcionando.',
+  menuOnlineDocs: 'Documentação online',
+  menuCopilotGuide: 'Guia do Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

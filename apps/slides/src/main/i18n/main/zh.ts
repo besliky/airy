@@ -110,4 +110,8 @@ export const zh = {
   menuZoomIn: '放大',
   menuZoomOut: '缩小',
   menuActualSize: '实际大小',
+  menuHelp: '帮助',
+  menuShortcuts: '键盘快捷键',
+  menuOnlineDocs: '在线文档',
+  menuCopilotGuide: 'Copilot 指南（MCP）',
 }

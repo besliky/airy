@@ -33,6 +33,9 @@ import {
   installNavigationGuard,
   printHtmlToPdf,
   rendererMayReadPath,
+  COPILOT_GUIDE_URL,
+  DOCS_README_URL,
+  openHelpUrl,
   safeExternalUrl,
   saveAsSuggestion,
   showOpenDialogWithMemory,
@@ -238,6 +241,8 @@ const tMain = createI18n({
     menuWindow: '窗口',
     menuHelp: '帮助',
     menuShortcuts: '键盘快捷键',
+    menuOnlineDocs: '在线文档',
+    menuCopilotGuide: 'Copilot 指南（MCP）',
   },
   en: {
     dlgLoadFailed: 'The app window failed to load.',
@@ -339,6 +344,8 @@ const tMain = createI18n({
     menuWindow: 'Window',
     menuHelp: 'Help',
     menuShortcuts: 'Keyboard Shortcuts',
+    menuOnlineDocs: 'Online Documentation',
+    menuCopilotGuide: 'Copilot Guide (MCP)',
   },
   ja: {
     dlgLoadFailed: 'アプリウィンドウの読み込みに失敗しました。',
@@ -440,6 +447,8 @@ const tMain = createI18n({
     menuWindow: 'ウィンドウ',
     menuHelp: 'ヘルプ',
     menuShortcuts: 'キーボードショートカット',
+    menuOnlineDocs: 'オンライン ドキュメント',
+    menuCopilotGuide: 'Copilot ガイド (MCP)',
   },
   ko: {
     dlgLoadFailed: '앱 창을 로드하지 못했습니다.',
@@ -542,6 +551,8 @@ const tMain = createI18n({
     menuWindow: '창',
     menuHelp: '도움말',
     menuShortcuts: '키보드 바로 가기',
+    menuOnlineDocs: '온라인 설명서',
+    menuCopilotGuide: 'Copilot 가이드(MCP)',
   },
   fr: {
     dlgLoadFailed: 'Échec du chargement de la fenêtre principale.',
@@ -645,6 +656,8 @@ const tMain = createI18n({
     menuWindow: 'Fenêtre',
     menuHelp: 'Aide',
     menuShortcuts: 'Raccourcis clavier',
+    menuOnlineDocs: 'Documentation en ligne',
+    menuCopilotGuide: 'Guide Copilot (MCP)',
   },
   de: {
     dlgLoadFailed: 'Das Anwendungsfenster konnte nicht geladen werden.',
@@ -748,6 +761,8 @@ const tMain = createI18n({
     menuWindow: 'Fenster',
     menuHelp: 'Hilfe',
     menuShortcuts: 'Tastenkombinationen',
+    menuOnlineDocs: 'Online-Dokumentation',
+    menuCopilotGuide: 'Copilot-Leitfaden (MCP)',
   },
   es: {
     dlgLoadFailed: 'No se pudo cargar la ventana de la aplicación.',
@@ -851,6 +866,8 @@ const tMain = createI18n({
     menuWindow: 'Ventana',
     menuHelp: 'Ayuda',
     menuShortcuts: 'Atajos de teclado',
+    menuOnlineDocs: 'Documentación en línea',
+    menuCopilotGuide: 'Guía de Copilot (MCP)',
   },
   th: {
     dlgLoadFailed: 'โหลดหน้าต่างแอปไม่สำเร็จ',
@@ -952,6 +969,8 @@ const tMain = createI18n({
     menuWindow: 'หน้าต่าง',
     menuHelp: 'วิธีใช้',
     menuShortcuts: 'แป้นพิมพ์ลัด',
+    menuOnlineDocs: 'เอกสารออนไลน์',
+    menuCopilotGuide: 'คู่มือ Copilot (MCP)',
   },
   id: {
     dlgLoadFailed: 'Gagal memuat jendela aplikasi.',
@@ -1054,6 +1073,8 @@ const tMain = createI18n({
     menuWindow: 'Jendela',
     menuHelp: 'Bantuan',
     menuShortcuts: 'Pintasan Papan Ketik',
+    menuOnlineDocs: 'Dokumentasi daring',
+    menuCopilotGuide: 'Panduan Copilot (MCP)',
   },
   ru: {
     dlgLoadFailed: 'Не удалось загрузить окно приложения.',
@@ -1156,6 +1177,8 @@ const tMain = createI18n({
     menuWindow: 'Окно',
     menuHelp: 'Справка',
     menuShortcuts: 'Сочетания клавиш',
+    menuOnlineDocs: 'Документация в сети',
+    menuCopilotGuide: 'Руководство по Copilot (MCP)',
   },
   ar: {
     dlgLoadFailed: 'فشل تحميل نافذة التطبيق.',
@@ -1258,6 +1281,8 @@ const tMain = createI18n({
     menuWindow: 'نافذة',
     menuHelp: 'تعليمات',
     menuShortcuts: 'اختصارات لوحة المفاتيح',
+    menuOnlineDocs: 'الدокументات عبر الإنترنت',
+    menuCopilotGuide: 'دليل Copilot (MCP)',
   },
   pt: {
     dlgLoadFailed: 'Falha ao carregar a janela do aplicativo.',
@@ -1360,6 +1385,8 @@ const tMain = createI18n({
     menuWindow: 'Janela',
     menuHelp: 'Ajuda',
     menuShortcuts: 'Atalhos de Teclado',
+    menuOnlineDocs: 'Documentação online',
+    menuCopilotGuide: 'Guia do Copilot (MCP)',
   },
   it: {
     dlgLoadFailed: 'Impossibile caricare la finestra dell’app.',
@@ -1462,6 +1489,8 @@ const tMain = createI18n({
     menuWindow: 'Finestra',
     menuHelp: 'Aiuto',
     menuShortcuts: 'Scelte rapide da tastiera',
+    menuOnlineDocs: 'Documentazione online',
+    menuCopilotGuide: 'Guida Copilot (MCP)',
   },
   pl: {
     dlgLoadFailed: 'Nie udało się załadować okna aplikacji.',
@@ -1564,6 +1593,8 @@ const tMain = createI18n({
     menuWindow: 'Okno',
     menuHelp: 'Pomoc',
     menuShortcuts: 'Skróty klawiaturowe',
+    menuOnlineDocs: 'Dokumentacja online',
+    menuCopilotGuide: 'Przewodnik Copilot (MCP)',
   },
   cs: {
     dlgLoadFailed: 'Okno aplikace se nepodařilo načíst.',
@@ -1666,6 +1697,8 @@ const tMain = createI18n({
     menuWindow: 'Okno',
     menuHelp: 'Nápověda',
     menuShortcuts: 'Klávesové zkratky',
+    menuOnlineDocs: 'Online dokumentace',
+    menuCopilotGuide: 'Průvodce Copilotem (MCP)',
   },
   nl: {
     dlgLoadFailed: 'Het app-venster kon niet worden geladen.',
@@ -1768,6 +1801,8 @@ const tMain = createI18n({
     menuWindow: 'Venster',
     menuHelp: 'Help',
     menuShortcuts: 'Sneltoetsen',
+    menuOnlineDocs: 'Online documentatie',
+    menuCopilotGuide: 'Copilot-gids (MCP)',
   },
   ms: {
     dlgLoadFailed: 'Gagal memuat tetingkap aplikasi.',
@@ -1870,6 +1905,8 @@ const tMain = createI18n({
     menuWindow: 'Tetingkap',
     menuHelp: 'Bantuan',
     menuShortcuts: 'Pintasan Papan Kekunci',
+    menuOnlineDocs: 'Dokumentasi dalam talian',
+    menuCopilotGuide: 'Panduan Copilot (MCP)',
   },
   he: {
     dlgLoadFailed: 'טעינת חלון היישום נכשלה.',
@@ -1971,6 +2008,8 @@ const tMain = createI18n({
     menuWindow: 'חלון',
     menuHelp: 'עזרה',
     menuShortcuts: 'קיצורי מקלדת',
+    menuOnlineDocs: 'תיעוד מקוון',
+    menuCopilotGuide: 'מדריך Copilot (MCP)',
   },
   hi: {
     dlgLoadFailed: 'ऐप विंडो लोड करने में विफल।',
@@ -2073,6 +2112,8 @@ const tMain = createI18n({
     menuWindow: 'विंडो',
     menuHelp: 'सहायता',
     menuShortcuts: 'कीबोर्ड शॉर्टकट',
+    menuOnlineDocs: 'ऑनलाइन दस्तावेज़',
+    menuCopilotGuide: 'Copilot गाइड (MCP)',
   },
   'zh-TW': {
     dlgLoadFailed: '應用程式視窗載入失敗。',
@@ -2173,6 +2214,8 @@ const tMain = createI18n({
     menuWindow: '視窗',
     menuHelp: '說明',
     menuShortcuts: '鍵盤快速鍵',
+    menuOnlineDocs: '線上說明文件',
+    menuCopilotGuide: 'Copilot 指南（MCP）',
   },
 })
 const tm = (key: Parameters<typeof tMain>[1], params?: Parameters<typeof tMain>[2]) =>
@@ -4306,6 +4349,9 @@ export function buildDocsMenu(): void {
           accelerator: 'CmdOrCtrl+/',
           click: () => sendCommand('shortcuts'),
         },
+        { type: 'separator' },
+        { label: tm('menuOnlineDocs'), click: () => void openHelpUrl(DOCS_README_URL) },
+        { label: tm('menuCopilotGuide'), click: () => void openHelpUrl(COPILOT_GUIDE_URL) },
       ],
     },
   ]

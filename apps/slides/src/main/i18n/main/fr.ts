@@ -118,4 +118,8 @@ export const fr = {
   menuZoomIn: 'Zoom avant',
   menuZoomOut: 'Zoom arrière',
   menuActualSize: 'Taille réelle',
+  menuHelp: 'Aide',
+  menuShortcuts: 'Raccourcis clavier',
+  menuOnlineDocs: 'Documentation en ligne',
+  menuCopilotGuide: 'Guide Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

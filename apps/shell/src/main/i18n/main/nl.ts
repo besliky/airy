@@ -110,4 +110,6 @@ export const nl = {
     'Dit tabblad is onverwacht gestopt. Kies Opnieuw laden of Tabblad sluiten in het dialoogvenster.',
   dlgLoadFailed: 'Het app-venster kon niet worden geladen.',
   errUnhandledException: 'Er is een onverwachte fout opgetreden. De app probeert door te gaan.',
+  menuOnlineDocs: 'Online documentatie',
+  menuCopilotGuide: 'Copilot-gids (MCP)',
 } satisfies Record<keyof typeof zh, string>

@@ -109,4 +109,6 @@ export const id = {
   crashPageBody: 'Tab ini berhenti tanpa diduga. Pilih Muat ulang atau Tutup tab pada dialog.',
   dlgLoadFailed: 'Gagal memuat jendela aplikasi.',
   errUnhandledException: 'Terjadi kesalahan tak terduga. Aplikasi akan mencoba tetap berjalan.',
+  menuOnlineDocs: 'Dokumentasi daring',
+  menuCopilotGuide: 'Panduan Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>

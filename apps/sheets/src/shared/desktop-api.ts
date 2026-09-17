@@ -2877,7 +2877,15 @@ export interface DesktopApi {
 }
 
 export type MenuAction =
-  'open' | 'save' | 'save-as' | 'export-pdf' | 'export-csv' | 'print' | 'undo' | 'redo'
+  | 'open'
+  | 'save'
+  | 'save-as'
+  | 'export-pdf'
+  | 'export-csv'
+  | 'print'
+  | 'undo'
+  | 'redo'
+  | 'shortcuts'
 
 export interface WebSearchResult {
   results: Array<{ title: string; url: string; snippet: string }>

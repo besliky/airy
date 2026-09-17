@@ -99,4 +99,6 @@ export const zhTW = {
   crashPageBody: '此分頁已意外停止。請在對話框中選擇重新載入或關閉分頁。',
   dlgLoadFailed: '應用程式視窗載入失敗。',
   errUnhandledException: '發生意外錯誤。應用程式將嘗試繼續執行。',
+  menuOnlineDocs: '線上說明文件',
+  menuCopilotGuide: 'Copilot 指南（MCP）',
 } satisfies Record<keyof typeof zh, string>

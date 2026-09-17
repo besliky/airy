@@ -5728,3 +5728,69 @@ textarea:focus {
   color: var(--text-dim);
   font-size: 12px;
 }
+
+/* ---- Keyboard Shortcuts reference dialog (Help menu; mirrors docs' sheet) ---- */
+
+.modal-shortcuts {
+  width: 620px;
+  max-height: min(78vh, 720px);
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-shortcuts .sc-filter {
+  display: block;
+  width: 100%;
+}
+
+.modal-shortcuts .sc-list {
+  flex: 1;
+  overflow-y: auto;
+  margin-top: 14px;
+  padding-right: 4px;
+}
+
+.modal-shortcuts .sc-group + .sc-group {
+  margin-top: 18px;
+}
+
+.modal-shortcuts .sc-group h3 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.modal-shortcuts .sc-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.modal-shortcuts .sc-row:last-child {
+  border-bottom: none;
+}
+
+.modal-shortcuts .sc-keys {
+  flex: none;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--hover);
+  border-radius: 6px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.modal-shortcuts .sc-empty {
+  margin: 24px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}

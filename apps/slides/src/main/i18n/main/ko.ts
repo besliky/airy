@@ -113,4 +113,8 @@ export const ko = {
   menuZoomIn: '확대',
   menuZoomOut: '축소',
   menuActualSize: '실제 크기',
+  menuHelp: '도움말',
+  menuShortcuts: '키보드 바로 가기',
+  menuOnlineDocs: '온라인 설명서',
+  menuCopilotGuide: 'Copilot 가이드(MCP)',
 } satisfies Record<keyof typeof zh, string>

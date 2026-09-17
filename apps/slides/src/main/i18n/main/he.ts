@@ -111,4 +111,8 @@ export const he = {
   menuZoomIn: 'התקרבות',
   menuZoomOut: 'התרחקות',
   menuActualSize: 'גודל אמיתי',
+  menuHelp: 'עזרה',
+  menuShortcuts: 'קיצורי מקלדת',
+  menuOnlineDocs: 'תיעוד מקוון',
+  menuCopilotGuide: 'מדריך Copilot (MCP)',
 } satisfies Record<keyof typeof zh, string>
