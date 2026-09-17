@@ -17,6 +17,7 @@ vi.mock('@airy-office/electron-utils', () => ({ showSaveDialogWithMemory: vi.fn(
 
 import { countPdfPages } from '../src/main/pdf-export'
 import { workbookPrintPreviewResultSchema } from '../src/shared/desktop-api'
+import { controlsFromEffective } from '../src/renderer/PrintDialog'
 import {
   buildActiveSheetPrintRequest,
   type PageLayoutContext,
@@ -100,6 +101,33 @@ describe('buildActiveSheetPrintRequest', () => {
     const again = await buildActiveSheetPrintRequest(ctx)
     expect(again.request.landscape).toBe(false)
     expect(again.effective.paperSize).toBe(9)
+  })
+})
+
+describe('controlsFromEffective (dialog seed)', () => {
+  it('seeds the controls from the sheet saved setup', () => {
+    expect(
+      controlsFromEffective({
+        paperSize: 9,
+        orientation: 'portrait',
+        scale: 100,
+        fitToPage: false,
+      }),
+    ).toEqual({ paperSize: 9, orientation: 'portrait', scale: 100, fitToPage: false })
+    expect(
+      controlsFromEffective({
+        paperSize: 1,
+        orientation: 'landscape',
+        scale: 62.5,
+        fitToPage: false,
+      }),
+    ).toEqual({ paperSize: 1, orientation: 'landscape', scale: 63, fitToPage: false })
+  })
+
+  it('fit-to-page owns the scale control at 100%', () => {
+    expect(
+      controlsFromEffective({ paperSize: 9, orientation: 'portrait', scale: 40, fitToPage: true }),
+    ).toEqual({ paperSize: 9, orientation: 'portrait', scale: 100, fitToPage: true })
   })
 })
 

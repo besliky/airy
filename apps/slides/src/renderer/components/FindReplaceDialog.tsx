@@ -18,6 +18,7 @@ import {
   matchFocusBox,
   matchStageOutline,
   matchStageRects,
+  stepMatchIndex,
   type FindMatch,
 } from '../find-matches'
 
@@ -87,12 +88,7 @@ export function FindReplaceDialog({
       setStatus(t('paneFrNotFound'))
       return
     }
-    const next =
-      cursor < 0
-        ? dir === 1
-          ? 0
-          : matches.length - 1
-        : (cursor + dir + matches.length) % matches.length
+    const next = stepMatchIndex(cursor, dir, matches.length)
     setCursor(next)
     const m = matches[next]!
     onNavigate(m.slideIndex, m.sourceId, matchFocusBox(slides[m.slideIndex], m))

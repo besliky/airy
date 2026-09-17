@@ -16,6 +16,7 @@ import {
   matchRects,
   matchStageOutline,
   matchStageRects,
+  stepMatchIndex,
 } from '../src/renderer/find-matches'
 
 // ── fixtures: hand-built render trees (only the fields the walker reads) ──
@@ -104,6 +105,32 @@ describe('hitRanges', () => {
   it('case-folding never shifts offsets (length-preserving)', () => {
     // 'İ' lowercases to a longer sequence; the folded haystack must keep offsets
     expect(hitRanges('İSTANBUL istanbul', 'istanbul', c(false, false))).toEqual([[9, 17]])
+  })
+})
+
+describe('stepMatchIndex (find panel cursor math)', () => {
+  it('enters at the first or last match without a cursor, then wraps', () => {
+    expect(stepMatchIndex(-1, 1, 5)).toBe(0)
+    expect(stepMatchIndex(-1, -1, 5)).toBe(4)
+    expect(stepMatchIndex(0, 1, 5)).toBe(1)
+    expect(stepMatchIndex(4, 1, 5)).toBe(0) // wrap forward
+    expect(stepMatchIndex(0, -1, 5)).toBe(4) // wrap backward
+    expect(stepMatchIndex(2, -1, 5)).toBe(1)
+  })
+
+  it('after a single replace consumed the cursor item, find-next lands on the following one', () => {
+    // doReplace sets cursor = cursor - 1 after consuming the current match;
+    // the next findWith(1) must return the index that followed the consumed
+    // item, wrapping at the end
+    const afterReplace = 2 - 1
+    expect(stepMatchIndex(afterReplace, 1, 5)).toBe(2)
+    expect(stepMatchIndex(0 - 1, 1, 5)).toBe(0)
+    expect(stepMatchIndex(4 - 1, 1, 5)).toBe(4) // consumed the last item
+  })
+
+  it('returns -1 without matches', () => {
+    expect(stepMatchIndex(-1, 1, 0)).toBe(-1)
+    expect(stepMatchIndex(0, 1, 0)).toBe(-1)
   })
 })
 

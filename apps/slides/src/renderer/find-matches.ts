@@ -260,6 +260,15 @@ export function matchRects(
   return rects
 }
 
+/** next match index for a find-next/find-prev step: without a cursor the
+ *  first press enters at the first (next) or last (prev) match, otherwise the
+ *  index wraps modulo the match count. Count 0 returns -1 (no matches). */
+export function stepMatchIndex(cursor: number, dir: 1 | -1, count: number): number {
+  if (count <= 0) return -1
+  if (cursor < 0) return dir === 1 ? 0 : count - 1
+  return (cursor + dir + count) % count
+}
+
 /** all hits across the deck, one FindMatch per occurrence */
 export function buildMatches(
   slides: RenderSlide[],

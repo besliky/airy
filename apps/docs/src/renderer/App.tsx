@@ -1,3 +1,4 @@
+import { clampDocZoom } from './zoom-clamp'
 import { DOC_CSS_COMMITTED_EVENT } from './editor/cjk-punct-shrink'
 import {
   useCallback,
@@ -1152,7 +1153,7 @@ export function App() {
       const rect = scrollContainerRef.current?.getBoundingClientRect()
       const anchor = rect ? { vx: e.clientX - rect.left, vy: e.clientY - rect.top } : null
       setZoom((z) => {
-        const next = Math.min(400, Math.max(50, z - e.deltaY * 0.6))
+        const next = clampDocZoom(z - e.deltaY * 0.6)
         if (next !== z) zoomAnchorRef.current = anchor
         return next
       })
@@ -2065,7 +2066,7 @@ export function App() {
       // whole page = the entire page visible, so it must fit both dimensions;
       // floor, not round: rounding up would push the page past the pane edge
       const next = mode === 'width' ? wFit : Math.min(wFit, hFit)
-      const applied = Math.min(400, Math.max(50, Math.floor(next)))
+      const applied = clampDocZoom(Math.floor(next))
       lastFitRef.current = { mode, value: applied }
       setZoom(applied)
     },
@@ -4043,10 +4044,10 @@ export function App() {
           editor?.chain().focus().redo().run()
           break
         case 'zoom-in':
-          setZoom((z) => Math.min(400, Math.round(z) + 10))
+          setZoom((z) => clampDocZoom(Math.round(z) + 10))
           break
         case 'zoom-out':
-          setZoom((z) => Math.max(50, Math.round(z) - 10))
+          setZoom((z) => clampDocZoom(Math.round(z) - 10))
           break
         case 'zoom-100':
           setZoom(100)
@@ -5047,7 +5048,7 @@ export function App() {
                 className="zoom-btn"
                 data-tip={t('appZoomOut')}
                 aria-label={t('appZoomOut')}
-                onClick={() => setZoom((z) => Math.max(50, Math.round(z) - 10))}
+                onClick={() => setZoom((z) => clampDocZoom(Math.round(z) - 10))}
               >
                 −
               </button>
@@ -5065,7 +5066,7 @@ export function App() {
                 className="zoom-btn"
                 data-tip={t('appZoomIn')}
                 aria-label={t('appZoomIn')}
-                onClick={() => setZoom((z) => Math.min(400, Math.round(z) + 10))}
+                onClick={() => setZoom((z) => clampDocZoom(Math.round(z) + 10))}
               >
                 +
               </button>

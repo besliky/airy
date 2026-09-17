@@ -46,6 +46,22 @@ interface EffectiveSetup {
   fitToPage: boolean
 }
 
+/// Initial dialog control values for a sheet's effective saved page setup:
+/// fit-to-page takes over the scale control at 100%.
+export function controlsFromEffective(effective: EffectiveSetup): {
+  paperSize: number
+  orientation: 'portrait' | 'landscape'
+  scale: number
+  fitToPage: boolean
+} {
+  return {
+    paperSize: effective.paperSize,
+    orientation: effective.orientation,
+    scale: effective.fitToPage ? 100 : Math.round(effective.scale),
+    fitToPage: effective.fitToPage,
+  }
+}
+
 export function PrintDialog({
   buildRequest,
   onClose,
@@ -110,10 +126,11 @@ export function PrintDialog({
       try {
         const { effective } = await buildRequest({})
         if (!alive) return
-        setPaperSize(effective.paperSize)
-        setOrientation(effective.orientation)
-        setScale(effective.fitToPage ? 100 : Math.round(effective.scale))
-        setFitToPage(effective.fitToPage)
+        const seeded = controlsFromEffective(effective)
+        setPaperSize(seeded.paperSize)
+        setOrientation(seeded.orientation)
+        setScale(seeded.scale)
+        setFitToPage(seeded.fitToPage)
       } catch {
         // Nothing printable: the preview pass below reports the error.
       } finally {
