@@ -79,10 +79,25 @@ describe('tokens.css WCAG contrast', () => {
     ).toBeGreaterThanOrEqual(3)
   })
 
+  it('dark-theme muted icons meet the non-text minimum (3:1) on the dark surface', () => {
+    const ratio = contrastRatio(dark.get('--icon-muted') as string, dark.get('--surface') as string)
+    expect(
+      ratio,
+      `--icon-muted ${dark.get('--icon-muted')} on ${dark.get('--surface')}`,
+    ).toBeGreaterThanOrEqual(3)
+  })
+
   it('keeps tertiary lighter than secondary in light theme (visual hierarchy)', () => {
     const tertiary = contrastRatio(light.get('--text-tertiary') as string, '#ffffff')
     const secondary = contrastRatio(light.get('--text-secondary') as string, '#ffffff')
     expect(tertiary).toBeLessThan(secondary)
+  })
+
+  it('keeps dark muted icons dimmer than dark tertiary text (visual hierarchy)', () => {
+    const surface = dark.get('--surface') as string
+    const iconMuted = contrastRatio(dark.get('--icon-muted') as string, surface)
+    const tertiary = contrastRatio(dark.get('--text-tertiary') as string, surface)
+    expect(iconMuted).toBeLessThan(tertiary)
   })
 
   it('system-dark fallback matches the dark-theme block for audited tokens', () => {
