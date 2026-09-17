@@ -617,6 +617,8 @@ export const ar = {
   appApply: 'تطبيق',
   appTabHome: 'الشريط الرئيسي',
   appRibbonTabs: 'علامات تبويب الشريط',
+  appWorkbookCommands: 'أوامر المصنف',
+  appOpenDropdown: 'فتح القائمة المنسدلة',
   appFileTab: 'ملف',
   appFileOpen: 'فتح مصنف',
   appFileSave: 'حفظ',

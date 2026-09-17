@@ -651,6 +651,8 @@ export const cs = {
   appApply: 'Použít',
   appTabHome: 'Domů',
   appRibbonTabs: 'Karty pásu karet',
+  appWorkbookCommands: 'Příkazy sešitu',
+  appOpenDropdown: 'Otevřít rozevírací seznam',
   appFileTab: 'Soubor',
   appFileOpen: 'Otevřít sešit',
   appFileSave: 'Uložit',

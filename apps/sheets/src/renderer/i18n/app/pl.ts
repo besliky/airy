@@ -674,6 +674,8 @@ export const pl = {
   appApply: 'Zastosuj',
   appTabHome: 'Narzędzia główne',
   appRibbonTabs: 'Karty wstążki',
+  appWorkbookCommands: 'Polecenia skoroszytu',
+  appOpenDropdown: 'Otwórz listę rozwijaną',
   appFileTab: 'Plik',
   appFileOpen: 'Otwórz skoroszyt',
   appFileSave: 'Zapisz',

@@ -658,6 +658,8 @@ export const ko = {
   // Ribbon tabs
   appTabHome: '홈',
   appRibbonTabs: '리본 탭',
+  appWorkbookCommands: '통합 문서 명령',
+  appOpenDropdown: '드롭다운 열기',
   appFileTab: '파일',
   appFileOpen: '통합 문서 열기',
   appFileSave: '저장',

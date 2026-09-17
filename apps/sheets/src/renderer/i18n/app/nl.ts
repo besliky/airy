@@ -683,6 +683,8 @@ export const nl = {
   appApply: 'Toepassen',
   appTabHome: 'Start',
   appRibbonTabs: 'Linttabbladen',
+  appWorkbookCommands: 'Werkmapopdrachten',
+  appOpenDropdown: 'Vervolgkeuzelijst openen',
   appFileTab: 'Bestand',
   appFileOpen: 'Werkmap openen',
   appFileSave: 'Opslaan',

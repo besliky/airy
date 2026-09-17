@@ -696,6 +696,8 @@ export const de = {
   appApply: 'Anwenden',
   appTabHome: 'Start',
   appRibbonTabs: 'Menüband-Registerkarten',
+  appWorkbookCommands: 'Arbeitsmappen-Befehle',
+  appOpenDropdown: 'Dropdown öffnen',
   appFileTab: 'Datei',
   appFileOpen: 'Arbeitsmappe öffnen',
   appFileSave: 'Speichern',

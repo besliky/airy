@@ -684,6 +684,8 @@ export const it = {
   appApply: 'Applica',
   appTabHome: 'Home',
   appRibbonTabs: 'Schede della barra multifunzione',
+  appWorkbookCommands: 'Comandi della cartella di lavoro',
+  appOpenDropdown: 'Apri elenco a discesa',
   appFileTab: 'File',
   appFileOpen: 'Apri cartella di lavoro',
   appFileSave: 'Salva',

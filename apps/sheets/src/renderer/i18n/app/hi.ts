@@ -646,6 +646,8 @@ export const hi = {
   appApply: 'लागू करें',
   appTabHome: 'होम',
   appRibbonTabs: 'रिबन टैब',
+  appWorkbookCommands: 'कार्यपुस्तक कमांड',
+  appOpenDropdown: 'ड्रॉपडाउन खोलें',
   appFileTab: 'फ़ाइल',
   appFileOpen: 'कार्यपुस्तिका खोलें',
   appFileSave: 'सहेजें',

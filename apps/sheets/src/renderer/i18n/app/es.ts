@@ -687,6 +687,8 @@ export const es = {
   appApply: 'Aplicar',
   appTabHome: 'Inicio',
   appRibbonTabs: 'Pestañas de la cinta',
+  appWorkbookCommands: 'Comandos del libro',
+  appOpenDropdown: 'Abrir la lista desplegable',
   appFileTab: 'Archivo',
   appFileOpen: 'Abrir libro',
   appFileSave: 'Guardar',

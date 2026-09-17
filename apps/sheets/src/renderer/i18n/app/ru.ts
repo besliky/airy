@@ -666,6 +666,8 @@ export const ru = {
   appApply: 'Применить',
   appTabHome: 'Главная',
   appRibbonTabs: 'Вкладки ленты',
+  appWorkbookCommands: 'Команды книги',
+  appOpenDropdown: 'Открыть раскрывающийся список',
   appFileTab: 'Файл',
   appFileOpen: 'Открыть книгу',
   appFileSave: 'Сохранить',

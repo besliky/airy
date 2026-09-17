@@ -580,6 +580,8 @@ export const zh = {
   // Ribbon tabs
   appTabHome: '开始',
   appRibbonTabs: '功能区选项卡',
+  appWorkbookCommands: '工作簿命令',
+  appOpenDropdown: '打开下拉列表',
   appFileTab: '文件',
   appFileOpen: '打开工作簿',
   appFileSave: '保存',

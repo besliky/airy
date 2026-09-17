@@ -568,7 +568,7 @@ export function ExcelShell({
       <header className={`excel-header ${collapse.rootClass}`} ref={collapse.rootRef}>
         <nav
           className={`ribbon-tabs ${IN_TAB ? '' : IS_MAC ? 'ribbon-tabs-mac' : 'ribbon-tabs-win'}`}
-          aria-label="Workbook commands"
+          aria-label={t('appWorkbookCommands')}
           onDoubleClick={collapse.onTabsDoubleClick}
         >
           {!IS_MAC && (
@@ -808,7 +808,7 @@ export function ExcelShell({
             <button
               className="name-box-goto"
               data-tip={t('appGoToButtonTitle')}
-              aria-label="Go To"
+              aria-label={t('appGoToButtonTitle')}
               onClick={() => setShowGoTo(true)}
             >
               ▾
@@ -1026,7 +1026,7 @@ function NameBox({
   return (
     <input
       className={`name-box${error === null ? '' : ' invalid'}`}
-      aria-label="Name Box"
+      aria-label={t('appNameBoxTitle')}
       data-tip={error ?? t('appNameBoxTitle')}
       placeholder="A1"
       spellCheck={false}
@@ -1101,7 +1101,7 @@ function SortDialog({
       <div
         className="format-cells-dialog sort-dialog"
         role="dialog"
-        aria-label="Custom sort"
+        aria-label={t('appCustomSort')}
         onClick={(event) => event.stopPropagation()}
       >
         <header>{t('appSort')}</header>
@@ -1169,7 +1169,7 @@ function RemoveDuplicatesDialog({
       <div
         className="format-cells-dialog sort-dialog"
         role="dialog"
-        aria-label="Remove duplicates"
+        aria-label={t('appRemoveDuplicates')}
         onClick={(event) => event.stopPropagation()}
       >
         <header>{t('appRemoveDuplicates')}</header>
@@ -1334,7 +1334,7 @@ function LinkDialog({
       <div
         className="format-cells-dialog link-dialog"
         role="dialog"
-        aria-label="Insert link"
+        aria-label={t(currentTarget ? 'appEditLinkTitle' : 'appInsertLinkTitle')}
         onClick={(event) => event.stopPropagation()}
       >
         <header>{t(currentTarget ? 'appEditLinkTitle' : 'appInsertLinkTitle')}</header>

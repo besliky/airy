@@ -648,6 +648,8 @@ export const id = {
   appApply: 'Terapkan',
   appTabHome: 'Beranda',
   appRibbonTabs: 'Tab pita',
+  appWorkbookCommands: 'Perintah buku kerja',
+  appOpenDropdown: 'Buka dropdown',
   appFileTab: 'Berkas',
   appFileOpen: 'Buka Buku Kerja',
   appFileSave: 'Simpan',

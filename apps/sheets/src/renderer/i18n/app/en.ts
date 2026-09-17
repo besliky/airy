@@ -629,6 +629,8 @@ export const en = {
   appApply: 'Apply',
   appTabHome: 'Home',
   appRibbonTabs: 'Ribbon tabs',
+  appWorkbookCommands: 'Workbook commands',
+  appOpenDropdown: 'Open dropdown',
   appFileTab: 'File',
   appFileOpen: 'Open Workbook',
   appFileSave: 'Save',

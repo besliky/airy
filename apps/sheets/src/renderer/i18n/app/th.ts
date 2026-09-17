@@ -618,6 +618,8 @@ export const th = {
   appApply: 'นำไปใช้',
   appTabHome: 'หน้าแรก',
   appRibbonTabs: 'แท็บริบบอน',
+  appWorkbookCommands: 'คำสั่งของเวิร์กบุ๊ก',
+  appOpenDropdown: 'เปิดรายการแบบเลื่อนลง',
   appFileTab: 'ไฟล์',
   appFileOpen: 'เปิดสมุดงาน',
   appFileSave: 'บันทึก',

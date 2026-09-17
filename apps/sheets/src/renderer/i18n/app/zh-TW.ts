@@ -566,6 +566,8 @@ export const zhTW = {
   appApply: '套用',
   appTabHome: '常用',
   appRibbonTabs: '功能區索引標籤',
+  appWorkbookCommands: '活頁簿命令',
+  appOpenDropdown: '開啟下拉清單',
   appFileTab: '檔案',
   appFileOpen: '開啟活頁簿',
   appFileSave: '儲存',

@@ -597,6 +597,8 @@ export const he = {
   appApply: 'החל',
   appTabHome: 'בית',
   appRibbonTabs: 'כרטיסיות רצועה',
+  appWorkbookCommands: 'פקודות חוברת העבודה',
+  appOpenDropdown: 'פתיחת רשימה נפתחת',
   appFileTab: 'קובץ',
   appFileOpen: 'פתיחת חוברת עבודה',
   appFileSave: 'שמירה',

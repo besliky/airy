@@ -683,6 +683,8 @@ export const ja = {
   // Ribbon tabs
   appTabHome: 'ホーム',
   appRibbonTabs: 'リボンのタブ',
+  appWorkbookCommands: 'ブックのコマンド',
+  appOpenDropdown: 'ドロップダウンを開く',
   appFileTab: 'ファイル',
   appFileOpen: 'ワークシートを開く',
   appFileSave: '保存',

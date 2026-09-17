@@ -648,6 +648,8 @@ export const ms = {
   appApply: 'Gunakan',
   appTabHome: 'Laman Utama',
   appRibbonTabs: 'Tab reben',
+  appWorkbookCommands: 'Perintah buku kerja',
+  appOpenDropdown: 'Buka senarai juntai',
   appFileTab: 'Fail',
   appFileOpen: 'Buka Buku Kerja',
   appFileSave: 'Simpan',

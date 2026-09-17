@@ -708,6 +708,8 @@ export const fr = {
   appApply: 'Appliquer',
   appTabHome: 'Accueil',
   appRibbonTabs: 'Onglets du ruban',
+  appWorkbookCommands: 'Commandes du classeur',
+  appOpenDropdown: 'Ouvrir la liste déroulante',
   appFileTab: 'Fichier',
   appFileOpen: 'Ouvrir un classeur',
   appFileSave: 'Enregistrer',
