@@ -9,6 +9,7 @@ import type {
 } from 'electron'
 import {
   crashErrorPageUrl,
+  forgetRendererFileAccess,
   grantRendererFileAccess,
   isRecoverableRendererCrash,
   voidLoad,
@@ -258,6 +259,14 @@ export class TabManager {
     return this.tabs.find((t) => t.view?.webContents.id === webContentsId)?.filePath
   }
 
+  /** Grant the tab's renderer read access to `filePath`'s folder (per-sender
+   *  allowlist — a shell-routed open belongs to the tab that loads it). */
+  grantTabFile(tabId: string | undefined, filePath: string): void {
+    if (!tabId) return
+    const wc = this.tabs.find((t) => t.id === tabId)?.view?.webContents
+    if (wc) grantRendererFileAccess(filePath, wc.id)
+  }
+
   /** full record snapshot for shell-side menus (tab context-menu enablement) */
   tabInfo(id: string): { id: string; kind: TabKind; filePath?: string } | undefined {
     const tab = this.tabs.find((t) => t.id === id)
@@ -271,32 +280,34 @@ export class TabManager {
   duplicateTab(id: string): boolean {
     const tab = this.tabs.find((t) => t.id === id)
     if (!tab?.filePath || tab.present) return false
-    // same grants/recents a routed open would apply — but bypassing the
-    // open-by-path dedupe, which would just activate this tab
-    grantRendererFileAccess(tab.filePath)
+    // same recents a routed open would apply — but bypassing the open-by-path
+    // dedupe, which would just activate this tab. The read grant goes to the
+    // NEW tab's renderer (captured once it exists below).
     recordRecentFile(tab.filePath)
+    let newId: string | undefined
     switch (tab.kind) {
       case 'docs':
-        this.openDocsTab(tab.filePath)
+        newId = this.openDocsTab(tab.filePath)
         break
       case 'sheets':
-        this.openSheetsTab(tab.filePath)
+        newId = this.openSheetsTab(tab.filePath)
         break
       case 'slides':
-        this.openSlidesTab(tab.filePath)
+        newId = this.openSlidesTab(tab.filePath)
         break
       case 'pdf':
-        this.openPdfTab(tab.filePath)
+        newId = this.openPdfTab(tab.filePath)
         break
       case 'markdown':
-        this.openMarkdownTab(tab.filePath)
+        newId = this.openMarkdownTab(tab.filePath)
         break
       case 'html':
-        this.openHtmlTab(tab.filePath)
+        newId = this.openHtmlTab(tab.filePath)
         break
       default:
         return false
     }
+    this.grantTabFile(newId, tab.filePath)
     return true
   }
 
@@ -662,6 +673,8 @@ export class TabManager {
     if (idx < 0) return
     if (this.htmlFullScreenId === id) this.htmlFullScreenId = null
     const [removed] = this.tabs.splice(idx, 1)
+    // the tab's renderer is going away: its per-sender read grants go with it
+    if (removed.view) forgetRendererFileAccess(removed.view.webContents.id)
     this.onTabClosed?.({ id: removed.id, kind: removed.kind, filePath: removed.filePath })
     if (this.activeId === id) {
       const fallback = this.tabs[idx - 1] ?? this.tabs[0]

@@ -28,6 +28,7 @@ import {
   configuredDefaultSaveDir,
   contextMenuLabels,
   fetchRemoteImage,
+  forgetRendererFileAccess,
   forgetWitnessedDrops,
   grantRendererFileAccess,
   installContextMenu,
@@ -793,6 +794,7 @@ function statAttachment(filePath: string): { meta?: AttachmentMeta; error?: stri
 
 function collectAttachments(
   paths: string[],
+  senderId: number,
   mayGrant?: (p: string) => boolean,
 ): AttachmentAddResult {
   const accepted: AttachmentMeta[] = []
@@ -804,7 +806,7 @@ function collectAttachments(
     // picks, pasted temp files), and only with a witnessed user drop/paste
     // for renderer-named paths (see the filesAdd handler)
     if (meta) {
-      if (!mayGrant || mayGrant(p)) grantRendererFileAccess(p)
+      if (!mayGrant || mayGrant(p)) grantRendererFileAccess(p, senderId)
       accepted.push(meta)
     } else if (error) rejected.push(error)
   }
@@ -1197,11 +1199,17 @@ async function resolveSaveTarget(
   const defaultPath = current
     ? join(dirname(current), basename(current))
     : join(configuredDefaultSaveDir(app), `${fileNameBase(defaultName) || tm('untitledFile')}.html`)
-  const picked = await showSaveDialogWithMemory(dialog, win, {
-    title: tm('dlgSaveTitle'),
-    defaultPath,
-    filters: [{ name: tm('filterHtml'), extensions: ['html', 'htm'] }],
-  })
+  const picked = await showSaveDialogWithMemory(
+    dialog,
+    win,
+    {
+      title: tm('dlgSaveTitle'),
+      defaultPath,
+      filters: [{ name: tm('filterHtml'), extensions: ['html', 'htm'] }],
+    },
+    undefined,
+    e.sender.id,
+  )
   if (picked.canceled || !picked.filePath) return 'canceled'
   return picked.filePath
 }
@@ -1462,16 +1470,22 @@ function registerHtmlIpc(): void {
   ipcMain.handle(HTML_CHANNELS.filesPick, async (e): Promise<AttachmentAddResult | null> => {
     const win =
       BrowserWindow.fromWebContents(e.sender) ?? BrowserWindow.getFocusedWindow() ?? undefined
-    const picked = await showOpenDialogWithMemory(dialog, win, {
-      title: tm('dlgAddAttachment'),
-      filters: [
-        { name: tm('filterSupported'), extensions: [...ATTACHMENT_EXTS] },
-        { name: tm('filterAll'), extensions: ['*'] },
-      ],
-      properties: ['openFile', 'multiSelections'],
-    })
+    const picked = await showOpenDialogWithMemory(
+      dialog,
+      win,
+      {
+        title: tm('dlgAddAttachment'),
+        filters: [
+          { name: tm('filterSupported'), extensions: [...ATTACHMENT_EXTS] },
+          { name: tm('filterAll'), extensions: ['*'] },
+        ],
+        properties: ['openFile', 'multiSelections'],
+      },
+      undefined,
+      e.sender.id,
+    )
     if (picked.canceled || picked.filePaths.length === 0) return null
-    return collectAttachments(picked.filePaths)
+    return collectAttachments(picked.filePaths, e.sender.id)
   })
 
   // Witnessed drops/pastes feed the files-add grant policy (preload-world
@@ -1485,16 +1499,17 @@ function registerHtmlIpc(): void {
     // renderer or already inside a granted directory
     collectAttachments(
       Array.isArray(paths) ? paths.filter((p) => typeof p === 'string') : [],
+      event.sender.id,
       (p) => mayGrantAttachmentRead(event.sender.id, p),
     ),
   )
 
   ipcMain.handle(
     HTML_CHANNELS.filesAddPastedImage,
-    (_e, data: unknown, ext: unknown): AttachmentAddResult => {
+    (e, data: unknown, ext: unknown): AttachmentAddResult => {
       const filePath = savePastedImage(data, ext)
       return filePath
-        ? collectAttachments([filePath])
+        ? collectAttachments([filePath], e.sender.id)
         : { accepted: [], rejected: [tm('errNotImage')] }
     },
   )
@@ -1502,7 +1517,7 @@ function registerHtmlIpc(): void {
   ipcMain.handle(
     HTML_CHANNELS.filesRead,
     async (
-      _e,
+      e,
       filePath: string,
       offset: number,
       maxChars: number,
@@ -1512,7 +1527,7 @@ function registerHtmlIpc(): void {
       if (!ATTACHMENT_EXTS.has(ext)) return { ok: false, error: tm('errUnsupportedExt', { ext }) }
       if (ATTACHMENT_IMAGE_EXTS.has(ext)) return { ok: false, error: tm('errImageNoText') }
       // only attachments from granted directories (see collectAttachments)
-      if (!rendererMayReadPath(filePath)) {
+      if (!rendererMayReadPath(e.sender.id, filePath)) {
         return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
       }
       try {
@@ -1532,13 +1547,13 @@ function registerHtmlIpc(): void {
     },
   )
 
-  ipcMain.handle(HTML_CHANNELS.filesReadImage, (_e, filePath: string): AttachmentImageResult => {
+  ipcMain.handle(HTML_CHANNELS.filesReadImage, (e, filePath: string): AttachmentImageResult => {
     const name = basename(filePath)
     const ext = name.split('.').pop()?.toLowerCase() ?? ''
     const mime = ATTACHMENT_IMAGE_MIME[ext]
     if (!mime) return { ok: false, error: `${name}: ${tm('errNotImage')}` }
     // only attachments from granted directories (see collectAttachments)
-    if (!rendererMayReadPath(filePath)) {
+    if (!rendererMayReadPath(e.sender.id, filePath)) {
       return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
     }
     try {
@@ -1557,12 +1572,18 @@ function registerHtmlIpc(): void {
     if (!docPath) return null
     const win =
       BrowserWindow.fromWebContents(e.sender) ?? BrowserWindow.getFocusedWindow() ?? undefined
-    const picked = await showOpenDialogWithMemory(dialog, win, {
-      title: tm('dlgPickImage'),
-      // only formats readImage/DOCX export can round-trip (docx-engine NewImage mimes)
-      filters: [{ name: tm('filterImages'), extensions: ['png', 'jpg', 'jpeg', 'gif'] }],
-      properties: ['openFile'],
-    })
+    const picked = await showOpenDialogWithMemory(
+      dialog,
+      win,
+      {
+        title: tm('dlgPickImage'),
+        // only formats readImage/DOCX export can round-trip (docx-engine NewImage mimes)
+        filters: [{ name: tm('filterImages'), extensions: ['png', 'jpg', 'jpeg', 'gif'] }],
+        properties: ['openFile'],
+      },
+      undefined,
+      e.sender.id,
+    )
     const source = picked.filePaths[0]
     if (picked.canceled || !source) return null
     return copyImageIntoOwnedAssets(docPath, source)
@@ -1649,6 +1670,7 @@ function registerHtmlIpc(): void {
           filters: [{ name: 'Word', extensions: ['docx'] }],
         },
         configuredDefaultSaveDir(app),
+        e.sender.id,
       )
       if (picked.canceled || !picked.filePath) return { ok: true, canceled: true }
       if (docxExportPrepareHook && !(await docxExportPrepareHook(picked.filePath))) {
@@ -1693,6 +1715,7 @@ function registerHtmlIpc(): void {
           filters: [{ name: 'PDF', extensions: ['pdf'] }],
         },
         configuredDefaultSaveDir(app),
+        e.sender.id,
       )
       if (picked.canceled || !picked.filePath) return { ok: true, canceled: true }
       const workDir = await mkdtemp(join(tmpdir(), 'airy-html-pdf-'))
@@ -1751,6 +1774,7 @@ function grantAndTrack(wc: WebContents, openPath?: string | null): void {
     clearHtmlRecoveryFor(wcId)
     closePresentViewsOf(wcId)
     forgetWitnessedDrops(wcId)
+    forgetRendererFileAccess(wcId)
     openPathByWc.delete(wcId)
     allowedByWc.delete(wcId)
     savePathByWc.delete(wcId)

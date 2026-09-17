@@ -188,6 +188,7 @@ export async function showOpenDialogWithMemory(
   parent: BrowserWindow | null | undefined,
   options: OpenDialogOptions,
   fallbackDir?: string,
+  requesterId?: number,
 ): Promise<OpenDialogReturnValue> {
   await seedPersistedDirectory(dialog)
   const withDir = withRememberedDirectory(dialog, options, fallbackDir)
@@ -199,10 +200,16 @@ export async function showOpenDialogWithMemory(
     const pickedDir = options.properties?.includes('openDirectory') ? picked : dirname(picked)
     lastUsedDirectoryByDialog.set(dialog, pickedDir)
     void persistPickedDirectory(pickedDir)
-    // Every dialog pick is a user-driven folder choice: allow the renderers
-    // to read what the user just picked (files and chosen directories alike).
-    for (const filePath of result.filePaths) grantRendererFileAccess(filePath)
-    if (options.properties?.includes('openDirectory')) grantRendererDir(picked)
+    // Every dialog pick is a user-driven folder choice: allow the REQUESTING
+    // renderer (when known — a renderer-initiated dialog) to read what the
+    // user just picked (files and chosen directories alike). Grants are per
+    // sender, so another tab gains nothing. Main-side (menu-driven) dialogs
+    // pass no requester and grant nothing here — their opens go through the
+    // shell's per-tab routing, which grants the tab that loads the file.
+    if (requesterId !== undefined) {
+      for (const filePath of result.filePaths) grantRendererFileAccess(filePath, requesterId)
+      if (options.properties?.includes('openDirectory')) grantRendererDir(picked, requesterId)
+    }
   }
   return result
 }
@@ -226,6 +233,7 @@ export async function showSaveDialogWithMemory(
   parent: BrowserWindow | null | undefined,
   options: SaveDialogOptions,
   fallbackDir?: string,
+  requesterId?: number,
 ): Promise<SaveDialogReturnValue> {
   await seedPersistedDirectory(dialog)
   const withDir = withRememberedDirectory(dialog, options, fallbackDir)
@@ -236,7 +244,8 @@ export async function showSaveDialogWithMemory(
     lastUsedDirectoryByDialog.set(dialog, dirname(result.filePath))
     void persistPickedDirectory(dirname(result.filePath))
     // the user just chose this folder for a save: reading there is fine too
-    grantRendererFileAccess(result.filePath)
+    // (for the requesting renderer only — grants are per sender)
+    if (requesterId !== undefined) grantRendererFileAccess(result.filePath, requesterId)
   }
   return result
 }

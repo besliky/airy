@@ -52,7 +52,7 @@ describe('mayGrantAttachmentRead policy', () => {
   it('allows witnessed paths and paths already inside granted directories', () => {
     recordWitnessedDrops(SENDER, ['/tmp/dropped/report.pdf'], 1_000)
     expect(mayGrantAttachmentRead(SENDER, '/tmp/dropped/report.pdf', 1_500)).toBe(true)
-    grantRendererDir('/home/user/docs')
+    grantRendererDir('/home/user/docs', SENDER)
     expect(mayGrantAttachmentRead(SENDER, '/home/user/docs/secret.zip', 1_500)).toBe(true)
   })
 
@@ -62,6 +62,12 @@ describe('mayGrantAttachmentRead policy', () => {
     // a witness for one sender must not bless another sender's claim
     recordWitnessedDrops(SENDER, ['/tmp/x.txt'], 1_000)
     expect(mayGrantAttachmentRead(OTHER, '/tmp/x.txt', 1_000)).toBe(false)
+  })
+
+  it('a grant held by another sender does not bless this sender (per-sender allowlist)', () => {
+    grantRendererDir('/home/user/docs', OTHER)
+    expect(mayGrantAttachmentRead(OTHER, '/home/user/docs/secret.zip', 1_000)).toBe(true)
+    expect(mayGrantAttachmentRead(SENDER, '/home/user/docs/secret.zip', 1_000)).toBe(false)
   })
 })
 

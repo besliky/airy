@@ -45,6 +45,7 @@ import {
   DOCS_README_URL,
   contextMenuLabels,
   fetchRemoteImage,
+  forgetRendererFileAccess,
   forgetWitnessedDrops,
   grantRendererFileAccess,
   installContextMenu,
@@ -1844,7 +1845,7 @@ function dialogParent(event: IpcMainInvokeEvent): BrowserWindow | undefined {
 }
 
 async function openFileDialog(event: IpcMainInvokeEvent, options: OpenDialogOptions) {
-  return showOpenDialogWithMemory(dialog, dialogParent(event), options)
+  return showOpenDialogWithMemory(dialog, dialogParent(event), options, undefined, event.sender.id)
 }
 
 async function saveFileDialog(event: IpcMainInvokeEvent, options: SaveDialogOptions) {
@@ -1855,6 +1856,7 @@ async function saveFileDialog(event: IpcMainInvokeEvent, options: SaveDialogOpti
     dialogParent(event),
     options,
     configuredDefaultSaveDir(app),
+    event.sender.id,
   )
 }
 
@@ -1874,6 +1876,7 @@ function registerSheetsSession(webContents: WebContents, client: XlsxSidecarClie
     sheetsTabs.delete(webContents.id)
     captureConsent.forget(webContents.id)
     forgetWitnessedDrops(webContents.id)
+    forgetRendererFileAccess(webContents.id)
     if (entry) {
       // Free pending chunked-save uploads with the tab (the sweep timer's
       // closure would otherwise keep them reachable until the idle expiry).
@@ -2355,18 +2358,19 @@ function statAttachment(filePath: string): { meta?: AttachmentMeta; error?: stri
 
 function collectAttachments(
   paths: string[],
+  senderId: number,
   mayGrant?: (p: string) => boolean,
 ): AttachmentAddResult {
   const accepted: AttachmentMeta[] = []
   const rejected: string[] = []
   for (const p of paths) {
     const { meta, error } = statAttachment(p)
-    // accepted = user-chosen attachment: its folder joins the renderer read
-    // allowlist — unconditionally for trusted main-side origins (dialog
+    // accepted = user-chosen attachment: its folder joins THIS renderer's
+    // read allowlist — unconditionally for trusted main-side origins (dialog
     // picks, pasted temp files), and only with a witnessed user drop/paste
     // for renderer-named paths (see the filesAdd handler)
     if (meta) {
-      if (!mayGrant || mayGrant(p)) grantRendererFileAccess(p)
+      if (!mayGrant || mayGrant(p)) grantRendererFileAccess(p, senderId)
       accepted.push(meta)
     } else if (error) rejected.push(error)
   }
@@ -2719,7 +2723,7 @@ export function registerSheetsIpc(): void {
     // attachments — both grant the file's folder before this runs.
     const checked = checkMergeSourcePaths(paths, {
       homeDir: app.getPath('home'),
-      mayRead: (path) => rendererMayReadPath(path),
+      mayRead: (path) => rendererMayReadPath(event.sender.id, path),
       exists: (path) => existsSync(path),
     })
     if ('rejection' in checked) {
@@ -2850,7 +2854,7 @@ export function registerSheetsIpc(): void {
     // same confinement as the files:* handlers: only files in granted
     // directories (dialog picks, shell-routed opens, accepted attachments)
     // may be read back — an AI-proposed arbitrary path is not a grant
-    if (!rendererMayReadPath(resolved)) throw new Error(tm('errImgNotGranted'))
+    if (!rendererMayReadPath(event.sender.id, resolved)) throw new Error(tm('errImgNotGranted'))
     const info = await stat(resolved).catch(() => null)
     if (!info?.isFile()) throw new Error(tm('errImgNotFound', { path: request.path }))
     if (info.size > 20 * 1024 * 1024) throw new Error(tm('errImgTooLarge20'))
@@ -3397,7 +3401,7 @@ export function registerSheetsIpc(): void {
       properties: ['openFile', 'multiSelections'],
     })
     if (selection.canceled || selection.filePaths.length === 0) return null
-    return collectAttachments(selection.filePaths)
+    return collectAttachments(selection.filePaths, event.sender.id)
   })
 
   // Witnessed drops/pastes feed the files-add grant policy (preload-world
@@ -3410,8 +3414,10 @@ export function registerSheetsIpc(): void {
     sessionFor(event)
     // renderer-named paths grant only when really dropped/pasted into this
     // renderer or already inside a granted directory
-    return collectAttachments(z.array(z.string().min(1).max(1024)).max(50).parse(paths), (p) =>
-      mayGrantAttachmentRead(event.sender.id, p),
+    return collectAttachments(
+      z.array(z.string().min(1).max(1024)).max(50).parse(paths),
+      event.sender.id,
+      (p) => mayGrantAttachmentRead(event.sender.id, p),
     )
   })
 
@@ -3432,7 +3438,7 @@ export function registerSheetsIpc(): void {
         return { ok: false, error: tm('errImageNoText') }
       }
       // only attachments from granted directories (see collectAttachments)
-      if (!rendererMayReadPath(validatedPath)) {
+      if (!rendererMayReadPath(event.sender.id, validatedPath)) {
         return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
       }
       try {
@@ -3462,7 +3468,7 @@ export function registerSheetsIpc(): void {
     const mime = ATTACHMENT_IMAGE_MIME[ext]
     if (!mime) return { ok: false, error: `${name}: ${tm('errNotImage')}` }
     // only attachments from granted directories (see collectAttachments)
-    if (!rendererMayReadPath(validatedPath)) {
+    if (!rendererMayReadPath(event.sender.id, validatedPath)) {
       return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
     }
     try {
@@ -3484,7 +3490,7 @@ export function registerSheetsIpc(): void {
       sessionFor(event)
       const filePath = savePastedImage(data, ext)
       return filePath
-        ? collectAttachments([filePath])
+        ? collectAttachments([filePath], event.sender.id)
         : { accepted: [], rejected: [tm('errNotImage')] }
     },
   )

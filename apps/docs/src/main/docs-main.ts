@@ -28,6 +28,7 @@ import {
   configuredDefaultSaveDir,
   contextMenuLabels,
   fetchRemoteImage,
+  forgetRendererFileAccess,
   forgetWitnessedDrops,
   grantRendererFileAccess,
   installContextMenu,
@@ -2296,13 +2297,19 @@ function dialogParent(event: IpcMainInvokeEvent): BrowserWindow | undefined {
 }
 
 async function openDialog(event: IpcMainInvokeEvent, options: OpenDialogOptions) {
-  return showOpenDialogWithMemory(dialog, dialogParent(event), options)
+  return showOpenDialogWithMemory(dialog, dialogParent(event), options, undefined, event.sender.id)
 }
 
 async function saveDialog(event: IpcMainInvokeEvent, options: SaveDialogOptions) {
   // before any pick is remembered, bare-name suggestions anchor in the
   // configurable default save folder instead of Electron's Downloads pin
-  return showSaveDialogWithMemory(dialog, dialogParent(event), options, defaultSaveDir())
+  return showSaveDialogWithMemory(
+    dialog,
+    dialogParent(event),
+    options,
+    defaultSaveDir(),
+    event.sender.id,
+  )
 }
 
 /** default folder where new files land on their first (silent) save; shared with the other editors via shell. User-configurable (app-settings.json), falls back to <Documents>/Airy. */
@@ -2322,13 +2329,14 @@ export function uniquePathIn(dir: string, fileName: string): string {
 
 export function openExternalDocx(filePath: string | null): void {
   if (!filePath || !/\.docx$/i.test(filePath)) return
-  // OS-level open (file association / dock / argv): user-intended, grant it
-  grantRendererFileAccess(filePath)
   const win = BrowserWindow.getFocusedWindow() ?? mainWindow
+  // OS-level open (file association / dock / argv): user-intended — granted
+  // to the renderer that actually loads it (per-sender allowlist)
   if (!rendererReady || !win) {
     pendingOpenPath = filePath
     return
   }
+  grantRendererFileAccess(filePath, win.webContents.id)
   void loadDocx(filePath, win.webContents.id)
     .then((result) => {
       if (!result || win.isDestroyed()) return
@@ -2815,6 +2823,7 @@ function statAttachment(filePath: string): { meta?: AttachmentMeta; error?: stri
 
 function collectAttachments(
   paths: string[],
+  senderId: number,
   mayGrant?: (p: string) => boolean,
 ): AttachmentAddResult {
   const accepted: AttachmentMeta[] = []
@@ -2826,7 +2835,7 @@ function collectAttachments(
     // picks, pasted temp files), and only with a witnessed user drop/paste
     // for renderer-named paths (see files:add below)
     if (meta) {
-      if (!mayGrant || mayGrant(p)) grantRendererFileAccess(p)
+      if (!mayGrant || mayGrant(p)) grantRendererFileAccess(p, senderId)
       accepted.push(meta)
     } else if (error) rejected.push(error)
   }
@@ -3371,7 +3380,7 @@ export function registerDocsIpc(): void {
   // renderer-named path: only files inside a granted directory (dialog pick,
   // shell-routed open, pending open queued by main) may be parsed
   ipcMain.handle('docs:open-path', (event, filePath: string) =>
-    typeof filePath === 'string' && rendererMayReadPath(filePath)
+    typeof filePath === 'string' && rendererMayReadPath(event.sender.id, filePath)
       ? loadDocx(filePath, event.sender.id)
       : null,
   )
@@ -3667,11 +3676,12 @@ export function registerDocsIpc(): void {
       createAiDocument(request),
   )
 
-  ipcMain.handle('docs:recent', () => {
+  ipcMain.handle('docs:recent', (event) => {
     // recents are the user's own documents: serving them also (re)grants
-    // their folders so docs:open-path works for last session's files
+    // their folders to the asking renderer so docs:open-path works for last
+    // session's files
     const recent = readJson<string[]>(RECENT_PATH(), []).filter((p) => existsSync(p))
-    for (const p of recent) grantRendererFileAccess(p)
+    for (const p of recent) grantRendererFileAccess(p, event.sender.id)
     return recent
   })
 
@@ -3703,7 +3713,7 @@ export function registerDocsIpc(): void {
       properties: ['openFile', 'multiSelections'],
     })
     if (result.canceled || result.filePaths.length === 0) return null
-    return collectAttachments(result.filePaths)
+    return collectAttachments(result.filePaths, event.sender.id)
   })
 
   // Witnessed drops/pastes feed the files:add grant policy (preload-world
@@ -3715,13 +3725,13 @@ export function registerDocsIpc(): void {
   ipcMain.handle('files:add', (event, paths: string[]) =>
     // renderer-named paths grant only when really dropped/pasted into this
     // renderer or already inside a granted directory
-    collectAttachments(paths, (p) => mayGrantAttachmentRead(event.sender.id, p)),
+    collectAttachments(paths, event.sender.id, (p) => mayGrantAttachmentRead(event.sender.id, p)),
   )
 
   ipcMain.handle(
     'files:read',
     async (
-      _event,
+      event,
       filePath: string,
       offset: number,
       maxChars: number,
@@ -3733,7 +3743,7 @@ export function registerDocsIpc(): void {
         return { ok: false, error: tm('errImageNoText') }
       }
       // only attachments from granted directories (see collectAttachments)
-      if (!rendererMayReadPath(filePath))
+      if (!rendererMayReadPath(event.sender.id, filePath))
         return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
       try {
         const text = await extractAttachmentText(filePath)
@@ -3753,13 +3763,13 @@ export function registerDocsIpc(): void {
   )
 
   // image attachments read raw bytes → base64; AiPanel puts them into the user message's images for multimodal
-  ipcMain.handle('files:read-image', (_event, filePath: string): AttachmentImageResult => {
+  ipcMain.handle('files:read-image', (event, filePath: string): AttachmentImageResult => {
     const name = basename(filePath)
     const ext = name.split('.').pop()?.toLowerCase() ?? ''
     const mime = ATTACHMENT_IMAGE_MIME[ext]
     if (!mime) return { ok: false, error: `${name}: ${tm('errNotImage')}` }
     // only attachments from granted directories (see collectAttachments)
-    if (!rendererMayReadPath(filePath))
+    if (!rendererMayReadPath(event.sender.id, filePath))
       return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
     try {
       const stat = statSync(filePath)
@@ -3775,10 +3785,10 @@ export function registerDocsIpc(): void {
   // clipboard-pasted images (screenshots and other bitmaps with no local path): saved to a temp file then use the regular attachment path
   ipcMain.handle(
     'files:add-pasted-image',
-    (_event, data: unknown, ext: unknown): AttachmentAddResult => {
+    (event, data: unknown, ext: unknown): AttachmentAddResult => {
       const filePath = savePastedImage(data, ext)
       return filePath
-        ? collectAttachments([filePath])
+        ? collectAttachments([filePath], event.sender.id)
         : { accepted: [], rejected: [tm('errNotImage')] }
     },
   )
@@ -4433,7 +4443,10 @@ export function createDocsWindow(openPath?: string): BrowserWindow {
   const webContentsId = win.webContents.id
   if (openPath) pendingWindowOpens.set(webContentsId, openPath)
   trackDocsRenderer(webContentsId)
-  win.webContents.once('destroyed', () => untrackDocsRenderer(webContentsId))
+  win.webContents.once('destroyed', () => {
+    untrackDocsRenderer(webContentsId)
+    forgetRendererFileAccess(webContentsId)
+  })
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     const target = safeExternalUrl(url)
@@ -4695,6 +4708,7 @@ export function createDocsView(openPath?: string): WebContentsView {
     untrackDocsRenderer(wcId)
     dropDocWriter(wcId)
     forgetWitnessedDrops(wcId)
+    forgetRendererFileAccess(wcId)
     closeCheckWaiters.get(wcId)?.({ dirty: false, autoSave: false })
     closeCheckWaiters.delete(wcId)
     closeSaveWaiters.get(wcId)?.(false)

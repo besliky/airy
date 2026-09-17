@@ -97,5 +97,5 @@ export function mayGrantAttachmentRead(
   path: string,
   now: number = Date.now(),
 ): boolean {
-  return witnessedDroppedPath(senderId, path, now) || rendererMayReadPath(path)
+  return witnessedDroppedPath(senderId, path, now) || rendererMayReadPath(senderId, path)
 }

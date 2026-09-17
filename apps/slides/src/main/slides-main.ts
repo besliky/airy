@@ -41,6 +41,7 @@ import {
   COPILOT_GUIDE_URL,
   DOCS_README_URL,
   installNavigationGuard,
+  forgetRendererFileAccess,
   forgetWitnessedDrops,
   isPathInsideDir,
   openHelpUrl,
@@ -402,6 +403,7 @@ function trackSlidesWebContents(wc: WebContents): void {
     pendingByWc.delete(wc.id)
     exportPicksByWc.delete(wc.id)
     forgetWitnessedDrops(wc.id)
+    forgetRendererFileAccess(wc.id)
     lastSlidePaste.delete(wc.id)
     closeSaveWaiters.get(wc.id)?.(false)
     closeSaveWaiters.delete(wc.id)
@@ -1140,11 +1142,17 @@ export function registerSlidesIpc(): void {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
-  ipcMain.handle('slides:font-install-local', async () => {
-    const r = await showOpenDialogWithMemory(dialog, dialogParent(), {
-      properties: ['openFile', 'multiSelections'],
-      filters: [{ name: 'Fonts', extensions: ['ttf', 'otf', 'ttc', 'otc'] }],
-    })
+  ipcMain.handle('slides:font-install-local', async (e) => {
+    const r = await showOpenDialogWithMemory(
+      dialog,
+      dialogParent(),
+      {
+        properties: ['openFile', 'multiSelections'],
+        filters: [{ name: 'Fonts', extensions: ['ttf', 'otf', 'ttc', 'otc'] }],
+      },
+      undefined,
+      e.sender.id,
+    )
     if (r.canceled || !r.filePaths.length) return { families: [] }
     const families = installLocalFontFiles(r.filePaths)
     if (families.length) afterFontsChanged()
@@ -1212,7 +1220,7 @@ export function registerSlidesIpc(): void {
           ]
         : [{ name: tm('filterPpt'), extensions: ['pptx', 'ppt'] }],
     }
-    const r = await showOpenDialogWithMemory(dialog, parent, options)
+    const r = await showOpenDialogWithMemory(dialog, parent, options, undefined, e.sender.id)
     if (r.canceled || !r.filePaths[0]) return null
     // another editor's file: the shell routes it to the right tab
     if (slidesOpenPathRouter && !/\.(pptx|ppt)$/i.test(r.filePaths[0])) {
@@ -1227,7 +1235,7 @@ export function registerSlidesIpc(): void {
     if (!path || !existsSync(path)) return null
     // renderer-named path: only granted directories (shell-routed opens,
     // dialog picks, recents served by slides:recent) may be parsed
-    if (!rendererMayReadPath(path)) return null
+    if (!rendererMayReadPath(e.sender.id, path)) return null
     if (await rejectLegacyPpt(path)) return null
     return openAndBuild(e.sender, path, fitWidthPx)
   })
@@ -2104,16 +2112,22 @@ export function registerSlidesIpc(): void {
     if (op.kind === 'image') {
       let source: { bytes: Uint8Array; ext: string } | { mediaPath: string }
       if (op.pick !== false) {
-        const r = await showOpenDialogWithMemory(dialog, dialogParent(), {
-          title: tm('dlgInsertImage'),
-          properties: ['openFile' as const],
-          filters: [
-            {
-              name: tm('filterImages'),
-              extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff'],
-            },
-          ],
-        })
+        const r = await showOpenDialogWithMemory(
+          dialog,
+          dialogParent(),
+          {
+            title: tm('dlgInsertImage'),
+            properties: ['openFile' as const],
+            filters: [
+              {
+                name: tm('filterImages'),
+                extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff'],
+              },
+            ],
+          },
+          undefined,
+          e.sender.id,
+        )
         if (r.canceled || !r.filePaths[0]) return null
         const bytes = await readFile(r.filePaths[0])
         source = {
@@ -2195,16 +2209,22 @@ export function registerSlidesIpc(): void {
       bytes = new Uint8Array(Buffer.from(op.source.base64, 'base64'))
       ext = op.source.ext.toLowerCase()
     } else {
-      const r = await showOpenDialogWithMemory(dialog, dialogParent(), {
-        title: tm('dlgInsertImage'),
-        properties: ['openFile' as const],
-        filters: [
-          {
-            name: tm('filterImages'),
-            extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff'],
-          },
-        ],
-      })
+      const r = await showOpenDialogWithMemory(
+        dialog,
+        dialogParent(),
+        {
+          title: tm('dlgInsertImage'),
+          properties: ['openFile' as const],
+          filters: [
+            {
+              name: tm('filterImages'),
+              extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff'],
+            },
+          ],
+        },
+        undefined,
+        e.sender.id,
+      )
       if (r.canceled || !r.filePaths[0]) return null
       bytes = new Uint8Array(await readFile(r.filePaths[0]))
       ext = r.filePaths[0].split('.').pop()!.toLowerCase()
@@ -2240,17 +2260,23 @@ export function registerSlidesIpc(): void {
   })
 
   // Replace picture: the renderer swaps the bytes in place through replacePictureBytes
-  ipcMain.handle('slides:pick-picture-file', async () => {
-    const r = await showOpenDialogWithMemory(dialog, dialogParent(), {
-      title: tm('dlgReplacePicture'),
-      properties: ['openFile' as const],
-      filters: [
-        {
-          name: tm('filterImages'),
-          extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff'],
-        },
-      ],
-    })
+  ipcMain.handle('slides:pick-picture-file', async (e) => {
+    const r = await showOpenDialogWithMemory(
+      dialog,
+      dialogParent(),
+      {
+        title: tm('dlgReplacePicture'),
+        properties: ['openFile' as const],
+        filters: [
+          {
+            name: tm('filterImages'),
+            extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff'],
+          },
+        ],
+      },
+      undefined,
+      e.sender.id,
+    )
     if (r.canceled || !r.filePaths[0]) return null
     const filePath = r.filePaths[0]
     return {
@@ -2274,7 +2300,7 @@ export function registerSlidesIpc(): void {
         },
       ],
     }
-    const r = await showOpenDialogWithMemory(dialog, parent, options)
+    const r = await showOpenDialogWithMemory(dialog, parent, options, undefined, e.sender.id)
     if (r.canceled || !r.filePaths[0]) return null
     const filePath = r.filePaths[0]
     const bytes = await readFile(filePath)
@@ -3423,7 +3449,7 @@ export function registerSlidesIpc(): void {
         properties: ['openFile' as const],
         filters,
       }
-      const r = await showOpenDialogWithMemory(dialog, parent, options)
+      const r = await showOpenDialogWithMemory(dialog, parent, options, undefined, e.sender.id)
       if (r.canceled || !r.filePaths[0]) return null
       const filePath = r.filePaths[0]
       const bytes = await readFile(filePath)
@@ -3586,7 +3612,7 @@ export function registerSlidesIpc(): void {
       properties: ['openFile' as const],
       filters: [{ name: tm('filter3d'), extensions: ['glb', 'gltf'] }],
     }
-    const r = await showOpenDialogWithMemory(dialog, parent, options)
+    const r = await showOpenDialogWithMemory(dialog, parent, options, undefined, e.sender.id)
     if (r.canceled || !r.filePaths[0]) return null
     const filePath = r.filePaths[0]
     const bytes = await readFile(filePath)
@@ -4084,11 +4110,16 @@ export function registerSlidesIpc(): void {
     const session = sessions.get(e.sender.id)
     if (!session) return { ok: false, error: 'no file open' }
     const parent = dialogParent()
-    const options = {
-      defaultPath: saveAsSuggestion(session.path, defaultName),
-      filters: [{ name: 'PowerPoint', extensions: ['pptx'] }],
-    }
-    const r = await showSaveDialogWithMemory(dialog, parent, options, getDraftsDir())
+    const r = await showSaveDialogWithMemory(
+      dialog,
+      parent,
+      {
+        defaultPath: saveAsSuggestion(session.path, defaultName),
+        filters: [{ name: 'PowerPoint', extensions: ['pptx'] }],
+      },
+      getDraftsDir(),
+      e.sender.id,
+    )
     if (r.canceled || !r.filePath) return { ok: false }
     try {
       await savePptxToFile(session.opened, r.filePath)
@@ -4118,7 +4149,7 @@ export function registerSlidesIpc(): void {
       buttonLabel: tm('btnExport'),
       properties: ['openDirectory' as const, 'createDirectory' as const],
     }
-    const r = await showOpenDialogWithMemory(dialog, parent, options)
+    const r = await showOpenDialogWithMemory(dialog, parent, options, undefined, e.sender.id)
     const dir = r.canceled || !r.filePaths[0] ? null : r.filePaths[0]
     if (dir) {
       const picks = exportPicksByWc.get(e.sender.id) ?? {}
@@ -4157,7 +4188,7 @@ export function registerSlidesIpc(): void {
       defaultPath: defaultName,
       filters: [{ name: 'PDF', extensions: ['pdf'] }],
     }
-    const r = await showSaveDialogWithMemory(dialog, parent, options, getDraftsDir())
+    const r = await showSaveDialogWithMemory(dialog, parent, options, getDraftsDir(), e.sender.id)
     const filePath = r.canceled || !r.filePath ? null : r.filePath
     if (filePath) {
       const picks = exportPicksByWc.get(e.sender.id) ?? {}
@@ -4243,11 +4274,12 @@ export function registerSlidesIpc(): void {
     },
   )
 
-  ipcMain.handle('slides:recent', async () => {
+  ipcMain.handle('slides:recent', async (e) => {
     // recents are the user's own decks: serving them also (re)grants their
-    // folders so slides:open-path works for last session's files
+    // folders to the asking renderer so slides:open-path works for last
+    // session's files
     const recent = await readRecent()
-    for (const p of recent) grantRendererFileAccess(p)
+    for (const p of recent) grantRendererFileAccess(p, e.sender.id)
     return recent
   })
 

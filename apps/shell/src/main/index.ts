@@ -62,8 +62,8 @@ import {
   appMenuLabels,
   contextMenuLabels,
   editMenuTemplate,
+  forgetRendererFileAccess,
   grantRendererDir,
-  grantRendererFileAccess,
   installContextMenu,
   installNavigationGuard,
   isRecoverableRendererCrash,
@@ -1068,7 +1068,10 @@ function createShellWindow(): void {
 
   win.on('closed', () => {
     if (shellWindow === win) shellWindow = null
-    if (homeWebContentsId === shellWcId) homeWebContentsId = null
+    if (homeWebContentsId === shellWcId) {
+      homeWebContentsId = null
+      forgetRendererFileAccess(shellWcId)
+    }
     if (tabManager === manager) tabManager = null
   })
 
@@ -1189,58 +1192,71 @@ function openGeneratedDocument(filePath: string): boolean {
 
 function routeDocumentPath(filePath: string): boolean {
   if (!existsSync(filePath) || !tabManager) return false
+  const manager = tabManager
   // every shell-routed open is user-intended: its folder becomes readable
-  // for the renderer that will load it (renderer file-read allowlist)
-  grantRendererFileAccess(filePath)
+  // for the renderer of the tab that will load it (per-sender allowlist).
+  // `existing`/openXTab return tab ids; grantTabFile resolves the tab's
+  // webContents and grants exactly that renderer.
+  const grantTo = (tabId: string): void => manager.grantTabFile(tabId, filePath)
+  const openOrActivate = (
+    find: () => string | undefined,
+    open: () => string,
+    afterOpen?: () => void,
+  ): boolean => {
+    const existing = find()
+    if (existing) {
+      manager.activateTab(existing)
+      grantTo(existing)
+    } else {
+      grantTo(open())
+      afterOpen?.()
+    }
+    return true
+  }
   if (DOCX_RE.test(filePath)) {
     recordRecentFile(filePath)
-    const existing = tabManager.findDocsTabByPath(filePath)
-    if (existing) tabManager.activateTab(existing)
-    else tabManager.openDocsTab(filePath)
-    return true
+    return openOrActivate(
+      () => manager.findDocsTabByPath(filePath),
+      () => manager.openDocsTab(filePath),
+    )
   }
   if (XLSX_RE.test(filePath)) {
     recordRecentFile(filePath)
-    const existing = tabManager.findSheetsTabByPath(filePath)
-    if (existing) {
-      tabManager.activateTab(existing)
-    } else {
-      tabManager.openSheetsTab(filePath)
-      queuedWorkbookDelivery.start()
-    }
-    return true
+    return openOrActivate(
+      () => manager.findSheetsTabByPath(filePath),
+      () => manager.openSheetsTab(filePath),
+      () => queuedWorkbookDelivery.start(),
+    )
   }
   if (PPTX_RE.test(filePath)) {
     recordRecentFile(filePath)
-    const existing = tabManager.findSlidesTabByPath(filePath)
-    if (existing) {
-      tabManager.activateTab(existing)
-    } else {
-      // For a new tab the path goes through the pending queue; the renderer consumes it after mounting
-      tabManager.openSlidesTab(filePath)
-    }
-    return true
+    return openOrActivate(
+      () => manager.findSlidesTabByPath(filePath),
+      // For a new tab the path goes through the pending queue; the renderer
+      // consumes it after mounting
+      () => manager.openSlidesTab(filePath),
+    )
   }
   if (PDF_RE.test(filePath)) {
     recordRecentFile(filePath)
-    const existing = tabManager.findPdfTabByPath(filePath)
-    if (existing) tabManager.activateTab(existing)
-    else tabManager.openPdfTab(filePath)
-    return true
+    return openOrActivate(
+      () => manager.findPdfTabByPath(filePath),
+      () => manager.openPdfTab(filePath),
+    )
   }
   if (MD_RE.test(filePath)) {
     recordRecentFile(filePath)
-    const existing = tabManager.findMarkdownTabByPath(filePath)
-    if (existing) tabManager.activateTab(existing)
-    else tabManager.openMarkdownTab(filePath)
-    return true
+    return openOrActivate(
+      () => manager.findMarkdownTabByPath(filePath),
+      () => manager.openMarkdownTab(filePath),
+    )
   }
   if (HTML_RE.test(filePath)) {
     recordRecentFile(filePath)
-    const existing = tabManager.findHtmlTabByPath(filePath)
-    if (existing) tabManager.activateTab(existing)
-    else tabManager.openHtmlTab(filePath)
-    return true
+    return openOrActivate(
+      () => manager.findHtmlTabByPath(filePath),
+      () => manager.openHtmlTab(filePath),
+    )
   }
   notifyUnsupportedFile(filePath)
   return false
@@ -1493,11 +1509,17 @@ function registerHomeIpc(): void {
   handleHome(HOME_CHANNELS.browse, async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender) ?? shellWindow
     if (!win) return
-    const result = await showOpenDialogWithMemory(dialog, win, {
-      title: tm('dlgOpenTitle'),
-      filters: openDialogFilters(),
-      properties: ['openFile', 'multiSelections'],
-    })
+    const result = await showOpenDialogWithMemory(
+      dialog,
+      win,
+      {
+        title: tm('dlgOpenTitle'),
+        filters: openDialogFilters(),
+        properties: ['openFile', 'multiSelections'],
+      },
+      undefined,
+      event.sender.id,
+    )
     if (!result.canceled) for (const path of result.filePaths) openDocumentPath(path)
   })
 
@@ -1738,18 +1760,25 @@ function registerHomeIpc(): void {
 
   // effective folder where new/untitled files land; the editor mains resolve
   // the same setting themselves (configuredDefaultSaveDir via docs' defaultSaveDir)
-  handleHome(HOME_CHANNELS.getDefaultSaveDir, (): string => {
-    // the default save folder is a standing user choice: readable for renderers
-    grantRendererDir(defaultSaveDir())
+  handleHome(HOME_CHANNELS.getDefaultSaveDir, (event): string => {
+    // the default save folder is a standing user choice: readable for the
+    // asking renderer (per-sender allowlist)
+    grantRendererDir(defaultSaveDir(), event.sender.id)
     return defaultSaveDir()
   })
 
   handleHome(HOME_CHANNELS.pickDefaultSaveDir, async (): Promise<string | null> => {
-    const result = await showOpenDialogWithMemory(dialog, shellWindow, {
-      title: tm('dlgPickSaveDir'),
-      defaultPath: defaultSaveDir(),
-      properties: ['openDirectory', 'createDirectory'],
-    })
+    const result = await showOpenDialogWithMemory(
+      dialog,
+      shellWindow,
+      {
+        title: tm('dlgPickSaveDir'),
+        defaultPath: defaultSaveDir(),
+        properties: ['openDirectory', 'createDirectory'],
+      },
+      undefined,
+      homeWebContentsId ?? undefined,
+    )
     const picked = result.filePaths[0]
     if (result.canceled || !picked) return null
     if (!isUsableSaveDir(picked)) {
@@ -2450,10 +2479,16 @@ async function savePdfAs(): Promise<void> {
   // blur-triggered autosave would write the pending edits into the original file
   setPdfSaveAsInFlight(tab.webContents, true)
   try {
-    const picked = await showSaveDialogWithMemory(dialog, shellWindow, {
-      defaultPath: tab.filePath,
-      filters: [{ name: tm('filterPdf'), extensions: ['pdf'] }],
-    })
+    const picked = await showSaveDialogWithMemory(
+      dialog,
+      shellWindow,
+      {
+        defaultPath: tab.filePath,
+        filters: [{ name: tm('filterPdf'), extensions: ['pdf'] }],
+      },
+      undefined,
+      tab.webContents.id,
+    )
     if (picked.canceled || !picked.filePath || picked.filePath === tab.filePath) return
     if (pdfIsDirty(tab.webContents.id)) {
       // Renderer applies its pending edits onto the source bytes; the pdf main
@@ -2485,10 +2520,16 @@ async function saveStagedPdfAs(tabId: string): Promise<void> {
   savingPdfAs = true
   setPdfSaveAsInFlight(tab.webContents, true)
   try {
-    const picked = await showSaveDialogWithMemory(dialog, shellWindow, {
-      defaultPath: join(defaultSaveDir(), basename(stagedPath)),
-      filters: [{ name: tm('filterPdf'), extensions: ['pdf'] }],
-    })
+    const picked = await showSaveDialogWithMemory(
+      dialog,
+      shellWindow,
+      {
+        defaultPath: join(defaultSaveDir(), basename(stagedPath)),
+        filters: [{ name: tm('filterPdf'), extensions: ['pdf'] }],
+      },
+      undefined,
+      tab.webContents.id,
+    )
     if (picked.canceled || !picked.filePath) return
     if (pdfIsDirty(tab.webContents.id)) {
       // Renderer applies its pending edits onto the source bytes; the pdf main
@@ -2535,10 +2576,16 @@ async function exportPdfAsDocxLocal(): Promise<void> {
   exportingPdfDocx = true
   try {
     if (!(await flushPdfSave(tab.webContents))) return
-    const picked = await showSaveDialogWithMemory(dialog, shellWindow, {
-      defaultPath: tab.filePath.replace(/\.pdf$/i, '.docx'),
-      filters: [{ name: tm('filterWord'), extensions: ['docx'] }],
-    })
+    const picked = await showSaveDialogWithMemory(
+      dialog,
+      shellWindow,
+      {
+        defaultPath: tab.filePath.replace(/\.pdf$/i, '.docx'),
+        filters: [{ name: tm('filterWord'), extensions: ['docx'] }],
+      },
+      undefined,
+      tab.webContents.id,
+    )
     if (picked.canceled || !picked.filePath) return
     // If the destination is already open in a docs tab, close it first (its
     // normal unsaved-changes guard applies) so the converted file opens fresh
@@ -2674,10 +2721,16 @@ async function exportPdfAsPptxLocal(): Promise<void> {
   exportingPdfDocx = true
   try {
     if (!(await flushPdfSave(tab.webContents))) return
-    const picked = await showSaveDialogWithMemory(dialog, shellWindow, {
-      defaultPath: tab.filePath.replace(/\.pdf$/i, '.pptx'),
-      filters: [{ name: tm('filterPpt'), extensions: ['pptx'] }],
-    })
+    const picked = await showSaveDialogWithMemory(
+      dialog,
+      shellWindow,
+      {
+        defaultPath: tab.filePath.replace(/\.pdf$/i, '.pptx'),
+        filters: [{ name: tm('filterPpt'), extensions: ['pptx'] }],
+      },
+      undefined,
+      tab.webContents.id,
+    )
     if (picked.canceled || !picked.filePath) return
     // same stale-tab handling as the Word export (see exportPdfAsDocxLocal),
     // against the slides tab that may already show the destination file
@@ -2784,10 +2837,16 @@ async function exportPdfAsXlsxLocal(): Promise<void> {
   exportingPdfDocx = true
   try {
     if (!(await flushPdfSave(tab.webContents))) return
-    const picked = await showSaveDialogWithMemory(dialog, shellWindow, {
-      defaultPath: tab.filePath.replace(/\.pdf$/i, '.xlsx'),
-      filters: [{ name: tm('filterExcel'), extensions: ['xlsx'] }],
-    })
+    const picked = await showSaveDialogWithMemory(
+      dialog,
+      shellWindow,
+      {
+        defaultPath: tab.filePath.replace(/\.pdf$/i, '.xlsx'),
+        filters: [{ name: tm('filterExcel'), extensions: ['xlsx'] }],
+      },
+      undefined,
+      tab.webContents.id,
+    )
     if (picked.canceled || !picked.filePath) return
     // same stale-tab handling as the Word export (see exportPdfAsDocxLocal),
     // against the sheets tab that may already show the destination file

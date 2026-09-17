@@ -30,7 +30,13 @@ export async function exportPdf(
     defaultPath: request.fileName,
     filters: [{ name: 'PDF', extensions: ['pdf'] }],
   }
-  const selection = await showSaveDialogWithMemory(dialog, parent, dialogOptions)
+  const selection = await showSaveDialogWithMemory(
+    dialog,
+    parent,
+    dialogOptions,
+    undefined,
+    event.sender.id,
+  )
   if (selection.canceled || !selection.filePath) return { canceled: true }
 
   const workDir = await mkdtemp(join(tmpdir(), 'ai-excel-pdf-'))

@@ -243,7 +243,7 @@ export function registerSlidesOnlyAiIpc(): void {
   ipcMain.handle(
     'ai:generate-image',
     async (
-      _event,
+      event,
       op: {
         prompt: string
         model?: string
@@ -266,14 +266,14 @@ export function registerSlidesOnlyAiIpc(): void {
         // local reference files must come from granted directories (dialog
         // picks, shell-routed opens, attachments); file:// generated-store
         // and https URLs are unaffected
-        { mayReadFile: rendererMayReadPath },
+        { mayReadFile: (candidate) => rendererMayReadPath(event.sender.id, candidate) },
       )
     },
   )
 
   ipcMain.handle(
     'ai:analyze-media',
-    async (_event, op: { mediaUrls: string[]; requirements: string }) => {
+    async (event, op: { mediaUrls: string[]; requirements: string }) => {
       return analyzeMediaTool(
         AI_SETTINGS_PATH(),
         {
@@ -281,7 +281,7 @@ export function registerSlidesOnlyAiIpc(): void {
           requirements: String(op.requirements ?? ''),
         },
         // local media must come from granted directories; see ai:generate-image
-        { mayReadFile: rendererMayReadPath },
+        { mayReadFile: (candidate) => rendererMayReadPath(event.sender.id, candidate) },
       )
     },
   )

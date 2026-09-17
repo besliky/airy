@@ -108,6 +108,7 @@ function statAttachment(filePath: string): { meta?: AttachmentMeta; error?: stri
 
 function collectAttachments(
   paths: string[],
+  senderId: number,
   mayGrant?: (p: string) => boolean,
 ): AttachmentAddResult {
   const accepted: AttachmentMeta[] = []
@@ -119,7 +120,7 @@ function collectAttachments(
     // picks, pasted temp files), and only with a witnessed user drop/paste
     // for renderer-named paths (see slides:files-add below)
     if (meta) {
-      if (!mayGrant || mayGrant(p)) grantRendererFileAccess(p)
+      if (!mayGrant || mayGrant(p)) grantRendererFileAccess(p, senderId)
       accepted.push(meta)
     } else if (error) rejected.push(error)
   }
@@ -168,7 +169,7 @@ async function extractAttachmentText(filePath: string): Promise<string> {
 
 /** Register the slides:files-* attachment channels (called from registerSlidesIpc). */
 export function registerAttachmentIpc(): void {
-  ipcMain.handle('slides:files-pick', async (): Promise<AttachmentAddResult | null> => {
+  ipcMain.handle('slides:files-pick', async (event): Promise<AttachmentAddResult | null> => {
     const parent = dialogParent()
     const options = {
       title: tm('dlgAddAttachment'),
@@ -178,9 +179,9 @@ export function registerAttachmentIpc(): void {
       ],
       properties: ['openFile' as const, 'multiSelections' as const],
     }
-    const r = await showOpenDialogWithMemory(dialog, parent, options)
+    const r = await showOpenDialogWithMemory(dialog, parent, options, undefined, event.sender.id)
     if (r.canceled || r.filePaths.length === 0) return null
-    return collectAttachments(r.filePaths)
+    return collectAttachments(r.filePaths, event.sender.id)
   })
 
   // Witnessed drops/pastes feed the files-add grant policy (preload-world
@@ -192,13 +193,13 @@ export function registerAttachmentIpc(): void {
   ipcMain.handle('slides:files-add', (event, paths: string[]) =>
     // renderer-named paths grant only when really dropped/pasted into this
     // renderer or already inside a granted directory
-    collectAttachments(paths, (p) => mayGrantAttachmentRead(event.sender.id, p)),
+    collectAttachments(paths, event.sender.id, (p) => mayGrantAttachmentRead(event.sender.id, p)),
   )
 
   ipcMain.handle(
     'slides:files-read',
     async (
-      _e,
+      e,
       filePath: string,
       offset: number,
       maxChars: number,
@@ -210,7 +211,7 @@ export function registerAttachmentIpc(): void {
         return { ok: false, error: tm('errImageNoText') }
       }
       // only attachments from granted directories (see collectAttachments)
-      if (!rendererMayReadPath(filePath)) {
+      if (!rendererMayReadPath(e.sender.id, filePath)) {
         return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
       }
       try {
@@ -224,20 +225,20 @@ export function registerAttachmentIpc(): void {
           offset: start,
           text: text.slice(start, start + size),
         }
-      } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : String(e) }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }
     },
   )
 
   // Image attachments read raw bytes -> base64; AiPanel puts them into the user message's images for multimodal
-  ipcMain.handle('slides:files-read-image', (_e, filePath: string): AttachmentImageResult => {
+  ipcMain.handle('slides:files-read-image', (e, filePath: string): AttachmentImageResult => {
     const name = basename(filePath)
     const ext = name.split('.').pop()?.toLowerCase() ?? ''
     const mime = ATTACHMENT_IMAGE_MIME[ext]
     if (!mime) return { ok: false, error: `${name}: ${tm('errNotImage')}` }
     // only attachments from granted directories (see collectAttachments)
-    if (!rendererMayReadPath(filePath)) {
+    if (!rendererMayReadPath(e.sender.id, filePath)) {
       return { ok: false, error: `${name}: ${tm('errUnreadable')}` }
     }
     try {
@@ -254,10 +255,10 @@ export function registerAttachmentIpc(): void {
   // Clipboard-pasted images (screenshots and other bitmaps without a local path): saved to a temp file then take the regular attachment chain
   ipcMain.handle(
     'slides:files-add-pasted-image',
-    (_e, data: unknown, ext: unknown): AttachmentAddResult => {
+    (e, data: unknown, ext: unknown): AttachmentAddResult => {
       const filePath = savePastedImage(data, ext)
       return filePath
-        ? collectAttachments([filePath])
+        ? collectAttachments([filePath], e.sender.id)
         : { accepted: [], rejected: [tm('errNotImage')] }
     },
   )

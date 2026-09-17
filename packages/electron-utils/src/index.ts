@@ -89,6 +89,7 @@ export {
 } from './print-html-pdf'
 export { crashErrorPageUrl, isRecoverableRendererCrash, voidLoad } from './process-safety'
 export {
+  forgetRendererFileAccess,
   grantRendererDir,
   grantRendererFileAccess,
   grantedRendererDirs,

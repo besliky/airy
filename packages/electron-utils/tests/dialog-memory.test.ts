@@ -5,8 +5,11 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  grantedRendererDirs,
   recordDialogDir,
   readLastDialogDirs,
+  rendererMayReadPath,
+  resetRendererFileGrants,
   saveAsSuggestion,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
@@ -218,5 +221,59 @@ describe('persisted dialog directories (lastDialogDirs LRU)', () => {
     } finally {
       rmSync(scratch, { recursive: true, force: true })
     }
+  })
+})
+
+describe('dialog pick grants (per requester)', () => {
+  const TAB_A = 11
+  const TAB_B = 22
+
+  it('grants the picked file folder to the requesting renderer only', async () => {
+    resetRendererFileGrants()
+    const dialog = fakeDialog({ showOpenDialog: pickedOpen([join('/work', 'report.docx')]) })
+    await showOpenDialogWithMemory(
+      dialog,
+      undefined,
+      { properties: ['openFile'] },
+      undefined,
+      TAB_A,
+    )
+    expect(rendererMayReadPath(TAB_A, '/work/report.docx')).toBe(true)
+    expect(rendererMayReadPath(TAB_B, '/work/report.docx')).toBe(false)
+    resetRendererFileGrants()
+  })
+
+  it('grants a picked directory itself for openDirectory picks', async () => {
+    resetRendererFileGrants()
+    const dialog = fakeDialog({ showOpenDialog: pickedOpen(['/work/subdir']) })
+    await showOpenDialogWithMemory(
+      dialog,
+      undefined,
+      { properties: ['openDirectory'] },
+      undefined,
+      TAB_A,
+    )
+    // both the pick itself and its parent folder join the requester's list
+    expect(grantedRendererDirs(TAB_A)).toEqual(['/work', '/work/subdir'])
+    expect(grantedRendererDirs(TAB_B)).toEqual([])
+    resetRendererFileGrants()
+  })
+
+  it('grants nothing without a requester (menu-driven dialogs)', async () => {
+    resetRendererFileGrants()
+    const dialog = fakeDialog({ showOpenDialog: pickedOpen([join('/work', 'report.docx')]) })
+    await showOpenDialogWithMemory(dialog, undefined, { properties: ['openFile'] })
+    expect(grantedRendererDirs(TAB_A)).toEqual([])
+    expect(grantedRendererDirs(TAB_B)).toEqual([])
+    resetRendererFileGrants()
+  })
+
+  it('save picks grant the target folder to the requester', async () => {
+    resetRendererFileGrants()
+    const dialog = fakeDialog({ showSaveDialog: pickedSave(join('/out', 'deck.pptx')) })
+    await showSaveDialogWithMemory(dialog, undefined, {}, undefined, TAB_B)
+    expect(rendererMayReadPath(TAB_B, '/out/deck.pptx')).toBe(true)
+    expect(rendererMayReadPath(TAB_A, '/out/deck.pptx')).toBe(false)
+    resetRendererFileGrants()
   })
 })
