@@ -132,6 +132,7 @@ import {
 } from '../shared/desktop-api'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
 import { atomicWriteFile } from '@airy-office/electron-utils'
+import { captureGrantValid, newCaptureGrant, type CaptureGrant } from './capture-consent'
 import { closeGuardDecision } from './close-guard'
 import { SaveEditsTransferStore } from './save-edits-transfer'
 import { exportPdf, previewPrint, printWorkbook } from './pdf-export'
@@ -1726,6 +1727,8 @@ interface SheetsTabSession {
 const MAX_REMOTE_IMAGE_BYTES = 20 * 1024 * 1024
 
 const sheetsTabs = new Map<number, SheetsTabSession>()
+/** Outstanding screenshot-picker capture grant per tab (see capture-consent.ts) */
+const captureGrantsByWc = new Map<number, CaptureGrant>()
 let activeSheetsWebContents: WebContents | null = null
 let pastedTempCleanupStarted = false
 
@@ -1786,6 +1789,7 @@ function registerSheetsSession(webContents: WebContents, client: XlsxSidecarClie
   webContents.once('destroyed', () => {
     const entry = sheetsTabs.get(webContents.id)
     sheetsTabs.delete(webContents.id)
+    captureGrantsByWc.delete(webContents.id)
     if (entry) {
       // Free pending chunked-save uploads with the tab (the sweep timer's
       // closure would otherwise keep them reachable until the idle expiry).
@@ -2758,7 +2762,7 @@ export function registerSheetsIpc(): void {
     if (process.platform === 'darwin') {
       const status = systemPreferences.getMediaAccessStatus('screen')
       if (status !== 'granted' && status !== 'not-determined') {
-        return screenSourcesResultSchema.parse({ status: 'denied', sources: [] })
+        return screenSourcesResultSchema.parse({ status: 'denied', sources: [], captureToken: '' })
       }
     }
     const sources = await desktopCapturer.getSources({
@@ -2770,28 +2774,41 @@ export function registerSheetsIpc(): void {
       process.platform === 'darwin' &&
       systemPreferences.getMediaAccessStatus('screen') !== 'granted'
     ) {
-      return screenSourcesResultSchema.parse({ status: 'denied', sources: [] })
+      return screenSourcesResultSchema.parse({ status: 'denied', sources: [], captureToken: '' })
     }
     // In tab mode the sheets renderer is a WebContentsView, so fromWebContents
     // on the sender is null; the shell window is the one to exclude.
     const selfWindow = sheetsShellWindow ?? BrowserWindow.fromWebContents(event.sender)
     const selfId = selfWindow?.getMediaSourceId()
+    const listed = sources.filter((source) => source.id !== selfId)
+    // Consent: enumeration issues a short-lived single-use token bound to
+    // this tab; the full-res capture must redeem it for one listed source
+    // (see capture-consent.ts). A new enumeration replaces the grant.
+    const grant = newCaptureGrant(
+      listed.map((source) => source.id),
+      Date.now(),
+    )
+    captureGrantsByWc.set(event.sender.id, grant)
     return screenSourcesResultSchema.parse({
       status: 'ok',
-      sources: sources
-        .filter((source) => source.id !== selfId)
-        .map((source) => ({
-          id: source.id,
-          name: source.name,
-          kind: source.id.startsWith('screen') ? 'screen' : 'window',
-          thumbnail: source.thumbnail.isEmpty() ? '' : source.thumbnail.toDataURL(),
-        })),
+      captureToken: grant.token,
+      sources: listed.map((source) => ({
+        id: source.id,
+        name: source.name,
+        kind: source.id.startsWith('screen') ? 'screen' : 'window',
+        thumbnail: source.thumbnail.isEmpty() ? '' : source.thumbnail.toDataURL(),
+      })),
     })
   })
 
   ipcMain.handle(IPC_CHANNELS.captureScreenSource, async (event, input: unknown) => {
     sessionFor(event)
     const request = screenCaptureRequestSchema.parse(input)
+    // Consent gate: exactly one full-res frame per enumeration round, for a
+    // source the enumeration listed, within the grant's TTL.
+    const grant = captureGrantsByWc.get(event.sender.id)
+    if (!captureGrantValid(grant, request.captureToken, request.id, Date.now())) return null
+    captureGrantsByWc.delete(event.sender.id)
     // desktopCapturer only ever returns thumbnails, so a full-res capture is
     // a re-listing with the thumbnail sized to the largest physical display.
     const displays = screen.getAllDisplays()

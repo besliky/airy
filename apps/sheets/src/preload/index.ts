@@ -156,6 +156,7 @@ const desktopApi: DesktopApi = {
     if (
       !isRecord(result) ||
       (result.status !== 'ok' && result.status !== 'denied') ||
+      typeof result.captureToken !== 'string' ||
       !Array.isArray(result.sources)
     ) {
       throw new Error('Invalid screen sources response.')
@@ -163,11 +164,18 @@ const desktopApi: DesktopApi = {
     return result as ScreenSourcesResult
   },
   async captureScreenSource(request) {
-    if (!isRecord(request) || typeof request.id !== 'string' || request.id.length === 0) {
+    if (
+      !isRecord(request) ||
+      typeof request.id !== 'string' ||
+      request.id.length === 0 ||
+      typeof request.captureToken !== 'string' ||
+      request.captureToken.length === 0
+    ) {
       throw new Error('Invalid screen capture request.')
     }
     const result: unknown = await ipcRenderer.invoke(IPC_CHANNELS.captureScreenSource, {
       id: request.id,
+      captureToken: request.captureToken,
     })
     if (result === null) return null
     if (

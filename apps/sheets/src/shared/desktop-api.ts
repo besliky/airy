@@ -2185,6 +2185,9 @@ export const localImageResultSchema = z
 export const screenSourcesResultSchema = z
   .object({
     status: z.enum(['ok', 'denied']),
+    /// Single-use consent token for one full-res capture of a listed source
+    /// (empty when denied — no enumeration happened).
+    captureToken: z.string(),
     sources: z.array(
       z
         .object({
@@ -2202,6 +2205,8 @@ export const screenSourcesResultSchema = z
 export const screenCaptureRequestSchema = z
   .object({
     id: z.string().min(1).max(256),
+    /// Consent token from the enumeration the source was listed in.
+    captureToken: z.string().min(16).max(128),
   })
   .strict()
 
