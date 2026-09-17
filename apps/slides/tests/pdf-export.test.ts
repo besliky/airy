@@ -54,8 +54,6 @@ class TestPdfWindow implements PdfExportWindow {
   tempDirectoryExistedAtDestroy: boolean | null = null
   shouldFailLoad = false
   shouldFailPrint = false
-  executedScript: string | null = null
-  executedWithUserGesture: boolean | undefined
   printOptions: Electron.PrintToPDFOptions | null = null
 
   async loadFile(path: string): Promise<void> {
@@ -65,10 +63,6 @@ class TestPdfWindow implements PdfExportWindow {
   }
 
   webContents = {
-    executeJavaScript: async (script: string, userGesture?: boolean): Promise<void> => {
-      this.executedScript = script
-      this.executedWithUserGesture = userGesture
-    },
     printToPDF: async (options: Electron.PrintToPDFOptions): Promise<Buffer> => {
       this.printOptions = options
       if (this.shouldFailPrint) throw new Error('print failed')
@@ -138,8 +132,7 @@ describe('slides PDF export', () => {
     expect(win.loadedHtml).toContain(`data:image/png;base64,${firstPng}`)
     expect(win.loadedHtml.length).toBeGreaterThan(chromiumDataUrlLimit)
     expect(win.loadedHtml).toContain('@page { size: 13.333in 7.5in; margin: 0; }')
-    expect(win.executedScript).toContain('document.fonts.ready')
-    expect(win.executedWithUserGesture).toBe(true)
+    // the hidden window is scripting-disabled; readiness rides on loadFile's onload
     expect(win.printOptions).toEqual({
       landscape: false,
       printBackground: true,

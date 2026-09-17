@@ -5,7 +5,6 @@ import { join } from 'node:path'
 export interface PdfExportWindow {
   loadFile(path: string): Promise<void>
   webContents: {
-    executeJavaScript(script: string, userGesture?: boolean): Promise<unknown>
     printToPDF(options: Electron.PrintToPDFOptions): Promise<Buffer>
   }
   destroy(): void
@@ -69,11 +68,11 @@ export async function exportSlidesPdf({
     const htmlPath = join(tempDir, 'slides.html')
     await writeFile(htmlPath, buildPdfExportHtml(pages, widthIn, heightIn), 'utf8')
     await win.loadFile(htmlPath)
-    // Wait for fonts and all images to decode before printing, avoiding blank pages
-    await win.webContents.executeJavaScript(
-      'Promise.all([document.fonts.ready, ...Array.from(document.images).map((i) => i.decode().catch(() => {}))])',
-      true,
-    )
+    // The window is scripting-disabled (javascript: false, like sheets'
+    // pdf-export), so no fonts/images-ready probe runs: loadFile resolves at
+    // onload (all data:-URL images loaded) and printToPDF rasterizes the
+    // decoded result — the sheets export path proves this renders
+    // SVG text and bitmaps correctly.
     const pdf = await win.webContents.printToPDF({
       landscape: false, // The page size is already landscape (width > height); passing landscape would rotate a second time
       printBackground: true,

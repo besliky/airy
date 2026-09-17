@@ -4175,7 +4175,11 @@ export function registerSlidesIpc(): void {
     }
     return exportSlidesPdf({
       ...op,
-      createWindow: () => new BrowserWindow({ show: false, webPreferences: { sandbox: true } }),
+      createWindow: () =>
+        new BrowserWindow({
+          show: false,
+          webPreferences: { sandbox: true, javascript: false },
+        }),
       openExportedPdf,
     })
   })
@@ -4205,14 +4209,13 @@ export function registerSlidesIpc(): void {
               skipTaskbar: true,
             }
           : {}),
-        webPreferences: { sandbox: true },
+        webPreferences: { sandbox: true, javascript: false },
       })
       try {
         await win.loadURL('data:text/html;base64,' + Buffer.from(html, 'utf8').toString('base64'))
-        await win.webContents.executeJavaScript(
-          'Promise.all([document.fonts.ready, ...Array.from(document.images).map((i) => i.decode().catch(() => {}))])',
-          true,
-        )
+        // The window is scripting-disabled (javascript: false, like sheets'
+        // print flow): the load promise resolves at onload with every
+        // data:-URL image loaded, and print rasterizes the decoded result.
         // Chromium attaches the native Windows print dialog to the window being printed.
         // If that owner is hidden, the dialog is hidden too and the layout buttons appear inert.
         if (process.platform === 'win32') {
