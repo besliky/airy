@@ -40,6 +40,13 @@ export {
   resolveDefaultSaveDir,
   type PathProvider,
 } from './default-save-dir'
+export {
+  AUTHOR_NAME_KEY,
+  AUTHOR_NAME_MAX,
+  configuredAuthorName,
+  readAuthorNameSetting,
+  sanitizeAuthorName,
+} from './author-name'
 export { installNavigationGuard } from './navigation-guard'
 export {
   DROP_OPEN_CHANNEL,

@@ -245,6 +245,7 @@ import {
   deleteComment as deleteCommentImpl,
   deleteNote as deleteNoteImpl,
   editComment as editCommentImpl,
+  effectiveAuthorName,
   handleRevision as handleRevisionImpl,
   removeInks as removeInksImpl,
   replyToComment as replyToCommentImpl,
@@ -785,6 +786,8 @@ export function App() {
     entries: CompareEntry[]
   } | null>(null)
   const [autoSave, setAutoSave] = useAutoSavePref('aidocs.autoSave', window.desktop)
+  /** author name configured in the shell (Settings → General); '' = unset */
+  const [authorName, setAuthorName] = useState('')
   // tab closed but this renderer kept alive (shell freeze workaround): go inert
   const [tornDown, setTornDown] = useState(false)
   const [aiPreset, setAiPreset] = useState<{
@@ -1235,7 +1238,30 @@ export function App() {
     if (!editor) return
     const storage = editor.storage.trackChanges as TrackChangesStorage
     storage.enabled = trackChanges
-  }, [editor, trackChanges])
+    // revision marks carry the configured author (fallback: localized default)
+    storage.author = effectiveAuthorName(authorName, t('editorDefaultAuthor'))
+  }, [editor, trackChanges, authorName, lang])
+
+  // author name (Settings → General in the shell): read once, then follow live
+  // changes so open documents stamp new comments / revisions without a reopen
+  useEffect(() => {
+    let alive = true
+    window.desktop
+      .getAuthorName()
+      .then((name) => {
+        if (alive && typeof name === 'string') setAuthorName(name)
+      })
+      .catch(() => {
+        /* standalone dev without the shell: keep the localized default */
+      })
+    const off = window.desktop.onAuthorNameChanged((name) => {
+      if (alive && typeof name === 'string') setAuthorName(name)
+    })
+    return () => {
+      alive = false
+      off()
+    }
+  }, [])
 
   // window title follows the document, so the OS window list and Switch Window show file names
   useEffect(() => {
@@ -1925,6 +1951,7 @@ export function App() {
     doc,
     dirtyRef,
     setStatus,
+    authorName,
     notePrompt,
     setNotePrompt,
     footnotes,

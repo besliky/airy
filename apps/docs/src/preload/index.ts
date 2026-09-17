@@ -37,6 +37,17 @@ const api: DesktopApi = {
     ipcRenderer.on('app:auto-save-default-changed', listener)
     return () => ipcRenderer.removeListener('app:auto-save-default-changed', listener)
   },
+  getAuthorName: async () => {
+    const result: unknown = await ipcRenderer.invoke('app:get-author-name')
+    return typeof result === 'string' ? result : ''
+  },
+  onAuthorNameChanged: (handler) => {
+    const listener = (_event: IpcRendererEvent, name: unknown) => {
+      if (typeof name === 'string') handler(name)
+    }
+    ipcRenderer.on('app:author-name-changed', listener)
+    return () => ipcRenderer.removeListener('app:author-name-changed', listener)
+  },
   getAiPanelPrefs: () => ipcRenderer.invoke('app:get-ai-panel-prefs'),
   onAiPanelPrefsChanged: (handler) => {
     const listener = (_event: IpcRendererEvent, prefs: AiPanelPrefs) => handler(prefs)

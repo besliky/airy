@@ -144,6 +144,10 @@ export interface HomeApi {
   getRestoreSession(): Promise<boolean>
   /** persist the session-restore preference (applies on the next launch) */
   setRestoreSession(on: boolean): Promise<void>
+  /** author display name for comments and tracked changes (persisted in userData/app-settings.json; '' = unset, editors use their default) */
+  getAuthorName(): Promise<string>
+  /** sanitize + persist the author name; broadcasts 'app:author-name-changed' to all web contents; resolves the stored name */
+  setAuthorName(name: string): Promise<string>
   /** AI panel text size + chat-input spellcheck (persisted in userData/app-settings.json) */
   getAiPanelPrefs(): Promise<AiPanelPrefs>
   /** merge + persist; broadcasts 'app:ai-panel-prefs-changed' to all web contents */
@@ -271,6 +275,8 @@ export const HOME_CHANNELS = {
   setLiveBridgeEnabled: 'home:set-live-bridge-enabled',
   getRestoreSession: 'home:get-restore-session',
   setRestoreSession: 'home:set-restore-session',
+  getAuthorName: 'home:get-author-name',
+  setAuthorName: 'home:set-author-name',
   getAiPanelPrefs: 'home:get-ai-panel-prefs',
   setAiPanelPrefs: 'home:set-ai-panel-prefs',
   getDefaultSaveDir: 'home:get-default-save-dir',

@@ -74,6 +74,11 @@ const AI_FONT_SIZE_OPTIONS = [
   { value: 'custom', labelKey: 'aiFontSizeCustom' },
 ] as const satisfies readonly { value: AiFontSize; labelKey: StringKey }[]
 
+/** mirrors AUTHOR_NAME_MAX in @airy-office/electron-utils (not importable here:
+ *  that module reads app-settings.json through node:fs); the main process
+ *  re-sanitizes whatever arrives over IPC */
+const AUTHOR_NAME_INPUT_MAX = 60
+
 /** GitHub-style abbreviated stargazer count (2591 → "2.6k") — the number is
  * social proof, not a metric; the cached/exact value would only look stale */
 function formatStars(n: number): string {
@@ -908,6 +913,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [autoSaveOn, setAutoSaveOn] = useState(false)
   const [restoreSessionOn, setRestoreSessionOn] = useState(true)
   const [liveBridgeOn, setLiveBridgeOn] = useState(true)
+  /** configured author name ('' = unset, editors use their localized default) */
+  const [authorName, setAuthorName] = useState('')
+  /** free-typed value of the author-name input; committed on blur / Enter */
+  const [authorNameDraft, setAuthorNameDraft] = useState<string | null>(null)
   const [aiPrefs, setAiPrefs] = useState<AiPanelPrefs>(DEFAULT_AI_PANEL_PREFS)
   const [appVersion, setAppVersion] = useState('')
   const [githubStars, setGithubStars] = useState<number | null>(null)
@@ -925,6 +934,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     })
     void window.aiOffice.getRestoreSession?.().then((v) => {
       if (alive) setRestoreSessionOn(v)
+    })
+    void window.aiOffice.getAuthorName?.().then((v) => {
+      if (alive && typeof v === 'string') setAuthorName(v)
     })
     void window.aiOffice.getLiveBridgeEnabled?.().then((v) => {
       if (alive) setLiveBridgeOn(v)
@@ -967,6 +979,21 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     void window.aiOffice.pickDefaultSaveDir?.().then((dir) => {
       if (dir) setSaveDir(dir)
     })
+  }
+
+  /** commit the author-name input: trim + cap what was typed, drop a no-op
+   *  edit; the main process sanitizes again and broadcasts to open editors */
+  const commitAuthorName = () => {
+    if (authorNameDraft === null) return
+    setAuthorNameDraft(null)
+    const next = authorNameDraft.trim().slice(0, AUTHOR_NAME_INPUT_MAX)
+    if (next === authorName) return
+    void window.aiOffice
+      .setAuthorName?.(next)
+      .then((stored) => {
+        if (typeof stored === 'string') setAuthorName(stored)
+      })
+      .catch(() => {})
   }
 
   return (
@@ -1035,6 +1062,31 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       label: t(opt.labelKey),
                     }))}
                     onPick={(v) => applyTheme(v as UiTheme)}
+                  />
+                </div>
+                <div className="set-field">
+                  <div className="set-field-text">
+                    <div className="set-field-stack">
+                      <label className="set-field-label" htmlFor="set-author-name">
+                        {t('setAuthorName')}
+                      </label>
+                      <div className="set-field-desc">{t('setAuthorNameDesc')}</div>
+                    </div>
+                  </div>
+                  <input
+                    id="set-author-name"
+                    className="set-input"
+                    type="text"
+                    value={authorNameDraft ?? authorName}
+                    placeholder={t('setAuthorNamePlaceholder')}
+                    maxLength={AUTHOR_NAME_INPUT_MAX}
+                    spellCheck={false}
+                    autoComplete="off"
+                    onChange={(e) => setAuthorNameDraft(e.target.value)}
+                    onBlur={commitAuthorName}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur()
+                    }}
                   />
                 </div>
                 <div className="set-field">

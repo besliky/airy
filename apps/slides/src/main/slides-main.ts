@@ -31,6 +31,7 @@ import {
   ALL_OPEN_EXTENSIONS,
   OPEN_EXTENSION_GROUPS,
   appMenuLabels,
+  configuredAuthorName,
   configuredDefaultSaveDir,
   contextMenuLabels,
   fetchRemoteImage,
@@ -429,8 +430,14 @@ function syncAttachedPaths(session: Session, path: string): void {
 
 const RECENT_PATH = () => join(app.getPath('userData'), 'slides-recent.json')
 
-/** Comment author name: system username, falling back to a generic "User" label. */
+/**
+ * Comment author name: the shell-configured author name (Settings → General),
+ * falling back to the system username, then a generic "User" label. Read per
+ * call so a live settings change applies to the next comment without a reopen.
+ */
 function commentAuthorName(): string {
+  const configured = configuredAuthorName(app)
+  if (configured) return configured
   try {
     return userInfo().username || 'User'
   } catch {

@@ -41,10 +41,13 @@ import menuHomeIcon2x from './assets/menu-home@2x.png?asset'
 import { createI18n, isLang, normalizeLang, setUiLang, type Lang } from '@airy-office/i18n'
 import {
   ALL_OPEN_EXTENSIONS,
+  AUTHOR_NAME_KEY,
   DEFAULT_SAVE_DIR_KEY,
   DROP_OPEN_CHANNEL,
   GITHUB_REPO_URL,
   OPEN_EXTENSION_GROUPS,
+  readAuthorNameSetting,
+  sanitizeAuthorName,
   appMenuLabels,
   contextMenuLabels,
   editMenuTemplate,
@@ -391,6 +394,16 @@ function currentAiPanelPrefs(): AiPanelPrefs {
     spellcheck: saved.aiPanelSpellcheck,
   })
   return cachedAiPanelPrefs
+}
+
+// ---- author display name (comments / revision marks) ----
+
+let cachedAuthorName: string | null = null
+
+/** configured author name; '' means unset (editors fall back to their defaults) */
+function currentAuthorName(): string {
+  if (cachedAuthorName === null) cachedAuthorName = readAuthorNameSetting(APP_SETTINGS_PATH())
+  return cachedAuthorName
 }
 
 // ---- first-run onboarding ----
@@ -1561,6 +1574,20 @@ function registerHomeIpc(): void {
 
   ipcMain.handle(HOME_CHANNELS.getAutoSaveDefault, (): AutoSaveDefault => currentAutoSaveDefault())
   ipcMain.handle('app:get-auto-save-default', (): AutoSaveDefault => currentAutoSaveDefault())
+
+  // author display name: persisted like the other General settings and pushed
+  // to open editors live (they stamp it on new comments / revision marks)
+  ipcMain.handle(HOME_CHANNELS.getAuthorName, (): string => currentAuthorName())
+  ipcMain.handle('app:get-author-name', (): string => currentAuthorName())
+
+  ipcMain.handle(HOME_CHANNELS.setAuthorName, (_event, raw: unknown): string => {
+    const next = sanitizeAuthorName(raw)
+    if (next === currentAuthorName()) return next
+    cachedAuthorName = next
+    writeAppSetting(APP_SETTINGS_PATH(), AUTHOR_NAME_KEY, next)
+    for (const wc of webContents.getAllWebContents()) wc.send('app:author-name-changed', next)
+    return next
+  })
 
   ipcMain.handle(HOME_CHANNELS.setAutoSaveDefault, (_event, on: unknown) => {
     if (typeof on !== 'boolean') return

@@ -2,6 +2,11 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import {
+  AUTHOR_NAME_KEY,
+  readAuthorNameSetting,
+  sanitizeAuthorName,
+} from '@airy-office/electron-utils'
 import { readAppSettings, writeAppSetting, writeAppSettings } from '../src/main/app-settings'
 
 /**
@@ -81,5 +86,20 @@ describe('writeAppSettings', () => {
       onboardingSeen: true,
       liveBridge: false,
     })
+  })
+})
+
+describe('authorName (settings round-trip)', () => {
+  it('persists like the other General settings and reads back sanitized', () => {
+    writeAppSetting(settingsPath, AUTHOR_NAME_KEY, sanitizeAuthorName('  Ada \u0007 Lovelace  '))
+    expect(readAuthorNameSetting(settingsPath)).toBe('Ada Lovelace')
+  })
+
+  it('clearing the name keeps the other keys intact', () => {
+    writeAppSettings(settingsPath, { language: 'de', [AUTHOR_NAME_KEY]: 'Ada' })
+    writeAppSetting(settingsPath, AUTHOR_NAME_KEY, '')
+    const stored = JSON.parse(readFileSync(settingsPath, 'utf8'))
+    expect(stored).toEqual({ language: 'de', [AUTHOR_NAME_KEY]: '' })
+    expect(readAuthorNameSetting(settingsPath)).toBe('')
   })
 })

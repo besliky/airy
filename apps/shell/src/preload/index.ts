@@ -175,6 +175,15 @@ const homeApi: HomeApi = {
     if (typeof on !== 'boolean') throw new Error('Invalid session restore flag.')
     await ipcRenderer.invoke(HOME_CHANNELS.setRestoreSession, on)
   },
+  async getAuthorName() {
+    const result: unknown = await ipcRenderer.invoke(HOME_CHANNELS.getAuthorName)
+    return typeof result === 'string' ? result : ''
+  },
+  async setAuthorName(name) {
+    if (typeof name !== 'string') throw new Error('Invalid author name.')
+    const result: unknown = await ipcRenderer.invoke(HOME_CHANNELS.setAuthorName, name)
+    return typeof result === 'string' ? result : ''
+  },
   async getAiPanelPrefs() {
     return normalizeAiPanelPrefs(await ipcRenderer.invoke(HOME_CHANNELS.getAiPanelPrefs))
   },

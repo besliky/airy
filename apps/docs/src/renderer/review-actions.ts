@@ -32,12 +32,24 @@ export interface NotePrompt {
   id?: string
 }
 
+/**
+ * Author stamped on new comments / revision marks: the shell-configured name
+ * (Settings → General, possibly changed live) or the localized default when
+ * unset/blank. Kept pure for tests.
+ */
+export function effectiveAuthorName(configured: string, fallback: string): string {
+  const trimmed = configured.trim()
+  return trimmed ? trimmed : fallback
+}
+
 /** The App state the review actions need; built fresh per call. */
 export interface ReviewContext {
   editor: Editor | null
   doc: DocState | null
   dirtyRef: { current: boolean }
   setStatus: (status: string) => void
+  /** shell-configured author name ('' / undefined = unset → localized default author) */
+  authorName?: string
   notePrompt: NotePrompt | null
   setNotePrompt: (value: NotePrompt | null) => void
   footnotes: NoteInfo[]
@@ -150,7 +162,15 @@ export function submitNewComment(ctx: ReviewContext, text: string): void {
     return
   }
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
-  ctx.setComments((prev) => [...prev, { id, author: 'User', date: now, text }])
+  ctx.setComments((prev) => [
+    ...prev,
+    {
+      id,
+      author: effectiveAuthorName(ctx.authorName ?? '', t('editorDefaultAuthor')),
+      date: now,
+      text,
+    },
+  ])
   ctx.setCommentsDirty(true)
   ctx.setCommentComposing(false)
   ctx.dirtyRef.current = true
@@ -162,7 +182,7 @@ export function replyToComment(
   ctx: ReviewContext,
   parentId: string,
   text: string,
-  author = 'User',
+  author?: string,
 ): boolean {
   if (!ctx.editor) return false
   const id = nextCommentId(ctx.comments)
@@ -170,8 +190,9 @@ export function replyToComment(
     ctx.setStatus(t('appCommentAnchorGone'))
     return false
   }
+  const who = author ?? effectiveAuthorName(ctx.authorName ?? '', t('editorDefaultAuthor'))
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
-  ctx.setComments((prev) => [...prev, { id, author, date: now, text, parentId }])
+  ctx.setComments((prev) => [...prev, { id, author: who, date: now, text, parentId }])
   ctx.setCommentsDirty(true)
   ctx.dirtyRef.current = true
   ctx.setStatus(t('appCommentReplied'))
