@@ -73,6 +73,39 @@ describe('bridge command handler', () => {
     expect(result.context).toContain('Body paragraph')
   })
 
+  it('inserts at the end of the document by default (not at the cursor)', async () => {
+    // two blocks with the selection in the first: the bridge contract
+    // (live_apply_ops documents "html inserted at the end") must win over
+    // the embedded pipeline's cursor default
+    const editor = new Editor({
+      element: document.createElement('div'),
+      extensions: editorExtensions,
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'docParagraph',
+            attrs: { docxIndex: null },
+            content: [{ type: 'text', text: 'First' }],
+          },
+          {
+            type: 'docParagraph',
+            attrs: { docxIndex: null },
+            content: [{ type: 'text', text: 'Second' }],
+          },
+        ],
+      },
+    })
+    liveEditors.push(editor)
+    const handler = makeHandler(editor)
+    const reply = await handler('insert_content', { html: '<p>Inserted by bridge</p>' })
+    expect(reply.ok).toBe(true)
+    expect(editor.state.doc.childCount).toBe(3)
+    expect(editor.state.doc.child(0).textContent).toBe('First')
+    expect(editor.state.doc.child(1).textContent).toBe('Second')
+    expect(editor.state.doc.child(2).textContent).toBe('Inserted by bridge')
+  })
+
   it('inserts content and undo reverts exactly that turn', async () => {
     const editor = makeEditor()
     const handler = makeHandler(editor)

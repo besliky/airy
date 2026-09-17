@@ -166,9 +166,13 @@ export function createBridgeCommandHandler(
       method === 'insert_content'
         ? await runTool(editor, state, 'insert_content', {
             html: String(params.html ?? ''),
+            // the bridge contract (live_apply_ops) inserts at the END of the
+            // document so block indexes from get_context stay valid — the
+            // embedded pipeline's cursor default only applies to panel
+            // callers, which pass their own afterBlockIndex
             ...(params.afterBlockIndex !== undefined
               ? { afterBlockIndex: params.afterBlockIndex }
-              : {}),
+              : { afterBlockIndex: editor.state.doc.childCount - 1 }),
           })
         : await runTool(editor, state, 'apply_ops', { ops: params.ops })
     if (exec.isError) return executionError(exec)
