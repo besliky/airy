@@ -109,7 +109,7 @@ describe('writeCopy / clear / maybeRecover', () => {
         await gate
         writeFileSync(path, text, 'utf8')
       },
-      readOriginal: async (path) => originals.get(path) ?? 'saved',
+      readOriginal: async () => 'saved',
     })
     const inFlight = racing.writeCopy(file, 'edits the user discarded')
     racing.clear(file) // discard lands while the write is pending
