@@ -24,6 +24,7 @@ import {
   webContents,
 } from 'electron'
 import type { MenuItemConstructorOptions, NativeImage, WebContents } from 'electron'
+import { isHomeSender } from './home-sender-guard'
 import menuDocxIcon1x from './assets/menu-docx.png?asset'
 import menuDocxIcon2x from './assets/menu-docx@2x.png?asset'
 import menuXlsxIcon1x from './assets/menu-xlsx.png?asset'
@@ -475,6 +476,8 @@ const tm = (key: Parameters<typeof tMain>[1], params?: Parameters<typeof tMain>[
 // ---- the shell window + its tab manager (recreated if the user closes it on macOS) ----
 
 let shellWindow: BrowserWindow | null = null
+/** The Home tab is the shell window's own renderer; home:* channels answer it only. */
+let homeWebContentsId: number | null = null
 let tabManager: TabManager | null = null
 /** Home renderer crashed and awaits its Reload decision (dedupe guard) */
 let homeRendererCrashed = false
@@ -727,6 +730,8 @@ function createShellWindow(): void {
   if (saved?.isFullScreen) win.setFullScreen(true)
   else if (saved?.isMaximized) win.maximize()
   shellWindow = win
+  const shellWcId = win.webContents.id
+  homeWebContentsId = shellWcId
 
   // Persist geometry on move/resize (debounced — a drag fires dozens of
   // events) and immediately on state flips and close, the last of which is
@@ -830,7 +835,14 @@ function createShellWindow(): void {
     },
   })
   setDocsShellHooks({
-    openTab: (openPath, options) => manager.openDocsTab(openPath, options),
+    openTab: (openPath, options) => {
+      // win:new arrives from a docs renderer with a renderer-named path:
+      // route it through the same confinement an OS-level open uses
+      // (grant the folder, dedupe an already-open document). Falls through
+      // to a plain tab for paths the router cannot place (e.g. missing file).
+      if (openPath && openDocumentPath(openPath)) return
+      manager.openDocsTab(openPath, options)
+    },
     openAiDocTab: (content) =>
       manager.openDocsTab(undefined, { newBlank: true, aiContent: content }),
     listTabs: () =>
@@ -992,6 +1004,7 @@ function createShellWindow(): void {
 
   win.on('closed', () => {
     if (shellWindow === win) shellWindow = null
+    if (homeWebContentsId === shellWcId) homeWebContentsId = null
     if (tabManager === manager) tabManager = null
   })
 
@@ -1362,6 +1375,15 @@ async function setLiveBridgeEnabled(on: boolean): Promise<boolean> {
 }
 
 function registerHomeIpc(): void {
+  // home:* channels are process-global (the shell bundles every editor's
+  // main code), so only the Home tab — the shell window's own renderer —
+  // may drive the file-touching handlers; any other webContents is untrusted
+  const requireHomeSender = (event: { sender: { id: number } }): void => {
+    if (!isHomeSender(homeWebContentsId, event.sender.id)) {
+      throw new Error('Untrusted IPC sender.')
+    }
+  }
+
   ipcMain.handle(HOME_CHANNELS.getAppVersion, (): string => app.getVersion())
 
   ipcMain.handle(HOME_CHANNELS.recents, (_event, query: unknown): Promise<RecentPage> =>
@@ -1380,15 +1402,18 @@ function registerHomeIpc(): void {
     }
   })
 
-  ipcMain.handle(HOME_CHANNELS.statPaths, async (_event, paths: unknown): Promise<RecentEntry[]> =>
-    statEntries(stringPaths(paths)),
-  )
+  ipcMain.handle(HOME_CHANNELS.statPaths, async (event, paths: unknown): Promise<RecentEntry[]> => {
+    requireHomeSender(event)
+    return statEntries(stringPaths(paths))
+  })
 
-  ipcMain.handle(HOME_CHANNELS.toggleStar, (_event, path: unknown) => {
+  ipcMain.handle(HOME_CHANNELS.toggleStar, (event, path: unknown) => {
+    requireHomeSender(event)
     if (typeof path === 'string') toggleStarredFile(path)
   })
 
-  ipcMain.handle(HOME_CHANNELS.openPath, (_event, path: unknown) => {
+  ipcMain.handle(HOME_CHANNELS.openPath, (event, path: unknown) => {
+    requireHomeSender(event)
     if (typeof path === 'string') openDocumentPath(path)
   })
 
@@ -1445,7 +1470,8 @@ function registerHomeIpc(): void {
     void newPdfTab()
   })
 
-  ipcMain.handle(HOME_CHANNELS.removeRecent, (_event, paths: unknown) => {
+  ipcMain.handle(HOME_CHANNELS.removeRecent, (event, paths: unknown) => {
+    requireHomeSender(event)
     const list = stringPaths(paths)
     removeRecentFiles(list)
     // an unavailable entry's star must go with it, or the Starred view keeps
@@ -1453,13 +1479,15 @@ function registerHomeIpc(): void {
     removeStarredFiles(list.filter((p) => !existsSync(p)))
   })
 
-  ipcMain.handle(HOME_CHANNELS.revealPath, (_event, path: unknown) => {
+  ipcMain.handle(HOME_CHANNELS.revealPath, (event, path: unknown) => {
+    requireHomeSender(event)
     if (typeof path === 'string' && existsSync(path)) shell.showItemInFolder(path)
   })
 
   ipcMain.handle(
     HOME_CHANNELS.renameFile,
-    (_event, path: unknown, newName: unknown): RenameResult => {
+    (event, path: unknown, newName: unknown): RenameResult => {
+      requireHomeSender(event)
       if (typeof path !== 'string' || typeof newName !== 'string')
         return { ok: false, error: tm('errBadArgs') }
       const name = newName.trim()
@@ -1495,7 +1523,8 @@ function registerHomeIpc(): void {
     },
   )
 
-  ipcMain.handle(HOME_CHANNELS.duplicateFile, (_event, path: unknown) => {
+  ipcMain.handle(HOME_CHANNELS.duplicateFile, (event, path: unknown) => {
+    requireHomeSender(event)
     if (typeof path !== 'string' || !existsSync(path)) return
     const ext = extname(path)
     const base = basename(path, ext)
@@ -1509,7 +1538,8 @@ function registerHomeIpc(): void {
     }
   })
 
-  ipcMain.handle(HOME_CHANNELS.deleteFiles, async (_event, paths: unknown) => {
+  ipcMain.handle(HOME_CHANNELS.deleteFiles, async (event, paths: unknown) => {
+    requireHomeSender(event)
     const list = stringPaths(paths)
     for (const p of list) {
       try {

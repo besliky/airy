@@ -115,6 +115,7 @@ import type {
 } from '../shared/ipc'
 import { ATTACHMENT_IMAGE_EXTS } from '../shared/ipc'
 import { findDocxPath } from '../shared/open-file'
+import { isDocsRenderer, trackDocsRenderer, untrackDocsRenderer } from './docs-renderers'
 import { atomicWriteFile, looksLikeZip } from '@airy-office/electron-utils'
 import {
   commitDocPasswordSave,
@@ -3972,7 +3973,12 @@ export function registerDocsIpc(): void {
     },
   )
 
-  ipcMain.handle('win:new', (_event, openPath: string | null) => {
+  ipcMain.handle('win:new', (event, openPath: string | null) => {
+    // process-global channel: only docs renderers may spawn docs tabs or
+    // windows (the ribbon's New Tab button is the only caller); the shell's
+    // openTab hook routes a renderer-named path through the same
+    // grant+dedupe confinement an OS-level open uses
+    if (!isDocsRenderer(event.sender.id)) throw new Error('Untrusted IPC sender.')
     // A pathless new tab/window starts as a blank document, not the start screen
     const path = openPath ?? undefined
     if (shellHooks) shellHooks.openTab(path, path ? undefined : { newBlank: true })
@@ -4414,6 +4420,8 @@ export function createDocsWindow(openPath?: string): BrowserWindow {
   // captured up front: webContents is already destroyed inside the 'closed' handler
   const webContentsId = win.webContents.id
   if (openPath) pendingWindowOpens.set(webContentsId, openPath)
+  trackDocsRenderer(webContentsId)
+  win.webContents.once('destroyed', () => untrackDocsRenderer(webContentsId))
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     const target = safeExternalUrl(url)
@@ -4669,8 +4677,10 @@ export function createDocsView(openPath?: string): WebContentsView {
   }
   // view.webContents becomes undefined after destroy, so grab the id beforehand
   const wcId = view.webContents.id
+  trackDocsRenderer(wcId)
   view.webContents.once('destroyed', () => {
     pendingWindowOpens.delete(wcId)
+    untrackDocsRenderer(wcId)
     dropDocWriter(wcId)
     forgetWitnessedDrops(wcId)
     closeCheckWaiters.get(wcId)?.({ dirty: false, autoSave: false })
