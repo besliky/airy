@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-17
+
 ### Added
 
 - Docs: navigation-pane search — type to live-filter headings with matched-text
@@ -162,7 +164,8 @@ agent-driven document work.
 - The `gsk` CLI search backend and the `@genspark/cli` dependency.
 - The Genspark AI provider — AI in the app is bring-your-own-key only.
 
-[Unreleased]: https://github.com/besliky/airy/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/besliky/airy/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/besliky/airy/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/besliky/airy/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/besliky/airy/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/besliky/airy/compare/v0.9.0...v0.9.1
