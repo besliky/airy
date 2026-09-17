@@ -419,6 +419,33 @@ function chartGeometry(chart: ChartRenderNode, defs: string[]): string {
 /** pie/doughnut wedge → SVG arc path */
 function wedgePath(w: NonNullable<ChartRenderNode['wedges']>[number]): string {
   const { cx, cy, outerR, innerR, startDeg, sweepDeg } = w
+  if (sweepDeg >= 360 - 1e-6) {
+    // full-circle wedge (a pie's only slice): start == end, and an SVG arc
+    // with identical endpoints draws nothing — emit the circle as two
+    // half arcs (and a two-arc inner ring for doughnuts)
+    const a0 = ((startDeg - 90) * Math.PI) / 180
+    const aOpp = a0 + Math.PI
+    const x0 = cx + outerR * Math.cos(a0)
+    const y0 = cy + outerR * Math.sin(a0)
+    const xOpp = cx + outerR * Math.cos(aOpp)
+    const yOpp = cy + outerR * Math.sin(aOpp)
+    if (innerR <= 0) {
+      return (
+        `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${outerR.toFixed(2)} ${outerR.toFixed(2)} 0 1 1 ${xOpp.toFixed(2)} ${yOpp.toFixed(2)} ` +
+        `A ${outerR.toFixed(2)} ${outerR.toFixed(2)} 0 1 1 ${x0.toFixed(2)} ${y0.toFixed(2)} Z`
+      )
+    }
+    const xi0 = cx + innerR * Math.cos(a0)
+    const yi0 = cy + innerR * Math.sin(a0)
+    const xiOpp = cx + innerR * Math.cos(aOpp)
+    const yiOpp = cy + innerR * Math.sin(aOpp)
+    return (
+      `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${outerR.toFixed(2)} ${outerR.toFixed(2)} 0 1 1 ${xOpp.toFixed(2)} ${yOpp.toFixed(2)} ` +
+      `A ${outerR.toFixed(2)} ${outerR.toFixed(2)} 0 1 1 ${x0.toFixed(2)} ${y0.toFixed(2)} ` +
+      `L ${xi0.toFixed(2)} ${yi0.toFixed(2)} A ${innerR.toFixed(2)} ${innerR.toFixed(2)} 0 1 0 ${xiOpp.toFixed(2)} ${yiOpp.toFixed(2)} ` +
+      `A ${innerR.toFixed(2)} ${innerR.toFixed(2)} 0 1 0 ${xi0.toFixed(2)} ${yi0.toFixed(2)} Z`
+    )
+  }
   const large = sweepDeg > 180 ? 1 : 0
   const a0 = ((startDeg - 90) * Math.PI) / 180
   const a1 = ((startDeg + sweepDeg - 90) * Math.PI) / 180

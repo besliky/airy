@@ -300,4 +300,28 @@ describe('renderSlideSvg', () => {
       '<g transform="translate(100.00 0) scale(-1 1)"><g transform="translate(0.00 0.00)">',
     )
   })
+  it('draws a 360° pie wedge as a closed full circle', () => {
+    const chart: RenderNode = {
+      id: 'c2',
+      type: 'chart',
+      sourceId: 'c2',
+      box: box(0, 0, 300, 200),
+      gridLines: [],
+      axisLines: [],
+      labels: [],
+      bars: [],
+      polylines: [],
+      markers: [],
+      swatches: [],
+      wedges: [
+        { cx: 150, cy: 100, outerR: 60, innerR: 0, startDeg: 0, sweepDeg: 360, color: 'ED7D31' },
+      ],
+    } as unknown as ChartRenderNode
+    const svg = renderSlideSvg(slideOf(chart), new Map())
+    // start == end would draw nothing; the full circle is two half arcs
+    expect(svg.match(/A 60\.00 60\.00 0 1 1/g)).toHaveLength(2)
+    expect(svg).toContain(
+      'M 150.00 40.00 A 60.00 60.00 0 1 1 150.00 160.00 A 60.00 60.00 0 1 1 150.00 40.00 Z',
+    )
+  })
 })
