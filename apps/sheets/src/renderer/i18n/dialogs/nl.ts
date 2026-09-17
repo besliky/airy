@@ -410,6 +410,7 @@ export const nl = {
   dlgFnCatMore: 'Meer',
   dlgPrintTitle: 'Afdrukken',
   dlgPrintRendering: 'Voorbeeld wordt gemaakt…',
+  dlgPrintPreviewFrame: 'Afdrukvoorbeeld',
   dlgPrintPaper: 'Papierformaat',
   dlgPrintOrientation: 'Oriëntatie',
   dlgPrintPortrait: 'Staand',

@@ -411,6 +411,7 @@ export const cs = {
   dlgFnCatMore: 'Další',
   dlgPrintTitle: 'Tisk',
   dlgPrintRendering: 'Vytváření náhledu…',
+  dlgPrintPreviewFrame: 'Náhled tisku',
   dlgPrintPaper: 'Velikost papíru',
   dlgPrintOrientation: 'Orientace',
   dlgPrintPortrait: 'Na výšku',

@@ -413,6 +413,7 @@ export const ru = {
   dlgFnCatMore: 'Другие',
   dlgPrintTitle: 'Печать',
   dlgPrintRendering: 'Создание предварительного просмотра…',
+  dlgPrintPreviewFrame: 'Предварительный просмотр печати',
   dlgPrintPaper: 'Размер бумаги',
   dlgPrintOrientation: 'Ориентация',
   dlgPrintPortrait: 'Книжная',

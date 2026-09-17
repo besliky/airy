@@ -406,6 +406,7 @@ export const th = {
   dlgFnCatMore: 'อื่นๆ',
   dlgPrintTitle: 'พิมพ์',
   dlgPrintRendering: 'กำลังสร้างตัวอย่าง…',
+  dlgPrintPreviewFrame: 'ตัวอย่างก่อนพิมพ์',
   dlgPrintPaper: 'ขนาดกระดาษ',
   dlgPrintOrientation: 'การวางแนว',
   dlgPrintPortrait: 'แนวตั้ง',

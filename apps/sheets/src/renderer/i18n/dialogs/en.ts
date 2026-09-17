@@ -411,6 +411,7 @@ export const en = {
   dlgFnCatMore: 'More',
   dlgPrintTitle: 'Print',
   dlgPrintRendering: 'Rendering preview…',
+  dlgPrintPreviewFrame: 'Print preview',
   dlgPrintPaper: 'Paper size',
   dlgPrintOrientation: 'Orientation',
   dlgPrintPortrait: 'Portrait',

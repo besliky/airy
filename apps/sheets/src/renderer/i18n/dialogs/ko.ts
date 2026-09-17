@@ -405,6 +405,7 @@ export const ko = {
   dlgFnCatMore: '기타',
   dlgPrintTitle: '인쇄',
   dlgPrintRendering: '미리보기 생성 중…',
+  dlgPrintPreviewFrame: '인쇄 미리 보기',
   dlgPrintPaper: '용지 크기',
   dlgPrintOrientation: '방향',
   dlgPrintPortrait: '세로',

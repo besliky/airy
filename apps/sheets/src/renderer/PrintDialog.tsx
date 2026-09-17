@@ -64,6 +64,9 @@ export function PrintDialog({
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [pageCount, setPageCount] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /// Raw English error from the main process — surfaced only as a tooltip on
+  /// the localized message, never as the visible text.
+  const [errorDetail, setErrorDetail] = useState<string | null>(null)
   const [paperSize, setPaperSize] = useState(9)
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait')
   const [scale, setScale] = useState(100)
@@ -139,14 +142,20 @@ export function PrintDialog({
           printRequestRef.current = built.request
           setPreviewHtml(built.request.html)
           setError(null)
+          setErrorDetail(null)
           const preview = await window.desktopApi.previewPrint(built.request)
           if (!alive || run !== runRef.current) return
           if (preview.ok) setPageCount(preview.pageCount)
-          else setError(preview.error)
+          else {
+            setError(t('appPrintPreviewFailed'))
+            setErrorDetail(preview.error)
+          }
         } catch (reason: unknown) {
           if (alive && run === runRef.current) {
             setPreviewHtml(null)
             setPageCount(null)
+            setErrorDetail(null)
+            // buildRequest throws localized messages when nothing is printable
             setError(reason instanceof Error ? reason.message : t('appPrintPreviewFailed'))
           }
         }
@@ -201,13 +210,16 @@ export function PrintDialog({
             {previewHtml !== null ? (
               <iframe
                 ref={frameRef}
-                title="print-preview"
+                title={t('dlgPrintPreviewFrame')}
+                aria-label={t('dlgPrintPreviewFrame')}
                 sandbox="allow-same-origin"
                 srcDoc={previewHtml}
                 onLoad={applyZoom}
               />
             ) : (
-              <div className="print-preview-empty">{error ?? t('dlgPrintRendering')}</div>
+              <div className="print-preview-empty" title={errorDetail ?? undefined}>
+                {error ?? t('dlgPrintRendering')}
+              </div>
             )}
           </div>
           <div className="print-options">
@@ -284,8 +296,8 @@ export function PrintDialog({
                 {t('dlgPrintFitSheet')}
               </label>
             </fieldset>
-            <div className="print-page-count">
-              {pageCount !== null ? t('dlgPrintPageCount', { n: pageCount }) : ''}
+            <div className="print-page-count" title={errorDetail ?? undefined}>
+              {error ?? (pageCount !== null ? t('dlgPrintPageCount', { n: pageCount }) : '')}
             </div>
           </div>
         </div>

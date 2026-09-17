@@ -409,6 +409,7 @@ export const hi = {
   dlgFnCatMore: 'अन्य',
   dlgPrintTitle: 'प्रिंट',
   dlgPrintRendering: 'पूर्वावलोकन बना रहे हैं…',
+  dlgPrintPreviewFrame: 'प्रिंट पूर्वावलोकन',
   dlgPrintPaper: 'कागज़ का आकार',
   dlgPrintOrientation: 'अभिविन्यास',
   dlgPrintPortrait: 'पोर्ट्रेट',

@@ -395,6 +395,7 @@ export const zh = {
   dlgFnCatMore: '其他',
   dlgPrintTitle: '打印',
   dlgPrintRendering: '正在生成预览…',
+  dlgPrintPreviewFrame: '打印预览',
   dlgPrintPaper: '纸张大小',
   dlgPrintOrientation: '方向',
   dlgPrintPortrait: '纵向',

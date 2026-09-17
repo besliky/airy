@@ -397,6 +397,7 @@ export const zhTW = {
   dlgFnCatMore: '其他',
   dlgPrintTitle: '列印',
   dlgPrintRendering: '正在產生預覽…',
+  dlgPrintPreviewFrame: '列印預覽',
   dlgPrintPaper: '紙張大小',
   dlgPrintOrientation: '方向',
   dlgPrintPortrait: '縱向',

@@ -412,6 +412,7 @@ export const it = {
   dlgFnCatMore: 'Altro',
   dlgPrintTitle: 'Stampa',
   dlgPrintRendering: 'Generazione anteprima…',
+  dlgPrintPreviewFrame: 'Anteprima di stampa',
   dlgPrintPaper: 'Formato carta',
   dlgPrintOrientation: 'Orientamento',
   dlgPrintPortrait: 'Verticale',

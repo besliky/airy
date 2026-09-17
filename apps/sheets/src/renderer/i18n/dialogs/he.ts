@@ -403,6 +403,7 @@ export const he = {
   dlgFnCatMore: 'אחר',
   dlgPrintTitle: 'הדפסה',
   dlgPrintRendering: 'יוצר תצוגה מקדימה…',
+  dlgPrintPreviewFrame: 'תצוגה מקדימה של הדפסה',
   dlgPrintPaper: 'גודל נייר',
   dlgPrintOrientation: 'כיוון',
   dlgPrintPortrait: 'לאורך',

@@ -411,6 +411,7 @@ export const id = {
   dlgFnCatMore: 'Lainnya',
   dlgPrintTitle: 'Cetak',
   dlgPrintRendering: 'Menyusun pratinjau…',
+  dlgPrintPreviewFrame: 'Pratinjau cetak',
   dlgPrintPaper: 'Ukuran kertas',
   dlgPrintOrientation: 'Orientasi',
   dlgPrintPortrait: 'Potret',

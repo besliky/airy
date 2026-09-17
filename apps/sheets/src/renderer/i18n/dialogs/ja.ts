@@ -409,6 +409,7 @@ export const ja = {
   dlgFnCatMore: 'その他',
   dlgPrintTitle: '印刷',
   dlgPrintRendering: 'プレビューを生成中…',
+  dlgPrintPreviewFrame: '印刷プレビュー',
   dlgPrintPaper: '用紙サイズ',
   dlgPrintOrientation: '向き',
   dlgPrintPortrait: '縦',

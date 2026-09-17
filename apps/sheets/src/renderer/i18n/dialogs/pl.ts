@@ -412,6 +412,7 @@ export const pl = {
   dlgFnCatMore: 'Inne',
   dlgPrintTitle: 'Drukuj',
   dlgPrintRendering: 'Generowanie podglądu…',
+  dlgPrintPreviewFrame: 'Podgląd wydruku',
   dlgPrintPaper: 'Rozmiar papieru',
   dlgPrintOrientation: 'Orientacja',
   dlgPrintPortrait: 'Pionowo',

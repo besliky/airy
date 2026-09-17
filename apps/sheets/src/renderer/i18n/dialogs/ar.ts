@@ -407,6 +407,7 @@ export const ar = {
   dlgFnCatMore: 'أخرى',
   dlgPrintTitle: 'طباعة',
   dlgPrintRendering: 'جارٍ إنشاء المعاينة…',
+  dlgPrintPreviewFrame: 'معاينة الطباعة',
   dlgPrintPaper: 'حجم الورق',
   dlgPrintOrientation: 'الاتجاه',
   dlgPrintPortrait: 'طولي',

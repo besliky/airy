@@ -411,6 +411,7 @@ export const pt = {
   dlgFnCatMore: 'Mais',
   dlgPrintTitle: 'Imprimir',
   dlgPrintRendering: 'Gerando visualização…',
+  dlgPrintPreviewFrame: 'Visualização de impressão',
   dlgPrintPaper: 'Tamanho do papel',
   dlgPrintOrientation: 'Orientação',
   dlgPrintPortrait: 'Retrato',

@@ -409,6 +409,7 @@ export const ms = {
   dlgFnCatMore: 'Lain-lain',
   dlgPrintTitle: 'Cetak',
   dlgPrintRendering: 'Menghasilkan pratonton…',
+  dlgPrintPreviewFrame: 'Pratonton cetak',
   dlgPrintPaper: 'Saiz kertas',
   dlgPrintOrientation: 'Orientasi',
   dlgPrintPortrait: 'Potret',
