@@ -544,6 +544,7 @@ register({
   apply(op, ctx): OpRecord {
     const { count } = replaceAllInDeck(ctx.opened.deck, String(op.find), String(op.replace), {
       matchCase: op.matchCase as boolean | undefined,
+      wholeWord: op.wholeWord as boolean | undefined,
       firstOnly: op.firstOnly as boolean | undefined,
       slideIndex: op.slideIndex as number | undefined,
       elementId: op.elementId as string | undefined,

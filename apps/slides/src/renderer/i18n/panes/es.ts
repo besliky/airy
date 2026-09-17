@@ -69,6 +69,8 @@ export const es = {
   paneFrReplace: 'Reemplazar',
   paneFrReplaceAll: 'Reemplazar todo',
   paneFrMatchCase: 'Coincidir mayúsculas y minúsculas',
+  paneFrWholeWord: 'Coincidir palabra completa',
+  paneFrFindPrev: 'Buscar anterior',
   paneFrNotFound: 'Sin coincidencias',
   paneFrReplaced: '{n} reemplazado(s)',
   paneFrMatchPos: '{i} de {n}',

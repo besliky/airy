@@ -68,6 +68,8 @@ export const zhTW = {
   paneFrReplace: '取代',
   paneFrReplaceAll: '全部取代',
   paneFrMatchCase: '大小寫須相符',
+  paneFrWholeWord: '全字相符',
+  paneFrFindPrev: '尋找上一個',
   paneFrNotFound: '找不到符合項目',
   paneFrReplaced: '已取代 {n} 處',
   paneFrMatchPos: '第 {i} 項，共 {n} 項',

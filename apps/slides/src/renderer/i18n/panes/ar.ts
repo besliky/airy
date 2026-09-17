@@ -68,6 +68,8 @@ export const ar = {
   paneFrReplace: 'استبدال',
   paneFrReplaceAll: 'استبدال الكل',
   paneFrMatchCase: 'مطابقة حالة الأحرف',
+  paneFrWholeWord: 'مطابقة الكلمة بالكامل',
+  paneFrFindPrev: 'بحث عن السابق',
   paneFrNotFound: 'لا توجد نتائج',
   paneFrReplaced: 'تم استبدال {n}',
   paneFrMatchPos: '{i} من {n}',

@@ -8521,8 +8521,10 @@ body.show-curtain::after {
 }
 .find-panel-opts {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 4px 10px;
   color: var(--text);
 }
 .find-panel-opts label {
@@ -8553,6 +8555,28 @@ body.show-curtain::after {
 .find-panel-actions button:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* Find hits overlay (portaled into .stage-rel, slide-px coordinates; the
+ * canvas zoom scales it with the slide). Chrome, not document content:
+ * accent-tinted hit boxes, the active one outlined. */
+.find-hits {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 7;
+}
+.find-hit {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 2px;
+  background: var(--accent-soft);
+  outline: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.find-hit.active {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  outline: 2px solid var(--accent);
+  z-index: 1;
 }
 
 /* ── Slide master editing view (full-screen overlay) ── */

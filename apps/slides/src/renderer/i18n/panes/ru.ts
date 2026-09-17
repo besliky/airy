@@ -69,6 +69,8 @@ export const ru = {
   paneFrReplace: 'Заменить',
   paneFrReplaceAll: 'Заменить все',
   paneFrMatchCase: 'С учётом регистра',
+  paneFrWholeWord: 'Только целое слово',
+  paneFrFindPrev: 'Найти предыдущее',
   paneFrNotFound: 'Совпадений не найдено',
   paneFrReplaced: 'Заменено: {n}',
   paneFrMatchPos: '{i} из {n}',

@@ -69,6 +69,8 @@ export const ko = {
   paneFrReplace: '바꾸기',
   paneFrReplaceAll: '모두 바꾸기',
   paneFrMatchCase: '대/소문자 구분',
+  paneFrWholeWord: '전체 단어 일치',
+  paneFrFindPrev: '이전 찾기',
   paneFrNotFound: '일치하는 항목 없음',
   paneFrReplaced: '{n}개 바꿈',
   paneFrMatchPos: '{n}개 중 {i}번째',

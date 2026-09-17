@@ -69,6 +69,8 @@ export const th = {
   paneFrReplace: 'แทนที่',
   paneFrReplaceAll: 'แทนที่ทั้งหมด',
   paneFrMatchCase: 'ตรงตามตัวพิมพ์',
+  paneFrWholeWord: 'ตรงทั้งคำ',
+  paneFrFindPrev: 'ค้นหาก่อนหน้า',
   paneFrNotFound: 'ไม่พบรายการที่ตรงกัน',
   paneFrReplaced: 'แทนที่แล้ว {n} รายการ',
   paneFrMatchPos: 'รายการที่ {i} จาก {n}',

@@ -69,6 +69,8 @@ export const pl = {
   paneFrReplace: 'Zamień',
   paneFrReplaceAll: 'Zamień wszystko',
   paneFrMatchCase: 'Uwzględnij wielkość liter',
+  paneFrWholeWord: 'Całe słowo',
+  paneFrFindPrev: 'Znajdź poprzednie',
   paneFrNotFound: 'Nie znaleziono dopasowań',
   paneFrReplaced: 'Zamieniono: {n}',
   paneFrMatchPos: '{i} z {n}',

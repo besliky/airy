@@ -20,7 +20,7 @@ Common sizes: 16:9 is 12192000 x 6858000, 4:3 is 9144000 x 6858000.
 
 ### findReplace
 
-`{find,replace,matchCase?,slideIndex?} — whole deck unless slideIndex`
+`{find,replace,matchCase?,wholeWord?,slideIndex?} — whole deck unless slideIndex`
 
 Text substitution inside runs across text boxes, shapes, table cells and direct
 group children. Matches that span two differently formatted runs are not
@@ -31,6 +31,7 @@ replaced.
 | find       | non-empty string |                                             |
 | replace    | string           | May be empty to delete the text             |
 | matchCase  | boolean          | Default false                               |
+| wholeWord  | boolean          | Only whole-word matches (default false)     |
 | slideIndex | integer          | Restrict to one page                        |
 | elementId  | string           | Restrict to one element (with `slideIndex`) |
 | firstOnly  | boolean          | Replace only the first match                |

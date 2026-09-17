@@ -69,6 +69,8 @@ export const it = {
   paneFrReplace: 'Sostituisci',
   paneFrReplaceAll: 'Sostituisci tutto',
   paneFrMatchCase: 'Maiuscole/minuscole',
+  paneFrWholeWord: 'Parola intera',
+  paneFrFindPrev: 'Trova precedente',
   paneFrNotFound: 'Nessuna corrispondenza trovata',
   paneFrReplaced: '{n} sostituzioni effettuate',
   paneFrMatchPos: '{i} di {n}',

@@ -375,6 +375,7 @@ export interface FindReplaceOp {
   find: string
   replace: string
   matchCase?: boolean
+  wholeWord?: boolean
   firstOnly?: boolean
   slideIndex?: number
   elementId?: string

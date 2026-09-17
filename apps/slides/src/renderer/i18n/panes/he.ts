@@ -68,6 +68,8 @@ export const he = {
   paneFrReplace: 'החלף',
   paneFrReplaceAll: 'החלף הכל',
   paneFrMatchCase: 'התאם רישיות',
+  paneFrWholeWord: 'התאמת מילה שלמה',
+  paneFrFindPrev: 'חיפוש הקודם',
   paneFrNotFound: 'לא נמצאו התאמות',
   paneFrReplaced: 'הוחלפו {n}',
   paneFrMatchPos: '{i} מתוך {n}',

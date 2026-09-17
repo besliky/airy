@@ -69,6 +69,8 @@ export const id = {
   paneFrReplace: 'Ganti',
   paneFrReplaceAll: 'Ganti Semua',
   paneFrMatchCase: 'Cocokkan huruf besar/kecil',
+  paneFrWholeWord: 'Cocokkan kata utuh',
+  paneFrFindPrev: 'Cari Sebelumnya',
   paneFrNotFound: 'Tidak ditemukan',
   paneFrReplaced: '{n} diganti',
   paneFrMatchPos: '{i} dari {n}',

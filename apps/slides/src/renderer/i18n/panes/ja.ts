@@ -69,6 +69,8 @@ export const ja = {
   paneFrReplace: '置換',
   paneFrReplaceAll: 'すべて置換',
   paneFrMatchCase: '大文字と小文字を区別',
+  paneFrWholeWord: '完全一致検索',
+  paneFrFindPrev: '前を検索',
   paneFrNotFound: '見つかりませんでした',
   paneFrReplaced: '{n} 件置換しました',
   paneFrMatchPos: '{n} 件中 {i} 件目',

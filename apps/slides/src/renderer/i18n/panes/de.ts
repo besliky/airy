@@ -69,6 +69,8 @@ export const de = {
   paneFrReplace: 'Ersetzen',
   paneFrReplaceAll: 'Alle ersetzen',
   paneFrMatchCase: 'Groß-/Kleinschreibung beachten',
+  paneFrWholeWord: 'Ganzes Wort suchen',
+  paneFrFindPrev: 'Vorheriges suchen',
   paneFrNotFound: 'Keine Treffer',
   paneFrReplaced: '{n} ersetzt',
   paneFrMatchPos: '{i} von {n}',

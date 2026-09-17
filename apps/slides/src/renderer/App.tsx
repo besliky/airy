@@ -663,6 +663,38 @@ export function App() {
     setZoom(z)
   }, [slide, fitZoom])
 
+  // Find navigation: scroll the hit into view once the switched slide has
+  // committed (element-granularity jumps used to leave off-screen hits unseen)
+  const [findFocus, setFindFocus] = useState<{
+    slide: number
+    box: { x: number; y: number; w: number; h: number }
+  } | null>(null)
+  useEffect(() => {
+    if (!findFocus) return
+    const rel = stageRelRef.current
+    const wrap = stageWrapRef.current
+    const sl = slides[findFocus.slide]
+    if (rel && wrap && sl && sl.widthPx > 0) {
+      const r = rel.getBoundingClientRect()
+      const scale = r.width / sl.widthPx
+      const left = r.left + findFocus.box.x * scale
+      const top = r.top + findFocus.box.y * scale
+      const right = left + findFocus.box.w * scale
+      const bottom = top + findFocus.box.h * scale
+      const view = wrap.getBoundingClientRect()
+      const pad = 48
+      let dx = 0
+      let dy = 0
+      if (right > view.right - pad) dx = right - (view.right - pad)
+      else if (left < view.left + pad) dx = left - (view.left + pad)
+      if (bottom > view.bottom - pad) dy = bottom - (view.bottom - pad)
+      else if (top < view.top + pad) dy = top - (view.top + pad)
+      if (dx) wrap.scrollLeft += dx
+      if (dy) wrap.scrollTop += dy
+    }
+    setFindFocus(null)
+  }, [findFocus, slides])
+
   // measure the stage content's unscaled layout size (offsetWidth ignores the
   // transform); slide-size changes are the only thing that alters it
   useLayoutEffect(() => {
@@ -4091,9 +4123,12 @@ export function App() {
       {findOpen && (
         <FindReplaceDialog
           slides={slides}
-          onNavigate={(si, id) => {
+          current={current}
+          stageRel={stageRelRef}
+          onNavigate={(si, id, focus) => {
             setCurrent(si)
             setSelectedIds([id])
+            if (focus) setFindFocus({ slide: si, box: focus })
           }}
           onReplaced={(all) => {
             setSlides(all)

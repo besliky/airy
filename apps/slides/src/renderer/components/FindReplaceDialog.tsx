@@ -1,84 +1,60 @@
 /**
  * Find/replace floating panel (⌘F) — modeled on PowerPoint "Home → Find/Replace".
- * Find works on render-tree text (element-granularity hits, page jump + select); replace goes
- * through the main-process model layer (in-run matching, byte-faithful patches), and on success
+ * Find works on render-tree text with per-hit offsets (see find-matches.ts):
+ * match case / whole word, next + previous navigation, and a canvas overlay
+ * highlighting every hit on the shown slide (the active hit outlined; elements
+ * whose runs cannot be boxed — vertical or WordArt-warped text — get an element
+ * outline instead). Replace goes through the main-process model layer (in-run
+ * matching, byte-faithful patches) under the same conditions, and on success
  * the whole RenderSlide set refreshes.
  */
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import type { RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import { useI18n } from '../i18n/locale'
-import type {
-  GroupRenderNode,
-  RenderNode,
-  RenderSlide,
-  RenderTextLayout,
-  ShapeRenderNode,
-  TableRenderNode,
-} from '@airy-office/pptx-render'
+import type { RenderSlide } from '@airy-office/pptx-render'
+import {
+  buildMatches,
+  findNodeBox,
+  matchFocusBox,
+  matchRects,
+  type FindMatch,
+} from '../find-matches'
 
-export interface FindMatch {
-  slideIndex: number
-  sourceId: string
-  count: number
-}
+const SCAN_DEBOUNCE_MS = 120
 
-/** Laid-out text → plain text (skip bullet glyphs; restore spaces swallowed by wrapping; newline between paragraphs). */
-function layoutText(text?: RenderTextLayout): string {
-  if (!text) return ''
-  let out = ''
-  text.lines.forEach((l, i) => {
-    if (i > 0 && l.paraStart !== false) out += '\n'
-    out += l.runs
-      .filter((r) => !r.isBullet)
-      .map((r) => r.text)
-      .join('')
-    if (l.trailingSpace) out += l.trailingText ?? ' '
-  })
-  return out
-}
-
-/** Searchable text aggregated from a node (including group children/table cells). */
-function nodeText(n: RenderNode): string {
-  if (n.type === 'text' || n.type === 'shape') return layoutText((n as ShapeRenderNode).text)
-  if (n.type === 'table')
-    return (n as TableRenderNode).cells.map((c) => layoutText(c.text)).join('\n')
-  if (n.type === 'group') return (n as GroupRenderNode).children.map(nodeText).join('\n')
-  return ''
-}
-
-function countHits(hay: string, needle: string, matchCase: boolean): number {
-  if (!needle) return 0
-  const h = matchCase ? hay : hay.toLowerCase()
-  const q = matchCase ? needle : needle.toLowerCase()
-  let n = 0
-  for (let i = h.indexOf(q); i >= 0; i = h.indexOf(q, i + q.length)) n++
-  return n
-}
-
-export function buildMatches(
-  slides: RenderSlide[],
-  query: string,
-  matchCase: boolean,
-): FindMatch[] {
-  const out: FindMatch[] = []
-  if (!query) return out
-  slides.forEach((sl, si) => {
-    for (const n of sl.nodes) {
-      if (n.decoration) continue
-      const count = countHits(nodeText(n), query, matchCase)
-      if (count > 0) out.push({ slideIndex: si, sourceId: n.sourceId, count })
-    }
-  })
-  return out
+/** one highlighted rect on the overlay (slide px) */
+interface OverlayHit {
+  key: string
+  x: number
+  y: number
+  w: number
+  h: number
+  active: boolean
+  /** rotate about the element box center (top-level element rotation) */
+  rotation: number
+  originX: number
+  originY: number
 }
 
 export function FindReplaceDialog({
   slides,
+  current,
+  stageRel,
   onNavigate,
   onReplaced,
   onClose,
 }: {
   slides: RenderSlide[]
-  onNavigate: (slideIndex: number, sourceId: string) => void
+  /** slide the canvas is showing (drives which hits get the overlay before navigation) */
+  current: number
+  /** .stage-rel element the highlight overlay portals into (inherits the canvas zoom) */
+  stageRel: RefObject<HTMLDivElement | null>
+  onNavigate: (
+    slideIndex: number,
+    sourceId: string,
+    focus?: { x: number; y: number; w: number; h: number },
+  ) => void
   onReplaced: (slides: RenderSlide[]) => void
   onClose: () => void
 }) {
@@ -86,25 +62,39 @@ export function FindReplaceDialog({
   const [query, setQuery] = useState('')
   const [replaceText, setReplaceText] = useState('')
   const [matchCase, setMatchCase] = useState(false)
+  const [wholeWord, setWholeWord] = useState(false)
   const [cursor, setCursor] = useState(-1)
   const [status, setStatus] = useState('')
+  const [scanned, setScanned] = useState<FindMatch[]>([])
   const findRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => findRef.current?.focus(), [])
 
-  // Recompute the hit list when slides change (refresh after replace) or conditions change; the cursor is invalidated
-  const matches = buildMatches(slides, query, matchCase)
-  const total = matches.reduce((a, m) => a + m.count, 0)
+  // Debounced rescan when the deck or the conditions change (large decks stay
+  // smooth while typing); the cursor is invalidated
+  useEffect(() => {
+    const id = window.setTimeout(
+      () => setScanned(buildMatches(slides, query, { matchCase, wholeWord })),
+      SCAN_DEBOUNCE_MS,
+    )
+    return () => window.clearTimeout(id)
+  }, [slides, query, matchCase, wholeWord])
+  const matches = scanned
 
-  const findNext = () => {
+  const findWith = (dir: 1 | -1) => {
     if (!matches.length) {
       setStatus(t('paneFrNotFound'))
       return
     }
-    const next = (cursor + 1) % matches.length
+    const next =
+      cursor < 0
+        ? dir === 1
+          ? 0
+          : matches.length - 1
+        : (cursor + dir + matches.length) % matches.length
     setCursor(next)
     const m = matches[next]!
-    onNavigate(m.slideIndex, m.sourceId)
+    onNavigate(m.slideIndex, m.sourceId, matchFocusBox(slides[m.slideIndex], m))
     setStatus(t('paneFrMatchPos', { i: String(next + 1), n: String(matches.length) }))
   }
 
@@ -112,13 +102,14 @@ export function FindReplaceDialog({
     if (!query) return
     const cur = !all && cursor >= 0 ? matches[cursor] : undefined
     if (!all && !cur) {
-      findNext()
+      findWith(1)
       return
     }
     const r = await window.slidesApi.findReplace({
       find: query,
       replace: replaceText,
       matchCase,
+      wholeWord,
       ...(all ? {} : { firstOnly: true, slideIndex: cur!.slideIndex, elementId: cur!.sourceId }),
     })
     if (!r || !r.count || !r.slides) {
@@ -130,64 +121,143 @@ export function FindReplaceDialog({
     if (!all) setCursor(cursor - 1) // The current item is consumed; the next findNext lands on the following one
   }
 
+  // overlay hits live on the navigated slide, or on the shown slide before navigation
+  const overlaySlide = cursor >= 0 ? matches[cursor]!.slideIndex : current
+  const overlay = useMemo<OverlayHit[]>(() => {
+    const slide = slides[overlaySlide]
+    if (!slide || !matches.length) return []
+    const hits: OverlayHit[] = []
+    matches.forEach((m, i) => {
+      if (m.slideIndex !== overlaySlide) return
+      const hit = findNodeBox(slide, m.sourceId)
+      if (!hit) return
+      const rot = hit.node.box.rotationDeg
+      const cx = hit.x + hit.node.box.w / 2
+      const cy = hit.y + hit.node.box.h / 2
+      const push = (x: number, y: number, w: number, h: number) => {
+        hits.push({
+          key: `${i}-${x}-${y}`,
+          x,
+          y,
+          w,
+          h,
+          active: i === cursor,
+          rotation: rot,
+          originX: cx - x,
+          originY: cy - y,
+        })
+      }
+      const rects = matchRects(hit.node, m.start, m.end)
+      if (rects.length) for (const r of rects) push(hit.x + r.x, hit.y + r.y, r.w, r.h)
+      // layout without boxable runs (vertical / warped): outline the element
+      else push(hit.x, hit.y, hit.node.box.w, hit.node.box.h)
+    })
+    return hits
+  }, [slides, matches, overlaySlide, cursor])
+
   return (
-    <div className="find-panel" onKeyDown={(e) => e.key === 'Escape' && onClose()}>
-      <div className="find-panel-head">
-        <span>{t('paneFrTitle')}</span>
-        <button className="find-panel-close" onClick={onClose} data-tip="Esc" aria-label="Esc">
-          ×
-        </button>
-      </div>
-      <div className="find-panel-row">
-        <input
-          ref={findRef}
-          placeholder={t('paneFrFind')}
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value)
-            setCursor(-1)
-            setStatus('')
-          }}
-          onKeyDown={(e) => e.key === 'Enter' && findNext()}
-        />
-      </div>
-      <div className="find-panel-row">
-        <input
-          placeholder={t('paneFrReplaceWith')}
-          value={replaceText}
-          onChange={(e) => setReplaceText(e.target.value)}
-        />
-      </div>
-      <div className="find-panel-row find-panel-opts">
-        <label>
+    <>
+      <div className="find-panel" onKeyDown={(e) => e.key === 'Escape' && onClose()}>
+        <div className="find-panel-head">
+          <span>{t('paneFrTitle')}</span>
+          <button className="find-panel-close" onClick={onClose} data-tip="Esc" aria-label="Esc">
+            ×
+          </button>
+        </div>
+        <div className="find-panel-row">
           <input
-            type="checkbox"
-            checked={matchCase}
-            onChange={(e) => setMatchCase(e.target.checked)}
+            ref={findRef}
+            placeholder={t('paneFrFind')}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setCursor(-1)
+              setStatus('')
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') findWith(e.shiftKey ? -1 : 1)
+            }}
           />
-          {t('paneFrMatchCase')}
-        </label>
-        <span className="find-panel-status">
-          {status ||
-            (query
-              ? t('paneFrMatchPos', {
-                  i: String(Math.max(cursor + 1, 0)),
-                  n: String(matches.length),
-                })
-              : '')}
-        </span>
+        </div>
+        <div className="find-panel-row">
+          <input
+            placeholder={t('paneFrReplaceWith')}
+            value={replaceText}
+            onChange={(e) => setReplaceText(e.target.value)}
+          />
+        </div>
+        <div className="find-panel-row find-panel-opts">
+          <label>
+            <input
+              type="checkbox"
+              checked={matchCase}
+              onChange={(e) => {
+                setMatchCase(e.target.checked)
+                setCursor(-1)
+              }}
+            />
+            {t('paneFrMatchCase')}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={wholeWord}
+              onChange={(e) => {
+                setWholeWord(e.target.checked)
+                setCursor(-1)
+              }}
+            />
+            {t('paneFrWholeWord')}
+          </label>
+          <span className="find-panel-status">
+            {status ||
+              (query
+                ? t('paneFrMatchPos', {
+                    i: String(Math.max(cursor + 1, 0)),
+                    n: String(matches.length),
+                  })
+                : '')}
+          </span>
+        </div>
+        <div className="find-panel-row find-panel-actions">
+          <button onClick={() => findWith(-1)} disabled={!query}>
+            {t('paneFrFindPrev')}
+          </button>
+          <button onClick={() => findWith(1)} disabled={!query}>
+            {t('paneFrFindNext')}
+          </button>
+          <button onClick={() => void doReplace(false)} disabled={!query}>
+            {t('paneFrReplace')}
+          </button>
+          <button onClick={() => void doReplace(true)} disabled={!query || !matches.length}>
+            {t('paneFrReplaceAll')}
+          </button>
+        </div>
       </div>
-      <div className="find-panel-row find-panel-actions">
-        <button onClick={findNext} disabled={!query}>
-          {t('paneFrFindNext')}
-        </button>
-        <button onClick={() => void doReplace(false)} disabled={!query}>
-          {t('paneFrReplace')}
-        </button>
-        <button onClick={() => void doReplace(true)} disabled={!query || !total}>
-          {t('paneFrReplaceAll')}
-        </button>
-      </div>
-    </div>
+      {stageRel.current &&
+        createPortal(
+          <div className="find-hits" aria-hidden="true">
+            {overlay.map((h) => (
+              <div
+                key={h.key}
+                className={`find-hit${h.active ? ' active' : ''}`}
+                style={{
+                  left: h.x,
+                  top: h.y,
+                  width: h.w,
+                  height: h.h,
+                  ...(h.rotation
+                    ? {
+                        transform: `rotate(${h.rotation}deg)`,
+                        transformOrigin: `${h.originX}px ${h.originY}px`,
+                      }
+                    : {}),
+                }}
+              />
+            ))}
+          </div>,
+          stageRel.current,
+        )}
+    </>
   )
 }

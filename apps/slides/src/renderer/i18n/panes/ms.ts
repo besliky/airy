@@ -69,6 +69,8 @@ export const ms = {
   paneFrReplace: 'Ganti',
   paneFrReplaceAll: 'Ganti Semua',
   paneFrMatchCase: 'Padankan huruf besar/kecil',
+  paneFrWholeWord: 'Padan perkataan penuh',
+  paneFrFindPrev: 'Cari Sebelumnya',
   paneFrNotFound: 'Tiada padanan ditemui',
   paneFrReplaced: '{n} diganti',
   paneFrMatchPos: '{i} daripada {n}',

@@ -69,6 +69,8 @@ export const en = {
   paneFrReplace: 'Replace',
   paneFrReplaceAll: 'Replace All',
   paneFrMatchCase: 'Match case',
+  paneFrWholeWord: 'Match whole word',
+  paneFrFindPrev: 'Find Previous',
   paneFrNotFound: 'No matches found',
   paneFrReplaced: 'Replaced {n}',
   paneFrMatchPos: '{i} of {n}',

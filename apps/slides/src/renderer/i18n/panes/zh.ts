@@ -67,6 +67,8 @@ export const zh = {
   paneFrReplace: '替换',
   paneFrReplaceAll: '全部替换',
   paneFrMatchCase: '区分大小写',
+  paneFrWholeWord: '全字匹配',
+  paneFrFindPrev: '查找上一个',
   paneFrNotFound: '找不到匹配项',
   paneFrReplaced: '已替换 {n} 处',
   paneFrMatchPos: '第 {i} 项，共 {n} 项',

@@ -2746,6 +2746,7 @@ export function registerSlidesIpc(): void {
           find: op.find,
           replace: op.replace,
           matchCase: op.matchCase,
+          wholeWord: op.wholeWord,
           firstOnly: op.firstOnly,
           slideIndex: op.slideIndex,
           elementId: op.elementId,

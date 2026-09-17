@@ -69,6 +69,8 @@ export const fr = {
   paneFrReplace: 'Remplacer',
   paneFrReplaceAll: 'Remplacer tout',
   paneFrMatchCase: 'Respecter la casse',
+  paneFrWholeWord: 'Mot entier uniquement',
+  paneFrFindPrev: 'Rechercher le précédent',
   paneFrNotFound: 'Aucun résultat',
   paneFrReplaced: '{n} remplacé(s)',
   paneFrMatchPos: '{i} sur {n}',

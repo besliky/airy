@@ -69,6 +69,8 @@ export const cs = {
   paneFrReplace: 'Nahradit',
   paneFrReplaceAll: 'Nahradit vše',
   paneFrMatchCase: 'Rozlišovat velikost písmen',
+  paneFrWholeWord: 'Celé slovo',
+  paneFrFindPrev: 'Najít předchozí',
   paneFrNotFound: 'Nebyly nalezeny žádné shody',
   paneFrReplaced: 'Nahrazeno {n}',
   paneFrMatchPos: '{i} z {n}',

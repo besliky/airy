@@ -69,6 +69,8 @@ export const hi = {
   paneFrReplace: 'बदलें',
   paneFrReplaceAll: 'सभी बदलें',
   paneFrMatchCase: 'बड़े/छोटे अक्षर मिलाएँ',
+  paneFrWholeWord: 'पूरा शब्द मिलाएँ',
+  paneFrFindPrev: 'पिछला खोजें',
   paneFrNotFound: 'कोई मिलान नहीं मिला',
   paneFrReplaced: '{n} बदले गए',
   paneFrMatchPos: '{n} में से {i}',

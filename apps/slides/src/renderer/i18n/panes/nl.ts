@@ -69,6 +69,8 @@ export const nl = {
   paneFrReplace: 'Vervangen',
   paneFrReplaceAll: 'Alles vervangen',
   paneFrMatchCase: 'Hoofdlettergevoelig',
+  paneFrWholeWord: 'Heel woord',
+  paneFrFindPrev: 'Vorige zoeken',
   paneFrNotFound: 'Geen overeenkomsten gevonden',
   paneFrReplaced: '{n} vervangen',
   paneFrMatchPos: '{i} van {n}',
