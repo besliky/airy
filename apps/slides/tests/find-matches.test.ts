@@ -14,6 +14,8 @@ import {
   hitRanges,
   matchFocusBox,
   matchRects,
+  matchStageOutline,
+  matchStageRects,
 } from '../src/renderer/find-matches'
 
 // ── fixtures: hand-built render trees (only the fields the walker reads) ──
@@ -231,5 +233,109 @@ describe('matchFocusBox', () => {
     const slide = slideOf(n)
     const m = { slideIndex: 0, sourceId: 't', start: 0, end: 3 }
     expect(matchFocusBox(slide, m)).toEqual({ x: 100, y: 200, w: 400, h: 300 })
+  })
+})
+
+describe('matchStageRects (ancestor-group rotation chain)', () => {
+  const cond = { matchCase: false, wholeWord: false }
+
+  /** render a StageRect's top-left corner the way the CSS overlay does */
+  function renderedCorner(r: {
+    x: number
+    y: number
+    rotation: number
+    originX: number
+    originY: number
+  }) {
+    const ox = r.x + r.originX
+    const oy = r.y + r.originY
+    const rad = (r.rotation * Math.PI) / 180
+    return {
+      x: ox + (r.x - ox) * Math.cos(rad) - (r.y - oy) * Math.sin(rad),
+      y: oy + (r.x - ox) * Math.sin(rad) + (r.y - oy) * Math.cos(rad),
+    }
+  }
+
+  it('places text inside a group rotated 90° at the rotated position', () => {
+    const child = textNode('inner', [{ top: 5, height: 20, runs: [['target', 0, 60]] }])
+    child.box = box(20, 10, 40, 20)
+    const group: RenderNode = {
+      id: 'g',
+      type: 'group',
+      sourceId: 'g',
+      box: box(200, 100, 80, 40, { rotationDeg: 90 }),
+      children: [child],
+    } as unknown as GroupRenderNode
+    const slides = [slideOf(group)]
+    const m = buildMatches(slides, 'target', cond)[0]!
+    const rects = matchStageRects(slides[0], m)
+    // run rect group-local: x = child origin(20) + inset l(10) + run x(0) = 30,
+    // y = 10 + 6 + line top(5) = 21; the child is unrotated so its map is
+    // identity and the chain is T(200,100) ∘ R90 about the group center
+    // (40,20) → translation (260,80): the rect sits at (290,101) rotating
+    // about (260,80), i.e. transform-origin (−30,−21) relative to the rect
+    expect(rects).toEqual([
+      { x: 290, y: 101, w: 60, h: 20, rotation: 90, originX: -30, originY: -21 },
+    ])
+    // rendering that rect lands its top-left corner at the affine-projected
+    // spot: rotate (30,21) 90° about (40,20), then translate (200,100) → (239,110)
+    expect(renderedCorner(rects[0]!)).toEqual({ x: expect.closeTo(239), y: expect.closeTo(110) })
+  })
+
+  it('accumulates rotations of nested groups (outer plain, inner 90°)', () => {
+    const child = textNode('t', [{ top: 4, height: 18, runs: [['target', 0, 30]] }])
+    child.box = box(5, 5, 30, 10)
+    const inner: RenderNode = {
+      id: 'in',
+      type: 'group',
+      sourceId: 'in',
+      box: box(20, 10, 40, 20, { rotationDeg: 90 }),
+      children: [child],
+    } as unknown as GroupRenderNode
+    const outer: RenderNode = {
+      id: 'out',
+      type: 'group',
+      sourceId: 'out',
+      box: box(200, 100, 80, 40),
+      children: [inner],
+    } as unknown as GroupRenderNode
+    const slides = [slideOf(outer)]
+    const m = buildMatches(slides, 'target', cond)[0]!
+    // run rect outer-local: x = inner origin(20) + child origin(5) + inset(10)
+    // = 35, y = 10 + 5 + 6 + 4 = 25; the inner group's rotation pivots its
+    // center (40,20) in outer-local, the text child adds none:
+    // chain T(200,100) ∘ R90 about (40,20) → t = (260,80)
+    expect(matchStageRects(slides[0], m)).toEqual([
+      { x: 295, y: 105, w: 30, h: 18, rotation: 90, originX: -35, originY: -25 },
+    ])
+  })
+
+  it('keeps plain top-level hits unrotated at the element origin', () => {
+    const n = textNode('t', [{ top: 12, height: 24, runs: [['hello world', 0, 110]] }])
+    const slide = slideOf(n)
+    const m = buildMatches([slide], 'hello', cond)[0]!
+    expect(matchStageRects(slide, m)).toEqual([
+      { x: 100 + 10, y: 200 + 6 + 12, w: 50, h: 24, rotation: 0, originX: 0, originY: 0 },
+    ])
+  })
+
+  it('outlines a rotated element for unboxable layouts (vertical text)', () => {
+    const n = textNode('v', [{ top: 0, height: 20, runs: [['abc', 0, 30]] }])
+    n.box = box(100, 200, 400, 300, { rotationDeg: 90 })
+    ;(n as ShapeRenderNode).text!.vert = 'eaVert'
+    const slide = slideOf(n)
+    const m = buildMatches([slide], 'abc', cond)[0]!
+    expect(matchStageRects(slide, m)).toEqual([])
+    // chain T(100,200) ∘ R90 about (200,150): translation = (100,200)+(200,150)−R(200,150)
+    // R90(200,150) = (−150,200) → t = (450,150); outline at (0+450, 0+150)
+    expect(matchStageOutline(slide, m)).toEqual({
+      x: 450,
+      y: 150,
+      w: 400,
+      h: 300,
+      rotation: 90,
+      originX: 0,
+      originY: 0,
+    })
   })
 })

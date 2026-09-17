@@ -15,9 +15,9 @@ import { useI18n } from '../i18n/locale'
 import type { RenderSlide } from '@airy-office/pptx-render'
 import {
   buildMatches,
-  findNodeBox,
   matchFocusBox,
-  matchRects,
+  matchStageOutline,
+  matchStageRects,
   type FindMatch,
 } from '../find-matches'
 
@@ -31,7 +31,8 @@ interface OverlayHit {
   w: number
   h: number
   active: boolean
-  /** rotate about the element box center (top-level element rotation) */
+  /** rotate about the origin — the accumulated ancestor-group chain plus the
+   *  element's own rotation (see matchStageRects) */
   rotation: number
   originX: number
   originY: number
@@ -129,28 +130,20 @@ export function FindReplaceDialog({
     const hits: OverlayHit[] = []
     matches.forEach((m, i) => {
       if (m.slideIndex !== overlaySlide) return
-      const hit = findNodeBox(slide, m.sourceId)
-      if (!hit) return
-      const rot = hit.node.box.rotationDeg
-      const cx = hit.x + hit.node.box.w / 2
-      const cy = hit.y + hit.node.box.h / 2
-      const push = (x: number, y: number, w: number, h: number) => {
-        hits.push({
-          key: `${i}-${x}-${y}`,
-          x,
-          y,
-          w,
-          h,
-          active: i === cursor,
-          rotation: rot,
-          originX: cx - x,
-          originY: cy - y,
-        })
+      // run rects projected through the ancestor-group rotation chain
+      const rects = matchStageRects(slide, m)
+      if (rects.length) {
+        for (const r of rects) {
+          hits.push({ key: `${i}-${r.x.toFixed(1)}-${r.y.toFixed(1)}`, ...r, active: i === cursor })
+        }
+        return
       }
-      const rects = matchRects(hit.node, m.start, m.end)
-      if (rects.length) for (const r of rects) push(hit.x + r.x, hit.y + r.y, r.w, r.h)
-      // layout without boxable runs (vertical / warped): outline the element
-      else push(hit.x, hit.y, hit.node.box.w, hit.node.box.h)
+      // layout without boxable runs (vertical / warped): outline the element,
+      // rotated like the canvas draws it
+      const outline = matchStageOutline(slide, m)
+      if (outline) {
+        hits.push({ key: `${i}-outline`, ...outline, active: i === cursor })
+      }
     })
     return hits
   }, [slides, matches, overlaySlide, cursor])
