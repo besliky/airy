@@ -3,7 +3,6 @@ import type { zh } from './zh'
 export const es = {
   today: 'Hoy',
   yesterday: 'Ayer',
-  daysAgo: 'hace {n} días',
   closeTab: 'Cerrar pestaña',
   errFileNotFound: 'El archivo no existe o se ha movido.',
   errPermissionDenied: 'Permiso denegado para este archivo.',

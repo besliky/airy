@@ -1,11 +1,7 @@
 import type { zh } from './zh'
 
 export const nl = {
-  appVersion: 'Versie {v}',
   versionLabel: 'Versie',
-  updateChannel: 'Updatekanaal',
-  channelStable: 'Stabiel',
-  channelBeta: 'Bèta',
   theme: 'Thema',
   themeLight: 'Licht',
   themeDark: 'Donker',
@@ -20,9 +16,6 @@ export const nl = {
   setRestoreSession: 'Vorige sessie herstellen',
   setRestoreSessionDesc:
     'Opent bij het opstarten de bestanden die openstonden bij het laatste afsluiten of crashen.',
-  setAnalytics: 'Anonieme gebruiksstatistieken verzenden',
-  setAnalyticsDesc:
-    'Standaard ingeschakeld en uit te schakelen via Instellingen → Algemeen. Gebruikt Google Analytics 4; Google ontvangt uw openbare IP en transportmetadata, maar nooit documentinhoud of bestandsnamen.',
   setLiveBridge: 'Copilot live bridge',
   setLiveBridgeDesc:
     'Laat coding-agenten (MCP) verbinden met deze app om geopende documenten te lezen en bewerken. Gebruikt door tools zoals Claude, Cursor of airy-mcp.',
@@ -64,8 +57,6 @@ export const nl = {
   setAiMaxTokensDesc:
     'Uitvoerbudget voor één beurt. Redeneermodellen geven dit uit aan denken; is het op, dan komt een leeg antwoord terug — verhoog deze waarde.',
   setSecAiMedia: 'AI-media en zoeken',
-  setAiImageModel: 'Afbeeldingsmodel',
-  setAiAnalysisModel: 'Analysemodel',
   setAiSearchSerperHint: 'Serper levert web- en afbeeldingszoeken met je sleutel.',
   setAiSearchTavilyHint:
     'Tavily levert webzoeken met je sleutel; afbeeldingszoeken valt terug op gratis bronnen.',

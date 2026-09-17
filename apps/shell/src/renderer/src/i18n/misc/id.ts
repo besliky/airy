@@ -3,7 +3,6 @@ import type { zh } from './zh'
 export const id = {
   today: 'Hari ini',
   yesterday: 'Kemarin',
-  daysAgo: '{n} hari lalu',
   closeTab: 'Tutup tab',
   errFileNotFound: 'Berkas tidak ada atau telah dipindahkan.',
   errPermissionDenied: 'Akses ke berkas ini ditolak.',

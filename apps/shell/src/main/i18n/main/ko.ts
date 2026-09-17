@@ -22,8 +22,6 @@ export const ko = {
   menuSave: '저장',
   menuSaveAs: '다른 이름으로 저장…',
   menuClose: '닫기',
-  menuEdit: '편집',
-  menuWindow: '창',
   menuHome: '홈',
   backToHome: '홈으로 돌아가기',
   dlgOpenTitle: '파일 열기',

@@ -1,11 +1,7 @@
 import type { zh } from './zh'
 
 export const he = {
-  appVersion: 'גרסה {v}',
   versionLabel: 'גרסה',
-  updateChannel: 'ערוץ עדכונים',
-  channelStable: 'יציב',
-  channelBeta: 'בטא',
   theme: 'ערכת נושא',
   themeLight: 'בהיר',
   themeDark: 'כהה',
@@ -18,9 +14,6 @@ export const he = {
   setAutoSaveDesc: 'מפעיל שמירה אוטומטית כברירת מחדל בכל עורך. עדיין אפשר לכבות אותה בחלון בודד.',
   setRestoreSession: 'שחזור ההפעלה הקודמת',
   setRestoreSessionDesc: 'פותח מחדש בהפעלה את הקבצים שהיו פתוחים בסגירה או בקריסה האחרונה.',
-  setAnalytics: 'שליחת נתוני שימוש אנונימיים',
-  setAnalyticsDesc:
-    'מופעל כברירת מחדל וניתן לכיבוי בהגדרות ← כללי. משתמש ב-Google Analytics 4; Google מקבלת IP ציבורי ומטא-נתוני תעבורה, אך לא תוכן מסמכים או שמות קבצים.',
   setLiveBridge: 'גשר Copilot חי',
   setLiveBridgeDesc:
     'מאפשר לסוכני קידוד (MCP) להתחבר ליישום זה כדי לקרוא ולערוך מסמכים פתוחים. נעשה בו שימוש בכלים כמו Claude, Cursor או airy-mcp.',
@@ -60,8 +53,6 @@ export const he = {
   setAiMaxTokensDesc:
     'תקציב פלט לסיבוב אחד. מודלי היסק מנצלים חלק ממנו לחשיבה, ואם הוא נגמר התשובה עלולה לחזור ריקה — במקרה כזה העלו את הערך.',
   setSecAiMedia: 'מדיה וחיפוש AI',
-  setAiImageModel: 'מודל תמונות',
-  setAiAnalysisModel: 'מודל ניתוח',
   setAiSearchSerperHint: 'Serper מספק חיפוש באינטרנט ובתמונות עם המפתח שלך.',
   setAiSearchTavilyHint:
     'Tavily מספק חיפוש באינטרנט עם המפתח שלך; חיפוש תמונות חוזר למקורות חינמיים.',

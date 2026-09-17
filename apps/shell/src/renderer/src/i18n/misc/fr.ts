@@ -3,7 +3,6 @@ import type { zh } from './zh'
 export const fr = {
   today: "Aujourd'hui",
   yesterday: 'Hier',
-  daysAgo: 'il y a {n} j',
   closeTab: "Fermer l'onglet",
   errFileNotFound: "Le fichier n'existe pas ou a été déplacé.",
   errPermissionDenied: 'Accès refusé à ce fichier.',

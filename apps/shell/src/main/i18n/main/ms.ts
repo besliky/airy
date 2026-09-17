@@ -22,8 +22,6 @@ export const ms = {
   menuSave: 'Simpan',
   menuSaveAs: 'Simpan Sebagai…',
   menuClose: 'Tutup',
-  menuEdit: 'Edit',
-  menuWindow: 'Tetingkap',
   menuHome: 'Laman Utama',
   backToHome: 'Kembali ke Laman Utama',
   dlgOpenTitle: 'Buka Fail',

@@ -22,8 +22,6 @@ export const pt = {
   menuSave: 'Salvar',
   menuSaveAs: 'Salvar Como…',
   menuClose: 'Fechar',
-  menuEdit: 'Editar',
-  menuWindow: 'Janela',
   menuHome: 'Início',
   backToHome: 'Voltar ao início',
   dlgOpenTitle: 'Abrir arquivo',

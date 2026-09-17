@@ -1,11 +1,7 @@
 import type { zh } from './zh'
 
 export const id = {
-  appVersion: 'Versi {v}',
   versionLabel: 'Versi',
-  updateChannel: 'Saluran Pembaruan',
-  channelStable: 'Stabil',
-  channelBeta: 'Beta',
   theme: 'Tema',
   themeLight: 'Terang',
   themeDark: 'Gelap',
@@ -20,9 +16,6 @@ export const id = {
   setRestoreSession: 'Pulihkan sesi sebelumnya',
   setRestoreSessionDesc:
     'Membuka kembali berkas yang terbuka saat Airy terakhir ditutup atau crash.',
-  setAnalytics: 'Kirim statistik penggunaan anonim',
-  setAnalyticsDesc:
-    'Aktif secara default dan dapat dimatikan di Pengaturan → Umum. Menggunakan Google Analytics 4; Google menerima IP publik dan metadata transport Anda, tetapi tidak pernah mengumpulkan isi dokumen atau nama file.',
   setLiveBridge: 'Copilot live bridge',
   setLiveBridgeDesc:
     'Mengizinkan agen pengkodean (MCP) terhubung ke aplikasi ini untuk membaca dan mengedit dokumen yang terbuka. Digunakan oleh alat seperti Claude, Cursor, atau airy-mcp.',
@@ -63,8 +56,6 @@ export const id = {
   setAiMaxTokensDesc:
     'Anggaran keluaran untuk satu giliran. Model penalaran memakainya untuk berpikir; jika habis, balasan datang kosong — naikkan nilai ini.',
   setSecAiMedia: 'Media & Pencarian AI',
-  setAiImageModel: 'Model gambar',
-  setAiAnalysisModel: 'Model analisis',
   setAiSearchSerperHint: 'Serper menyediakan pencarian web dan gambar dengan kunci Anda.',
   setAiSearchTavilyHint:
     'Tavily menyediakan pencarian web dengan kunci Anda; pencarian gambar memakai sumber gratis.',

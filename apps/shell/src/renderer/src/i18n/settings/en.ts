@@ -1,11 +1,7 @@
 import type { zh } from './zh'
 
 export const en = {
-  appVersion: 'Version {v}',
   versionLabel: 'Version',
-  updateChannel: 'Update Channel',
-  channelStable: 'Stable',
-  channelBeta: 'Beta',
   theme: 'Theme',
   themeLight: 'Light',
   themeDark: 'Dark',
@@ -19,9 +15,6 @@ export const en = {
     'Turn on AutoSave by default in every editor. You can still switch it off for a single window.',
   setRestoreSession: 'Restore previous session',
   setRestoreSessionDesc: 'Reopen the files that were open when Airy last closed or crashed.',
-  setAnalytics: 'Send anonymous usage statistics',
-  setAnalyticsDesc:
-    'Enabled by default and can be turned off anytime in Settings → General. Uses Google Analytics 4; Google receives your public IP address and transport metadata, but document contents and file names are never collected.',
   setLiveBridge: 'Copilot live bridge',
   setLiveBridgeDesc:
     'Let coding agents (MCP) attach to this app to read and edit open documents. Used by tools like Claude, Cursor or airy-mcp.',
@@ -63,8 +56,6 @@ export const en = {
   setAiMaxTokensDesc:
     'Output budget for one turn. Reasoning models spend part of it thinking, so an answer can come back empty once the budget runs out; raise this value if that happens.',
   setSecAiMedia: 'AI Media & Search',
-  setAiImageModel: 'Image model',
-  setAiAnalysisModel: 'Analysis model',
   setAiSearchSerperHint: 'Serper serves both web and image search with your key.',
   setAiSearchTavilyHint:
     'Tavily serves web search with your key; image search falls back to free sources.',

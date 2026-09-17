@@ -3,7 +3,6 @@ import type { zh } from './zh'
 export const th = {
   today: 'วันนี้',
   yesterday: 'เมื่อวาน',
-  daysAgo: '{n} วันที่แล้ว',
   closeTab: 'ปิดแท็บ',
   errFileNotFound: 'ไฟล์ไม่มีอยู่หรือถูกย้ายไปแล้ว',
   errPermissionDenied: 'ไม่มีสิทธิ์เข้าถึงไฟล์นี้',

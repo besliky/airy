@@ -22,8 +22,6 @@ export const he = {
   menuSave: 'שמירה',
   menuSaveAs: 'שמירה בשם…',
   menuClose: 'סגירה',
-  menuEdit: 'עריכה',
-  menuWindow: 'חלון',
   menuHome: 'דף הבית',
   backToHome: 'חזרה לדף הבית',
   dlgOpenTitle: 'פתיחת קובץ',

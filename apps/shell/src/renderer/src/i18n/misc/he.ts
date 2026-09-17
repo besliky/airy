@@ -3,7 +3,6 @@ import type { zh } from './zh'
 export const he = {
   today: 'היום',
   yesterday: 'אתמול',
-  daysAgo: 'לפני {n} ימים',
   closeTab: 'סגירת כרטיסייה',
   errFileNotFound: 'הקובץ אינו קיים או הועבר.',
   errPermissionDenied: 'הגישה לקובץ זה נדחתה.',

@@ -21,8 +21,6 @@ export const zh = {
   menuSave: '保存',
   menuSaveAs: '另存为…',
   menuClose: '关闭',
-  menuEdit: '编辑',
-  menuWindow: '窗口',
   menuHome: '首页',
   backToHome: '返回首页',
   dlgOpenTitle: '打开文件',

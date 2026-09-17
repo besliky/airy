@@ -22,8 +22,6 @@ export const ar = {
   menuSave: 'حفظ',
   menuSaveAs: 'حفظ باسم…',
   menuClose: 'إغلاق',
-  menuEdit: 'تحرير',
-  menuWindow: 'نافذة',
   menuHome: 'الصفحة الرئيسية',
   backToHome: 'العودة إلى الصفحة الرئيسية',
   dlgOpenTitle: 'فتح ملف',

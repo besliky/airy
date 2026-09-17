@@ -22,8 +22,6 @@ export const th = {
   menuSave: 'บันทึก',
   menuSaveAs: 'บันทึกเป็น…',
   menuClose: 'ปิด',
-  menuEdit: 'แก้ไข',
-  menuWindow: 'หน้าต่าง',
   menuHome: 'หน้าแรก',
   backToHome: 'กลับไปหน้าแรก',
   dlgOpenTitle: 'เปิดไฟล์',

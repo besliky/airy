@@ -22,8 +22,6 @@ export const id = {
   menuSave: 'Simpan',
   menuSaveAs: 'Simpan Sebagai…',
   menuClose: 'Tutup',
-  menuEdit: 'Edit',
-  menuWindow: 'Jendela',
   menuHome: 'Beranda',
   backToHome: 'Kembali ke Beranda',
   dlgOpenTitle: 'Buka File',

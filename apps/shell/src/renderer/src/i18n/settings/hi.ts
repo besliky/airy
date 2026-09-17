@@ -1,11 +1,7 @@
 import type { zh } from './zh'
 
 export const hi = {
-  appVersion: 'संस्करण {v}',
   versionLabel: 'संस्करण',
-  updateChannel: 'अपडेट चैनल',
-  channelStable: 'स्थिर',
-  channelBeta: 'बीटा',
   theme: 'थीम',
   themeLight: 'लाइट',
   themeDark: 'डार्क',
@@ -20,9 +16,6 @@ export const hi = {
   setRestoreSession: 'पिछला सेशन पुनर्स्थापित करें',
   setRestoreSessionDesc:
     'लॉन्च होने पर वे फ़ाइलें फिर से खोलता है जो पिछली बार बंद होने या क्रैश होने पर खुली थीं।',
-  setAnalytics: 'गुमनाम उपयोग आँकड़े भेजें',
-  setAnalyticsDesc:
-    'डिफ़ॉल्ट रूप से चालू; सेटिंग्स → सामान्य में बंद किया जा सकता है। Google Analytics 4 का उपयोग होता है; Google को सार्वजनिक IP और ट्रांसपोर्ट मेटाडेटा मिलता है, लेकिन दस्तावेज़ सामग्री या फ़ाइल नाम नहीं।',
   setLiveBridge: 'Copilot लाइव ब्रिज',
   setLiveBridgeDesc:
     'कोडिंग एजेंटों (MCP) को ऐप से जुड़कर खुले दस्तावेज़ पढ़ने और संपादित करने की अनुमति देता है। Claude, Cursor या airy-mcp जैसे टूल द्वारा उपयोग किया जाता है।',
@@ -63,8 +56,6 @@ export const hi = {
   setAiMaxTokensDesc:
     'एक टर्न का आउटपुट बजट। रीज़निंग मॉडल इसका कुछ हिस्सा सोचने में खर्च करते हैं; बजट खत्म होने पर उत्तर खाली आ सकता है — ऐसा हो तो इसे बढ़ाएँ।',
   setSecAiMedia: 'AI मीडिया और खोज',
-  setAiImageModel: 'इमेज मॉडल',
-  setAiAnalysisModel: 'विश्लेषण मॉडल',
   setAiSearchSerperHint: 'Serper आपकी कुंजी से वेब और इमेज खोज दोनों देता है।',
   setAiSearchTavilyHint:
     'Tavily आपकी कुंजी से वेब खोज देता है; इमेज खोज मुफ़्त स्रोतों पर लौट जाती है।',

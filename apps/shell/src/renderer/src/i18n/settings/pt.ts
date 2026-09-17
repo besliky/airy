@@ -1,11 +1,7 @@
 import type { zh } from './zh'
 
 export const pt = {
-  appVersion: 'Versão {v}',
   versionLabel: 'Versão',
-  updateChannel: 'Canal de atualização',
-  channelStable: 'Estável',
-  channelBeta: 'Beta',
   theme: 'Tema',
   themeLight: 'Claro',
   themeDark: 'Escuro',
@@ -20,9 +16,6 @@ export const pt = {
   setRestoreSession: 'Restaurar sessão anterior',
   setRestoreSessionDesc:
     'Reabre ao iniciar os arquivos abertos no último encerramento ou travamento.',
-  setAnalytics: 'Enviar estatísticas de uso anônimas',
-  setAnalyticsDesc:
-    'Ativado por padrão e pode ser desativado em Configurações → Geral. Usa o Google Analytics 4; o Google recebe seu IP público e metadados de transporte, mas nunca o conteúdo dos documentos ou nomes de arquivos.',
   setLiveBridge: 'Ponte Copilot ao vivo',
   setLiveBridgeDesc:
     'Permite que agentes de código (MCP) se conectem a este aplicativo para ler e editar documentos abertos. Usado por ferramentas como Claude, Cursor ou airy-mcp.',
@@ -64,8 +57,6 @@ export const pt = {
   setAiMaxTokensDesc:
     'Orçamento de saída por turno. Modelos de raciocínio gastam-no pensando; se esgotar, a resposta vem vazia — aumente este valor.',
   setSecAiMedia: 'Mídia e busca de IA',
-  setAiImageModel: 'Modelo de imagem',
-  setAiAnalysisModel: 'Modelo de análise',
   setAiSearchSerperHint: 'O Serper oferece busca na web e de imagens com a sua chave.',
   setAiSearchTavilyHint:
     'O Tavily oferece busca na web com a sua chave; a busca de imagens recorre a fontes gratuitas.',

@@ -22,8 +22,6 @@ export const ja = {
   menuSave: '保存',
   menuSaveAs: '名前を付けて保存…',
   menuClose: '閉じる',
-  menuEdit: '編集',
-  menuWindow: 'ウィンドウ',
   menuHome: 'ホーム',
   backToHome: 'ホームに戻る',
   dlgOpenTitle: 'ファイルを開く',

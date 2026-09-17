@@ -22,8 +22,6 @@ export const zhTW = {
   menuSave: '儲存',
   menuSaveAs: '另存新檔…',
   menuClose: '關閉',
-  menuEdit: '編輯',
-  menuWindow: '視窗',
   menuHome: '首頁',
   backToHome: '返回首頁',
   dlgOpenTitle: '開啟檔案',

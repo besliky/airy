@@ -2,7 +2,6 @@
 export const zh = {
   today: '今天',
   yesterday: '昨天',
-  daysAgo: '{n}天前',
   closeTab: '关闭标签',
   errFileNotFound: '文件不存在或已被移动。',
   errPermissionDenied: '没有访问该文件的权限。',

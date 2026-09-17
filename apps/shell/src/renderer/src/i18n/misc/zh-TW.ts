@@ -3,7 +3,6 @@ import type { zh } from './zh'
 export const zhTW = {
   today: '今天',
   yesterday: '昨天',
-  daysAgo: '{n} 天前',
   closeTab: '關閉分頁',
   errFileNotFound: '檔案不存在或已被移動。',
   errPermissionDenied: '沒有存取此檔案的權限。',

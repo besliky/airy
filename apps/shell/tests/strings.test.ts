@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { homeStrings } from '../src/renderer/src/i18n/strings-home'
 import { settingsStrings } from '../src/renderer/src/i18n/strings-settings'
 import { onboardingStrings } from '../src/renderer/src/i18n/strings-onboarding'
@@ -10,7 +12,9 @@ import { strings } from '../src/renderer/src/strings'
  * (src/renderer/src/i18n/<domain>/<lang>.ts aggregated by the
  * strings-<domain>.ts files): zh defines each domain's key set; every other
  * locale shard must cover exactly those keys with real content and matching
- * {placeholder} sets. The aggregated table must be the exact union.
+ * {placeholder} sets. The aggregated table must be the exact union. A
+ * reverse-usage scan (below) keeps the union free of dead keys — shard
+ * parity alone cannot catch a key every locale translates but no code reads.
  */
 
 const shards = {
@@ -105,5 +109,38 @@ describe('home-screen locale tables', () => {
     const identical = referenceKeys.filter((key) => zh[key] === en[key])
     // a few shared strings (brand names, "PDF", "OK"-style tokens) are fine
     expect(identical.length).toBeLessThan(referenceKeys.length / 4)
+  })
+})
+
+describe('no dead keys', () => {
+  /** collect non-i18n source files under a directory (usage scan corpus) */
+  function collectSource(dir: string, out: string[] = []): string[] {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry)
+      if (statSync(full).isDirectory()) {
+        if (entry === 'i18n') continue
+        collectSource(full, out)
+      } else if (/\.(ts|tsx)$/.test(entry)) {
+        out.push(full)
+      }
+    }
+    return out
+  }
+
+  it('every key is referenced outside the i18n shards', () => {
+    // grep-equivalent: a key counts as used when it appears as a quoted
+    // token in any non-i18n source file (renderer, main, preload). Keys
+    // selected dynamically must still surface as a literal somewhere — a
+    // key only the shards translate and no code reads is dead weight in
+    // all 20 locales.
+    const corpus = [
+      ...collectSource(join(__dirname, '../src/renderer')),
+      ...collectSource(join(__dirname, '../src/main')),
+      ...collectSource(join(__dirname, '../src/preload')),
+    ]
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n')
+    const dead = referenceKeys.filter((key) => !new RegExp(`['"\`]${key}['"\`]`).test(corpus))
+    expect(dead).toEqual([])
   })
 })

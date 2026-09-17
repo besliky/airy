@@ -22,8 +22,6 @@ export const de = {
   menuSave: 'Speichern',
   menuSaveAs: 'Speichern unter…',
   menuClose: 'Schließen',
-  menuEdit: 'Bearbeiten',
-  menuWindow: 'Fenster',
   menuHome: 'Startseite',
   backToHome: 'Zurück zur Startseite',
   dlgOpenTitle: 'Datei öffnen',

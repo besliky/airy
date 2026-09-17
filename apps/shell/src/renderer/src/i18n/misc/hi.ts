@@ -3,7 +3,6 @@ import type { zh } from './zh'
 export const hi = {
   today: 'आज',
   yesterday: 'कल',
-  daysAgo: '{n} दिन पहले',
   closeTab: 'टैब बंद करें',
   errFileNotFound: 'फ़ाइल मौजूद नहीं है या ले जाई गई है।',
   errPermissionDenied: 'इस फ़ाइल तक पहुँच अस्वीकृत है।',

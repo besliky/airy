@@ -1,11 +1,7 @@
 import type { zh } from './zh'
 
 export const de = {
-  appVersion: 'Version {v}',
   versionLabel: 'Version',
-  updateChannel: 'Update-Kanal',
-  channelStable: 'Stabil',
-  channelBeta: 'Beta',
   theme: 'Thema',
   themeLight: 'Hell',
   themeDark: 'Dunkel',
@@ -20,9 +16,6 @@ export const de = {
   setRestoreSession: 'Vorherige Sitzung wiederherstellen',
   setRestoreSessionDesc:
     'Öffnet beim Start die Dateien erneut, die beim letzten Schließen oder Absturz geöffnet waren.',
-  setAnalytics: 'Anonyme Nutzungsstatistiken senden',
-  setAnalyticsDesc:
-    'Standardmäßig aktiviert und unter Einstellungen → Allgemein deaktivierbar. Verwendet Google Analytics 4; Google erhält Ihre öffentliche IP-Adresse und Transportmetadaten, aber keine Dokumentinhalte oder Dateinamen.',
   setLiveBridge: 'Copilot-Live-Bridge',
   setLiveBridgeDesc:
     'Erlaubt Coding-Agenten (MCP), sich mit dieser App zu verbinden und geöffnete Dokumente zu lesen und zu bearbeiten. Wird von Tools wie Claude, Cursor oder airy-mcp genutzt.',
@@ -65,8 +58,6 @@ export const de = {
   setAiMaxTokensDesc:
     'Ausgabe-Budget pro Durchlauf. Denk-Modelle verbrauchen es beim Reasoning; ist es erschöpft, kommt eine leere Antwort zurück — dann diesen Wert erhöhen.',
   setSecAiMedia: 'KI-Medien & Suche',
-  setAiImageModel: 'Bildmodell',
-  setAiAnalysisModel: 'Analysemodell',
   setAiSearchSerperHint: 'Serper liefert mit deinem Schlüssel Web- und Bildsuche.',
   setAiSearchTavilyHint:
     'Tavily liefert mit deinem Schlüssel die Websuche; die Bildsuche greift auf kostenlose Quellen zurück.',

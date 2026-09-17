@@ -1,11 +1,7 @@
 import type { zh } from './zh'
 
 export const ru = {
-  appVersion: 'Версия {v}',
   versionLabel: 'Версия',
-  updateChannel: 'Канал обновлений',
-  channelStable: 'Стабильный',
-  channelBeta: 'Бета',
   theme: 'Тема',
   themeLight: 'Светлая',
   themeDark: 'Тёмная',
@@ -20,9 +16,6 @@ export const ru = {
   setRestoreSession: 'Восстановить предыдущий сеанс',
   setRestoreSessionDesc:
     'При запуске заново открывает файлы, открытые при последнем закрытии или сбое.',
-  setAnalytics: 'Отправлять анонимную статистику использования',
-  setAnalyticsDesc:
-    'Включено по умолчанию и отключается в Настройки → Общие. Используется Google Analytics 4; Google получает публичный IP и транспортные метаданные, но не содержимое документов и не имена файлов.',
   setLiveBridge: 'Живой мост Copilot',
   setLiveBridgeDesc:
     'Позволяет агентам для программирования (MCP) подключаться к этому приложению и работать с открытыми документами. Используется такими инструментами, как Claude, Cursor и airy-mcp.',
@@ -63,8 +56,6 @@ export const ru = {
   setAiMaxTokensDesc:
     'Бюджет вывода за один ход. Модели рассуждений тратят его на размышления: если бюджет иссякнет, ответ придёт пустым — увеличьте значение.',
   setSecAiMedia: 'Медиа и поиск ИИ',
-  setAiImageModel: 'Модель изображений',
-  setAiAnalysisModel: 'Модель анализа',
   setAiSearchSerperHint: 'Serper обеспечивает веб-поиск и поиск изображений с вашим ключом.',
   setAiSearchTavilyHint:
     'Tavily обеспечивает веб-поиск с вашим ключом; поиск изображений использует бесплатные источники.',

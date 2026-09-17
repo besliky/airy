@@ -3,7 +3,6 @@ import type { zh } from './zh'
 export const cs = {
   today: 'Dnes',
   yesterday: 'Včera',
-  daysAgo: 'před {n} dny',
   closeTab: 'Zavřít kartu',
   errFileNotFound: 'Soubor neexistuje nebo byl přesunut.',
   errPermissionDenied: 'Přístup k tomuto souboru byl odepřen.',

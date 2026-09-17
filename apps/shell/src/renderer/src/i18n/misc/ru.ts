@@ -3,7 +3,6 @@ import type { zh } from './zh'
 export const ru = {
   today: 'Сегодня',
   yesterday: 'Вчера',
-  daysAgo: '{n} дн. назад',
   closeTab: 'Закрыть вкладку',
   errFileNotFound: 'Файл не существует или был перемещён.',
   errPermissionDenied: 'Доступ к файлу запрещён.',

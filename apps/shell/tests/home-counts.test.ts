@@ -8,7 +8,7 @@ import {
   normalizeRecentQuery,
   pageRecentPaths,
 } from '../src/main/recent-files'
-import { fileCountKey, timelineCountKey, visiblePageCount } from '../src/renderer/src/counts'
+import { fileCountKey, visiblePageCount } from '../src/renderer/src/counts'
 import { strings } from '../src/renderer/src/strings'
 
 const tempDirs: string[] = []
@@ -129,11 +129,6 @@ describe('count labels', () => {
   it('uses singular and plural file labels', () => {
     expect(translate('en', fileCountKey(1), { n: 1 })).toBe('1 file')
     expect(translate('en', fileCountKey(2), { n: 2 })).toBe('2 files')
-  })
-
-  it('uses singular and plural activity item labels', () => {
-    expect(translate('en', timelineCountKey(1), { n: 1 })).toBe('1 item')
-    expect(translate('en', timelineCountKey(2), { n: 2 })).toBe('2 items')
   })
 
   it('picks the singular form in every locale with plural inflection', () => {

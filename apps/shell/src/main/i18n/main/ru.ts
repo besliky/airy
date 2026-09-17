@@ -22,8 +22,6 @@ export const ru = {
   menuSave: 'Сохранить',
   menuSaveAs: 'Сохранить как…',
   menuClose: 'Закрыть',
-  menuEdit: 'Правка',
-  menuWindow: 'Окно',
   menuHome: 'Главная',
   backToHome: 'Вернуться на главную',
   dlgOpenTitle: 'Открытие файла',

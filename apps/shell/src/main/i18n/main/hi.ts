@@ -22,8 +22,6 @@ export const hi = {
   menuSave: 'सहेजें',
   menuSaveAs: 'इस रूप में सहेजें…',
   menuClose: 'बंद करें',
-  menuEdit: 'संपादन',
-  menuWindow: 'विंडो',
   menuHome: 'होम',
   backToHome: 'होम पर वापस जाएँ',
   dlgOpenTitle: 'फ़ाइल खोलें',

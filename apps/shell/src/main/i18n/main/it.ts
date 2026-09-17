@@ -22,8 +22,6 @@ export const it = {
   menuSave: 'Salva',
   menuSaveAs: 'Salva con nome…',
   menuClose: 'Chiudi',
-  menuEdit: 'Modifica',
-  menuWindow: 'Finestra',
   menuHome: 'Home',
   backToHome: 'Torna alla Home',
   dlgOpenTitle: 'Apri file',

@@ -22,8 +22,6 @@ export const cs = {
   menuSave: 'Uložit',
   menuSaveAs: 'Uložit jako…',
   menuClose: 'Zavřít',
-  menuEdit: 'Úpravy',
-  menuWindow: 'Okno',
   menuHome: 'Domů',
   backToHome: 'Zpět na domovskou stránku',
   dlgOpenTitle: 'Otevřít soubor',

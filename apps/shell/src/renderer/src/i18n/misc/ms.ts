@@ -3,7 +3,6 @@ import type { zh } from './zh'
 export const ms = {
   today: 'Hari ini',
   yesterday: 'Semalam',
-  daysAgo: '{n} hari lalu',
   closeTab: 'Tutup tab',
   errFileNotFound: 'Fail tidak wujud atau telah dipindahkan.',
   errPermissionDenied: 'Akses kepada fail ini ditolak.',

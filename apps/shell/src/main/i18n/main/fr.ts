@@ -22,8 +22,6 @@ export const fr = {
   menuSave: 'Enregistrer',
   menuSaveAs: 'Enregistrer sous…',
   menuClose: 'Fermer',
-  menuEdit: 'Édition',
-  menuWindow: 'Fenêtre',
   menuHome: 'Accueil',
   backToHome: "Retour à l'accueil",
   dlgOpenTitle: 'Ouvrir un fichier',

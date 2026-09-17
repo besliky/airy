@@ -1,11 +1,7 @@
 import type { zh } from './zh'
 
 export const th = {
-  appVersion: 'เวอร์ชัน {v}',
   versionLabel: 'เวอร์ชัน',
-  updateChannel: 'ช่องทางอัปเดต',
-  channelStable: 'เสถียร',
-  channelBeta: 'เบต้า',
   theme: 'ธีม',
   themeLight: 'สว่าง',
   themeDark: 'มืด',
@@ -18,9 +14,6 @@ export const th = {
   setAutoSaveDesc: 'เปิดบันทึกอัตโนมัติเป็นค่าเริ่มต้นในทุกตัวแก้ไข คุณยังปิดได้ในแต่ละหน้าต่าง',
   setRestoreSession: 'กู้คืนเซสชันก่อนหน้า',
   setRestoreSessionDesc: 'เปิดไฟล์ที่เปิดอยู่ตอนปิดโปรแกรมหรือขัดข้องครั้งล่าสุดเมื่อเริ่มทำงาน',
-  setAnalytics: 'ส่งสถิติการใช้งานแบบไม่ระบุตัวตน',
-  setAnalyticsDesc:
-    'เปิดใช้งานเป็นค่าเริ่มต้นและปิดได้ทุกเมื่อใน การตั้งค่า → ทั่วไป ใช้ Google Analytics 4 โดย Google จะได้รับ IP สาธารณะและข้อมูลเมตาการรับส่งข้อมูล แต่จะไม่เก็บเนื้อหาเอกสารหรือชื่อไฟล์',
   setLiveBridge: 'Copilot live bridge',
   setLiveBridgeDesc:
     'อนุญาตให้เอเจนต์เขียนโค้ด (MCP) เชื่อมต่อกับแอปนี้เพื่ออ่านและแก้ไขเอกสารที่เปิดอยู่ ใช้โดยเครื่องมืออย่าง Claude, Cursor หรือ airy-mcp',
@@ -60,8 +53,6 @@ export const th = {
   setAiMaxTokensDesc:
     'งบผลลัพธ์ต่อหนึ่งรอบ โมเดลแบบใช้เหตุผลจะใช้ส่วนหนึ่งไปกับการคิด หากงบหมด คำตอบอาจกลับมาว่างเปล่า ให้เพิ่มค่านี้',
   setSecAiMedia: 'สื่อ AI และการค้นหา',
-  setAiImageModel: 'โมเดลสร้างภาพ',
-  setAiAnalysisModel: 'โมเดลวิเคราะห์',
   setAiSearchSerperHint: 'Serper ให้บริการค้นหาเว็บและภาพด้วยคีย์ของคุณ',
   setAiSearchTavilyHint:
     'Tavily ให้บริการค้นหาเว็บด้วยคีย์ของคุณ ส่วนการค้นหาภาพจะใช้แหล่งข้อมูลฟรีแทน',

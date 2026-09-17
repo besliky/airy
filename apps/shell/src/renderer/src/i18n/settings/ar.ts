@@ -1,11 +1,7 @@
 import type { zh } from './zh'
 
 export const ar = {
-  appVersion: 'الإصدار {v}',
   versionLabel: 'الإصدار',
-  updateChannel: 'قناة التحديث',
-  channelStable: 'مستقر',
-  channelBeta: 'تجريبي',
   theme: 'المظهر',
   themeLight: 'فاتح',
   themeDark: 'داكن',
@@ -19,9 +15,6 @@ export const ar = {
     'تشغيل الحفظ التلقائي افتراضيًا في كل محرر. لا يزال بإمكانك إيقافه لنافذة واحدة.',
   setRestoreSession: 'استعادة الجلسة السابقة',
   setRestoreSessionDesc: 'يعيد فتح الملفات التي كانت مفتوحة عند آخر إغلاق أو انهيار للتطبيق.',
-  setAnalytics: 'إرسال إحصاءات استخدام مجهولة الهوية',
-  setAnalyticsDesc:
-    'مفعّل افتراضيًا ويمكن إيقافه في الإعدادات ← عام. يستخدم Google Analytics 4؛ تتلقى Google عنوان IP العام وبيانات النقل، ولكن لا يتم جمع محتوى المستندات أو أسماء الملفات.',
   setLiveBridge: 'جسر Copilot المباشر',
   setLiveBridgeDesc:
     'يتيح لوكلاء البرمجة (MCP) الاتصال بهذا التطبيق لقراءة المستندات المفتوحة وتحريرها. تستخدمه أدوات مثل Claude وCursor وairy-mcp.',
@@ -62,8 +55,6 @@ export const ar = {
   setAiMaxTokensDesc:
     'ميزانية الإخراج في الدورة الواحدة. نماذج الاستدلال تصرفها على التفكير، فإذا نفدت جاء الرد فارغًا؛ ارفع هذه القيمة عندئذ.',
   setSecAiMedia: 'وسائط الذكاء الاصطناعي والبحث',
-  setAiImageModel: 'نموذج الصور',
-  setAiAnalysisModel: 'نموذج التحليل',
   setAiSearchSerperHint: 'يوفّر Serper البحث في الويب والصور بمفتاحك.',
   setAiSearchTavilyHint:
     'يوفّر Tavily البحث في الويب بمفتاحك؛ ويعود البحث في الصور إلى مصادر مجانية.',

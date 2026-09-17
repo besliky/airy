@@ -22,8 +22,6 @@ export const nl = {
   menuSave: 'Opslaan',
   menuSaveAs: 'Opslaan als…',
   menuClose: 'Sluiten',
-  menuEdit: 'Bewerken',
-  menuWindow: 'Venster',
   menuHome: 'Start',
   backToHome: 'Terug naar start',
   dlgOpenTitle: 'Bestand openen',

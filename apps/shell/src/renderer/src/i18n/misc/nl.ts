@@ -3,7 +3,6 @@ import type { zh } from './zh'
 export const nl = {
   today: 'Vandaag',
   yesterday: 'Gisteren',
-  daysAgo: '{n} dagen geleden',
   closeTab: 'Tabblad sluiten',
   errFileNotFound: 'Het bestand bestaat niet of is verplaatst.',
   errPermissionDenied: 'Toegang tot dit bestand geweigerd.',

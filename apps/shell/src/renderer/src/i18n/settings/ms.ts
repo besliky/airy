@@ -1,11 +1,7 @@
 import type { zh } from './zh'
 
 export const ms = {
-  appVersion: 'Versi {v}',
   versionLabel: 'Versi',
-  updateChannel: 'Saluran Kemas Kini',
-  channelStable: 'Stabil',
-  channelBeta: 'Beta',
   theme: 'Tema',
   themeLight: 'Cerah',
   themeDark: 'Gelap',
@@ -19,9 +15,6 @@ export const ms = {
     'Hidupkan Simpan Automatik secara lalai dalam setiap editor. Anda masih boleh mematikannya untuk satu tetingkap.',
   setRestoreSession: 'Pulihkan sesi sebelumnya',
   setRestoreSessionDesc: 'Membuka semula fail yang dibuka ketika Airy terakhir ditutup atau ranap.',
-  setAnalytics: 'Hantar statistik penggunaan tanpa nama',
-  setAnalyticsDesc:
-    'Diaktifkan secara lalai dan boleh dimatikan di Tetapan → Umum. Menggunakan Google Analytics 4; Google menerima IP awam dan metadata pengangkutan, tetapi tidak pernah kandungan dokumen atau nama fail.',
   setLiveBridge: 'Copilot live bridge',
   setLiveBridgeDesc:
     'Membenarkan ejen pengekodan (MCP) menyambung ke aplikasi ini untuk membaca dan mengedit dokumen terbuka. Digunakan oleh alat seperti Claude, Cursor atau airy-mcp.',
@@ -63,8 +56,6 @@ export const ms = {
   setAiMaxTokensDesc:
     'Belanjawan output untuk satu pusingan. Model penaakulan menghabiskannya untuk berfikir; jika habis, balasan datang kosong — tingkatkan nilai ini.',
   setSecAiMedia: 'Media & Carian AI',
-  setAiImageModel: 'Model imej',
-  setAiAnalysisModel: 'Model analisis',
   setAiSearchSerperHint: 'Serper menyediakan carian web dan imej dengan kunci anda.',
   setAiSearchTavilyHint:
     'Tavily menyediakan carian web dengan kunci anda; carian imej menggunakan sumber percuma.',

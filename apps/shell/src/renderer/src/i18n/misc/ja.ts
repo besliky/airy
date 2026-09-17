@@ -3,7 +3,6 @@ import type { zh } from './zh'
 export const ja = {
   today: '今日',
   yesterday: '昨日',
-  daysAgo: '{n}日前',
   closeTab: 'タブを閉じる',
   errFileNotFound: 'ファイルが存在しないか、移動されました。',
   errPermissionDenied: 'このファイルへのアクセスが拒否されました。',

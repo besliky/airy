@@ -1,10 +1,6 @@
 /** settings-modal strings, zh: defines the key set every other locale shard must match. */
 export const zh = {
-  appVersion: '版本 {v}',
   versionLabel: '版本',
-  updateChannel: '更新通道',
-  channelStable: '稳定版',
-  channelBeta: 'Beta 版',
   theme: '主题',
   themeLight: '浅色',
   themeDark: '深色',
@@ -17,9 +13,6 @@ export const zh = {
   setAutoSaveDesc: '在每个编辑器中默认开启自动保存，仍可在单个窗口中关闭。',
   setRestoreSession: '恢复上次会话',
   setRestoreSessionDesc: '启动时重新打开上次退出或崩溃时打开的文件。',
-  setAnalytics: '发送匿名使用统计',
-  setAnalyticsDesc:
-    '该功能默认开启，可随时在“设置 → 常规”中关闭。使用 Google Analytics 4；Google 会接收您的公网 IP 地址和传输元数据，但绝不收集文档内容或文件名。',
   setLiveBridge: 'Copilot 实时桥接',
   setLiveBridgeDesc:
     '允许编码代理（MCP）连接本应用以读取和编辑打开的文档。供 Claude、Cursor、airy-mcp 等工具使用。',
@@ -60,8 +53,6 @@ export const zh = {
   setAiMaxTokensDesc:
     '一次回合的输出预算。推理模型会先消耗预算用于思考，预算用完时回复可能变成空白，遇到这种情况请调大此项。',
   setSecAiMedia: '生图、媒体与搜索',
-  setAiImageModel: '生图模型',
-  setAiAnalysisModel: '解析模型',
   setAiSearchSerperHint: 'Serper 用你的 key 同时提供网页与图片搜索。',
   setAiSearchTavilyHint: 'Tavily 用你的 key 提供网页搜索；图片搜索改用免费来源。',
   setAiCapImage: '生图',

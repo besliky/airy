@@ -1,11 +1,7 @@
 import type { zh } from './zh'
 
 export const ja = {
-  appVersion: 'バージョン {v}',
   versionLabel: 'バージョン',
-  updateChannel: '更新チャネル',
-  channelStable: '安定版',
-  channelBeta: 'ベータ版',
   theme: 'テーマ',
   themeLight: 'ライト',
   themeDark: 'ダーク',
@@ -20,9 +16,6 @@ export const ja = {
   setRestoreSession: '前回のセッションを復元',
   setRestoreSessionDesc:
     '前回終了時（またはクラッシュ時）に開いていたファイルを起動時に再び開きます。',
-  setAnalytics: '匿名の使用状況統計を送信',
-  setAnalyticsDesc:
-    '既定で有効です。設定 → 一般でいつでも無効にできます。Google Analytics 4 を使用し、Google は公開 IP アドレスと通信メタデータを受け取りますが、文書の内容やファイル名は収集されません。',
   setLiveBridge: 'Copilot ライブブリッジ',
   setLiveBridgeDesc:
     'コーディングエージェント（MCP）がこのアプリに接続して開いているドキュメントを読み書きできるようにします。Claude・Cursor・airy-mcp などのツールで利用されます。',
@@ -62,8 +55,6 @@ export const ja = {
   setAiMaxTokensDesc:
     '1 ターンの出力予算です。推論モデルは思考にも消費するため、使い切ると返信が空になることがあります。その場合は値を大きくしてください。',
   setSecAiMedia: 'AI メディアと検索',
-  setAiImageModel: '画像モデル',
-  setAiAnalysisModel: '解析モデル',
   setAiSearchSerperHint: 'Serper はあなたのキーで Web 検索と画像検索の両方を提供します。',
   setAiSearchTavilyHint:
     'Tavily はあなたのキーで Web 検索を提供します。画像検索は無料ソースにフォールバックします。',

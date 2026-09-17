@@ -1,11 +1,7 @@
 import type { zh } from './zh'
 
 export const zhTW = {
-  appVersion: '版本 {v}',
   versionLabel: '版本',
-  updateChannel: '更新通道',
-  channelStable: '穩定版',
-  channelBeta: 'Beta 版',
   theme: '主題',
   themeLight: '淺色',
   themeDark: '深色',
@@ -18,9 +14,6 @@ export const zhTW = {
   setAutoSaveDesc: '在每個編輯器中預設開啟自動儲存，仍可在單一視窗中關閉。',
   setRestoreSession: '恢復上次工作階段',
   setRestoreSessionDesc: '啟動時重新開啟上次退出或當機時開啟的檔案。',
-  setAnalytics: '傳送匿名使用統計',
-  setAnalyticsDesc:
-    '此功能預設開啟，可隨時在「設定 → 一般」中關閉。使用 Google Analytics 4；Google 會接收您的公開 IP 位址和傳輸中繼資料，但絕不收集文件內容或檔案名稱。',
   setLiveBridge: 'Copilot 即時橋接',
   setLiveBridgeDesc:
     '允許編碼代理（MCP）連線本應用程式以讀取和編輯開啟的文件。供 Claude、Cursor、airy-mcp 等工具使用。',
@@ -60,8 +53,6 @@ export const zhTW = {
   setAiMaxTokensDesc:
     '一次回合的輸出預算。推理模型會先消耗預算用於思考，預算用畢時回覆可能變成空白，遇到此情況請調高本項。',
   setSecAiMedia: '生圖、媒體與搜尋',
-  setAiImageModel: '生圖模型',
-  setAiAnalysisModel: '解析模型',
   setAiSearchSerperHint: 'Serper 用你的 key 同時提供網頁與圖片搜尋。',
   setAiSearchTavilyHint: 'Tavily 用你的 key 提供網頁搜尋；圖片搜尋改用免費來源。',
   setAiCapImage: '生圖',

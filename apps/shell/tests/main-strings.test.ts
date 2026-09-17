@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { mainStrings } from '../src/main/i18n/strings-main'
 
 /**
  * Main-process locale shards (src/main/i18n/main/*.ts aggregated by
  * strings-main.ts): zh defines the key set; every other locale must cover
  * exactly the same keys with real content and matching {placeholder} sets.
+ * The reverse-usage scan keeps the set free of dead keys.
  */
 
 const locales = Object.keys(mainStrings) as Array<keyof typeof mainStrings>
@@ -41,5 +44,35 @@ describe('main-process locale tables', () => {
       (key) => placeholdersOf(table[key]).join(',') !== placeholdersOf(zhTable[key]).join(','),
     )
     expect(mismatched).toEqual([])
+  })
+})
+
+describe('no dead main keys', () => {
+  /** collect non-i18n source files under a directory (usage scan corpus) */
+  function collectSource(dir: string, out: string[] = []): string[] {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry)
+      if (statSync(full).isDirectory()) {
+        if (entry === 'i18n') continue
+        collectSource(full, out)
+      } else if (/\.(ts|tsx)$/.test(entry)) {
+        out.push(full)
+      }
+    }
+    return out
+  }
+
+  it('every key is referenced outside the i18n shards', () => {
+    // grep-equivalent reverse-usage scan (see tests/strings.test.ts); the
+    // menu labels the shell builds live in index.ts and the crash prompts
+    // in error-dialog.ts — a key nothing reads is dead in all 20 locales.
+    const corpus = [
+      ...collectSource(join(__dirname, '../src/main')),
+      ...collectSource(join(__dirname, '../src/renderer')),
+    ]
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n')
+    const dead = referenceKeys.filter((key) => !new RegExp(`['"\`]${key}['"\`]`).test(corpus))
+    expect(dead).toEqual([])
   })
 })

@@ -1,11 +1,7 @@
 import type { zh } from './zh'
 
 export const cs = {
-  appVersion: 'Verze {v}',
   versionLabel: 'Verze',
-  updateChannel: 'Kanál aktualizací',
-  channelStable: 'Stabilní',
-  channelBeta: 'Beta',
   theme: 'Motiv',
   themeLight: 'Světlý',
   themeDark: 'Tmavý',
@@ -20,9 +16,6 @@ export const cs = {
   setRestoreSession: 'Obnovit předchozí relaci',
   setRestoreSessionDesc:
     'Při spuštění znovu otevře soubory otevřené při posledním ukončení nebo pádu.',
-  setAnalytics: 'Odesílat anonymní statistiky používání',
-  setAnalyticsDesc:
-    'Ve výchozím nastavení zapnuto, kdykoli lze vypnout v Nastavení → Obecné. Používá Google Analytics 4; Google obdrží vaši veřejnou IP adresu a přenosová metadata, obsah dokumentů ani názvy souborů se však nikdy neshromažďují.',
   setLiveBridge: 'Živý most Copilot',
   setLiveBridgeDesc:
     'Umožňuje kódovacím agentům (MCP) připojit se k této aplikaci a číst či upravovat otevřené dokumenty. Používají ho nástroje jako Claude, Cursor nebo airy-mcp.',
@@ -64,8 +57,6 @@ export const cs = {
   setAiMaxTokensDesc:
     'Rozpočet výstupu na jeden tah. Modely s uvažováním jeho část spotřebují na přemýšlení, takže po vyčerpání rozpočtu může být odpověď prázdná; v takovém případě hodnotu zvyšte.',
   setSecAiMedia: 'AI média a vyhledávání',
-  setAiImageModel: 'Model pro obrázky',
-  setAiAnalysisModel: 'Model pro analýzu',
   setAiSearchSerperHint: 'Serper zajišťuje webové i obrázkové vyhledávání s vaším klíčem.',
   setAiSearchTavilyHint:
     'Tavily zajišťuje webové vyhledávání s vaším klíčem; obrázkové vyhledávání použije bezplatné zdroje.',

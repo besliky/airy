@@ -3,7 +3,6 @@ import type { zh } from './zh'
 export const ko = {
   today: '오늘',
   yesterday: '어제',
-  daysAgo: '{n}일 전',
   closeTab: '탭 닫기',
   errFileNotFound: '파일이 없거나 이동되었습니다.',
   errPermissionDenied: '이 파일에 대한 액세스 권한이 없습니다.',

@@ -1,11 +1,7 @@
 import type { zh } from './zh'
 
 export const ko = {
-  appVersion: '버전 {v}',
   versionLabel: '버전',
-  updateChannel: '업데이트 채널',
-  channelStable: '안정 버전',
-  channelBeta: '베타 버전',
   theme: '테마',
   themeLight: '라이트',
   themeDark: '다크',
@@ -18,9 +14,6 @@ export const ko = {
   setAutoSaveDesc: '모든 편집기에서 자동 저장을 기본으로 켭니다. 개별 창에서는 끌 수 있습니다.',
   setRestoreSession: '이전 세션 복원',
   setRestoreSessionDesc: '마지막으로 종료하거나 충돌했을 때 열려 있던 파일을 시작 시 다시 엽니다.',
-  setAnalytics: '익명 사용 통계 보내기',
-  setAnalyticsDesc:
-    '기본적으로 켜져 있으며 설정 → 일반에서 언제든 끌 수 있습니다. Google Analytics 4를 사용하며 Google은 공인 IP 주소와 전송 메타데이터를 수신하지만 문서 내용이나 파일 이름은 수집하지 않습니다.',
   setLiveBridge: 'Copilot 라이브 브리지',
   setLiveBridgeDesc:
     '코딩 에이전트(MCP)가 이 앱에 연결하여 열린 문서를 읽고 편집할 수 있도록 합니다. Claude, Cursor, airy-mcp 등의 도구에서 사용됩니다.',
@@ -60,8 +53,6 @@ export const ko = {
   setAiMaxTokensDesc:
     '한 턴의 출력 예산입니다. 추론 모델은 생각하는 데 소모하므로 예산이 떨어지면 응답이 비어 올 수 있습니다. 그럴 때 값을 키우세요.',
   setSecAiMedia: 'AI 미디어 및 검색',
-  setAiImageModel: '이미지 모델',
-  setAiAnalysisModel: '분석 모델',
   setAiSearchSerperHint: 'Serper는 내 키로 웹 검색과 이미지 검색을 모두 제공합니다.',
   setAiSearchTavilyHint:
     'Tavily는 내 키로 웹 검색을 제공합니다. 이미지 검색은 무료 소스로 대체됩니다.',
