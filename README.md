@@ -28,12 +28,12 @@ Prebuilt installers for every release are on
 - **Linux** — `airy_<version>_amd64.deb` (Debian/Ubuntu) and
   `airy-<version>-x86_64.AppImage` (runs on any distro); an `.rpm` is
   published alongside them
+- **macOS** — `Airy-<version>.dmg` and `Airy-<version>-mac.zip` (arm64)
 
-The installers are **not code-signed**. Windows SmartScreen and some Linux
-desktops will warn about an unknown publisher — that is expected for an
-unsigned fork; check the release notes and the CI build that produced the
-artifact, or [build from source](#development) instead. macOS builds are not
-published yet.
+The installers are **not code-signed**. Windows SmartScreen, some Linux
+desktops, and macOS Gatekeeper will warn about an unknown publisher — that is
+expected for an unsigned fork; check the release notes and the CI build that
+produced the artifact, or [build from source](#development) instead.
 
 Every installer also bundles the **MCP server** (`resources/mcp/index.js`), so
 coding agents can run it straight from the installed app — no Node.js and no

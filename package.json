@@ -1,6 +1,6 @@
 {
   "name": "airy",
-  "version": "0.1.0",
+  "version": "0.9.3",
   "private": true,
   "description": "Airy: open-source office suite with an MCP copilot for CLI coding agents (fork of GenOffice)",
   "license": "Apache-2.0",
@@ -40,7 +40,8 @@
     "dist:win": "npm run notices && npm run build:all && npm run dist:win -w @airy-office/shell",
     "dist:linux": "npm run notices && npm run build:all && npm run dist:linux -w @airy-office/shell",
     "release:win": "npm run notices && npm run build:all && npm run release:win -w @airy-office/shell -- --publish always",
-    "release:linux": "npm run notices && npm run build:all && npm run release:linux -w @airy-office/shell -- --publish always"
+    "release:linux": "npm run notices && npm run build:all && npm run release:linux -w @airy-office/shell -- --publish always",
+    "release:mac": "npm run notices && npm run build:all && npm run native:build:universal -w @airy-office/sheets && npm run release:mac -w @airy-office/shell -- --publish always"
   },
   "dependencies": {
     "ws": "^8.21.1"
