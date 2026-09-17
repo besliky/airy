@@ -180,6 +180,7 @@ const tMain = createI18n({
     errImgAbsPath: '图片路径必须是绝对路径。',
     errImgNotFound: '找不到图片文件: {path}',
     errImgTooLarge20: '图片超过 20MB,不支持插入。',
+    errImgNotGranted: '图片不在本应用可读取的目录内（请先添加为附件或打开所在目录）。',
     errImgBadType: '该文件不是 PNG/JPEG/GIF 图片。',
     errDiskChanged: '工作簿在打开后被磁盘上的改动覆盖——请改用另存为。',
     autosaveFoundTitle: '发现自动恢复版本',
@@ -245,6 +246,8 @@ const tMain = createI18n({
     errImgAbsPath: 'Image path must be absolute.',
     errImgNotFound: 'Image file not found: {path}',
     errImgTooLarge20: 'Image exceeds 20MB and cannot be inserted.',
+    errImgNotGranted:
+      'The image is outside the folders this app may read (attach it or open its folder first).',
     errImgBadType: 'The file is not a PNG/JPEG/GIF image.',
     errDiskChanged: 'The workbook changed on disk after it was opened — use Save As instead.',
     autosaveFoundTitle: 'Recovered version found',
@@ -313,6 +316,8 @@ const tMain = createI18n({
     errImgAbsPath: '画像パスは絶対パスで指定してください。',
     errImgNotFound: '画像ファイルが見つかりません: {path}',
     errImgTooLarge20: '画像が 20MB を超えているため挿入できません。',
+    errImgNotGranted:
+      '画像はこのアプリが読み取り可能なフォルダの範囲外です（先に添付するか、そのフォルダを開いてください）。',
     errImgBadType: 'このファイルは PNG/JPEG/GIF 画像ではありません。',
     errDiskChanged:
       'ブックを開いた後にディスク上で変更されています — 名前を付けて保存を使用してください。',
@@ -383,6 +388,8 @@ const tMain = createI18n({
     errImgAbsPath: '이미지 경로는 절대 경로여야 합니다.',
     errImgNotFound: '이미지 파일을 찾을 수 없습니다: {path}',
     errImgTooLarge20: '이미지가 20MB를 초과하여 삽입할 수 없습니다.',
+    errImgNotGranted:
+      '이미지가 이 앱이 읽을 수 있는 폴더 범위 밖에 있습니다(먼저 첨부하거나 해당 폴더를 여세요).',
     errImgBadType: '이 파일은 PNG/JPEG/GIF 이미지가 아닙니다.',
     errDiskChanged:
       '통합 문서가 열린 후 디스크에서 변경되었습니다. 다른 이름으로 저장을 사용하세요.',
@@ -453,6 +460,8 @@ const tMain = createI18n({
     errImgAbsPath: "Le chemin de l'image doit être absolu.",
     errImgNotFound: 'Fichier image introuvable : {path}',
     errImgTooLarge20: "L'image dépasse 20 Mo et ne peut pas être insérée.",
+    errImgNotGranted:
+      "L'image est en dehors des dossiers lisibles par cette application (joignez-la ou ouvrez son dossier d'abord).",
     errImgBadType: "Ce fichier n'est pas une image PNG/JPEG/GIF.",
     errDiskChanged:
       'Le classeur a été modifié sur le disque après son ouverture — utilisez Enregistrer sous.',
@@ -524,6 +533,8 @@ const tMain = createI18n({
     errImgAbsPath: 'Der Bildpfad muss absolut sein.',
     errImgNotFound: 'Bilddatei nicht gefunden: {path}',
     errImgTooLarge20: 'Das Bild überschreitet 20 MB und kann nicht eingefügt werden.',
+    errImgNotGranted:
+      'Das Bild liegt außerhalb der Ordner, die diese App lesen darf (erst anhängen oder den Ordner öffnen).',
     errImgBadType: 'Die Datei ist kein PNG/JPEG/GIF-Bild.',
     errDiskChanged:
       'Die Arbeitsmappe wurde nach dem Öffnen auf dem Datenträger geändert — verwenden Sie stattdessen „Speichern unter“.',
@@ -595,6 +606,8 @@ const tMain = createI18n({
     errImgAbsPath: 'La ruta de la imagen debe ser absoluta.',
     errImgNotFound: 'No se encontró el archivo de imagen: {path}',
     errImgTooLarge20: 'La imagen supera los 20 MB y no se puede insertar.',
+    errImgNotGranted:
+      'La imagen está fuera de las carpetas que esta app puede leer (adjúntala o abre su carpeta primero).',
     errImgBadType: 'El archivo no es una imagen PNG/JPEG/GIF.',
     errDiskChanged: 'El libro cambió en el disco después de abrirse; usa Guardar como en su lugar.',
     autosaveFoundTitle: 'Se encontró una versión recuperada',
@@ -664,6 +677,7 @@ const tMain = createI18n({
     errImgAbsPath: 'เส้นทางรูปภาพต้องเป็นเส้นทางแบบสัมบูรณ์',
     errImgNotFound: 'ไม่พบไฟล์รูปภาพ: {path}',
     errImgTooLarge20: 'รูปภาพเกิน 20MB ไม่สามารถแทรกได้',
+    errImgNotGranted: 'รูปภาพอยู่นอกโฟลเดอร์ที่แอปนี้อ่านได้ (แนบไฟล์หรือเปิดโฟลเดอร์นั้นก่อน)',
     errImgBadType: 'ไฟล์นี้ไม่ใช่รูปภาพ PNG/JPEG/GIF',
     errDiskChanged: 'เวิร์กบุ๊กถูกเปลี่ยนแปลงบนดิสก์หลังจากเปิด — โปรดใช้บันทึกเป็นแทน',
     autosaveFoundTitle: 'พบเวอร์ชันกู้คืนอัตโนมัติ',
@@ -732,6 +746,8 @@ const tMain = createI18n({
     errImgAbsPath: 'Jalur gambar harus berupa jalur absolut.',
     errImgNotFound: 'File gambar tidak ditemukan: {path}',
     errImgTooLarge20: 'Gambar melebihi 20MB dan tidak dapat disisipkan.',
+    errImgNotGranted:
+      'Gambar berada di luar folder yang boleh dibaca aplikasi ini (lampirkan dulu atau buka foldernya).',
     errImgBadType: 'File ini bukan gambar PNG/JPEG/GIF.',
     errDiskChanged: 'Buku kerja berubah di disk setelah dibuka — gunakan Simpan Sebagai.',
     autosaveFoundTitle: 'Versi pemulihan ditemukan',
@@ -801,6 +817,8 @@ const tMain = createI18n({
     errImgAbsPath: 'Путь к изображению должен быть абсолютным.',
     errImgNotFound: 'Файл изображения не найден: {path}',
     errImgTooLarge20: 'Изображение превышает 20 МБ и не может быть вставлено.',
+    errImgNotGranted:
+      'Изображение находится вне папок, доступных приложению для чтения (сначала прикрепите его или откройте его папку).',
     errImgBadType: 'Этот файл не является изображением PNG/JPEG/GIF.',
     errDiskChanged: 'Книга была изменена на диске после открытия — используйте «Сохранить как».',
     autosaveFoundTitle: 'Найдена восстановленная версия',
@@ -869,6 +887,8 @@ const tMain = createI18n({
     errImgAbsPath: 'يجب أن يكون مسار الصورة مسارًا مطلقًا.',
     errImgNotFound: 'لم يتم العثور على ملف الصورة: {path}',
     errImgTooLarge20: 'الصورة تتجاوز 20 ميغابايت ولا يمكن إدراجها.',
+    errImgNotGranted:
+      'الصورة خارج المجلدات التي يمكن لهذا التطبيق قراءتها (أرفقها أو افتح مجلدها أولاً).',
     errImgBadType: 'هذا الملف ليس صورة PNG/JPEG/GIF.',
     errDiskChanged: 'تم تغيير المصنف على القرص بعد فتحه — استخدم «حفظ باسم» بدلاً من ذلك.',
     menuPrint: 'طباعة…',
@@ -936,6 +956,8 @@ const tMain = createI18n({
     errImgAbsPath: 'O caminho da imagem deve ser absoluto.',
     errImgNotFound: 'Arquivo de imagem não encontrado: {path}',
     errImgTooLarge20: 'A imagem excede 20MB e não pode ser inserida.',
+    errImgNotGranted:
+      'A imagem está fora das pastas que este app pode ler (anexe-a ou abra a pasta primeiro).',
     errImgBadType: 'O arquivo não é uma imagem PNG/JPEG/GIF.',
     menuPrint: 'Imprimir…',
     errDiskChanged: 'A pasta de trabalho foi alterada no disco após ser aberta — use Salvar Como.',
@@ -1005,6 +1027,8 @@ const tMain = createI18n({
     errImgAbsPath: "Il percorso dell'immagine deve essere assoluto.",
     errImgNotFound: 'File immagine non trovato: {path}',
     errImgTooLarge20: "L'immagine supera i 20 MB e non può essere inserita.",
+    errImgNotGranted:
+      "L'immagine è fuori dalle cartelle che questa app può leggere (allegala o apri prima la sua cartella).",
     errImgBadType: "Il file non è un'immagine PNG/JPEG/GIF.",
     menuPrint: 'Stampa…',
     errDiskChanged:
@@ -1075,6 +1099,8 @@ const tMain = createI18n({
     errImgAbsPath: 'Ścieżka obrazu musi być bezwzględna.',
     errImgNotFound: 'Nie znaleziono pliku obrazu: {path}',
     menuPrint: 'Drukuj…',
+    errImgNotGranted:
+      'Obraz znajduje się poza folderami, które ta aplikacja może odczytać (najpierw załącz go lub otwórz jego folder).',
     errImgTooLarge20: 'Obraz przekracza 20 MB i nie może zostać wstawiony.',
     errImgBadType: 'Plik nie jest obrazem PNG/JPEG/GIF.',
     errDiskChanged: 'Skoroszyt został zmieniony na dysku po otwarciu — użyj polecenia Zapisz jako.',
@@ -1145,6 +1171,8 @@ const tMain = createI18n({
     menuPrint: 'Tisk…',
     errImgNotFound: 'Soubor obrázku nebyl nalezen: {path}',
     errImgTooLarge20: 'Obrázek překračuje 20 MB a nelze ho vložit.',
+    errImgNotGranted:
+      'Obrázek leží mimo složky, které může tato aplikace číst (nejprve jej připojte nebo otevřete jeho složku).',
     errImgBadType: 'Soubor není obrázek PNG/JPEG/GIF.',
     errDiskChanged: 'Sešit byl po otevření změněn na disku — použijte místo toho Uložit jako.',
     autosaveFoundTitle: 'Nalezena obnovená verze',
@@ -1214,6 +1242,8 @@ const tMain = createI18n({
     menuPrint: 'Afdrukken…',
     errImgNotFound: 'Afbeeldingsbestand niet gevonden: {path}',
     errImgTooLarge20: 'De afbeelding is groter dan 20 MB en kan niet worden ingevoegd.',
+    errImgNotGranted:
+      'De afbeelding ligt buiten de mappen die deze app mag lezen (voeg haar eerst toe of open de map).',
     errImgBadType: 'Het bestand is geen PNG/JPEG/GIF-afbeelding.',
     errDiskChanged:
       'De werkmap is op de schijf gewijzigd nadat deze was geopend — gebruik Opslaan als.',
@@ -1283,6 +1313,8 @@ const tMain = createI18n({
     errImgAbsPath: 'Laluan imej mestilah laluan mutlak.',
     errImgNotFound: 'Fail imej tidak ditemui: {path}',
     errImgTooLarge20: 'Imej melebihi 20MB dan tidak boleh disisipkan.',
+    errImgNotGranted:
+      'Imej berada di luar folder yang boleh dibaca oleh aplikasi ini (lampirkan dahulu atau buka foldernya).',
     errImgBadType: 'Fail ini bukan imej PNG/JPEG/GIF.',
     errDiskChanged: 'Buku kerja telah diubah pada cakera selepas dibuka — gunakan Simpan Sebagai.',
     autosaveFoundTitle: 'Versi pulihan ditemui',
@@ -1352,6 +1384,8 @@ const tMain = createI18n({
     errImgAbsPath: 'נתיב התמונה חייב להיות מוחלט.',
     errImgNotFound: 'קובץ התמונה לא נמצא: {path}',
     errImgTooLarge20: 'התמונה חורגת מ-20MB ולא ניתן להוסיף אותה.',
+    errImgNotGranted:
+      'התמונה נמצאת מחוץ לתיקיות שהאפליקציה הזו יכולה לקרוא (צרפו אותה או פתחו קודם את התיקייה שלה).',
     errImgBadType: 'הקובץ אינו תמונת PNG/JPEG/GIF.',
     errDiskChanged: 'חוברת העבודה השתנתה בדיסק לאחר פתיחתה — השתמש בשמירה בשם.',
     autosaveFoundTitle: 'נמצאה גרסה משוחזרת',
@@ -1418,6 +1452,8 @@ const tMain = createI18n({
     errImgAbsPath: 'छवि पथ निरपेक्ष होना चाहिए।',
     errImgNotFound: 'छवि फ़ाइल नहीं मिली: {path}',
     errImgTooLarge20: 'छवि 20MB से अधिक है और सम्मिलित नहीं की जा सकती।',
+    errImgNotGranted:
+      'छवि इस ऐप के पढ़ने योग्य फ़ोल्डरों के बाहर है (पहले इसे संलग्न करें या इसका फ़ोल्डर खोलें)।',
     errImgBadType: 'यह फ़ाइल PNG/JPEG/GIF छवि नहीं है।',
     errDiskChanged:
       'खोले जाने के बाद कार्यपुस्तिका डिस्क पर बदल गई — इसके बजाय इस रूप में सहेजें का उपयोग करें।',
@@ -1487,6 +1523,7 @@ const tMain = createI18n({
     errImgAbsPath: '圖片路徑必須是絕對路徑。',
     errImgNotFound: '找不到圖片檔案: {path}',
     errImgTooLarge20: '圖片超過 20MB,不支援插入。',
+    errImgNotGranted: '圖片不在本應用程式可讀取的目錄內（請先附加或開啟所在資料夾）。',
     errImgBadType: '該檔案不是 PNG/JPEG/GIF 圖片。',
     errDiskChanged: '活頁簿在開啟後被磁碟上的變更覆蓋——請改用另存新檔。',
     autosaveFoundTitle: '發現自動復原版本',
@@ -2699,6 +2736,10 @@ export function registerSheetsIpc(): void {
       ? join(app.getPath('home'), request.path.slice(2))
       : request.path
     if (!isAbsolute(resolved)) throw new Error(tm('errImgAbsPath'))
+    // same confinement as the files:* handlers: only files in granted
+    // directories (dialog picks, shell-routed opens, accepted attachments)
+    // may be read back — an AI-proposed arbitrary path is not a grant
+    if (!rendererMayReadPath(resolved)) throw new Error(tm('errImgNotGranted'))
     const info = await stat(resolved).catch(() => null)
     if (!info?.isFile()) throw new Error(tm('errImgNotFound', { path: request.path }))
     if (info.size > 20 * 1024 * 1024) throw new Error(tm('errImgTooLarge20'))
