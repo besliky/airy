@@ -261,7 +261,8 @@ export function registerTools(server: McpServer): void {
         'same cell win per channel. The batch is validated up front (unknown sheets, bad refs, ' +
         'malformed edits reject the whole batch); dryRun reports without journaling. Edits are ' +
         'journaled in memory; persist with save_document, which keeps untouched zip entries ' +
-        'byte-identical. Cell values, formulas and styles only — charts, pivots, merged ranges and ' +
+        'byte-identical (xl/workbook.xml excepted — it gains the fullCalcOnLoad recalc flag ' +
+        'when the source lacks it). Cell values, formulas and styles only — charts, pivots, merged ranges and ' +
         'sheet structure are not editable headlessly.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
@@ -399,8 +400,12 @@ export function registerTools(server: McpServer): void {
         'exists on disk is refused with an error unless it is a file the session itself opened ' +
         'or saved — pass overwrite: true to replace it. format "origin" instead exports ' +
         'back to the original .doc/.odt/.ods through LibreOffice (best-effort; .xls output is ' +
-        'not supported — use the default .xlsx save). Untouched parts of the document are kept ' +
-        'byte-identical; a save with zero edits writes the original bytes back verbatim. Returns ' +
+        'not supported — use the default .xlsx save). Byte preservation differs by format: docx ' +
+        'saves keep untouched parts byte-identical and a zero-edit save writes the original bytes ' +
+        'back verbatim; xlsx saves keep untouched zip entries byte-identical except ' +
+        'xl/workbook.xml, which is rewritten when needed to force recalculation on open (the ' +
+        'fullCalcOnLoad flag) — so even a zero-edit xlsx save may touch that one entry, and for ' +
+        'workbooks the unchanged result flag reflects the edit journal, not the bytes. Returns ' +
         'the absolute path.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
@@ -451,7 +456,7 @@ export function registerTools(server: McpServer): void {
         return content(
           result,
           `Saved ${result.bytes} bytes to ${result.path} (${result.format})` +
-            `${result.unchanged ? ' — no changes: bytes round-tripped verbatim' : ''}` +
+            `${result.unchanged ? ' — no journaled changes: untouched entries preserved (xl/workbook.xml may gain the fullCalcOnLoad recalc flag)' : ''}` +
             `${result.warnings.length > 0 ? `. ${result.warnings.join(' ')}` : ''}`,
         )
       }

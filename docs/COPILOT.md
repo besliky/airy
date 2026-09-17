@@ -261,6 +261,14 @@ fresh context.
 | `.doc`            | via soffice → editable `.docx`; without soffice → read-only text | `.docx`; `format: "origin"` best-effort `.doc` via soffice                                              |
 | `.odt`            | via soffice → editable `.docx` (without soffice: clear error)    | `.docx`; `format: "origin"` best-effort `.odt` via soffice                                              |
 
+Byte preservation differs by format. `docx` saves keep untouched parts
+byte-identical, and a zero-edit save writes the original bytes back verbatim.
+`xlsx` saves keep untouched zip entries byte-identical **except
+`xl/workbook.xml`**: the save gateway always ensures the `fullCalcOnLoad`
+flag so edited formulas recalculate on open, so even a zero-edit workbook
+save may rewrite that one entry — and the save result's `unchanged` flag is
+journal-based for workbooks (no edits journaled), not a byte guarantee.
+
 Headless slides, PDF, Markdown and HTML tools are planned (backlog).
 
 ## Security model
