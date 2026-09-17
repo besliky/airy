@@ -152,7 +152,11 @@ import {
   setPdfSaveAsInFlight,
 } from '../../../pdf/src/main/pdf-main'
 import { PDF_CHANNELS } from '../../../pdf/src/shared/ipc'
-import { convertPdfFileToDocxLocalWithPrompt, PdfLoadError } from './pdf2docx-local'
+import {
+  convertPdfFileToDocxLocalWithPrompt,
+  disposePdfConversionWorkers,
+  PdfLoadError,
+} from './pdf2docx-local'
 import { convertPdfFileToPptxLocalWithPrompt } from './pdf2pptx-local'
 import { convertPdfFileToXlsxLocalWithPrompt } from './pdf2xlsx-local'
 import { closePdfPasswordDialog, promptPdfPassword } from './pdf-password-dialog'
@@ -3027,4 +3031,6 @@ app.on('before-quit', () => {
   stopSheetsSidecar()
   // close the live bridge socket and remove the token file (best-effort)
   void stopShellBridge()
+  // kill in-flight pdf->docx conversion workers (best-effort)
+  disposePdfConversionWorkers()
 })
