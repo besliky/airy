@@ -4431,8 +4431,11 @@ export function createSlidesWindow(openPath?: string | null): BrowserWindow {
     })
   })
 
-  if (runtime.rendererDevUrl) win.loadURL(runtime.rendererDevUrl)
-  else if (runtime.rendererFilePath) win.loadFile(runtime.rendererFilePath)
+  if (runtime.rendererDevUrl) {
+    voidLoad(win.loadURL(runtime.rendererDevUrl), 'slides standalone renderer')
+  } else if (runtime.rendererFilePath) {
+    voidLoad(win.loadFile(runtime.rendererFilePath), 'slides standalone renderer')
+  }
 
   if (openPath) {
     win.setTitle(basename(openPath))
