@@ -75,12 +75,26 @@ function errorText(err: unknown): string {
 }
 
 /**
+ * Optional app-injected local-path policy. ai-search is a pure package with
+ * no Electron, so the default allows every local media file; the Electron
+ * IPC layer passes renderer-file-access's rendererMayReadPath bound to the
+ * sender, so a compromised renderer cannot ship arbitrary local files to
+ * the BYOK vendor through media references.
+ */
+export interface MediaPathPolicy {
+  mayReadFile?(path: string): boolean
+}
+
+/**
  * Resolves a tool-supplied media reference to bytes: an https URL (SSRF-guarded),
  * a file:// URL from the generated-image store, or a local media file
  * (attachments). Only media extensions are read locally — the model must not be
  * able to ship arbitrary files to a vendor.
  */
-export async function loadMediaReference(ref: string): Promise<MediaBlob> {
+export async function loadMediaReference(
+  ref: string,
+  policy: MediaPathPolicy = {},
+): Promise<MediaBlob> {
   if (/^https?:\/\//i.test(ref)) {
     const resp = await (ref.match(/\.(png|jpe?g|gif|webp)(\?|$)/i)
       ? fetchRemoteImage(ref)
@@ -106,6 +120,10 @@ export async function loadMediaReference(ref: string): Promise<MediaBlob> {
   }
   const mime = MIME_BY_EXT[extname(ref).toLowerCase()]
   if (!mime) throw new Error(`Unsupported media file: ${ref} (images, video and audio only)`)
+  // local reads go through the app's path policy when one is injected
+  if (policy.mayReadFile && !policy.mayReadFile(ref)) {
+    throw new Error(`Not an accessible media path: ${ref}`)
+  }
   if (!existsSync(ref)) throw new Error(`File not found: ${ref}`)
   if (statSync(ref).size > MAX_MEDIA_BYTES) {
     throw new MediaTooLargeError(`${ref} is too large to analyze`)
@@ -124,6 +142,7 @@ export interface GenerateImageOp {
 export async function generateImageTool(
   settingsPath: string,
   op: GenerateImageOp,
+  policy: MediaPathPolicy = {},
 ): Promise<{ url?: string; error?: string }> {
   const prompt = String(op.prompt ?? '').trim()
   if (!prompt) return { error: 'prompt must not be empty' }
@@ -132,7 +151,9 @@ export async function generateImageTool(
   try {
     if (!byok) return { error: IMAGE_PROVIDER_NOT_CONFIGURED_ERROR }
     // BYOK uses the configured image model
-    const references = await Promise.all((op.referenceImageUrls ?? []).map(loadMediaReference))
+    const references = await Promise.all(
+      (op.referenceImageUrls ?? []).map((ref) => loadMediaReference(ref, policy)),
+    )
     const image = await generateImageWithProvider(byok.provider, byok.config, {
       prompt,
       aspectRatio: op.aspectRatio,
@@ -147,6 +168,7 @@ export async function generateImageTool(
 export async function analyzeMediaTool(
   settingsPath: string,
   op: { mediaUrls: string[]; requirements: string },
+  policy: MediaPathPolicy = {},
 ): Promise<{ text?: string; error?: string }> {
   const mediaUrls = (op.mediaUrls ?? []).map(String).filter(Boolean)
   const requirements = String(op.requirements ?? '').trim()
@@ -161,7 +183,7 @@ export async function analyzeMediaTool(
     // image-analysis provider, anything with video/audio to the video one
     let media: MediaBlob[]
     try {
-      media = await Promise.all(mediaUrls.map(loadMediaReference))
+      media = await Promise.all(mediaUrls.map((ref) => loadMediaReference(ref, policy)))
     } catch (err) {
       // scheme / path / SSRF / size rejections stay rejections
       return { error: errorText(err) }

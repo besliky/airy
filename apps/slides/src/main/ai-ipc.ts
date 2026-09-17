@@ -37,7 +37,7 @@ import {
   saveAiSettings,
 } from '../../../docs/src/main/ai-settings-store'
 import { shutdownCodexAppServers } from '@airy-office/ai-provider/codex-app-server'
-import { fetchRemoteImage } from '@airy-office/electron-utils'
+import { fetchRemoteImage, rendererMayReadPath } from '@airy-office/electron-utils'
 import {
   webSearchTool,
   imageSearchTool,
@@ -252,25 +252,37 @@ export function registerSlidesOnlyAiIpc(): void {
         imageSize?: string
       },
     ) => {
-      return generateImageTool(AI_SETTINGS_PATH(), {
-        prompt: String(op.prompt),
-        model: op.model ? String(op.model) : undefined,
-        referenceImageUrls: Array.isArray(op.referenceImageUrls)
-          ? op.referenceImageUrls.map(String)
-          : undefined,
-        aspectRatio: op.aspectRatio ? String(op.aspectRatio) : undefined,
-        imageSize: op.imageSize ? String(op.imageSize) : undefined,
-      })
+      return generateImageTool(
+        AI_SETTINGS_PATH(),
+        {
+          prompt: String(op.prompt),
+          model: op.model ? String(op.model) : undefined,
+          referenceImageUrls: Array.isArray(op.referenceImageUrls)
+            ? op.referenceImageUrls.map(String)
+            : undefined,
+          aspectRatio: op.aspectRatio ? String(op.aspectRatio) : undefined,
+          imageSize: op.imageSize ? String(op.imageSize) : undefined,
+        },
+        // local reference files must come from granted directories (dialog
+        // picks, shell-routed opens, attachments); file:// generated-store
+        // and https URLs are unaffected
+        { mayReadFile: rendererMayReadPath },
+      )
     },
   )
 
   ipcMain.handle(
     'ai:analyze-media',
     async (_event, op: { mediaUrls: string[]; requirements: string }) => {
-      return analyzeMediaTool(AI_SETTINGS_PATH(), {
-        mediaUrls: (op.mediaUrls ?? []).map(String),
-        requirements: String(op.requirements ?? ''),
-      })
+      return analyzeMediaTool(
+        AI_SETTINGS_PATH(),
+        {
+          mediaUrls: (op.mediaUrls ?? []).map(String),
+          requirements: String(op.requirements ?? ''),
+        },
+        // local media must come from granted directories; see ai:generate-image
+        { mayReadFile: rendererMayReadPath },
+      )
     },
   )
 
