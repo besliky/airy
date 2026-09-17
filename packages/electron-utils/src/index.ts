@@ -14,6 +14,7 @@ export {
   type AppMenuLabels,
 } from './app-menu'
 export { GITHUB_REPO_URL } from './github-menu'
+export { atomicWriteFile, looksLikeZip } from './atomic-write'
 export {
   saveAsSuggestion,
   showOpenDialogWithMemory,

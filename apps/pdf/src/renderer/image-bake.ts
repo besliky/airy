@@ -3,7 +3,7 @@
  * PDF content-stream images are plain bitmaps, so these edits rewrite pixels and land
  * as replaceImage ops; no DOM here — App owns the canvas decode/encode glue.
  */
-import type { PixelImage } from './cutout'
+import type { PixelImage } from '@airy-office/ui'
 
 type Rect = readonly [number, number, number, number]
 

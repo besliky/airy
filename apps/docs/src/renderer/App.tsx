@@ -153,7 +153,7 @@ import { FindPanel } from './components/FindPanel'
 import { Ribbon } from './components/Ribbon'
 import { computeFormatState } from './components/ribbon-format-state'
 import { IconRedo, IconSave, IconUndo } from './components/icons'
-import { ToastHost } from './components/toast'
+import { ToastHost } from '@airy-office/ui'
 import {
   AI_REWRITE_ACK_KEY,
   LinkInsertModal,

@@ -1,7 +1,7 @@
 import { friendlyErrorKey, type FriendlyErrorKey } from '../../shared/error-codes'
 import type { StringKey } from './locale'
 import type { TFunc } from './locale'
-import { showToast } from './toast-bus'
+import { showToast } from '@airy-office/ui/toast-bus'
 
 /** renderer localization per friendly-error key */
 const KEY_TO_STRING: Record<FriendlyErrorKey, StringKey> = {

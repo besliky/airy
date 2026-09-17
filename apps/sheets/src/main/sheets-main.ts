@@ -128,7 +128,7 @@ import {
   type WorkbookSaveRequest,
 } from '../shared/desktop-api'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
-import { atomicWriteFile } from './atomic-write'
+import { atomicWriteFile } from '@airy-office/electron-utils'
 import { closeGuardDecision } from './close-guard'
 import { SaveEditsTransferStore } from './save-edits-transfer'
 import { exportPdf, previewPrint, printWorkbook } from './pdf-export'

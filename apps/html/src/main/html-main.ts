@@ -40,7 +40,7 @@ import { generateImageTool } from '@airy-office/ai-search'
 import { parseFileToText } from '@airy-office/file-parse'
 import { decodeHtmlText, legacyCharsetForLang } from '@airy-office/file-parse/text'
 import { convertHtmlToDocx } from '../../../../packages/html2docx/src'
-import { atomicWriteFile } from './atomic-write'
+import { atomicWriteFile } from '@airy-office/electron-utils'
 import { ElectronBrowserDriver } from './html2docx-driver'
 import {
   copyImageIntoOwnedAssets,

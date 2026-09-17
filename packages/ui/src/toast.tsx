@@ -1,10 +1,18 @@
-/** Transient feedback for shell-renderer actions (Home, Settings): a fixed
- * top-center pill that auto-dismisses, styled from ui tokens — replaces raw
- * window.alert for error paths. Trigger via showToast from './toast-bus'. */
 import { useEffect, useState } from 'react'
 import { setToastEmitter, type ToastData } from './toast-bus'
 
-export function ToastHost() {
+/** How long an error toast stays on screen before fading out. */
+const DEFAULT_ERROR_MS = 4000
+const SUCCESS_MS = 2000
+
+/**
+ * Transient feedback for user-triggered actions (save etc.): a fixed
+ * top-center pill that auto-dismisses. The status bar stays the durable log.
+ * Trigger via showToast from '@airy-office/ui/toast-bus' (kept component-only
+ * here so React Fast Refresh works in dev). Styling is deliberately app-scoped:
+ * each app's styles.css defines the `.app-toast` palette variables.
+ */
+export function ToastHost({ errorMs = DEFAULT_ERROR_MS }: { errorMs?: number }) {
   const [toast, setToast] = useState<ToastData | null>(null)
   const [visible, setVisible] = useState(false)
   useEffect(() => {
@@ -22,7 +30,7 @@ export function ToastHost() {
       raf = window.requestAnimationFrame(() => {
         raf = window.requestAnimationFrame(() => setVisible(true))
       })
-      const shownMs = next.kind === 'error' ? 5000 : 2000
+      const shownMs = next.kind === 'error' ? errorMs : SUCCESS_MS
       hideTimer = window.setTimeout(() => setVisible(false), shownMs)
       // keep the node mounted through the fade-out transition
       clearTimer = window.setTimeout(() => setToast(null), shownMs + 200)
@@ -33,10 +41,15 @@ export function ToastHost() {
       window.clearTimeout(clearTimer)
       window.cancelAnimationFrame(raf)
     }
-  }, [])
+  }, [errorMs])
   if (!toast) return null
   return (
-    <div className={`app-toast ${toast.kind}${visible ? ' show' : ''}`} role="status">
+    <div
+      className={`app-toast ${toast.kind}${visible ? ' show' : ''}`}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
       <svg
         className="app-toast-icon"
         viewBox="0 0 24 24"

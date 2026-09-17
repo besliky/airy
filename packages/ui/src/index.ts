@@ -1,4 +1,6 @@
 export { AiComposer } from './AiComposer'
+export { ToastHost } from './toast'
+export { setToastEmitter, showToast, type ToastData } from './toast-bus'
 export { AiScopeQuote, type AiScopeQuoteData } from './AiScopeQuote'
 export {
   AI_CUSTOM_FONT_MAX_PX,
@@ -87,8 +89,10 @@ export {
   type ImageDialogLabels,
 } from './image-dialogs'
 export {
+  colorDistance,
   removeBackground,
   sampleBackgroundColors,
+  toleranceToThreshold,
   type CutoutResult,
   type PixelImage,
   type RGB,

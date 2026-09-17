@@ -28,7 +28,7 @@ import type {
   TextEditFailure,
   TextInsertFailure,
 } from '../shared/ipc'
-import { writePdfAtomically } from './atomic-write'
+import { atomicWriteFile } from '@airy-office/electron-utils'
 
 const num = (v: number) => Math.round(v * 100) / 100
 const STATIC_FORM_FILLS_KEY = PDFName.of('GenOfficeStaticFormFills')
@@ -846,7 +846,7 @@ export async function savePdfToPath(
     request,
   )
   await verifyContentEdits(bytes, request, skips)
-  await writePdfAtomically(targetPath, bytes)
+  await atomicWriteFile(targetPath, bytes)
   return skips
 }
 

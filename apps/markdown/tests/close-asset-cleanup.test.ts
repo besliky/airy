@@ -70,22 +70,27 @@ vi.mock('electron', () => ({
   },
 }))
 
-vi.mock('@airy-office/electron-utils', () => ({
-  TextRecoveryStore: class {
-    clear(): void {}
-    async writeCopy(): Promise<void> {}
-    async maybeRecover(_p: unknown, _r: unknown) {
-      return { text: '', recovered: false }
-    }
-  },
-  configuredDefaultSaveDir: vi.fn(() => tmpdir()),
-  contextMenuLabels: vi.fn(() => ({})),
-  installContextMenu: vi.fn(),
-  installNavigationGuard: vi.fn(),
-  safeExternalUrl: vi.fn(() => null),
-  showOpenDialogWithMemory: vi.fn(),
-  showSaveDialogWithMemory: (...args: unknown[]) => showSaveDialogWithMemory(...args),
-}))
+vi.mock('@airy-office/electron-utils', async () => {
+  const { writeFile } = await import('node:fs/promises')
+  return {
+    TextRecoveryStore: class {
+      clear(): void {}
+      async writeCopy(): Promise<void> {}
+      async maybeRecover(_p: unknown, _r: unknown) {
+        return { text: '', recovered: false }
+      }
+    },
+    // manifests must really land on disk: the assertions re-read them
+    atomicWriteFile: async (path: string, data: Uint8Array) => void (await writeFile(path, data)),
+    configuredDefaultSaveDir: vi.fn(() => tmpdir()),
+    contextMenuLabels: vi.fn(() => ({})),
+    installContextMenu: vi.fn(),
+    installNavigationGuard: vi.fn(),
+    safeExternalUrl: vi.fn(() => null),
+    showOpenDialogWithMemory: vi.fn(),
+    showSaveDialogWithMemory: (...args: unknown[]) => showSaveDialogWithMemory(...args),
+  }
+})
 
 import {
   readOwnedAssetManifest,

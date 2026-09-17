@@ -366,7 +366,7 @@ import { lastSurvivingScreenLine, netAxisDelta, screenToFile } from './view-tran
 import { selectionFormatEquals, toSelectionFormat, type SelectionFormat } from './selection-format'
 import { ExcelShell } from './ExcelShell'
 import { RecoveryDialog } from './RecoveryDialog'
-import { ToastHost } from './toast'
+import { ToastHost } from '@airy-office/ui'
 import { AdvancedFilterDialog, type AdvancedFilterColumn } from './AdvancedFilterDialog'
 import { EquationDialog } from './EquationDialog'
 import { IconsDialog } from './IconsDialog'

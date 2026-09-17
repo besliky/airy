@@ -108,7 +108,7 @@ import type {
 } from '../shared/ipc'
 import { ATTACHMENT_IMAGE_EXTS } from '../shared/ipc'
 import { findDocxPath } from '../shared/open-file'
-import { atomicWriteFile, looksLikeZip } from './atomic-write'
+import { atomicWriteFile, looksLikeZip } from '@airy-office/electron-utils'
 import {
   commitDocPasswordSave,
   currentDocPasswordIntentRevision,

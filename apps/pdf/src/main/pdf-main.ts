@@ -60,7 +60,7 @@ import type {
   ValidateTextEditsRequest,
 } from '../shared/ipc'
 import type { SavedSignature } from '../shared/ipc'
-import { writePdfAtomically } from './atomic-write'
+import { atomicWriteFile } from '@airy-office/electron-utils'
 import {
   cropPagesBytes,
   extractPagesBytes,
@@ -1114,7 +1114,7 @@ function registerPdfIpc(): void {
           new Uint8Array(await readFile(other)),
           typeof afterPageIndex === 'number' ? afterPageIndex : -1,
         )
-        await writePdfAtomically(path, merged)
+        await atomicWriteFile(path, merged)
         return { ok: true, insertedCount: count }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -1134,7 +1134,7 @@ function registerPdfIpc(): void {
           new Uint8Array(await readFile(path)),
           typeof afterPageIndex === 'number' ? afterPageIndex : -1,
         )
-        await writePdfAtomically(path, bytes)
+        await atomicWriteFile(path, bytes)
         return { ok: true }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -1267,7 +1267,7 @@ function registerPdfIpc(): void {
           new Uint8Array(await readFile(other)),
           pages,
         )
-        await writePdfAtomically(path, merged)
+        await atomicWriteFile(path, merged)
         return { ok: true, removed, inserted }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -1287,7 +1287,7 @@ function registerPdfIpc(): void {
       }
       try {
         const bytes = await setPageSizeBytes(new Uint8Array(await readFile(path)), width, height)
-        await writePdfAtomically(path, bytes)
+        await atomicWriteFile(path, bytes)
         return { ok: true }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -1335,7 +1335,7 @@ function registerPdfIpc(): void {
       }
       try {
         const bytes = await cropPagesBytes(new Uint8Array(await readFile(path)), pages, rect)
-        await writePdfAtomically(path, bytes)
+        await atomicWriteFile(path, bytes)
         return { ok: true }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }

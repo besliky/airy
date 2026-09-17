@@ -12,7 +12,7 @@ import {
   writeFile,
 } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { atomicWriteFile } from './atomic-write'
+import { atomicWriteFile } from '@airy-office/electron-utils'
 
 export const ASSET_MANIFEST_FILENAME = '.airy-assets.json'
 

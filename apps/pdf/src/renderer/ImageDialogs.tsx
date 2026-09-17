@@ -10,7 +10,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactElement, ReactNode } from 'react'
-import { removeBackground, sampleBackgroundColors, type PixelImage, type RGB } from './cutout'
+import {
+  removeBackground,
+  sampleBackgroundColors,
+  type PixelImage,
+  type RGB,
+} from '@airy-office/ui'
 import { DEFAULT_CUTOUT_TOLERANCE, type CropFractions } from './image-bake'
 import type { StringKey, TFunc } from './i18n/locale'
 

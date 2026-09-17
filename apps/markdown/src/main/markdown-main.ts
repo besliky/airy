@@ -28,7 +28,7 @@ import {
 import { createI18n, getUiLang } from '@airy-office/i18n'
 import { generateImageTool } from '@airy-office/ai-search'
 import { decodeTextBytes, legacyCharsetForLang } from '@airy-office/file-parse/text'
-import { atomicWriteFile } from './atomic-write'
+import { atomicWriteFile } from '@airy-office/electron-utils'
 import {
   copyImageIntoOwnedAssets,
   discardPendingOwnedAssets,

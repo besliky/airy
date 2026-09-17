@@ -10,7 +10,12 @@
  * (png keeps transparency, jpeg stays jpeg). Reuses the .modal-backdrop/.modal styles.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { removeBackground, sampleBackgroundColors, type PixelImage, type RGB } from '../cutout'
+import {
+  removeBackground,
+  sampleBackgroundColors,
+  type PixelImage,
+  type RGB,
+} from '@airy-office/ui'
 import { useI18n, type StringKey } from '../i18n/locale'
 
 /** Longest side of the preview canvas (px) */

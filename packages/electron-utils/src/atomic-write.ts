@@ -6,14 +6,17 @@ import { basename, dirname, join } from 'node:path'
 const RETRYABLE_RENAME_CODES = new Set(['EPERM', 'EACCES', 'EBUSY'])
 const RENAME_RETRIES = 4
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 /**
- * Same-directory temp file + rename prevents observers from reading a partial
- * export. Windows rename-over-existing can fail transiently, so retry with
- * backoff and finally fall back to the prior in-place write behavior.
+ * Same-dir temp file + rename, so a crash mid-write can't truncate the target.
+ * Rename-over-existing fails transiently on Windows under Defender/indexer
+ * locks: retry with backoff, then fall back to an in-place write — losing
+ * atomicity for that one save beats failing a save a plain writeFileSync would
+ * have completed. Shared by every app main (docs/sheets/pdf/markdown/html);
+ * formerly one near-identical copy per app.
  */
-export async function atomicWriteFile(filePath: string, data: Buffer): Promise<void> {
+export async function atomicWriteFile(filePath: string, data: Uint8Array): Promise<void> {
   const tmp = join(
     dirname(filePath),
     `.${basename(filePath)}.${randomBytes(6).toString('hex')}.tmp`,
@@ -42,4 +45,15 @@ export async function atomicWriteFile(filePath: string, data: Buffer): Promise<v
     await unlink(tmp).catch(() => {})
     throw error
   }
+}
+
+/** 'PK\x03\x04' local-file-header check — cheap docx/zip sanity test. */
+export function looksLikeZip(bytes: Uint8Array): boolean {
+  return (
+    bytes.length >= 4 &&
+    bytes[0] === 0x50 && // 'P'
+    bytes[1] === 0x4b && // 'K'
+    bytes[2] === 0x03 &&
+    bytes[3] === 0x04
+  )
 }

@@ -3,7 +3,7 @@ import { Home } from './Home'
 import { Onboarding } from './Onboarding'
 import { StarPromptCard } from './StarPromptCard'
 import { TabBar } from './TabBar'
-import { ToastHost } from './Toast'
+import { ToastHost } from '@airy-office/ui'
 
 interface AppFrameProps {
   /** resolved before first paint (main.tsx) so home never flashes under the overlay */
@@ -66,7 +66,8 @@ export function AppFrame({ initialOnboardingSeen }: AppFrameProps) {
       {/* transient error feedback for Home/Settings operations (covers the
        * settings modal too); editor tabs paint above shell DOM, so it is a
        * home-tab surface by nature */}
-      <ToastHost />
+      {/* 5s error toasts: shell surfaces background-task failures the user may have stepped away from */}
+      <ToastHost errorMs={5000} />
     </div>
   )
 }

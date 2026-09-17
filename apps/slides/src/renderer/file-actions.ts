@@ -8,7 +8,7 @@ import type { ActionCtx } from './action-context'
 import { renderSlidesToPngBase64 } from './export-render'
 import { renderSlideSvg } from './slide-svg'
 import { t } from './i18n/locale'
-import { showToast } from './components/toast-bus'
+import { showToast } from '@airy-office/ui/toast-bus'
 
 /**
  * If a text box/table is still being edited on ⌘S/close-save, blur first so the
