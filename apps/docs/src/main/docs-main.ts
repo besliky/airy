@@ -4144,6 +4144,14 @@ export function setDocsExtraFileMenuItems(items: MenuItemConstructorOptions[]): 
   extraFileMenuItems = items
 }
 
+/** shell-injected File-menu head items (the suite's New submenu) — Office
+ *  convention puts New before Open */
+let fileMenuHeadItems: MenuItemConstructorOptions[] = []
+
+export function setDocsFileMenuHeadItems(items: MenuItemConstructorOptions[]): void {
+  fileMenuHeadItems = items
+}
+
 /** Shell-installed gate: inside the shell the docs menu may only take over the
  * application menu while a docs tab is active — internal rebuilds (pushRecent
  * after opening/saving any file) must not clobber another tab's menu.
@@ -4202,6 +4210,10 @@ export function buildDocsMenu(): void {
             else markDocsNewBlank(createDocsWindow().webContents.id)
           },
         },
+        // the suite's New submenu stays before Open (Office convention)
+        ...(fileMenuHeadItems.length > 0
+          ? [{ type: 'separator' as const }, ...fileMenuHeadItems]
+          : []),
         { label: tm('menuOpen'), accelerator: 'CmdOrCtrl+O', click: () => sendCommand('open') },
         { label: tm('menuOpenRecent'), submenu: recentSubmenu },
         ...(extraFileMenuItems.length > 0

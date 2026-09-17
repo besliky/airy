@@ -108,6 +108,7 @@ import {
   toggleStarredFile,
   registerDocsIpc,
   setDocsExtraFileMenuItems,
+  setDocsFileMenuHeadItems,
   setDocsMenuGate,
   setDocsShellHooks,
   createAiDocument,
@@ -133,6 +134,7 @@ import {
   sheetsFileRenamed,
   setSheetsCloseTabHook,
   setSheetsExtraFileMenuItems,
+  setSheetsFileMenuHeadItems,
   setSheetsOpenPathRouter,
   setSheetsShellWindow,
   setSheetsWorkbookOpenedHook,
@@ -146,6 +148,7 @@ import {
   requestSlidesClose,
   setSlidesCloseTabHook,
   setSlidesExtraFileMenuItems,
+  setSlidesFileMenuHeadItems,
   setSlidesOpenedHook,
   setSlidesOpenPathRouter,
   setSlidesShellWindow,
@@ -2884,17 +2887,21 @@ function openThirdPartyNotices(): Promise<string> {
   return shell.openPath(path)
 }
 
-/** every module's File menu gets the New submenu (parity with Home) and a way back to the launcher */
+/** every module's File menu gets the New submenu (parity with Home, FIRST —
+ *  Office convention, matching the shell's own File menus) and a way back to
+ *  the launcher */
 function installBackToHomeItems(): void {
   const backToHomeItem: MenuItemConstructorOptions = {
     label: tm('backToHome'),
     accelerator: 'Shift+CmdOrCtrl+H',
     click: () => tabManager?.openHomeTab(),
   }
-  const items = [newFileSubMenu(), backToHomeItem]
-  setDocsExtraFileMenuItems(items)
-  setSheetsExtraFileMenuItems(items)
-  setSlidesExtraFileMenuItems(items)
+  setDocsFileMenuHeadItems([newFileSubMenu()])
+  setSheetsFileMenuHeadItems([newFileSubMenu()])
+  setSlidesFileMenuHeadItems([newFileSubMenu()])
+  setDocsExtraFileMenuItems([backToHomeItem])
+  setSheetsExtraFileMenuItems([backToHomeItem])
+  setSlidesExtraFileMenuItems([backToHomeItem])
 }
 
 function installDockMenu(): void {
@@ -2912,6 +2919,7 @@ function installDockMenu(): void {
       },
       { label: tm('menuNewSlide'), click: () => newSlideTab() },
       { label: tm('menuNewMarkdown'), click: () => newMarkdownTab() },
+      { label: tm('menuNewHtml'), click: () => newHtmlTab() },
       { label: tm('menuNewPdf'), click: () => void newPdfTab() },
     ]),
   )

@@ -4506,6 +4506,13 @@ export function setSlidesExtraFileMenuItems(items: Electron.MenuItemConstructorO
   extraFileMenuItems = items
 }
 
+/** shell-injected File-menu head items (the suite's New submenu) — Office
+ *  convention puts New before Open */
+let fileMenuHeadItems: Electron.MenuItemConstructorOptions[] = []
+export function setSlidesFileMenuHeadItems(items: Electron.MenuItemConstructorOptions[]): void {
+  fileMenuHeadItems = items
+}
+
 /** Tab mode: Cmd+W closes the current tab rather than the whole shell window */
 let closeActiveTabHook: (() => void) | null = null
 export function setSlidesCloseTabHook(fn: (() => void) | null): void {
@@ -4535,6 +4542,10 @@ export function buildSlidesMenu(): Menu {
     {
       label: tm('menuFile'),
       submenu: [
+        // the suite's New submenu stays before Open (Office convention)
+        ...(fileMenuHeadItems.length > 0
+          ? [...fileMenuHeadItems, { type: 'separator' as const }]
+          : []),
         { label: tm('menuOpen'), accelerator: 'CmdOrCtrl+O', click: () => send('open') },
         {
           // Detached second editor window on the same saved file: it attaches to

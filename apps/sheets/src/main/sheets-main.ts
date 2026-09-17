@@ -4130,6 +4130,14 @@ export function setSheetsExtraFileMenuItems(items: MenuItemConstructorOptions[])
   extraFileMenuItems = items
 }
 
+/** shell-injected File-menu head items (the suite's New submenu) — Office
+ *  convention puts New before Open */
+let fileMenuHeadItems: MenuItemConstructorOptions[] = []
+
+export function setSheetsFileMenuHeadItems(items: MenuItemConstructorOptions[]): void {
+  fileMenuHeadItems = items
+}
+
 /** tab mode: closes the sheets tab instead of the whole shell window (Cmd+W / role:'close') */
 let closeActiveTabHook: (() => void) | null = null
 export function setSheetsCloseTabHook(fn: (() => void) | null): void {
@@ -4157,6 +4165,10 @@ function installApplicationMenu(): void {
       {
         label: tm('menuFile'),
         submenu: [
+          // the suite's New submenu stays before Open (Office convention)
+          ...(fileMenuHeadItems.length > 0
+            ? [...fileMenuHeadItems, { type: 'separator' as const }]
+            : []),
           {
             label: tm('menuOpenWorkbook'),
             accelerator: 'CmdOrCtrl+O',
