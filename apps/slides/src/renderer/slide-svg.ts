@@ -547,6 +547,12 @@ function nodeSvg(
       ? `<g${flipGeo ? ` transform="${flipGeo}"` : ''}>${geo}</g>${text}`
       : `${geo}${text}`
   }
+  if (flipGeo && n.type !== 'text' && n.type !== 'shape') {
+    // pictures, charts, tables, and whole groups mirror about the box center
+    // exactly like the canvas (Konva scaleX/scaleY −1 about the boxPivot);
+    // shape/text keeps the split above (geometry flips, text stays readable)
+    body = `<g transform="${flipGeo}">${body}</g>`
+  }
 
   if (parts.length) {
     return `<g transform="translate(${x.toFixed(2)} ${y.toFixed(2)}) ${parts.join(' ')}">${defsMarkup(defs)}${body}</g>`

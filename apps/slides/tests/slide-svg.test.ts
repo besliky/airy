@@ -238,4 +238,66 @@ describe('renderSlideSvg', () => {
     // flipped text mirrors its anchor inside the box: 200 - (5 + 6*10) = 135
     expect(svg).toContain('x="135.00"')
   })
+
+  it('mirrors flipped pictures, tables, and whole groups about the box center', () => {
+    const pic: RenderNode = {
+      id: 'p2',
+      type: 'picture',
+      sourceId: 'p2',
+      box: box(0, 0, 200, 100, { flipH: true }),
+      dataUrl: 'data:image/png;base64,BBBB',
+    } as unknown as PictureRenderNode
+    const table: RenderNode = {
+      id: 'tbl2',
+      type: 'table',
+      sourceId: 'tbl2',
+      box: box(0, 150, 400, 80, { flipV: true }),
+      gridX: [0, 400],
+      gridY: [0, 80],
+      cells: [
+        {
+          x: 0,
+          y: 0,
+          w: 400,
+          h: 80,
+          row: 0,
+          col: 0,
+          merged: false,
+          fill: { kind: 'solid', color: 'EEEEEE' },
+          text: {
+            lines: [],
+            insets: { l: 4, t: 4, r: 4, b: 4 },
+            fontScale: 1,
+            contentHeight: 0,
+            wrap: true,
+          },
+        },
+      ],
+    } as unknown as TableRenderNode
+    const group: RenderNode = {
+      id: 'grp',
+      type: 'group',
+      sourceId: 'grp',
+      box: box(10, 20, 100, 50, { flipH: true }),
+      children: [
+        {
+          id: 'inner',
+          type: 'shape',
+          sourceId: 'inner',
+          box: box(0, 0, 100, 50),
+          presetGeometry: 'rect',
+          fill: { kind: 'solid', color: '445566' },
+        } as unknown as ShapeRenderNode,
+      ],
+    } as unknown as RenderNode
+    const svg = renderSlideSvg(slideOf(pic, table, group), new Map())
+    // picture: mirror about the box center (w=200), image inside the flip group
+    expect(svg).toContain('<g transform="translate(200.00 0) scale(-1 1)"><g><image ')
+    // table: flipV mirrors about the box center height (h=80)
+    expect(svg).toContain('<g transform="translate(0 80.00) scale(1 -1)"><rect ')
+    // group: the whole child subtree flips with the group
+    expect(svg).toContain(
+      '<g transform="translate(100.00 0) scale(-1 1)"><g transform="translate(0.00 0.00)">',
+    )
+  })
 })
