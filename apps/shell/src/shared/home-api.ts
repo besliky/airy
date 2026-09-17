@@ -138,8 +138,10 @@ export interface HomeApi {
   setAutoSaveDefault(on: boolean): Promise<void>
   /** whether the Copilot live bridge server runs (persisted in userData/app-settings.json, default on) */
   getLiveBridgeEnabled(): Promise<LiveBridgeEnabled>
-  /** persist and start/stop the live bridge immediately; resolves the new state */
+  /** persist and start/stop the live bridge immediately; resolves the effective state */
   setLiveBridgeEnabled(on: boolean): Promise<LiveBridgeEnabled>
+  /** whether AIRY_DISABLE_BRIDGE=1 pins the bridge off regardless of the preference */
+  getLiveBridgeEnvDisabled(): Promise<boolean>
   /** whether the previous session's tabs reopen on launch (persisted in userData/app-settings.json, default on) */
   getRestoreSession(): Promise<boolean>
   /** persist the session-restore preference (applies on the next launch) */
@@ -273,6 +275,7 @@ export const HOME_CHANNELS = {
   setAutoSaveDefault: 'home:set-auto-save-default',
   getLiveBridgeEnabled: 'home:get-live-bridge-enabled',
   setLiveBridgeEnabled: 'home:set-live-bridge-enabled',
+  getLiveBridgeEnvDisabled: 'home:get-live-bridge-env-disabled',
   getRestoreSession: 'home:get-restore-session',
   setRestoreSession: 'home:set-restore-session',
   getAuthorName: 'home:get-author-name',

@@ -26,6 +26,8 @@ export const ru = {
   setLiveBridge: 'Живой мост Copilot',
   setLiveBridgeDesc:
     'Позволяет агентам для программирования (MCP) подключаться к этому приложению и работать с открытыми документами. Используется такими инструментами, как Claude, Cursor и airy-mcp.',
+  setLiveBridgeEnvDisabled:
+    'Принудительно отключено переменной окружения AIRY_DISABLE_BRIDGE=1; переключатель не действует, пока её не убрать.',
   setAiFontSize: 'Размер текста панели ИИ',
   aiFontSizeDefault: 'По умолчанию',
   aiFontSizeLarge: 'Крупный',

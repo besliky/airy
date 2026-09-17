@@ -26,6 +26,8 @@ export const pt = {
   setLiveBridge: 'Ponte Copilot ao vivo',
   setLiveBridgeDesc:
     'Permite que agentes de código (MCP) se conectem a este aplicativo para ler e editar documentos abertos. Usado por ferramentas como Claude, Cursor ou airy-mcp.',
+  setLiveBridgeEnvDisabled:
+    'Desativado à força pela variável de ambiente AIRY_DISABLE_BRIDGE=1; este interruptor não tem efeito até que ela seja removida.',
   setAiFontSize: 'Tamanho do texto do painel de IA',
   aiFontSizeDefault: 'Padrão',
   aiFontSizeLarge: 'Grande',

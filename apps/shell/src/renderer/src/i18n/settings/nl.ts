@@ -26,6 +26,8 @@ export const nl = {
   setLiveBridge: 'Copilot live bridge',
   setLiveBridgeDesc:
     'Laat coding-agenten (MCP) verbinden met deze app om geopende documenten te lezen en bewerken. Gebruikt door tools zoals Claude, Cursor of airy-mcp.',
+  setLiveBridgeEnvDisabled:
+    'Uitgedwongen uit door de omgevingsvariabele AIRY_DISABLE_BRIDGE=1; deze schakelaar doet niets tot die wordt verwijderd.',
   setAiFontSize: 'Tekstgrootte AI-paneel',
   aiFontSizeDefault: 'Standaard',
   aiFontSizeLarge: 'Groot',

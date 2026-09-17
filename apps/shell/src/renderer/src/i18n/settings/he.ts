@@ -24,6 +24,8 @@ export const he = {
   setLiveBridge: 'גשר Copilot חי',
   setLiveBridgeDesc:
     'מאפשר לסוכני קידוד (MCP) להתחבר ליישום זה כדי לקרוא ולערוך מסמכים פתוחים. נעשה בו שימוש בכלים כמו Claude, Cursor או airy-mcp.',
+  setLiveBridgeEnvDisabled:
+    'מושבת בכפייה על ידי משתנה הסביבה AIRY_DISABLE_BRIDGE=1; המתג לא ישפיע עד שהמשתנה יוסר.',
   setAiFontSize: 'גודל הטקסט בחלונית ה-AI',
   aiFontSizeDefault: 'ברירת מחדל',
   aiFontSizeLarge: 'גדול',

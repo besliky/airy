@@ -24,6 +24,8 @@ export const ko = {
   setLiveBridge: 'Copilot 라이브 브리지',
   setLiveBridgeDesc:
     '코딩 에이전트(MCP)가 이 앱에 연결하여 열린 문서를 읽고 편집할 수 있도록 합니다. Claude, Cursor, airy-mcp 등의 도구에서 사용됩니다.',
+  setLiveBridgeEnvDisabled:
+    '환경 변수 AIRY_DISABLE_BRIDGE=1에 의해 강제로 꺼져 있습니다. 이 변수를 제거하기 전까지는 스위치가 동작하지 않습니다.',
   setAiFontSize: 'AI 패널 글자 크기',
   aiFontSizeDefault: '기본',
   aiFontSizeLarge: '크게',

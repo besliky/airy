@@ -913,6 +913,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [autoSaveOn, setAutoSaveOn] = useState(false)
   const [restoreSessionOn, setRestoreSessionOn] = useState(true)
   const [liveBridgeOn, setLiveBridgeOn] = useState(true)
+  /** AIRY_DISABLE_BRIDGE=1 pins the bridge off; the toggle becomes a no-op with a note */
+  const [bridgeEnvOff, setBridgeEnvOff] = useState(false)
   /** configured author name ('' = unset, editors use their localized default) */
   const [authorName, setAuthorName] = useState('')
   /** free-typed value of the author-name input; committed on blur / Enter */
@@ -940,6 +942,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     })
     void window.aiOffice.getLiveBridgeEnabled?.().then((v) => {
       if (alive) setLiveBridgeOn(v)
+    })
+    void window.aiOffice.getLiveBridgeEnvDisabled?.().then((v) => {
+      if (alive) setBridgeEnvOff(v)
     })
     void window.aiOffice.getAiPanelPrefs?.().then((prefs) => {
       if (alive) setAiPrefs(prefs)
@@ -1188,6 +1193,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     <div className="set-field-stack">
                       <div className="set-field-label">{t('setLiveBridge')}</div>
                       <div className="set-field-desc">{t('setLiveBridgeDesc')}</div>
+                      {bridgeEnvOff && (
+                        <div className="set-field-desc">{t('setLiveBridgeEnvDisabled')}</div>
+                      )}
                     </div>
                   </div>
                   <button
@@ -1199,7 +1207,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       const next = !liveBridgeOn
                       setLiveBridgeOn(next)
                       // the main process starts/stops the socket server live
-                      void window.aiOffice.setLiveBridgeEnabled?.(next).catch(() => {})
+                      // and resolves the EFFECTIVE state (an env override can
+                      // veto the change — the switch then snaps back)
+                      void window.aiOffice
+                        .setLiveBridgeEnabled?.(next)
+                        .then((resolved) => setLiveBridgeOn(resolved))
+                        .catch(() => {})
                     }}
                   />
                 </div>

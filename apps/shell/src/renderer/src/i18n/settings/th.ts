@@ -24,6 +24,8 @@ export const th = {
   setLiveBridge: 'Copilot live bridge',
   setLiveBridgeDesc:
     'อนุญาตให้เอเจนต์เขียนโค้ด (MCP) เชื่อมต่อกับแอปนี้เพื่ออ่านและแก้ไขเอกสารที่เปิดอยู่ ใช้โดยเครื่องมืออย่าง Claude, Cursor หรือ airy-mcp',
+  setLiveBridgeEnvDisabled:
+    'ถูกปิดบังคับด้วยตัวแปรสภาพแวดล้อม AIRY_DISABLE_BRIDGE=1 สวิตช์นี้จะไม่มีผลจนกว่าจะลบตัวแปรออก',
   setAiFontSize: 'ขนาดตัวอักษรในแผง AI',
   aiFontSizeDefault: 'ค่าเริ่มต้น',
   aiFontSizeLarge: 'ใหญ่',

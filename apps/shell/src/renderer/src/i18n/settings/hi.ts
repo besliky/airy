@@ -26,6 +26,8 @@ export const hi = {
   setLiveBridge: 'Copilot लाइव ब्रिज',
   setLiveBridgeDesc:
     'कोडिंग एजेंटों (MCP) को ऐप से जुड़कर खुले दस्तावेज़ पढ़ने और संपादित करने की अनुमति देता है। Claude, Cursor या airy-mcp जैसे टूल द्वारा उपयोग किया जाता है।',
+  setLiveBridgeEnvDisabled:
+    'पर्यावरण चर AIRY_DISABLE_BRIDGE=1 द्वारा बलपूर्वक बंद है; इसे हटाए जाने तक यह स्विच कोई प्रभाव नहीं देगा।',
   setAiFontSize: 'AI पैनल का टेक्स्ट आकार',
   aiFontSizeDefault: 'डिफ़ॉल्ट',
   aiFontSizeLarge: 'बड़ा',

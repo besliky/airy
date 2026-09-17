@@ -26,6 +26,8 @@ export const cs = {
   setLiveBridge: 'Živý most Copilot',
   setLiveBridgeDesc:
     'Umožňuje kódovacím agentům (MCP) připojit se k této aplikaci a číst či upravovat otevřené dokumenty. Používají ho nástroje jako Claude, Cursor nebo airy-mcp.',
+  setLiveBridgeEnvDisabled:
+    'Vynuceně vypnuto proměnnou prostředí AIRY_DISABLE_BRIDGE=1; tento přepínač nemá žádný účinek, dokud ji neodstraníte.',
   setAiFontSize: 'Velikost textu panelu AI',
   aiFontSizeDefault: 'Výchozí',
   aiFontSizeLarge: 'Velké',

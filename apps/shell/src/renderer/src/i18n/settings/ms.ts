@@ -25,6 +25,8 @@ export const ms = {
   setLiveBridge: 'Copilot live bridge',
   setLiveBridgeDesc:
     'Membenarkan ejen pengekodan (MCP) menyambung ke aplikasi ini untuk membaca dan mengedit dokumen terbuka. Digunakan oleh alat seperti Claude, Cursor atau airy-mcp.',
+  setLiveBridgeEnvDisabled:
+    'Dipaksa dimatikan oleh pemboleh ubah persekitaran AIRY_DISABLE_BRIDGE=1; suis ini tidak memberi kesan sehingga ia dibuang.',
   setAiFontSize: 'Saiz teks panel AI',
   aiFontSizeDefault: 'Lalai',
   aiFontSizeLarge: 'Besar',

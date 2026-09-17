@@ -26,6 +26,8 @@ export const ja = {
   setLiveBridge: 'Copilot ライブブリッジ',
   setLiveBridgeDesc:
     'コーディングエージェント（MCP）がこのアプリに接続して開いているドキュメントを読み書きできるようにします。Claude・Cursor・airy-mcp などのツールで利用されます。',
+  setLiveBridgeEnvDisabled:
+    '環境変数 AIRY_DISABLE_BRIDGE=1 により強制的に無効化されています。この変数を削除するまでスイッチは機能しません。',
   setAiFontSize: 'AI パネルの文字サイズ',
   aiFontSizeDefault: '標準',
   aiFontSizeLarge: '大',

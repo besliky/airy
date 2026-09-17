@@ -168,6 +168,9 @@ const homeApi: HomeApi = {
     if (typeof on !== 'boolean') throw new Error('Invalid live bridge flag.')
     return (await ipcRenderer.invoke(HOME_CHANNELS.setLiveBridgeEnabled, on)) === true
   },
+  async getLiveBridgeEnvDisabled() {
+    return (await ipcRenderer.invoke(HOME_CHANNELS.getLiveBridgeEnvDisabled)) === true
+  },
   async getRestoreSession() {
     return (await ipcRenderer.invoke(HOME_CHANNELS.getRestoreSession)) === true
   },

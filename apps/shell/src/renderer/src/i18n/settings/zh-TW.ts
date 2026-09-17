@@ -24,6 +24,8 @@ export const zhTW = {
   setLiveBridge: 'Copilot 即時橋接',
   setLiveBridgeDesc:
     '允許編碼代理（MCP）連線本應用程式以讀取和編輯開啟的文件。供 Claude、Cursor、airy-mcp 等工具使用。',
+  setLiveBridgeEnvDisabled:
+    '已被環境變數 AIRY_DISABLE_BRIDGE=1 強制關閉；此開關在移除該變數前不會生效。',
   setAiFontSize: 'AI 面板文字大小',
   aiFontSizeDefault: '預設',
   aiFontSizeLarge: '大',

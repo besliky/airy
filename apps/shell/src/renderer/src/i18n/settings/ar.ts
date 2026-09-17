@@ -25,6 +25,8 @@ export const ar = {
   setLiveBridge: 'جسر Copilot المباشر',
   setLiveBridgeDesc:
     'يتيح لوكلاء البرمجة (MCP) الاتصال بهذا التطبيق لقراءة المستندات المفتوحة وتحريرها. تستخدمه أدوات مثل Claude وCursor وairy-mcp.',
+  setLiveBridgeEnvDisabled:
+    'معطَّل قسرًا بواسطة متغير البيئة AIRY_DISABLE_BRIDGE=1؛ هذا المفتاح لا يسمح بأي تأثير حتى يُزال المتغير.',
   setAiFontSize: 'حجم نص لوحة الذكاء الاصطناعي',
   aiFontSizeDefault: 'افتراضي',
   aiFontSizeLarge: 'كبير',

@@ -25,6 +25,11 @@ import {
 } from 'electron'
 import type { MenuItemConstructorOptions, NativeImage, WebContents } from 'electron'
 import { isHomeSender } from './home-sender-guard'
+import {
+  bridgeEnvDisabled,
+  effectiveLiveBridgeEnabled,
+  liveBridgeToggleAllowed,
+} from './live-bridge-state'
 import menuDocxIcon1x from './assets/menu-docx.png?asset'
 import menuDocxIcon2x from './assets/menu-docx@2x.png?asset'
 import menuXlsxIcon1x from './assets/menu-xlsx.png?asset'
@@ -1350,14 +1355,17 @@ function statEntries(paths: string[]): Promise<RecentEntry[]> {
   return statPathEntries(paths, new Set(readStarredFiles()))
 }
 
-/** live-bridge user preference (app-settings.json `liveBridge`); absent = enabled */
+/** live-bridge effective state (app-settings.json `liveBridge`, absent = enabled; env override wins) */
 function liveBridgeEnabled(): boolean {
-  if (process.env.AIRY_DISABLE_BRIDGE === '1') return false
-  return readAppSettings(APP_SETTINGS_PATH()).liveBridge !== false
+  return effectiveLiveBridgeEnabled(readAppSettings(APP_SETTINGS_PATH()).liveBridge)
 }
 
 /** persist the preference and bring the bridge up/down right away */
 async function setLiveBridgeEnabled(on: boolean): Promise<boolean> {
+  // env override active: the toggle is a visible no-op — keep the stored
+  // setting untouched (so lifting the override restores the user's choice)
+  // and the server off
+  if (!liveBridgeToggleAllowed()) return liveBridgeEnabled()
   writeAppSetting(APP_SETTINGS_PATH(), 'liveBridge', on)
   try {
     if (on) {
@@ -1638,6 +1646,8 @@ function registerHomeIpc(): void {
     if (typeof on !== 'boolean') return liveBridgeEnabled()
     return setLiveBridgeEnabled(on)
   })
+  // whether AIRY_DISABLE_BRIDGE=1 pins the bridge off (Settings shows a note)
+  ipcMain.handle(HOME_CHANNELS.getLiveBridgeEnvDisabled, (): boolean => bridgeEnvDisabled())
 
   // session restore toggle (Settings → General): read on the next launch
   ipcMain.handle(HOME_CHANNELS.getRestoreSession, (): boolean => sessionRestoreEnabled())
