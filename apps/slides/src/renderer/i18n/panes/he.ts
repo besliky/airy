@@ -58,6 +58,12 @@ export const he = {
   paneCommentsDelete: 'מחק הערה',
   paneCommentsPlaceholder: 'הערה חדשה… (⌘/Ctrl+Enter לפרסום)',
   paneCommentsPost: 'פרסם',
+  paneCommentsReply: 'השב',
+  paneCommentsReplyPlaceholder: 'השב…',
+  paneCommentsResolve: 'סמן כהושלם',
+  paneCommentsReopen: 'פתח מחדש',
+  paneCommentsResolved: 'הושלם',
+  paneCommentsReplies: '{n} תשובות',
 
   paneCsdTitle: 'הצגות מותאמות אישית',
   paneCsdDefaultName: 'הצגה מותאמת אישית {n}',

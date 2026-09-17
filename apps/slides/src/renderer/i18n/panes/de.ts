@@ -59,6 +59,12 @@ export const de = {
   paneCommentsDelete: 'Kommentar löschen',
   paneCommentsPlaceholder: 'Neuer Kommentar… (⌘/Strg+Eingabetaste zum Veröffentlichen)',
   paneCommentsPost: 'Veröffentlichen',
+  paneCommentsReply: 'Antworten',
+  paneCommentsReplyPlaceholder: 'Antworten…',
+  paneCommentsResolve: 'Lösen',
+  paneCommentsReopen: 'Wieder öffnen',
+  paneCommentsResolved: 'Gelöst',
+  paneCommentsReplies: '{n} Antworten',
 
   paneCsdTitle: 'Zielgruppenorientierte Präsentationen',
   paneCsdDefaultName: 'Zielgruppenorientierte Präsentation {n}',

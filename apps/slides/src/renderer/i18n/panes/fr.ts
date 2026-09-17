@@ -59,6 +59,12 @@ export const fr = {
   paneCommentsDelete: 'Supprimer le commentaire',
   paneCommentsPlaceholder: 'Nouveau commentaire… (⌘/Ctrl+Entrée pour publier)',
   paneCommentsPost: 'Publier',
+  paneCommentsReply: 'Répondre',
+  paneCommentsReplyPlaceholder: 'Répondre…',
+  paneCommentsResolve: 'Résoudre',
+  paneCommentsReopen: 'Rouvrir',
+  paneCommentsResolved: 'Résolu',
+  paneCommentsReplies: '{n} réponses',
 
   paneCsdTitle: 'Diaporamas personnalisés',
   paneCsdDefaultName: 'Diaporama personnalisé {n}',

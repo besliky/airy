@@ -59,6 +59,12 @@ export const en = {
   paneCommentsDelete: 'Delete comment',
   paneCommentsPlaceholder: 'New comment… (⌘/Ctrl+Enter to post)',
   paneCommentsPost: 'Post',
+  paneCommentsReply: 'Reply',
+  paneCommentsReplyPlaceholder: 'Reply…',
+  paneCommentsResolve: 'Resolve',
+  paneCommentsReopen: 'Reopen',
+  paneCommentsResolved: 'Resolved',
+  paneCommentsReplies: '{n} replies',
 
   paneCsdTitle: 'Custom Shows',
   paneCsdDefaultName: 'Custom Show {n}',

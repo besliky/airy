@@ -59,6 +59,12 @@ export const ko = {
   paneCommentsDelete: '메모 삭제',
   paneCommentsPlaceholder: '새 메모… (⌘/Ctrl+Enter로 게시)',
   paneCommentsPost: '게시',
+  paneCommentsReply: '회신',
+  paneCommentsReplyPlaceholder: '회신…',
+  paneCommentsResolve: '해결',
+  paneCommentsReopen: '다시 열기',
+  paneCommentsResolved: '해결됨',
+  paneCommentsReplies: '회신 {n}건',
 
   paneCsdTitle: '쇼 재구성',
   paneCsdDefaultName: '쇼 재구성 {n}',

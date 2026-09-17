@@ -59,6 +59,12 @@ export const hi = {
   paneCommentsDelete: 'टिप्पणी हटाएँ',
   paneCommentsPlaceholder: 'नई टिप्पणी… (पोस्ट करने के लिए ⌘/Ctrl+Enter)',
   paneCommentsPost: 'पोस्ट करें',
+  paneCommentsReply: 'उत्तर दें',
+  paneCommentsReplyPlaceholder: 'उत्तर दें…',
+  paneCommentsResolve: 'हल करें',
+  paneCommentsReopen: 'फिर खोलें',
+  paneCommentsResolved: 'हल हो गया',
+  paneCommentsReplies: '{n} उत्तर',
 
   paneCsdTitle: 'कस्टम शो',
   paneCsdDefaultName: 'कस्टम शो {n}',

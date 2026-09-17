@@ -59,6 +59,12 @@ export const ja = {
   paneCommentsDelete: 'コメントを削除',
   paneCommentsPlaceholder: '新しいコメント…（⌘/Ctrl+Enter で投稿）',
   paneCommentsPost: '投稿',
+  paneCommentsReply: '返信',
+  paneCommentsReplyPlaceholder: '返信…',
+  paneCommentsResolve: '解決',
+  paneCommentsReopen: '再オープン',
+  paneCommentsResolved: '解決済み',
+  paneCommentsReplies: '返信 {n} 件',
 
   paneCsdTitle: '目的別スライドショー',
   paneCsdDefaultName: '目的別スライドショー {n}',

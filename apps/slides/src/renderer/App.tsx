@@ -1845,12 +1845,27 @@ export function App() {
   }, [hasDoc, current, path, annotationsNonce])
 
   const addComment = useCallback(
-    async (text: string) => {
-      const r = await window.slidesApi.addComment({ slideIndex: current, text })
+    async (text: string, parent?: SlideComment) => {
+      const r = await window.slidesApi.addComment({
+        slideIndex: current,
+        text,
+        ...(parent ? { parent: { authorId: parent.authorId, idx: parent.idx } } : {}),
+      })
       if (r) {
         setComments(r)
         setDirty(true)
         setStatus(t('appStatusCommentAdded'))
+      }
+    },
+    [current],
+  )
+
+  const resolveComments = useCallback(
+    async (refs: Array<{ authorId: number; idx: number }>, done: boolean) => {
+      const r = await window.slidesApi.resolveComments({ slideIndex: current, refs, done })
+      if (r) {
+        setComments(r)
+        setDirty(true)
       }
     },
     [current],
@@ -2994,7 +3009,8 @@ export function App() {
         commentsOpen={showComments}
         onToggleComments={() => (showComments ? setShowComments(false) : openComments(false))}
         onNewComment={() => openComments(true)}
-        commentCount={comments.length}
+        /** thread-aware badge: replies count into their thread, not as new markers */
+        commentCount={comments.filter((c) => !c.parentId).length}
         onInsertIcon={(def, color) => void insertIcon(def, color)}
         onInsertChart={(kind) => void insertChart(kind)}
         onInsertSmartArt={(def) => void insertSmartArt(def)}
@@ -3982,6 +3998,8 @@ export function App() {
                     comments={comments}
                     focusNonce={commentsFocusNonce}
                     onAdd={(text) => void addComment(text)}
+                    onReply={(text, parent) => void addComment(text, parent)}
+                    onResolve={(refs, done) => void resolveComments(refs, done)}
                     onDelete={(c) => void deleteComment(c)}
                     onCollapse={() => setShowComments(false)}
                   />

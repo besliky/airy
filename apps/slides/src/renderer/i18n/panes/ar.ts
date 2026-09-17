@@ -58,6 +58,12 @@ export const ar = {
   paneCommentsDelete: 'حذف التعليق',
   paneCommentsPlaceholder: 'تعليق جديد… (⌘/Ctrl+Enter للنشر)',
   paneCommentsPost: 'نشر',
+  paneCommentsReply: 'رد',
+  paneCommentsReplyPlaceholder: 'رد…',
+  paneCommentsResolve: 'حل',
+  paneCommentsReopen: 'إعادة فتح',
+  paneCommentsResolved: 'تم الحل',
+  paneCommentsReplies: '{n} ردود',
 
   paneCsdTitle: 'عروض مخصصة',
   paneCsdDefaultName: 'عرض مخصص {n}',

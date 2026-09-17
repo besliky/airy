@@ -894,10 +894,12 @@ export interface SetNotesOp {
   text: string
 }
 
-/** Add a comment (the author is the system username fetched by the main process). */
+/** Add a comment (the author is the system username fetched by the main process); parentRef makes it a reply. */
 export interface AddCommentOp {
   slideIndex: number
   text: string
+  /** reply target: the parent comment's (authorId, idx) */
+  parent?: { authorId: number; idx: number }
 }
 
 /** Delete a comment: uniquely located by (authorId, idx). */
@@ -905,6 +907,13 @@ export interface DeleteCommentOp {
   slideIndex: number
   authorId: number
   idx: number
+}
+
+/** Resolve / reopen comments (one IPC = one undo step, typically a whole thread). */
+export interface ResolveCommentsOp {
+  slideIndex: number
+  refs: Array<{ authorId: number; idx: number }>
+  done: boolean
 }
 
 // ── New insert capabilities (charts / SmartArt / icons / audio-video / 3D / links / header-footer) ──
@@ -1473,10 +1482,12 @@ export interface SlidesApi {
   setNotes: (op: SetNotesOp) => Promise<boolean>
   /** All comments on a page (in add order) */
   getComments: (slideIndex: number) => Promise<SlideComment[]>
-  /** Add a comment; returns the page's updated comment list, null on failure */
+  /** Add a comment (or a reply, with parent); returns the page's updated comment list, null on failure */
   addComment: (op: AddCommentOp) => Promise<SlideComment[] | null>
   /** Delete a comment; returns the page's updated comment list, null on failure */
   deleteComment: (op: DeleteCommentOp) => Promise<SlideComment[] | null>
+  /** Resolve / reopen comments (one undo step); returns the page's updated comment list, null on failure */
+  resolveComments: (op: ResolveCommentsOp) => Promise<SlideComment[] | null>
   /** System clipboard while text-editing (webContents.cut/copy/paste, for menu command echo) */
   nativeClipboard: (op: 'cut' | 'copy' | 'paste') => Promise<void>
   /** Nestable history transaction; all edits between begin/end become one undo step.

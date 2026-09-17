@@ -137,6 +137,7 @@ import type {
   SetLinkOp,
   CopyElementsOp,
   DeleteCommentOp,
+  ResolveCommentsOp,
   DeleteElementOp,
   EditBackgroundOp,
   EditFillOp,
@@ -3911,6 +3912,7 @@ export function registerSlidesIpc(): void {
           target: { slide: op.slideIndex },
           author: commentAuthorName(),
           text: op.text,
+          ...(op.parent ? { parent: op.parent } : {}),
         },
       ],
     })
@@ -3923,6 +3925,10 @@ export function registerSlidesIpc(): void {
     const session = sessions.get(e.sender.id)
     const slide = session?.opened.deck.slides[op.slideIndex]
     if (!session || !slide) return null
+    // cascade: deleting a thread head removes its replies too (one undo step)
+    const replies = getSlideComments(session.opened.archive, slide.path)
+      .filter((c) => c.parentId?.authorId === op.authorId && c.parentId.idx === op.idx)
+      .map((c) => ({ authorId: c.authorId, idx: c.idx }))
     const r = sessionTxn(session, {
       ops: [
         {
@@ -3931,7 +3937,32 @@ export function registerSlidesIpc(): void {
           authorId: op.authorId,
           idx: op.idx,
         },
+        ...replies.map((ref) => ({
+          op: 'deleteComment',
+          target: { slide: op.slideIndex },
+          authorId: ref.authorId,
+          idx: ref.idx,
+        })),
       ],
+    })
+    if (!r) return null
+    session.metaDirty = true
+    return getSlideComments(session.opened.archive, slide.path)
+  })
+
+  ipcMain.handle('slides:resolve-comments', (e, op: ResolveCommentsOp) => {
+    const session = sessions.get(e.sender.id)
+    const slide = session?.opened.deck.slides[op.slideIndex]
+    if (!session || !slide || !op.refs?.length) return null
+    // one transaction = one undo step for the whole thread flip
+    const r = sessionTxn(session, {
+      ops: op.refs.map((ref) => ({
+        op: 'resolveComment',
+        target: { slide: op.slideIndex },
+        authorId: ref.authorId,
+        idx: ref.idx,
+        done: op.done,
+      })),
     })
     if (!r) return null
     session.metaDirty = true

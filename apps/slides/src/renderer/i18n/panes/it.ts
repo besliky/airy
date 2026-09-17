@@ -59,6 +59,12 @@ export const it = {
   paneCommentsDelete: 'Elimina commento',
   paneCommentsPlaceholder: 'Nuovo commento… (⌘/Ctrl+Invio per pubblicare)',
   paneCommentsPost: 'Pubblica',
+  paneCommentsReply: 'Rispondi',
+  paneCommentsReplyPlaceholder: 'Rispondi…',
+  paneCommentsResolve: 'Risolvi',
+  paneCommentsReopen: 'Riapri',
+  paneCommentsResolved: 'Risolto',
+  paneCommentsReplies: '{n} risposte',
 
   paneCsdTitle: 'Presentazioni personalizzate',
   paneCsdDefaultName: 'Presentazione personalizzata {n}',

@@ -59,6 +59,12 @@ export const ru = {
   paneCommentsDelete: 'Удалить примечание',
   paneCommentsPlaceholder: 'Новое примечание… (⌘/Ctrl+Enter — опубликовать)',
   paneCommentsPost: 'Опубликовать',
+  paneCommentsReply: 'Ответить',
+  paneCommentsReplyPlaceholder: 'Ответить…',
+  paneCommentsResolve: 'Решить',
+  paneCommentsReopen: 'Открыть снова',
+  paneCommentsResolved: 'Решено',
+  paneCommentsReplies: 'Ответы: {n}',
 
   paneCsdTitle: 'Произвольные показы',
   paneCsdDefaultName: 'Произвольный показ {n}',

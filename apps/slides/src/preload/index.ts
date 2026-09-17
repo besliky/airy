@@ -294,6 +294,7 @@ const api: SlidesApi = {
   getComments: (slideIndex: number) => ipcRenderer.invoke('slides:get-comments', slideIndex),
   addComment: (op) => ipcRenderer.invoke('slides:add-comment', op),
   deleteComment: (op) => ipcRenderer.invoke('slides:delete-comment', op),
+  resolveComments: (op) => ipcRenderer.invoke('slides:resolve-comments', op),
   nativeClipboard: (op: 'cut' | 'copy' | 'paste') =>
     ipcRenderer.invoke('slides:native-clipboard', op),
   beginHistoryBatch: () => ipcRenderer.invoke('slides:history-batch-begin'),

@@ -245,6 +245,8 @@ export {
   getSlideComments,
   addSlideComment,
   deleteSlideComment,
+  setSlideCommentResolved,
+  type CommentRef,
   type SlideComment,
 } from './comments'
 export {
