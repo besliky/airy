@@ -70,6 +70,7 @@ import {
   isUsableSaveDir,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
+  voidLoad,
   windowMenuTemplate,
 } from '@airy-office/electron-utils'
 import { readAppSettings, writeAppSetting, writeAppSettings } from './app-settings'
@@ -525,18 +526,71 @@ function promptRendererCrash(info: { id: string; title: string; reason: string }
     .then(({ response }) => {
       if (response === 0) {
         // Home is the shell window's own renderer, not a manager view
-        if (isHome && shellWindow && !shellWindow.isDestroyed()) {
-          homeRendererCrashed = false
-          shellWindow.webContents.reload()
-        } else {
-          manager.reloadTab(info.id)
-        }
+        if (isHome) reloadHomeRenderer()
+        else manager.reloadTab(info.id)
       } else if (response === 1 && !isHome) {
         void manager.closeTab(info.id)
       }
     })
     .catch(() => undefined)
 }
+
+/** (Re)load the shell's own Home renderer — the app bundle or dev server,
+ *  NOT webContents.reload(): after a crash the webContents shows the error
+ *  page, and reloading that would just redraw the error page. */
+function reloadHomeRenderer(): void {
+  homeRendererCrashed = false
+  const win = shellWindow
+  if (!win || win.isDestroyed()) return
+  const load = process.env.ELECTRON_RENDERER_URL
+    ? win.loadURL(process.env.ELECTRON_RENDERER_URL)
+    : win.loadFile(join(__dirname, '../renderer/index.html'))
+  load.catch((err: unknown) => {
+    console.error('[shell] renderer load failed:', err)
+    showErrorDialog(win, tm('dlgLoadFailed'), err)
+  })
+}
+
+/** In-window error page for the crashed Home renderer — the tabs' crash page
+ *  plus a Reload button. Cancel on the crash prompt then still leaves an
+ *  explanatory page with a way back (View > Reload is dev-only). The button
+ *  reaches the main process through the preload's dedicated airyHomeCrash
+ *  channel; body and label are main-side localized strings, HTML-escaped —
+ *  nothing renderer-controlled is interpolated. */
+function homeCrashErrorPageUrl(): string {
+  const esc = (text: string): string =>
+    text.replace(/[<>&"']/g, (c) =>
+      c === '<'
+        ? '&lt;'
+        : c === '>'
+          ? '&gt;'
+          : c === '&'
+            ? '&amp;'
+            : c === '"'
+              ? '&quot;'
+              : '&#39;',
+    )
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{height:100%;margin:0}
+body{display:flex;align-items:center;justify-content:center;background:#f5f5f5;color:#333;
+font:14px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center;padding:24px}
+button{margin-top:16px;padding:8px 22px;font:inherit;border:1px solid #bbb;border-radius:6px;
+background:#fff;color:#333;cursor:pointer}
+button:hover{background:#f0f0f0}
+</style></head><body><div>${esc(tm('crashPageBody'))}
+<button onclick="window.airyHomeCrash&&window.airyHomeCrash.reload()">${esc(tm('btnReload'))}</button>
+</div></body></html>`
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
+}
+
+// The crashed-Home error page's Reload button. Fire-and-forget channel: only
+// the shell window's own webContents is accepted, and only while a Home
+// crash is actually pending (the flag doubles as the guard).
+ipcMain.on(HOME_CHANNELS.crashReload, (event) => {
+  if (!shellWindow || shellWindow.isDestroyed()) return
+  if (event.sender.id !== shellWindow.webContents.id || !homeRendererCrashed) return
+  reloadHomeRenderer()
+})
 
 /**
  * When the user creates a file from a specific project view, remember which
@@ -810,10 +864,13 @@ function createShellWindow(): void {
     if (tab.filePath) removeStagedTabFile(tab.filePath)
   }
   // The Home tab is the shell window's own renderer: same crash recovery as
-  // editor tabs (blank shell → prompt; Reload restarts it).
+  // editor tabs — the in-tab error page loads BEFORE the prompt, so Cancel
+  // still leaves an explanatory page (with its own Reload button) instead of
+  // a dead chrome shell; Reload restarts the renderer.
   win.webContents.on('render-process-gone', (_event, details) => {
     if (!isRecoverableRendererCrash(details.reason) || homeRendererCrashed) return
     homeRendererCrashed = true
+    voidLoad(win.webContents.loadURL(homeCrashErrorPageUrl()), 'home crash error page')
     promptRendererCrash({ id: 'home', title: 'Airy', reason: details.reason })
   })
 
@@ -1013,13 +1070,7 @@ function createShellWindow(): void {
 
   // A rejected load used to become an unhandled rejection; surface it instead
   // (single-flight error dialog) so a missing/corrupt bundle is visible.
-  const shellLoad = process.env.ELECTRON_RENDERER_URL
-    ? win.loadURL(process.env.ELECTRON_RENDERER_URL)
-    : win.loadFile(join(__dirname, '../renderer/index.html'))
-  shellLoad.catch((err: unknown) => {
-    console.error('[shell] renderer load failed:', err)
-    showErrorDialog(win, tm('dlgLoadFailed'), err)
-  })
+  reloadHomeRenderer()
 }
 
 // ---- routing: one dispatch function for every open path ----

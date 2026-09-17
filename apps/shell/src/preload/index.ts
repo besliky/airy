@@ -358,5 +358,14 @@ const tabsApi: TabsApi = {
 
 contextBridge.exposeInMainWorld('aiOfficeTabs', tabsApi)
 
+// The crashed-Home error page (a data: URL the main process loads when the
+// Home renderer dies) cannot reach any other API surface — this one channel
+// is its Reload button.
+contextBridge.exposeInMainWorld('airyHomeCrash', {
+  reload: (): void => {
+    ipcRenderer.send(HOME_CHANNELS.crashReload)
+  },
+})
+
 // open documents dragged from the OS anywhere over Home or the tab strip
 installDropOpenBridge()

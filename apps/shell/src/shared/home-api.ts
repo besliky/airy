@@ -264,6 +264,9 @@ export const HOME_CHANNELS = {
   duplicateFile: 'home:duplicate-file',
   deleteFiles: 'home:delete-files',
   openTrash: 'home:open-trash',
+  /// fire-and-forget: the crashed-Home error page's Reload button (data: URL
+  /// page — it cannot reach any other API surface)
+  crashReload: 'home:crash-reload',
   getLanguage: 'home:get-language',
   setLanguage: 'home:set-language',
   getAppVersion: 'home:get-app-version',
