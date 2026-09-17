@@ -138,6 +138,7 @@ import { IPC_CHANNELS } from '../shared/ipc-channels'
 import { atomicWriteFile } from '@airy-office/electron-utils'
 import { captureGrantValid, newCaptureGrant, type CaptureGrant } from './capture-consent'
 import { closeGuardDecision } from './close-guard'
+import { checkMergeSourcePaths } from './merge-source-policy'
 import { SaveEditsTransferStore } from './save-edits-transfer'
 import { exportPdf, previewPrint, printWorkbook } from './pdf-export'
 import { allowsAutomaticWorkbookRecovery } from './recovery-policy'
@@ -187,6 +188,9 @@ const tMain = createI18n({
     errImgTooLarge20: '图片超过 20MB,不支持插入。',
     errImgNotGranted: '图片不在本应用可读取的目录内（请先添加为附件或打开所在目录）。',
     errImgBadType: '该文件不是 PNG/JPEG/GIF 图片。',
+    errMergeUnsupportedExt: '不支持的合并来源: .{ext}',
+    errMergeNotFound: '找不到合并来源文件。',
+    errMergeNotGranted: '合并来源不在本应用可读取的目录内（请先添加为附件或打开所在目录）。',
     errDiskChanged: '工作簿在打开后被磁盘上的改动覆盖——请改用另存为。',
     autosaveFoundTitle: '发现自动恢复版本',
     autosaveFoundBody:
@@ -254,6 +258,10 @@ const tMain = createI18n({
     errImgNotGranted:
       'The image is outside the folders this app may read (attach it or open its folder first).',
     errImgBadType: 'The file is not a PNG/JPEG/GIF image.',
+    errMergeUnsupportedExt: 'Unsupported merge source: .{ext}',
+    errMergeNotFound: 'Merge source not found.',
+    errMergeNotGranted:
+      'The merge source is outside the folders this app may read (attach the file or open its folder first).',
     errDiskChanged: 'The workbook changed on disk after it was opened — use Save As instead.',
     autosaveFoundTitle: 'Recovered version found',
     autosaveFoundBody:
@@ -324,6 +332,10 @@ const tMain = createI18n({
     errImgNotGranted:
       '画像はこのアプリが読み取り可能なフォルダの範囲外です（先に添付するか、そのフォルダを開いてください）。',
     errImgBadType: 'このファイルは PNG/JPEG/GIF 画像ではありません。',
+    errMergeUnsupportedExt: '結合できないソース形式です: .{ext}',
+    errMergeNotFound: '結合元のファイルが見つかりません。',
+    errMergeNotGranted:
+      '結合元はこのアプリが読み取り可能なフォルダーにありません（先に添付するか、フォルダーを開いてください）。',
     errDiskChanged:
       'ブックを開いた後にディスク上で変更されています — 名前を付けて保存を使用してください。',
     autosaveFoundTitle: '自動回復バージョンがあります',
@@ -396,6 +408,10 @@ const tMain = createI18n({
     errImgNotGranted:
       '이미지가 이 앱이 읽을 수 있는 폴더 범위 밖에 있습니다(먼저 첨부하거나 해당 폴더를 여세요).',
     errImgBadType: '이 파일은 PNG/JPEG/GIF 이미지가 아닙니다.',
+    errMergeUnsupportedExt: '병합할 수 없는 소스 형식입니다: .{ext}',
+    errMergeNotFound: '병합 원본 파일을 찾을 수 없습니다.',
+    errMergeNotGranted:
+      '병합 원본이 이 앱이 읽을 수 있는 폴더에 없습니다(먼저 첨부하거나 해당 폴더를 여세요).',
     errDiskChanged:
       '통합 문서가 열린 후 디스크에서 변경되었습니다. 다른 이름으로 저장을 사용하세요.',
     autosaveFoundTitle: '자동 복구 버전 발견',
@@ -468,6 +484,10 @@ const tMain = createI18n({
     errImgNotGranted:
       "L'image est en dehors des dossiers lisibles par cette application (joignez-la ou ouvrez son dossier d'abord).",
     errImgBadType: "Ce fichier n'est pas une image PNG/JPEG/GIF.",
+    errMergeUnsupportedExt: 'Source de fusion non prise en charge : .{ext}',
+    errMergeNotFound: 'Fichier source de fusion introuvable.',
+    errMergeNotGranted:
+      "La source de fusion se trouve hors des dossiers lisibles par cette application (joignez d'abord le fichier ou ouvrez son dossier).",
     errDiskChanged:
       'Le classeur a été modifié sur le disque après son ouverture — utilisez Enregistrer sous.',
     autosaveFoundTitle: 'Version récupérée trouvée',
@@ -541,6 +561,10 @@ const tMain = createI18n({
     errImgNotGranted:
       'Das Bild liegt außerhalb der Ordner, die diese App lesen darf (erst anhängen oder den Ordner öffnen).',
     errImgBadType: 'Die Datei ist kein PNG/JPEG/GIF-Bild.',
+    errMergeUnsupportedExt: 'Nicht unterstützte Zusammenführungsquelle: .{ext}',
+    errMergeNotFound: 'Zusammenführungsquelle nicht gefunden.',
+    errMergeNotGranted:
+      'Die Zusammenführungsquelle liegt außerhalb der Ordner, die diese App lesen darf (Datei zuerst anhängen oder ihren Ordner öffnen).',
     errDiskChanged:
       'Die Arbeitsmappe wurde nach dem Öffnen auf dem Datenträger geändert — verwenden Sie stattdessen „Speichern unter“.',
     autosaveFoundTitle: 'Wiederhergestellte Version gefunden',
@@ -614,6 +638,10 @@ const tMain = createI18n({
     errImgNotGranted:
       'La imagen está fuera de las carpetas que esta app puede leer (adjúntala o abre su carpeta primero).',
     errImgBadType: 'El archivo no es una imagen PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'Origen de combinación no admitido: .{ext}',
+    errMergeNotFound: 'No se encontró el archivo de origen de la combinación.',
+    errMergeNotGranted:
+      'El origen de la combinación está fuera de las carpetas que esta app puede leer (adjunta antes el archivo o abre su carpeta).',
     errDiskChanged: 'El libro cambió en el disco después de abrirse; usa Guardar como en su lugar.',
     autosaveFoundTitle: 'Se encontró una versión recuperada',
     autosaveFoundBody:
@@ -684,6 +712,10 @@ const tMain = createI18n({
     errImgTooLarge20: 'รูปภาพเกิน 20MB ไม่สามารถแทรกได้',
     errImgNotGranted: 'รูปภาพอยู่นอกโฟลเดอร์ที่แอปนี้อ่านได้ (แนบไฟล์หรือเปิดโฟลเดอร์นั้นก่อน)',
     errImgBadType: 'ไฟล์นี้ไม่ใช่รูปภาพ PNG/JPEG/GIF',
+    errMergeUnsupportedExt: 'ไม่รองรับชนิดไฟล์ต้นทางสำหรับผสาน: .{ext}',
+    errMergeNotFound: 'ไม่พบไฟล์ต้นทางสำหรับผสาน',
+    errMergeNotGranted:
+      'ไฟล์ต้นทางอยู่นอกโฟลเดอร์ที่แอปนี้อ่านได้ (แนบไฟล์หรือเปิดโฟลเดอร์นั้นก่อน)',
     errDiskChanged: 'เวิร์กบุ๊กถูกเปลี่ยนแปลงบนดิสก์หลังจากเปิด — โปรดใช้บันทึกเป็นแทน',
     autosaveFoundTitle: 'พบเวอร์ชันกู้คืนอัตโนมัติ',
     autosaveFoundBody:
@@ -754,6 +786,10 @@ const tMain = createI18n({
     errImgNotGranted:
       'Gambar berada di luar folder yang boleh dibaca aplikasi ini (lampirkan dulu atau buka foldernya).',
     errImgBadType: 'File ini bukan gambar PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'Sumber penggabungan tidak didukung: .{ext}',
+    errMergeNotFound: 'File sumber penggabungan tidak ditemukan.',
+    errMergeNotGranted:
+      'Sumber penggabungan berada di luar folder yang dapat dibaca aplikasi ini (lampirkan dulu file atau buka foldernya).',
     errDiskChanged: 'Buku kerja berubah di disk setelah dibuka — gunakan Simpan Sebagai.',
     autosaveFoundTitle: 'Versi pemulihan ditemukan',
     autosaveFoundBody:
@@ -825,6 +861,10 @@ const tMain = createI18n({
     errImgNotGranted:
       'Изображение находится вне папок, доступных приложению для чтения (сначала прикрепите его или откройте его папку).',
     errImgBadType: 'Этот файл не является изображением PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'Неподдерживаемый источник объединения: .{ext}',
+    errMergeNotFound: 'Файл источника объединения не найден.',
+    errMergeNotGranted:
+      'Источник объединения находится вне папок, доступных приложению для чтения (сначала прикрепите файл или откройте его папку).',
     errDiskChanged: 'Книга была изменена на диске после открытия — используйте «Сохранить как».',
     autosaveFoundTitle: 'Найдена восстановленная версия',
     menuPrint: 'Печать…',
@@ -895,6 +935,10 @@ const tMain = createI18n({
     errImgNotGranted:
       'الصورة خارج المجلدات التي يمكن لهذا التطبيق قراءتها (أرفقها أو افتح مجلدها أولاً).',
     errImgBadType: 'هذا الملف ليس صورة PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'مصدر دمج غير مدعوم: .{ext}',
+    errMergeNotFound: 'لم يتم العثور على ملف مصدر الدمج.',
+    errMergeNotGranted:
+      'مصدر الدمج خارج المجلدات التي يمكن لهذا التطبيق قراءتها (أرفق الملف أو افتح مجلده أولاً).',
     errDiskChanged: 'تم تغيير المصنف على القرص بعد فتحه — استخدم «حفظ باسم» بدلاً من ذلك.',
     menuPrint: 'طباعة…',
     autosaveFoundTitle: 'تم العثور على نسخة مستردة',
@@ -964,6 +1008,10 @@ const tMain = createI18n({
     errImgNotGranted:
       'A imagem está fora das pastas que este app pode ler (anexe-a ou abra a pasta primeiro).',
     errImgBadType: 'O arquivo não é uma imagem PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'Origem de mesclagem sem suporte: .{ext}',
+    errMergeNotFound: 'Arquivo de origem da mesclagem não encontrado.',
+    errMergeNotGranted:
+      'A origem da mesclagem está fora das pastas que este app pode ler (anexe antes o arquivo ou abra a pasta).',
     menuPrint: 'Imprimir…',
     errDiskChanged: 'A pasta de trabalho foi alterada no disco após ser aberta — use Salvar Como.',
     autosaveFoundTitle: 'Versão recuperada encontrada',
@@ -1035,6 +1083,10 @@ const tMain = createI18n({
     errImgNotGranted:
       "L'immagine è fuori dalle cartelle che questa app può leggere (allegala o apri prima la sua cartella).",
     errImgBadType: "Il file non è un'immagine PNG/JPEG/GIF.",
+    errMergeUnsupportedExt: 'Origine di unione non supportata: .{ext}',
+    errMergeNotFound: "File di origine dell'unione non trovato.",
+    errMergeNotGranted:
+      "L'origine dell'unione è fuori dalle cartelle leggibili da questa app (allega prima il file o apri la sua cartella).",
     menuPrint: 'Stampa…',
     errDiskChanged:
       "La cartella di lavoro è stata modificata sul disco dopo l'apertura — usa Salva con nome.",
@@ -1108,6 +1160,10 @@ const tMain = createI18n({
       'Obraz znajduje się poza folderami, które ta aplikacja może odczytać (najpierw załącz go lub otwórz jego folder).',
     errImgTooLarge20: 'Obraz przekracza 20 MB i nie może zostać wstawiony.',
     errImgBadType: 'Plik nie jest obrazem PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'Nieobsługiwane źródło scalania: .{ext}',
+    errMergeNotFound: 'Nie znaleziono pliku źródłowego scalania.',
+    errMergeNotGranted:
+      'Źródło scalania znajduje się poza folderami, które ta aplikacja może odczytać (najpierw załącz plik lub otwórz jego folder).',
     errDiskChanged: 'Skoroszyt został zmieniony na dysku po otwarciu — użyj polecenia Zapisz jako.',
     autosaveFoundTitle: 'Znaleziono odzyskaną wersję',
     autosaveFoundBody:
@@ -1179,6 +1235,10 @@ const tMain = createI18n({
     errImgNotGranted:
       'Obrázek leží mimo složky, které může tato aplikace číst (nejprve jej připojte nebo otevřete jeho složku).',
     errImgBadType: 'Soubor není obrázek PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'Nepodporovaný zdroj sloučení: .{ext}',
+    errMergeNotFound: 'Zdrojový soubor sloučení nebyl nalezen.',
+    errMergeNotGranted:
+      'Zdroj sloučení leží mimo složky, které může tato aplikace číst (nejprve soubor připojte nebo otevřete jeho složku).',
     errDiskChanged: 'Sešit byl po otevření změněn na disku — použijte místo toho Uložit jako.',
     autosaveFoundTitle: 'Nalezena obnovená verze',
     autosaveFoundBody:
@@ -1250,6 +1310,10 @@ const tMain = createI18n({
     errImgNotGranted:
       'De afbeelding ligt buiten de mappen die deze app mag lezen (voeg haar eerst toe of open de map).',
     errImgBadType: 'Het bestand is geen PNG/JPEG/GIF-afbeelding.',
+    errMergeUnsupportedExt: 'Niet-ondersteunde samenvoegbron: .{ext}',
+    errMergeNotFound: 'Samenvoegbronbestand niet gevonden.',
+    errMergeNotGranted:
+      'De samenvoegbron ligt buiten de mappen die deze app mag lezen (voeg eerst het bestand toe of open de map).',
     errDiskChanged:
       'De werkmap is op de schijf gewijzigd nadat deze was geopend — gebruik Opslaan als.',
     autosaveFoundTitle: 'Herstelde versie gevonden',
@@ -1321,6 +1385,10 @@ const tMain = createI18n({
     errImgNotGranted:
       'Imej berada di luar folder yang boleh dibaca oleh aplikasi ini (lampirkan dahulu atau buka foldernya).',
     errImgBadType: 'Fail ini bukan imej PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'Sumber cantuman tidak disokong: .{ext}',
+    errMergeNotFound: 'Fail sumber cantuman tidak dijumpai.',
+    errMergeNotGranted:
+      'Sumber cantuman berada di luar folder yang boleh dibaca oleh aplikasi ini (lampirkan dahulu fail atau buka foldernya).',
     errDiskChanged: 'Buku kerja telah diubah pada cakera selepas dibuka — gunakan Simpan Sebagai.',
     autosaveFoundTitle: 'Versi pulihan ditemui',
     autosaveFoundBody:
@@ -1392,6 +1460,10 @@ const tMain = createI18n({
     errImgNotGranted:
       'התמונה נמצאת מחוץ לתיקיות שהאפליקציה הזו יכולה לקרוא (צרפו אותה או פתחו קודם את התיקייה שלה).',
     errImgBadType: 'הקובץ אינו תמונת PNG/JPEG/GIF.',
+    errMergeUnsupportedExt: 'מקור מיזוג לא נתמך: .{ext}',
+    errMergeNotFound: 'קובץ מקור המיזוג לא נמצא.',
+    errMergeNotGranted:
+      'מקור המיזוג נמצא מחוץ לתיקיות שהאפליקציה הזו יכולה לקרוא (צרף קודם את הקובץ או פתח את התיקייה שלו).',
     errDiskChanged: 'חוברת העבודה השתנתה בדיסק לאחר פתיחתה — השתמש בשמירה בשם.',
     autosaveFoundTitle: 'נמצאה גרסה משוחזרת',
     autosaveFoundBody:
@@ -1460,6 +1532,10 @@ const tMain = createI18n({
     errImgNotGranted:
       'छवि इस ऐप के पढ़ने योग्य फ़ोल्डरों के बाहर है (पहले इसे संलग्न करें या इसका फ़ोल्डर खोलें)।',
     errImgBadType: 'यह फ़ाइल PNG/JPEG/GIF छवि नहीं है।',
+    errMergeUnsupportedExt: 'असमर्थित मर्ज स्रोत: .{ext}',
+    errMergeNotFound: 'मर्ज स्रोत फ़ाइल नहीं मिली।',
+    errMergeNotGranted:
+      'मर्ज स्रोत उन फ़ोल्डरों के बाहर है जिन्हें यह ऐप पढ़ सकता है (पहले फ़ाइल संलग्न करें या उसका फ़ोल्डर खोलें)',
     errDiskChanged:
       'खोले जाने के बाद कार्यपुस्तिका डिस्क पर बदल गई — इसके बजाय इस रूप में सहेजें का उपयोग करें।',
     autosaveFoundTitle: 'पुनर्प्राप्त संस्करण मिला',
@@ -1530,6 +1606,9 @@ const tMain = createI18n({
     errImgTooLarge20: '圖片超過 20MB,不支援插入。',
     errImgNotGranted: '圖片不在本應用程式可讀取的目錄內（請先附加或開啟所在資料夾）。',
     errImgBadType: '該檔案不是 PNG/JPEG/GIF 圖片。',
+    errMergeUnsupportedExt: '不支援的合併來源: .{ext}',
+    errMergeNotFound: '找不到合併來源檔案。',
+    errMergeNotGranted: '合併來源不在本應用程式可讀取的資料夾內（請先附加檔案或開啟所在資料夾）。',
     errDiskChanged: '活頁簿在開啟後被磁碟上的變更覆蓋——請改用另存新檔。',
     autosaveFoundTitle: '發現自動復原版本',
     autosaveFoundBody:
@@ -2558,63 +2637,68 @@ export function registerSheetsIpc(): void {
   // (workbookOpenedHook) — these sessions exist only to be read from and
   // closed by the renderer's merge routine.
   /** Open the given spreadsheet paths as merge-source sessions; cleans up
-   *  everything already opened when a later file fails or the tab dies. */
-  const openMergeSources = async (
-    event: Electron.IpcMainInvokeEvent,
-    paths: readonly string[],
-  ): Promise<unknown[] | null> => {
-    const entry = sessionFor(event)
-    const opened: { sessionId: string }[] = []
-    const closeOpened = async () => {
-      for (const { sessionId } of opened) {
-        const session = entry.sessions.get(sessionId)
-        entry.sessions.delete(sessionId)
-        if (session !== undefined) {
-          await cleanupSessionResources({
-            tempRoot: app.getPath('temp'),
-            snapshotPath: session.snapshotPath,
-            importTempDir: session.importTempDir,
-            closeSidecar: () => entry.client.close(sessionId),
-          })
-        }
-      }
-    }
-    try {
-      for (const path of paths) {
-        const prepared = await prepareWorkbookForOpen(
-          entry.client,
-          path,
-          event.sender,
-          dialogParent(event),
-          { skipRecoveryPrompt: true },
-        )
-        if (event.sender.isDestroyed()) {
-          if (prepared.importTempDir !== undefined) {
-            await cleanupImportTempDirectory(app.getPath('temp'), prepared.importTempDir)
+   *  everything already opened when a later file fails or the tab dies. */ const openMergeSources =
+    async (
+      event: Electron.IpcMainInvokeEvent,
+      paths: readonly string[],
+    ): Promise<unknown[] | null> => {
+      const entry = sessionFor(event)
+      const opened: { sessionId: string }[] = []
+      const closeOpened = async () => {
+        for (const { sessionId } of opened) {
+          const session = entry.sessions.get(sessionId)
+          entry.sessions.delete(sessionId)
+          if (session !== undefined) {
+            await cleanupSessionResources({
+              tempRoot: app.getPath('temp'),
+              snapshotPath: session.snapshotPath,
+              importTempDir: session.importTempDir,
+              closeSidecar: () => entry.client.close(sessionId),
+            })
           }
-          break
         }
-        const result = await openWorkbookSession(entry.client, prepared.openPath, entry.sessions, {
-          suggestSaveAs: prepared.suggestSaveAs,
-          csvImport: prepared.csvImport,
-          csvSourcePath: prepared.csvSourcePath,
-          importTempDir: prepared.importTempDir,
-          restoreTarget: prepared.restoreTarget,
-        })
-        opened.push(result as { sessionId: string })
-        if (event.sender.isDestroyed()) break
       }
-    } catch (error) {
-      // a later file failing must not strand the sessions already opened
-      await closeOpened()
-      throw error
+      try {
+        for (const path of paths) {
+          const prepared = await prepareWorkbookForOpen(
+            entry.client,
+            path,
+            event.sender,
+            dialogParent(event),
+            { skipRecoveryPrompt: true },
+          )
+          if (event.sender.isDestroyed()) {
+            if (prepared.importTempDir !== undefined) {
+              await cleanupImportTempDirectory(app.getPath('temp'), prepared.importTempDir)
+            }
+            break
+          }
+          const result = await openWorkbookSession(
+            entry.client,
+            prepared.openPath,
+            entry.sessions,
+            {
+              suggestSaveAs: prepared.suggestSaveAs,
+              csvImport: prepared.csvImport,
+              csvSourcePath: prepared.csvSourcePath,
+              importTempDir: prepared.importTempDir,
+              restoreTarget: prepared.restoreTarget,
+            },
+          )
+          opened.push(result as { sessionId: string })
+          if (event.sender.isDestroyed()) break
+        }
+      } catch (error) {
+        // a later file failing must not strand the sessions already opened
+        await closeOpened()
+        throw error
+      }
+      if (event.sender.isDestroyed()) {
+        await closeOpened()
+        return null
+      }
+      return opened.length > 0 ? opened : null
     }
-    if (event.sender.isDestroyed()) {
-      await closeOpened()
-      return null
-    }
-    return opened.length > 0 ? opened : null
-  }
 
   ipcMain.handle(IPC_CHANNELS.selectWorkbooksForMerge, async (event) => {
     const selection = await openFileDialog(event, {
@@ -2625,15 +2709,28 @@ export function registerSheetsIpc(): void {
     return openMergeSources(event, selection.filePaths)
   })
 
-  const MERGE_SOURCE_EXTS = new Set(['xlsx', 'xlsm', 'xls', 'csv'])
   ipcMain.handle(IPC_CHANNELS.openWorkbooksForMerge, async (event, input: unknown) => {
     const paths = z.array(z.string().min(1)).min(1).max(20).parse(input)
-    for (const path of paths) {
-      const ext = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
-      if (!MERGE_SOURCE_EXTS.has(ext)) throw new Error(`Unsupported merge source: ${ext}`)
-      if (!existsSync(path)) throw new Error('Merge source not found.')
+    // Renderer-named paths get the same read policy as files:* / read-local-
+    // image: only files in directories granted to THIS tab (dialog picks,
+    // shell-routed opens, accepted attachments, witnessed drops) may be read.
+    // The legit callers keep working: the ribbon merges dialog-picked files
+    // (selectWorkbooksForMerge above) and the AI tool merges accepted
+    // attachments — both grant the file's folder before this runs.
+    const checked = checkMergeSourcePaths(paths, {
+      homeDir: app.getPath('home'),
+      mayRead: (path) => rendererMayReadPath(path),
+      exists: (path) => existsSync(path),
+    })
+    if ('rejection' in checked) {
+      const rejection = checked.rejection
+      if (rejection.kind === 'ext') {
+        throw new Error(tm('errMergeUnsupportedExt', { ext: rejection.ext }))
+      }
+      if (rejection.kind === 'missing') throw new Error(tm('errMergeNotFound'))
+      throw new Error(tm('errMergeNotGranted'))
     }
-    return openMergeSources(event, paths)
+    return openMergeSources(event, checked.resolved)
   })
 
   ipcMain.handle(IPC_CHANNELS.readWorkbookRange, async (event, input: unknown) => {
