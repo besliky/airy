@@ -42,11 +42,14 @@ async function mount(partial: Partial<Props>) {
     })
   }
   // submit hashes/verifies passwords asynchronously (iterated SHA-512); keep
-  // flushing until the expected outcome shows up instead of guessing a delay
+  // flushing until the expected outcome shows up instead of guessing a delay.
+  // The cap only bounds a runaway; under the parallel root test runner (or a
+  // loaded CI box) 2×100k SHA-512 iterations can legitimately take tens of
+  // seconds, so keep it generous.
   const submit = async (done: () => boolean) => {
     await click(host.querySelector('.btn-primary')!)
     const start = Date.now()
-    while (!done() && Date.now() - start < 10_000) {
+    while (!done() && Date.now() - start < 45_000) {
       await act(async () => {
         await new Promise((r) => setTimeout(r, 10))
       })
@@ -102,6 +105,8 @@ describe('ProtectDialog', () => {
     await d.cleanup()
   })
 
+  // 3×100k-iteration SHA-512 (hash + confirm + verify): generous timeout
+  // because the parallel root test runner legitimately loads the CPU.
   it('setting a modify password produces verifiable writeProtection credentials', async () => {
     const d = await mount({})
     const [, , modify, modifyConfirm] = d.passwordInputs()
@@ -113,7 +118,7 @@ describe('ProtectDialog', () => {
     expect(result.writeProtection?.hash).toBeTruthy()
     expect(await verifyProtectionPassword('to-modify', result.writeProtection!)).toBe(true)
     await d.cleanup()
-  })
+  }, 60_000)
 
   it('enabling a comments restriction without password enforces mode only', async () => {
     const d = await mount({})
