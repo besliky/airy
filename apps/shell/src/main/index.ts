@@ -25,6 +25,7 @@ import {
 } from 'electron'
 import type { MenuItemConstructorOptions, NativeImage, WebContents } from 'electron'
 import { isHomeSender } from './home-sender-guard'
+import { stringPathsCapped } from './home-paths'
 import {
   bridgeEnvDisabled,
   effectiveLiveBridgeEnabled,
@@ -1412,7 +1413,8 @@ function registerHomeIpc(): void {
 
   ipcMain.handle(HOME_CHANNELS.statPaths, async (event, paths: unknown): Promise<RecentEntry[]> => {
     requireHomeSender(event)
-    return statEntries(stringPaths(paths))
+    // bounded: the Home screen stats hand-picked lists, never thousands
+    return statEntries(stringPathsCapped(paths))
   })
 
   ipcMain.handle(HOME_CHANNELS.toggleStar, (event, path: unknown) => {
