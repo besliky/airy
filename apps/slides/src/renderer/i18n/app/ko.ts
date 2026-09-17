@@ -208,6 +208,9 @@ export const ko = {
   appAiRailText: 'AI',
   appStatusBarSlide: '슬라이드 {current}/{total}',
   appStatusBarReady: '준비',
+  appZoomIn: '확대',
+  appZoomOut: '축소',
+  appZoomLabel: '확대/축소',
   appMediaCloseTitle: '닫기(Esc)',
   appRehearseTitle: '예행 연습',
   appRehearseSummary:

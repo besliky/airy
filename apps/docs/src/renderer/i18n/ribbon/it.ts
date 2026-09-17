@@ -5,6 +5,7 @@ export const it = {
   ribbonAiRewriteConfirm:
     "Questa azione richiama l'IA: consuma crediti e può riscrivere l'intero contenuto. Continuare? (Non verrà più chiesto.)",
   ribbonTabFile: 'File',
+  ribbonTabsLabel: 'Schede della barra multifunzione',
   ribbonTabHome: 'Home',
   ribbonTabInsert: 'Inserisci',
   ribbonTabDraw: 'Disegno',

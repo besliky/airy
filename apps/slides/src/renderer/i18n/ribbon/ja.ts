@@ -6,6 +6,7 @@ export const ja = {
     'この操作は AI を呼び出します。クレジットを消費し、内容全体が書き換えられる可能性があります。続行しますか？（確認後は再表示されません）',
   // tabs
   ribbonTabFile: 'ファイル',
+  ribbonTabsLabel: 'リボンのタブ',
   ribbonTabHome: 'ホーム',
   ribbonTabInsert: '挿入',
   ribbonTabDraw: '描画',

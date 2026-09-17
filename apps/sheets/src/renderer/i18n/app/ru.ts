@@ -665,6 +665,7 @@ export const ru = {
   appTypeLabel: 'Тип',
   appApply: 'Применить',
   appTabHome: 'Главная',
+  appRibbonTabs: 'Вкладки ленты',
   appFileTab: 'Файл',
   appFileOpen: 'Открыть книгу',
   appFileSave: 'Сохранить',

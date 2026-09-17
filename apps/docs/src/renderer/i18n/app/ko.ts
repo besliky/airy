@@ -232,6 +232,9 @@ export const ko = {
   // Status bar / word count
   appPageOf: '{current}/{total} 페이지',
   appWordCountTitle: '단어 개수',
+  appZoomIn: '확대',
+  appZoomOut: '축소',
+  appZoomLabel: '확대/축소',
   appWordCountN: '단어 {n}개',
   appStatPages: '페이지 수',
   appStatWords: '단어 수',

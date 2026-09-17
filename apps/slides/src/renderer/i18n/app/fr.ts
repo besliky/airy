@@ -224,6 +224,9 @@ export const fr = {
   appAiRailText: 'IA',
   appStatusBarSlide: 'Diapositive {current} sur {total}',
   appStatusBarReady: 'Prêt',
+  appZoomIn: 'Zoom avant',
+  appZoomOut: 'Zoom arrière',
+  appZoomLabel: 'Zoom',
   appMediaCloseTitle: 'Fermer (Échap)',
   appRehearseTitle: 'Vérification du minutage',
   appRehearseSummary:

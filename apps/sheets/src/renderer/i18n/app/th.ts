@@ -617,6 +617,7 @@ export const th = {
   appTypeLabel: 'ชนิด',
   appApply: 'นำไปใช้',
   appTabHome: 'หน้าแรก',
+  appRibbonTabs: 'แท็บริบบอน',
   appFileTab: 'ไฟล์',
   appFileOpen: 'เปิดสมุดงาน',
   appFileSave: 'บันทึก',

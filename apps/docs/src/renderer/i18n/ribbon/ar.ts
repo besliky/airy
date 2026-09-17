@@ -5,6 +5,7 @@ export const ar = {
   ribbonAiRewriteConfirm:
     'هذا الإجراء يستدعي الذكاء الاصطناعي: يستهلك الرصيد وقد يعيد كتابة المحتوى بالكامل. هل تريد المتابعة؟ (لن يتم السؤال مرة أخرى.)',
   ribbonTabFile: 'ملف',
+  ribbonTabsLabel: 'علامات تبويب الشريط',
   ribbonTabHome: 'الشريط الرئيسي',
   ribbonTabInsert: 'إدراج',
   ribbonTabDraw: 'رسم',

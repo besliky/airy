@@ -707,6 +707,7 @@ export const fr = {
   appTypeLabel: 'Type',
   appApply: 'Appliquer',
   appTabHome: 'Accueil',
+  appRibbonTabs: 'Onglets du ruban',
   appFileTab: 'Fichier',
   appFileOpen: 'Ouvrir un classeur',
   appFileSave: 'Enregistrer',

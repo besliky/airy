@@ -5,6 +5,7 @@ export const zh = {
     '此操作将调用 AI：会消耗额度，并可能改写整篇内容。是否继续？（确认后不再提示）',
   // Tabs
   ribbonTabFile: '文件',
+  ribbonTabsLabel: '功能区选项卡',
   ribbonTabHome: '开始',
   ribbonTabInsert: '插入',
   ribbonTabDraw: '绘图',

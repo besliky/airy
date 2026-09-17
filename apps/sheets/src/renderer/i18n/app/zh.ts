@@ -579,6 +579,7 @@ export const zh = {
   appApply: '应用',
   // Ribbon tabs
   appTabHome: '开始',
+  appRibbonTabs: '功能区选项卡',
   appFileTab: '文件',
   appFileOpen: '打开工作簿',
   appFileSave: '保存',

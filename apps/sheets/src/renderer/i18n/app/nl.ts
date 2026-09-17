@@ -682,6 +682,7 @@ export const nl = {
   appTypeLabel: 'Type',
   appApply: 'Toepassen',
   appTabHome: 'Start',
+  appRibbonTabs: 'Linttabbladen',
   appFileTab: 'Bestand',
   appFileOpen: 'Werkmap openen',
   appFileSave: 'Opslaan',

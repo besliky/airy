@@ -222,6 +222,9 @@ export const pl = {
   appAiRailText: 'AI',
   appStatusBarSlide: 'Slajd {current} z {total}',
   appStatusBarReady: 'Gotowe',
+  appZoomIn: 'Powiększ',
+  appZoomOut: 'Pomniejsz',
+  appZoomLabel: 'Powiększenie',
   appMediaCloseTitle: 'Zamknij (Esc)',
   appRehearseTitle: 'Próba tempa',
   appRehearseSummary:

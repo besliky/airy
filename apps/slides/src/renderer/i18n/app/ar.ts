@@ -210,6 +210,9 @@ export const ar = {
   appAiRailText: 'AI',
   appStatusBarSlide: 'الشريحة {current} من {total}',
   appStatusBarReady: 'جاهز',
+  appZoomIn: 'تكبير',
+  appZoomOut: 'تصغير',
+  appZoomLabel: 'تكبير/تصغير',
   appMediaCloseTitle: 'إغلاق (Esc)',
   appRehearseTitle: 'التمرن على التوقيت',
   appRehearseSummary:

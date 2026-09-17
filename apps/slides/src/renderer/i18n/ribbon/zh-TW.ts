@@ -5,6 +5,7 @@ export const zhTW = {
   ribbonAiRewriteConfirm:
     '此操作將呼叫 AI：會消耗額度，並可能改寫整篇內容。是否繼續？（確認後不再提示）',
   ribbonTabFile: '檔案',
+  ribbonTabsLabel: '功能區索引標籤',
   ribbonTabHome: '常用',
   ribbonTabInsert: '插入',
   ribbonTabDraw: '繪圖',

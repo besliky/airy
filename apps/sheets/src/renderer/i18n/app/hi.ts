@@ -645,6 +645,7 @@ export const hi = {
   appTypeLabel: 'प्रकार',
   appApply: 'लागू करें',
   appTabHome: 'होम',
+  appRibbonTabs: 'रिबन टैब',
   appFileTab: 'फ़ाइल',
   appFileOpen: 'कार्यपुस्तिका खोलें',
   appFileSave: 'सहेजें',

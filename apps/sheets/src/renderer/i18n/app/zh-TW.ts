@@ -565,6 +565,7 @@ export const zhTW = {
   appTypeLabel: '類型',
   appApply: '套用',
   appTabHome: '常用',
+  appRibbonTabs: '功能區索引標籤',
   appFileTab: '檔案',
   appFileOpen: '開啟活頁簿',
   appFileSave: '儲存',

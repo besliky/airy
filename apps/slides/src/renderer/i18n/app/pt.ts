@@ -223,6 +223,9 @@ export const pt = {
   appAiRailText: 'IA',
   appStatusBarSlide: 'Slide {current} de {total}',
   appStatusBarReady: 'Pronto',
+  appZoomIn: 'Ampliar',
+  appZoomOut: 'Reduzir',
+  appZoomLabel: 'Zoom',
   appMediaCloseTitle: 'Fechar (Esc)',
   appRehearseTitle: 'Testar Intervalos',
   appRehearseSummary:

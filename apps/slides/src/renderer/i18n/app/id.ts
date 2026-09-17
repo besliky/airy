@@ -216,6 +216,9 @@ export const id = {
   appAiRailText: 'AI',
   appStatusBarSlide: 'Slide {current} dari {total}',
   appStatusBarReady: 'Siap',
+  appZoomIn: 'Perbesar',
+  appZoomOut: 'Perkecil',
+  appZoomLabel: 'Zoom',
   appMediaCloseTitle: 'Tutup (Esc)',
   appRehearseTitle: 'Latih Pengaturan Waktu',
   appRehearseSummary:

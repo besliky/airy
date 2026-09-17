@@ -205,6 +205,9 @@ export const he = {
   appAiRailText: 'AI',
   appStatusBarSlide: 'שקופית {current} מתוך {total}',
   appStatusBarReady: 'מוכן',
+  appZoomIn: 'התקרבות',
+  appZoomOut: 'התרחקות',
+  appZoomLabel: 'זום',
   appMediaCloseTitle: 'סגור (Esc)',
   appRehearseTitle: 'חזרה על תזמונים',
   appRehearseSummary:

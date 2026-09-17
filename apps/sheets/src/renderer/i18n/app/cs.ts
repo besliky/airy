@@ -650,6 +650,7 @@ export const cs = {
   appTypeLabel: 'Typ',
   appApply: 'Použít',
   appTabHome: 'Domů',
+  appRibbonTabs: 'Karty pásu karet',
   appFileTab: 'Soubor',
   appFileOpen: 'Otevřít sešit',
   appFileSave: 'Uložit',

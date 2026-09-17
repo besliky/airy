@@ -6,6 +6,7 @@ export const ar = {
     'هذا الإجراء يستدعي الذكاء الاصطناعي: يستهلك الرصيد وقد يعيد كتابة المحتوى بالكامل. هل تريد المتابعة؟ (لن يتم السؤال مرة أخرى.)',
   // tabs
   ribbonTabFile: 'ملف',
+  ribbonTabsLabel: 'علامات تبويب الشريط',
   ribbonTabHome: 'الصفحة الرئيسية',
   ribbonTabInsert: 'إدراج',
   ribbonTabDraw: 'رسم',

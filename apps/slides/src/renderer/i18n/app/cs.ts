@@ -214,6 +214,9 @@ export const cs = {
   appAiRailText: 'AI',
   appStatusBarSlide: 'Snímek {current} z {total}',
   appStatusBarReady: 'Připraveno',
+  appZoomIn: 'Přiblížit',
+  appZoomOut: 'Oddálit',
+  appZoomLabel: 'Lupa',
   appMediaCloseTitle: 'Zavřít (Esc)',
   appRehearseTitle: 'Vyzkoušet časování',
   appRehearseSummary:

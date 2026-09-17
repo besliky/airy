@@ -5,6 +5,7 @@ export const he = {
   ribbonAiRewriteConfirm:
     'פעולה זו מפעילה AI: היא צורכת קרדיטים ועשויה לשכתב את כל התוכן. להמשיך? (לא תישאל שוב.)',
   ribbonTabFile: 'קובץ',
+  ribbonTabsLabel: 'כרטיסיות רצועה',
   ribbonTabHome: 'בית',
   ribbonTabInsert: 'הוספה',
   ribbonTabDraw: 'ציור',

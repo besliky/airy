@@ -647,6 +647,7 @@ export const ms = {
   appTypeLabel: 'Jenis',
   appApply: 'Gunakan',
   appTabHome: 'Laman Utama',
+  appRibbonTabs: 'Tab reben',
   appFileTab: 'Fail',
   appFileOpen: 'Buka Buku Kerja',
   appFileSave: 'Simpan',

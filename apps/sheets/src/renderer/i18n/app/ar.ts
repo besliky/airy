@@ -616,6 +616,7 @@ export const ar = {
   appTypeLabel: 'النوع',
   appApply: 'تطبيق',
   appTabHome: 'الشريط الرئيسي',
+  appRibbonTabs: 'علامات تبويب الشريط',
   appFileTab: 'ملف',
   appFileOpen: 'فتح مصنف',
   appFileSave: 'حفظ',

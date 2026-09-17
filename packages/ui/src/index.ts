@@ -25,6 +25,16 @@ export {
 } from './color-picker'
 export { installScreenTips } from './screentip'
 export {
+  useRibbonTablist,
+  nextRibbonTabIndex,
+  wrapRibbonTabIndex,
+  ribbonTabId,
+  ribbonPanelProps,
+  type UseRibbonTablistOptions,
+  type RibbonTablistController,
+  type RibbonTabProps,
+} from './ribbon-tablist'
+export {
   installPopoverDismiss,
   useDismissablePopover,
   type PopoverDismissOptions,

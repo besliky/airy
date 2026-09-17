@@ -227,6 +227,9 @@ export const de = {
   appAiRailText: 'KI',
   appStatusBarSlide: 'Folie {current} von {total}',
   appStatusBarReady: 'Bereit',
+  appZoomIn: 'Vergrößern',
+  appZoomOut: 'Verkleinern',
+  appZoomLabel: 'Zoom',
   appMediaCloseTitle: 'Schließen (Esc)',
   appRehearseTitle: 'Neue Einblendezeiten testen',
   appRehearseSummary:

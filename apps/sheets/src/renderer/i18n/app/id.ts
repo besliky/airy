@@ -647,6 +647,7 @@ export const id = {
   appTypeLabel: 'Jenis',
   appApply: 'Terapkan',
   appTabHome: 'Beranda',
+  appRibbonTabs: 'Tab pita',
   appFileTab: 'Berkas',
   appFileOpen: 'Buka Buku Kerja',
   appFileSave: 'Simpan',

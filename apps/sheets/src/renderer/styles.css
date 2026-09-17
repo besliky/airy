@@ -454,7 +454,13 @@ html.airy-popover-open .ribbon-tabs {
   padding-right: 150px;
 }
 
-.ribbon-tabs > button:not(.qa-btn) {
+/* ARIA tablist wrapper around the tab buttons: contents-only, so the strip's
+   flex layout keeps working */
+.ribbon-tablist {
+  display: contents;
+}
+
+.ribbon-tabs .ribbon-tablist > button:not(.qa-btn) {
   -webkit-app-region: no-drag;
   position: relative;
   border: 0;
@@ -583,18 +589,18 @@ html.airy-popover-open .ribbon-tabs {
 }
 
 /* Hovering a tab tints the label, it doesn't paint a box */
-.ribbon-tabs > button:not(.qa-btn):hover {
+.ribbon-tabs .ribbon-tablist > button:not(.qa-btn):hover {
   color: var(--accent-dark);
 }
 
-.ribbon-tabs > button:not(.qa-btn).active {
+.ribbon-tabs .ribbon-tablist > button:not(.qa-btn).active {
   color: var(--accent-dark);
   font-weight: 600;
 }
 
 /* active underline: about the label's width (insets past the tab padding),
  * ends slightly rounded — same as the slides ribbon */
-.ribbon-tabs > button:not(.qa-btn).active::after {
+.ribbon-tabs .ribbon-tablist > button:not(.qa-btn).active::after {
   position: absolute;
   right: 13px;
   bottom: -2.5px;
@@ -607,7 +613,7 @@ html.airy-popover-open .ribbon-tabs {
 
 /* Contextual tabs (Chart Design) stand out even while inactive, with a
    colored caption. */
-.ribbon-tabs > button:not(.qa-btn).contextual {
+.ribbon-tabs .ribbon-tablist > button:not(.qa-btn).contextual {
   color: var(--accent-dark);
   font-weight: 600;
 }

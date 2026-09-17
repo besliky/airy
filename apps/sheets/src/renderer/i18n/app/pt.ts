@@ -685,6 +685,7 @@ export const pt = {
   appTypeLabel: 'Tipo',
   appApply: 'Aplicar',
   appTabHome: 'Página Inicial',
+  appRibbonTabs: 'Guias da faixa de opções',
   appFileTab: 'Arquivo',
   appFileOpen: 'Abrir pasta de trabalho',
   appFileSave: 'Salvar',

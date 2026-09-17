@@ -5,6 +5,7 @@ export const hi = {
   ribbonAiRewriteConfirm:
     'यह क्रिया AI को कॉल करती है: इसमें क्रेडिट खर्च होते हैं और पूरी सामग्री फिर से लिखी जा सकती है। जारी रखें? (दोबारा नहीं पूछा जाएगा।)',
   ribbonTabFile: 'फ़ाइल',
+  ribbonTabsLabel: 'रिबन टैब',
   ribbonTabHome: 'होम',
   ribbonTabInsert: 'सम्मिलित करें',
   ribbonTabDraw: 'आरेखण',

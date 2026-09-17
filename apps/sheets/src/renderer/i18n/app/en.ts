@@ -628,6 +628,7 @@ export const en = {
   appTypeLabel: 'Type',
   appApply: 'Apply',
   appTabHome: 'Home',
+  appRibbonTabs: 'Ribbon tabs',
   appFileTab: 'File',
   appFileOpen: 'Open Workbook',
   appFileSave: 'Save',

@@ -5,6 +5,7 @@ export const nl = {
   ribbonAiRewriteConfirm:
     'Deze actie roept AI aan: het verbruikt tegoed en kan de volledige inhoud herschrijven. Doorgaan? (U wordt niet opnieuw gevraagd.)',
   ribbonTabFile: 'Bestand',
+  ribbonTabsLabel: 'Linttabbladen',
   ribbonTabHome: 'Start',
   ribbonTabInsert: 'Invoegen',
   ribbonTabDraw: 'Tekenen',

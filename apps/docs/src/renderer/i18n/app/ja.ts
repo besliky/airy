@@ -232,6 +232,9 @@ export const ja = {
   // Status bar / word count
   appPageOf: '{current} / {total} ページ',
   appWordCountTitle: '文字カウント',
+  appZoomIn: '拡大',
+  appZoomOut: '縮小',
+  appZoomLabel: 'ズーム',
   appWordCountN: '{n} 文字',
   appStatPages: 'ページ数',
   appStatWords: '単語数',

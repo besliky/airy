@@ -5,6 +5,7 @@ export const th = {
   ribbonAiRewriteConfirm:
     'การดำเนินการนี้จะเรียกใช้ AI: ใช้เครดิตและอาจเขียนเนื้อหาทั้งหมดใหม่ ดำเนินการต่อหรือไม่ (จะไม่ถามอีก)',
   ribbonTabFile: 'ไฟล์',
+  ribbonTabsLabel: 'แท็บริบบอน',
   ribbonTabHome: 'หน้าแรก',
   ribbonTabInsert: 'แทรก',
   ribbonTabDraw: 'วาด',

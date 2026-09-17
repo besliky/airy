@@ -451,6 +451,12 @@ button {
   -webkit-app-region: no-drag;
 }
 
+/* ARIA tablist wrapper around the tab buttons: contents-only, so the strip's
+   flex layout keeps working */
+.ribbon-tablist {
+  display: contents;
+}
+
 /* While a ribbon popup is open the row must deliver mousedown (drag regions
    swallow it), so outside-press dismissal can see presses on the blank band */
 .ribbon-tabs.ribbon-tabs-nodrag {

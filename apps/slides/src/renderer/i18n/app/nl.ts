@@ -226,6 +226,9 @@ export const nl = {
   appAiRailText: 'AI',
   appStatusBarSlide: 'Dia {current} van {total}',
   appStatusBarReady: 'Gereed',
+  appZoomIn: 'Inzoomen',
+  appZoomOut: 'Uitzoomen',
+  appZoomLabel: 'In-/uitzoomen',
   appMediaCloseTitle: 'Sluiten (Esc)',
   appRehearseTitle: 'Try-out',
   appRehearseSummary:

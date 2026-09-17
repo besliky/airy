@@ -221,6 +221,9 @@ export const hi = {
   appAiRailText: 'AI',
   appStatusBarSlide: 'स्लाइड {current} / {total}',
   appStatusBarReady: 'तैयार',
+  appZoomIn: 'ज़ूम इन',
+  appZoomOut: 'ज़ूम आउट',
+  appZoomLabel: 'ज़ूम',
   appMediaCloseTitle: 'बंद करें (Esc)',
   appRehearseTitle: 'समय का पूर्वाभ्यास',
   appRehearseSummary:

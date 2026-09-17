@@ -682,6 +682,7 @@ export const ja = {
   appApply: '適用',
   // Ribbon tabs
   appTabHome: 'ホーム',
+  appRibbonTabs: 'リボンのタブ',
   appFileTab: 'ファイル',
   appFileOpen: 'ワークシートを開く',
   appFileSave: '保存',

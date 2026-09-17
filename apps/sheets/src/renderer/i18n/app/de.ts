@@ -695,6 +695,7 @@ export const de = {
   appTypeLabel: 'Typ',
   appApply: 'Anwenden',
   appTabHome: 'Start',
+  appRibbonTabs: 'Menüband-Registerkarten',
   appFileTab: 'Datei',
   appFileOpen: 'Arbeitsmappe öffnen',
   appFileSave: 'Speichern',

@@ -5,8 +5,10 @@ import {
   RibbonCollapseButton,
   SHAPE_GALLERY_GROUPS,
   ShapePreview,
+  ribbonPanelProps,
   useDismissablePopover,
   useRibbonCollapse,
+  useRibbonTablist,
 } from '@airy-office/ui'
 
 import {
@@ -84,6 +86,9 @@ const TAB_LABEL: Record<RibbonTab, StringKey> = {
   View: 'appTabView',
   'Chart Design': 'appTabChartDesign',
 }
+
+/** DOM id prefix shared by the tablist in ExcelShell and the band's tabpanel */
+const RIBBON_ID_PREFIX = 'sheets-ribbon'
 
 export interface SelectedChartRibbon {
   readonly title: string
@@ -544,6 +549,19 @@ export function ExcelShell({
     ? [...ribbonTabs, 'Chart Design']
     : ribbonTabs
   const saveAsTitle = `${t('appSaveAs')} (${platformShortcuts('⇧⌘S')})`
+  // WAI-ARIA tabs: the tab strip is a tablist (roving tabindex, automatic
+  // activation on arrow keys); the Ribbon band renders the tabpanel
+  const selectRibbonTab = (name: string) => {
+    collapse.onTabPress(name === activeTab)
+    setActiveTab(name as RibbonTab)
+  }
+  const ribbonTablist = useRibbonTablist({
+    tabs: visibleTabs as readonly string[],
+    activeTab,
+    idPrefix: RIBBON_ID_PREFIX,
+    label: t('appRibbonTabs'),
+    onSelect: selectRibbonTab,
+  })
 
   return (
     <main className={`app-shell ${isCopilotOpen ? '' : 'copilot-collapsed'}`}>
@@ -674,18 +692,18 @@ export function ExcelShell({
             />
           </label>
           <span className="qa-sep" aria-hidden="true" />
-          {visibleTabs.map((tab) => (
-            <button
-              className={`${tab === activeTab ? 'active' : ''} ${tab === 'Chart Design' ? 'contextual' : ''}`}
-              key={tab}
-              onClick={() => {
-                collapse.onTabPress(tab === activeTab)
-                setActiveTab(tab)
-              }}
-            >
-              {t(TAB_LABEL[tab])}
-            </button>
-          ))}
+          <div className="ribbon-tablist" {...ribbonTablist.tablistProps}>
+            {visibleTabs.map((tab) => (
+              <button
+                className={`${tab === activeTab ? 'active' : ''} ${tab === 'Chart Design' ? 'contextual' : ''}`}
+                key={tab}
+                {...ribbonTablist.tabProps(tab)}
+                onClick={() => selectRibbonTab(tab)}
+              >
+                {t(TAB_LABEL[tab])}
+              </button>
+            ))}
+          </div>
           <span className="ribbon-tabs-spacer" />
           <span className="workbook-status" role="status" aria-live="polite">
             {statusMessage}
@@ -1528,7 +1546,11 @@ function Ribbon({
       },
     ]
     return (
-      <div className="ribbon" data-ribbon-body="">
+      <div
+        className="ribbon"
+        data-ribbon-body=""
+        {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}
+      >
         <RibbonGroup label={t('appGroupChartLayouts')}>
           {canEditChart ? (
             largeMenu(t('appAddChartElement'), '📊', t('appAddChartElementTitle'), elementOptions)
@@ -1647,7 +1669,11 @@ function Ribbon({
 
   if (activeTab === 'Insert') {
     return (
-      <div className="ribbon" data-ribbon-body="">
+      <div
+        className="ribbon"
+        data-ribbon-body=""
+        {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}
+      >
         <RibbonGroup label={t('appGroupTables')}>
           <RibbonButton
             large
@@ -1918,7 +1944,11 @@ function Ribbon({
       narrow: t('appMarginNarrow'),
     } as const
     return (
-      <div className="ribbon" data-ribbon-body="">
+      <div
+        className="ribbon"
+        data-ribbon-body=""
+        {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}
+      >
         <RibbonGroup label={t('appGroupThemes')}>
           {largeMenu(
             t('appGroupThemes'),
@@ -2101,7 +2131,11 @@ function Ribbon({
       />
     )
     return (
-      <div className="ribbon" data-ribbon-body="">
+      <div
+        className="ribbon"
+        data-ribbon-body=""
+        {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}
+      >
         <RibbonGroup label={t('appGroupFunctionLibrary')}>
           <RibbonButton
             large
@@ -2268,7 +2302,11 @@ function Ribbon({
 
   if (activeTab === 'Data') {
     return (
-      <div className="ribbon" data-ribbon-body="">
+      <div
+        className="ribbon"
+        data-ribbon-body=""
+        {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}
+      >
         <RibbonGroup label={t('appPivotTable')}>
           <RibbonButton
             large
@@ -2425,7 +2463,11 @@ function Ribbon({
 
   if (activeTab === 'View') {
     return (
-      <div className="ribbon" data-ribbon-body="">
+      <div
+        className="ribbon"
+        data-ribbon-body=""
+        {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}
+      >
         <RibbonGroup label={t('appGroupWorkbookViews')}>
           <RibbonButton
             large
@@ -2522,7 +2564,11 @@ function Ribbon({
 
   if (activeTab === 'Review') {
     return (
-      <div className="ribbon" data-ribbon-body="">
+      <div
+        className="ribbon"
+        data-ribbon-body=""
+        {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}
+      >
         <RibbonGroup label={t('appGroupProofing')}>
           <RibbonButton
             large
@@ -2647,7 +2693,7 @@ function Ribbon({
     ? fontSizes
     : [...fontSizes, echoSize].sort((a, b) => a - b)
   return (
-    <div className="ribbon" data-ribbon-body="">
+    <div className="ribbon" data-ribbon-body="" {...ribbonPanelProps(RIBBON_ID_PREFIX, activeTab)}>
       <RibbonGroup label={t('appGroupAiAssistant')}>
         <button
           className={`ribbon-tool as-button large ai-entry ${aiOpen ? 'active' : ''}`}

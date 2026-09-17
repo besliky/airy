@@ -4017,7 +4017,12 @@ export function App() {
               ) : (
                 t('appStatusBarReady')
               )}
-              {status && <span className="status-msg"> — {status}</span>}
+              {status && (
+                <span className="status-msg" role="status" aria-live="polite">
+                  {' '}
+                  — {status}
+                </span>
+              )}
             </div>
             <div className="status-right">
               {hasDoc && (
@@ -4268,6 +4273,7 @@ function ZoomControls({
   readonly onPreview: (z: number | ((current: number) => number)) => void
 }) {
   const [live, setLive] = useState(() => Math.round(zoom * 100))
+  const { t } = useI18n()
   // adopt outside commits (fit, pinch, menu) once they land
   useEffect(() => setLive(Math.round(zoom * 100)), [zoom])
   // Buttons go through the preview path too: the zoom pivots on the viewport center and
@@ -4278,7 +4284,12 @@ function ZoomControls({
   }
   return (
     <>
-      <button className="zoom-btn" onClick={() => step(-1)}>
+      <button
+        className="zoom-btn"
+        data-tip={t('appZoomOut')}
+        aria-label={t('appZoomOut')}
+        onClick={() => step(-1)}
+      >
         −
       </button>
       <input
@@ -4287,6 +4298,7 @@ function ZoomControls({
         min={25}
         max={300}
         step={5}
+        aria-label={t('appZoomLabel')}
         style={{ '--zoom-pct': `${((live - 25) / 275) * 100}%` } as React.CSSProperties}
         value={live}
         onChange={(e) => {
@@ -4295,7 +4307,12 @@ function ZoomControls({
           onPreview(v / 100)
         }}
       />
-      <button className="zoom-btn" onClick={() => step(1)}>
+      <button
+        className="zoom-btn"
+        data-tip={t('appZoomIn')}
+        aria-label={t('appZoomIn')}
+        onClick={() => step(1)}
+      >
         +
       </button>
       <span className="zoom-value">{live}%</span>

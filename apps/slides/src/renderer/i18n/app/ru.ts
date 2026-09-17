@@ -218,6 +218,9 @@ export const ru = {
   appAiRailText: 'ИИ',
   appStatusBarSlide: 'Слайд {current} из {total}',
   appStatusBarReady: 'Готово',
+  appZoomIn: 'Увеличить',
+  appZoomOut: 'Уменьшить',
+  appZoomLabel: 'Масштаб',
   appMediaCloseTitle: 'Закрыть (Esc)',
   appRehearseTitle: 'Настройка времени',
   appRehearseSummary:

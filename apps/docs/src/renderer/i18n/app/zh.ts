@@ -221,6 +221,9 @@ export const zh = {
   // Status bar / word count
   appPageOf: '第 {current} 页,共 {total} 页',
   appWordCountTitle: '字数统计',
+  appZoomIn: '放大',
+  appZoomOut: '缩小',
+  appZoomLabel: '缩放',
   appWordCountN: '{n} 个字',
   appStatPages: '页数',
   appStatWords: '字数',

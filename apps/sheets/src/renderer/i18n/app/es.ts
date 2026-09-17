@@ -686,6 +686,7 @@ export const es = {
   appTypeLabel: 'Tipo',
   appApply: 'Aplicar',
   appTabHome: 'Inicio',
+  appRibbonTabs: 'Pestañas de la cinta',
   appFileTab: 'Archivo',
   appFileOpen: 'Abrir libro',
   appFileSave: 'Guardar',

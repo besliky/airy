@@ -657,6 +657,7 @@ export const ko = {
   appApply: '적용',
   // Ribbon tabs
   appTabHome: '홈',
+  appRibbonTabs: '리본 탭',
   appFileTab: '파일',
   appFileOpen: '통합 문서 열기',
   appFileSave: '저장',

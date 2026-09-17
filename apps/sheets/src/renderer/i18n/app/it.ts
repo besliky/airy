@@ -683,6 +683,7 @@ export const it = {
   appTypeLabel: 'Tipo',
   appApply: 'Applica',
   appTabHome: 'Home',
+  appRibbonTabs: 'Schede della barra multifunzione',
   appFileTab: 'File',
   appFileOpen: 'Apri cartella di lavoro',
   appFileSave: 'Salva',

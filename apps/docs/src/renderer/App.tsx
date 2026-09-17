@@ -5035,11 +5035,18 @@ export function App() {
                 </>
               )}
               {!doc && t('appReady')}
-              {status && <span className="status-msg"> — {status}</span>}
+              {status && (
+                <span className="status-msg" role="status" aria-live="polite">
+                  {' '}
+                  — {status}
+                </span>
+              )}
             </div>
             <div className="status-right">
               <button
                 className="zoom-btn"
+                data-tip={t('appZoomOut')}
+                aria-label={t('appZoomOut')}
                 onClick={() => setZoom((z) => Math.max(50, Math.round(z) - 10))}
               >
                 −
@@ -5050,11 +5057,14 @@ export function App() {
                 min={50}
                 max={400}
                 step={10}
+                aria-label={t('appZoomLabel')}
                 value={Math.round(zoom)}
                 onChange={(e) => setZoom(Number(e.target.value))}
               />
               <button
                 className="zoom-btn"
+                data-tip={t('appZoomIn')}
+                aria-label={t('appZoomIn')}
                 onClick={() => setZoom((z) => Math.min(400, Math.round(z) + 10))}
               >
                 +

@@ -673,6 +673,7 @@ export const pl = {
   appTypeLabel: 'Typ',
   appApply: 'Zastosuj',
   appTabHome: 'Narzędzia główne',
+  appRibbonTabs: 'Karty wstążki',
   appFileTab: 'Plik',
   appFileOpen: 'Otwórz skoroszyt',
   appFileSave: 'Zapisz',

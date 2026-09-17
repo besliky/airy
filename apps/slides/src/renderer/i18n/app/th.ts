@@ -207,6 +207,9 @@ export const th = {
   appAiRailText: 'AI',
   appStatusBarSlide: 'สไลด์ {current} จาก {total}',
   appStatusBarReady: 'พร้อม',
+  appZoomIn: 'ขยาย',
+  appZoomOut: 'ย่อ',
+  appZoomLabel: 'ย่อ/ขยาย',
   appMediaCloseTitle: 'ปิด (Esc)',
   appRehearseTitle: 'ซ้อมการกำหนดเวลา',
   appRehearseSummary:

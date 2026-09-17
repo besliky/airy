@@ -5,6 +5,7 @@ export const pl = {
   ribbonAiRewriteConfirm:
     'Ta akcja wywołuje AI: zużywa kredyty i może przepisać całą treść. Kontynuować? (Nie zapytamy ponownie.)',
   ribbonTabFile: 'Plik',
+  ribbonTabsLabel: 'Karty wstążki',
   ribbonTabHome: 'Narzędzia główne',
   ribbonTabInsert: 'Wstawianie',
   ribbonTabDraw: 'Rysowanie',

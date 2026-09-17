@@ -220,6 +220,9 @@ export const ms = {
   appAiRailText: 'AI',
   appStatusBarSlide: 'Slaid {current} daripada {total}',
   appStatusBarReady: 'Sedia',
+  appZoomIn: 'Zum masuk',
+  appZoomOut: 'Zum keluar',
+  appZoomLabel: 'Zum',
   appMediaCloseTitle: 'Tutup (Esc)',
   appRehearseTitle: 'Raptai Pemasaan',
   appRehearseSummary:

@@ -427,6 +427,12 @@ button {
   -webkit-app-region: no-drag;
 }
 
+/* ARIA tablist wrapper around the tab buttons: contents-only, so the strip's
+   flex layout and child selectors keep working */
+.ribbon-tablist {
+  display: contents;
+}
+
 /* While a popover is open the row must deliver presses (drag regions swallow
    them), so outside-press dismissal can see presses on the blank band */
 html.airy-popover-open .ribbon-tabs {

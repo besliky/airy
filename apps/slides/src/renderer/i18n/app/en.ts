@@ -211,6 +211,9 @@ export const en = {
   appAiRailText: 'AI',
   appStatusBarSlide: 'Slide {current} of {total}',
   appStatusBarReady: 'Ready',
+  appZoomIn: 'Zoom in',
+  appZoomOut: 'Zoom out',
+  appZoomLabel: 'Zoom',
   appMediaCloseTitle: 'Close (Esc)',
   appRehearseTitle: 'Rehearse Timings',
   appRehearseSummary:

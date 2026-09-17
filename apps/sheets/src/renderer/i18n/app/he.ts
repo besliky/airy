@@ -596,6 +596,7 @@ export const he = {
   appTypeLabel: 'סוג',
   appApply: 'החל',
   appTabHome: 'בית',
+  appRibbonTabs: 'כרטיסיות רצועה',
   appFileTab: 'קובץ',
   appFileOpen: 'פתיחת חוברת עבודה',
   appFileSave: 'שמירה',

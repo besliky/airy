@@ -212,6 +212,9 @@ export const ja = {
   appAiRailText: 'AI',
   appStatusBarSlide: 'スライド {current} / {total}',
   appStatusBarReady: '準備完了',
+  appZoomIn: '拡大',
+  appZoomOut: '縮小',
+  appZoomLabel: 'ズーム',
   appMediaCloseTitle: '閉じる (Esc)',
   appRehearseTitle: 'リハーサル',
   appRehearseSummary:
