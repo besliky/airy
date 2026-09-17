@@ -17,13 +17,14 @@ import { UniverFormulaEnginePlugin } from '@univerjs/engine-formula'
 import { UniverSheetsPlugin } from '@univerjs/sheets'
 import { UniverSheetsFormulaPlugin } from '@univerjs/sheets-formula'
 import '@univerjs/sheets/lib/facade'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { createUniver } from '../src/renderer/create-univer'
 import {
   applyCrossSheetRewrites,
   collectCrossSheetDependentRewrites,
   deleteSpanSpec,
+  finishCrossSheetRewrites,
 } from '../src/renderer/delete-ref-rewrite'
 import type { LazyWorkbookState } from '../src/renderer/univer-state'
 
@@ -129,5 +130,89 @@ describe('cross-sheet #REF! rewrite around remove-row', () => {
     expect(main.getRange(4, 2).getFormulas()[0]?.[0]).toBe('=B3+C3')
     const other = workbook.getSheetBySheetId('other')!
     expect(other.getRange(1, 1).getValue()).toBe(10)
+  })
+
+  it('drops the rewrite when the command declines (rows never removed)', async () => {
+    const runtime = createUniver({
+      locale: LocaleType.EN_US,
+      locales: {},
+      presets: [
+        { plugins: [UniverFormulaEnginePlugin] },
+        { plugins: [UniverSheetsPlugin] },
+        { plugins: [UniverSheetsFormulaPlugin] },
+      ],
+    })
+    runtime.univer.createUnit(UniverInstanceType.UNIVER_SHEET, {
+      id: 'wb1',
+      sheetOrder: ['main', 'other'],
+      name: 'wb',
+      styles: {},
+      sheets: {
+        main: { id: 'main', name: 'Main', rowCount: 20, columnCount: 8, cellData: {} },
+        other: { id: 'other', name: 'Other', rowCount: 20, columnCount: 8, cellData: {} },
+      },
+    })
+    runtime.univer.__getInjector().get(IUniverInstanceService).focusUnit('wb1')
+    const commandService = runtime.univer.__getInjector().get(ICommandService)
+    await commandService.executeCommand('sheet.command.set-range-values', {
+      unitId: 'wb1',
+      subUnitId: 'main',
+      range: { startRow: 4, endRow: 4, startColumn: 0, endColumn: 0 },
+      value: { 4: { 0: { f: '=SUM(Other!B2:B3)' } } },
+    })
+    const workbook = runtime.univerAPI.getActiveWorkbook()!
+    const main = workbook.getSheetBySheetId('main')!
+    const other = workbook.getSheetBySheetId('other')!
+    const spec = deleteSpanSpec(lazyState(), () => 'Other', {
+      op: 'delete_rows',
+      sheetId: 'other',
+      row: 2,
+      count: 2,
+    })
+    const countBefore = other.getMaxRows()
+
+    // The gate registers its one-shot finish on CommandExecuted; a DECLINED
+    // command (invalid sheet id — same shape as a protected-sheet refusal)
+    // still emits CommandExecuted but leaves the model untouched.
+    let executed = false
+    const disposable = runtime.univerAPI.addEvent(runtime.univerAPI.Event.CommandExecuted, (e) => {
+      if (e.id === 'sheet.command.remove-row') executed = true
+    })
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    try {
+      const outcome = await commandService.executeCommand('sheet.command.remove-row', {
+        unitId: 'wb1',
+        subUnitId: 'missing-sheet',
+        range: { startRow: 1, endRow: 2, startColumn: 0, endColumn: 7 },
+      })
+      expect(outcome).toBe(false)
+      expect(executed).toBe(true)
+      expect(other.getMaxRows()).toBe(countBefore)
+
+      const applied = finishCrossSheetRewrites({
+        runtime,
+        state: lazyState(),
+        workbook,
+        spec,
+        countBefore,
+        spanCount: 2,
+        beginBatch: () => {
+          const batching = runtime.univer
+            .__getInjector()
+            .get(IUndoRedoService)
+            .__tempBatchingUndoRedo('wb1')
+          return { settle: () => batching.dispose() }
+        },
+      })
+      // No rewrite commands journaled, formulas untouched
+      expect(applied).toBe(false)
+      expect(main.getRange(4, 0).getFormulas()[0]?.[0]).toBe('=SUM(Other!B2:B3)')
+      expect(debug).toHaveBeenCalledWith(
+        'cross-sheet #REF! rewrite skipped: the deletion did not land',
+      )
+    } finally {
+      debug.mockRestore()
+      disposable.dispose()
+    }
   })
 })

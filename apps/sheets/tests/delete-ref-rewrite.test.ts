@@ -7,12 +7,14 @@
  * rewriter's semantics. The gateway's own emission is covered in
  * xlsx-structure.test.ts.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   applyCrossSheetRewrites,
   collectCrossSheetDependentRewrites,
+  deletionLanded,
   deleteSpanSpec,
+  finishCrossSheetRewrites,
   rewriteFormulaForDeletedSpan,
   rewriteHarvestedFormulaTexts,
   type RewriteWorkbook,
@@ -91,14 +93,17 @@ describe('rewriteFormulaForDeletedSpan', () => {
   })
 })
 
-function scanWorkbook(formulasBySheet: Record<string, string[][]>): RewriteWorkbook {
+function scanWorkbook(
+  formulasBySheet: Record<string, string[][]>,
+  dims: Record<string, { rows?: number; columns?: number }> = {},
+): RewriteWorkbook {
   return {
     getSheets: () =>
       Object.entries(formulasBySheet).map(([sheetId, rows]) => ({
         getSheetId: () => sheetId,
         getSheetName: () => (sheetId === 'sh1' ? 'Data' : 'Other'),
-        getMaxRows: () => 20,
-        getMaxColumns: () => 8,
+        getMaxRows: () => dims[sheetId]?.rows ?? 20,
+        getMaxColumns: () => dims[sheetId]?.columns ?? 8,
         getRange: () => ({ getFormulas: () => rows }),
       })),
   }
@@ -207,6 +212,101 @@ describe('applyCrossSheetRewrites', () => {
     expect(() =>
       applyCrossSheetRewrites(runtime, [{ sheetId: 'sh2', row: 0, column: 0, formula: '=#REF!' }]),
     ).not.toThrow()
+  })
+})
+
+describe('deletionLanded', () => {
+  it('is true when the sheet shrank by exactly the deleted span', () => {
+    expect(deletionLanded(scanWorkbook({ sh1: [] }, { sh1: { rows: 18 } }), delRows78, 20, 2)).toBe(
+      true,
+    )
+    expect(deletionLanded(scanWorkbook({ sh1: [] }, { sh1: { columns: 6 } }), delDE, 8, 2)).toBe(
+      true,
+    )
+  })
+
+  it('is false when the model is unchanged (declined command) or moved otherwise', () => {
+    // Univer emits CommandExecuted even when the handler declines
+    // (protected sheet, invalid range) — the model never moved.
+    expect(deletionLanded(scanWorkbook({ sh1: [] }), delRows78, 20, 2)).toBe(false)
+    expect(deletionLanded(scanWorkbook({ sh1: [] }, { sh1: { rows: 19 } }), delRows78, 20, 2)).toBe(
+      false,
+    )
+    expect(deletionLanded(scanWorkbook({ sh1: [] }, { sh1: { rows: 20 } }), delRows78, 20, 2)).toBe(
+      false,
+    )
+  })
+
+  it('is false without the sheet or a real span', () => {
+    expect(deletionLanded(scanWorkbook({ sh2: [] }), delRows78, 20, 2)).toBe(false)
+    expect(deletionLanded(scanWorkbook({ sh1: [] }, { sh1: { rows: 20 } }), delRows78, 20, 0)).toBe(
+      false,
+    )
+  })
+})
+
+describe('finishCrossSheetRewrites', () => {
+  function spyRuntime(): {
+    runtime: Parameters<typeof applyCrossSheetRewrites>[0]
+    commands: Array<{ id: string; params: Record<string, unknown> }>
+  } {
+    const commands: Array<{ id: string; params: Record<string, unknown> }> = []
+    return {
+      commands,
+      runtime: {
+        univer: {
+          __getInjector: () => ({
+            get: () => ({
+              syncExecuteCommand: (id: string, params?: Record<string, unknown>) => {
+                commands.push({ id, params: params ?? {} })
+              },
+            }),
+          }),
+        },
+        univerAPI: { getActiveWorkbook: () => ({ getId: () => 'file-sha' }) },
+      },
+    }
+  }
+
+  it('drops the rewrite when the deletion never landed (declined command)', () => {
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    try {
+      const { runtime, commands } = spyRuntime()
+      const harvested = new Map([['sh2', new Map([['6:0', '=Data!D7']])]])
+      const st = state({ formulaText: harvested })
+      // the model still has its original 20 rows — the command was declined
+      const applied = finishCrossSheetRewrites({
+        runtime: runtime as never,
+        state: st,
+        workbook: scanWorkbook({ sh2: [['=Data!D7']] }),
+        spec: delRows78,
+        countBefore: 20,
+        spanCount: 2,
+      })
+      expect(applied).toBe(false)
+      expect(commands).toEqual([])
+      expect(harvested.get('sh2')?.get('6:0')).toBe('=Data!D7')
+    } finally {
+      debug.mockRestore()
+    }
+  })
+
+  it('applies journaled rewrites and harvested-text updates once landed', () => {
+    const { runtime, commands } = spyRuntime()
+    const harvested = new Map([['sh2', new Map([['6:0', '=Data!D7']])]])
+    const st = state({ formulaText: harvested })
+    const applied = finishCrossSheetRewrites({
+      runtime: runtime as never,
+      state: st,
+      // rows shrank 20 → 18 as requested
+      workbook: scanWorkbook({ sh1: [], sh2: [['=Data!D7']] }, { sh1: { rows: 18 } }),
+      spec: delRows78,
+      countBefore: 20,
+      spanCount: 2,
+    })
+    expect(applied).toBe(true)
+    expect(commands.map((c) => c.id)).toEqual(['sheet.command.set-range-values'])
+    expect(harvested.get('sh2')?.get('6:0')).toBe('=#REF!')
   })
 })
 

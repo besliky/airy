@@ -112,6 +112,25 @@ export interface RewriteWorkbook {
   }[]
 }
 
+/// Whether the deletion the rewrites were computed for actually landed in the
+/// model: the sheet's row/column count shrank by the deleted span's size.
+/// Univer emits CommandExecuted even when the command handler DECLINES
+/// (protected sheet, invalid range), and the safety-valve timeout reaches the
+/// same finish() path after a throw or cancel — without this check a declined
+/// deletion would rewrite qualified references on other sheets to #REF!/clipped
+/// forms via journaled commands and reach the next save.
+export function deletionLanded(
+  workbook: RewriteWorkbook,
+  spec: DeletedSpanSpec,
+  beforeCount: number,
+  deletedCount: number,
+): boolean {
+  const sheet = workbook.getSheets().find((candidate) => candidate.getSheetId() === spec.sheetId)
+  if (!sheet) return false
+  const afterCount = spec.axis === 'row' ? sheet.getMaxRows() : sheet.getMaxColumns()
+  return deletedCount > 0 && afterCount === beforeCount - deletedCount
+}
+
 /// Formulas on every OTHER sheet that reference the deleted span (only
 /// sheet-qualified tokens can) and need a #REF!/clip rewrite in the model.
 /// Same-sheet formulas are left to Univer's own remove-row/col rewriting.
@@ -194,4 +213,47 @@ export function applyCrossSheetRewrites(
       value: { [rewrite.row]: { [rewrite.column]: { f: rewrite.formula } } },
     })
   }
+}
+
+/// Inputs of the finish step the BeforeCommandExecute gate runs once the
+/// deletion settles (CommandExecuted, or the safety valve on cancel/throw).
+export interface FinishRewritesArgs {
+  runtime: RewriteRuntime
+  state: LazyWorkbookState
+  workbook: RewriteWorkbook
+  spec: DeletedSpanSpec
+  /** sheet row/column count captured before the command ran */
+  countBefore: number | undefined
+  /** size of the requested deleted span */
+  spanCount: number
+  /** opens one undo item for all the rewrites; null/omitted while an AI bulk
+   *  edit owns its own batch (injected to keep this module import-light) */
+  beginBatch?: (() => { settle(): void }) | null
+}
+
+/// The finish step of the cross-sheet #REF! flow: verify the deletion
+/// actually landed, then re-collect rewrites from the (relocated) model and
+/// apply them as journaled commands under one undo item. Returns false —
+/// rewrites dropped, a console.debug note left — when the deletion never
+/// executed: Univer emits CommandExecuted even when the handler declines
+/// (protected sheet, invalid range) and the safety valve reaches this step
+/// after a throw or cancel, and rewriting formulas for a deletion that did
+/// not happen would corrupt the workbook at the next save.
+export function finishCrossSheetRewrites(args: FinishRewritesArgs): boolean {
+  const { runtime, state, workbook, spec, countBefore, spanCount, beginBatch } = args
+  if (countBefore === undefined || !deletionLanded(workbook, spec, countBefore, spanCount)) {
+    console.debug('cross-sheet #REF! rewrite skipped: the deletion did not land')
+    return false
+  }
+  const batch = beginBatch?.() ?? null
+  try {
+    applyCrossSheetRewrites(runtime, collectCrossSheetDependentRewrites(state, workbook, spec))
+    rewriteHarvestedFormulaTexts(state, spec)
+  } catch {
+    // Best-effort model polish; the save's own #REF! emission remains the
+    // backstop for file correctness.
+  } finally {
+    batch?.settle()
+  }
+  return true
 }

@@ -49,10 +49,9 @@ import {
   type PlanContext,
 } from './plan-operations'
 import {
-  applyCrossSheetRewrites,
   collectCrossSheetDependentRewrites,
   deleteSpanSpec,
-  rewriteHarvestedFormulaTexts,
+  finishCrossSheetRewrites,
 } from './delete-ref-rewrite'
 import { isNumericIdentifierText } from './cell-warning'
 import { consumePendingUndoCarry, undoStackDepth } from './undo-carry'
@@ -2350,8 +2349,9 @@ export function App(): React.JSX.Element {
           // They land as their own undo item on top of the deletion's, so
           // ⌘Z restores the original formulas and a second ⌘Z the rows
           // (same-sheet deletions remain Univer's native single-step undo).
-          // A command canceled by a later gate never completes and the
-          // rewrites never run.
+          // CommandExecuted fires even for declined commands and the safety
+          // valve fires on cancel/throw, so the rewrites apply only after
+          // verifying the deletion actually landed in the model.
           if (sheet && /^sheet\.command\.remove-(row|col)/.test(event.id)) {
             const uiWorkbook = runtime.univerAPI.getActiveWorkbook()
             const range =
@@ -2377,27 +2377,39 @@ export function App(): React.JSX.Element {
                 removeOp,
               )
               if (collectCrossSheetDependentRewrites(state, uiWorkbook, spec).length > 0) {
+                // Span size and sheet row/column count before the command
+                // runs — the landed check compares against them once the
+                // command settles.
+                const isRow = event.id.includes('remove-row')
+                const spanCount = isRow
+                  ? range.endRow - range.startRow + 1
+                  : range.endColumn - range.startColumn + 1
+                const spanSheet = uiWorkbook.getSheetBySheetId(sheet.id)
+                const countBefore = spanSheet
+                  ? isRow
+                    ? spanSheet.getMaxRows()
+                    : spanSheet.getMaxColumns()
+                  : undefined
                 let settled = false
                 const finish = () => {
                   if (settled) return
                   settled = true
                   disposable.dispose()
                   clearTimeout(safety)
-                  // One undo item for all the rewrites (the AI path's open
-                  // batch already folds them into its own item).
-                  const batch = aiBulkUndoGate.active ? null : beginUndoBatch(runtime)
-                  try {
-                    applyCrossSheetRewrites(
-                      runtime,
-                      collectCrossSheetDependentRewrites(state, uiWorkbook, spec),
-                    )
-                    rewriteHarvestedFormulaTexts(state, spec)
-                  } catch {
-                    // Best-effort model polish; the save's own #REF!
-                    // emission remains the backstop for file correctness.
-                  } finally {
-                    batch?.settle()
-                  }
+                  // Verifies the deletion landed (CommandExecuted fires even
+                  // for declined commands; the safety valve fires on
+                  // cancel/throw) before re-collecting from the relocated
+                  // model and applying the rewrites under one undo item (the
+                  // AI path's open batch already folds them into its own).
+                  finishCrossSheetRewrites({
+                    runtime,
+                    state,
+                    workbook: uiWorkbook,
+                    spec,
+                    countBefore,
+                    spanCount,
+                    beginBatch: aiBulkUndoGate.active ? null : () => beginUndoBatch(runtime),
+                  })
                 }
                 const disposable = runtime.univerAPI.addEvent(
                   runtime.univerAPI.Event.CommandExecuted,
