@@ -1,3 +1,5 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
@@ -180,8 +182,6 @@ describe('persisted dialog directories (lastDialogDirs LRU)', () => {
   })
 
   it('round-trips through app-settings.json atomically', async () => {
-    const { mkdtempSync, readFileSync, rmSync } = await import('node:fs')
-    const { tmpdir } = await import('node:os')
     const scratch = mkdtempSync(join(tmpdir(), 'airy-dialog-dirs-'))
     try {
       const settingsPath = join(scratch, 'app-settings.json')
@@ -204,8 +204,6 @@ describe('persisted dialog directories (lastDialogDirs LRU)', () => {
   })
 
   it('tolerates malformed persisted values', () => {
-    const { mkdtempSync, writeFileSync, rmSync } = require('node:fs') as typeof import('node:fs')
-    const { tmpdir } = require('node:os') as typeof import('node:os')
     const scratch = mkdtempSync(join(tmpdir(), 'airy-dialog-dirs-bad-'))
     try {
       const settingsPath = join(scratch, 'app-settings.json')
