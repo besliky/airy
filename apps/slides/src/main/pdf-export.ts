@@ -12,7 +12,8 @@ export interface PdfExportWindow {
 }
 
 export interface ExportSlidesPdfOptions {
-  pngsBase64: string[]
+  /** one entry per exported slide: inline vector SVG (preferred) or raster PNG fallback */
+  pages: Array<{ svg?: string; pngBase64?: string }>
   widthPx: number
   heightPx: number
   filePath: string
@@ -26,21 +27,32 @@ export interface ExportSlidesPdfResult {
   error?: string
 }
 
-function buildPdfExportHtml(pngsBase64: string[], widthIn: number, heightIn: number): string {
+/** Inline page body: the vector slide fills the page; raster pages embed the bitmap. */
+export function pdfPageBody(page: { svg?: string; pngBase64?: string }): string {
+  if (page.svg) return page.svg
+  return `<img src="data:image/png;base64,${page.pngBase64 ?? ''}" alt="">`
+}
+
+export function buildPdfExportHtml(
+  pages: Array<{ svg?: string; pngBase64?: string }>,
+  widthIn: number,
+  heightIn: number,
+): string {
   return `<!doctype html><html><head><meta charset="utf-8"><style>
 @page { size: ${widthIn}in ${heightIn}in; margin: 0; }
 html, body { margin: 0; padding: 0; }
 .page { width: ${widthIn}in; height: ${heightIn}in; overflow: hidden; page-break-after: always; }
 .page:last-child { page-break-after: auto; }
 .page img { display: block; width: 100%; height: 100%; }
-</style></head><body>${pngsBase64
-    .map((b64) => `<div class="page"><img src="data:image/png;base64,${b64}"></div>`)
+.page svg { display: block; width: 100%; height: 100%; }
+</style></head><body>${pages
+    .map((p) => `<div class="page">${pdfPageBody(p)}</div>`)
     .join('')}</body></html>`
 }
 
-/** Export rendered slide PNGs via an app-owned temporary HTML file. */
+/** Export the deck via an app-owned temporary HTML file (printToPDF: SVG text stays selectable). */
 export async function exportSlidesPdf({
-  pngsBase64,
+  pages,
   widthPx,
   heightPx,
   filePath,
@@ -55,7 +67,7 @@ export async function exportSlidesPdf({
   try {
     tempDir = await mkdtemp(join(tmpdir(), 'airy-slides-pdf-'))
     const htmlPath = join(tempDir, 'slides.html')
-    await writeFile(htmlPath, buildPdfExportHtml(pngsBase64, widthIn, heightIn), 'utf8')
+    await writeFile(htmlPath, buildPdfExportHtml(pages, widthIn, heightIn), 'utf8')
     await win.loadFile(htmlPath)
     // Wait for fonts and all images to decode before printing, avoiding blank pages
     await win.webContents.executeJavaScript(

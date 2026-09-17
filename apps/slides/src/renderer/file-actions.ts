@@ -6,6 +6,7 @@
 import type { RenderSlide } from '@airy-office/pptx-render'
 import type { ActionCtx } from './action-context'
 import { renderSlidesToPngBase64 } from './export-render'
+import { renderSlideSvg } from './slide-svg'
 import { t } from './i18n/locale'
 import { showToast } from './components/toast-bus'
 
@@ -158,7 +159,12 @@ export async function exportImages(ctx: ActionCtx): Promise<void> {
   }
 }
 
-/** Export as PDF: each page (skipping hidden ones) rendered offscreen to 2x PNG; main process printToPDF in a hidden window */
+/**
+ * Export as PDF: each page painted as an inline SVG through the same
+ * printToPDF-over-DOM pipeline the print sheet uses — the PDF carries real,
+ * selectable text. A slide whose SVG assembly fails falls back to the raster
+ * page (2x PNG) individually; the rest of the deck stays vector.
+ */
 export async function exportPdf(ctx: ActionCtx): Promise<void> {
   const visible = ctx.slides.filter((s) => !s.hidden)
   if (visible.length === 0) {
@@ -169,10 +175,20 @@ export async function exportPdf(ctx: ActionCtx): Promise<void> {
   if (!target) return
   ctx.setStatus(t('appExportPdfProgress'))
   try {
-    const pngs = await renderSlidesToPngBase64(visible, ctx.images)
+    const pages: Array<{ svg?: string; pngBase64?: string }> = []
+    for (const slide of visible) {
+      try {
+        pages.push({ svg: renderSlideSvg(slide, ctx.images) })
+      } catch {
+        // raster fallback for this slide only (unexpected node structures)
+        const [png] = await renderSlidesToPngBase64([slide], ctx.images)
+        if (!png) throw new Error('slide render failed')
+        pages.push({ pngBase64: png })
+      }
+    }
     const r = await window.slidesApi.exportPdf({
       filePath: target,
-      pngsBase64: pngs,
+      pages,
       widthPx: visible[0].widthPx,
       heightPx: visible[0].heightPx,
     })

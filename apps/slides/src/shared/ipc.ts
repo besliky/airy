@@ -1097,11 +1097,19 @@ export interface ExportImagesResult {
 }
 
 /** Export as PDF: the main process loads each page PNG in a hidden window then printToPDF. */
+/** One exported page: the vector slide (preferred) or the 2x raster fallback. */
+export interface PdfPage {
+  /** self-contained inline SVG (real text → selectable in the PDF) */
+  svg?: string
+  /** base64 PNG (without the data: prefix) when SVG assembly failed for the slide */
+  pngBase64?: string
+}
+
 export interface ExportPdfOp {
   /** Target pdf absolute path (chosen via pickExportPdfPath) */
   filePath: string
-  /** base64 per page PNG (without the data: prefix), in page order */
-  pngsBase64: string[]
+  /** one entry per exported slide, in page order */
+  pages: PdfPage[]
   /** Rendered pixel width/height of the slide page (used to compute the PDF page aspect ratio) */
   widthPx: number
   heightPx: number
