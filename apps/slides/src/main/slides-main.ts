@@ -22,11 +22,16 @@ import type { WebContents } from 'electron'
 import { execFile } from 'node:child_process'
 import { readFile, writeFile, rm, stat, mkdir, open } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, realpathSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { cleanupExpiredGeneratedPages } from './generated-page-temp'
-import { isSameExportFile, resolveExportImagePaths } from './export-targets'
+import {
+  exportDirInsidePick,
+  exportFileMatchesPick,
+  realPathOrDeepestExisting,
+  resolveExportImagePaths,
+} from './export-targets'
 import { exportSlidesPdf } from './pdf-export'
 import {
   ALL_OPEN_EXTENSIONS,
@@ -43,7 +48,6 @@ import {
   installNavigationGuard,
   forgetRendererFileAccess,
   forgetWitnessedDrops,
-  isPathInsideDir,
   openHelpUrl,
   rendererMayReadPath,
   safeExternalUrl,
@@ -4150,13 +4154,25 @@ export function registerSlidesIpc(): void {
       properties: ['openDirectory' as const, 'createDirectory' as const],
     }
     const r = await showOpenDialogWithMemory(dialog, parent, options, undefined, e.sender.id)
-    const dir = r.canceled || !r.filePaths[0] ? null : r.filePaths[0]
-    if (dir) {
-      const picks = exportPicksByWc.get(e.sender.id) ?? {}
-      picks.dir = dir
-      exportPicksByWc.set(e.sender.id, picks)
+    const picked = r.canceled || !r.filePaths[0] ? null : r.filePaths[0]
+    const picks = exportPicksByWc.get(e.sender.id) ?? {}
+    if (!picked) {
+      // a canceled pick must not leave the previous directory usable —
+      // exporting requires a fresh successful pick
+      delete picks.dir
+      if (picks.pdfPath === undefined) exportPicksByWc.delete(e.sender.id)
+      else exportPicksByWc.set(e.sender.id, picks)
+      return null
     }
-    return dir
+    try {
+      // store the PHYSICAL directory: a later symlink swap of the picked
+      // folder must not keep containment passing by spelling
+      picks.dir = realpathSync(picked)
+    } catch {
+      return null
+    }
+    exportPicksByWc.set(e.sender.id, picks)
+    return picked
   })
 
   ipcMain.handle(
@@ -4165,8 +4181,13 @@ export function registerSlidesIpc(): void {
       try {
         const pickedDir = exportPicksByWc.get(e.sender.id)?.dir
         // the renderer must export into the directory it picked (or a
-        // subdirectory of it) with a single-segment base name
-        if (!pickedDir || !op.dir || !isPathInsideDir(pickedDir, op.dir)) {
+        // subdirectory of it) with a single-segment base name; the target is
+        // re-resolved physically so a symlink swapped in after the pick fails
+        if (
+          !pickedDir ||
+          !op.dir ||
+          !exportDirInsidePick(pickedDir, op.dir, (p) => realpathSync(p))
+        ) {
           return { ok: false, error: tm('errExportDestNotPicked') }
         }
         const paths = resolveExportImagePaths(op.dir, op.baseName, op.pngsBase64.length)
@@ -4189,19 +4210,32 @@ export function registerSlidesIpc(): void {
       filters: [{ name: 'PDF', extensions: ['pdf'] }],
     }
     const r = await showSaveDialogWithMemory(dialog, parent, options, getDraftsDir(), e.sender.id)
-    const filePath = r.canceled || !r.filePath ? null : r.filePath
-    if (filePath) {
-      const picks = exportPicksByWc.get(e.sender.id) ?? {}
-      picks.pdfPath = filePath
-      exportPicksByWc.set(e.sender.id, picks)
+    const picked = r.canceled || !r.filePath ? null : r.filePath
+    const picks = exportPicksByWc.get(e.sender.id) ?? {}
+    if (!picked) {
+      // a canceled pick must not keep the previous file usable — exporting
+      // requires a fresh successful pick
+      delete picks.pdfPath
+      if (picks.dir === undefined) exportPicksByWc.delete(e.sender.id)
+      else exportPicksByWc.set(e.sender.id, picks)
+      return null
     }
-    return filePath
+    try {
+      // a fresh target may not exist yet: resolve through its deepest
+      // existing ancestor so the stored value is the physical file location
+      picks.pdfPath = realPathOrDeepestExisting(picked, (p) => realpathSync(p))
+    } catch {
+      return null
+    }
+    exportPicksByWc.set(e.sender.id, picks)
+    return picked
   })
 
   ipcMain.handle('slides:export-pdf', async (e, op: ExportPdfOp): Promise<ExportPdfResult> => {
-    // the PDF must land exactly on the file the user picked for this tab
+    // the PDF must land exactly on the file the user picked for this tab,
+    // physically re-resolved (a symlink swap after the pick must not pass)
     const pickedFile = exportPicksByWc.get(e.sender.id)?.pdfPath
-    if (!pickedFile || !isSameExportFile(pickedFile, op.filePath)) {
+    if (!pickedFile || !exportFileMatchesPick(pickedFile, op.filePath, (p) => realpathSync(p))) {
       return { ok: false, error: tm('errExportDestNotPicked') }
     }
     return exportSlidesPdf({

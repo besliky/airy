@@ -9,7 +9,7 @@
  * / slides:pick-export-pdf-path) and confines the export to that pick.
  * The helpers here are pure so the validation can be unit-tested.
  */
-import { join, posix, win32 } from 'node:path'
+import { basename, dirname, join, posix, win32 } from 'node:path'
 
 import { isPathInsideDir } from '@airy-office/electron-utils'
 
@@ -33,8 +33,11 @@ export function isSameExportFile(
 
 /**
  * Export base name must be a single path segment: no separators, no `.` /
- * `..` traversal, no control characters. Returns the trimmed name, or null
- * when the name could escape the target directory.
+ * `..` traversal, no control characters. Windows-reserved characters are
+ * rejected too — `:` would create an NTFS alternate data stream
+ * (`name.png:hidden`) and `*?"< >|` are illegal in Windows filenames
+ * (hygiene: the export would fail there anyway). Returns the trimmed name,
+ * or null when the name could escape the target directory or misbehave.
  */
 export function sanitizeExportBaseName(baseName: string): string | null {
   const name = baseName.trim()
@@ -42,6 +45,7 @@ export function sanitizeExportBaseName(baseName: string): string | null {
   if (name.includes('/') || name.includes('\\')) return null
   // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(name)) return null
+  if (/[:*?"<>|]/.test(name)) return null
   return name
 }
 
@@ -72,4 +76,68 @@ export function resolveExportImagePaths(
     paths.push(p)
   }
   return paths
+}
+
+// ── physical containment ──────────────────────────────────────────────────
+
+/** throws when the path (or its deepest existing ancestor) cannot be resolved */
+export type RealpathFn = (path: string) => string
+
+/**
+ * The realpath when it exists; for a non-existent path, the physical path of
+ * its deepest EXISTING ancestor with the missing tail components appended —
+ * so a not-yet-created export subdirectory still resolves to the physical
+ * folder it would be created in (mirrors mcp-server's docx/paths.ts). A
+ * symlink swapped into the path after the pick therefore resolves to its
+ * real target and fails the containment check below.
+ */
+export function realPathOrDeepestExisting(path: string, realpath: RealpathFn): string {
+  try {
+    return realpath(path)
+  } catch {
+    const tail: string[] = []
+    let current = path
+    for (;;) {
+      const parent = dirname(current)
+      // dirname(x) === x only at the filesystem root — nothing exists to
+      // resolve against; the lexical spelling is the best answer left
+      if (parent === current) return path
+      tail.unshift(basename(current))
+      current = parent
+      try {
+        return join(realpath(current), ...tail)
+      } catch {
+        // this ancestor does not exist either — keep climbing
+      }
+    }
+  }
+}
+
+/**
+ * Containment of a renderer-named export directory against the REALPATH of
+ * the directory the user picked (stored at pick time): the target is
+ * re-resolved physically (deepest existing ancestor handles fresh
+ * subdirectories) before the prefix check, so a later symlink swap of the
+ * picked dir — or of any intermediate component — cannot pass by spelling.
+ */
+export function exportDirInsidePick(
+  pickedRealDir: string,
+  dir: string,
+  realpath: RealpathFn,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  const physical = realPathOrDeepestExisting(dir, realpath)
+  return isPathInsideDir(pickedRealDir, physical, platform)
+}
+
+/** Same physical check for the picked PDF file path (a fresh target resolves
+ *  through its deepest existing ancestor, so saving a new file still works). */
+export function exportFileMatchesPick(
+  pickedRealFile: string,
+  filePath: string,
+  realpath: RealpathFn,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  const physical = realPathOrDeepestExisting(filePath, realpath)
+  return normalizeForCompare(physical, platform) === normalizeForCompare(pickedRealFile, platform)
 }

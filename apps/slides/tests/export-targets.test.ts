@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  exportDirInsidePick,
+  exportFileMatchesPick,
   isSameExportFile,
+  realPathOrDeepestExisting,
   resolveExportImagePaths,
   sanitizeExportBaseName,
 } from '../src/main/export-targets'
@@ -22,7 +25,9 @@ describe('sanitizeExportBaseName', () => {
     expect(sanitizeExportBaseName('a\\b')).toBeNull()
     expect(sanitizeExportBaseName('../../etc/passwd')).toBeNull()
     // windows-style drive +UNC payloads are separators too
-    expect(sanitizeExportBaseName('C:secret')).toBe('C:secret') // bare colon stays a legal ntfs name char
+    // the colon is rejected now: on NTFS it would address an alternate
+    // data stream of the file instead of a regular name
+    expect(sanitizeExportBaseName('C:secret')).toBeNull()
   })
 
   it('rejects control characters', () => {
@@ -85,5 +90,114 @@ describe('isSameExportFile', () => {
     expect(isSameExportFile('/tmp/x/../a.pdf', '/tmp/a.pdf')).toBe(true)
     expect(isSameExportFile('C:\\Users\\me\\a.pdf', 'c:\\users\\ME\\a.pdf', 'win32')).toBe(true)
     expect(isSameExportFile('C:\\Users\\me\\a.pdf', 'C:\\Users\\me\\B.pdf', 'win32')).toBe(false)
+  })
+})
+
+describe('sanitizeExportBaseName (windows-reserved characters)', () => {
+  it('rejects the NTFS alternate-data-stream colon', () => {
+    expect(sanitizeExportBaseName('name:hidden')).toBeNull()
+    expect(sanitizeExportBaseName('a:b-01')).toBeNull()
+  })
+
+  it('rejects the other Windows-reserved filename characters', () => {
+    for (const name of ['a*b', 'a?b', 'a"b', 'a<b', 'a>b', 'a|b']) {
+      expect(sanitizeExportBaseName(name), name).toBeNull()
+    }
+  })
+
+  it('still accepts ordinary names and dots inside the name', () => {
+    expect(sanitizeExportBaseName('  deck final  ')).toBe('deck final')
+    expect(sanitizeExportBaseName('deck.v2')).toBe('deck.v2')
+  })
+})
+
+describe('realPathOrDeepestExisting', () => {
+  /** fake filesystem: only the listed real paths exist; symlinks re-map */
+  function fakeRealpath(real: Record<string, string>): (p: string) => string {
+    return (p: string) => {
+      const target = real[p]
+      if (target === undefined) throw new Error('ENOENT')
+      return target
+    }
+  }
+
+  it('returns the realpath for an existing path', () => {
+    const realpath = fakeRealpath({ '/pick/sub': '/data/sub' })
+    expect(realPathOrDeepestExisting('/pick/sub', realpath)).toBe('/data/sub')
+  })
+
+  it('resolves a missing tail through its deepest existing ancestor', () => {
+    const realpath = fakeRealpath({ '/pick': '/data' })
+    expect(realPathOrDeepestExisting('/pick/new/deck.pdf', realpath)).toBe('/data/new/deck.pdf')
+  })
+
+  it('falls back to the lexical spelling when nothing exists', () => {
+    const realpath = fakeRealpath({})
+    expect(realPathOrDeepestExisting('/gone/x', realpath)).toBe('/gone/x')
+  })
+})
+
+describe('exportDirInsidePick (physical containment)', () => {
+  /** realpaths: the pick and a subdirectory exist; a swapped pick is a symlink */
+  const realpathOf = (p: string): string => {
+    const map: Record<string, string> = {
+      '/pick': '/data/export',
+      '/pick/sub': '/data/export/sub',
+    }
+    const target = map[p]
+    if (target === undefined) throw new Error('ENOENT')
+    return target
+  }
+
+  it('accepts the picked dir itself and existing/new subdirectories', () => {
+    expect(exportDirInsidePick('/data/export', '/pick', realpathOf)).toBe(true)
+    expect(exportDirInsidePick('/data/export', '/pick/sub', realpathOf)).toBe(true)
+    // fresh subdirectory resolves through the existing pick
+    expect(exportDirInsidePick('/data/export', '/pick/brand-new', realpathOf)).toBe(true)
+  })
+
+  it('rejects a swapped pick: the stored realpath no longer matches what the name resolves to', () => {
+    // after the swap, /elsewhere is itself real and /pick now maps outside
+    const swapped = (p: string): string => {
+      const map: Record<string, string> = {
+        '/pick': '/elsewhere/attacker',
+        '/pick/sub': '/elsewhere/attacker/sub',
+      }
+      const target = map[p]
+      if (target === undefined) throw new Error('ENOENT')
+      return target
+    }
+    expect(exportDirInsidePick('/data/export', '/pick', swapped)).toBe(false)
+    expect(exportDirInsidePick('/data/export', '/pick/sub', swapped)).toBe(false)
+  })
+
+  it('rejects sibling and outside dirs outright', () => {
+    expect(exportDirInsidePick('/data/export', '/other', realpathOf)).toBe(false)
+    expect(exportDirInsidePick('/data/export', '/data/export-evil', realpathOf)).toBe(false)
+  })
+})
+
+describe('exportFileMatchesPick (physical file match)', () => {
+  const realpathOf = (p: string): string => {
+    const map: Record<string, string> = { '/data': '/data' }
+    const target = map[p]
+    if (target === undefined) throw new Error('ENOENT')
+    return target
+  }
+
+  it('matches an existing file and a not-yet-created target in the picked folder', () => {
+    expect(exportFileMatchesPick('/data/deck.pdf', '/data/deck.pdf', realpathOf)).toBe(true)
+    expect(exportFileMatchesPick('/data/deck.pdf', '/data/deck.pdf', realpathOf)).toBe(true)
+  })
+
+  it('rejects a different file and a swapped directory component', () => {
+    expect(exportFileMatchesPick('/data/deck.pdf', '/data/other.pdf', realpathOf)).toBe(false)
+    const swapped = (p: string): string => {
+      const map: Record<string, string> = { '/data': '/elsewhere' }
+      const target = map[p]
+      if (target === undefined) throw new Error('ENOENT')
+      return target
+    }
+    expect(exportFileMatchesPick('/data/deck.pdf', '/data/deck.pdf', swapped)).toBe(false)
   })
 })
