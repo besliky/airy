@@ -9,8 +9,8 @@ import {
   recordWitnessedDrops,
   resetWitnessedDrops,
   witnessedDroppedPath,
-  WITNESS_DROP_CHANNEL,
 } from '../src/witnessed-drops'
+import { WITNESS_DROP_CHANNEL } from '../src/witness-channel'
 import { grantRendererDir, resetRendererFileGrants } from '../src/renderer-file-access'
 
 const SENDER = 7

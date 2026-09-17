@@ -107,5 +107,5 @@ export {
   recordWitnessedDrops,
   resetWitnessedDrops,
   witnessedDroppedPath,
-  WITNESS_DROP_CHANNEL,
 } from './witnessed-drops'
+export { WITNESS_DROP_CHANNEL } from './witness-channel'

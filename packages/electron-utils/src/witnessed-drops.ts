@@ -11,8 +11,6 @@
  */
 import { rendererMayReadPath } from './renderer-file-access'
 
-/** One-way channel the preload witness sends resolved drop/paste paths on. */
-export const WITNESS_DROP_CHANNEL = 'app:witnessed-dropped-files'
 
 /** Generous window for attach-then-read chats; purely memory hygiene. */
 const WITNESS_TTL_MS = 30 * 60_000

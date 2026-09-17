@@ -6,7 +6,7 @@ import {
   installDropOpenBridge,
   partitionDropPayload,
 } from '../src/drop-open'
-import { WITNESS_DROP_CHANNEL } from '../src/witnessed-drops'
+import { WITNESS_DROP_CHANNEL } from '../src/witness-channel'
 
 // ---- electron mock (module under test imports ipcRenderer/webUtils eagerly) ----
 

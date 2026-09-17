@@ -12,7 +12,7 @@
 /// the way. Text/media drags without OS files are untouched.
 import { ipcRenderer, webUtils } from 'electron'
 
-import { WITNESS_DROP_CHANNEL } from './witnessed-drops'
+import { WITNESS_DROP_CHANNEL } from './witness-channel'
 
 export const DROP_OPEN_CHANNEL = 'app:open-dropped-files'
 
