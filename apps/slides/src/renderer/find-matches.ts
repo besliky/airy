@@ -64,6 +64,10 @@ function translationAffine(tx: number, ty: number): AffineMap {
   return { a: 1, b: 0, c: 0, d: 1, e: tx, f: ty }
 }
 
+function scaleAffine(sx: number, sy: number): AffineMap {
+  return { a: sx, b: 0, c: 0, d: sy, e: 0, f: 0 }
+}
+
 /** clockwise rotation about (cx, cy) by deg — y-down screen coords (Konva/SVG parity) */
 function rotationAffine(cx: number, cy: number, deg: number): AffineMap {
   const rad = (deg * Math.PI) / 180
@@ -79,24 +83,41 @@ function rotationAffine(cx: number, cy: number, deg: number): AffineMap {
   }
 }
 
-/** apply the map to a point */
-export function applyAffine(m: AffineMap, x: number, y: number): { x: number; y: number } {
-  return { x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f }
-}
-
-/** a node's local frame → its parent frame: translate to the box origin, then
- *  rotate the box about its own center (boxPivotProps semantics) */
+/** A node's local frame → its parent frame, Konva-exactly: boxPivotProps
+ *  places each node with position=center, offset=center, rotation, and
+ *  scaleX/scaleY = ±1 for its own flip, i.e.
+ *  T(box.x, box.y) ∘ [T(center) ∘ R ∘ S ∘ T(−center)]. Composing these maps
+ *  down the tree is what the nested Konva containers apply, so an ancestor
+ *  flip arrives as a scale(−1) matrix — conjugating every descendant rotation
+ *  it wraps (a mirrored group reverses its children's rotation direction). */
 function nodeLocalToParentMap(box: {
   x: number
   y: number
   w: number
   h: number
   rotationDeg: number
+  flipH?: boolean
+  flipV?: boolean
 }): AffineMap {
-  return composeAffine(
-    translationAffine(box.x, box.y),
-    rotationAffine(box.w / 2, box.h / 2, box.rotationDeg || 0),
+  const cx = box.w / 2
+  const cy = box.h / 2
+  // T(center) ∘ R ∘ S ∘ T(−center) — flip mirrors about the box center
+  const pivotTransform = composeAffine(
+    translationAffine(cx, cy),
+    composeAffine(
+      rotationAffine(0, 0, box.rotationDeg || 0),
+      composeAffine(
+        scaleAffine(box.flipH ? -1 : 1, box.flipV ? -1 : 1),
+        translationAffine(-cx, -cy),
+      ),
+    ),
   )
+  return composeAffine(translationAffine(box.x, box.y), pivotTransform)
+}
+
+/** apply the map to a point */
+export function applyAffine(m: AffineMap, x: number, y: number): { x: number; y: number } {
+  return { x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f }
 }
 
 const isWordChar = (ch: string | undefined) => !!ch && /[\p{L}\p{N}_]/u.test(ch)
@@ -202,10 +223,15 @@ function nodeSegments(
       const cy = effV ? n.box.h - (c.box.y + c.box.h) : c.box.y
       // rect offsets already carry the (flip-mirrored) child origin through
       // ox/oy — the map contributes only the child's rotation, pivoting the
-      // child's center in this group's frame (boxPivotProps semantics)
+      // MIRRORED child center in this group's frame (boxPivotProps
+      // semantics). Under an effective mirror (exactly one of effH/effV) the
+      // rotation must be conjugated — a mirrored group reverses its
+      // children's rotation direction, like Konva's scale(-1) container does.
+      const rotationDeg =
+        effH !== effV ? -((c.box.rotationDeg || 0) as number) : ((c.box.rotationDeg || 0) as number)
       const childMap = composeAffine(
         m,
-        rotationAffine(cx + c.box.w / 2, cy + c.box.h / 2, c.box.rotationDeg || 0),
+        rotationAffine(cx + c.box.w / 2, cy + c.box.h / 2, rotationDeg),
       )
       nodeSegments(
         c,
@@ -293,9 +319,12 @@ export function buildMatches(
 /** find a node (recursing into groups) and return it with its box origin in
  *  slide px plus the affine from the node's local frame (origin = its box
  *  top-left) to slide px, composing the ancestor-group translations and
- *  rotations — each rotation pivots its own box center, like the canvas's
- *  nested Konva containers (boxPivotProps). Flip parity stays positional in
- *  the run-rect projection (nodeSegments), as before. */
+ *  rotations AND flips — each node contributes its Konva-exact
+ *  T(origin)∘T(center)∘R∘S∘T(−center) map (see nodeLocalToParentMap), so an
+ *  ancestor flip rides along as scale(−1) and conjugates every descendant
+ *  rotation it wraps. Flip parity stays positional only in the run-rect
+ *  coordinate walk (nodeSegments), which conjugates child rotations itself
+ *  for mirrors inside the found node's subtree. */
 export function findNodeBox(
   slide: RenderSlide | undefined,
   sourceId: string,
@@ -358,19 +387,35 @@ export interface StageRect {
   originY: number
 }
 
-/** axis-aligned local rect under an affine (det=1 rotation chain) → StageRect.
- * With A = R(θ) + t, placing the element at r + t and rotating about the
- * origin t (absolute stage px — i.e. transform-origin −r, element-local)
- * maps every corner q to exactly A·q; θ ≈ 0 collapses to the plain rect. */
+/** axis-aligned local rect under an affine (rotation, possibly with a flip
+ *  scale) → StageRect. With A = R(θ) + t, placing the element at r + t and
+ *  rotating about the origin t (absolute stage px — i.e. transform-origin
+ * −r, element-local) maps every corner q to exactly A·q; θ ≈ 0 collapses to
+ * the plain rect. A det < 0 chain (a flipped ancestor contributes
+ * scale(−1)) is first conjugated with a mirror about the RECT's own vertical
+ * center axis — that mirror maps the rect onto itself, so the corner set is
+ * unchanged while the map becomes det=1 and decomposes like any rotation. */
 function projectRect(m: AffineMap, r: { x: number; y: number; w: number; h: number }): StageRect {
-  let theta = (Math.atan2(m.b, m.a) * 180) / Math.PI
+  let map = m
+  if (map.a * map.d - map.b * map.c < 0) {
+    // mirror x ↦ 2·(r.x + r.w/2) − x about the rect's center axis
+    map = composeAffine(map, {
+      a: -1,
+      b: 0,
+      c: 0,
+      d: 1,
+      e: 2 * (r.x + r.w / 2),
+      f: 0,
+    })
+  }
+  let theta = (Math.atan2(map.b, map.a) * 180) / Math.PI
   if (Math.abs(theta) < 1e-6) theta = 0
   if (theta === 0) {
-    return { x: r.x + m.e, y: r.y + m.f, w: r.w, h: r.h, rotation: 0, originX: 0, originY: 0 }
+    return { x: r.x + map.e, y: r.y + map.f, w: r.w, h: r.h, rotation: 0, originX: 0, originY: 0 }
   }
   return {
-    x: r.x + m.e,
-    y: r.y + m.f,
+    x: r.x + map.e,
+    y: r.y + map.f,
     w: r.w,
     h: r.h,
     rotation: theta,
@@ -383,13 +428,16 @@ function projectRect(m: AffineMap, r: { x: number; y: number; w: number; h: numb
 /** run line boxes of a match projected into slide px, each carrying the
  *  accumulated rotation of its ancestor-group chain plus the element's own —
  *  the overlay geometry the canvas draws through nested Konva containers.
+ *  The walk starts UNflipped: hit.map (findNodeBox) already carries the top
+ *  node's own flip as a scale(-1) matrix, which mirrors the rect positions
+ *  and conjugates the segment rotations as one composed transform.
  *  Empty when the layout cannot be boxed (callers fall back to the element
  *  outline via findNodeBox + projectRect). */
 export function matchStageRects(slide: RenderSlide | undefined, m: FindMatch): StageRect[] {
   const hit = findNodeBox(slide, m.sourceId)
   if (!hit) return []
   const segs: NodeSegment[] = []
-  nodeSegments(hit.node, 0, 0, !!hit.node.box.flipH, !!hit.node.box.flipV, IDENTITY, segs)
+  nodeSegments(hit.node, 0, 0, false, false, IDENTITY, segs)
   const rects: StageRect[] = []
   let off = 0
   for (const s of segs) {

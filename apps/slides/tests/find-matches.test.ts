@@ -346,6 +346,104 @@ describe('matchStageRects (ancestor-group rotation chain)', () => {
     ])
   })
 
+  it('conjugates a child rotation under a flipped ancestor group (Konva parity)', () => {
+    const child = textNode('inner', [{ top: 5, height: 20, runs: [['target', 0, 30]] }])
+    child.box = box(20, 10, 40, 20, { rotationDeg: 30 })
+    const group: RenderNode = {
+      id: 'g',
+      type: 'group',
+      sourceId: 'g',
+      box: box(200, 100, 80, 40, { flipH: true }),
+      children: [child],
+    } as unknown as GroupRenderNode
+    const slides = [slideOf(group)]
+    const m = buildMatches(slides, 'target', cond)[0]!
+
+    // Konva-equivalent ground truth: each StaticNode Group applies
+    // T(pos+center) ∘ R ∘ S ∘ T(−center) (boxPivotProps: position=center,
+    // offset=center, rotation, scaleX/scaleY from the flip)
+    const mul = (m1: number[], m2: number[]): number[] => [
+      m1[0]! * m2[0]! + m1[2]! * m2[1]!,
+      m1[1]! * m2[0]! + m1[3]! * m2[1]!,
+      m1[0]! * m2[2]! + m1[2]! * m2[3]!,
+      m1[1]! * m2[2]! + m1[3]! * m2[3]!,
+      m1[0]! * m2[4]! + m1[2]! * m2[5]! + m1[4]!,
+      m1[1]! * m2[4]! + m1[3]! * m2[5]! + m1[5]!,
+    ]
+    const konvaNodeMap = (b: {
+      x: number
+      y: number
+      w: number
+      h: number
+      rotationDeg: number
+      flipH?: boolean
+    }): number[] => {
+      const rad = (b.rotationDeg * Math.PI) / 180
+      const cos = Math.cos(rad)
+      const sin = Math.sin(rad)
+      const cx = b.w / 2
+      const cy = b.h / 2
+      // linear part R ∘ S with S = diag(flipH ? -1 : 1, 1)
+      const rotateScale = [cos * (b.flipH ? -1 : 1), sin * (b.flipH ? -1 : 1), -sin, cos, 0, 0]
+      const translate = [1, 0, 0, 1, b.x + cx, b.y + cy]
+      const unOffset = [1, 0, 0, 1, -cx, -cy]
+      return mul(mul(translate, rotateScale), unOffset)
+    }
+    const total = mul(konvaNodeMap(group.box as never), konvaNodeMap(child.box as never))
+    // run rect in child-local px: inset l(10) + run x(0), inset t(6) + top(5)
+    const rect = { x: 10, y: 11, w: 30, h: 20 }
+    const expected = [
+      { x: rect.x, y: rect.y },
+      { x: rect.x + rect.w, y: rect.y },
+      { x: rect.x, y: rect.y + rect.h },
+      { x: rect.x + rect.w, y: rect.y + rect.h },
+    ].map((p) => ({
+      x: total[0]! * p.x + total[2]! * p.y + total[4]!,
+      y: total[1]! * p.x + total[3]! * p.y + total[5]!,
+    }))
+
+    const rects = matchStageRects(slides[0], m)
+    expect(rects.length).toBe(1)
+    // render the StageRect the way the CSS overlay does and compare corner SETS
+    const stage = rects[0]!
+    const ox = stage.x + stage.originX
+    const oy = stage.y + stage.originY
+    const rad = (stage.rotation * Math.PI) / 180
+    const cos = Math.cos(rad)
+    const sin = Math.sin(rad)
+    const rendered = [
+      { x: stage.x, y: stage.y },
+      { x: stage.x + stage.w, y: stage.y },
+      { x: stage.x, y: stage.y + stage.h },
+      { x: stage.x + stage.w, y: stage.y + stage.h },
+    ].map((p) => ({
+      x: ox + (p.x - ox) * cos - (p.y - oy) * sin,
+      y: oy + (p.x - ox) * sin + (p.y - oy) * cos,
+    }))
+    const key = (p: { x: number; y: number }) => `${p.x.toFixed(6)},${p.y.toFixed(6)}`
+    expect(new Set(rendered.map(key))).toEqual(new Set(expected.map(key)))
+  })
+
+  it('conjugates through a rotated+flipped group containing a rotated child', () => {
+    const child = textNode('inner', [{ top: 4, height: 18, runs: [['target', 0, 25]] }])
+    child.box = box(10, 6, 30, 16, { rotationDeg: -25 })
+    const group: RenderNode = {
+      id: 'g',
+      type: 'group',
+      sourceId: 'g',
+      box: box(300, 150, 90, 50, { rotationDeg: 40, flipH: true }),
+      children: [child],
+    } as unknown as GroupRenderNode
+    const slides = [slideOf(group)]
+    const m = buildMatches(slides, 'target', cond)[0]!
+    const rects = matchStageRects(slides[0], m)
+    expect(rects.length).toBe(1)
+    // a mirrored ancestor reverses the child's rotation direction: the
+    // chain R40 ∘ mirror ∘ R(−25) equals R65 ∘ mirror, so the projected
+    // highlight rect rotates by 65°
+    expect(Math.abs(Math.abs(rects[0]!.rotation) - 65)).toBeLessThan(1e-6)
+  })
+
   it('outlines a rotated element for unboxable layouts (vertical text)', () => {
     const n = textNode('v', [{ top: 0, height: 20, runs: [['abc', 0, 30]] }])
     n.box = box(100, 200, 400, 300, { rotationDeg: 90 })
