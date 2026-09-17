@@ -100,9 +100,11 @@ under 5 s, logs on stderr, reads carry `readOnlyHint`.
 
 ## Run the MCP server from an installed Airy app
 
-The Windows and Linux installers bundle the built server as
-`resources/mcp/index.js` next to the app binary, and the app itself doubles
-as its Node runtime: with `ELECTRON_RUN_AS_NODE=1`, `Airy.exe` / `airy`
+Every installer — Windows, Linux and macOS — bundles the built server as
+`resources/mcp/index.js` next to the app binary (on mac:
+`Airy.app/Contents/Resources/mcp/index.js`), and the app itself doubles
+as its Node runtime: with `ELECTRON_RUN_AS_NODE=1`, `Airy.exe` / `airy` /
+`Airy.app/Contents/MacOS/Airy`
 runs any script exactly like `node` (same Node line the bundle targets, and
 `process.resourcesPath` still points at the install's `resources` dir, so
 the xlsx sidecar in `resources/native` is found automatically). A machine
@@ -120,6 +122,28 @@ changeable directory), so the default location is
       "command": "C:\\Users\\<you>\\AppData\\Local\\Programs\\Airy\\Airy.exe",
       "env": { "ELECTRON_RUN_AS_NODE": "1" },
       "args": ["C:\\Users\\<you>\\AppData\\Local\\Programs\\Airy\\resources\\mcp\\index.js"]
+    }
+  }
+}
+```
+
+**macOS (dmg).** Drag the app to `/Applications`; the binary is
+`/Applications/Airy.app/Contents/MacOS/Airy`, the server
+`/Applications/Airy.app/Contents/Resources/mcp/index.js`. ZCode
+(`~/.zcode/cli/config.json`):
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "airy": {
+        "type": "stdio",
+        "command": "/Applications/Airy.app/Contents/MacOS/Airy",
+        "env": { "ELECTRON_RUN_AS_NODE": "1" },
+        "args": ["/Applications/Airy.app/Contents/Resources/mcp/index.js"],
+        "enabled": true,
+        "timeoutMs": 60000
+      }
     }
   }
 }
