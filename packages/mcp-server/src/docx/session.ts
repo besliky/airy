@@ -177,13 +177,41 @@ export async function assertSaveTargetFree(
  * overwrite error instead of being silently replaced by a rename. Saves that
  * replace by intent (same-file, the session's own output, overwrite:true)
  * keep using rename.
+ *
+ * exFAT/FAT/network shares do not support hard links, so link fails there
+ * with EPERM/EACCES: on those codes the target is stat-checked and, when
+ * still missing, promoted with the plain atomic rename instead. Trade-off
+ * (accepted, link-less volumes only): rename REPLACES an existing file, so
+ * the exclusive-create guarantee narrows to that stat — a file another
+ * writer creates between the stat and the rename would be clobbered.
+ * Volumes that do support links keep the race-free guarantee.
  */
 export async function promoteNewFileExclusively(tmp: string, target: string): Promise<void> {
   try {
     await link(tmp, target)
   } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code
+    if (code === 'EEXIST') {
+      await rm(tmp, { force: true })
+      throw saveTargetExistsError(target)
+    }
+    if (code === 'EPERM' || code === 'EACCES') {
+      const targetExists = await stat(target).then(
+        () => true,
+        (statError: NodeJS.ErrnoException) => {
+          if (statError.code === 'ENOENT') return false
+          throw statError
+        },
+      )
+      if (targetExists) {
+        await rm(tmp, { force: true })
+        throw saveTargetExistsError(target)
+      }
+      // the docx save's own atomic promote (rename consumes the temp file)
+      await rename(tmp, target)
+      return
+    }
     await rm(tmp, { force: true })
-    if ((e as NodeJS.ErrnoException).code === 'EEXIST') throw saveTargetExistsError(target)
     throw e
   }
   await rm(tmp, { force: true })

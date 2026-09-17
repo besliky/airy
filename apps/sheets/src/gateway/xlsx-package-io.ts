@@ -240,15 +240,40 @@ export class SaveTargetExistsError extends Error {
  * EEXIST atomically when the target exists, so it cannot silently replace a
  * file that appeared after the caller's existence check. Saves that replace
  * by intent use promoteFileAtomically.
+ *
+ * exFAT/FAT/network shares do not support hard links, so link fails there
+ * with EPERM/EACCES: on those codes the target is stat-checked and, when
+ * still missing, promoted through the atomic rename machinery instead.
+ * Trade-off (accepted, link-less volumes only): rename REPLACES an existing
+ * file, so the exclusive-create guarantee narrows to that stat — a file
+ * another writer creates in the window between the stat and the rename
+ * would be clobbered. Volumes that do support links keep the full
+ * race-free guarantee.
  */
 export async function promoteFileExclusively(temporaryPath: string, path: string): Promise<void> {
   await syncFileBestEffort(temporaryPath)
   try {
     await link(temporaryPath, path)
   } catch (error: unknown) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'EEXIST') {
       await rm(temporaryPath, { force: true })
       throw new SaveTargetExistsError(path)
+    }
+    if (code === 'EPERM' || code === 'EACCES') {
+      const targetExists = await stat(path).then(
+        () => true,
+        (statError: NodeJS.ErrnoException) => {
+          if (statError.code === 'ENOENT') return false
+          throw statError
+        },
+      )
+      if (targetExists) {
+        await rm(temporaryPath, { force: true })
+        throw new SaveTargetExistsError(path)
+      }
+      await promoteFileAtomically(temporaryPath, path)
+      return
     }
     throw error
   }

@@ -8,6 +8,7 @@
 import {
   chmod,
   copyFile,
+  link,
   mkdir,
   mkdtemp,
   readFile,
@@ -23,9 +24,10 @@ import { promoteFileAtomically, promoteFileExclusively } from '../src/gateway/xl
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
-  return { ...actual, copyFile: vi.fn(actual.copyFile) }
+  return { ...actual, copyFile: vi.fn(actual.copyFile), link: vi.fn(actual.link) }
 })
 const copyFileMock = vi.mocked(copyFile)
+const linkMock = vi.mocked(link)
 
 const scratches: string[] = []
 const actualCopyFile = copyFileMock.getMockImplementation()!
@@ -36,9 +38,13 @@ async function scratchDir(): Promise<string> {
   return dir
 }
 
+const actualLink = linkMock.getMockImplementation()!
+
 afterEach(async () => {
   copyFileMock.mockReset()
   copyFileMock.mockImplementation(actualCopyFile)
+  linkMock.mockReset()
+  linkMock.mockImplementation(actualLink)
   for (const dir of scratches.splice(0)) {
     await chmod(dir, 0o755).catch(() => {})
     for (const sub of ['locked']) await chmod(join(dir, sub), 0o755).catch(() => {})
@@ -188,5 +194,46 @@ describe('promoteFileExclusively', () => {
     await expect(
       promoteFileExclusively(join(dir, '.missing.tmp.xlsx'), join(dir, 'book.xlsx')),
     ).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('EPERM from link (exFAT/FAT/network) with an existing target still refuses', async () => {
+    const dir = await scratchDir()
+    const temporary = join(dir, '.new.tmp.xlsx')
+    const target = join(dir, 'book.xlsx')
+    await writeFile(temporary, 'new-bytes')
+    await writeFile(target, 'concurrent bytes')
+    linkMock.mockImplementation(async () => {
+      throw Object.assign(new Error('EPERM: operation not permitted, link'), { code: 'EPERM' })
+    })
+    await expect(promoteFileExclusively(temporary, target)).rejects.toThrow(
+      'The save target already exists',
+    )
+    expect(await readFile(target, 'utf8')).toBe('concurrent bytes')
+    await expect(stat(temporary)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('EPERM from link with a missing target falls back to the atomic rename promote', async () => {
+    const dir = await scratchDir()
+    const temporary = join(dir, '.new.tmp.xlsx')
+    const target = join(dir, 'book.xlsx')
+    await writeFile(temporary, 'new-bytes')
+    linkMock.mockImplementation(async () => {
+      throw Object.assign(new Error('EPERM: operation not permitted, link'), { code: 'EPERM' })
+    })
+    await promoteFileExclusively(temporary, target)
+    expect(await readFile(target, 'utf8')).toBe('new-bytes')
+    await expect(stat(temporary)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('EACCES from link behaves like EPERM (fallback on missing target)', async () => {
+    const dir = await scratchDir()
+    const temporary = join(dir, '.new.tmp.xlsx')
+    const target = join(dir, 'book.xlsx')
+    await writeFile(temporary, 'new-bytes')
+    linkMock.mockImplementation(async () => {
+      throw Object.assign(new Error('EACCES: permission denied, link'), { code: 'EACCES' })
+    })
+    await promoteFileExclusively(temporary, target)
+    expect(await readFile(target, 'utf8')).toBe('new-bytes')
   })
 })

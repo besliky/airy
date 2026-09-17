@@ -7,7 +7,29 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import JSZip from 'jszip'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// the EPERM-fallback tests steer `link` through this vi.fn (pass-through to
+// the real fs/promises link by default, like the sheets promote tests do for
+// copyFile)
+const { linkMock, actualLink, captureActual } = vi.hoisted(() => {
+  let actual: ((...args: never[]) => Promise<void>) | undefined
+  const passthrough = ((...args: never[]) => actual!(...args)) as (
+    ...args: never[]
+  ) => Promise<void>
+  return {
+    linkMock: vi.fn(passthrough),
+    captureActual: (fn: (...args: never[]) => Promise<void>) => {
+      actual = fn
+    },
+    actualLink: passthrough,
+  }
+})
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  captureActual((...args: Parameters<typeof actual.link>) => actual.link(...args) as Promise<void>)
+  return { ...actual, link: linkMock }
+})
 
 import {
   assertSaveTargetFree,
@@ -442,6 +464,45 @@ describe('promoteNewFileExclusively (TOCTOU guard)', () => {
     await expect(promoteNewFileExclusively(tmp, target)).resolves.toBeUndefined()
     expect(await readFile(target, 'utf8')).toBe('fresh bytes')
     await expect(stat(tmp)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('EPERM from link with an existing target still surfaces the clobber error', async () => {
+    const tmp = join(root, '.eperm-exist.docx.airy-test')
+    const target = join(root, 'eperm-exist.docx')
+    await writeFile(tmp, 'new bytes')
+    await writeFile(target, 'created in the stat/write window')
+    // exFAT/FAT/network shares refuse hard links outright: the guard must
+    // degrade to stat + clobber error, never a silent replace
+    linkMock.mockImplementation(async () => {
+      throw Object.assign(new Error('EPERM: operation not permitted, link'), { code: 'EPERM' })
+    })
+    try {
+      const error = await promoteNewFileExclusively(tmp, target).then(
+        () => null,
+        (e: Error) => e,
+      )
+      expect(error?.message).toContain('already exists')
+      expect(await readFile(target, 'utf8')).toBe('created in the stat/write window')
+      await expect(stat(tmp)).rejects.toMatchObject({ code: 'ENOENT' })
+    } finally {
+      linkMock.mockImplementation(actualLink)
+    }
+  })
+
+  it('EPERM from link with a missing target falls back to the atomic rename', async () => {
+    const tmp = join(root, '.eperm-missing.docx.airy-test')
+    const target = join(root, 'eperm-missing.docx')
+    await writeFile(tmp, 'fallback bytes')
+    linkMock.mockImplementation(async () => {
+      throw Object.assign(new Error('EPERM: operation not permitted, link'), { code: 'EPERM' })
+    })
+    try {
+      await expect(promoteNewFileExclusively(tmp, target)).resolves.toBeUndefined()
+      expect(await readFile(target, 'utf8')).toBe('fallback bytes')
+      await expect(stat(tmp)).rejects.toMatchObject({ code: 'ENOENT' })
+    } finally {
+      linkMock.mockImplementation(actualLink)
+    }
   })
 })
 
