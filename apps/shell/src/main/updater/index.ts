@@ -4,9 +4,11 @@
 // Electron. The shell menu integration (index.ts) renders the status via
 // updaterMenuItems() and re-runs its menu builder on every status change —
 // no dedicated renderer window, following the bridge/ glue split.
-import { Notification, dialog, shell } from 'electron'
+import { Notification, dialog } from 'electron'
 import type { BrowserWindow, MenuItemConstructorOptions } from 'electron'
 import { autoUpdater } from 'electron-updater'
+
+import { openHelpUrl } from '@airy-office/electron-utils'
 
 import {
   GITHUB_OWNER,
@@ -134,7 +136,8 @@ function dialogUi(getWindow: () => BrowserWindow | null): UpdaterUi {
         cancelId: 2,
         noLink: true,
       })
-      if (response === 1) void shell.openExternal(notesUrl)
+      // single gate for every shell.openExternal (see github-menu's openHelpUrl)
+      if (response === 1) void openHelpUrl(notesUrl)
       return response === 0 ? 'download' : 'later'
     },
     async offerInstall({ version }) {
@@ -154,7 +157,7 @@ function dialogUi(getWindow: () => BrowserWindow | null): UpdaterUi {
         title: updaterText('updNotifyTitle'),
         body: updaterText('updNotifyBody', { version }),
       })
-      notification.on('click', () => void shell.openExternal(releasesUrl))
+      notification.on('click', () => void openHelpUrl(releasesUrl))
       notification.show()
     },
   }
