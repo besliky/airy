@@ -34,6 +34,7 @@ import {
   installContextMenu,
   installNavigationGuard,
   mayGrantAttachmentRead,
+  parseAttachmentPaths,
   printHtmlToPdf,
   recordWitnessedDrops,
   rendererMayReadPath,
@@ -3722,11 +3723,17 @@ export function registerDocsIpc(): void {
     recordWitnessedDrops(event.sender.id, paths),
   )
 
-  ipcMain.handle('files:add', (event, paths: string[]) =>
+  ipcMain.handle('files:add', (event, raw: unknown): AttachmentAddResult => {
+    // same shape policy as sheets' zod gate: a bounded list of non-empty,
+    // bounded strings — anything else processes nothing (fail closed)
+    const paths = parseAttachmentPaths(raw)
+    if (!paths) return { accepted: [], rejected: [] }
     // renderer-named paths grant only when really dropped/pasted into this
     // renderer or already inside a granted directory
-    collectAttachments(paths, event.sender.id, (p) => mayGrantAttachmentRead(event.sender.id, p)),
-  )
+    return collectAttachments(paths, event.sender.id, (p) =>
+      mayGrantAttachmentRead(event.sender.id, p),
+    )
+  })
 
   ipcMain.handle(
     'files:read',

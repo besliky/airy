@@ -84,13 +84,12 @@ export function resetWitnessedDrops(): void {
   witnessedBySender.clear()
 }
 
-/**
- * Policy for the files:add grant: an accepted attachment may widen the read
- * allowlist only when the user really dragged/pasted that exact file into
- * the asking renderer (witness), or its folder is already readable (the
- * grant widens nothing). A renderer-named path with neither origin is
- * accepted into the attachment list but grants nothing, so the read
- * channels still refuse it.
+/** Policy for the files:add attachment grant: an accepted attachment may widen
+ *  the read allowlist only when the user really dragged/pasted that exact file
+ *  into the asking renderer (witness), or its folder is already readable (the
+ *  grant widens nothing). A renderer-named path with neither origin is
+ *  accepted into the attachment list but grants nothing, so the read
+ *  channels still refuse it.
  */
 export function mayGrantAttachmentRead(
   senderId: number,
@@ -98,4 +97,32 @@ export function mayGrantAttachmentRead(
   now: number = Date.now(),
 ): boolean {
   return witnessedDroppedPath(senderId, path, now) || rendererMayReadPath(senderId, path)
+}
+
+// ── files:add payload shape ────────────────────────────────────────────────
+
+/** Same bounds sheets enforces with zod (z.string().min(1).max(1024), max 50). */
+export const MAX_ATTACHMENT_ADD_PATHS = 50
+export const MAX_ATTACHMENT_PATH_CHARS = 1024
+
+/**
+ * Shape policy for the files:add channel, shared by the apps that validate
+ * payloads by hand (docs/slides/html; sheets enforces the same bounds with
+ * zod): the payload must be a bounded array of non-empty, length-bounded
+ * strings. Returns the trimmed list, or null when the shape is wrong — the
+ * handler then processes nothing (fail closed) instead of stat-ing an
+ * unbounded or non-string renderer-supplied list.
+ */
+export function parseAttachmentPaths(raw: unknown): string[] | null {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_ATTACHMENT_ADD_PATHS) {
+    return null
+  }
+  const paths: string[] = []
+  for (const entry of raw) {
+    if (typeof entry !== 'string') return null
+    const path = entry.trim()
+    if (!path || path.length > MAX_ATTACHMENT_PATH_CHARS) return null
+    paths.push(path)
+  }
+  return paths
 }

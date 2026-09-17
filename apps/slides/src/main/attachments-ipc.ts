@@ -11,6 +11,7 @@ import { basename, join } from 'node:path'
 import {
   grantRendererFileAccess,
   mayGrantAttachmentRead,
+  parseAttachmentPaths,
   recordWitnessedDrops,
   rendererMayReadPath,
   showOpenDialogWithMemory,
@@ -190,11 +191,17 @@ export function registerAttachmentIpc(): void {
     recordWitnessedDrops(event.sender.id, paths),
   )
 
-  ipcMain.handle('slides:files-add', (event, paths: string[]) =>
+  ipcMain.handle('slides:files-add', (event, raw: unknown): AttachmentAddResult => {
+    // same shape policy as sheets' zod gate: a bounded list of non-empty,
+    // bounded strings — anything else processes nothing (fail closed)
+    const paths = parseAttachmentPaths(raw)
+    if (!paths) return { accepted: [], rejected: [] }
     // renderer-named paths grant only when really dropped/pasted into this
     // renderer or already inside a granted directory
-    collectAttachments(paths, event.sender.id, (p) => mayGrantAttachmentRead(event.sender.id, p)),
-  )
+    return collectAttachments(paths, event.sender.id, (p) =>
+      mayGrantAttachmentRead(event.sender.id, p),
+    )
+  })
 
   ipcMain.handle(
     'slides:files-read',

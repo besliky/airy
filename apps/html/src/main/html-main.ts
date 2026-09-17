@@ -34,6 +34,7 @@ import {
   installContextMenu,
   installNavigationGuard,
   mayGrantAttachmentRead,
+  parseAttachmentPaths,
   recordWitnessedDrops,
   rendererMayReadPath,
   safeExternalUrl,
@@ -1494,15 +1495,17 @@ function registerHtmlIpc(): void {
     recordWitnessedDrops(event.sender.id, paths),
   )
 
-  ipcMain.handle(HTML_CHANNELS.filesAdd, (event, paths: unknown) =>
+  ipcMain.handle(HTML_CHANNELS.filesAdd, (event, raw: unknown) => {
+    // same shape policy as sheets' zod gate: a bounded list of non-empty,
+    // bounded strings — anything else processes nothing (fail closed)
+    const paths = parseAttachmentPaths(raw)
+    if (!paths) return { accepted: [], rejected: [] }
     // renderer-named paths grant only when really dropped/pasted into this
     // renderer or already inside a granted directory
-    collectAttachments(
-      Array.isArray(paths) ? paths.filter((p) => typeof p === 'string') : [],
-      event.sender.id,
-      (p) => mayGrantAttachmentRead(event.sender.id, p),
-    ),
-  )
+    return collectAttachments(paths, event.sender.id, (p) =>
+      mayGrantAttachmentRead(event.sender.id, p),
+    )
+  })
 
   ipcMain.handle(
     HTML_CHANNELS.filesAddPastedImage,

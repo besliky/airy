@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   forgetWitnessedDrops,
   mayGrantAttachmentRead,
+  MAX_ATTACHMENT_ADD_PATHS,
+  MAX_ATTACHMENT_PATH_CHARS,
+  parseAttachmentPaths,
   recordWitnessedDrops,
   resetWitnessedDrops,
   witnessedDroppedPath,
@@ -74,5 +77,34 @@ describe('mayGrantAttachmentRead policy', () => {
 describe('channel name', () => {
   it('is the drop-open witness channel', () => {
     expect(WITNESS_DROP_CHANNEL).toBe('app:witnessed-dropped-files')
+  })
+})
+
+describe('parseAttachmentPaths (files:add shape policy)', () => {
+  it('accepts a bounded list of non-empty strings, trimmed', () => {
+    expect(parseAttachmentPaths([' /a/b.docx ', 'c.pdf'])).toEqual(['/a/b.docx', 'c.pdf'])
+  })
+
+  it('rejects non-array and empty payloads', () => {
+    expect(parseAttachmentPaths(null)).toBeNull()
+    expect(parseAttachmentPaths('/a/b.docx')).toBeNull()
+    expect(parseAttachmentPaths({})).toBeNull()
+    expect(parseAttachmentPaths([])).toBeNull()
+  })
+
+  it('rejects non-string, empty, and over-long entries', () => {
+    expect(parseAttachmentPaths(['/ok.docx', 42])).toBeNull()
+    expect(parseAttachmentPaths(['/ok.docx', null])).toBeNull()
+    expect(parseAttachmentPaths(['/ok.docx', '   '])).toBeNull()
+    expect(
+      parseAttachmentPaths(['/ok.docx', `${'x'.repeat(MAX_ATTACHMENT_PATH_CHARS + 1)}`]),
+    ).toBeNull()
+    expect(parseAttachmentPaths(['x'.repeat(MAX_ATTACHMENT_PATH_CHARS)])).not.toBeNull()
+  })
+
+  it('caps the list length like the sheets zod gate', () => {
+    const fifty = Array.from({ length: MAX_ATTACHMENT_ADD_PATHS }, (_, i) => `/f${i}`)
+    expect(parseAttachmentPaths(fifty)).not.toBeNull()
+    expect(parseAttachmentPaths([...fifty, '/one-too-many'])).toBeNull()
   })
 })

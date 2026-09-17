@@ -100,7 +100,10 @@ export {
 } from './renderer-file-access'
 export {
   forgetWitnessedDrops,
+  MAX_ATTACHMENT_ADD_PATHS,
+  MAX_ATTACHMENT_PATH_CHARS,
   mayGrantAttachmentRead,
+  parseAttachmentPaths,
   recordWitnessedDrops,
   resetWitnessedDrops,
   witnessedDroppedPath,
