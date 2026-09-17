@@ -1788,9 +1788,8 @@ function registerHomeIpc(): void {
   })
 
   handleHome(HOME_CHANNELS.openGitHubRepo, () => {
-    shell.openExternal(GITHUB_REPO_URL).catch(() => {
-      // no browser handler available; nothing actionable for the user here
-    })
+    // through the shared safeExternalUrl gate like every other external link
+    void openHelpUrl(GITHUB_REPO_URL)
   })
 
   handleHome(HOME_CHANNELS.githubStars, () => fetchGithubStars())
