@@ -146,6 +146,30 @@ describe('restricted HTML parsing', () => {
       { type: 'paragraph', runs: [{ text: 'kept' }] },
     ])
   })
+
+  it('drops disallowed link schemes and keeps allowed ones (renderer href policy)', () => {
+    const blocks = parseRestrictedHtml(
+      '<p><a href="javascript:alert(1)">js</a> <a href="file:///etc/passwd">file</a> ' +
+        '<a href="data:text/html,hi">data</a> <a href=" https://example.com/a ">https</a> ' +
+        '<a href="mailto:a@b.c">mail</a> <a href="#frag">frag</a> ' +
+        '<a href="docs/next.md">rel</a></p>',
+    )
+    const runs = (blocks[0] as unknown as { runs: Array<Record<string, unknown>> }).runs
+    const links = runs
+      .map((r) => (r.link as { href?: string } | undefined)?.href)
+      .filter((h): h is string => h !== undefined)
+    // disallowed schemes leave no link at all — their text survives as plain runs
+    expect(links).not.toContain('javascript:alert(1)')
+    expect(links).not.toContain('file:///etc/passwd')
+    expect(links).not.toContain('data:text/html,hi')
+    expect(runs.map((r) => r.text).join('')).toContain('js')
+    expect(runs.map((r) => r.text).join('')).toContain('data')
+    // allowed schemes survive, with surrounding whitespace trimmed
+    expect(links).toContain('https://example.com/a')
+    expect(links).toContain('mailto:a@b.c')
+    expect(links).toContain('#frag')
+    expect(links).toContain('docs/next.md')
+  })
 })
 
 describe('insert_content', () => {
@@ -172,6 +196,30 @@ describe('insert_content', () => {
   it('rejects HTML that parses into nothing', async () => {
     const session = await openSession()
     expect(() => session.insertContent('   ', 0)).toThrow(/did not parse/)
+  })
+
+  it('writes no external rel for dropped-scheme anchors; allowed hrefs persist', async () => {
+    const session = await openSession()
+    session.insertContent(
+      '<p><a href="javascript:alert(1)">js</a> <a href="file:///etc/passwd">file</a> ' +
+        '<a href="data:text/html,hi">data</a> <a href="https://example.com/ok">ok</a></p>',
+      0,
+    )
+    await session.save()
+    const zip = await JSZip.loadAsync(new Uint8Array(await readFile(docPath)))
+    const rels = await zip.file('word/_rels/document.xml.rels')!.async('string')
+    // the engine writes every link run as an external rel target: the dropped
+    // schemes must not appear there, the allowed https href must
+    expect(rels).not.toContain('javascript:')
+    expect(rels).not.toContain('file:')
+    expect(rels).not.toContain('data:')
+    expect(rels).toContain('https://example.com/ok')
+    // degraded anchors still carry their text; only the allowed link reads back
+    // as an anchor (at: 0 inserts after block 0, so the new block is index 1)
+    const inserted = session.readDocument({ blocks: [1] })
+    expect(inserted).toContain('js')
+    expect(inserted).toContain('<a href="https://example.com/ok">ok</a>')
+    expect(inserted).not.toContain('javascript:')
   })
 })
 

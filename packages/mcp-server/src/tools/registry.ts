@@ -322,7 +322,9 @@ export function registerTools(server: McpServer): void {
         'features needed). Supported tags: p, h1-h6, ul, ol, li (nested lists allowed), strong/b, ' +
         'em/i, u, s, a[href], br, blockquote, pre, table/tr/th/td (header row styled, cells plain ' +
         'text). Unknown tags keep their text; markdown fences and plain text are tolerated (blank ' +
-        'lines split paragraphs). Insertion happens in memory; persist with save_document.',
+        'lines split paragraphs). Link policy: a[href] accepts http/https, mailto, #fragment and ' +
+        'scheme-less relative hrefs only — anchors with any other scheme (javascript:, file:, ' +
+        'data:, …) degrade to plain text. Insertion happens in memory; persist with save_document.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
         html: z.string().min(1).describe('Restricted HTML fragment to insert'),
