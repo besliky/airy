@@ -3680,7 +3680,11 @@ export function registerDocsIpc(): void {
   ipcMain.handle('docs:recent', (event) => {
     // recents are the user's own documents: serving them also (re)grants
     // their folders to the asking renderer so docs:open-path works for last
-    // session's files
+    // session's files. The grant makes the channel privileged — any
+    // webContents in this shared process could otherwise enumerate recents
+    // and self-grant their folders — so only docs renderers may ask
+    // (same membership check as win:new)
+    if (!isDocsRenderer(event.sender.id)) throw new Error('Untrusted IPC sender.')
     const recent = readJson<string[]>(RECENT_PATH(), []).filter((p) => existsSync(p))
     for (const p of recent) grantRendererFileAccess(p, event.sender.id)
     return recent

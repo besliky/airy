@@ -33,4 +33,15 @@ describe('docs renderer registry', () => {
     untrackDocsRenderer(5)
     expect(isDocsRenderer(5)).toBe(false)
   })
+
+  it('a foreign editor renderer never becomes a docs renderer by asking', () => {
+    // the docs:recent / win:new membership check: a webContents from
+    // another app in the shared process (fake ids here) is refused until
+    // tracked — which only happens for webContents docs' main created
+    const sheetsTabId = 12
+    const docsViewId = 40
+    trackDocsRenderer(docsViewId)
+    expect(isDocsRenderer(sheetsTabId)).toBe(false)
+    expect(isDocsRenderer(docsViewId)).toBe(true)
+  })
 })

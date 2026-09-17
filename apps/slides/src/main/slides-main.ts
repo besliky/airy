@@ -244,6 +244,7 @@ import {
   type Session,
 } from './session-state'
 import { registerAiIpc, registerSlidesOnlyAiIpc } from './ai-ipc'
+import { trackSlidesRenderer, untrackSlidesRenderer, isSlidesRenderer } from './slides-renderers'
 import { listPrivateFontFaces, getPrivateFontData, registerEmbeddedFonts } from './fonts'
 import { listMetafileFonts } from './metafile-fonts'
 import {
@@ -379,17 +380,18 @@ async function handleRendererFreeze(wc: WebContents): Promise<void> {
 }
 
 /**
- * Renderers allowed to receive a screen-capture stream. The display-media
- * handler below answers for the whole default session, so every other
- * renderer (docs, sheets, home, …) must be denied: granting sources[0]
- * unconditionally would hand a live primary-screen stream to any code that
- * manages to run in one of them.
+ * Slides renderers are tracked in slides-renderers.ts (tab views + standalone
+ * windows). The display-media handler below answers for the whole default
+ * session, so every other renderer (docs, sheets, home, …) must be denied:
+ * granting sources[0] unconditionally would hand a live primary-screen
+ * stream to any code that manages to run in one of them. slides:recent uses
+ * the same membership: serving recents re-grants their folders to the asker,
+ * a privilege only slides renderers may claim.
  */
-const screenCaptureWcIds = new Set<number>()
 
 function trackSlidesWebContents(wc: WebContents): void {
   windowRefs.activeWebContents = wc
-  screenCaptureWcIds.add(wc.id)
+  trackSlidesRenderer(wc.id)
   wc.on('unresponsive', () => void handleRendererFreeze(wc))
   // The AI panel opens links via window.open; route them to the system
   // browser instead of spawning an in-app window with remote content.
@@ -412,7 +414,7 @@ function trackSlidesWebContents(wc: WebContents): void {
     closeSaveWaiters.get(wc.id)?.(false)
     closeSaveWaiters.delete(wc.id)
     autoSavePrefByWc.delete(wc.id)
-    screenCaptureWcIds.delete(wc.id)
+    untrackSlidesRenderer(wc.id)
     if (windowRefs.activeWebContents === wc) windowRefs.activeWebContents = null
   })
 }
@@ -1085,17 +1087,17 @@ export function registerSlidesIpc(): void {
   ipcMain.handle('app:get-language', () => getUiLang())
 
   // Screen recording: source dispatch for the renderer's navigator.mediaDevices.getDisplayMedia.
-  // Scoped to slides renderers only (screenCaptureWcIds): the handler answers
-  // for the whole default session, and answering any other renderer would
-  // grant it a live screen stream with no prompt. macOS prefers the system
-  // picker (with its permission flow), falling back to the first screen.
+  // Scoped to slides renderers only (slides-renderers registry): the handler
+  // answers for the whole default session, and answering any other renderer
+  // would grant it a live screen stream with no prompt. macOS prefers the
+  // system picker (with its permission flow), falling back to the first screen.
   void app.whenReady().then(() => {
     try {
       electronSession.defaultSession.setDisplayMediaRequestHandler(
         (request, callback) => {
           // frame null on torn-down renderers; fromFrame null when unknown
           const wc = request.frame ? webContents.fromFrame(request.frame) : null
-          if (!wc || !screenCaptureWcIds.has(wc.id)) {
+          if (!wc || !isSlidesRenderer(wc.id)) {
             callback({})
             return
           }
@@ -4311,7 +4313,11 @@ export function registerSlidesIpc(): void {
   ipcMain.handle('slides:recent', async (e) => {
     // recents are the user's own decks: serving them also (re)grants their
     // folders to the asking renderer so slides:open-path works for last
-    // session's files
+    // session's files. The grant makes the channel privileged — any
+    // webContents in this shared process could otherwise enumerate recents
+    // and self-grant their folders — so only slides renderers may ask
+    // (same membership as the display-media handler)
+    if (!isSlidesRenderer(e.sender.id)) throw new Error('Untrusted IPC sender.')
     const recent = await readRecent()
     for (const p of recent) grantRendererFileAccess(p, e.sender.id)
     return recent
