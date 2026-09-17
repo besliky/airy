@@ -280,7 +280,7 @@ describe('deleted-reference #REF! emission (Excel semantics)', () => {
     ).toThrow(StructuralShiftError)
   })
 
-  it('whole-range references become #REF!, keeping the sheet qualifier', () => {
+  it('whole-range references become the bare #REF! token (qualifier dropped)', () => {
     expect(
       shiftFormulaText(
         'SUM(Other!A5:A9)+$B$8',

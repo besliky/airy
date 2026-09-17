@@ -13,16 +13,14 @@
  *    reference (shiftFormulaText's fail-closed mode).
  *
  * The save side now emits #REF! (xlsx-structure's 'ref-error' mode). This
- * module fixes the model side: the BeforeCommandExecute gate collects the
- * affected cross-sheet formulas from the pristine pre-deletion model and
- * rewrites them SYNCHRONOUSLY BEFORE the command runs — Univer then carries
- * the rewritten texts verbatim through its relocation, because they no
- * longer reference the deleted span. The rewrites are journaled set-values
- * commands wrapped in one undo batch with the deletion, so a single ⌘Z
- * restores rows and formulas together; if the command never lands (canceled
- * by a later gate), the batch's only item is rolled back with one undo. The
- * harvested file-coordinate formula index (streamed workbooks' formula bar)
- * is rewritten in place once the deletion is confirmed; those keys live on
+ * module fixes the model side: the BeforeCommandExecute gate captures the
+ * span and a pre-deletion row/column count, and once CommandExecuted fires
+ * (verified to have actually landed — see finishCrossSheetRewrites) it
+ * re-collects the affected cross-sheet formulas from the relocated model and
+ * rewrites them as journaled set-values commands — their own undo item on
+ * top of the deletion's, so ⌘Z restores the original formulas and a second
+ * ⌘Z the rows. The harvested file-coordinate formula index (streamed
+ * workbooks' formula bar) is rewritten in place too; those keys live on
  * other sheets, which the deletion never moves.
  */
 import { ICommandService } from '@univerjs/core'

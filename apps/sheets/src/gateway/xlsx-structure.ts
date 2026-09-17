@@ -451,8 +451,9 @@ function refreshMergeCount(xml: string): string {
 
 /// Rewrites references to the edited sheet inside another sheet's formulas
 /// (only tokens qualified with the edited sheet's name shift). References the
-/// deletion orphans become `Other!#REF!` — Excel semantics, so a delete that
-/// strands a dependent formula still saves.
+/// deletion orphans become a bare `#REF!` token — the qualifier is dropped,
+/// matching Univer's own rewrite (the recalc engine rejects `Other!#REF!`) —
+/// so a delete that strands a dependent formula still saves.
 export function shiftCrossSheetFormulas(
   otherWorksheetXml: string,
   editedSheetName: string,

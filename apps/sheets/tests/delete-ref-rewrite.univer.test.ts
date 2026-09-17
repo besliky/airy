@@ -1,10 +1,10 @@
 /**
  * Headless end-to-end check of the delete→#REF! flow the BeforeCommandExecute
- * gate drives: cross-sheet dependent formulas are rewritten synchronously
- * BEFORE the remove-row command runs (so Univer carries the rewritten texts
- * verbatim through its dependent-cell relocation), the deletion succeeds
- * instead of being refused, and one undo — the batching the gate wraps around
- * rewrites, then the deletion — restoring texts, then rows and positions.
+ * gate drives: the remove-row command runs first (Univer relocates the
+ * cross-sheet dependents but leaves their texts stale), then the gate's
+ * finish step — after verifying the deletion landed — re-collects and applies
+ * the rewrites as journaled commands, and undo walks them back item by item:
+ * first the rewrite batch (texts), then the deletion (rows and positions).
  */
 import {
   ICommandService,
