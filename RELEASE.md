@@ -3,9 +3,9 @@
 This document describes how a version of Airy is cut, what ends up in a
 GitHub release, and how installed apps pick updates up. The release pipeline
 is the `Release` workflow (`.github/workflows/release.yml`); it packages
-Linux and Windows installers and publishes them through electron-builder's
-GitHub provider (`publish: { owner: besliky, repo: airy }` baked into
-`apps/shell/electron-builder.cjs`).
+Linux, Windows, and macOS installers and publishes them through
+electron-builder's GitHub provider (`publish: { owner: besliky, repo: airy }`
+baked into `apps/shell/electron-builder.cjs`).
 
 ## Cutting a release
 
@@ -22,11 +22,11 @@ git tag v0.9.1
 git push origin main v0.9.1
 ```
 
-Pushing the `v*` tag triggers the Release workflow on `ubuntu-latest` and
-`windows-latest`. Each job regenerates the third-party notices, builds all
-six apps, and runs electron-builder with `--publish always`, which uploads
-the artifacts to the release named after the tag. Watch the run under the
-repository's **Actions** tab.
+Pushing the `v*` tag triggers the Release workflow on `ubuntu-latest`,
+`windows-latest`, and `macos-latest`. Each job regenerates the third-party
+notices, builds all six apps, and runs electron-builder with
+`--publish always`, which uploads the artifacts to the release named after
+the tag. Watch the run under the repository's **Actions** tab.
 
 electron-builder creates that release as a **draft**. Drafts are invisible
 to the in-app updater (see below), so the last manual step is: open
@@ -59,6 +59,8 @@ hand out but not announce.
 | `Airy-<v>.AppImage`                         | Linux    | self-contained x64 AppImage                          |
 | `latest-linux.yml` (+ `.AppImage.blockmap`) | Linux    | update feed + blockmap for the AppImage              |
 | `airy_<v>_amd64.deb`                        | Linux    | apt package (`packageName: airy`, upgrades in place) |
+| `Airy-<v>-arm64.dmg`                        | macOS    | arm64 disk image (x64 builds are opt-in, see below)  |
+| `Airy-<v>-arm64-mac.zip`                    | macOS    | zip variant of the same arm64 build                  |
 
 The `latest*.yml` files are what electron-updater reads; they are release
 assets just like the binaries and must not be deleted from a published
@@ -79,7 +81,9 @@ launch and via **Help → Check for Updates**. Behavior per install type:
   downloads `airy_<v>_amd64.deb` and installs it (`apt install ./…` upgrades
   the `airy` package).
 
-macOS is out of scope for the fork; dev runs have the updater off.
+macOS keeps the in-app updater off (unsigned builds make auto-update
+trust-reduced); a new version arrives by downloading the new
+`Airy-<v>-arm64.dmg` from the releases page.
 
 ## Manually verifying the update flow
 
@@ -102,7 +106,10 @@ Before announcing a release, walk one cycle end to end:
 ## Notes
 
 - The fork ships unsigned installers. Windows shows a SmartScreen/"unknown
-  publisher" prompt on first run and macOS is not packaged at all; that is
-  expected for now.
+  publisher" prompt on first run and macOS Gatekeeper warns about the
+  unsigned dmg; that is expected for now.
+- macOS releases build arm64 only by default; an Intel (x64) variant is
+  opt-in via `AIRY_MAC_X64=1` in the workflow environment (see the mac
+  block in `apps/shell/electron-builder.cjs`).
 - The rpm target is intentionally not built by the release workflow; the
   local `npm run dist:linux` still packages it when `rpmbuild` is present.
