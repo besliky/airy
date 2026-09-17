@@ -230,6 +230,8 @@ export const pt = {
   appStatLines: 'Linhas',
   appNavTitle: 'Navegação',
   appNavNoHeadings: 'Não há títulos neste documento',
+  appNavSearch: 'Pesquisar títulos',
+  appNavNoMatch: 'Nenhum título correspondente',
   appTabTypeTip: 'Tipo de tabulação: {type} (clique para alternar)',
   appTabStopTitle: 'Tabulação {type} @ {pos}cm',
   appTabLeader: ', preenchimento: {leader}',

@@ -233,6 +233,8 @@ export const it = {
   appStatLines: 'Righe',
   appNavTitle: 'Navigazione',
   appNavNoHeadings: 'Nessun titolo in questo documento',
+  appNavSearch: 'Cerca titoli',
+  appNavNoMatch: 'Nessun titolo corrispondente',
   appTabTypeTip: 'Tipo di tabulazione: {type} (fai clic per cambiare)',
   appTabStopTitle: 'Tabulazione {type} @ {pos}cm',
   appTabLeader: ', carattere di riempimento: {leader}',

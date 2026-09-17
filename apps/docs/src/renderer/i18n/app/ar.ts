@@ -226,6 +226,8 @@ export const ar = {
   appStatLines: 'الأسطر',
   appNavTitle: 'التنقل',
   appNavNoHeadings: 'لا توجد عناوين في هذا المستند',
+  appNavSearch: 'البحث عن عناوين',
+  appNavNoMatch: 'لا توجد عناوين مطابقة',
   appTabTypeTip: 'نوع علامة الجدولة: {type} (انقر للتبديل)',
   appTabStopTitle: 'علامة جدولة {type} @ {pos}سم',
   appTabLeader: '، الحرف السابق: {leader}',

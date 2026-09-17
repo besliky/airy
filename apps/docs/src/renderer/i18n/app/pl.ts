@@ -234,6 +234,8 @@ export const pl = {
   appStatLines: 'Wiersze',
   appNavTitle: 'Nawigacja',
   appNavNoHeadings: 'Brak nagłówków w tym dokumencie',
+  appNavSearch: 'Szukaj nagłówków',
+  appNavNoMatch: 'Brak pasujących nagłówków',
   appTabTypeTip: 'Typ tabulatora: {type} (kliknij, aby przełączyć)',
   appTabStopTitle: 'Tabulator {type} @ {pos}cm',
   appTabLeader: ', znak wiodący: {leader}',

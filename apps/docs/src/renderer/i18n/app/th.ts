@@ -229,6 +229,8 @@ export const th = {
   appStatLines: 'จำนวนบรรทัด',
   appNavTitle: 'การนำทาง',
   appNavNoHeadings: 'ไม่มีหัวเรื่องในเอกสารนี้',
+  appNavSearch: 'ค้นหาหัวเรื่อง',
+  appNavNoMatch: 'ไม่พบหัวเรื่องที่ตรงกัน',
   appTabTypeTip: 'ชนิดแท็บหยุด: {type} (คลิกเพื่อสลับ)',
   appTabStopTitle: 'แท็บหยุด{type} @ {pos}cm',
   appTabLeader: ' ตัวนำ: {leader}',

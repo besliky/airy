@@ -229,6 +229,8 @@ export const cs = {
   appStatLines: 'Řádky',
   appNavTitle: 'Navigace',
   appNavNoHeadings: 'Tento dokument neobsahuje žádné nadpisy',
+  appNavSearch: 'Hledat nadpisy',
+  appNavNoMatch: 'Žádné odpovídající nadpisy',
   appTabTypeTip: 'Typ tabulátoru: {type} (klepnutím přepnete)',
   appTabStopTitle: 'Tabulátor {type} @ {pos} cm',
   appTabLeader: ', vodicí znak: {leader}',

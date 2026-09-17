@@ -231,6 +231,8 @@ export const ru = {
   appStatLines: 'Строки',
   appNavTitle: 'Навигация',
   appNavNoHeadings: 'В документе нет заголовков',
+  appNavSearch: 'Поиск заголовков',
+  appNavNoMatch: 'Заголовки не найдены',
   appTabTypeTip: 'Тип позиции табуляции: {type} (щелкните для переключения)',
   appTabStopTitle: 'Позиция табуляции ({type}) @ {pos}см',
   appTabLeader: ', заполнитель: {leader}',

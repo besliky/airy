@@ -233,6 +233,8 @@ export const ms = {
   appStatLines: 'Baris',
   appNavTitle: 'Navigasi',
   appNavNoHeadings: 'Tiada tajuk dalam dokumen ini',
+  appNavSearch: 'Cari tajuk',
+  appNavNoMatch: 'Tiada tajuk yang sepadan',
   appTabTypeTip: 'Jenis hentian tab: {type} (klik untuk tukar)',
   appTabStopTitle: 'Hentian tab {type} @ {pos}cm',
   appTabLeader: ', pendahulu: {leader}',

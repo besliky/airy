@@ -239,6 +239,8 @@ export const fr = {
   appStatLines: 'Lignes',
   appNavTitle: 'Navigation',
   appNavNoHeadings: 'Aucun titre dans ce document',
+  appNavSearch: 'Rechercher un titre',
+  appNavNoMatch: 'Aucun titre correspondant',
   appTabTypeTip: 'Type de taquet de tabulation : {type} (cliquez pour changer)',
   appTabStopTitle: 'Taquet de tabulation {type} @ {pos}cm',
   appTabLeader: ', points de suite : {leader}',

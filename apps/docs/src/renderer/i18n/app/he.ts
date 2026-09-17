@@ -224,6 +224,8 @@ export const he = {
   appStatLines: 'שורות',
   appNavTitle: 'ניווט',
   appNavNoHeadings: 'אין כותרות במסמך זה',
+  appNavSearch: 'חיפוש כותרות',
+  appNavNoMatch: 'לא נמצאו כותרות מתאימות',
   appTabTypeTip: 'סוג עצירת טאב: {type} (לחצו להחלפה)',
   appTabStopTitle: 'עצירת טאב {type} @ {pos}ס"מ',
   appTabLeader: ', תו מוביל: {leader}',

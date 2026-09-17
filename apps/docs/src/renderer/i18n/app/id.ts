@@ -231,6 +231,8 @@ export const id = {
   appStatLines: 'Baris',
   appNavTitle: 'Navigasi',
   appNavNoHeadings: 'Tidak ada judul di dokumen ini',
+  appNavSearch: 'Cari judul',
+  appNavNoMatch: 'Tidak ada judul yang cocok',
   appTabTypeTip: 'Jenis hentian tab: {type} (klik untuk mengganti)',
   appTabStopTitle: 'Hentian tab {type} @ {pos}cm',
   appTabLeader: ', pemandu: {leader}',

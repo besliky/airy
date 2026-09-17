@@ -239,6 +239,8 @@ export const nl = {
   appStatLines: 'Regels',
   appNavTitle: 'Navigatie',
   appNavNoHeadings: 'Geen koppen in dit document',
+  appNavSearch: 'Koppen zoeken',
+  appNavNoMatch: 'Geen overeenkomende koppen',
   appTabTypeTip: 'Type tabstop: {type} (klik om te wisselen)',
   appTabStopTitle: '{type} tabstop @ {pos}cm',
   appTabLeader: ', opvulteken: {leader}',

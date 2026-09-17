@@ -247,6 +247,8 @@ export const ja = {
   // Navigation pane
   appNavTitle: 'ナビゲーション',
   appNavNoHeadings: '文書に見出しがありません',
+  appNavSearch: '見出しを検索',
+  appNavNoMatch: '一致する見出しがありません',
   // Ruler
   appTabTypeTip: 'タブの種類: {type}(クリックで切り替え)',
   appTabStopTitle: '{type}タブ @ {pos}cm',

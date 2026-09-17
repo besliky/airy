@@ -225,6 +225,8 @@ export const en = {
   appStatLines: 'Lines',
   appNavTitle: 'Navigation',
   appNavNoHeadings: 'No headings in this document',
+  appNavSearch: 'Search headings',
+  appNavNoMatch: 'No matching headings',
   appTabTypeTip: 'Tab stop type: {type} (click to cycle)',
   appTabStopTitle: '{type} tab stop @ {pos}cm',
   appTabLeader: ', leader: {leader}',

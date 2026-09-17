@@ -219,6 +219,8 @@ export const zhTW = {
   appStatLines: '行數',
   appNavTitle: '導覽',
   appNavNoHeadings: '文件中沒有標題',
+  appNavSearch: '搜尋標題',
+  appNavNoMatch: '沒有相符的標題',
   appTabTypeTip: '定位停駐點類型: {type}(點選切換)',
   appTabStopTitle: '{type}定位停駐點 @ {pos}cm',
   appTabLeader: '，前置字元:{leader}',

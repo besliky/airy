@@ -229,6 +229,8 @@ export const hi = {
   appStatLines: 'पंक्तियाँ',
   appNavTitle: 'नेविगेशन',
   appNavNoHeadings: 'इस दस्तावेज़ में कोई शीर्षक नहीं है',
+  appNavSearch: 'शीर्षक खोजें',
+  appNavNoMatch: 'कोई मेल खाता शीर्षक नहीं',
   appTabTypeTip: 'टैब स्टॉप प्रकार: {type} (बदलने के लिए क्लिक करें)',
   appTabStopTitle: '{type} टैब स्टॉप @ {pos}cm',
   appTabLeader: ', लीडर: {leader}',

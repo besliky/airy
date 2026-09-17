@@ -2686,6 +2686,29 @@ th.cell-rev-del {
   border-bottom: 1px solid var(--border);
 }
 
+/* live heading filter (Word's navigation-pane search box) */
+.nav-search {
+  flex: none;
+  margin: 8px 10px;
+  height: 28px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 0 8px;
+  font-size: 12.5px;
+  outline: none;
+}
+
+.nav-search:focus {
+  border-color: var(--word-blue);
+}
+
+/* matched substring emphasis inside a nav item */
+.nav-hit {
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+}
+
 .nav-pane-list {
   overflow-y: auto;
   padding: 6px 0;

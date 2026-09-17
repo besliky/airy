@@ -247,6 +247,8 @@ export const ko = {
   // Navigation pane
   appNavTitle: '탐색',
   appNavNoHeadings: '문서에 제목이 없습니다',
+  appNavSearch: '제목 검색',
+  appNavNoMatch: '일치하는 제목이 없습니다',
   // Ruler
   appTabTypeTip: '탭 종류: {type}(클릭하여 전환)',
   appTabStopTitle: '{type} 탭 @ {pos}cm',

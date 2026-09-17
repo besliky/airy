@@ -236,6 +236,8 @@ export const zh = {
   // Navigation pane
   appNavTitle: '导航',
   appNavNoHeadings: '文档中没有标题',
+  appNavSearch: '搜索标题',
+  appNavNoMatch: '没有匹配的标题',
   // Ruler
   appTabTypeTip: '制表位类型: {type}（点击切换）',
   appTabStopTitle: '{type}制表位 @ {pos}cm',

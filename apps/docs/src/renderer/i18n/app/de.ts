@@ -239,6 +239,8 @@ export const de = {
   appStatLines: 'Zeilen',
   appNavTitle: 'Navigation',
   appNavNoHeadings: 'Keine Überschriften in diesem Dokument',
+  appNavSearch: 'Überschriften suchen',
+  appNavNoMatch: 'Keine passenden Überschriften',
   appTabTypeTip: 'Tabstopptyp: {type} (zum Wechseln klicken)',
   appTabStopTitle: '{type}-Tabstopp @ {pos}cm',
   appTabLeader: ', Füllzeichen: {leader}',
