@@ -30,6 +30,16 @@ All application windows run with the full Electron renderer lockdown:
   capture tokens, and an audit log. A compromised sheets renderer can still
   capture full-resolution frames at the rate limit; macOS additionally gates
   this behind the OS screen-recording permission, Windows and Linux do not.
+- Known residual: user-side link href storage. AI/bridge/ops insert paths
+  sanitize hrefs through a scheme whitelist, but three user-driven paths
+  store raw hrefs for fidelity — pasted HTML, the Insert-Link dialog, and
+  loading an existing docx. Opening any link still goes through the
+  `safeExternalUrl` gate (http/https/mailto only), so a stored
+  `javascript:` href is inert data, never executed. Relatedly, the slides
+  `files:add` attachment flow stats up to 50 renderer-named paths per call
+  before the witnessed-drop grant decision, acting as a bounded file-metadata
+  oracle (existence/size/extension); the folder grant itself still requires a
+  witnessed user drop or paste.
 
 ## Updater Posture
 

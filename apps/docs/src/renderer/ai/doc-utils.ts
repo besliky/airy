@@ -32,6 +32,15 @@ const hasDelMark = (node: ProseMirrorNode) => node.marks.some((m) => m.type.name
  * persist a dangerous scheme into the document (opening is separately gated,
  * but the stored attribute itself must stay benign). Returns null to mean
  * "keep the text, drop the link".
+ *
+ * Residuals (accepted): this policy covers the AI/bridge/ops entry points
+ * only. Three user-side or file-load paths persist raw hrefs by design —
+ * pasted-HTML link marks (LinkMark.parseHTML in editor/marks.ts), the
+ * Insert-Link dialog (components/ribbon-insert-tab.tsx), and docx file
+ * loading (editor/convert.ts, for fidelity with what the file contains).
+ * There the user, not a model, supplied the value; every link OPENING path
+ * still routes through safeExternalUrl, which rejects non-http(s)/mailto
+ * schemes, so a stored javascript: href can never execute (see SECURITY.md).
  */
 export function sanitizeLinkHref(raw: string | null): string | null {
   const href = (raw ?? '').trim()
