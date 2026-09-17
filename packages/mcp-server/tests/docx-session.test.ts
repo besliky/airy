@@ -587,6 +587,65 @@ describe('path confinement', () => {
       await rm(outsideDir, { recursive: true, force: true })
     }
   })
+  it('refuses a save-as onto an EXISTING symlink that points outside the root', async () => {
+    // the target path itself is a file symlink to an outside document: the
+    // real-path check resolves it (it exists) and refuses
+    const outsideDir = join(root, '..', 'airy-outside-link-target')
+    await mkdir(outsideDir)
+    await writeFile(join(outsideDir, 'secret.docx'), 'outside bytes')
+    try {
+      symlinkSync(join(outsideDir, 'secret.docx'), join(root, 'linked.docx'), 'file')
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === 'EPERM' || code === 'EACCES') return
+      throw e
+    }
+    try {
+      expect(() => resolveConfined(join(root, 'linked.docx'), root)).toThrow(
+        /outside the workspace root/,
+      )
+      // end to end: save-as onto the link refuses and never touches the target
+      const session = await openSession()
+      await expect(session.save(join(root, 'linked.docx'))).rejects.toThrow(
+        /outside the workspace root/,
+      )
+      expect(await readFile(join(outsideDir, 'secret.docx'), 'utf8')).toBe('outside bytes')
+    } finally {
+      await rm(join(root, 'linked.docx'), { force: true })
+      await rm(outsideDir, { recursive: true, force: true })
+    }
+  })
+
+  it('refuses a fresh save-as through a multi-hop symlink chain (a -> b -> outside)', async () => {
+    const outsideDir = join(root, '..', 'airy-outside-chain')
+    await mkdir(outsideDir)
+    try {
+      symlinkSync(outsideDir, join(root, 'hop-b'), 'dir')
+      symlinkSync(join(root, 'hop-b'), join(root, 'hop-a'), 'dir')
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === 'EPERM' || code === 'EACCES') return
+      throw e
+    }
+    try {
+      // the candidate file does not exist under the chain; the deepest
+      // existing ancestor walk must follow BOTH hops out of the root
+      expect(() => resolveConfined('hop-a/new.docx', root)).toThrow(/outside the workspace root/)
+      expect(() => resolveConfined(join(root, 'hop-a', 'new.docx'), root)).toThrow(
+        /outside the workspace root/,
+      )
+      const session = await openSession()
+      await expect(session.save(join(root, 'hop-a', 'new.docx'))).rejects.toThrow(
+        /outside the workspace root/,
+      )
+      expect(readdirSync(outsideDir)).toEqual([])
+    } finally {
+      await rm(join(root, 'hop-a'), { force: true })
+      await rm(join(root, 'hop-b'), { force: true })
+      await rm(outsideDir, { recursive: true, force: true })
+    }
+  })
+
   it('allows a fresh in-root save-as: nested dirs and deep missing chains', async () => {
     const session = await openSession()
     session.insertContent('<p>fresh</p>', 0)
