@@ -396,7 +396,8 @@ export function registerTools(server: McpServer): void {
         'session overwrites the file it was opened from (refusing with a clear error when the ' +
         'file changed on disk since open — reopen and re-apply in that case), while sessions ' +
         'imported from .xls/.ods/.doc/.odt write a fresh sibling file with the native extension ' +
-        'next to the original (the original stays untouched). An explicit path that already ' +
+        'next to the original (the original stays untouched; when that sibling already exists ' +
+        'the save is refused like any save-as target). An explicit path that already ' +
         'exists on disk is refused with an error unless it is a file the session itself opened ' +
         'or saved — pass overwrite: true to replace it. format "origin" instead exports ' +
         'back to the original .doc/.odt/.ods through LibreOffice (best-effort; .xls output is ' +

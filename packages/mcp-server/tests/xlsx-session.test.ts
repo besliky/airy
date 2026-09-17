@@ -261,6 +261,26 @@ describe('XlsxSession journal + save matrix', () => {
     expect(result.warnings[0]).toMatch(/original .*\.xls.* left untouched/)
   })
 
+  it('refuses a converted session default save onto a pre-existing sibling', async () => {
+    const legacyPath = join(root, 'legacy.xls')
+    await writeFile(legacyPath, 'legacy-bytes')
+    const session = await XlsxSession.open(legacyPath, root, makeStubIo())
+    const sibling = join(root, 'legacy.xlsx')
+    await writeFile(sibling, 'pre-existing sibling bytes')
+    // the sibling is not a file the session opened or saved: the default
+    // save must not silently clobber it
+    await expect(session.save()).rejects.toThrow(/already exists/)
+    await expect(session.save()).rejects.toThrow(/overwrite: true/)
+    expect(await readFile(sibling, 'utf8')).toBe('pre-existing sibling bytes')
+    // explicit consent replaces it
+    await expect(session.save(undefined, 'xlsx', { overwrite: true })).resolves.toMatchObject({
+      path: sibling,
+    })
+    expect(await readFile(sibling, 'utf8')).toBe('saved-xlsx-bytes')
+    // after the first save the sibling is the session's own output
+    await expect(session.save()).resolves.toMatchObject({ path: sibling })
+  })
+
   it('format origin: .xls refuses with the save-as-.xlsx cascade', async () => {
     const legacyPath = join(root, 'legacy.xls')
     await writeFile(legacyPath, 'legacy-bytes')

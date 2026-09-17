@@ -510,9 +510,10 @@ export class XlsxSession {
    *
    * Default target: the opened .xlsx; for imported .xls/.ods books a fresh
    * sibling .xlsx next to the original (true legacy output is not supported;
-   * format 'origin' refuses for .xls and exports .ods via LibreOffice). An
-   * explicit target that already exists is refused unless it is the session's
-   * own backing file / last output, or overwrite is true.
+   * format 'origin' refuses for .xls and exports .ods via LibreOffice). A
+   * target (explicit or default) that already exists is refused unless it is
+   * the session's own backing file / last output, or overwrite is true — a
+   * pre-existing import sibling is guarded like any save-as.
    */
   async save(
     rawPath?: string,
@@ -521,12 +522,7 @@ export class XlsxSession {
   ): Promise<XlsxSaveResult> {
     if (format === 'origin') return this.saveToOrigin()
     const target = resolveConfined(rawPath ?? this.defaultTarget(), this.root)
-    await assertSaveTargetFree(
-      target,
-      [this.backingPath, ...this.savedTargets],
-      rawPath,
-      options.overwrite,
-    )
+    await assertSaveTargetFree(target, [this.backingPath, ...this.savedTargets], options.overwrite)
     if (target === this.backingPath) await this.assertBackingUnchanged()
 
     const result = await saveWorkbookViaSidecar({

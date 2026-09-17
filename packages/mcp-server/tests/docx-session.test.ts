@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import JSZip from 'jszip'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { DocxSession, FencingError } from '../src/docx/session.js'
+import { assertSaveTargetFree, DocxSession, FencingError } from '../src/docx/session.js'
 import { resolveConfined, WORKSPACE_ROOT_ENV } from '../src/docx/paths.js'
 import type { Target } from '../src/docx/ops.js'
 import { parseRestrictedHtml, blocksToHtml } from '../src/docx/html.js'
@@ -381,6 +381,33 @@ describe('save: byte preservation and fencing', () => {
     await session.save()
     session.insertContent('<p>two</p>', 0)
     await expect(session.save()).resolves.toMatchObject({ path: docPath })
+  })
+})
+
+describe('assertSaveTargetFree (clobber guard)', () => {
+  it('guards a converted session sibling like an explicit save-as', async () => {
+    const sibling = join(root, 'legacy.docx')
+    await writeFile(sibling, "someone else's document")
+    // a converted session owns its temp .docx and the .doc origin, never the sibling
+    const owned = [join(root, 'temp-converted.docx'), join(root, 'legacy.doc')]
+    // default save onto the pre-existing sibling: refused, file untouched
+    await expect(assertSaveTargetFree(sibling, owned, undefined)).rejects.toThrow(/already exists/)
+    await expect(assertSaveTargetFree(sibling, owned, undefined)).rejects.toThrow(/overwrite: true/)
+    expect(await readFile(sibling, 'utf8')).toBe("someone else's document")
+    // explicit consent replaces it
+    await expect(assertSaveTargetFree(sibling, owned, true)).resolves.toBeUndefined()
+    // once saved, the sibling is the session's own output: repeat saves pass
+    await expect(
+      assertSaveTargetFree(sibling, [...owned, sibling], undefined),
+    ).resolves.toBeUndefined()
+    // a fresh (not yet existing) sibling target is allowed
+    await expect(
+      assertSaveTargetFree(join(root, 'fresh.docx'), owned, undefined),
+    ).resolves.toBeUndefined()
+  })
+
+  it('lets native default saves (the opened file) through without overwrite', async () => {
+    await expect(assertSaveTargetFree(docPath, [docPath], undefined)).resolves.toBeUndefined()
   })
 })
 

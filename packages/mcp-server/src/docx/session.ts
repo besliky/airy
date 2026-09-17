@@ -126,19 +126,21 @@ export class FencingError extends Error {
 }
 
 /**
- * Save-as clobber guard shared by the docx and xlsx sessions: refuse an
- * explicit target that already exists on disk unless it is one of the
- * session's own files (the opened file / a previous save's output) or the
- * caller passed overwrite. Default targets (rawPath undefined) are exempt —
- * repeat saves over the session's own output keep working.
+ * Save-as clobber guard shared by the docx and xlsx sessions: refuse a target
+ * that already exists on disk unless it is one of the session's own files
+ * (the opened/backing file, a previous save's output) or the caller passed
+ * overwrite. Default targets are guarded by the same rule: a native session
+ * defaults to the file it opened (owned, so repeat saves keep working),
+ * while a session converted from .xls/.ods/.doc/.odt defaults to a FRESH
+ * sibling the session neither opened nor saved — a pre-existing sibling must
+ * not be clobbered without consent.
  */
 export async function assertSaveTargetFree(
   target: string,
   owned: ReadonlyArray<string | null>,
-  rawPath: string | undefined,
   overwrite: boolean | undefined,
 ): Promise<void> {
-  if (rawPath === undefined || overwrite === true) return
+  if (overwrite === true) return
   if (owned.some((path) => path !== null && path === target)) return
   let exists = true
   try {
@@ -431,9 +433,11 @@ export class DocxSession {
    * mtime/size fencing: saving over the file this session opened refuses when
    * the file changed on disk since open (external writer), with a clear error.
    *
-   * Save-as clobber guard: an explicit target that already exists on disk is
-   * refused unless it is the file this session opened (or last saved) or
-   * `overwrite` is true — the default targets below keep working unchanged.
+   * Save-as clobber guard: a target (explicit or default) that already exists
+   * on disk is refused unless it is the file this session opened (or last
+   * saved) or `overwrite` is true — a converted session's fresh sibling
+   * default target is guarded like any save-as, while the native default
+   * (the opened file) keeps working unchanged.
    *
    * Default target: the opened .docx; for sessions converted from .doc/.odt a
    * fresh sibling .docx next to the original. format:'origin' exports the
@@ -447,12 +451,7 @@ export class DocxSession {
   ): Promise<SaveResult> {
     if (format === 'origin') return this.saveToOrigin()
     const target = resolveConfined(rawPath ?? this.defaultTarget(), this.root)
-    await assertSaveTargetFree(
-      target,
-      [this.path, ...this.savedTargets],
-      rawPath,
-      options.overwrite,
-    )
+    await assertSaveTargetFree(target, [this.path, ...this.savedTargets], options.overwrite)
     if (target === this.path && this.baseline) {
       let current: FileStamp
       try {
