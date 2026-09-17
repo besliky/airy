@@ -1,0 +1,40 @@
+import type { en } from './en'
+
+/** Fill Form strings (ms); missing keys fall back to the en base. */
+export const ms = {
+  ribbonTabFillForm: 'Isi borang',
+  formPreviousField: 'Medan sebelumnya',
+  formNextField: 'Medan seterusnya',
+  formFieldProgress: '{current} / {total}',
+  insertText: 'Sisip teks',
+  insertTextHint: 'Sisip teks yang boleh dicari ke dalam PDF',
+  insertTextTitle: 'Sisip teks',
+  editInsertedText: 'Edit teks yang disisip',
+  deleteInsertedText: 'Padam teks yang disisip',
+  insertedTextDeleted: 'Teks yang disisip telah dipadam',
+  textInsertSkipped: 'Teks yang disisip tidak dapat disimpan pada halaman: {pages}',
+  textInsertNoFont:
+    'Tiada fon terpasang boleh melukis teks ini dalam PDF (emoji dan simbol khas tidak disokong)',
+  formComplete: 'Selesaikan pengisian',
+  formMissingRequired: '{count} medan wajib masih kosong',
+  formCompleteDone: 'Pemeriksaan pengisian borang lulus',
+  formSignField: 'Klik untuk tandatangan',
+  formAddText: 'Tambah teks',
+  formAddTextHint: 'Taip teks, kemudian klik halaman untuk meletakkannya',
+  formAddTextTitle: 'Tambah teks ke PDF',
+  formEditText: 'Edit teks',
+  formAddTextPlaceholder: 'Masukkan teks untuk diletakkan',
+  formTextSize: 'Saiz fon',
+  formTextColor: 'Warna',
+  formTextAlign: 'Penjajaran',
+  formAlignLeft: 'Kiri',
+  formAlignCenter: 'Tengah',
+  formAlignRight: 'Kanan',
+  formAddCheck: 'Tanda semak',
+  formAddCheckHint: 'Klik halaman untuk meletakkan tanda semak',
+  formAddCross: 'Tanda silang',
+  formAddCrossHint: 'Klik halaman untuk meletakkan tanda X',
+  formPlaceStaticHint: 'Klik untuk meletakkan; pilih hasil untuk mengalihkan atau mengubah saiznya',
+  formXfaWarning:
+    'PDF ini mengandungi XFA. Hanya AcroForm disokong; penyimpanan mungkin tidak mengekalkan data XFA.',
+} as const satisfies Partial<Record<keyof typeof en, string>>

@@ -1,0 +1,40 @@
+import type { en } from './en'
+
+/** Fill Form strings (ko); missing keys fall back to the en base. */
+export const ko = {
+  ribbonTabFillForm: '양식 채우기',
+  formPreviousField: '이전 필드',
+  formNextField: '다음 필드',
+  formFieldProgress: '{current} / {total}',
+  insertText: '텍스트 삽입',
+  insertTextHint: '검색 가능한 텍스트를 PDF에 삽입',
+  insertTextTitle: '텍스트 삽입',
+  editInsertedText: '삽입한 텍스트 편집',
+  deleteInsertedText: '삽입한 텍스트 삭제',
+  insertedTextDeleted: '삽입한 텍스트를 삭제했습니다',
+  textInsertSkipped: '{pages} 페이지의 텍스트를 저장할 수 없습니다',
+  textInsertNoFont:
+    '이 텍스트를 그릴 수 있는 글꼴이 설치되어 있지 않습니다(이모지 및 특수 기호는 지원되지 않음)',
+  formComplete: '채우기 완료',
+  formMissingRequired: '필수 필드 {count}개가 비어 있습니다',
+  formCompleteDone: '양식 작성 검사를 통과했습니다',
+  formSignField: '클릭하여 서명',
+  formAddText: '텍스트 추가',
+  formAddTextHint: '텍스트를 입력한 후 페이지를 클릭해 배치',
+  formAddTextTitle: 'PDF에 텍스트 추가',
+  formEditText: '텍스트 편집',
+  formAddTextPlaceholder: '배치할 텍스트 입력',
+  formTextSize: '글꼴 크기',
+  formTextColor: '색상',
+  formTextAlign: '맞춤',
+  formAlignLeft: '왼쪽',
+  formAlignCenter: '가운데',
+  formAlignRight: '오른쪽',
+  formAddCheck: '확인 표시',
+  formAddCheckHint: '페이지를 클릭해 확인 표시 배치',
+  formAddCross: 'X 표시',
+  formAddCrossHint: '페이지를 클릭해 X 표시 배치',
+  formPlaceStaticHint: '클릭하여 배치합니다. 선택한 후 이동하거나 크기를 조정할 수 있습니다',
+  formXfaWarning:
+    '이 PDF에는 XFA가 포함되어 있습니다. AcroForm만 지원되므로 저장 시 XFA 데이터가 유지되지 않을 수 있습니다.',
+} as const satisfies Partial<Record<keyof typeof en, string>>

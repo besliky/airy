@@ -1,0 +1,40 @@
+import type { en } from './en'
+
+/** Fill Form strings (ar); missing keys fall back to the en base. */
+export const ar = {
+  ribbonTabFillForm: 'تعبئة النموذج',
+  formPreviousField: 'الحقل السابق',
+  formNextField: 'الحقل التالي',
+  formFieldProgress: '{current} / {total}',
+  insertText: 'إدراج نص',
+  insertTextHint: 'إدراج نص قابل للبحث في ملف PDF',
+  insertTextTitle: 'إدراج نص',
+  editInsertedText: 'تحرير النص المُدرج',
+  deleteInsertedText: 'حذف النص المُدرج',
+  insertedTextDeleted: 'تم حذف النص المُدرج',
+  textInsertSkipped: 'تعذر حفظ النص المُدرج في الصفحات: {pages}',
+  textInsertNoFont:
+    'لا يوجد خط مثبّت يمكنه رسم هذا النص في PDF (الرموز التعبيرية والرموز الخاصة غير مدعومة)',
+  formComplete: 'إنهاء التعبئة',
+  formMissingRequired: '{count} من الحقول المطلوبة لا تزال فارغة',
+  formCompleteDone: 'اجتاز فحص تعبئة النموذج',
+  formSignField: 'انقر للتوقيع',
+  formAddText: 'إضافة نص',
+  formAddTextHint: 'اكتب النص، ثم انقر فوق الصفحة لوضعه',
+  formAddTextTitle: 'إضافة نص إلى PDF',
+  formEditText: 'تحرير النص',
+  formAddTextPlaceholder: 'أدخل النص المطلوب وضعه',
+  formTextSize: 'حجم الخط',
+  formTextColor: 'اللون',
+  formTextAlign: 'المحاذاة',
+  formAlignLeft: 'يسار',
+  formAlignCenter: 'وسط',
+  formAlignRight: 'يمين',
+  formAddCheck: 'علامة اختيار',
+  formAddCheckHint: 'انقر فوق الصفحة لوضع علامة اختيار',
+  formAddCross: 'علامة X',
+  formAddCrossHint: 'انقر فوق الصفحة لوضع علامة X',
+  formPlaceStaticHint: 'انقر للوضع؛ حدد النتيجة لتحريكها أو تغيير حجمها',
+  formXfaWarning:
+    'يحتوي ملف PDF هذا على XFA. يكون AcroForm فقط مدعومًا؛ وقد لا تُحفظ بيانات XFA عند الحفظ.',
+} as const satisfies Partial<Record<keyof typeof en, string>>

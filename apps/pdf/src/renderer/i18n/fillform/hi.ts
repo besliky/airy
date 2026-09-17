@@ -1,0 +1,40 @@
+import type { en } from './en'
+
+/** Fill Form strings (hi); missing keys fall back to the en base. */
+export const hi = {
+  ribbonTabFillForm: 'फ़ॉर्म भरें',
+  formPreviousField: 'पिछला फ़ील्ड',
+  formNextField: 'अगला फ़ील्ड',
+  formFieldProgress: '{current} / {total}',
+  insertText: 'टेक्स्ट डालें',
+  insertTextHint: 'PDF में खोज योग्य टेक्स्ट डालें',
+  insertTextTitle: 'टेक्स्ट डालें',
+  editInsertedText: 'डाला गया टेक्स्ट संपादित करें',
+  deleteInsertedText: 'डाला गया टेक्स्ट हटाएं',
+  insertedTextDeleted: 'डाला गया टेक्स्ट हटा दिया गया',
+  textInsertSkipped: 'पृष्ठों पर डाला गया टेक्स्ट सहेजा नहीं जा सका: {pages}',
+  textInsertNoFont:
+    'कोई भी इंस्टॉल किया गया फ़ॉन्ट इस टेक्स्ट को PDF में नहीं खींच सकता (इमोजी और विशेष प्रतीक समर्थित नहीं हैं)',
+  formComplete: 'भरना पूरा करें',
+  formMissingRequired: '{count} अनिवार्य फ़ील्ड अभी भी खाली हैं',
+  formCompleteDone: 'फ़ॉर्म भरने की जाँच पास हो गई',
+  formSignField: 'हस्ताक्षर के लिए क्लिक करें',
+  formAddText: 'टेक्स्ट जोड़ें',
+  formAddTextHint: 'टेक्स्ट टाइप करें, फिर उसे रखने के लिए पृष्ठ पर क्लिक करें',
+  formAddTextTitle: 'PDF में टेक्स्ट जोड़ें',
+  formEditText: 'टेक्स्ट संपादित करें',
+  formAddTextPlaceholder: 'रखने के लिए टेक्स्ट दर्ज करें',
+  formTextSize: 'फ़ॉन्ट आकार',
+  formTextColor: 'रंग',
+  formTextAlign: 'संरेखण',
+  formAlignLeft: 'बाएँ',
+  formAlignCenter: 'मध्य',
+  formAlignRight: 'दाएँ',
+  formAddCheck: 'चेक',
+  formAddCheckHint: 'चेक मार्क रखने के लिए पृष्ठ पर क्लिक करें',
+  formAddCross: 'क्रॉस',
+  formAddCrossHint: 'X मार्क रखने के लिए पृष्ठ पर क्लिक करें',
+  formPlaceStaticHint: 'रखने के लिए क्लिक करें; उसे स्थानांतरित या आकार बदलने के लिए चुनें',
+  formXfaWarning:
+    'इस PDF में XFA है। केवल AcroForm समर्थित है; सहेजने पर XFA डेटा संरक्षित नहीं हो सकता।',
+} as const satisfies Partial<Record<keyof typeof en, string>>
