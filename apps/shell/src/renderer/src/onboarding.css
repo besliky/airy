@@ -123,11 +123,11 @@
 /* each glyph carries different padding inside its canvas; pull it out so the
  * visible left edge of the artwork sits on the text axis below */
 .onb-art-gift {
-  margin-left: -6px;
+  margin-inline-start: -6px;
 }
 
 .onb-art-check {
-  margin-left: -4px;
+  margin-inline-start: -4px;
 }
 
 .onb-title {

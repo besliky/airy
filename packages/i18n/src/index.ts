@@ -91,6 +91,11 @@ export function htmlLang(lang: Lang): string {
   return HTML_LANGS[lang]
 }
 
+/** Direction for document.documentElement.dir: the RTL UI languages ('ar', 'he') get mirrored chrome. */
+export function htmlDir(lang: Lang): 'rtl' | 'ltr' {
+  return lang === 'ar' || lang === 'he' ? 'rtl' : 'ltr'
+}
+
 // ---- platform-native shortcut hints ----
 // Dictionaries write shortcut hints in Mac notation (⌘S, ⇧⌘Z, ⌘+Click); on
 // Windows/Linux every translated string is rewritten to Ctrl/Alt/Shift form.

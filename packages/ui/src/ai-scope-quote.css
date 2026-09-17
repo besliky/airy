@@ -4,8 +4,8 @@
   flex-direction: column;
   gap: 3px;
   margin-bottom: 6px;
-  padding-left: 9px;
-  border-left: 2px solid var(--color-brand-secondary);
+  padding-inline-start: 9px;
+  border-inline-start: 2px solid var(--color-brand-secondary);
   white-space: normal;
 }
 

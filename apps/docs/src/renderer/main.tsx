@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client'
-import { htmlLang, type Lang } from '@airy-office/i18n'
+import { htmlDir, htmlLang, type Lang } from '@airy-office/i18n'
 import { App } from './App'
 import { LocaleProvider, setModuleLang } from './i18n/locale'
 import type { UiTheme } from '../shared/ipc'
@@ -37,6 +37,7 @@ async function bootstrap(): Promise<void> {
   }
   setModuleLang(lang)
   document.documentElement.lang = htmlLang(lang)
+  document.documentElement.dir = htmlDir(lang)
   applyTheme(theme)
   window.desktop?.onThemeChanged(applyTheme)
   void window.desktop

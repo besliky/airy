@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client'
-import { htmlLang, type Lang } from '@airy-office/i18n'
+import { htmlDir, htmlLang, type Lang } from '@airy-office/i18n'
 import App from './App'
 import { PresentView } from './PresentView'
 import { LocaleProvider } from './i18n/locale'
@@ -29,6 +29,7 @@ void (async () => {
     window.htmlApi.getTheme().catch(() => 'system' as const),
   ])
   document.documentElement.lang = htmlLang(lang as Lang)
+  document.documentElement.dir = htmlDir(lang as Lang)
   applyTheme(theme)
   window.htmlApi.onThemeChanged(applyTheme)
   void window.htmlApi

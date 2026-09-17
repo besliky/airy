@@ -1030,6 +1030,7 @@ function NameBox({
       data-tip={error ?? t('appNameBoxTitle')}
       placeholder="A1"
       spellCheck={false}
+      dir="ltr"
       value={draft ?? activeCellA1}
       onFocus={(event) => {
         setDraft(activeCellA1)

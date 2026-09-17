@@ -58,8 +58,9 @@ html.airy-popover-open .tab-bar {
    * line as the hover capsule — measured from Chrome, whose favicons sit
    * 3px above the tab's geometric center */
   margin-top: 6px;
-  /* 12px left = 3px plate inset + 9px icon-to-plate, per Chrome @2x */
-  padding: 0 8px 6px 12px;
+  /* 12px inline-start = 3px plate inset + 9px icon-to-plate, per Chrome @2x */
+  padding-block: 0 6px;
+  padding-inline: 12px 8px;
   /* Chrome tabs shrink under pressure but never grow past 240px */
   flex: 0 1 240px;
   min-width: 104px;
@@ -84,14 +85,14 @@ html.airy-popover-open .tab-bar {
   /* 27px = 3px plate inset + 24px from "Airy" to the plate's edge, so the
    * label gets a real 24px of breathing room (the 9px the other tabs' icons
    * get reads too tight after a word) */
-  padding-right: 27px;
+  padding-inline-end: 27px;
 }
 
 /* thin separator between adjacent inactive tabs */
 .tab-item:not(.active):not(:first-child)::before {
   content: '';
   position: absolute;
-  left: 0;
+  inset-inline-start: 0;
   /* centered on the content line (3px above tab center, like the icons) */
   top: calc(50% - 3px);
   width: 1px;
@@ -235,7 +236,7 @@ html.airy-popover-open .tab-bar {
 
 /* "+" new tab button: lives inside the strip so it hugs the last tab, Chrome-style */
 .tab-new-btn {
-  margin-left: 4px;
+  margin-inline-start: 4px;
 }
 
 .tab-overflow-btn {

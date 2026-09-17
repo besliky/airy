@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createI18n,
   format,
+  htmlDir,
   htmlLang,
   isLang,
   LANGS,
@@ -98,6 +99,16 @@ describe('htmlLang', () => {
     expect(htmlLang('ko')).toBe('ko-KR')
     expect(htmlLang('zh-TW')).toBe('zh-TW')
     for (const lang of LANGS) expect(htmlLang(lang)).toMatch(/^[a-z]{2}-[A-Z]{2}$/)
+  })
+})
+
+describe('htmlDir', () => {
+  it('mirrors the chrome only for the RTL languages', () => {
+    expect(htmlDir('ar')).toBe('rtl')
+    expect(htmlDir('he')).toBe('rtl')
+    for (const lang of LANGS) {
+      if (lang !== 'ar' && lang !== 'he') expect(htmlDir(lang)).toBe('ltr')
+    }
   })
 })
 

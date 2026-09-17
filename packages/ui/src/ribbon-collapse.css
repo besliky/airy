@@ -47,5 +47,5 @@
   color: var(--text);
 }
 .ribbon-expand-btn {
-  margin-left: 4px;
+  margin-inline-start: 4px;
 }

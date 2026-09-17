@@ -1,6 +1,6 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
-import { htmlLang } from '@airy-office/i18n'
+import { htmlDir, htmlLang } from '@airy-office/i18n'
 import airyMark from '@airy-office/ui/assets/airy-mark.png'
 import { AppFrame } from './AppFrame'
 import { LocaleProvider } from './locale'
@@ -44,6 +44,7 @@ void Promise.all([
   window.aiOffice.getTheme().catch(() => 'system' as const),
 ]).then(([lang, onboardingSeen, theme]) => {
   document.documentElement.lang = htmlLang(lang)
+  document.documentElement.dir = htmlDir(lang)
   // apply theme attribute before first paint to avoid flash
   if (theme !== 'system') {
     document.documentElement.setAttribute('data-theme', theme)
