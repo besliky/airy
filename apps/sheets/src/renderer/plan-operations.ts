@@ -30,11 +30,7 @@ import {
 } from '../domain/workbook-dsl'
 import type { ApplyOutcome, ChangePlan } from '../domain/workbook.types'
 import { offsetFormulaRefs } from '../domain/formula-shift'
-import {
-  qualifierMatches,
-  shiftCellArea,
-  StructuralShiftError,
-} from '../gateway/xlsx-structure'
+import { qualifierMatches, shiftCellArea, StructuralShiftError } from '../gateway/xlsx-structure'
 import { MAX_PATCH_ENTRY_BYTES } from '../shared/desktop-api'
 import { isSheetRemoved } from './edit-journal'
 import { cellKey, parseFormulaReferences } from './formula-closure'

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { nextRibbonTabIndex, ribbonPanelProps, ribbonTabId, wrapRibbonTabIndex } from '../src/ribbon-tablist'
+import {
+  nextRibbonTabIndex,
+  ribbonPanelProps,
+  ribbonTabId,
+  wrapRibbonTabIndex,
+} from '../src/ribbon-tablist'
 
 describe('wrapRibbonTabIndex', () => {
   it('wraps at both ends', () => {
