@@ -18,6 +18,8 @@ export const id = {
   dlgPickExportDir: 'Pilih Folder Ekspor',
   btnExport: 'Ekspor',
   dlgExportPdf: 'Ekspor sebagai PDF',
+  errExportDestNotPicked:
+    'Tujuan ekspor tidak dipilih di jendela ini; pilih lagi lewat dialog ekspor.',
   dlgAddAttachment: 'Tambahkan Lampiran',
   filterSupported: 'File yang Didukung',
   filterWord: 'Dokumen Word',

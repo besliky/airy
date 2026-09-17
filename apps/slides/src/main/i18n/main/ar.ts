@@ -18,6 +18,7 @@ export const ar = {
   dlgPickExportDir: 'اختيار مجلد التصدير',
   btnExport: 'تصدير',
   dlgExportPdf: 'تصدير بتنسيق PDF',
+  errExportDestNotPicked: 'وجهة التصدير لم تُختر في هذه النافذة؛ اخترها مرة أخرى عبر حوار التصدير.',
   dlgAddAttachment: 'إضافة مرفقات',
   filterSupported: 'الملفات المدعومة',
   filterWord: 'مستندات Word',

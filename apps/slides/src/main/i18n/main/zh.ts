@@ -17,6 +17,7 @@ export const zh = {
   dlgPickExportDir: '选择导出目录',
   btnExport: '导出',
   dlgExportPdf: '导出为 PDF',
+  errExportDestNotPicked: '导出目录不是本窗口内选定的位置；请在导出对话框中重新选择。',
   dlgAddAttachment: '添加附件',
   filterSupported: '支持的文件',
   filterWord: 'Word 文档',

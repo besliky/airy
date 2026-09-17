@@ -18,6 +18,8 @@ export const ko = {
   dlgPickExportDir: '내보낼 폴더 선택',
   btnExport: '내보내기',
   dlgExportPdf: 'PDF로 내보내기',
+  errExportDestNotPicked:
+    '내보내기 대상이 이 창에서 선택되지 않았습니다. 내보내기 대화상자에서 다시 선택하세요.',
   dlgAddAttachment: '첨부 파일 추가',
   filterSupported: '지원되는 파일',
   filterWord: 'Word 문서',

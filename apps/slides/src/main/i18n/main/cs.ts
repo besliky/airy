@@ -18,6 +18,8 @@ export const cs = {
   dlgPickExportDir: 'Zvolte složku pro export',
   btnExport: 'Exportovat',
   dlgExportPdf: 'Exportovat jako PDF',
+  errExportDestNotPicked:
+    'Cíl exportu nebyl v tomto okně vybrán; vyberte jej znovu v exportním dialogu.',
   dlgAddAttachment: 'Přidat přílohy',
   filterSupported: 'Podporované soubory',
   filterWord: 'Dokumenty Word',

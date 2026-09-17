@@ -18,6 +18,8 @@ export const pt = {
   dlgPickExportDir: 'Escolher Pasta de Exportação',
   btnExport: 'Exportar',
   dlgExportPdf: 'Exportar como PDF',
+  errExportDestNotPicked:
+    'O destino de exportação não foi escolhido nesta janela; escolha-o novamente na caixa de diálogo de exportação.',
   dlgAddAttachment: 'Adicionar Anexos',
   filterSupported: 'Arquivos Compatíveis',
   filterWord: 'Documentos do Word',

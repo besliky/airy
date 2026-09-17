@@ -18,6 +18,8 @@ export const ru = {
   dlgPickExportDir: 'Выбор папки для экспорта',
   btnExport: 'Экспорт',
   dlgExportPdf: 'Экспорт в PDF',
+  errExportDestNotPicked:
+    'Папка экспорта не была выбрана в этом окне; выберите её заново в диалоге экспорта.',
   dlgAddAttachment: 'Добавление вложений',
   filterSupported: 'Поддерживаемые файлы',
   filterWord: 'Документы Word',

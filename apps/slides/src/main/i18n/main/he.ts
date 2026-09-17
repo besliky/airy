@@ -18,6 +18,7 @@ export const he = {
   dlgPickExportDir: 'בחירת תיקיית ייצוא',
   btnExport: 'ייצוא',
   dlgExportPdf: 'ייצוא כ-PDF',
+  errExportDestNotPicked: 'יעד הייצוא לא נבחר בחלון זה; בחרו אותו שוב בדו-שיח הייצוא.',
   dlgAddAttachment: 'הוספת קבצים מצורפים',
   filterSupported: 'קבצים נתמכים',
   filterWord: 'מסמכי Word',

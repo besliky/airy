@@ -26,6 +26,7 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { cleanupExpiredGeneratedPages } from './generated-page-temp'
+import { isSameExportFile, resolveExportImagePaths } from './export-targets'
 import { exportSlidesPdf } from './pdf-export'
 import {
   ALL_OPEN_EXTENSIONS,
@@ -40,6 +41,7 @@ import {
   COPILOT_GUIDE_URL,
   DOCS_README_URL,
   installNavigationGuard,
+  isPathInsideDir,
   openHelpUrl,
   rendererMayReadPath,
   safeExternalUrl,
@@ -292,6 +294,12 @@ let pendingOpenPath: string | null = null
 /** tab mode: each view queues its own path; the renderer consumes it after mounting */
 const pendingByWc = new Map<number, string>()
 /**
+ * Last picked export destination per webContents (slides:pick-export-dir /
+ * slides:pick-export-pdf-path): the export channels are confined to it, so
+ * a renderer cannot name an arbitrary write target.
+ */
+const exportPicksByWc = new Map<number, { dir?: string; pdfPath?: string }>()
+/**
  * Renderer freeze watchdog: the freeze is sporadic and has never
  * reproduced under instrumentation, so when it does happen, capture the
  * discriminating evidence (per-process CPU/RSS, GPU feature state, and on
@@ -391,6 +399,7 @@ function trackSlidesWebContents(wc: WebContents): void {
     else untitledRecovery.delete(wc.id)
     sessions.delete(wc.id)
     pendingByWc.delete(wc.id)
+    exportPicksByWc.delete(wc.id)
     lastSlidePaste.delete(wc.id)
     closeSaveWaiters.get(wc.id)?.(false)
     closeSaveWaiters.delete(wc.id)
@@ -4100,7 +4109,7 @@ export function registerSlidesIpc(): void {
 
   // ── Export (PDF / images): the renderer renders hi-res PNGs with offscreen Konva; the main process handles dialogs/writing ──
 
-  ipcMain.handle('slides:pick-export-dir', async () => {
+  ipcMain.handle('slides:pick-export-dir', async (e) => {
     const parent = dialogParent()
     const options = {
       title: tm('dlgPickExportDir'),
@@ -4108,20 +4117,29 @@ export function registerSlidesIpc(): void {
       properties: ['openDirectory' as const, 'createDirectory' as const],
     }
     const r = await showOpenDialogWithMemory(dialog, parent, options)
-    return r.canceled || !r.filePaths[0] ? null : r.filePaths[0]
+    const dir = r.canceled || !r.filePaths[0] ? null : r.filePaths[0]
+    if (dir) {
+      const picks = exportPicksByWc.get(e.sender.id) ?? {}
+      picks.dir = dir
+      exportPicksByWc.set(e.sender.id, picks)
+    }
+    return dir
   })
 
   ipcMain.handle(
     'slides:export-images',
-    async (_e, op: ExportImagesOp): Promise<ExportImagesResult> => {
+    async (e, op: ExportImagesOp): Promise<ExportImagesResult> => {
       try {
-        // Zero-padding width follows the total page count (3 digits for ≥100 pages)
-        const pad = op.pngsBase64.length >= 100 ? 3 : 2
-        const paths: string[] = []
-        for (let i = 0; i < op.pngsBase64.length; i++) {
-          const p = join(op.dir, `${op.baseName}-${String(i + 1).padStart(pad, '0')}.png`)
-          await writeFile(p, Buffer.from(op.pngsBase64[i], 'base64'))
-          paths.push(p)
+        const pickedDir = exportPicksByWc.get(e.sender.id)?.dir
+        // the renderer must export into the directory it picked (or a
+        // subdirectory of it) with a single-segment base name
+        if (!pickedDir || !op.dir || !isPathInsideDir(pickedDir, op.dir)) {
+          return { ok: false, error: tm('errExportDestNotPicked') }
+        }
+        const paths = resolveExportImagePaths(op.dir, op.baseName, op.pngsBase64.length)
+        if (!paths) return { ok: false, error: tm('errExportDestNotPicked') }
+        for (let i = 0; i < paths.length; i++) {
+          await writeFile(paths[i], Buffer.from(op.pngsBase64[i], 'base64'))
         }
         return { ok: true, paths }
       } catch (err) {
@@ -4130,7 +4148,7 @@ export function registerSlidesIpc(): void {
     },
   )
 
-  ipcMain.handle('slides:pick-export-pdf-path', async (_e, defaultName: string) => {
+  ipcMain.handle('slides:pick-export-pdf-path', async (e, defaultName: string) => {
     const parent = dialogParent()
     const options = {
       title: tm('dlgExportPdf'),
@@ -4138,10 +4156,21 @@ export function registerSlidesIpc(): void {
       filters: [{ name: 'PDF', extensions: ['pdf'] }],
     }
     const r = await showSaveDialogWithMemory(dialog, parent, options, getDraftsDir())
-    return r.canceled || !r.filePath ? null : r.filePath
+    const filePath = r.canceled || !r.filePath ? null : r.filePath
+    if (filePath) {
+      const picks = exportPicksByWc.get(e.sender.id) ?? {}
+      picks.pdfPath = filePath
+      exportPicksByWc.set(e.sender.id, picks)
+    }
+    return filePath
   })
 
-  ipcMain.handle('slides:export-pdf', async (_e, op: ExportPdfOp): Promise<ExportPdfResult> => {
+  ipcMain.handle('slides:export-pdf', async (e, op: ExportPdfOp): Promise<ExportPdfResult> => {
+    // the PDF must land exactly on the file the user picked for this tab
+    const pickedFile = exportPicksByWc.get(e.sender.id)?.pdfPath
+    if (!pickedFile || !isSameExportFile(pickedFile, op.filePath)) {
+      return { ok: false, error: tm('errExportDestNotPicked') }
+    }
     return exportSlidesPdf({
       ...op,
       createWindow: () => new BrowserWindow({ show: false, webPreferences: { sandbox: true } }),

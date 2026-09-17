@@ -18,6 +18,8 @@ export const th = {
   dlgPickExportDir: 'เลือกโฟลเดอร์ส่งออก',
   btnExport: 'ส่งออก',
   dlgExportPdf: 'ส่งออกเป็น PDF',
+  errExportDestNotPicked:
+    'ไม่ได้เลือกปลายทางการส่งออกในหน้าต่างนี้ โปรดเลือกอีกครั้งผ่านกล่องโต้ตอบการส่งออก',
   dlgAddAttachment: 'เพิ่มสิ่งที่แนบ',
   filterSupported: 'ไฟล์ที่รองรับ',
   filterWord: 'เอกสาร Word',

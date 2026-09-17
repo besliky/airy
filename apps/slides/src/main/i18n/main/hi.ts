@@ -18,6 +18,8 @@ export const hi = {
   dlgPickExportDir: 'निर्यात फ़ोल्डर चुनें',
   btnExport: 'निर्यात करें',
   dlgExportPdf: 'PDF के रूप में निर्यात करें',
+  errExportDestNotPicked:
+    'निर्यात गंतव्य इस विंडो में नहीं चुना गया; इसे निर्यात संवाद से फिर से चुनें।',
   dlgAddAttachment: 'अनुलग्नक जोड़ें',
   filterSupported: 'समर्थित फ़ाइलें',
   filterWord: 'Word दस्तावेज़',

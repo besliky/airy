@@ -18,6 +18,8 @@ export const nl = {
   dlgPickExportDir: 'Exportmap kiezen',
   btnExport: 'Exporteren',
   dlgExportPdf: 'Exporteren als PDF',
+  errExportDestNotPicked:
+    'De exportbestemming is niet gekozen in dit venster; kies deze opnieuw in het exportdialoogvenster.',
   dlgAddAttachment: 'Bijlagen toevoegen',
   filterSupported: 'Ondersteunde bestanden',
   filterWord: 'Word-documenten',

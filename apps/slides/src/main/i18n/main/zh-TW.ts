@@ -18,6 +18,7 @@ export const zhTW = {
   dlgPickExportDir: '選擇匯出目錄',
   btnExport: '匯出',
   dlgExportPdf: '匯出為 PDF',
+  errExportDestNotPicked: '匯出目錄不是本視窗內選定的位置；請在匯出對話方塊中重新選擇。',
   dlgAddAttachment: '新增附件',
   filterSupported: '支援的檔案',
   filterWord: 'Word 文件',

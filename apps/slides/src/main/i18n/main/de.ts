@@ -18,6 +18,8 @@ export const de = {
   dlgPickExportDir: 'Exportordner auswählen',
   btnExport: 'Exportieren',
   dlgExportPdf: 'Als PDF exportieren',
+  errExportDestNotPicked:
+    'Das Exportziel wurde in diesem Fenster nicht gewählt; wählen Sie es erneut im Exportdialog.',
   dlgAddAttachment: 'Anlagen hinzufügen',
   filterSupported: 'Unterstützte Dateien',
   filterWord: 'Word-Dokumente',

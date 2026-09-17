@@ -18,6 +18,8 @@ export const ja = {
   dlgPickExportDir: 'エクスポート先フォルダーの選択',
   btnExport: 'エクスポート',
   dlgExportPdf: 'PDF としてエクスポート',
+  errExportDestNotPicked:
+    'エクスポート先がこのウィンドウで選択されていません。エクスポートダイアログで再選択してください。',
   dlgAddAttachment: '添付ファイルの追加',
   filterSupported: 'サポートされているファイル',
   filterWord: 'Word 文書',
