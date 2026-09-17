@@ -586,8 +586,11 @@ export function registerTools(server: McpServer): void {
         'end of the document, so block indexes from live_get_context stay valid) and the ops then run against ' +
         'the result — a single call can add a section and format it. When the ops batch fails after the ' +
         'html was inserted, the insert turn is automatically rolled back with an undo, so a failed call ' +
-        'leaves the document at its pre-call state (if that undo itself fails, the error says the edit may ' +
-        'be partially applied — call live_undo to revert the insert). The user sees the change immediately; ' +
+        "leaves the document at its pre-call state; the automatic rollback only reverts THIS client's turn — " +
+        'when another copilot client edited the document in between, it refuses (turn_owned_by_other) and the ' +
+        'error says the insert remains (call live_undo manually to revert everything). If the rollback undo ' +
+        'itself fails, the error says the edit may be partially applied — call live_undo to revert the ' +
+        'insert. The user sees the change immediately; ' +
         'tracked changes are authored as "Airy Copilot" when the app has track changes on. Each bridge call ' +
         'is one undo step, so undo a combined edit with live_undo twice. ' +
         `Operations:\n${OPS_GUIDE}\n${LIVE_OPS_EXTRAS}`,
@@ -624,19 +627,30 @@ export function registerTools(server: McpServer): void {
       } catch (err) {
         if (!inserted) throw new Error(describeBridgeFailure(err), { cause: err })
         // the html landed but the ops batch failed: revert the insert turn so
-        // the document is not left half-edited (best-effort — when the undo
-        // itself fails, say the edit may be partially applied and point at
-        // live_undo)
+        // the document is not left half-edited. ownTurnsOnly guards the undo
+        // to THIS client's turn — with another copilot client connected, the
+        // last turn may be theirs and reverting it silently would destroy
+        // their edit while reporting "back at its pre-call state".
         let rollbackNote: string
         try {
-          await bridge.call('undo')
+          await bridge.call('undo', { ownTurnsOnly: true })
           rollbackNote =
             ' — the inserted html was rolled back with an undo; the document is back at its ' +
             'pre-call state (nothing was applied).'
         } catch (undoErr) {
-          rollbackNote =
-            ` — the inserted html could NOT be rolled back (${describeBridgeFailure(undoErr)}); ` +
-            'the edit may be partially applied, call live_undo to revert the insert.'
+          if (
+            undoErr instanceof BridgeClientError &&
+            undoErr.bridgeCode === 'turn_owned_by_other'
+          ) {
+            rollbackNote =
+              ` — the inserted html was NOT rolled back: ${describeBridgeFailure(undoErr)}. ` +
+              "The insert is still applied; reverting the other client's turn is a deliberate " +
+              'choice — call live_undo manually if that is intended.'
+          } else {
+            rollbackNote =
+              ` — the inserted html could NOT be rolled back (${describeBridgeFailure(undoErr)}); ` +
+              'the edit may be partially applied, call live_undo to revert the insert.'
+          }
         }
         throw new Error(describeBridgeFailure(err) + rollbackNote, { cause: err })
       }
@@ -655,7 +669,9 @@ export function registerTools(server: McpServer): void {
       description:
         'Revert the last live bridge turn in the active document of the running Airy app (one ' +
         'live_apply_ops / live_undo step). Refuses with nothing_to_undo when the agent made no edits yet, ' +
-        'and with stale_document when the user edited the document since — fetch fresh context instead.',
+        'and with stale_document when the user edited the document since — fetch fresh context instead. ' +
+        'When several copilot clients are connected, the last turn may belong to another client: undoing ' +
+        'it is allowed (an explicit choice) and the result says whose turn was reverted (anotherClient).',
       inputSchema: {},
       annotations: {
         destructiveHint: true,
@@ -669,7 +685,10 @@ export function registerTools(server: McpServer): void {
       } catch (err) {
         throw new Error(describeBridgeFailure(err), { cause: err })
       }
-      return content(asRecord(result) ?? { undone: true }, 'Undid the last live bridge turn.')
+      const record = asRecord(result) ?? { undone: true }
+      const note =
+        record.anotherClient === true ? ' Undone turn was made by another copilot client.' : ''
+      return content(record, `Undid the last live bridge turn.${note}`)
     },
   )
 }

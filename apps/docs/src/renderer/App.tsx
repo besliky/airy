@@ -4420,9 +4420,9 @@ export function App() {
       getComments: () => bridgeCtxRef.current.comments,
       getHf: () => bridgeCtxRef.current.hf,
     })
-    return window.desktop.onBridgeInvoke((requestId, method, params) => {
-      void handleCommand(method, (params as Record<string, unknown>) ?? {}).then((result) =>
-        window.desktop.reportBridgeResult(requestId, result),
+    return window.desktop.onBridgeInvoke((requestId, method, params, clientId) => {
+      void handleCommand(method, (params as Record<string, unknown>) ?? {}, clientId).then(
+        (result) => window.desktop.reportBridgeResult(requestId, result),
       )
     })
   }, [])

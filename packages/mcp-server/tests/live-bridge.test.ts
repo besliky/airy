@@ -294,6 +294,43 @@ describe('live tools over MCP', () => {
     }
   })
 
+  it('live_apply_ops stays honest when the rollback would revert another client', async () => {
+    if (process.platform === 'win32') return
+    // two copilot clients on one document: the app's undo handler refuses
+    // the auto-rollback because the latest turn belongs to the other client
+    const handle = await startBridge({
+      insert_content: () => 'inserted 1 block(s)',
+      apply_ops: () => {
+        throw new MockBridgeMethodError('invalid_params', 'op #1 bogus: unknown op "nope"')
+      },
+      undo: () => {
+        throw new MockBridgeMethodError(
+          'turn_owned_by_other',
+          'the last bridge turn belongs to another copilot client (conn-2); the automatic rollback refuses to revert it',
+        )
+      },
+    })
+    const { client, close } = await connectSession()
+    try {
+      const result = await call(client, 'live_apply_ops', {
+        html: '<p>draft section</p>',
+        ops: [{ op: 'nope' }],
+      })
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('unknown op "nope"')
+      // honest about the document state: the insert REMAINS, no false
+      // "back at its pre-call state"
+      expect(text(result)).not.toContain('pre-call state')
+      expect(text(result)).toContain('another copilot client')
+      expect(text(result)).toContain('still applied')
+      expect(text(result)).toContain('live_undo')
+      // the rollback asked for an own-turn-only undo
+      expect(handle.requests[2]).toMatchObject({ method: 'undo', params: { ownTurnsOnly: true } })
+    } finally {
+      await close()
+    }
+  })
+
   it('live_apply_ops rejects a call with neither ops nor html', async () => {
     if (process.platform === 'win32') return
     await startBridge({})

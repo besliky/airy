@@ -254,6 +254,28 @@ describe('bridge server over a live socket', () => {
     b.end()
   })
 
+  it('stamps each connection with a distinct, stable client id', async () => {
+    server = await startBridgeServer({
+      userDataDir: dir,
+      methods: { whoami: (_params, _signal, context) => ({ clientId: context.clientId }) },
+    })
+    const a = connectClient(server.info.socketPath)
+    const b = connectClient(server.info.socketPath)
+    await a.ready
+    await b.ready
+    await handshake(a, server.info.token)
+    await handshake(b, server.info.token)
+    a.send({ protocol_version: 1, method: 'whoami' })
+    b.send({ protocol_version: 1, method: 'whoami' })
+    expect(JSON.parse(await a.next())).toEqual({ ok: true, result: { clientId: 'conn-1' } })
+    expect(JSON.parse(await b.next())).toEqual({ ok: true, result: { clientId: 'conn-2' } })
+    // stable for the connection's lifetime (bridge turn ownership relies on it)
+    a.send({ protocol_version: 1, method: 'whoami' })
+    expect(JSON.parse(await a.next())).toEqual({ ok: true, result: { clientId: 'conn-1' } })
+    a.end()
+    b.end()
+  })
+
   it('stop() removes the socket and the info file', async () => {
     if (process.platform === 'win32') return
     const handle = await startBridgeServer({ userDataDir: dir, methods: {} })

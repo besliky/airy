@@ -11,6 +11,7 @@ import type { TabManager } from '../tab-manager'
 import type { BridgeCommandResult } from '../../../../docs/src/shared/ipc'
 import { BRIDGE_INVOKE_CHANNEL, BRIDGE_RESULT_CHANNEL } from '../../../../docs/src/shared/ipc'
 import { BridgeMethodError, isBridgeErrorCode } from './protocol'
+import type { BridgeCallContext } from './dispatcher'
 import { startBridgeServer, type BridgeServerHandle } from './server'
 
 /** default per-call timeout; the env var AIRY_DISABLE_BRIDGE=1 turns the bridge off entirely */
@@ -68,6 +69,7 @@ function callRenderer(
   method: string,
   params: Record<string, unknown>,
   signal: AbortSignal,
+  context: BridgeCallContext,
 ): Promise<BridgeCommandResult> {
   return new Promise<BridgeCommandResult>((resolve) => {
     if (webContents.isDestroyed()) {
@@ -91,7 +93,9 @@ function callRenderer(
     pendingCalls.set(requestId, { resolve: settle, webContentsId: webContents.id })
     webContents.once('destroyed', onDestroyed)
     signal.addEventListener('abort', onAbort, { once: true })
-    webContents.send(BRIDGE_INVOKE_CHANNEL, requestId, method, params)
+    // the connection identity rides along so the renderer can attribute
+    // bridge turns to the client that made them
+    webContents.send(BRIDGE_INVOKE_CHANNEL, requestId, method, params, context.clientId)
   })
 }
 
@@ -101,6 +105,7 @@ async function callActiveDocs(
   method: string,
   params: Record<string, unknown>,
   signal: AbortSignal,
+  context: BridgeCallContext,
 ): Promise<unknown> {
   const tab = getTabManager()?.activeDocsTab()
   if (!tab) {
@@ -112,7 +117,7 @@ async function callActiveDocs(
   if (tab.webContents.isDestroyed()) {
     throw new BridgeMethodError('tab_closed', 'the active docs tab is gone')
   }
-  const reply = await callRenderer(tab.webContents, method, params, signal)
+  const reply = await callRenderer(tab.webContents, method, params, signal, context)
   if (!reply.ok) {
     // renderer codes are strings on the wire; unknown codes surface as internal
     const code = isBridgeErrorCode(reply.error.code) ? reply.error.code : 'internal'
@@ -149,23 +154,25 @@ export async function startShellBridge(options: {
         pid: process.pid,
       }),
       list: () => ({ documents: getTabManager()?.docsTabSummaries() ?? [] }),
-      get_context: (params, signal) => callActiveDocs(getTabManager, 'get_context', params, signal),
-      apply_ops: (params, signal) => {
+      get_context: (params, signal, context) =>
+        callActiveDocs(getTabManager, 'get_context', params, signal, context),
+      apply_ops: (params, signal, context) => {
         if (!Array.isArray(params.ops)) {
           throw new BridgeMethodError('invalid_params', 'params.ops must be an array of ops')
         }
-        return callActiveDocs(getTabManager, 'apply_ops', params, signal)
+        return callActiveDocs(getTabManager, 'apply_ops', params, signal, context)
       },
-      insert_content: (params, signal) => {
+      insert_content: (params, signal, context) => {
         if (typeof params.html !== 'string' || params.html.trim() === '') {
           throw new BridgeMethodError(
             'invalid_params',
             'params.html must be a non-empty restricted-HTML string',
           )
         }
-        return callActiveDocs(getTabManager, 'insert_content', params, signal)
+        return callActiveDocs(getTabManager, 'insert_content', params, signal, context)
       },
-      undo: (params, signal) => callActiveDocs(getTabManager, 'undo', params, signal),
+      undo: (params, signal, context) =>
+        callActiveDocs(getTabManager, 'undo', params, signal, context),
     },
   })
   return server

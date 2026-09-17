@@ -192,7 +192,8 @@ const api: DesktopApi = {
       requestId: number,
       method: string,
       params: unknown,
-    ) => handler(requestId, method, params)
+      clientId?: string,
+    ) => handler(requestId, method, params, clientId)
     ipcRenderer.on(BRIDGE_INVOKE_CHANNEL, listener)
     return () => ipcRenderer.removeListener(BRIDGE_INVOKE_CHANNEL, listener)
   },

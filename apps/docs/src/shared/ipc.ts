@@ -375,8 +375,12 @@ export interface DesktopApi {
   /** keep the native View menu's checkbox items in sync with renderer state */
   reportViewMenuState(state: { aiSidebar: boolean; darkCanvas: boolean }): void
   /** live bridge (Airy Copilot): a command arrived from the shell's local
-   *  socket server; reply once via reportBridgeResult with the same requestId */
-  onBridgeInvoke(handler: (requestId: number, method: string, params: unknown) => void): () => void
+   *  socket server; reply once via reportBridgeResult with the same requestId.
+   *  clientId identifies the calling bridge connection (bridge turn ownership);
+   *  undefined when the sender does not stamp one */
+  onBridgeInvoke(
+    handler: (requestId: number, method: string, params: unknown, clientId?: string) => void,
+  ): () => void
   reportBridgeResult(requestId: number, result: BridgeCommandResult): void
 }
 

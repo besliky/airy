@@ -236,7 +236,12 @@ the html was inserted rolls the insert back with an automatic undo — the
 document ends at its pre-call state (or the error says the edit may be
 partially applied and to call `live_undo`). A `stale_document` error means
 the user edited the document since your last `live_get_context` — fetch
-fresh context.
+fresh context. Bridge turns are attributed to the connection that made
+them: the automatic rollback after a failed combined `live_apply_ops` only
+reverts that client's own turn — when another copilot client edited in
+between it refuses (`turn_owned_by_other`) and the error says the insert
+remains. An explicit `live_undo` may still revert another client's turn (a
+deliberate choice) and its result says whose turn it was (`anotherClient`).
 
 `AIRY_DISABLE_BRIDGE=1` turns the bridge off in the app entirely.
 
