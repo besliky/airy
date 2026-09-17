@@ -53,9 +53,16 @@ function resetInstallFlag(): void {
   delete (globalThis as Record<symbol | string, unknown>)[Symbol.for('airy.drop-open-installed')]
 }
 
-/** DragEvent-shaped literal; only the fields the bridge touches are provided */
-function fileDrag(paths: Array<string | ''>, prevented = false): Record<string, unknown> {
+/** DragEvent-shaped literal; only the fields the bridge touches are provided.
+ *  The DOM seam cannot dispatch real trusted events, so the factory stamps
+ *  isTrusted explicitly — the guard's negative cases live below. */
+function fileDrag(
+  paths: Array<string | ''>,
+  prevented = false,
+  trusted = true,
+): Record<string, unknown> {
   return {
+    isTrusted: trusted,
     defaultPrevented: prevented,
     preventDefault: vi.fn(),
     stopPropagation: vi.fn(),
@@ -247,6 +254,7 @@ describe('installDropOpenBridge', () => {
     const win = install()
     try {
       const ev = {
+        isTrusted: true,
         defaultPrevented: false,
         preventDefault: vi.fn(),
         clipboardData: { files: [{ name: 'sheet.xlsx' }] },
@@ -273,6 +281,52 @@ describe('installDropOpenBridge', () => {
       await Promise.resolve()
       expect(electronMocks.send).not.toHaveBeenCalled()
       expect(images.preventDefault).toHaveBeenCalled()
+    } finally {
+      uninstall(win)
+    }
+  })
+
+  it('ignores synthetic (untrusted) drop events: no witness, no open', async () => {
+    electronMocks.getPathForFile.mockImplementation((f: { name: string }) => `/tmp/${f.name}`)
+    const win = install()
+    try {
+      const ev = fileDrag(['report.docx'], false, false)
+      win.fire('drop', ev)
+      await Promise.resolve()
+      expect(electronMocks.send).not.toHaveBeenCalled()
+      expect(ev.preventDefault).not.toHaveBeenCalled()
+    } finally {
+      uninstall(win)
+    }
+  })
+
+  it('ignores synthetic paste events (a page File cannot forge a witness)', async () => {
+    electronMocks.getPathForFile.mockImplementation((f: { name: string }) => `/tmp/${f.name}`)
+    const win = install()
+    try {
+      const ev = {
+        isTrusted: false,
+        defaultPrevented: false,
+        preventDefault: vi.fn(),
+        clipboardData: { files: [{ name: 'sheet.xlsx' }] },
+      }
+      win.fire('paste', ev)
+      await Promise.resolve()
+      expect(electronMocks.send).not.toHaveBeenCalled()
+    } finally {
+      uninstall(win)
+    }
+  })
+
+  it('treats a missing isTrusted flag as untrusted (fake objects default closed)', async () => {
+    electronMocks.getPathForFile.mockImplementation((f: { name: string }) => `/tmp/${f.name}`)
+    const win = install()
+    try {
+      const ev = fileDrag(['report.docx'])
+      delete (ev as { isTrusted?: boolean }).isTrusted
+      win.fire('drop', ev)
+      await Promise.resolve()
+      expect(electronMocks.send).not.toHaveBeenCalled()
     } finally {
       uninstall(win)
     }

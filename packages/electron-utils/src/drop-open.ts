@@ -101,7 +101,10 @@ const INSTALLED = Symbol.for('airy.drop-open-installed')
  * page and forwards recognized files to the shell's router. Intentionally not
  * exposed through contextBridge — page code cannot spoof these events with
  * arbitrary paths because payload construction happens here in the preload
- * world only.
+ * world only, and every drop/paste listener ignores synthetic (page-
+ * dispatched) events via the isTrusted check: only real user input carries
+ * isTrusted=true, so a page that grabs a File from a DOM input cannot forge
+ * a witness or an open by dispatching its own events.
  */
 export function installDropOpenBridge(): void {
   const holder = globalThis as Record<symbol, boolean | undefined>
@@ -112,7 +115,9 @@ export function installDropOpenBridge(): void {
   // file that really lands in this window — including drops a page drop zone
   // claims (capture runs before page handlers and only observes). The main
   // process lets files:add widen its read allowlist only for witnessed paths
-  // (see witnessed-drops.ts), so a compromised page cannot self-grant.
+  // (see witnessed-drops.ts), so a compromised page cannot self-grant; the
+  // isTrusted guard below keeps the witness itself unforgeable (synthetic
+  // drop/paste events dispatched by page script never become witnesses).
   const witness = (files: FileList | null | undefined): void => {
     if (!files || files.length === 0) return
     const paths: string[] = []
@@ -122,9 +127,24 @@ export function installDropOpenBridge(): void {
     }
     if (paths.length > 0) ipcRenderer.send(WITNESS_DROP_CHANNEL, paths.slice(0, 20))
   }
-  window.addEventListener('drop', (ev) => witness(ev.dataTransfer?.files), { capture: true })
+  // real user events are trusted; synthetic ones (page-dispatched) are not
+  window.addEventListener(
+    'drop',
+    (ev) => {
+      if (!ev.isTrusted) return
+      witness(ev.dataTransfer?.files)
+    },
+    { capture: true },
+  )
   // Files pasted with a local path (a copied file) ride the same witness.
-  window.addEventListener('paste', (ev) => witness(ev.clipboardData?.files), { capture: true })
+  window.addEventListener(
+    'paste',
+    (ev) => {
+      if (!ev.isTrusted) return
+      witness(ev.clipboardData?.files)
+    },
+    { capture: true },
+  )
 
   // Without a canceled dragover Chromium never fires `drop`; canceling here is
   // what lets a document-drag land anywhere that isn't already a drop zone.
@@ -136,8 +156,9 @@ export function installDropOpenBridge(): void {
 
   window.addEventListener('drop', (ev) => {
     // first: something in the page already claimed this drop (image insert,
-    // AI attachments...) — never second-guess it
-    if (ev.defaultPrevented) return
+    // AI attachments...) — never second-guess it. Synthetic drops are ignored
+    // for the same reason as in the witness above.
+    if (ev.defaultPrevented || !ev.isTrusted) return
     const paths = droppableFilePaths(ev, (file) => webUtils.getPathForFile(file))
     if (!paths) return
     // only recognized documents ride along; stray images/folders are swallowed
