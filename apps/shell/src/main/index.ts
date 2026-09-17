@@ -24,6 +24,7 @@ import {
   webContents,
 } from 'electron'
 import type { MenuItemConstructorOptions, NativeImage, WebContents } from 'electron'
+import { homeHandlerAllowed } from './home-channel-access'
 import { isHomeSender } from './home-sender-guard'
 import { stringPathsCapped } from './home-paths'
 import {
@@ -1437,21 +1438,35 @@ async function setLiveBridgeEnabled(on: boolean): Promise<boolean> {
 function registerHomeIpc(): void {
   // home:* channels are process-global (the shell bundles every editor's
   // main code), so only the Home tab — the shell window's own renderer —
-  // may drive the file-touching handlers; any other webContents is untrusted
+  // may drive them; any other webContents is untrusted. Default-deny: every
+  // handler below is registered through handleHome, which sender-checks all
+  // channels except the reads explicitly exempted in home-channel-access.ts.
   const requireHomeSender = (event: { sender: { id: number } }): void => {
     if (!isHomeSender(homeWebContentsId, event.sender.id)) {
       throw new Error('Untrusted IPC sender.')
     }
   }
+  // `...args: never[]` keeps concrete handler parameter types assignable
+  const handleHome = (
+    channel: string,
+    handler: (event: Electron.IpcMainInvokeEvent, ...args: never[]) => unknown,
+  ): void => {
+    ipcMain.handle(channel, (event, ...args) => {
+      if (!homeHandlerAllowed(channel, event.sender.id, homeWebContentsId)) {
+        requireHomeSender(event) // throws the standard untrusted-sender error
+      }
+      return handler(event, ...(args as never[]))
+    })
+  }
 
-  ipcMain.handle(HOME_CHANNELS.getAppVersion, (): string => app.getVersion())
+  handleHome(HOME_CHANNELS.getAppVersion, (): string => app.getVersion())
 
-  ipcMain.handle(HOME_CHANNELS.recents, (_event, query: unknown): Promise<RecentPage> =>
+  handleHome(HOME_CHANNELS.recents, (_event, query: unknown): Promise<RecentPage> =>
     pageRecentPaths(readRecentFiles(), query, new Set(readStarredFiles())),
   )
 
   // Starred files sort by mtime, which requires stat-ing them all first; they are hand-picked and few, so this is fine
-  ipcMain.handle(HOME_CHANNELS.starred, async (_event, query: unknown): Promise<RecentPage> => {
+  handleHome(HOME_CHANNELS.starred, async (_event, query: unknown): Promise<RecentPage> => {
     const { offset, limit, ext } = normalizeRecentQuery(query)
     const all = (await statEntries(readStarredFiles())).sort((a, b) => b.mtimeMs - a.mtimeMs)
     const filtered = ext ? all.filter((entry) => entry.ext === ext) : all
@@ -1462,23 +1477,20 @@ function registerHomeIpc(): void {
     }
   })
 
-  ipcMain.handle(HOME_CHANNELS.statPaths, async (event, paths: unknown): Promise<RecentEntry[]> => {
-    requireHomeSender(event)
+  handleHome(HOME_CHANNELS.statPaths, async (_event, paths: unknown): Promise<RecentEntry[]> => {
     // bounded: the Home screen stats hand-picked lists, never thousands
     return statEntries(stringPathsCapped(paths))
   })
 
-  ipcMain.handle(HOME_CHANNELS.toggleStar, (event, path: unknown) => {
-    requireHomeSender(event)
+  handleHome(HOME_CHANNELS.toggleStar, (_event, path: unknown) => {
     if (typeof path === 'string') toggleStarredFile(path)
   })
 
-  ipcMain.handle(HOME_CHANNELS.openPath, (event, path: unknown) => {
-    requireHomeSender(event)
+  handleHome(HOME_CHANNELS.openPath, (_event, path: unknown) => {
     if (typeof path === 'string') openDocumentPath(path)
   })
 
-  ipcMain.handle(HOME_CHANNELS.browse, async (event) => {
+  handleHome(HOME_CHANNELS.browse, async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender) ?? shellWindow
     if (!win) return
     const result = await showOpenDialogWithMemory(dialog, win, {
@@ -1489,50 +1501,49 @@ function registerHomeIpc(): void {
     if (!result.canceled) for (const path of result.filePaths) openDocumentPath(path)
   })
 
-  ipcMain.handle(HOME_CHANNELS.newDoc, (_event, opts?: { projectId?: string }) => {
+  handleHome(HOME_CHANNELS.newDoc, (_event, opts?: { projectId?: string }) => {
     if (opts?.projectId && opts.projectId !== 'default') {
       pendingNewFileProject.set('doc', opts.projectId)
     }
     newDocTab()
   })
 
-  ipcMain.handle(HOME_CHANNELS.newSheet, (_event, opts?: { projectId?: string }) => {
+  handleHome(HOME_CHANNELS.newSheet, (_event, opts?: { projectId?: string }) => {
     if (opts?.projectId && opts.projectId !== 'default') {
       pendingNewFileProject.set('sheet', opts.projectId)
     }
     void newSheetTab()
   })
 
-  ipcMain.handle(HOME_CHANNELS.newSlide, (_event, opts?: { projectId?: string }) => {
+  handleHome(HOME_CHANNELS.newSlide, (_event, opts?: { projectId?: string }) => {
     if (opts?.projectId && opts.projectId !== 'default') {
       pendingNewFileProject.set('slide', opts.projectId)
     }
     newSlideTab()
   })
 
-  ipcMain.handle(HOME_CHANNELS.newMarkdown, (_event, opts?: { projectId?: string }) => {
+  handleHome(HOME_CHANNELS.newMarkdown, (_event, opts?: { projectId?: string }) => {
     if (opts?.projectId && opts.projectId !== 'default') {
       pendingNewFileProject.set('markdown', opts.projectId)
     }
     newMarkdownTab()
   })
 
-  ipcMain.handle(HOME_CHANNELS.newHtml, (_event, opts?: { projectId?: string }) => {
+  handleHome(HOME_CHANNELS.newHtml, (_event, opts?: { projectId?: string }) => {
     if (opts?.projectId && opts.projectId !== 'default') {
       pendingNewFileProject.set('html', opts.projectId)
     }
     newHtmlTab()
   })
 
-  ipcMain.handle(HOME_CHANNELS.newPdf, (_event, opts?: { projectId?: string }) => {
+  handleHome(HOME_CHANNELS.newPdf, (_event, opts?: { projectId?: string }) => {
     if (opts?.projectId && opts.projectId !== 'default') {
       pendingNewFileProject.set('pdf', opts.projectId)
     }
     void newPdfTab()
   })
 
-  ipcMain.handle(HOME_CHANNELS.removeRecent, (event, paths: unknown) => {
-    requireHomeSender(event)
+  handleHome(HOME_CHANNELS.removeRecent, (_event, paths: unknown) => {
     const list = stringPaths(paths)
     removeRecentFiles(list)
     // an unavailable entry's star must go with it, or the Starred view keeps
@@ -1540,52 +1551,46 @@ function registerHomeIpc(): void {
     removeStarredFiles(list.filter((p) => !existsSync(p)))
   })
 
-  ipcMain.handle(HOME_CHANNELS.revealPath, (event, path: unknown) => {
-    requireHomeSender(event)
+  handleHome(HOME_CHANNELS.revealPath, (_event, path: unknown) => {
     if (typeof path === 'string' && existsSync(path)) shell.showItemInFolder(path)
   })
 
-  ipcMain.handle(
-    HOME_CHANNELS.renameFile,
-    (event, path: unknown, newName: unknown): RenameResult => {
-      requireHomeSender(event)
-      if (typeof path !== 'string' || typeof newName !== 'string')
-        return { ok: false, error: tm('errBadArgs') }
-      const name = newName.trim()
-      if (!isValidRenameName(name)) return { ok: false, error: tm('errBadName') }
-      if (!existsSync(path)) return { ok: false, error: tm('errMissing') }
-      const target = join(dirname(path), name)
-      if (target === path) return { ok: true, path }
-      // A case-only rename (Report.pdf -> report.pdf) hits the source itself on
-      // case-insensitive filesystems; only a genuinely different file blocks.
-      if (existsSync(target) && !isSameFile(path, target)) {
-        return { ok: false, error: tm('errExists') }
-      }
-      try {
-        renameSync(path, target)
-      } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : tm('errRenameFailed') }
-      }
-      replaceRecentFile(path, target)
-      // project-store's fileMap/chatIdByPath re-key too, so AI chat history follows the file
-      projectFileRenamed(path, target)
-      // the slides module's own recent list switches to the new path as well (used by the start screen)
-      if (/\.pptx$/i.test(target)) void replaceSlidesRecentFile(path, target)
-      // open tabs sync their title/path; each editor then syncs its internal save path and title bar
-      const affected = tabManager?.renameTabFile(path, target) ?? []
-      for (const t of affected) {
-        if (t.kind === 'slides') slidesFileRenamed(t.webContents, path, target)
-        else if (t.kind === 'docs') docsFileRenamed(t.webContents, path, target)
-        else if (t.kind === 'sheets') sheetsFileRenamed(t.webContents, path, target)
-        else if (t.kind === 'markdown') markdownFileRenamed(t.webContents, path, target)
-        else if (t.kind === 'html') htmlFileRenamed(t.webContents, path, target)
-      }
-      return { ok: true, path: target }
-    },
-  )
+  handleHome(HOME_CHANNELS.renameFile, (_event, path: unknown, newName: unknown): RenameResult => {
+    if (typeof path !== 'string' || typeof newName !== 'string')
+      return { ok: false, error: tm('errBadArgs') }
+    const name = newName.trim()
+    if (!isValidRenameName(name)) return { ok: false, error: tm('errBadName') }
+    if (!existsSync(path)) return { ok: false, error: tm('errMissing') }
+    const target = join(dirname(path), name)
+    if (target === path) return { ok: true, path }
+    // A case-only rename (Report.pdf -> report.pdf) hits the source itself on
+    // case-insensitive filesystems; only a genuinely different file blocks.
+    if (existsSync(target) && !isSameFile(path, target)) {
+      return { ok: false, error: tm('errExists') }
+    }
+    try {
+      renameSync(path, target)
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : tm('errRenameFailed') }
+    }
+    replaceRecentFile(path, target)
+    // project-store's fileMap/chatIdByPath re-key too, so AI chat history follows the file
+    projectFileRenamed(path, target)
+    // the slides module's own recent list switches to the new path as well (used by the start screen)
+    if (/\.pptx$/i.test(target)) void replaceSlidesRecentFile(path, target)
+    // open tabs sync their title/path; each editor then syncs its internal save path and title bar
+    const affected = tabManager?.renameTabFile(path, target) ?? []
+    for (const t of affected) {
+      if (t.kind === 'slides') slidesFileRenamed(t.webContents, path, target)
+      else if (t.kind === 'docs') docsFileRenamed(t.webContents, path, target)
+      else if (t.kind === 'sheets') sheetsFileRenamed(t.webContents, path, target)
+      else if (t.kind === 'markdown') markdownFileRenamed(t.webContents, path, target)
+      else if (t.kind === 'html') htmlFileRenamed(t.webContents, path, target)
+    }
+    return { ok: true, path: target }
+  })
 
-  ipcMain.handle(HOME_CHANNELS.duplicateFile, (event, path: unknown) => {
-    requireHomeSender(event)
+  handleHome(HOME_CHANNELS.duplicateFile, (_event, path: unknown) => {
     if (typeof path !== 'string' || !existsSync(path)) return
     const ext = extname(path)
     const base = basename(path, ext)
@@ -1599,8 +1604,7 @@ function registerHomeIpc(): void {
     }
   })
 
-  ipcMain.handle(HOME_CHANNELS.deleteFiles, async (event, paths: unknown) => {
-    requireHomeSender(event)
+  handleHome(HOME_CHANNELS.deleteFiles, async (_event, paths: unknown) => {
     const list = stringPaths(paths)
     for (const p of list) {
       try {
@@ -1614,7 +1618,7 @@ function registerHomeIpc(): void {
     removeStarredFiles(list)
   })
 
-  ipcMain.handle(HOME_CHANNELS.openTrash, () => {
+  handleHome(HOME_CHANNELS.openTrash, () => {
     if (process.platform === 'darwin') {
       void shell.openPath(join(app.getPath('home'), '.Trash'))
     } else if (process.platform === 'win32') {
@@ -1624,9 +1628,9 @@ function registerHomeIpc(): void {
     }
   })
 
-  ipcMain.handle(HOME_CHANNELS.getLanguage, (): Lang => currentLang())
+  handleHome(HOME_CHANNELS.getLanguage, (): Lang => currentLang())
 
-  ipcMain.handle(HOME_CHANNELS.setLanguage, (_event, lang: unknown) => {
+  handleHome(HOME_CHANNELS.setLanguage, (_event, lang: unknown) => {
     if (!isLang(lang) || lang === currentLang()) return
     persistLang(lang)
     // the switcher lives on the home page, so the home menu is the active one
@@ -1636,12 +1640,12 @@ function registerHomeIpc(): void {
     for (const wc of webContents.getAllWebContents()) wc.send('app:language-changed', lang)
   })
 
-  ipcMain.handle(
+  handleHome(
     HOME_CHANNELS.onboardingSeen,
     (): boolean => readAppSettings(APP_SETTINGS_PATH()).onboardingSeen === true,
   )
 
-  ipcMain.handle(HOME_CHANNELS.setOnboardingSeen, (): boolean => {
+  handleHome(HOME_CHANNELS.setOnboardingSeen, (): boolean => {
     try {
       writeAppSetting(APP_SETTINGS_PATH(), 'onboardingSeen', true)
       return true
@@ -1650,11 +1654,11 @@ function registerHomeIpc(): void {
     }
   })
 
-  ipcMain.handle(HOME_CHANNELS.getTheme, (): UiTheme => currentTheme())
+  handleHome(HOME_CHANNELS.getTheme, (): UiTheme => currentTheme())
   // editor tabs ask via the app-wide channel (symmetric with app:get-language)
   ipcMain.handle('app:get-theme', (): UiTheme => currentTheme())
 
-  ipcMain.handle(HOME_CHANNELS.setTheme, (_event, theme: unknown) => {
+  handleHome(HOME_CHANNELS.setTheme, (_event, theme: unknown) => {
     if (theme !== 'light' && theme !== 'dark' && theme !== 'system') return
     if (theme === currentTheme()) return
     cachedTheme = theme
@@ -1663,15 +1667,15 @@ function registerHomeIpc(): void {
     for (const wc of webContents.getAllWebContents()) wc.send('app:theme-changed', theme)
   })
 
-  ipcMain.handle(HOME_CHANNELS.getAutoSaveDefault, (): AutoSaveDefault => currentAutoSaveDefault())
+  handleHome(HOME_CHANNELS.getAutoSaveDefault, (): AutoSaveDefault => currentAutoSaveDefault())
   ipcMain.handle('app:get-auto-save-default', (): AutoSaveDefault => currentAutoSaveDefault())
 
   // author display name: persisted like the other General settings and pushed
   // to open editors live (they stamp it on new comments / revision marks)
-  ipcMain.handle(HOME_CHANNELS.getAuthorName, (): string => currentAuthorName())
+  handleHome(HOME_CHANNELS.getAuthorName, (): string => currentAuthorName())
   ipcMain.handle('app:get-author-name', (): string => currentAuthorName())
 
-  ipcMain.handle(HOME_CHANNELS.setAuthorName, (_event, raw: unknown): string => {
+  handleHome(HOME_CHANNELS.setAuthorName, (_event, raw: unknown): string => {
     const next = sanitizeAuthorName(raw)
     if (next === currentAuthorName()) return next
     cachedAuthorName = next
@@ -1680,7 +1684,7 @@ function registerHomeIpc(): void {
     return next
   })
 
-  ipcMain.handle(HOME_CHANNELS.setAutoSaveDefault, (_event, on: unknown) => {
+  handleHome(HOME_CHANNELS.setAutoSaveDefault, (_event, on: unknown) => {
     if (typeof on !== 'boolean') return
     if (on === currentAutoSaveDefault().on) return
     const next: AutoSaveDefault = { on, updatedAt: Date.now() }
@@ -1694,24 +1698,24 @@ function registerHomeIpc(): void {
 
   // Copilot live bridge toggle: persisted in app-settings.json; flipping it
   // starts/stops the local socket server immediately (no restart needed)
-  ipcMain.handle(HOME_CHANNELS.getLiveBridgeEnabled, (): LiveBridgeEnabled => liveBridgeEnabled())
-  ipcMain.handle(HOME_CHANNELS.setLiveBridgeEnabled, (_event, on: unknown) => {
+  handleHome(HOME_CHANNELS.getLiveBridgeEnabled, (): LiveBridgeEnabled => liveBridgeEnabled())
+  handleHome(HOME_CHANNELS.setLiveBridgeEnabled, (_event, on: unknown) => {
     if (typeof on !== 'boolean') return liveBridgeEnabled()
     return setLiveBridgeEnabled(on)
   })
   // whether AIRY_DISABLE_BRIDGE=1 pins the bridge off (Settings shows a note)
-  ipcMain.handle(HOME_CHANNELS.getLiveBridgeEnvDisabled, (): boolean => bridgeEnvDisabled())
+  handleHome(HOME_CHANNELS.getLiveBridgeEnvDisabled, (): boolean => bridgeEnvDisabled())
 
   // session restore toggle (Settings → General): read on the next launch
-  ipcMain.handle(HOME_CHANNELS.getRestoreSession, (): boolean => sessionRestoreEnabled())
-  ipcMain.handle(HOME_CHANNELS.setRestoreSession, (_event, on: unknown) => {
+  handleHome(HOME_CHANNELS.getRestoreSession, (): boolean => sessionRestoreEnabled())
+  handleHome(HOME_CHANNELS.setRestoreSession, (_event, on: unknown) => {
     if (typeof on === 'boolean') writeAppSetting(APP_SETTINGS_PATH(), 'restoreSession', on)
   })
 
-  ipcMain.handle(HOME_CHANNELS.getAiPanelPrefs, (): AiPanelPrefs => currentAiPanelPrefs())
+  handleHome(HOME_CHANNELS.getAiPanelPrefs, (): AiPanelPrefs => currentAiPanelPrefs())
   ipcMain.handle('app:get-ai-panel-prefs', (): AiPanelPrefs => currentAiPanelPrefs())
 
-  ipcMain.handle(HOME_CHANNELS.setAiPanelPrefs, (_event, patch: unknown): AiPanelPrefs => {
+  handleHome(HOME_CHANNELS.setAiPanelPrefs, (_event, patch: unknown): AiPanelPrefs => {
     const prev = currentAiPanelPrefs()
     const raw =
       patch !== null && typeof patch === 'object' ? (patch as Record<string, unknown>) : {}
@@ -1734,13 +1738,13 @@ function registerHomeIpc(): void {
 
   // effective folder where new/untitled files land; the editor mains resolve
   // the same setting themselves (configuredDefaultSaveDir via docs' defaultSaveDir)
-  ipcMain.handle(HOME_CHANNELS.getDefaultSaveDir, (): string => {
+  handleHome(HOME_CHANNELS.getDefaultSaveDir, (): string => {
     // the default save folder is a standing user choice: readable for renderers
     grantRendererDir(defaultSaveDir())
     return defaultSaveDir()
   })
 
-  ipcMain.handle(HOME_CHANNELS.pickDefaultSaveDir, async (): Promise<string | null> => {
+  handleHome(HOME_CHANNELS.pickDefaultSaveDir, async (): Promise<string | null> => {
     const result = await showOpenDialogWithMemory(dialog, shellWindow, {
       title: tm('dlgPickSaveDir'),
       defaultPath: defaultSaveDir(),
@@ -1756,17 +1760,17 @@ function registerHomeIpc(): void {
     return picked
   })
 
-  ipcMain.handle(HOME_CHANNELS.openGitHubRepo, () => {
+  handleHome(HOME_CHANNELS.openGitHubRepo, () => {
     shell.openExternal(GITHUB_REPO_URL).catch(() => {
       // no browser handler available; nothing actionable for the user here
     })
   })
 
-  ipcMain.handle(HOME_CHANNELS.githubStars, () => fetchGithubStars())
+  handleHome(HOME_CHANNELS.githubStars, () => fetchGithubStars())
 
   // returning true also counts as "shown": the renderer displays it
   // unconditionally, so no separate mark-shown round-trip is needed
-  ipcMain.handle(HOME_CHANNELS.starPromptShouldShow, (): StarPromptShow => {
+  handleHome(HOME_CHANNELS.starPromptShouldShow, (): StarPromptShow => {
     if (starPromptSessionGrant) return starPromptSessionGrant
     const now = Date.now()
     const state = readStarPrompt()
@@ -1789,7 +1793,7 @@ function registerHomeIpc(): void {
     return grant()
   })
 
-  ipcMain.handle(HOME_CHANNELS.starPromptAction, (_event, action: unknown) => {
+  handleHome(HOME_CHANNELS.starPromptAction, (_event, action: unknown) => {
     if (action !== 'starred' && action !== 'later') return
     // the card was reacted to — drop the session grant so a later query (new
     // shell window on macOS) re-evaluates the real rules (snooze / resolved)
