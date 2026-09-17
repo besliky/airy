@@ -145,17 +145,17 @@ support and limits, and the security model — is in
 
 ## Status
 
-| Area                                                                           | State           |
-| ------------------------------------------------------------------------------ | --------------- |
-| MCP server foundation (stdio, SDK v1, path confinement)                        | done            |
-| Headless docx: open / read / insert / apply_ops / save                         | done            |
-| Live mode: `live_status` / `live_get_context` / `live_apply_ops` / `live_undo` | done            |
-| Headless xlsx via the Rust sidecar (read / save, recalc)                       | done            |
-| Legacy & ODF import: `.xls` / `.ods` (convert), `.doc` / `.odt` (soffice)      | done            |
-| De-Genspark (provider, login, gsk CLI, updater, analytics)                     | done            |
-| Branding: build configs, README, docs                                          | done            |
-| i18n brand strings, UI marks, packaged distribution                            | done (phase 4b) |
-| Slides / PDF / Markdown / HTML headless tools                                  | backlog         |
+| Area                                                                              | State           |
+| --------------------------------------------------------------------------------- | --------------- |
+| MCP server foundation (stdio, SDK v1, path confinement)                           | done            |
+| Headless docx: open / read / insert / apply_ops / save                            | done            |
+| Headless xlsx: read / save plus `apply_workbook_ops` cell / formula / style edits | done            |
+| Live mode: `live_status` / `live_get_context` / `live_apply_ops` / `live_undo`    | done            |
+| Legacy & ODF import: `.xls` / `.ods` (convert), `.doc` / `.odt` (soffice)         | done            |
+| De-Genspark (provider, login, gsk CLI, updater, analytics)                        | done            |
+| Branding: build configs, README, docs                                             | done            |
+| i18n brand strings, UI marks, packaged distribution                               | done (phase 4b) |
+| Slides / PDF / Markdown / HTML headless tools                                     | backlog         |
 
 ## Development
 
