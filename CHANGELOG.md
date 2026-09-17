@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Docs: navigation-pane search — type to live-filter headings with matched-text
+  emphasis and a distinct no-match state.
 - Slides: threaded comments — replies nest under their parent with a
   per-thread composer, and threads can be resolved (muted + collapsed) and
   reopened; the ribbon badge counts threads.
@@ -67,6 +69,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tertiary text and muted icons meet WCAG contrast.
 - The README updater section now matches the shipped notify-before-install
   updater behavior.
+- macOS installers bundle the MCP server, so the copilot CLI works from
+  installed macOS builds.
+- Ctrl+1..9 switch tabs from inside editor views, not just from the Home
+  tab.
+- Sheets: Cmd/Ctrl+Y redoes, matching Excel.
+- Sheets: cross-sheet conditional-formatting and data-validation formulas
+  are rewritten on row/column deletion too, not just cell formulas.
+- Slides: SVG export mirrors flipped pictures, tables, charts, and groups.
+- Slides: a single 360° pie wedge renders as a closed full circle instead
+  of disappearing.
+- Slides: find highlights project correctly through rotated and flipped
+  ancestor groups.
+- File menus lead with the New submenu and the macOS dock menu gains
+  New HTML.
+- Save-as works on volumes without hardlink support (exFAT, FAT, some
+  network shares) instead of failing with an opaque error.
 
 ### Security
 
@@ -76,6 +94,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Spawned Codex CLI paths are restricted to an allowlist.
 - MCP workspace confinement resolves symlinks and Windows case
   differences before checking boundaries.
+- Inserted links pass a scheme whitelist (http/https/mailto, `#fragments`,
+  relative refs) on every AI/bridge/ops insert path; disallowed schemes
+  like `javascript:` degrade to plain text.
+- Mutating and privilege-granting IPC channels validate their sender
+  (`home:*` answers the Home tab only; `win:new` and per-app recents answer
+  that app's renderers only), and attachment folder grants require a
+  witnessed user drop or paste.
 
 ## [0.9.3] - 2026-09-15
 
