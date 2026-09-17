@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 interface FakeWebContents {
   id: number
   on: ReturnType<typeof vi.fn>
+  removeListener: ReturnType<typeof vi.fn>
   close: ReturnType<typeof vi.fn>
   reload: ReturnType<typeof vi.fn>
   loadURL: ReturnType<typeof vi.fn>
@@ -33,6 +34,9 @@ function makeFakeView(): FakeView {
       listeners,
       on: vi.fn((event: string, handler: () => void) => {
         listeners.set(event, handler)
+      }),
+      removeListener: vi.fn((event: string, handler: () => void) => {
+        if (listeners.get(event) === handler) listeners.delete(event)
       }),
       close: vi.fn(),
       reload: vi.fn(),
@@ -526,6 +530,69 @@ describe('dirty-tab queries (shell close guard)', () => {
     manager.openSheetsTab()
     manager.openDocsTab('/tmp/a.docx')
     expect(manager.docsTabs().map((t) => t.id)).toEqual(['t1', 't3'])
+  })
+})
+
+describe('tab-switch accelerators', () => {
+  const chord = (code: string, over: Record<string, unknown> = {}) =>
+    ({
+      type: 'keyDown',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: false,
+      code,
+      ...over,
+    }) as never
+
+  function emitKey(view: FakeView, input: unknown): { preventDefault: () => void } {
+    const handler = view.webContents.listeners.get('before-input-event')
+    expect(handler).toBeDefined()
+    const event = { preventDefault: vi.fn() }
+    handler!(event, input)
+    return event
+  }
+
+  it('attaches the before-input-event hook to every editor view', () => {
+    manager.openDocsTab()
+    manager.openSheetsTab()
+    manager.openSlidesTab()
+    for (const factory of [createDocsView, createSheetsView, createSlidesView]) {
+      const view = lastCreatedView(factory)
+      expect(view.webContents.on).toHaveBeenCalledWith('before-input-event', expect.any(Function))
+    }
+  })
+
+  it('switches tabs from a keydown inside an editor view', () => {
+    const docsId = manager.openDocsTab()
+    manager.openSheetsTab()
+    const sheetsView = lastCreatedView(createSheetsView) // active, owns keyboard focus
+
+    const event = emitKey(sheetsView, chord('Digit2'))
+    expect(event.preventDefault).toHaveBeenCalledTimes(1)
+    expect(manager.list().find((t) => t.id === docsId)?.active).toBe(true)
+  })
+
+  it('keeps digits the active editor kind reserves', () => {
+    manager.openHomeTab()
+    manager.openDocsTab() // docs is active and reserves Ctrl+1
+    const docsView = lastCreatedView(createDocsView)
+
+    const event = emitKey(docsView, chord('Digit1'))
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(manager.list()[0].active).toBe(false)
+  })
+
+  it('detaches the hook when the tab closes (docs views outlive their tab)', async () => {
+    const id = manager.openDocsTab()
+    const view = lastCreatedView(createDocsView)
+    await manager.closeTab(id)
+
+    expect(view.webContents.removeListener).toHaveBeenCalledWith(
+      'before-input-event',
+      expect.any(Function),
+    )
+    expect(view.webContents.listeners.has('before-input-event')).toBe(false)
   })
 })
 

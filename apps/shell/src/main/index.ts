@@ -221,10 +221,9 @@ import {
   untitledStagingDir,
 } from './untitled-staging'
 import {
-  RESERVED_TAB_DIGITS,
   switchableDigitsForKind,
-  switchDigitFromInput,
   tabIndexForDigit,
+  tabSwitchTargetForInput,
 } from './tab-accelerators'
 import {
   pruneSession,
@@ -763,19 +762,17 @@ function createShellWindow(): void {
   // dragging the window by the tab strip's blank (draggable) area produces no
   // DOM event anywhere — will-move is the only signal to dismiss popovers
   win.on('will-move', () => broadcastChromePressed())
-  // Ctrl/Cmd+1..8 → tab N, Ctrl/Cmd+9 → last tab. Covers the editor-owned
-  // menus (docs/sheets/slides), which cannot carry shell accelerators; the
-  // digits an editor reserves for its own Word/Excel shortcuts stay untouched
+  // Ctrl/Cmd+1..8 → tab N, Ctrl/Cmd+9 → last tab, for keydowns in the shell's
+  // own (Home) renderer — the shell-built menus cannot carry these when an
+  // editor owns the menu bar. The digits an editor reserves for its own
+  // Word/Excel shortcuts stay untouched. Editor tabs are sibling
+  // WebContentsViews whose keydowns never reach this hook; TabManager attaches
+  // the same decision to every editor view (see watchTabAccelerators).
   win.webContents.on('before-input-event', (event, input) => {
-    const digit = switchDigitFromInput(input)
-    if (digit === null) return
-    const tabs = tabManager?.list() ?? []
-    const activeKind = tabs.find((t) => t.active)?.kind
-    if (activeKind && RESERVED_TAB_DIGITS[activeKind]?.has(digit)) return
-    const index = tabIndexForDigit(digit, tabs.length)
-    if (index === null) return
+    const target = tabSwitchTargetForInput(input, tabManager?.list() ?? [])
+    if (target === null) return
     event.preventDefault()
-    tabManager?.activateTab(tabs[index].id)
+    tabManager?.activateTab(target)
   })
   // A detached editor window claims the process-global menu/active-editor targets
   // while focused; take them back when the shell window regains focus

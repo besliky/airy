@@ -53,3 +53,27 @@ export function switchDigitFromInput(input: InputLike): number | null {
   const match = /^Digit([1-9])$/.exec(input.code)
   return match ? Number(match[1]) : null
 }
+
+/** minimal tab shape the switch decision needs (TabManager.list() satisfies it) */
+export interface TabSwitchTabLike {
+  id: string
+  kind: TabKind
+  active: boolean
+}
+
+/**
+ * The tab id a before-input-event keydown should switch to, or null when the
+ * input is not a switch chord, the active tab's kind reserves the digit for an
+ * editor shortcut, or the digit points beyond the strip. The single decision
+ * shared by the hook on the shell's Home webContents and the hook TabManager
+ * attaches to every editor view, so digit switching behaves identically no
+ * matter which view owns keyboard focus.
+ */
+export function tabSwitchTargetForInput(input: InputLike, tabs: TabSwitchTabLike[]): string | null {
+  const digit = switchDigitFromInput(input)
+  if (digit === null) return null
+  const activeKind = tabs.find((t) => t.active)?.kind
+  if (activeKind && RESERVED_TAB_DIGITS[activeKind]?.has(digit)) return null
+  const index = tabIndexForDigit(digit, tabs.length)
+  return index === null ? null : (tabs[index].id ?? null)
+}

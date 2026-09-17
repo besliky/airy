@@ -10,6 +10,7 @@ import {
   switchableDigitsForKind,
   switchDigitFromInput,
   tabIndexForDigit,
+  tabSwitchTargetForInput,
 } from '../src/main/tab-accelerators'
 
 describe('tabIndexForDigit', () => {
@@ -74,5 +75,45 @@ describe('reserved digits', () => {
     expect(switchableDigitsForKind('docs')).toEqual([3, 4, 6, 7, 9])
     expect(switchableDigitsForKind('sheets')).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
     expect(switchableDigitsForKind('home')).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
+  })
+})
+
+describe('tabSwitchTargetForInput', () => {
+  const tabs = [
+    { id: 'home', kind: 'home', active: true },
+    { id: 't1', kind: 'docs', active: false },
+    { id: 't2', kind: 'sheets', active: false },
+  ]
+  const docsActive = tabs.map((t) => ({ ...t, active: t.id === 't1' }))
+  const key = (code: string, over: Record<string, unknown> = {}) =>
+    ({
+      type: 'keyDown',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: false,
+      code,
+      ...over,
+    }) as Parameters<typeof tabSwitchTargetForInput>[0]
+
+  it('returns the tab the chord selects (Home is tab 1, 9 the last)', () => {
+    expect(tabSwitchTargetForInput(key('Digit1'), tabs)).toBe('home')
+    expect(tabSwitchTargetForInput(key('Digit2'), tabs)).toBe('t1')
+    expect(tabSwitchTargetForInput(key('Digit9'), tabs)).toBe('t2')
+  })
+
+  it('returns null when the active kind reserves the digit', () => {
+    // docs is active and reserves Ctrl+1/2/5/8 (Word line spacing, marks)
+    expect(tabSwitchTargetForInput(key('Digit1'), docsActive)).toBeNull()
+    expect(tabSwitchTargetForInput(key('Digit5'), docsActive)).toBeNull()
+    // sheets-only Ctrl+9 reservation does not apply while docs is active
+    expect(tabSwitchTargetForInput(key('Digit9'), docsActive)).toBe('t2')
+  })
+
+  it('returns null beyond the strip, for non-switch chords, and without tabs', () => {
+    expect(tabSwitchTargetForInput(key('Digit4'), tabs.slice(0, 2))).toBeNull()
+    expect(tabSwitchTargetForInput(key('KeyA'), tabs)).toBeNull()
+    expect(tabSwitchTargetForInput(key('Digit2', { shift: true }), tabs)).toBeNull()
+    expect(tabSwitchTargetForInput(key('Digit1'), [])).toBeNull()
   })
 })

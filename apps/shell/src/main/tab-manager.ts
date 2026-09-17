@@ -1,6 +1,12 @@
 import { basename } from 'node:path'
 import { BrowserWindow } from 'electron'
-import type { Rectangle, WebContents, WebContentsView } from 'electron'
+import type {
+  Event as ElectronEvent,
+  Input,
+  Rectangle,
+  WebContents,
+  WebContentsView,
+} from 'electron'
 import {
   crashErrorPageUrl,
   grantRendererFileAccess,
@@ -50,6 +56,7 @@ import {
   setActiveSlidesWebContents,
   slidesIsDirty,
 } from '../../../slides/src/main/slides-main'
+import { tabSwitchTargetForInput } from './tab-accelerators'
 import type { TabKind, TabSummary } from '../shared/tabs-api'
 
 interface TabRecord {
@@ -95,6 +102,11 @@ export class TabManager {
   private readonly bleedWcIds = new Set<number>()
   /** tabs mid unsaved-changes prompt, so a second close click doesn't stack dialogs */
   private readonly closingIds = new Set<string>()
+  /** live before-input-event handlers per view webContents id (detach on close) */
+  private readonly acceleratorHandlers = new Map<
+    number,
+    (event: ElectronEvent, input: Input) => void
+  >()
 
   constructor(
     private readonly shellWindow: BrowserWindow,
@@ -182,6 +194,40 @@ export class TabManager {
   /** whether a tab's renderer crashed and is awaiting recovery (observability for tests) */
   isTabCrashed(id: string): boolean {
     return this.tabs.find((t) => t.id === id)?.crashed === true
+  }
+
+  /**
+   * Ctrl/Cmd+1..8 → tab N, Ctrl/Cmd+9 → last tab, inside THIS view. Editor
+   * tabs are sibling WebContentsViews with their own webContents — when one
+   * has keyboard focus, keydowns never reach the before-input-event hook the
+   * shell registers on its own (Home) webContents, and the editor-built menus
+   * carry no digit accelerators. So every view gets the same hook here, at
+   * creation, sharing the pure decision in tab-accelerators.ts (reserved
+   * digits of the ACTIVE tab's kind stay with the editor). Detached on close
+   * (docs views outlive their tab). Standalone editor windows are not hooked:
+   * they are owned by the editor mains, own no tab strip, and the shell's tab
+   * manager cannot be reached from them without cross-module plumbing for a
+   * switch the user could not see.
+   */
+  private watchTabAccelerators(view: WebContentsView): void {
+    const handler = (event: ElectronEvent, input: Input): void => {
+      const target = tabSwitchTargetForInput(input, this.list())
+      if (target === null) return
+      event.preventDefault()
+      this.activateTab(target)
+    }
+    this.acceleratorHandlers.set(view.webContents.id, handler)
+    view.webContents.on('before-input-event', handler)
+  }
+
+  /** drop a closed view's accelerator hook (webContents may outlive the tab) */
+  private detachTabAccelerators(wc: WebContents): void {
+    // webContents.close() already dropped everything; this matters for the
+    // docs teardown path, which detaches the view without destroying it
+    const handler = this.acceleratorHandlers.get(wc.id)
+    if (!handler) return
+    this.acceleratorHandlers.delete(wc.id)
+    if (!wc.isDestroyed()) wc.removeListener('before-input-event', handler)
   }
 
   /** re-fit the active tab's view after a window resize */
@@ -292,6 +338,7 @@ export class TabManager {
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
     this.watchRendererCrash(id, view)
+    this.watchTabAccelerators(view)
     this.tabs.push({
       id,
       kind: 'docs',
@@ -315,6 +362,7 @@ export class TabManager {
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
     this.watchRendererCrash(id, view)
+    this.watchTabAccelerators(view)
     this.tabs.push({
       id,
       kind: 'sheets',
@@ -333,6 +381,7 @@ export class TabManager {
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
     this.watchRendererCrash(id, view)
+    this.watchTabAccelerators(view)
     this.tabs.push({
       id,
       kind: 'slides',
@@ -351,6 +400,7 @@ export class TabManager {
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
     this.watchRendererCrash(id, view)
+    this.watchTabAccelerators(view)
     this.tabs.push({ id, kind: 'pdf', view, title: basename(openPath), filePath: openPath })
     this.activateTab(id)
     return id
@@ -374,6 +424,7 @@ export class TabManager {
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
     this.watchRendererCrash(id, view)
+    this.watchTabAccelerators(view)
     this.tabs.push({
       id,
       kind: 'markdown',
@@ -392,6 +443,7 @@ export class TabManager {
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
     this.watchRendererCrash(id, view)
+    this.watchTabAccelerators(view)
     this.tabs.push({
       id,
       kind: 'html',
@@ -411,6 +463,7 @@ export class TabManager {
     view.setVisible(false)
     this.trackHtmlFullScreen(id, view)
     this.watchRendererCrash(id, view)
+    this.watchTabAccelerators(view)
     this.tabs.push({
       id,
       kind: 'html',
@@ -619,6 +672,7 @@ export class TabManager {
     if (removed.view) {
       removed.view.setVisible(false)
       this.shellWindow.contentView.removeChildView(removed.view)
+      this.detachTabAccelerators(removed.view.webContents)
       if (removed.kind === 'docs') {
         // webContents.close()/.destroy() on a closed docs tab wedges Electron's whole
         // UI thread in a native modal run loop (reproduced consistently; survives
