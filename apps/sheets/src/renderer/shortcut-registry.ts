@@ -37,6 +37,8 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
   { id: 'save-as', group: 'file', labelKey: 'scSaveAs', keys: '⇧⌘S' },
   { id: 'print', group: 'file', labelKey: 'scPrint', keys: '⌘P' },
   { id: 'undo', group: 'file', labelKey: 'scUndo', keys: '⌘Z' },
+  // ⌘Y forwards to the same menu action from the renderer (menu items carry
+  // one accelerator; ⇧⌘Z is the menu-registered chord)
   { id: 'redo', group: 'file', labelKey: 'scRedo', keys: '⇧⌘Z / ⌘Y' },
 
   // ---- Workbook navigation (excel-shortcuts.ts) ----

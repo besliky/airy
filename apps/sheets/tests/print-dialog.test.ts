@@ -170,6 +170,17 @@ describe('Print dialog wiring', () => {
     expect(shellSrc).toContain("t('appFilePrint')")
   })
 
+  it('Cmd/Ctrl+Y forwards to the redo menu action (Excel parity)', () => {
+    const appSrc = read('../src/renderer/App.tsx')
+    // capture-phase keydown on KeyY with the redo modifiers, sent as the
+    // same menu action the Shift+Cmd+Z accelerator delivers
+    expect(appSrc).toMatch(/event\.code === 'KeyY'[\s\S]{0,120}menuActionRef\.current\('redo'\)/)
+    expect(appSrc).toMatch(/window\.addEventListener\('keydown', onRedoKey, true\)/)
+    // and the shortcut sheet's listing matches the real wiring
+    const registrySrc = read('../src/renderer/shortcut-registry.ts')
+    expect(registrySrc).toContain("keys: '⇧⌘Z / ⌘Y'")
+  })
+
   it('the File tab dropdown is dismissible and labeled as a menu button', () => {
     const shellSrc = read('../src/renderer/ExcelShell.tsx')
     // outside press / blur / chrome-press dismissal through the shared hook

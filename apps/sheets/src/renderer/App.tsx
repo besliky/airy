@@ -2595,6 +2595,22 @@ export function App(): React.JSX.Element {
     const unsubscribeMenu =
       window.desktopApi?.onMenuAction((action) => menuActionRef.current(action)) ??
       (() => undefined)
+    // Excel parity: Cmd/Ctrl+Y redo rides the same action the ⇧⌘Z menu
+    // accelerator sends — an Electron menu item carries a single accelerator,
+    // so the second chord forwards from here; focused text fields keep their
+    // native redo through the same menuAction branch.
+    const onRedoKey = (event: KeyboardEvent): void => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey &&
+        !event.altKey &&
+        event.code === 'KeyY'
+      ) {
+        event.preventDefault()
+        menuActionRef.current('redo')
+      }
+    }
+    window.addEventListener('keydown', onRedoKey, true)
     // Subscription live: tell the shell once so a queued workbook's 'open'
     // action is flushed now instead of waiting for the bounded retry resends.
     window.desktopApi?.menuActionsReady?.()
@@ -2743,6 +2759,7 @@ export function App(): React.JSX.Element {
     )
     return () => {
       unsubscribeMenu()
+      window.removeEventListener('keydown', onRedoKey, true)
       unsubscribeCloseSave()
       offThemeChanged?.()
       undoRedoSub.unsubscribe()
