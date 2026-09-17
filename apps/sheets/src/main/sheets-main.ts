@@ -2555,11 +2555,15 @@ export function registerSheetsIpc(): void {
   })
 
   /**
-   * Is a shell-queued workbook still waiting to be opened? The shell's 'open'
-   * nudge loop gives up after 30s; on slow dev cold starts (vite compiles the
-   * renderer on demand) Univer mounts later than that and the queued path
-   * would strand the tab as a blank in-memory workbook. The renderer polls
-   * this once it is ready and triggers the open itself.
+   * Is a shell-queued workbook still waiting to be opened? Delivery is the
+   * queued-workbook-delivery handshake (apps/shell/src/main/
+   * queued-workbook-delivery.ts): the shell sends 'open' once, the
+   * renderer's one-time menu-ready signal flushes it immediately, and a
+   * bounded resend loop (at most 2) covers a stale preload that never
+   * signals ready. On slow dev cold starts Univer still mounts after those
+   * resends, so the renderer polls this once it is ready and triggers the
+   * open itself — otherwise the tab would strand as a blank in-memory
+   * workbook with the queued file silently never opened.
    */
   ipcMain.handle('sheets:has-queued-workbook', (event) => queuedWorkbookPaths.has(event.sender.id))
   ipcMain.on(IPC_CHANNELS.menuReady, (event) => menuReadyHook?.(event.sender))

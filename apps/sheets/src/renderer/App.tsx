@@ -1507,10 +1507,11 @@ export function App(): React.JSX.Element {
     // The window always starts blank now; still consume the one-shot
     // new-blank flag so it doesn't leak into the next workbook open.
     void window.desktopApi?.consumeNewBlankWorkbook?.()
-    // Pull any shell-queued workbook ourselves: the shell's 'open' nudge loop
-    // gives up after 30s, and on slow dev cold starts Univer mounts later than
-    // that — the tab would strand as a blank in-memory workbook (no save, no
-    // shapes) with the queued file silently never opened.
+    // Pull any shell-queued workbook ourselves: delivery is the menu-ready
+    // handshake with at most 2 bounded resends, and on slow dev cold starts
+    // Univer mounts after those — the tab would strand as a blank in-memory
+    // workbook (no save, no shapes) with the queued file silently never
+    // opened.
     void window.desktopApi?.hasQueuedWorkbook?.().then((queued) => {
       if (queued) void handleInspectWorkbook()
     })
