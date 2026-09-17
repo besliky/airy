@@ -213,13 +213,18 @@ Live (app running; always target the _active_ tab):
 | `live_apply_ops`   | `(ops?, html?)` — one combined edit turn (html first, then ops)      |
 | `live_undo`        | `()` — revert the last agent turn                                    |
 
+In `live_apply_ops` the html is inserted at the **end** of the document, so
+block indexes from `live_get_context` stay valid when the ops run — the ops
+address the pre-insert numbering.
+
 Edit ops are flat records targeting blocks by `nodeType` / `headingLevel` /
 `containsText` / `blockIndexes`; `apply_ops` output includes the full
 signature list. Block indexes shift after inserts — re-read before further
-addressing. Both `nodeType` vocabularies are accepted everywhere, headless
-and live: the ops-guide names (`heading` / `paragraph` / `listItem` /
-`image`) and the renderer's canonical names (`docHeading` / `docParagraph` /
-`docListItem` / `image`) target the same blocks.
+addressing (the live html insert is the carve-out: it appends at the end, so
+earlier indexes are unaffected). Both `nodeType` vocabularies are accepted
+everywhere, headless and live: the ops-guide names (`heading` / `paragraph` /
+`listItem` / `image`) and the renderer's canonical names (`docHeading` /
+`docParagraph` / `docListItem` / `image`) target the same blocks.
 
 The live bridge additionally accepts the embedded registry's extra ops —
 `setImageProperties` (resize/align image blocks) and `insertToc` (insert a
@@ -299,6 +304,13 @@ save may rewrite that one entry — and the save result's `unchanged` flag is
 journal-based for workbooks (no edits journaled), not a byte guarantee.
 
 Headless slides, PDF, Markdown and HTML tools are planned (backlog).
+
+Reads are bounded to keep tool answers inside the ~30k-character MCP budget:
+`read_document` truncates its output at 30,000 characters (the block
+overview tightens previews and elides the middle first; a selected-blocks
+read tells you to narrow the range), `read_document`'s `blocks` parameter
+accepts at most 200 indexes per call, and `read_workbook` ranges cap at
+20,000 cells (split larger ranges into smaller reads).
 
 ## Security model
 
