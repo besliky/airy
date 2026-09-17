@@ -53,7 +53,8 @@ describe('drop-open preload safety', () => {
       }
       for (const relative of relativeImportsOf(file)) {
         queue.push(resolve(dirname(file), relative))
-      }    }
+      }
+    }
     // the graph is non-trivial (electron + at least the shared channel)
     expect(seen.size).toBeGreaterThan(1)
   })

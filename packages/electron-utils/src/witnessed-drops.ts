@@ -11,7 +11,6 @@
  */
 import { rendererMayReadPath } from './renderer-file-access'
 
-
 /** Generous window for attach-then-read chats; purely memory hygiene. */
 const WITNESS_TTL_MS = 30 * 60_000
 /** Bounded per sender so a drag-happy session cannot grow memory without limit. */
