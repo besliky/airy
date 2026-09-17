@@ -58,21 +58,30 @@ function tag(name, index) {
 function usage() {
   console.error(
     'Usage: node tools/run-workspaces.mjs <test|typecheck> [--concurrency <n>]\n' +
-      'Concurrency defaults to min(workspace count, cpu count); ' +
+      'Flags may come before or after the mode. Concurrency defaults to ' +
+      'min(workspace count, max(2, cpu count / 2)); ' +
       'AIRY_WORKSPACE_CONCURRENCY overrides the default.',
   )
 }
 
+// Order-independent parsing: flags (and their values) are lifted out wherever
+// they appear, so `--concurrency 4 test` no longer misreads `4` as the mode.
 const args = process.argv.slice(2)
-const mode = args.find((a) => !a.startsWith('--'))
 let concurrency = Number.parseInt(process.env.AIRY_WORKSPACE_CONCURRENCY ?? '', 10)
+const positional = []
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === '--concurrency' || args[i] === '-c') {
+  const arg = args[i]
+  if (arg === '--concurrency' || arg === '-c') {
     concurrency = Number.parseInt(args[++i], 10)
-  } else if (args[i].startsWith('--concurrency=')) {
-    concurrency = Number.parseInt(args[i].slice(args[i].indexOf('=') + 1), 10)
+  } else if (arg.startsWith('--concurrency=')) {
+    concurrency = Number.parseInt(arg.slice(arg.indexOf('=') + 1), 10)
+  } else if (arg.startsWith('-')) {
+    continue
+  } else {
+    positional.push(arg)
   }
 }
+const mode = positional[0]
 if (!Number.isFinite(concurrency) || concurrency < 1) concurrency = undefined
 if (mode !== 'test' && mode !== 'typecheck') {
   usage()
