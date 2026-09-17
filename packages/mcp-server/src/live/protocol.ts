@@ -5,6 +5,15 @@
 // in sync when the protocol changes. Pure Node, no Electron imports.
 export const BRIDGE_PROTOCOL_VERSION = 1
 
+// Mixed-version residual (tolerated while protocol_version stays 1): the
+// undo params carry `ownTurnsOnly` so a rollback cannot revert another
+// copilot client's turn, but an app from before that field existed accepts
+// the call and ignores the flag — under version skew a live_apply_ops
+// rollback may therefore undo the LAST turn regardless of owner. The server
+// rejects unknown protocol_versions outright, so this is bounded to
+// same-version (1) peers that merely predate the field; revisit by bumping
+// the version once the flag is old enough to require.
+
 export type BridgeErrorCode =
   | 'unauthorized'
   | 'unsupported_version'

@@ -285,7 +285,9 @@ Headless slides, PDF, Markdown and HTML tools are planned (backlog).
   inside the root but points outside cannot smuggle paths out (links that
   resolve back inside the root stay usable). On Windows the comparison folds
   case, matching the case-insensitive filesystem — `c:\users\...` and
-  `C:\Users\...` are the same path.
+  `C:\Users\...` are the same path. Confinement is checked at resolution
+  time: a racing local attacker with write access inside the root (swapping a
+  checked directory for a symlink before the write lands) is out of scope.
 - **Token, not location.** The bridge socket and its info file are `0600`;
   every bridge call must carry the current per-session token, which is
   reread from disk on every connect. The bridge listens on a local

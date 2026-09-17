@@ -91,6 +91,15 @@ function isInsideRoot(candidate: string, root: string): boolean {
  * is still caught while genuinely fresh in-root paths stay usable. The
  * returned path keeps its lexical spelling — callers address files by the
  * path the agent gave, only the confinement decision uses the real paths.
+ *
+ * Residual (accepted): the check resolves at decision time only. A local
+ * attacker with write access INSIDE the root can swap an already-checked
+ * in-root directory for a symlink between this resolution and the caller's
+ * open/write, redirecting the I/O outside the root (an intermediate-component
+ * TOCTOU). Closing it needs dirfd-relative openat I/O, which Node's fs API
+ * does not expose; the threat requires a hostile local process the user
+ * already let write into their own workspace, which is out of scope (see
+ * docs/COPILOT.md, Security model).
  */
 export function resolveConfined(rawPath: string, root = workspaceRoot()): string {
   if (typeof rawPath !== 'string' || rawPath.trim() === '') {
