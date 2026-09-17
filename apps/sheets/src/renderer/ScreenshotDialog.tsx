@@ -29,6 +29,16 @@ export function ScreenshotDialog({
   // lets exactly one full-res capture through per enumeration round
   const tokenRef = useRef('')
 
+  // Picker lifecycle: the main process enumerates capture sources only inside
+  // an announced, rate-limited picker session (capture-consent.ts). Mount =
+  // session open, unmount = close (drops any live token).
+  useEffect(() => {
+    window.desktopApi.capturePickerState(true)
+    return () => {
+      window.desktopApi.capturePickerState(false)
+    }
+  }, [])
+
   useEffect(() => {
     let stale = false
     setState({ phase: 'loading' })

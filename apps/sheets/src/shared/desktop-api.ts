@@ -2787,6 +2787,9 @@ export interface DesktopApi {
   readWorkbookMedia(request: WorkbookMediaRequest): Promise<WorkbookMediaResult>
   readPivotDefinition(request: WorkbookPivotRequest): Promise<WorkbookPivotDefinition>
   readLocalImage(request: LocalImageRequest): Promise<LocalImageResult>
+  /// Screenshot picker lifecycle: true when the dialog opens, false on close.
+  /// The main process only enumerates capture sources inside an open session.
+  capturePickerState(open: boolean): void
   captureScreenSources(): Promise<ScreenSourcesResult>
   /// null when the source vanished between listing and capture.
   captureScreenSource(request: ScreenCaptureRequest): Promise<ScreenCaptureResult | null>

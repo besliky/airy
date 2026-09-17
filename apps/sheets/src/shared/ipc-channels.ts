@@ -99,6 +99,8 @@ export const IPC_CHANNELS = {
   // the shell; avoids collisions)
   captureScreenSources: 'sheets:capture-screen-sources',
   captureScreenSource: 'sheets:capture-screen-source',
+  /** Picker lifecycle signal (true = dialog opened, false = closed) feeding the capture consent machine */
+  capturePickerState: 'sheets:capture-picker-state',
   filesPick: 'sheets:files-pick',
   filesAdd: 'sheets:files-add',
   filesAddPastedImage: 'sheets:files-add-pasted-image',

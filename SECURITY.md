@@ -23,6 +23,13 @@ All application windows run with the full Electron renderer lockdown:
   configures; user-supplied keys stay in the local settings store, encrypted
   at rest with the OS keychain (Electron safeStorage) whenever one is
   available, and the settings file is user-readable only (mode 0600).
+- Known residual: the sheets Insert → Screenshot picker. Electron offers no
+  native multi-source picker on Windows/Linux, so consent is enforced as
+  bounded + session-bound rather than per-frame: enumeration only inside an
+  announced picker session, per-tab rate limits, single-use short-lived
+  capture tokens, and an audit log. A compromised sheets renderer can still
+  capture full-resolution frames at the rate limit; macOS additionally gates
+  this behind the OS screen-recording permission, Windows and Linux do not.
 
 ## Updater Posture
 

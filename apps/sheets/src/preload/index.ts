@@ -151,6 +151,10 @@ const desktopApi: DesktopApi = {
     }
     return result as { mediaType: 'image/png' | 'image/jpeg' | 'image/gif'; base64: string }
   },
+  /** Screenshot picker lifecycle: true when the dialog opens, false when it closes */
+  capturePickerState(open: boolean) {
+    ipcRenderer.send(IPC_CHANNELS.capturePickerState, open)
+  },
   async captureScreenSources() {
     const result: unknown = await ipcRenderer.invoke(IPC_CHANNELS.captureScreenSources)
     if (

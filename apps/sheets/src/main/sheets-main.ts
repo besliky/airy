@@ -136,7 +136,7 @@ import {
 } from '../shared/desktop-api'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
 import { atomicWriteFile } from '@airy-office/electron-utils'
-import { captureGrantValid, newCaptureGrant, type CaptureGrant } from './capture-consent'
+import { CaptureConsentTracker } from './capture-consent'
 import { closeGuardDecision } from './close-guard'
 import { checkMergeSourcePaths } from './merge-source-policy'
 import { SaveEditsTransferStore } from './save-edits-transfer'
@@ -1810,8 +1810,8 @@ interface SheetsTabSession {
 const MAX_REMOTE_IMAGE_BYTES = 20 * 1024 * 1024
 
 const sheetsTabs = new Map<number, SheetsTabSession>()
-/** Outstanding screenshot-picker capture grant per tab (see capture-consent.ts) */
-const captureGrantsByWc = new Map<number, CaptureGrant>()
+/** Per-tab screenshot-picker consent (state machine + rate limits, capture-consent.ts) */
+const captureConsent = new CaptureConsentTracker()
 let activeSheetsWebContents: WebContents | null = null
 let pastedTempCleanupStarted = false
 
@@ -1872,7 +1872,7 @@ function registerSheetsSession(webContents: WebContents, client: XlsxSidecarClie
   webContents.once('destroyed', () => {
     const entry = sheetsTabs.get(webContents.id)
     sheetsTabs.delete(webContents.id)
-    captureGrantsByWc.delete(webContents.id)
+    captureConsent.forget(webContents.id)
     forgetWitnessedDrops(webContents.id)
     if (entry) {
       // Free pending chunked-save uploads with the tab (the sweep timer's
@@ -2862,8 +2862,27 @@ export function registerSheetsIpc(): void {
     return localImageResultSchema.parse({ mediaType, base64: bytes.toString('base64') })
   })
 
+  // Picker lifecycle signal: the renderer's ScreenshotDialog announces open/
+  // close so enumeration only happens inside a (rate-limited) picker session.
+  ipcMain.on(IPC_CHANNELS.capturePickerState, (event, open: unknown) => {
+    try {
+      sessionFor(event)
+    } catch {
+      return // not a sheets tab: ignore
+    }
+    if (open === true) captureConsent.pickerOpened(event.sender.id, Date.now())
+    else captureConsent.pickerClosed(event.sender.id)
+  })
+
   ipcMain.handle(IPC_CHANNELS.captureScreenSources, async (event) => {
     sessionFor(event)
+    // Consent gate: enumeration only inside an open picker session, bounded by
+    // the per-tab session/enumeration rate limits (see capture-consent.ts).
+    // Refusals fail closed with the denied status (no sources, no token).
+    const gate = captureConsent.beginEnumeration(event.sender.id, Date.now())
+    if (!gate.ok) {
+      return screenSourcesResultSchema.parse({ status: 'denied', sources: [], captureToken: '' })
+    }
     // macOS gates desktopCapturer behind the Screen Recording permission and
     // returns black frames instead of failing; surface a real denied state.
     if (process.platform === 'darwin') {
@@ -2888,14 +2907,14 @@ export function registerSheetsIpc(): void {
     const selfWindow = sheetsShellWindow ?? BrowserWindow.fromWebContents(event.sender)
     const selfId = selfWindow?.getMediaSourceId()
     const listed = sources.filter((source) => source.id !== selfId)
-    // Consent: enumeration issues a short-lived single-use token bound to
-    // this tab; the full-res capture must redeem it for one listed source
-    // (see capture-consent.ts). A new enumeration replaces the grant.
-    const grant = newCaptureGrant(
+    // Enumeration issues a short-lived single-use token bound to this tab; the
+    // full-res capture must redeem it for one listed source. A new
+    // enumeration replaces the grant.
+    const grant = captureConsent.issueGrant(
+      event.sender.id,
       listed.map((source) => source.id),
       Date.now(),
     )
-    captureGrantsByWc.set(event.sender.id, grant)
     return screenSourcesResultSchema.parse({
       status: 'ok',
       captureToken: grant.token,
@@ -2913,9 +2932,9 @@ export function registerSheetsIpc(): void {
     const request = screenCaptureRequestSchema.parse(input)
     // Consent gate: exactly one full-res frame per enumeration round, for a
     // source the enumeration listed, within the grant's TTL.
-    const grant = captureGrantsByWc.get(event.sender.id)
-    if (!captureGrantValid(grant, request.captureToken, request.id, Date.now())) return null
-    captureGrantsByWc.delete(event.sender.id)
+    if (!captureConsent.redeem(event.sender.id, request.captureToken, request.id, Date.now())) {
+      return null
+    }
     // desktopCapturer only ever returns thumbnails, so a full-res capture is
     // a re-listing with the thumbnail sized to the largest physical display.
     const displays = screen.getAllDisplays()
