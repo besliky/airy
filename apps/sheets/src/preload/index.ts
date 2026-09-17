@@ -295,12 +295,12 @@ const desktopApi: DesktopApi = {
     if (
       !isRecord(result) ||
       typeof result.ok !== 'boolean' ||
-      (result.ok === true &&
-        (typeof result.base64 !== 'string' || typeof result.pageCount !== 'number'))
+      (result.ok === true && typeof result.pageCount !== 'number') ||
+      (result.ok === false && typeof result.error !== 'string')
     ) {
       throw new Error('Invalid print preview response.')
     }
-    return result as { ok: true; base64: string; pageCount: number } | { ok: false; error: string }
+    return result as { ok: true; pageCount: number } | { ok: false; error: string }
   },
   async printWorkbook(request) {
     validatePdfRequest(request)

@@ -34,6 +34,11 @@ export const PRINT_PAPER_SIZES: ReadonlyArray<{
   { code: 7, labelKey: 'dlgPaperExecutive' },
 ]
 
+/// Preview rebuilds are debounced: rapid option toggles (scrolling the scale
+/// slider, flipping orientation) coalesce into one headless printToPDF pass
+/// for the last state instead of one full pass per change.
+const PREVIEW_DEBOUNCE_MS = 250
+
 interface EffectiveSetup {
   paperSize: number
   orientation: 'portrait' | 'landscape'
@@ -120,29 +125,36 @@ export function PrintDialog({
 
   useEffect(() => {
     if (!seeded) return
-    const run = ++runRef.current
     let alive = true
-    void (async () => {
-      try {
-        const built = await buildRequest(overrides)
-        if (!alive || run !== runRef.current) return
-        printRequestRef.current = built.request
-        setPreviewHtml(built.request.html)
-        setError(null)
-        const preview = await window.desktopApi.previewPrint(built.request)
-        if (!alive || run !== runRef.current) return
-        if (preview.ok) setPageCount(preview.pageCount)
-        else setError(preview.error)
-      } catch (reason: unknown) {
-        if (alive && run === runRef.current) {
-          setPreviewHtml(null)
-          setPageCount(null)
-          setError(reason instanceof Error ? reason.message : t('appPrintPreviewFailed'))
+    // Debounced: the cleanup of a superseded run cancels its pending timer,
+    // so only the last state within the debounce window reaches the main
+    // process's printToPDF pass; a run already in flight is cut off by the
+    // runRef stamp instead.
+    const timer = window.setTimeout(() => {
+      const run = ++runRef.current
+      void (async () => {
+        try {
+          const built = await buildRequest(overrides)
+          if (!alive || run !== runRef.current) return
+          printRequestRef.current = built.request
+          setPreviewHtml(built.request.html)
+          setError(null)
+          const preview = await window.desktopApi.previewPrint(built.request)
+          if (!alive || run !== runRef.current) return
+          if (preview.ok) setPageCount(preview.pageCount)
+          else setError(preview.error)
+        } catch (reason: unknown) {
+          if (alive && run === runRef.current) {
+            setPreviewHtml(null)
+            setPageCount(null)
+            setError(reason instanceof Error ? reason.message : t('appPrintPreviewFailed'))
+          }
         }
-      }
-    })()
+      })()
+    }, PREVIEW_DEBOUNCE_MS)
     return () => {
       alive = false
+      window.clearTimeout(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seeded, overrides])

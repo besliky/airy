@@ -82,6 +82,14 @@ async function printPass(
   })
 }
 
+/// Header/footer templates of the base (odd) pass: present once the request
+/// carries any header/footer, so Chromium never substitutes its own.
+function oddTemplatesFor(request: WorkbookExportPdfRequest): TemplatePair | undefined {
+  return request.headerTemplate !== undefined || request.footerTemplate !== undefined
+    ? { headerTemplate: request.headerTemplate, footerTemplate: request.footerTemplate }
+    : undefined
+}
+
 /// Chromium prints one header/footer template pair for every page. Excel's
 /// differentFirst / differentOddEven need extra passes — page 1 with the
 /// first-page templates, the even pages with the even ones — stitched into
@@ -91,10 +99,7 @@ async function renderPdf(
   contents: WebContents,
   request: WorkbookExportPdfRequest,
 ): Promise<Buffer> {
-  const oddTemplates: TemplatePair | undefined =
-    request.headerTemplate !== undefined || request.footerTemplate !== undefined
-      ? { headerTemplate: request.headerTemplate, footerTemplate: request.footerTemplate }
-      : undefined
+  const oddTemplates = oddTemplatesFor(request)
   const flags = {
     hasFirst: request.firstPage !== undefined,
     hasEven: request.evenPages !== undefined,
@@ -158,18 +163,49 @@ async function withPrintWindow<T>(
   }
 }
 
-/// Print dialog preview: the print HTML as PDF bytes (base64) plus its page
-/// count — nothing touches disk and no save dialog appears.
+/// Page count from raw PDF bytes. Chromium's printToPDF leaves the page
+/// object dictionaries uncompressed (only content streams are deflated), so
+/// scanning for `/Type /Page` — excluding the `/Type /Pages` tree nodes —
+/// avoids a full pdf-lib parse of the preview on every option change.
+export function countPdfPages(bytes: Uint8Array): number {
+  const text = Buffer.from(bytes).toString('latin1')
+  let count = 0
+  for (const _match of text.matchAll(/\/Type\s*\/Page(?![A-Za-z])/g)) count += 1
+  return count
+}
+
+/// Page count with a belt-and-suspenders fallback: a producer that compresses
+/// the page dictionaries yields no scan hits, so fall back to a real parse.
+async function pageCountOf(pdf: Buffer): Promise<number> {
+  const scanned = countPdfPages(pdf)
+  if (scanned > 0) return scanned
+  const { PDFDocument: PdfDocument } = await import('pdf-lib')
+  return (await PdfDocument.load(pdf)).getPageCount()
+}
+
+/// Print dialog preview: the request's page count. Nothing touches disk, no
+/// save dialog appears, and no PDF bytes cross the IPC boundary — the dialog
+/// previews the print HTML itself in its iframe; only the count needs the
+/// main-side printToPDF pass. The variant stitching changes which template
+/// each page carries, not how many pages print, so the base (odd) pass alone
+/// carries the count.
 export async function previewPrint(
   _event: IpcMainInvokeEvent,
   request: WorkbookExportPdfRequest,
 ): Promise<WorkbookPrintPreviewResult> {
   try {
     return await withPrintWindow(request, async (contents) => {
-      const pdf = await renderPdf(contents, request)
-      const { PDFDocument: PdfDocument } = await import('pdf-lib')
-      const pageCount = (await PdfDocument.load(pdf)).getPageCount()
-      return { ok: true, base64: pdf.toString('base64'), pageCount }
+      const oddTemplates = oddTemplatesFor(request)
+      const showHeaderFooter =
+        oddTemplates !== undefined ||
+        request.firstPage !== undefined ||
+        request.evenPages !== undefined
+      const pdf = await printPass(
+        contents,
+        request,
+        showHeaderFooter ? (oddTemplates ?? {}) : undefined,
+      )
+      return { ok: true, pageCount: await pageCountOf(pdf) }
     })
   } catch (err) {
     return { ok: false, error: String(err) }

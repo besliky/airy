@@ -2596,16 +2596,11 @@ export type WorkbookExportPdfRequest = z.infer<typeof workbookExportPdfRequestSc
 export type WorkbookExportPdfResult = z.infer<typeof workbookExportPdfResultSchema>
 
 /// Print dialog preview: the same request the PDF export sends, answered
-/// with the rendered PDF's bytes (base64) and page count — nothing is
-/// written to disk and no save dialog appears.
+/// with the rendered page count only — the dialog previews the print HTML
+/// itself, so no PDF bytes cross the IPC boundary, nothing is written to
+/// disk, and no save dialog appears.
 export const workbookPrintPreviewResultSchema = z.union([
-  z
-    .object({
-      ok: z.literal(true),
-      base64: z.string().min(1),
-      pageCount: z.number().int().positive().max(100_000),
-    })
-    .strict(),
+  z.object({ ok: z.literal(true), pageCount: z.number().int().positive().max(100_000) }).strict(),
   z.object({ ok: z.literal(false), error: z.string().min(1) }).strict(),
 ])
 

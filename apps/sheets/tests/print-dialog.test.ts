@@ -2,12 +2,21 @@
  * The Print dialog's renderer plumbing: the shared print-request builder
  * applies the dialog's per-job overrides on top of the sheet's effective
  * page setup, and the File › Print / Ctrl+P wiring reaches the dialog from
- * the application menu, the preload allowlist, and the ribbon.
+ * the application menu, the preload allowlist, and the ribbon. The preview
+ * channel's page-count scan and IPC shape live here too.
  */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
+vi.mock('electron', () => ({
+  BrowserWindow: class {},
+  dialog: {},
+}))
+vi.mock('@airy-office/electron-utils', () => ({ showSaveDialogWithMemory: vi.fn() }))
+
+import { countPdfPages } from '../src/main/pdf-export'
+import { workbookPrintPreviewResultSchema } from '../src/shared/desktop-api'
 import {
   buildActiveSheetPrintRequest,
   type PageLayoutContext,
@@ -91,6 +100,42 @@ describe('buildActiveSheetPrintRequest', () => {
     const again = await buildActiveSheetPrintRequest(ctx)
     expect(again.request.landscape).toBe(false)
     expect(again.effective.paperSize).toBe(9)
+  })
+})
+
+describe('print preview page count', () => {
+  it('counts /Type /Page objects and skips /Type /Pages tree nodes', () => {
+    const pdf = Buffer.from(
+      '<< /Type /Catalog /Pages 2 0 R >>\n' +
+        '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>\n' +
+        '<< /Type /Page /MediaBox [0 0 595 842] >>\n' +
+        '<< /Type/Page/Parent 2 0 R >>\n',
+      'latin1',
+    )
+    expect(countPdfPages(pdf)).toBe(2)
+  })
+
+  it('returns 0 when the scan finds nothing (the pdf-lib fallback path)', () => {
+    expect(countPdfPages(Buffer.from('%PDF-1.4 stream-only bytes', 'latin1'))).toBe(0)
+  })
+
+  it('the preview IPC result carries only the page count', () => {
+    expect(workbookPrintPreviewResultSchema.parse({ ok: true, pageCount: 3 })).toEqual({
+      ok: true,
+      pageCount: 3,
+    })
+    // the multi-MB base64 payload is gone from the channel — strict() rejects it
+    expect(
+      workbookPrintPreviewResultSchema.safeParse({
+        ok: true,
+        pageCount: 3,
+        base64: 'AAAA',
+      }).success,
+    ).toBe(false)
+    expect(workbookPrintPreviewResultSchema.parse({ ok: false, error: 'boom' })).toEqual({
+      ok: false,
+      error: 'boom',
+    })
   })
 })
 
