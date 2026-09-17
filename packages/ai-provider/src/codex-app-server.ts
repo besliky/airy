@@ -193,11 +193,14 @@ async function codexOnPath(
  * Basenames a configured CLI path may resolve to. The path arrives from a
  * renderer, so an arbitrary existing executable (e.g. /bin/sh) must never be
  * spawned: only these names are honored, everything else falls through to the
- * default discovery.
+ * default discovery. win32 lists only codex.exe: the client spawns without a
+ * shell, and modern Node rejects .cmd/.bat batch files with EINVAL there, so
+ * such entries could never actually run (PATH discovery likewise probes only
+ * codex.exe — see codexOnPath).
  */
 const CODEX_EXECUTABLE_BASENAMES: Record<'posix' | 'win32', readonly string[]> = {
   posix: ['codex'],
-  win32: ['codex.exe', 'codex.cmd', 'codex.bat'],
+  win32: ['codex.exe'],
 }
 
 export function isCodexCliCandidatePath(path: string, platform?: NodeJS.Platform): boolean {

@@ -133,8 +133,10 @@ describe('Codex app-server bridge', () => {
     expect(isCodexCliCandidatePath('/opt/evil/codex.exe', 'linux')).toBe(false)
     expect(isCodexCliCandidatePath('/opt/evil/codex.exe', 'win32')).toBe(true)
     expect(isCodexCliCandidatePath('C:\\tools\\CODEX.EXE', 'win32')).toBe(true)
-    expect(isCodexCliCandidatePath('C:\\tools\\codex.cmd', 'win32')).toBe(true)
-    expect(isCodexCliCandidatePath('C:\\tools\\codex.bat', 'win32')).toBe(true)
+    // batch shims are not allowlisted: spawn runs without a shell and modern
+    // Node rejects .cmd/.bat with EINVAL, so they can never execute
+    expect(isCodexCliCandidatePath('C:\\tools\\codex.cmd', 'win32')).toBe(false)
+    expect(isCodexCliCandidatePath('C:\\tools\\codex.bat', 'win32')).toBe(false)
     expect(isCodexCliCandidatePath('C:\\Windows\\system32\\cmd.exe', 'win32')).toBe(false)
     expect(isCodexCliCandidatePath('/bin/sh', 'darwin')).toBe(false)
 
@@ -149,7 +151,7 @@ describe('Codex app-server bridge', () => {
   it('accepts only allowlisted win32 executable names when resolving', async () => {
     const root = await mkdtemp(join(tmpdir(), 'airy-codex-win32-'))
     try {
-      const good = join(root, 'codex.cmd')
+      const good = join(root, 'codex.exe')
       await writeFile(good, '')
       await expect(resolveCodexCliPath(good, { platform: 'win32', env: {} })).resolves.toBe(good)
 

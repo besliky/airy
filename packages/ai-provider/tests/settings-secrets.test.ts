@@ -89,7 +89,23 @@ describe('settings secret overlay', () => {
   it('replaces the key only for a real new value, and keeps empty when nothing is stored', () => {
     expect(overlaySecret('sk-brand-new-key', 'sk-ant-api03-abcdefgh')).toBe('sk-brand-new-key')
     expect(overlaySecret('', '')).toBe('')
-    expect(overlaySecret('sk-…efgh', '')).toBe('')
+    // nothing was stored, so nothing was ever masked: a mask-shaped value
+    // typed into the empty field is a real (if odd) new key, not an echo
+    expect(overlaySecret('sk-…efgh', '')).toBe('sk-…efgh')
+  })
+
+  it("treats a mask-shaped value as an echo only when it is the stored key's exact mask", () => {
+    const stored = 'sk-ant-api03-abcdefgh'
+    expect(overlaySecret('sk-…efgh', stored)).toBe(stored)
+    // same 8-char ellipsis shape, different characters: a real new key
+    expect(overlaySecret('AIz…7890', stored)).toBe('AIz…7890')
+    // the placeholder still means unchanged for short stored keys
+    expect(overlaySecret(MASKED_SECRET_PLACEHOLDER, 'short')).toBe('short')
+    // a mask-shaped 8-char key can now be stored and replaced in turn
+    // (maskSecret of 'xy…zwxy' is 'xy……zwxy', so 'sk-…efgh' is NOT its echo)
+    const oddKey = 'xy…zwxy'
+    expect(overlaySecret(oddKey, stored)).toBe(oddKey)
+    expect(overlaySecret('sk-…efgh', oddKey)).toBe('sk-…efgh')
   })
 
   it('round-trips renderer edits over stored settings without losing other fields', () => {

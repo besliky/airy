@@ -44,9 +44,11 @@ export function maskSecret(secret: string): string {
 
 /**
  * Detects the exact shape produced by maskSecret: the short placeholder, or
- * first3 + '…' + last4 (length 8, ellipsis at index 3). Real API keys are
- * ASCII and never contain '…', so a match means the renderer echoed a masked
- * value back unchanged.
+ * first3 + '…' + last4 (length 8, ellipsis at index 3). Shape alone cannot
+ * prove the value is an echo — a real 8-character key containing '…' at
+ * index 3 has the same shape — so the overlay additionally compares against
+ * the stored key's actual mask (isMaskedSecretEcho) before treating a value
+ * as "unchanged".
  */
 export function isMaskedSecret(value: string): boolean {
   return (
@@ -55,14 +57,24 @@ export function isMaskedSecret(value: string): boolean {
   )
 }
 
+/** Whether `value` is the renderer echoing back the masked form of `stored`. */
+function isMaskedSecretEcho(value: string, stored: string): boolean {
+  if (value === MASKED_SECRET_PLACEHOLDER) return true
+  if (!isMaskedSecret(value)) return false
+  // the exact mask of the stored key; an empty stored key has no mask, so a
+  // mask-shaped value typed into an empty field is a real new key
+  return stored !== '' && value === maskSecret(stored)
+}
+
 /**
- * Single-secret overlay used by the save and connection-test paths: a masked
- * or empty incoming value means "unchanged" (keep the stored key); anything
- * else is a real new key and replaces it.
+ * Single-secret overlay used by the save and connection-test paths: an empty
+ * incoming value or an echo of the stored key's mask means "unchanged" (keep
+ * the stored key); anything else is a real new key and replaces it.
  */
 export function overlaySecret(incoming: string | undefined, stored: string | undefined): string {
   const value = incoming ?? ''
-  if (value === '' || isMaskedSecret(value)) return stored ?? ''
+  const keep = stored ?? ''
+  if (value === '' || isMaskedSecretEcho(value, keep)) return keep
   return value
 }
 
