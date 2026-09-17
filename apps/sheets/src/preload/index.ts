@@ -401,6 +401,9 @@ const desktopApi: DesktopApi = {
     ipcRenderer.on(IPC_CHANNELS.menuAction, listener)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.menuAction, listener)
   },
+  menuActionsReady() {
+    ipcRenderer.send(IPC_CHANNELS.menuReady)
+  },
   onWorkbookRenamed(callback) {
     const listener = (_event: unknown, newName: unknown): void => {
       if (typeof newName === 'string' && newName) callback(newName)

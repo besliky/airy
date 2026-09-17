@@ -118,6 +118,7 @@ import {
   requestSheetsClose,
   resolveSheetsSessionPath,
   sendSheetsMenuAction,
+  setSheetsMenuReadyHook,
   sheetsFileRenamed,
   setSheetsCloseTabHook,
   setSheetsExtraFileMenuItems,
@@ -228,6 +229,7 @@ import {
   type WindowState,
 } from './window-state'
 import { normalizeRecentQuery, pageRecentPaths, statPathEntries } from './recent-files'
+import { createQueuedWorkbookDelivery } from './queued-workbook-delivery'
 import { isSameFile, isValidRenameName } from './rename-validation'
 import { TabManager } from './tab-manager'
 import { startShellBridge, stopShellBridge } from './bridge/shell-bridge'
@@ -1130,7 +1132,7 @@ function routeDocumentPath(filePath: string): boolean {
       tabManager.activateTab(existing)
     } else {
       tabManager.openSheetsTab(filePath)
-      startQueuedWorkbookNudge()
+      queuedWorkbookDelivery.start()
     }
     return true
   }
@@ -1308,36 +1310,27 @@ async function newPdfTab(): Promise<void> {
 
 /**
  * The sheets renderer subscribes to menu actions only after Univer finishes
- * mounting (seconds on cold start), so a single 'open' can fire into the
- * void. Re-send until the queued workbook is consumed; consumption clears the
- * queue entry main-side (sheets-main), which stops the loop. The nudge only
- * reaches the active tab, so it gates on that tab's own queue entry —
- * background tabs from a multi-select Open pull their path themselves via the
- * renderer's has-queued-workbook poll.
+ * mounting (seconds on cold start), so a single 'open' can fire into the void.
+ * The renderer now sends a one-time menu-ready signal when its subscription is
+ * live, which flushes the queued workbook immediately; two bounded resends
+ * cover a stale preload that never sends the signal (the renderer's
+ * has-queued-workbook self-poll remains the safety net beyond that;
+ * consumption of the queued path clears the queue entry main-side in
+ * sheets-main, which stops everything). The state machine lives in
+ * queued-workbook-delivery.ts, unit-tested there with injected timers.
  */
-let workbookNudgeTimer: ReturnType<typeof setInterval> | null = null
+const queuedWorkbookDelivery = createQueuedWorkbookDelivery({
+  // only the active tab's queue entry matters here (background tabs from a
+  // multi-select Open pull their path themselves via the renderer's poll)
+  sendOpen: () => sendSheetsMenuAction('open'),
+  isStillWaiting: () => hasActiveQueuedWorkbook() && Boolean(tabManager?.findSheetsTab()),
+})
 
-function startQueuedWorkbookNudge(): void {
-  if (workbookNudgeTimer) clearInterval(workbookNudgeTimer)
-  const startedAt = Date.now()
-  sendSheetsMenuAction('open')
-  workbookNudgeTimer = setInterval(() => {
-    if (
-      !hasActiveQueuedWorkbook() ||
-      Date.now() - startedAt > 30_000 ||
-      !tabManager?.findSheetsTab()
-    ) {
-      if (workbookNudgeTimer) clearInterval(workbookNudgeTimer)
-      workbookNudgeTimer = null
-      return
-    }
-    sendSheetsMenuAction('open')
-  }, 700)
-}
+setSheetsMenuReadyHook(() => queuedWorkbookDelivery.onReady())
 
 // ---- home IPC ----
 
-function statEntries(paths: string[]): RecentEntry[] {
+function statEntries(paths: string[]): Promise<RecentEntry[]> {
   return statPathEntries(paths, new Set(readStarredFiles()))
 }
 
@@ -1368,14 +1361,14 @@ async function setLiveBridgeEnabled(on: boolean): Promise<boolean> {
 function registerHomeIpc(): void {
   ipcMain.handle(HOME_CHANNELS.getAppVersion, (): string => app.getVersion())
 
-  ipcMain.handle(HOME_CHANNELS.recents, (_event, query: unknown): RecentPage =>
+  ipcMain.handle(HOME_CHANNELS.recents, (_event, query: unknown): Promise<RecentPage> =>
     pageRecentPaths(readRecentFiles(), query, new Set(readStarredFiles())),
   )
 
   // Starred files sort by mtime, which requires stat-ing them all first; they are hand-picked and few, so this is fine
-  ipcMain.handle(HOME_CHANNELS.starred, (_event, query: unknown): RecentPage => {
+  ipcMain.handle(HOME_CHANNELS.starred, async (_event, query: unknown): Promise<RecentPage> => {
     const { offset, limit, ext } = normalizeRecentQuery(query)
-    const all = statEntries(readStarredFiles()).sort((a, b) => b.mtimeMs - a.mtimeMs)
+    const all = (await statEntries(readStarredFiles())).sort((a, b) => b.mtimeMs - a.mtimeMs)
     const filtered = ext ? all.filter((entry) => entry.ext === ext) : all
     return {
       entries: limit === 0 ? [] : filtered.slice(offset, offset + limit),
@@ -1384,7 +1377,7 @@ function registerHomeIpc(): void {
     }
   })
 
-  ipcMain.handle(HOME_CHANNELS.statPaths, (_event, paths: unknown): RecentEntry[] =>
+  ipcMain.handle(HOME_CHANNELS.statPaths, async (_event, paths: unknown): Promise<RecentEntry[]> =>
     statEntries(stringPaths(paths)),
   )
 

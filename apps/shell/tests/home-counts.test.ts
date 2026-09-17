@@ -3,18 +3,23 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createI18n } from '@airy-office/i18n'
-import { normalizeRecentQuery, pageRecentPaths } from '../src/main/recent-files'
+import {
+  clearRecentStatCache,
+  normalizeRecentQuery,
+  pageRecentPaths,
+} from '../src/main/recent-files'
 import { fileCountKey, timelineCountKey, visiblePageCount } from '../src/renderer/src/counts'
 import { strings } from '../src/renderer/src/strings'
 
 const tempDirs: string[] = []
 
 afterEach(() => {
+  clearRecentStatCache()
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
 describe('home visible counts', () => {
-  it('uses the filtered total for the sidebar count', () => {
+  it('uses the filtered total for the sidebar count', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'shell-counts-'))
     tempDirs.push(dir)
     const docPath = join(dir, 'notes.docx')
@@ -22,7 +27,7 @@ describe('home visible counts', () => {
     writeFileSync(docPath, 'doc')
     writeFileSync(slidePath, 'slide')
 
-    const page = pageRecentPaths(
+    const page = await pageRecentPaths(
       [docPath, slidePath],
       { ext: 'docx', offset: 0, limit: 50 },
       new Set(),
@@ -34,7 +39,7 @@ describe('home visible counts', () => {
     expect(visiblePageCount(page)).toBe(1)
   })
 
-  it('counts .xlsm under the sheets (xlsx) filter', () => {
+  it('counts .xlsm under the sheets (xlsx) filter', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'shell-counts-'))
     tempDirs.push(dir)
     const bookPath = join(dir, 'book.xlsx')
@@ -44,7 +49,7 @@ describe('home visible counts', () => {
     writeFileSync(macroPath, 'sheet')
     writeFileSync(docPath, 'doc')
 
-    const page = pageRecentPaths(
+    const page = await pageRecentPaths(
       [bookPath, macroPath, docPath],
       { ext: 'xlsx', offset: 0, limit: 50 },
       new Set(),
@@ -54,7 +59,7 @@ describe('home visible counts', () => {
     expect(page.entries.map((entry) => entry.path)).toEqual([bookPath, macroPath])
   })
 
-  it('counts legacy .xls under the sheets (xlsx) filter', () => {
+  it('counts legacy .xls under the sheets (xlsx) filter', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'shell-counts-'))
     tempDirs.push(dir)
     const bookPath = join(dir, 'book.xlsx')
@@ -64,7 +69,7 @@ describe('home visible counts', () => {
     writeFileSync(legacyPath, 'sheet')
     writeFileSync(docPath, 'doc')
 
-    const page = pageRecentPaths(
+    const page = await pageRecentPaths(
       [bookPath, legacyPath, docPath],
       { ext: 'xlsx', offset: 0, limit: 50 },
       new Set(),
@@ -74,14 +79,14 @@ describe('home visible counts', () => {
     expect(page.entries.map((entry) => entry.path)).toEqual([bookPath, legacyPath])
   })
 
-  it('keeps unavailable paths listed at their position, flagged missing (r158)', () => {
+  it('keeps unavailable paths listed at their position, flagged missing (r158)', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'shell-counts-'))
     tempDirs.push(dir)
     const existingPath = join(dir, 'existing.xlsx')
     const missingPath = join(dir, 'missing.xlsx')
     writeFileSync(existingPath, 'sheet')
 
-    const page = pageRecentPaths([missingPath, existingPath], {}, new Set())
+    const page = await pageRecentPaths([missingPath, existingPath], {}, new Set())
 
     // a transiently unstat-able file (disconnected drive, pending mount) must
     // not vanish from the list — it renders dimmed with an unavailable state
@@ -106,13 +111,13 @@ describe('recent query ext normalization', () => {
     expect(normalizeRecentQuery({}).ext).toBeUndefined()
   })
 
-  it('applies the normalized filter to the page', () => {
+  it('applies the normalized filter to the page', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'shell-counts-'))
     tempDirs.push(dir)
     const bookPath = join(dir, 'book.xlsx')
     writeFileSync(bookPath, 'sheet')
 
-    const page = pageRecentPaths([bookPath], { ext: '.XLSX', limit: 50 }, new Set())
+    const page = await pageRecentPaths([bookPath], { ext: '.XLSX', limit: 50 }, new Set())
     expect(page.total).toBe(1)
     expect(page.entries.map((entry) => entry.path)).toEqual([bookPath])
   })
@@ -135,5 +140,27 @@ describe('count labels', () => {
     expect(translate('fr', fileCountKey(1), { n: 1 })).toBe('1 fichier')
     expect(translate('de', fileCountKey(1), { n: 1 })).toBe('1 Datei')
     expect(translate('zh', fileCountKey(1), { n: 1 })).toBe('1 个文件')
+  })
+})
+
+describe('recents stat cache', () => {
+  it('serves repeated queries within the TTL without re-statting', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shell-counts-'))
+    tempDirs.push(dir)
+    const docPath = join(dir, 'notes.docx')
+    writeFileSync(docPath, 'doc')
+
+    const first = await pageRecentPaths([docPath], {}, new Set())
+    // file disappears (or its drive unmounts) after the first query
+    rmSync(docPath)
+    const second = await pageRecentPaths([docPath], {}, new Set())
+
+    expect(first.entries[0]!.missing).toBeUndefined()
+    // cached stat: still listed as available within the TTL
+    expect(second.entries[0]!.missing).toBeUndefined()
+
+    clearRecentStatCache()
+    const third = await pageRecentPaths([docPath], {}, new Set())
+    expect(third.entries[0]!.missing).toBe(true)
   })
 })

@@ -2823,6 +2823,10 @@ export interface DesktopApi {
   openExternal(url: string): Promise<void>
   /// Application-menu File commands (Open/Save/Save As); returns unsubscribe.
   onMenuAction(callback: (action: MenuAction) => void): () => void
+  /// One-time signal that onMenuAction above is live (sent right after the
+  /// subscription is installed, post-Univer-mount) so the shell can flush any
+  /// queued workbook action instead of blind-resending it.
+  menuActionsReady(): void
   /// The open workbook was renamed on disk (renamed in the shell Home list);
   /// emits the new file name.
   onWorkbookRenamed(callback: (newName: string) => void): () => void

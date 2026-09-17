@@ -2580,6 +2580,9 @@ export function App(): React.JSX.Element {
     const unsubscribeMenu =
       window.desktopApi?.onMenuAction((action) => menuActionRef.current(action)) ??
       (() => undefined)
+    // Subscription live: tell the shell once so a queued workbook's 'open'
+    // action is flushed now instead of waiting for the bounded retry resends.
+    window.desktopApi?.menuActionsReady?.()
     // Close guard chose Save: run the journal save and report the outcome.
     const unsubscribeCloseSave =
       window.desktopApi?.onCloseSaveRequest?.(() => void closeSaveRef.current()) ??

@@ -661,12 +661,22 @@ export function Home() {
   }, [view, filter])
 
   useEffect(() => {
+    // A short trailing debounce collapses rapid focus churn (alt-tab bounce,
+    // devtools toggling) into one refresh; the main process also caches stats
+    // briefly, so the focus handler is cheap either way.
+    let timer: number | undefined
     const onFocus = () => {
-      reloadRef.current(true)
-      setProjectTick((n) => n + 1)
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        reloadRef.current(true)
+        setProjectTick((n) => n + 1)
+      }, 150)
     }
     window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [])
 
   const hasMore = entries.length < listTotal

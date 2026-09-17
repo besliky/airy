@@ -84,6 +84,7 @@ export const IPC_CHANNELS = {
   createDocument: 'workbook:create-document',
   openExternal: 'shell:open-external',
   menuAction: 'menu:action',
+  menuReady: 'menu:ready',
   aiGetSettings: 'ai:get-settings',
   aiSetSettings: 'ai:set-settings',
   aiChat: 'ai:chat',

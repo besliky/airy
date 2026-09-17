@@ -1759,6 +1759,14 @@ export function sendSheetsMenuAction(
   activeSheetsWebContents?.send(IPC_CHANNELS.menuAction, action)
 }
 
+/** shell hook: the sheets renderer's menu-action subscription went live (once
+ *  per renderer, right after Univer mounts) — flush any queued workbook action
+ *  that was sent before the subscription existed. */
+let menuReadyHook: ((contents: WebContents) => void) | null = null
+export function setSheetsMenuReadyHook(fn: ((contents: WebContents) => void) | null): void {
+  menuReadyHook = fn
+}
+
 // ---- AI settings persistence (main process avoids renderer CORS for the chat/stream proxy) ----
 
 function userDataPath(...parts: string[]): string {
@@ -2328,6 +2336,7 @@ export function registerSheetsIpc(): void {
    * this once it is ready and triggers the open itself.
    */
   ipcMain.handle('sheets:has-queued-workbook', (event) => queuedWorkbookPaths.has(event.sender.id))
+  ipcMain.on(IPC_CHANNELS.menuReady, (event) => menuReadyHook?.(event.sender))
 
   ipcMain.handle(IPC_CHANNELS.selectWorkbook, async (event) => {
     const entry = sessionFor(event)
