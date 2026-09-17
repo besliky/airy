@@ -31,6 +31,7 @@ vi.mock('../src/import/soffice.js', () => ({
 }))
 
 import { XlsxSession, parseA1Range } from '../src/xlsx/session.js'
+import { FencingError } from '../src/docx/session.js'
 import { makeStubIo } from './helpers/stub-sidecar.js'
 
 let root: string
@@ -230,6 +231,25 @@ describe('XlsxSession journal + save matrix', () => {
     // in-place save closes and reopens the sidecar session for fresh reads
     expect(io.calls.close).toHaveLength(1)
     expect(io.calls.open).toEqual([join(root, 'book.xlsx'), join(root, 'book.xlsx')])
+  })
+
+  it('refuses an in-place save when the backing file changed on disk since open', async () => {
+    const { session } = await nativeSession()
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 'edit' }] })
+    // external writer rewrites the backing file between open and save
+    await writeFile(join(root, 'book.xlsx'), 'externally rewritten bytes')
+    await expect(session.save()).rejects.toThrow(FencingError)
+    await expect(session.save()).rejects.toThrow(/changed on disk/)
+    // the refusal left the external writer's file untouched
+    expect(await readFile(join(root, 'book.xlsx'), 'utf8')).toBe('externally rewritten bytes')
+  })
+
+  it('refreshes the fence after a successful in-place save (chained saves work)', async () => {
+    const { session } = await nativeSession()
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 'one' }] })
+    await session.save()
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 'two' }] })
+    await expect(session.save()).resolves.toMatchObject({ path: join(root, 'book.xlsx') })
   })
 
   it('refuses save-as over an existing unrelated file unless overwrite is set', async () => {

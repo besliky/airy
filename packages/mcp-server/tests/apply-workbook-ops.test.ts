@@ -172,6 +172,31 @@ describe('apply_workbook_ops over MCP', () => {
     }
   })
 
+  it('reports the merged journal count, not the raw input edit count', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const handle = await openBook(client)
+      const result = await call(client, 'apply_workbook_ops', {
+        handle,
+        edits: [
+          { sheet: 'Sheet1', ref: 'A1', value: 'one' },
+          { sheet: 'Sheet1', ref: 'A1', value: 'two' },
+          { sheet: 'Sheet1', ref: 'A1', style: { bold: true } },
+          { sheet: 'Sheet1', ref: 'A1', style: { italic: true } },
+        ],
+      })
+      expect(result.isError).toBeFalsy()
+      // four edits to one cell collapse into a single journaled entry
+      expect(result.structuredContent).toEqual({ journaled: 1, dirty: true, dryRun: false })
+      expect(text(result)).toContain('Journaled 1 cell edit(s)')
+      const saved = await call(client, 'save_document', { handle })
+      expect(saved.isError).toBeFalsy()
+      expect(saveCalls[0]?.edits).toHaveLength(1)
+    } finally {
+      await close()
+    }
+  })
+
   it('dryRun validates and reports without journaling anything', async () => {
     const { client, close } = await connectSession()
     try {

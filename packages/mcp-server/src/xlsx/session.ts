@@ -464,6 +464,11 @@ export class XlsxSession {
    * patch merges onto the journaled content edit for the same cell — the
    * same present=set patch semantics as the docx ops. dryRun validates the
    * whole batch (sheet names, refs, edit shapes) without journaling.
+   *
+   * The return distinguishes the input count (`journaled`: every edit the
+   * batch spelled, including later edits to already-journaled cells) from
+   * the journal growth (`merged`: entries this call added — several edits to
+   * one cell merge into a single journal entry).
    */
   setCells(
     input: {
@@ -478,9 +483,10 @@ export class XlsxSession {
       }>
     },
     dryRun = false,
-  ): { journaled: number } {
+  ): { journaled: number; merged: number } {
     const sheet = this.resolveSheet(input.sheet)
     let journaled = 0
+    let merged = 0
     for (const cell of input.cells) {
       const address = parseA1Range(cell.ref)
       if (address.startRow !== address.endRow || address.startColumn !== address.endColumn) {
@@ -495,11 +501,14 @@ export class XlsxSession {
             candidate.column === address.startColumn,
         )
         if (existing) mergeCellEdit(existing, edit)
-        else this.edits.push(edit)
+        else {
+          this.edits.push(edit)
+          merged += 1
+        }
       }
       journaled += 1
     }
-    return { journaled }
+    return { journaled, merged }
   }
 
   // ---- saving ----

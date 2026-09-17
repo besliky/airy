@@ -296,9 +296,11 @@ export function registerTools(server: McpServer): void {
       // validate the whole batch up front so a bad edit rejects everything
       // (setCells in dry-run mode parses every sheet name and ref)
       for (const batch of batches) session.setCells(batch, true)
+      // report the journal's merged entry count: several edits to one cell
+      // collapse into a single journaled entry
       let journaled = 0
       if (dryRun !== true) {
-        for (const batch of batches) journaled += session.setCells(batch, false).journaled
+        for (const batch of batches) journaled += session.setCells(batch, false).merged
       } else {
         journaled = edits.length
       }

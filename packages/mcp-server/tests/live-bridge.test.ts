@@ -545,6 +545,46 @@ describe('live bridge candidate fallback', () => {
     })
   })
 
+  it('throws on a live-but-unauthorized first candidate instead of falling through', async () => {
+    if (process.platform === 'win32') return
+    // candidate 1 ('Airy'): a LIVE server, but its info file carries a wrong
+    // token — an authorization problem on a reachable bridge, not a dead
+    // socket; silently advancing to candidate 2 would target a different
+    // bridge than the one the first file describes
+    const home = join(dir, 'unauth-home')
+    const firstDir = join(home, '.config', 'Airy')
+    const secondDir = join(home, '.config', 'Airy Dev')
+    mkdirSync(firstDir, { recursive: true })
+    mkdirSync(secondDir, { recursive: true })
+    mkdirSync(join(dir, 'live3'), { recursive: true })
+    const live = await startMockBridge({ dir: join(dir, 'live3'), methods: PING_METHODS })
+    bridge = live
+    writeFileSync(
+      join(firstDir, 'airy-bridge.json'),
+      JSON.stringify({
+        socketPath: live.socketPath,
+        token: '0'.repeat(64),
+        pid: process.pid,
+        protocolVersion: 1,
+      }),
+      'utf8',
+    )
+    writeFileSync(
+      join(secondDir, 'airy-bridge.json'),
+      JSON.stringify({
+        socketPath: live.socketPath,
+        token: live.info.token,
+        pid: live.info.pid,
+        protocolVersion: 1,
+      }),
+      'utf8',
+    )
+    const bridgeClient = createLiveBridge({ env: {}, homeDir: home, platform: 'linux' })
+    const err = await bridgeClient.call('ping').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(BridgeClientError)
+    expect((err as BridgeClientError).code).toBe('bridge_unauthorized')
+  })
+
   it('skips a stale file whose app pid is dead even before connecting', async () => {
     if (process.platform === 'win32') return
     const home = join(dir, 'deadpid-home')
