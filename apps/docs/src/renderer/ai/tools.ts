@@ -1173,8 +1173,14 @@ function executeSyncTool(
         skippedDeleted > 0
           ? `\nNote: ${skippedDeleted} matched target(s) were skipped because that text is a pending tracked deletion (already struck through). It is not current content — do not try to delete or replace it again; the user accepts/rejects revisions in the Review tab.`
           : ''
+      const droppedLinks = outcome.results.reduce((sum, r) => sum + (r.droppedLinks ?? 0), 0)
+      // honest report of the link scheme policy: the op applied, minus the link
+      const droppedLinksNote =
+        droppedLinks > 0
+          ? `\nNote: ${droppedLinks} link field(s) were dropped because the URL scheme is not allowed (only http/https/mailto, #fragments and relative URLs are persisted). The other formatting still applied; use an allowed URL to link the text.`
+          : ''
       return {
-        output: outcome.summary + deletedNote,
+        output: outcome.summary + deletedNote + droppedLinksNote,
         mutated: changed > 0,
         summary: outcome.summary,
       }

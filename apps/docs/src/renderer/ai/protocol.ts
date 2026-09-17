@@ -13,7 +13,7 @@ import { equationBlockJson, inlineEquationNodeJson } from '../editor/equation'
 import { inheritFrom, inheritTableFormatting, sameBlockRole } from './inherit-formatting'
 import { collectRevisions, TRACK_IGNORE, type RevisionRange } from '../editor/revisions'
 import { countWords } from '../word-count'
-import { blockRangePositions, isTrackedDeleted, liveText } from './doc-utils'
+import { blockRangePositions, isTrackedDeleted, liveText, sanitizeLinkHref } from './doc-utils'
 import { opSignatures } from './ops'
 
 export { blockRangePositions, isTrackedDeleted, liveText }
@@ -836,22 +836,14 @@ const INLINE_MARK_TAGS: Record<string, string> = {
 }
 
 /**
- * Whitelist for hrefs entering link marks: http(s), mailto, in-document
- * fragments and plain relative references. Everything else — javascript:,
- * file:, data:, vbscript: … — is dropped so a prompt-injected answer cannot
- * persist a dangerous scheme into the document (opening is separately gated,
- * but the stored attribute itself must stay benign). Returns null to mean
- * "keep the text, drop the link".
+ * Whitelist for hrefs entering link marks (http(s), mailto, #fragment and
+ * relative refs; everything else is dropped so a prompt-injected answer cannot
+ * persist a dangerous scheme into the document). Defined in doc-utils and
+ * re-exported here: ops.ts must not import this module (protocol builds its
+ * tool description from the ops registry at load time — a cycle), while both
+ * the HTML parse path and the ops link field must share one policy.
  */
-export function sanitizeLinkHref(raw: string | null): string | null {
-  const href = (raw ?? '').trim()
-  if (!href) return null
-  if (/^(https?|mailto):/i.test(href)) return href
-  if (href.startsWith('#')) return href
-  // anything else with a scheme is not allowed; scheme-less values are relative refs
-  if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return null
-  return href
-}
+export { sanitizeLinkHref }
 
 function parseInline(element: Node, marks: PmMark[]): PmNode[] {
   const nodes: PmNode[] = []
