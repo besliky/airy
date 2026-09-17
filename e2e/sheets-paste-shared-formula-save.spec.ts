@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { execSync } from 'node:child_process'
-import { mkdtemp, readdir } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { launchShell, closeAndSaveVideo, waitForPageWithUrl } from './helpers'
@@ -91,18 +91,24 @@ test.describe('sheets: tiled paste of formulas survives save', () => {
       await sheets.keyboard.press('Control+v')
       await sheets.waitForTimeout(800)
 
+      // The quick-created workbook is untitled-staged (4eb93d5): its first
+      // plain Save opens the Save dialog anchored in the default save dir —
+      // stub the native dialog to confirm under the untitled name there.
+      const workbook = join(scratch, 'Airy', 'Untitled Spreadsheet.xlsx')
+      await app.evaluate(({ dialog }, target) => {
+        dialog.showSaveDialog = (async () => ({
+          canceled: false,
+          filePath: target,
+        })) as typeof dialog.showSaveDialog
+      }, workbook)
+
       await app.evaluate(({ webContents }) => {
         const wc = webContents.getAllWebContents().find((w) => w.getURL().includes('sheets/out'))
         wc?.send('menu:action', 'save')
       })
 
-      const saveDir = join(scratch, 'Airy')
       await expect(async () => {
-        const files = (await readdir(saveDir)).filter((f) => f.endsWith('.xlsx'))
-        expect(files).toHaveLength(1)
-        const xml = execSync(
-          `unzip -p "${join(saveDir, files[0])}" xl/worksheets/sheet1.xml`,
-        ).toString()
+        const xml = execSync(`unzip -p "${workbook}" xl/worksheets/sheet1.xml`).toString()
         // both pasted repetitions keep values and a row-shifted formula
         expect(xml).toContain('<c r="A2" s="1"><v>10</v></c>')
         expect(xml).toContain('<c r="A3" s="1"><v>10</v></c>')

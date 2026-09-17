@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { execSync } from 'node:child_process'
-import { mkdtemp, readdir } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { launchShell, closeAndSaveVideo, waitForPageWithUrl } from './helpers'
@@ -73,16 +73,25 @@ test.describe('sheets: filter criteria survive save and reopen', () => {
       })
       await sheets.waitForTimeout(800)
 
+      // The quick-created workbook is untitled-staged (4eb93d5): its first
+      // plain Save opens the Save dialog anchored in the default save dir —
+      // stub the native dialog to confirm under the untitled name there so
+      // the reopen step gets a deterministic path.
+      const saveDir = join(scratch, 'Airy')
+      savedPath = join(saveDir, 'Untitled Spreadsheet.xlsx')
+      await app.evaluate(({ dialog }, target) => {
+        dialog.showSaveDialog = (async () => ({
+          canceled: false,
+          filePath: target,
+        })) as typeof dialog.showSaveDialog
+      }, savedPath)
+
       await app.evaluate(({ webContents }) => {
         const wc = webContents.getAllWebContents().find((w) => w.getURL().includes('sheets/out'))
         wc?.send('menu:action', 'save')
       })
 
-      const saveDir = join(scratch, 'Airy')
       await expect(async () => {
-        const files = (await readdir(saveDir)).filter((f) => f.endsWith('.xlsx'))
-        expect(files).toHaveLength(1)
-        savedPath = join(saveDir, files[0])
         const xml = execSync(`unzip -p "${savedPath}" xl/worksheets/sheet1.xml`).toString()
         expect(xml).toContain('<autoFilter ref="A1:B5">')
         expect(xml).toContain('<filterColumn colId="1"><filters><filter val="keep"/></filters>')
