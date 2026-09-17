@@ -472,6 +472,16 @@ export function shiftCrossSheetFormulas(
           shiftFormulaText(decodeEntities(body), editedSheetName, shift, axis, true, 'ref-error'),
         )}</f>`,
     )
+    // Conditional-formatting and data-validation rule bodies on the other
+    // sheet carry the same qualified references — same machinery as the
+    // same-sheet pass (transformFormulas), qualified-only here.
+    xml = xml.replace(
+      /<(formula[12]?)>([\s\S]*?)<\/\1>/g,
+      (_full, tag: string, body: string) =>
+        `<${tag}>${escapeXmlText(
+          shiftFormulaText(decodeEntities(body), editedSheetName, shift, axis, true, 'ref-error'),
+        )}</${tag}>`,
+    )
   }
   return xml
 }

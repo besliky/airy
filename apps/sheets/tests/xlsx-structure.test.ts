@@ -225,6 +225,28 @@ describe('cross-sheet reference rewriting', () => {
     expect(shifted).toContain('<f>SUM(Data!A5:A9)+#REF!+A5</f>')
   })
 
+  it('rewrites cross-sheet CF/DV formula bodies; unrelated ones stay byte-identical', () => {
+    const rulesSheet =
+      '<worksheet><sheetData/>' +
+      '<conditionalFormatting sqref="A1:A5"><cfRule type="expression" priority="1">' +
+      '<formula>Data!$D$7&gt;100</formula></cfRule></conditionalFormatting>' +
+      '<dataValidations count="2">' +
+      '<dataValidation type="list" allowBlank="1" sqref="B1"><formula1>Data!$A$2:$A$9</formula1></dataValidation>' +
+      '<dataValidation type="whole" allowBlank="1" sqref="C1"><formula1>Other!$A$2:$A$9</formula1><formula2>Data!$D$7</formula2></dataValidation>' +
+      '</dataValidations></worksheet>'
+    // deleting sheet row 7 (0-based 6) on Data
+    const shifted = shiftCrossSheetFormulas(rulesSheet, SHEET, [
+      { kind: 'remove-rows', index: 6, count: 1 },
+    ])
+    // wholly-inside qualified refs become the bare #REF! token, like <f> bodies
+    expect(shifted).toContain('<formula>#REF!&gt;100</formula>')
+    expect(shifted).toContain('<formula2>#REF!</formula2>')
+    // a straddling list source clips to the survivors (rows 2..9 minus 7)
+    expect(shifted).toContain('<formula1>Data!$A$2:$A$8</formula1>')
+    // references qualified to a third sheet are untouched
+    expect(shifted).toContain('<formula1>Other!$A$2:$A$9</formula1>')
+  })
+
   it('shifts defined names', () => {
     const workbook =
       '<workbook><definedNames><definedName name="x">Data!$A$8</definedName><definedName name="y">Other!$A$8</definedName></definedNames></workbook>'
