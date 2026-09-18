@@ -1054,7 +1054,8 @@ export function ReviewTab({
                     setDropdown(() => null)
                   }}
                 >
-                  {t('reviewCompareMerge')}
+                  <b>{t('reviewCompareMerge')}</b>
+                  <span>{t('reviewCompareMergeDesc')}</span>
                 </button>
                 <button
                   onClick={() => {
@@ -1062,7 +1063,8 @@ export function ReviewTab({
                     setDropdown(() => null)
                   }}
                 >
-                  {t('reviewComparePanel')}
+                  <b>{t('reviewComparePanel')}</b>
+                  <span>{t('reviewComparePanelDesc')}</span>
                 </button>
               </div>
             )}

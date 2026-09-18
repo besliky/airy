@@ -2,7 +2,9 @@ import type { zh } from './zh'
 
 export const he = {
   reviewCompareMerge: 'השווה (מזג כשינויים מסומנים)',
+  reviewCompareMergeDesc: 'מציג את ההבדלים כשינויים מסומנים שניתן לקבל או לדחות',
   reviewComparePanel: 'הצג את חלונית ההבדלים בלבד',
+  reviewComparePanelDesc: 'מציג את הבדלי הפסקאות בחלונית צדדית מבלי לשנות את המסמך',
   reviewCompareMerged:
     'הושווה עם {name}: {added} הוספות, {removed} מחיקות ו{changed} שינויים מוזגו כשינויים מסומנים',
   reviewCompareIdentical: 'אין הבדלים עם {name}: המסמכים זהים',

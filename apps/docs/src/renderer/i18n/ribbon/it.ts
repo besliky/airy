@@ -691,7 +691,8 @@ export const it = {
   ribbonNextChangeTip: 'Vai alla revisione successiva',
   ribbonGroupTracking: 'Rilevamento modifiche',
   ribbonCompare: 'Confronta',
-  ribbonCompareTip: 'Confronta: scegli un altro documento e confronta le differenze per paragrafo',
+  ribbonCompareTip:
+    'Confronta: unisci un altro documento come modifiche registrate, oppure apri un riquadro delle differenze',
   ribbonProtectDoc: 'Proteggi documento',
   ribbonProtectDocTip:
     'Proteggi documento: password di apertura/modifica, limitazioni di modifica e privacy',

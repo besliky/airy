@@ -700,7 +700,7 @@ export const ko = {
   ribbonNextChangeTip: '다음 변경 내용으로 이동',
   ribbonGroupTracking: '추적',
   ribbonCompare: '비교',
-  ribbonCompareTip: '비교: 다른 문서를 선택하여 단락별로 차이 비교',
+  ribbonCompareTip: '비교: 다른 문서를 변경 내용으로 병합하거나 차이 창을 엽니다',
   ribbonProtectDoc: '문서 보호',
   ribbonProtectDocTip: '문서 보호: 열기/수정 암호, 편집 제한 및 개인 정보 설정',
   ribbonGroupProtect: '보호',

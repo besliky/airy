@@ -2,7 +2,10 @@ import type { zh } from './zh'
 
 export const id = {
   reviewCompareMerge: 'Bandingkan (gabungkan sebagai perubahan terlacak)',
+  reviewCompareMergeDesc:
+    'Menampilkan perbedaan sebagai perubahan terlacak yang bisa diterima atau ditolak',
   reviewComparePanel: 'Hanya tampilkan panel perbedaan',
+  reviewComparePanelDesc: 'Mendaftarkan perbedaan paragraf di panel samping tanpa mengubah dokumen',
   reviewCompareMerged:
     'Dibandingkan dengan {name}: {added} penyisipan, {removed} penghapusan, dan {changed} perubahan digabungkan sebagai perubahan terlacak',
   reviewCompareIdentical: 'Tidak ada perbedaan dengan {name}: dokumen identik',

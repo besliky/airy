@@ -2,7 +2,9 @@ import type { zh } from './zh'
 
 export const zhTW = {
   reviewCompareMerge: '比較（合併為追蹤修訂）',
+  reviewCompareMergeDesc: '以追蹤修訂顯示差異，可接受或拒絕',
   reviewComparePanel: '僅顯示差異面板',
+  reviewComparePanelDesc: '在側邊窗格列出段落差異，不修改文件',
   reviewCompareMerged:
     '已與 {name} 比較：{added} 處新增、{removed} 處刪除、{changed} 處修改已合併為追蹤修訂',
   reviewCompareIdentical: '與 {name} 無差異：兩份文件內容相同',

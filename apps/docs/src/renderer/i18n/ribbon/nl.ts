@@ -690,7 +690,8 @@ export const nl = {
   ribbonNextChangeTip: 'Naar de volgende wijziging gaan',
   ribbonGroupTracking: 'Bijhouden',
   ribbonCompare: 'Vergelijken',
-  ribbonCompareTip: 'Vergelijken: kies een ander document en vergelijk de verschillen per alinea',
+  ribbonCompareTip:
+    'Vergelijken: een ander document samenvoegen als bijgehouden wijzigingen, of het verschillenpaneel openen',
   ribbonProtectDoc: 'Document beveiligen',
   ribbonProtectDocTip:
     'Document beveiligen: wachtwoorden voor openen/wijzigen, bewerkingsbeperkingen en privacy',

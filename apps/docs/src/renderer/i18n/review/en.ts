@@ -2,7 +2,10 @@ import type { zh } from './zh'
 
 export const en = {
   reviewCompareMerge: 'Compare (Legal Blackline)',
+  reviewCompareMergeDesc: 'Show the differences as tracked changes you can accept or reject',
   reviewComparePanel: 'Show Differences Pane Only',
+  reviewComparePanelDesc:
+    'List the paragraph differences in a side pane without editing the document',
   reviewCompareMerged:
     'Compared with {name}: merged {added} insertions, {removed} deletions and {changed} changes as tracked changes',
   reviewCompareMergedApprox:

@@ -693,7 +693,8 @@ export const de = {
   ribbonNextChangeTip: 'Zur nächsten Änderung wechseln',
   ribbonGroupTracking: 'Nachverfolgung',
   ribbonCompare: 'Vergleichen',
-  ribbonCompareTip: 'Vergleichen: ein anderes Dokument auswählen und absatzweise vergleichen',
+  ribbonCompareTip:
+    'Vergleichen: ein anderes Dokument als nachverfolgte Änderungen einmischen oder den Unterschiedsbereich öffnen',
   ribbonProtectDoc: 'Dokument schützen',
   ribbonProtectDocTip:
     'Dokument schützen: Öffnen-/Ändern-Kennwörter, Bearbeitungseinschränkungen und Datenschutz',

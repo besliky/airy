@@ -677,7 +677,7 @@ export const th = {
   ribbonNextChangeTip: 'ไปยังการเปลี่ยนแปลงถัดไป',
   ribbonGroupTracking: 'การติดตาม',
   ribbonCompare: 'เปรียบเทียบ',
-  ribbonCompareTip: 'เปรียบเทียบ: เลือกเอกสารอื่นแล้วเปรียบเทียบความแตกต่างทีละย่อหน้า',
+  ribbonCompareTip: 'เปรียบเทียบ: ผสานเอกสารอื่นเป็นการแก้ไขที่ติดตาม หรือเปิดบานหน้าต่างความต่าง',
   ribbonProtectDoc: 'ป้องกันเอกสาร',
   ribbonProtectDocTip: 'ป้องกันเอกสาร: รหัสผ่านเปิด/แก้ไข การจำกัดการแก้ไข และความเป็นส่วนตัว',
   ribbonGroupProtect: 'ป้องกัน',

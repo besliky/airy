@@ -689,7 +689,7 @@ export const zh = {
   ribbonNextChangeTip: '跳到下一条修订',
   ribbonGroupTracking: '修订',
   ribbonCompare: '比较',
-  ribbonCompareTip: '比较:选择另一个文档,按段落对比差异',
+  ribbonCompareTip: '比较:将另一份文档合并为修订,或打开差异面板',
   ribbonProtectDoc: '保护文档',
   ribbonProtectDocTip: '保护文档:打开密码、修改密码、编辑限制与隐私设置',
   ribbonGroupProtect: '保护',

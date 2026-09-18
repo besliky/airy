@@ -688,7 +688,8 @@ export const pt = {
   ribbonNextChangeTip: 'Ir para a próxima alteração',
   ribbonGroupTracking: 'Controle',
   ribbonCompare: 'Comparar',
-  ribbonCompareTip: 'Comparar: escolher outro documento e comparar as diferenças por parágrafo',
+  ribbonCompareTip:
+    'Comparar: intercalar outro documento como alterações controladas, ou abrir um painel de diferenças',
   ribbonProtectDoc: 'Proteger Documento',
   ribbonProtectDocTip:
     'Proteger documento: senhas de abertura/modificação, restrições de edição e privacidade',

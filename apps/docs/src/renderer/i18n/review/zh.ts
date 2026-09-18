@@ -1,7 +1,9 @@
 /** Review-tab compare strings (zh defines the key set every sibling shard must match) */
 export const zh = {
   reviewCompareMerge: '比较（修订合并）',
+  reviewCompareMergeDesc: '以修订形式显示差异，可接受或拒绝',
   reviewComparePanel: '仅显示差异面板',
+  reviewComparePanelDesc: '在侧边面板列出段落差异，不改动文档',
   reviewCompareMerged:
     '已与 {name} 比较：{added} 处新增、{removed} 处删除、{changed} 处修改已合并为修订',
   reviewCompareMergedApprox:

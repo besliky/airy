@@ -2,7 +2,11 @@ import type { zh } from './zh'
 
 export const es = {
   reviewCompareMerge: 'Comparar (fusionar como cambios)',
+  reviewCompareMergeDesc:
+    'Mostrar las diferencias como cambios controlados para aceptarlos o rechazarlos',
   reviewComparePanel: 'Mostrar solo el panel de diferencias',
+  reviewComparePanelDesc:
+    'Enumerar las diferencias de párrafos en un panel lateral sin modificar el documento',
   reviewCompareMerged:
     'Comparado con {name}: {added} inserciones, {removed} eliminaciones y {changed} cambios fusionados como cambios controlados',
   reviewCompareIdentical: 'Sin diferencias con {name}: los documentos son idénticos',

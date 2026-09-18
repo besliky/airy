@@ -687,7 +687,7 @@ export const pl = {
   ribbonNextChangeTip: 'Przejdź do następnej zmiany',
   ribbonGroupTracking: 'Śledzenie',
   ribbonCompare: 'Porównaj',
-  ribbonCompareTip: 'Porównaj: wybierz inny dokument i porównaj różnice akapit po akapicie',
+  ribbonCompareTip: 'Porównaj: scal inny dokument jako śledzone zmiany lub otwórz okienko różnic',
   ribbonProtectDoc: 'Chroń dokument',
   ribbonProtectDocTip:
     'Ochrona dokumentu: hasła otwarcia/modyfikacji, ograniczenia edytowania i prywatność',

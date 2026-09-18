@@ -2,7 +2,11 @@ import type { zh } from './zh'
 
 export const hi = {
   reviewCompareMerge: 'तुलना करें (ट्रैक किए गए परिवर्तनों के रूप में मर्ज करें)',
+  reviewCompareMergeDesc:
+    'अंतरों को ट्रैक किए गए परिवर्तनों के रूप में दिखाएँ, जिन्हें स्वीकार या अस्वीकार किया जा सकता है',
   reviewComparePanel: 'केवल अंतर पैनल दिखाएँ',
+  reviewComparePanelDesc:
+    'दस्तावेज़ में बदलाव किए बिना पैराग्राफ के अंतर साइड पैनल में सूचीबद्ध करता है',
   reviewCompareMerged:
     '{name} के साथ तुलना की गई: {added} जोड़, {removed} हटाने और {changed} परिवर्तन ट्रैक किए गए परिवर्तनों के रूप में मर्ज किए गए',
   reviewCompareIdentical: '{name} के साथ कोई अंतर नहीं: दस्तावेज़ समान हैं',

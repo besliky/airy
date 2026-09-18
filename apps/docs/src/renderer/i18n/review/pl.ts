@@ -2,7 +2,11 @@ import type { zh } from './zh'
 
 export const pl = {
   reviewCompareMerge: 'Porównaj (scal jako śledzone zmiany)',
+  reviewCompareMergeDesc:
+    'Pokazuje różnice jako śledzone zmiany, które można zaakceptować lub odrzucić',
   reviewComparePanel: 'Pokaż tylko panel różnic',
+  reviewComparePanelDesc:
+    'Wyświetla różnice między akapitami w panelu bocznym bez modyfikowania dokumentu',
   reviewCompareMerged:
     'Porównano z {name}: scalono {added} wstawień, {removed} usunięć i {changed} zmian jako śledzone zmiany',
   reviewCompareIdentical: 'Brak różnic z {name}: dokumenty są identyczne',

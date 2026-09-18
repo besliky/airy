@@ -674,7 +674,7 @@ export const he = {
   ribbonNextChangeTip: 'עבור לשינוי הבא',
   ribbonGroupTracking: 'מעקב',
   ribbonCompare: 'השווה',
-  ribbonCompareTip: 'השוואה: בחר מסמך אחר והשווה הבדלים לפי פיסקאות',
+  ribbonCompareTip: 'השוואה: מיזוג מסמך אחר כשינויים מסומנים, או פתיחת חלונית הבדלים',
   ribbonProtectDoc: 'הגנה על המסמך',
   ribbonProtectDocTip: 'הגנה על המסמך: סיסמאות פתיחה/שינוי, הגבלות עריכה ופרטיות',
   ribbonGroupProtect: 'הגנה',

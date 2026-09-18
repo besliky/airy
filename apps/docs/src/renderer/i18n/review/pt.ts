@@ -2,7 +2,10 @@ import type { zh } from './zh'
 
 export const pt = {
   reviewCompareMerge: 'Comparar (mesclar como alterações)',
+  reviewCompareMergeDesc: 'Mostra as diferenças como alterações controladas a aceitar ou rejeitar',
   reviewComparePanel: 'Mostrar apenas o painel de diferenças',
+  reviewComparePanelDesc:
+    'Listar as diferenças de parágrafos num painel lateral sem alterar o documento',
   reviewCompareMerged:
     'Comparado com {name}: {added} inserções, {removed} exclusões e {changed} alterações mescladas como alterações controladas',
   reviewCompareIdentical: 'Sem diferenças com {name}: os documentos são idênticos',

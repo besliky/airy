@@ -693,7 +693,7 @@ export const fr = {
   ribbonGroupTracking: 'Suivi',
   ribbonCompare: 'Comparer',
   ribbonCompareTip:
-    'Comparer : choisir un autre document et comparer les différences paragraphe par paragraphe',
+    'Comparer : fusionner un autre document sous forme de modifications suivies, ou ouvrir un volet de différences',
   ribbonProtectDoc: 'Protéger le document',
   ribbonProtectDocTip:
     'Protéger le document : mots de passe d’ouverture/modification, restrictions de modification et confidentialité',

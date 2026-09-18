@@ -2,7 +2,10 @@ import type { zh } from './zh'
 
 export const it = {
   reviewCompareMerge: 'Confronta (unisci come revisioni)',
+  reviewCompareMergeDesc: 'Mostra le differenze come modifiche registrate da accettare o rifiutare',
   reviewComparePanel: 'Mostra solo il riquadro delle differenze',
+  reviewComparePanelDesc:
+    'Elencare le differenze tra paragrafi in un riquadro laterale senza modificare il documento',
   reviewCompareMerged:
     'Confrontato con {name}: {added} inserimenti, {removed} eliminazioni e {changed} modifiche uniti come revisioni',
   reviewCompareIdentical: 'Nessuna differenza con {name}: i documenti sono identici',

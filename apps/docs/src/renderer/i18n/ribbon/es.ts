@@ -691,7 +691,8 @@ export const es = {
   ribbonNextChangeTip: 'Ir al cambio siguiente',
   ribbonGroupTracking: 'Seguimiento',
   ribbonCompare: 'Comparar',
-  ribbonCompareTip: 'Comparar: elegir otro documento y comparar las diferencias párrafo a párrafo',
+  ribbonCompareTip:
+    'Comparar: combinar otro documento como cambios controlados, o abrir un panel de diferencias',
   ribbonProtectDoc: 'Proteger documento',
   ribbonProtectDocTip:
     'Proteger documento: contraseñas de apertura/modificación, restricciones de edición y privacidad',

@@ -2,7 +2,11 @@ import type { zh } from './zh'
 
 export const ms = {
   reviewCompareMerge: 'Bandingkan (gabung sebagai perubahan dijejak)',
+  reviewCompareMergeDesc:
+    'Memaparkan perbezaan sebagai perubahan dijejak yang boleh diterima atau ditolak',
   reviewComparePanel: 'Tunjukkan panel perbezaan sahaja',
+  reviewComparePanelDesc:
+    'Menyenaraikan perbezaan perenggan dalam panel sisi tanpa mengubah dokumen',
   reviewCompareMerged:
     'Dibandingkan dengan {name}: {added} sisipan, {removed} pemadaman dan {changed} perubahan digabungkan sebagai perubahan dijejak',
   reviewCompareIdentical: 'Tiada perbezaan dengan {name}: dokumen adalah sama',

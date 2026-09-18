@@ -703,7 +703,7 @@ export const ja = {
   ribbonNextChangeTip: '次の変更箇所へ移動',
   ribbonGroupTracking: '変更履歴',
   ribbonCompare: '比較',
-  ribbonCompareTip: '比較:別のドキュメントを選択し、段落ごとに差分を比較',
+  ribbonCompareTip: '比較:別のドキュメントを変更履歴として取り込むか、差分パネルを開く',
   ribbonProtectDoc: '文書の保護',
   ribbonProtectDocTip: '文書の保護:開く/書き込みパスワード、編集の制限、プライバシー設定',
   ribbonGroupProtect: '保護',

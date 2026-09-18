@@ -688,7 +688,8 @@ export const ms = {
   ribbonNextChangeTip: 'Pergi ke perubahan seterusnya',
   ribbonGroupTracking: 'Penjejakan',
   ribbonCompare: 'Banding',
-  ribbonCompareTip: 'Banding: pilih dokumen lain dan bandingkan perbezaan mengikut perenggan',
+  ribbonCompareTip:
+    'Banding: gabungkan dokumen lain sebagai perubahan dijejak, atau buka panel perbezaan',
   ribbonProtectDoc: 'Lindungi Dokumen',
   ribbonProtectDocTip:
     'Lindungi dokumen: kata laluan buka/ubah suai, sekatan penyuntingan dan privasi',

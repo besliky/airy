@@ -669,7 +669,7 @@ export const zhTW = {
   ribbonNextChangeTip: '跳至下一個修訂',
   ribbonGroupTracking: '追蹤',
   ribbonCompare: '比較',
-  ribbonCompareTip: '比較：選擇另一份文件，依段落比對差異',
+  ribbonCompareTip: '比較：將另一份文件合併為追蹤修訂，或開啟差異窗格',
   ribbonProtectDoc: '保護文件',
   ribbonProtectDocTip: '保護文件：開啟密碼、修改密碼、編輯限制與隱私設定',
   ribbonGroupProtect: '保護',

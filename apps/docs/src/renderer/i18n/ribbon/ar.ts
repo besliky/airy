@@ -679,7 +679,7 @@ export const ar = {
   ribbonNextChangeTip: 'الانتقال إلى التغيير التالي',
   ribbonGroupTracking: 'تعقب',
   ribbonCompare: 'مقارنة',
-  ribbonCompareTip: 'مقارنة: اختيار مستند آخر ومقارنة الاختلافات فقرة بفقرة',
+  ribbonCompareTip: 'مقارنة: دمج مستند آخر كتغييرات متتبعة، أو فتح لوحة الاختلافات',
   ribbonProtectDoc: 'حماية المستند',
   ribbonProtectDocTip: 'حماية المستند: كلمات مرور الفتح/التعديل وقيود التحرير والخصوصية',
   ribbonGroupProtect: 'حماية',

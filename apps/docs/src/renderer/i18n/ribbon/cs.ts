@@ -683,7 +683,8 @@ export const cs = {
   ribbonNextChangeTip: 'Přejít na další změnu',
   ribbonGroupTracking: 'Sledování',
   ribbonCompare: 'Porovnat',
-  ribbonCompareTip: 'Porovnat: vybrat jiný dokument a porovnat rozdíly po odstavcích',
+  ribbonCompareTip:
+    'Porovnat: sloučit jiný dokument jako sledované změny nebo otevřít podokno rozdílů',
   ribbonProtectDoc: 'Zamknout dokument',
   ribbonProtectDocTip: 'Zamknout dokument: hesla pro otevření/úpravy, omezení úprav a soukromí',
   ribbonGroupProtect: 'Zámek',

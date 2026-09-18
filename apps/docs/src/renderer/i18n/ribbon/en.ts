@@ -683,7 +683,8 @@ export const en = {
   ribbonNextChangeTip: 'Go to the next change',
   ribbonGroupTracking: 'Tracking',
   ribbonCompare: 'Compare',
-  ribbonCompareTip: 'Compare: pick another document and diff it by paragraph',
+  ribbonCompareTip:
+    'Compare: merge another document as tracked changes, or open a differences pane',
   ribbonProtectDoc: 'Protect Document',
   ribbonProtectDocTip: 'Protect document: open/modify passwords, editing restrictions and privacy',
   ribbonGroupProtect: 'Protect',

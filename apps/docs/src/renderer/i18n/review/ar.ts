@@ -2,7 +2,9 @@ import type { zh } from './zh'
 
 export const ar = {
   reviewCompareMerge: 'مقارنة (دمج كتغييرات متتبعة)',
+  reviewCompareMergeDesc: 'يعرض الاختلافات كتغييرات متتبعة يمكنك قبولها أو رفضها',
   reviewComparePanel: 'إظهار لوحة الفروقات فقط',
+  reviewComparePanelDesc: 'يسرد اختلافات الفقرات في لوحة جانبية دون تعديل المستند',
   reviewCompareMerged:
     'تمت المقارنة مع {name}: تم دمج {added} إدراجًا و{removed} حذفًا و{changed} تغييرًا كتغييرات متتبعة',
   reviewCompareIdentical: 'لا توجد فروقات مع {name}: المستندان متطابقان',

@@ -685,7 +685,8 @@ export const id = {
   ribbonNextChangeTip: 'Pindah ke perubahan berikutnya',
   ribbonGroupTracking: 'Pelacakan',
   ribbonCompare: 'Bandingkan',
-  ribbonCompareTip: 'Bandingkan: pilih dokumen lain dan bandingkan perbedaannya per paragraf',
+  ribbonCompareTip:
+    'Bandingkan: gabungkan dokumen lain sebagai perubahan terlacak, atau buka panel perbedaan',
   ribbonProtectDoc: 'Proteksi Dokumen',
   ribbonProtectDocTip: 'Proteksi dokumen: kata sandi buka/ubah, pembatasan pengeditan, dan privasi',
   ribbonGroupProtect: 'Lindungi',
