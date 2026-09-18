@@ -220,7 +220,10 @@ export function registerTools(server: McpServer): void {
         range: z
           .object({ start: z.number().int().min(0), end: z.number().int().min(0) })
           .optional()
-          .describe('Inclusive block/line range to return in full (alternative to blocks)'),
+          .describe(
+            'Inclusive block/line range to return in full (alternative to blocks; ' +
+              'spans cap at 10,000 — split larger ranges)',
+          ),
       },
       annotations: {
         readOnlyHint: true,

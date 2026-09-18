@@ -103,6 +103,23 @@ describe('docx session open/read', () => {
     const session = await openSession()
     expect(() => session.readDocument({ blocks: [99] })).toThrow(/out of range/)
   })
+
+  it('rejects an enormous read range fast, before allocating the index array', async () => {
+    const session = await openSession()
+    // before the span cap this loop built the whole index array first and
+    // hung/OOMed the process; it must now fail fast with the cap message
+    expect(() =>
+      session.readDocument({ range: { start: 0, end: Number.MAX_SAFE_INTEGER } }),
+    ).toThrow(/the cap is 10000 per read/)
+    // a span just over the cap is refused; out-of-range counting still works
+    expect(() => session.readDocument({ range: { start: 0, end: 10_000 } })).toThrow(
+      /the cap is 10000 per read/,
+    )
+    expect(() => session.readDocument({ range: { start: 0, end: 99 } })).toThrow(/out of range/)
+    // at or under the cap the range still reads normally
+    const text = session.readDocument({ range: { start: 0, end: 6 } })
+    expect(text).toContain('<h1>Quarterly Report</h1>')
+  })
 })
 
 describe('restricted HTML parsing', () => {

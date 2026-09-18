@@ -61,6 +61,12 @@ const CONTEXT_MAX_CHARS = 30_000
 const PREVIEW_MAX_CHARS = 60
 const PREVIEW_TIGHT_CHARS = 20
 const READ_MAX_CHARS = 30_000
+/**
+ * Largest range span a read materializes: the request schema does not bound
+ * `end`, so the session must reject a huge span BEFORE building the index
+ * array (a range like 0..2^53 would otherwise hang/OOM the server).
+ */
+const RANGE_MAX_SPAN = 10_000
 
 // Word-parity word count (CJK chars one by one + non-Asian words)
 const ASIAN_RE =
@@ -408,23 +414,45 @@ export class DocxSession {
 
   private selectedIndexes(options: ReadOptions): number[] | null {
     const count = this.entries.length
-    let indexes: number[] | null = null
     if (options.blocks !== undefined) {
-      indexes = options.blocks
-    } else if (options.range !== undefined) {
-      const { start, end } = options.range
-      indexes = []
-      for (let i = start; i <= end; i++) indexes.push(i)
+      const valid = options.blocks.filter((i) => Number.isInteger(i) && i >= 0 && i < count)
+      const invalid = options.blocks.length - valid.length
+      if (invalid > 0)
+        throw new Error(
+          `${invalid} of the requested block indexes are out of range (document has ${count} blocks)`,
+        )
+      if (valid.length === 0) throw new Error('No blocks selected (empty blocks/range)')
+      return [...new Set(valid)].sort((a, b) => a - b)
     }
-    if (indexes === null) return null
-    const valid = indexes.filter((i) => Number.isInteger(i) && i >= 0 && i < count)
-    const invalid = indexes.length - valid.length
-    if (invalid > 0)
-      throw new Error(
-        `${invalid} of the requested block indexes are out of range (document has ${count} blocks)`,
-      )
-    if (valid.length === 0) throw new Error('No blocks selected (empty blocks/range)')
-    return [...new Set(valid)].sort((a, b) => a - b)
+    if (options.range !== undefined) {
+      // validate arithmetically and only then materialize: a huge `end` must
+      // fail fast instead of allocating the index array first
+      const { start, end } = options.range
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start) {
+        throw new Error(
+          `range start/end must be integers with 0 <= start <= end (got start=${start}, end=${end})`,
+        )
+      }
+      const span = end - start + 1
+      if (span > RANGE_MAX_SPAN) {
+        throw new Error(
+          `range ${start}..${end} spans ${span} blocks; the cap is ${RANGE_MAX_SPAN} per read ` +
+            '(split large ranges into smaller reads)',
+        )
+      }
+      const validEnd = Math.min(end, count - 1)
+      const validCount = Math.max(0, validEnd - start + 1)
+      const invalid = span - validCount
+      if (invalid > 0)
+        throw new Error(
+          `${invalid} of the requested block indexes are out of range (document has ${count} blocks)`,
+        )
+      if (validCount === 0) throw new Error('No blocks selected (empty blocks/range)')
+      const indexes: number[] = []
+      for (let i = start; i <= validEnd; i++) indexes.push(i)
+      return indexes
+    }
+    return null
   }
 
   // ---- editing ----

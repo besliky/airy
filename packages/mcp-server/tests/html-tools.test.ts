@@ -405,6 +405,30 @@ describe('html tools over MCP', () => {
     }
   })
 
+  it('rejects an enormous read range fast, before allocating the index array', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const handle = await openFixture(client)
+      // before the span cap this loop built the whole index array first and
+      // hung/OOMed the server; it must now fail fast with the cap message
+      const exploded = await call(client, 'read_document', {
+        handle,
+        range: { start: 0, end: Number.MAX_SAFE_INTEGER },
+      })
+      expect(exploded.isError).toBe(true)
+      expect(text(exploded)).toContain('the cap is 10000 per read')
+      // out-of-range counting still works without materializing the tail
+      const beyond = await call(client, 'read_document', {
+        handle,
+        range: { start: 10, end: 20 },
+      })
+      expect(beyond.isError).toBe(true)
+      expect(text(beyond)).toContain('out of range')
+    } finally {
+      await close()
+    }
+  })
+
   it('guards saves: refuses existing targets without overwrite, fences external writers', async () => {
     const { client, close } = await connectSession()
     try {

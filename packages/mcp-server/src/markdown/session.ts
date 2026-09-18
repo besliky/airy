@@ -35,6 +35,12 @@ const MAX_OPEN_BYTES = 8 * 1024 * 1024
 const READ_MAX_CHARS = 30_000
 const INSERT_MAX_CHARS = 200_000
 const OPS_TEXT_MAX_CHARS = 200_000
+/**
+ * Largest range span a read materializes: the request schema does not bound
+ * `end`, so the session must reject a huge span BEFORE building the index
+ * array (a range like 0..2^53 would otherwise hang/OOM the server).
+ */
+const RANGE_MAX_SPAN = 10_000
 
 /** U+FEFF as pure-ASCII source (a literal BOM char in source trips tooling) */
 const BOM_CHAR = String.fromCharCode(0xfeff)
@@ -417,24 +423,48 @@ export class MarkdownSession {
   /** Resolve blocks/range-style selections to validated, sorted line indexes. */
   private selectedIndexes(options: MarkdownReadOptions): number[] | null {
     const count = this.lines.length
-    let indexes: number[] | null = null
     if (options.lines !== undefined) {
-      indexes = options.lines
-    } else if (options.range !== undefined) {
+      const valid = options.lines.filter((i) => Number.isInteger(i) && i >= 0 && i < count)
+      const invalid = options.lines.length - valid.length
+      if (invalid > 0) {
+        throw new Error(
+          `${String(invalid)} of the requested line indexes are out of range (file has ${String(count)} lines)`,
+        )
+      }
+      if (valid.length === 0) throw new Error('No lines selected (empty lines/range)')
+      return [...new Set(valid)].sort((a, b) => a - b)
+    }
+    if (options.range !== undefined) {
+      // validate arithmetically and only then materialize: a huge `end` must
+      // fail fast instead of allocating the index array first
       const { start, end } = options.range
-      indexes = []
-      for (let i = start; i <= end; i++) indexes.push(i)
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start) {
+        throw new Error(
+          `range start/end must be integers with 0 <= start <= end (got start=${start}, end=${end})`,
+        )
+      }
+      const span = end - start + 1
+      if (span > RANGE_MAX_SPAN) {
+        throw new Error(
+          `range ${String(start)}..${String(end)} spans ${String(span)} lines; the cap is ${String(
+            RANGE_MAX_SPAN,
+          )} per read (split large ranges into smaller reads)`,
+        )
+      }
+      const validEnd = Math.min(end, count - 1)
+      const validCount = Math.max(0, validEnd - start + 1)
+      const invalid = span - validCount
+      if (invalid > 0) {
+        throw new Error(
+          `${String(invalid)} of the requested line indexes are out of range (file has ${String(count)} lines)`,
+        )
+      }
+      if (validCount === 0) throw new Error('No lines selected (empty lines/range)')
+      const indexes: number[] = []
+      for (let i = start; i <= validEnd; i++) indexes.push(i)
+      return indexes
     }
-    if (indexes === null) return null
-    const valid = indexes.filter((i) => Number.isInteger(i) && i >= 0 && i < count)
-    const invalid = indexes.length - valid.length
-    if (invalid > 0) {
-      throw new Error(
-        `${String(invalid)} of the requested line indexes are out of range (file has ${String(count)} lines)`,
-      )
-    }
-    if (valid.length === 0) throw new Error('No lines selected (empty lines/range)')
-    return [...new Set(valid)].sort((a, b) => a - b)
+    return null
   }
 
   // ---- editing ----
