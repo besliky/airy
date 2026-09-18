@@ -11,6 +11,8 @@
 //                       (word-extractor through @airy-office/file-parse)
 //   .odt             -> soffice -> temp .docx -> DocxSession with origin;
 //                       without LibreOffice -> actionable error
+//   .md/.markdown    -> MarkdownSession (native text session, line-based
+//                       editing; PAR-003)
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { extname, join } from 'node:path'
@@ -19,6 +21,7 @@ import { docToText } from '@airy-office/file-parse'
 
 import { DocxSession, type SessionOrigin } from '../docx/session.js'
 import { resolveConfined } from '../docx/paths.js'
+import { MarkdownSession } from '../markdown/session.js'
 import { TextSession } from '../sessions/text.js'
 import { XlsxSession } from '../xlsx/session.js'
 import { convertViaSoffice, findSoffice, SOFFICE_FILTERS, sofficeMissingError } from './soffice.js'
@@ -31,9 +34,11 @@ export const SUPPORTED_OPEN_EXTENSIONS = [
   'ods',
   'doc',
   'odt',
+  'md',
+  'markdown',
 ] as const
 
-export type OpenedDocument = DocxSession | XlsxSession | TextSession
+export type OpenedDocument = DocxSession | XlsxSession | TextSession | MarkdownSession
 
 export function extensionOf(path: string): string {
   return extname(path).replace('.', '').toLowerCase()
@@ -86,6 +91,9 @@ export async function openDocument(rawPath: string, root?: string): Promise<Open
       }
       return openConvertedWordDocument(rawPath, root, tool, 'odt')
     }
+    case 'md':
+    case 'markdown':
+      return MarkdownSession.open(rawPath, root)
     default:
       throw new Error(
         `Unsupported file type ".${ext || '(none)'}". Supported extensions: ` +

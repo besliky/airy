@@ -8,7 +8,11 @@
 // and read-only text), while workbooks are read through read_workbook — a
 // separate tool rather than a read_document extension because the addressing
 // models differ fundamentally (block indexes vs sheet + A1 ranges), and one
-// zod schema cannot describe both without confusing agents.
+// zod schema cannot describe both without confusing agents. Since PAR-003,
+// .md/.markdown open as line-based text sessions: read_document shows the
+// heading structure plus the text (blocks/range address lines), insert_content
+// takes markdown text at marker/heading/line positions, and apply_ops runs a
+// line-op vocabulary on markdown sessions.
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
@@ -16,6 +20,7 @@ import { DocxSession, type SessionMeta } from '../docx/session.js'
 import { opSignatures, type Op } from '../docx/ops.js'
 import { openDocument } from '../import/open.js'
 import { BridgeClientError, sharedLiveBridge } from '../live/client.js'
+import { MarkdownSession } from '../markdown/session.js'
 import { getSession, removeSession, storeSession, type DocumentSession } from '../sessions/store.js'
 import { TextSession } from '../sessions/text.js'
 import { XlsxSession, type XlsxSessionMeta } from '../xlsx/session.js'
@@ -35,6 +40,15 @@ const OPS_GUIDE = [
   'Each op is a flat record { op, target?, ...fields }; fields are patches: present = set, null = clear, absent = keep.',
   'Target conditions (AND, at least one): nodeType ("heading"|"paragraph"|"listItem"|"image"; the renderer spellings "docHeading"|"docParagraph"|"docListItem" are accepted aliases), headingLevel (1-6), containsText (+ matchCase: false), blockIndexes[].',
   ...opSignatures().map((s) => `- ${s}`),
+].join('\n')
+
+/** line-op vocabulary markdown sessions accept in apply_ops */
+const MARKDOWN_OPS_GUIDE = [
+  'Markdown sessions accept a line-op vocabulary instead (no target; line indexes are 0-based and shift after every splice, so re-read between batches):',
+  '- insertLines after(-1 = start) text — splice markdown source after a line',
+  '- replaceLines from to text — replace an inclusive line range (empty text deletes the range)',
+  '- deleteLines from to — remove an inclusive line range',
+  '- findReplace find replace matchCase?(default true) from? to? — line-scoped replace, optionally within an inclusive line window',
 ].join('\n')
 
 /** one agent-issued cell edit: sheet + A1 ref + value/formula/style patches */
@@ -140,7 +154,10 @@ export function registerTools(server: McpServer): void {
         'conversion (editable as .xlsx; styling is lost — see warnings); .doc and .odt convert to ' +
         '.docx via LibreOffice when installed (editable; save_document format "origin" exports ' +
         'back); without LibreOffice a .doc still opens read-only as extracted text (editable: ' +
-        'false). The path must be absolute or workspace-relative and stay inside the server ' +
+        'false). .md/.markdown open as line-based text sessions (read_document shows heading ' +
+        'structure plus text; insert_content inserts markdown source; apply_ops runs line ops; ' +
+        'UTF-8 with BOM/EOL preservation — files that are not valid UTF-8 are refused). The path ' +
+        'must be absolute or workspace-relative and stay inside the server ' +
         'workspace root (AIRY_WORKSPACE_ROOT env var, default: the process working directory). ' +
         'Read-only: nothing is written until save_document. Close sessions with close_document.',
       inputSchema: {
@@ -166,24 +183,27 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Read document',
       description:
-        'Read an open text document (.docx sessions, or read-only text sessions from legacy ' +
-        '.doc). By default returns the block overview ("index|type|content preview" one line per ' +
-        'block, plus full-text word/character stats). Pass blocks (indexes) or range ({start,end}) ' +
-        'to get the full content of those blocks as restricted HTML (p, h1-h6, ul/ol/li, ' +
-        'strong/em/u/s, a, br, table). Block indexes are the addressing scheme for insert_content ' +
-        '(at) and apply_ops targets; re-read after edits — indexes shift. For workbook (.xlsx) ' +
-        'sessions use read_workbook instead.',
+        'Read an open text document (.docx sessions, markdown sessions, or read-only text ' +
+        'sessions from legacy .doc). By default returns the block overview ("index|type|content ' +
+        'preview" one line per block, plus full-text word/character stats). Pass blocks (indexes) ' +
+        'or range ({start,end}) to get the full content of those blocks as restricted HTML (p, ' +
+        'h1-h6, ul/ol/li, strong/em/u/s, a, br, table). Block indexes are the addressing scheme ' +
+        'for insert_content (at) and apply_ops targets; re-read after edits — indexes shift. ' +
+        'Markdown sessions: the default read shows stats (EOL/BOM included), the heading list ' +
+        '"ordinal|line|level|text" and the full text (truncated at 30k characters — narrow with ' +
+        'blocks/range, which address LINES for markdown). For workbook (.xlsx) sessions use ' +
+        'read_workbook instead.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
         blocks: z
           .array(z.number().int().min(0))
           .max(200)
           .optional()
-          .describe('Block indexes to return in full (restricted HTML)'),
+          .describe('Block indexes to return in full (lines, for markdown sessions)'),
         range: z
           .object({ start: z.number().int().min(0), end: z.number().int().min(0) })
           .optional()
-          .describe('Inclusive block range to return in full (alternative to blocks)'),
+          .describe('Inclusive block/line range to return in full (alternative to blocks)'),
       },
       annotations: {
         readOnlyHint: true,
@@ -198,6 +218,13 @@ export function registerTools(server: McpServer): void {
       }
       if (session instanceof TextSession) {
         return { content: [{ type: 'text' as const, text: session.readDocument() }] }
+      }
+      if (session instanceof MarkdownSession) {
+        const text = session.readDocument({
+          ...(blocks !== undefined ? { lines: blocks } : {}),
+          ...(range !== undefined ? { range } : {}),
+        })
+        return { content: [{ type: 'text' as const, text }] }
       }
       const text = session.readDocument({
         ...(blocks !== undefined ? { blocks } : {}),
@@ -318,33 +345,90 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Insert content',
       description:
-        'Insert new content into an open .docx document from a restricted HTML fragment (no DOM ' +
-        'features needed). Supported tags: p, h1-h6, ul, ol, li (nested lists allowed), strong/b, ' +
-        'em/i, u, s, a[href], br, blockquote, pre, table/tr/th/td (header row styled, cells plain ' +
-        'text). Unknown tags keep their text; markdown fences and plain text are tolerated (blank ' +
-        'lines split paragraphs). Link policy: a[href] accepts http/https, mailto, #fragment and ' +
-        'scheme-less relative hrefs only — anchors with any other scheme (javascript:, file:, ' +
-        'data:, …) degrade to plain text. Insertion happens in memory; persist with save_document.',
+        'Insert new content into an open .docx or markdown document. Docx sessions take a ' +
+        'restricted HTML fragment (no DOM features needed). Supported tags: p, h1-h6, ul, ol, li ' +
+        '(nested lists allowed), strong/b, em/i, u, s, a[href], br, blockquote, pre, table/tr/th/td ' +
+        '(header row styled, cells plain text). Unknown tags keep their text; markdown fences and ' +
+        'plain text are tolerated (blank lines split paragraphs). Link policy: a[href] accepts ' +
+        'http/https, mailto, #fragment and scheme-less relative hrefs only — anchors with any ' +
+        'other scheme (javascript:, file:, data:, …) degrade to plain text. Markdown sessions ' +
+        "instead take `text` (markdown source; the file's EOL style and BOM are preserved) at one " +
+        'of three positions: after the first line containing `marker`, after heading N ' +
+        '(`afterHeading`, 1-based ordinal from the read structure), or after line `at` ' +
+        '(-1 = document start; default: end of document; marker > afterHeading > at). ' +
+        'Insertion happens in memory; persist with save_document.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
-        html: z.string().min(1).describe('Restricted HTML fragment to insert'),
+        html: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Restricted HTML fragment to insert (docx sessions)'),
+        text: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Markdown source to insert (markdown sessions)'),
         at: z
           .number()
           .int()
           .min(-1)
           .optional()
           .describe(
-            'Insert after this block index (-1 = document start; default: end of document)',
+            'Insert after this block/line index (-1 = document start; default: end of document)',
+          ),
+        afterHeading: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe(
+            'Markdown sessions: insert after heading N (1-based ordinal from the read structure)',
+          ),
+        marker: z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            'Markdown sessions: insert after the first line containing this exact substring',
           ),
       },
       annotations: {
         destructiveHint: false,
       },
     },
-    async ({ handle, html, at }) => {
-      const session = requireDocxSession(handle)
-      const { inserted } = session.insertContent(html, at ?? Number.MAX_SAFE_INTEGER)
-      const meta = session.meta()
+    async ({ handle, html, text, at, afterHeading, marker }) => {
+      const session = getSession(handle)
+      if (session instanceof MarkdownSession) {
+        if (html !== undefined) {
+          throw new Error(
+            'This handle is a markdown session: pass markdown source in `text`, not `html`.',
+          )
+        }
+        const result = session.insertContent(text ?? '', {
+          ...(at !== undefined ? { at } : {}),
+          ...(afterHeading !== undefined ? { afterHeading } : {}),
+          ...(marker !== undefined ? { marker } : {}),
+        })
+        return content(
+          {
+            inserted: result.inserted,
+            at: result.at,
+            lineCount: result.lineCount,
+            dirty: result.dirty,
+          },
+          `${result.detail}. Subsequent line indexes have shifted; call read_document if you need the new state.`,
+        )
+      }
+      const docx = requireDocxSession(session)
+      if (text !== undefined || afterHeading !== undefined || marker !== undefined) {
+        throw new Error(
+          'text/afterHeading/marker are markdown-session insert options; a .docx session takes ' +
+            'html (and optionally at).',
+        )
+      }
+      const { inserted } = docx.insertContent(html ?? '', at ?? Number.MAX_SAFE_INTEGER)
+      const meta = docx.meta()
       return content(
         {
           inserted,
@@ -361,10 +445,10 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Apply edit operations',
       description:
-        'Apply a batch of canonical edit operations to an open .docx document. The batch is ' +
-        'validated up front and applied atomically: any invalid op rejects the whole batch with ' +
-        'an error and nothing is applied. ' +
-        `Operations:\n${OPS_GUIDE}\nEdits happen in memory; persist with save_document.`,
+        'Apply a batch of canonical edit operations to an open .docx or markdown document. The ' +
+        'batch is validated up front and applied atomically: any invalid op rejects the whole ' +
+        'batch with an error and nothing is applied. ' +
+        `Operations:\n${OPS_GUIDE}\n${MARKDOWN_OPS_GUIDE}\nEdits happen in memory; persist with save_document.`,
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
         ops: z
@@ -382,8 +466,16 @@ export function registerTools(server: McpServer): void {
       },
     },
     async ({ handle, ops, dryRun }) => {
-      const session = requireDocxSession(handle)
-      const { results, summary, dryRun: isDry } = session.applyOps(ops as Op[], dryRun === true)
+      const session = getSession(handle)
+      if (session instanceof MarkdownSession) {
+        const result = session.applyOps(ops, dryRun === true)
+        return content(
+          { results: result.results, summary: result.summary, dryRun: result.dryRun },
+          `${result.summary}${result.dryRun ? ' (dry run, nothing applied)' : ''}`,
+        )
+      }
+      const docx = requireDocxSession(session)
+      const { results, summary, dryRun: isDry } = docx.applyOps(ops as Op[], dryRun === true)
       return content(
         { results, summary, dryRun: isDry },
         `${summary}${isDry ? ' (dry run, nothing applied)' : ''}`,
@@ -407,7 +499,10 @@ export function registerTools(server: McpServer): void {
         'back to the original .doc/.odt/.ods through LibreOffice (best-effort; .xls output is ' +
         'not supported — use the default .xlsx save). Byte preservation differs by format: docx ' +
         'saves keep untouched parts byte-identical and a zero-edit save writes the original bytes ' +
-        'back verbatim; xlsx saves keep untouched zip entries byte-identical except ' +
+        'back verbatim; markdown sessions behave the same at line granularity (untouched lines ' +
+        'keep their exact bytes, EOLs included, and a zero-edit save round-trips the file ' +
+        'verbatim; an edited save writes UTF-8 with the original BOM flag re-applied and the ' +
+        'format parameter is not accepted); xlsx saves keep untouched zip entries byte-identical except ' +
         'xl/workbook.xml, which is rewritten when needed to force recalculation on open (the ' +
         'fullCalcOnLoad flag) — so even a zero-edit xlsx save may touch that one entry, and for ' +
         'workbooks the unchanged result flag reflects the edit journal, not the bytes. Returns ' +
@@ -444,6 +539,21 @@ export function registerTools(server: McpServer): void {
         throw new Error(
           'This is a read-only text session (legacy .doc without LibreOffice); it cannot be saved. ' +
             'Install LibreOffice to open the document as an editable converted .docx session.',
+        )
+      }
+      if (session instanceof MarkdownSession) {
+        if (format !== undefined) {
+          throw new Error(
+            `format "${format}" is not valid for a markdown session; it always saves UTF-8 markdown.`,
+          )
+        }
+        const saveOptions = overwrite === undefined ? {} : { overwrite }
+        const result = await session.save(path, saveOptions)
+        return content(
+          result,
+          `Saved ${result.bytes} bytes to ${result.path}` +
+            `${result.unchanged ? ' (no changes: bytes round-tripped verbatim)' : ''}` +
+            `${result.warnings.length > 0 ? `. ${result.warnings.join(' ')}` : ''}`,
         )
       }
       const saveOptions = overwrite === undefined ? {} : { overwrite }
@@ -697,9 +807,8 @@ export function registerTools(server: McpServer): void {
 
 // ---- session helpers ----
 
-/** Docx-only tools (insert_content/apply_ops) reject other session kinds clearly. */
-function requireDocxSession(handle: string): DocxSession {
-  const session: DocumentSession = getSession(handle)
+/** Docx-only editing paths (insert_content/apply_ops docx branch) reject other session kinds clearly. */
+function requireDocxSession(session: DocumentSession): DocxSession {
   if (!(session instanceof DocxSession)) {
     throw new Error(
       'insert_content/apply_ops are only available for editable .docx sessions ' +
@@ -754,7 +863,11 @@ function describeBridgeFailure(err: unknown): string {
 
 // ---- open_document summaries (one per session kind) ----
 
-type AnyOpenMeta = SessionMeta | XlsxSessionMeta | ReturnType<TextSession['meta']>
+type AnyOpenMeta =
+  | SessionMeta
+  | XlsxSessionMeta
+  | ReturnType<TextSession['meta']>
+  | ReturnType<MarkdownSession['meta']>
 
 function summarizeOpenMeta(meta: AnyOpenMeta): string {
   if (meta.kind === 'xlsx') {
@@ -771,6 +884,13 @@ function summarizeOpenMeta(meta: AnyOpenMeta): string {
     return (
       `Opened ${meta.fileName} read-only (.${meta.format}, text extraction): ${String(meta.wordCount)} words, ` +
       `${String(meta.charCount)} characters. ${meta.warnings[0] ?? ''} Handle: ${meta.handle}. Path: ${meta.path}`
+    )
+  }
+  if (meta.kind === 'markdown') {
+    return (
+      `Opened ${meta.fileName} as an editable markdown session: ${String(meta.lineCount)} lines, ` +
+      `${String(meta.headingCount)} heading(s), ${String(meta.wordCount)} words. ` +
+      `${meta.warnings[0] ?? ''}Handle: ${meta.handle}. Path: ${meta.path}`
     )
   }
   return (
