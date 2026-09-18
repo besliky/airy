@@ -178,6 +178,99 @@ function bookmarkTargetAtCursor(editor: Editor): { pos: number; typeName: string
   return null
 }
 
+/** every bookmark name in the document (visible + hidden) — anchor uniqueness pool */
+export function allBookmarkNames(doc: Editor['state']['doc']): Set<string> {
+  const names = new Set<string>()
+  doc.descendants((node) => {
+    for (const attr of ['bookmarks', 'hiddenBookmarks'] as const) {
+      const list = node.attrs?.[attr] as string[] | null | undefined
+      if (Array.isArray(list)) for (const name of list) names.add(name)
+    }
+    return !node.isLeaf
+  })
+  return names
+}
+
+/** Word's hidden heading anchor (`_Toc…`) already on the node, if any */
+export function headingTocAnchor(
+  node: { attrs?: Record<string, unknown> } | null | undefined,
+): string | null {
+  const hidden = node?.attrs?.hiddenBookmarks as string[] | null | undefined
+  if (!Array.isArray(hidden)) return null
+  return hidden.find((name) => /^_Toc\d+$/.test(name)) ?? null
+}
+
+/** a fresh Word-style `_Toc` + 9-digit anchor name not colliding with `taken` */
+export function uniqueTocAnchor(taken: Set<string>): string {
+  for (;;) {
+    const name = `_Toc${Math.floor(100000000 + Math.random() * 900000000)}`
+    if (!taken.has(name)) return name
+  }
+}
+
+/** one "Place in This Document" pickable target */
+export interface LinkTarget {
+  kind: 'heading' | 'bookmark'
+  label: string
+  /** heading outline level (1-6); bookmarks indent at level 1 */
+  level: number
+  /** existing anchor name: the bookmark's name, or the heading's hidden `_Toc…` */
+  anchor: string | null
+  /** owning node position (jump target / hidden-bookmark host) */
+  pos: number
+  /** owning node text, for the list preview column */
+  preview: string
+}
+
+/** headings (by outline level) + bookmarks, in document order — the link dialog's target tree */
+export function collectLinkTargets(editor: Editor): LinkTarget[] {
+  const targets: LinkTarget[] = []
+  editor.state.doc.forEach((node, offset) => {
+    if (node.type.name === 'docHeading' && node.textContent.trim()) {
+      targets.push({
+        kind: 'heading',
+        label: node.textContent.trim(),
+        level: Number(node.attrs.level) || 1,
+        anchor: headingTocAnchor(node),
+        pos: offset,
+        preview: node.textContent.slice(0, 40),
+      })
+    }
+  })
+  for (const b of collectBookmarks(editor)) {
+    targets.push({
+      kind: 'bookmark',
+      label: b.name,
+      level: 1,
+      anchor: b.name,
+      pos: b.pos,
+      preview: b.preview,
+    })
+  }
+  return targets
+}
+
+/**
+ * The heading's link anchor: its existing hidden `_Toc…` bookmark, or a fresh
+ * one stamped onto the node (hidden bookmarks re-emit as w:bookmarkStart on
+ * save, so Word can resolve the w:anchor we write on the hyperlink).
+ */
+export function ensureHeadingTocAnchor(editor: Editor, pos: number): string | null {
+  const node = editor.state.doc.nodeAt(pos)
+  if (!node) return null
+  const existing = headingTocAnchor(node)
+  if (existing) return existing
+  const name = uniqueTocAnchor(allBookmarkNames(editor.state.doc))
+  const hidden = (node.attrs?.hiddenBookmarks as string[] | null) ?? []
+  editor.view.dispatch(
+    editor.state.tr.setNodeMarkup(pos, undefined, {
+      ...node.attrs,
+      hiddenBookmarks: [...hidden, name],
+    }),
+  )
+  return name
+}
+
 /** Word's Bookmark dialog: list + add (cursor's paragraph) / go to / delete */
 export function BookmarkModal({ editor, onClose }: { editor: Editor; onClose: () => void }) {
   const { t } = useI18n()
@@ -562,10 +655,46 @@ export function LinkInsertModal({ editor, onClose }: { editor: Editor; onClose: 
   })
   const [linkText, setLinkText] = useState(linkAtOpen ? linkAtOpen.text : selectionAtOpen.text)
   const [linkUrl, setLinkUrl] = useState(linkAtOpen ? linkAtOpen.href : '')
+  // Word's two link panes: "Existing File or Web Page" and "Place in This
+  // Document" (headings + bookmarks). Editing an internal link (#anchor)
+  // opens straight on the document pane with its target highlighted.
+  const [targets] = useState(() => collectLinkTargets(editor))
+  const [tab, setTab] = useState<'address' | 'document'>(() =>
+    linkAtOpen?.href.startsWith('#') ? 'document' : 'address',
+  )
+  const [picked, setPicked] = useState<'heading' | 'bookmark' | null>(() =>
+    linkAtOpen?.href.startsWith('#')
+      ? (targets.find((tg) => tg.anchor === linkAtOpen.href.slice(1))?.kind ?? null)
+      : null,
+  )
+  const [pickedPos, setPickedPos] = useState<number | null>(() =>
+    linkAtOpen?.href.startsWith('#')
+      ? (targets.find((tg) => tg.anchor === linkAtOpen.href.slice(1))?.pos ?? null)
+      : null,
+  )
+  const pickedTarget =
+    picked !== null && pickedPos !== null
+      ? (targets.find((tg) => tg.kind === picked && tg.pos === pickedPos) ?? null)
+      : null
+  const headings = targets.filter((tg) => tg.kind === 'heading')
+  const bookmarks = targets.filter((tg) => tg.kind === 'bookmark')
+  const canApply = tab === 'address' ? !!linkUrl.trim() : pickedTarget !== null
 
   const insertLink = () => {
-    const href = linkUrl.trim()
-    const text = linkText.trim() || href
+    // "Place in This Document": headings get a hidden `_Toc…` bookmark stamped
+    // (re-emitted as w:bookmarkStart on save) and link to it; bookmarks link to
+    // their own name. The href keeps the `#name` form the docx reader already
+    // produces for w:anchor, so saving writes w:hyperlink w:anchor without r:id.
+    let anchor: string | null = null
+    if (tab === 'document' && pickedTarget) {
+      anchor =
+        pickedTarget.kind === 'bookmark'
+          ? pickedTarget.anchor
+          : ensureHeadingTocAnchor(editor, pickedTarget.pos)
+      if (!anchor) return
+    }
+    const href = anchor ? `#${anchor}` : linkUrl.trim()
+    const text = linkText.trim() || (pickedTarget ? pickedTarget.label : '') || href
     if (!href || !editor.isEditable) return
     if (linkAtOpen) {
       if (text === linkAtOpen.text.trim()) {
@@ -626,6 +755,31 @@ export function LinkInsertModal({ editor, onClose }: { editor: Editor; onClose: 
     onClose()
   }
 
+  const targetRow = (target: LinkTarget) => {
+    const selected = pickedTarget === target
+    return (
+      <div
+        key={`${target.kind}-${target.pos}`}
+        className="bookmark-row"
+        style={selected ? { background: 'var(--hover)' } : undefined}
+      >
+        <button
+          className="bookmark-name"
+          data-tip={target.preview}
+          style={{ marginLeft: (target.level - 1) * 14, flex: 1, textAlign: 'left' }}
+          onClick={() => {
+            setPicked(target.kind)
+            setPickedPos(target.pos)
+          }}
+          onDoubleClick={insertLink}
+        >
+          {target.kind === 'bookmark' ? target.label : target.label || '—'}
+        </button>
+        {target.kind === 'bookmark' && <span className="bookmark-preview">{target.preview}</span>}
+      </div>
+    )
+  }
+
   return (
     <div
       className="modal-backdrop"
@@ -643,15 +797,46 @@ export function LinkInsertModal({ editor, onClose }: { editor: Editor; onClose: 
             placeholder={t('ribbonLinkTextPh')}
           />
         </label>
-        <label>
-          {t('ribbonLinkAddress')}
-          <input
-            value={linkUrl}
-            onChange={(e) => setLinkUrl(e.target.value)}
-            placeholder="https://…"
-            onKeyDown={(e) => e.key === 'Enter' && insertLink()}
-          />
-        </label>
+        <div className="modal-row">
+          <button
+            className={tab === 'address' ? 'btn-primary' : ''}
+            onClick={() => setTab('address')}
+          >
+            {t('ribbonLinkTabAddress')}
+          </button>
+          <button
+            className={tab === 'document' ? 'btn-primary' : ''}
+            onClick={() => setTab('document')}
+          >
+            {t('ribbonLinkTabDocument')}
+          </button>
+        </div>
+        {tab === 'address' ? (
+          <label>
+            {t('ribbonLinkAddress')}
+            <input
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              placeholder="https://…"
+              onKeyDown={(e) => e.key === 'Enter' && insertLink()}
+            />
+          </label>
+        ) : targets.length === 0 ? (
+          <div className="bookmark-list">
+            <div className="bookmark-empty">{t('ribbonLinkTargetEmpty')}</div>
+          </div>
+        ) : (
+          <div className="bookmark-list">
+            {headings.length > 0 && (
+              <div className="rb-drop-title">{t('ribbonLinkTargetHeadings')}</div>
+            )}
+            {headings.map(targetRow)}
+            {bookmarks.length > 0 && (
+              <div className="rb-drop-title">{t('ribbonLinkTargetBookmarks')}</div>
+            )}
+            {bookmarks.map(targetRow)}
+          </div>
+        )}
         <div className="modal-actions">
           {linkAtOpen && (
             <button className="btn-ghost" onClick={removeLink}>
@@ -661,7 +846,7 @@ export function LinkInsertModal({ editor, onClose }: { editor: Editor; onClose: 
           <button className="btn-ghost" onClick={onClose}>
             {t('ribbonCancel')}
           </button>
-          <button className="btn-primary" disabled={!linkUrl.trim()} onClick={insertLink}>
+          <button className="btn-primary" disabled={!canApply} onClick={insertLink}>
             {t(linkAtOpen ? 'ribbonApply' : 'ribbonInsert')}
           </button>
         </div>

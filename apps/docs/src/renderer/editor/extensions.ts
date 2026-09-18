@@ -5501,6 +5501,65 @@ export const AutoLinkOnDelimiter = Extension.create({
   },
 })
 
+/**
+ * Position of the block node whose bookmarks/hiddenBookmarks include `name`
+ * (a "Place in This Document" hyperlink target), or null when the anchor is
+ * dangling. Headings carry Word's hidden `_Toc…` bookmarks, user targets the
+ * visible bookmark names.
+ */
+export function resolveInternalLinkTarget(doc: PmNode, name: string): number | null {
+  let found: number | null = null
+  doc.descendants((node, pos) => {
+    if (found !== null) return false
+    const list = node.attrs?.bookmarks as string[] | null | undefined
+    const hidden = node.attrs?.hiddenBookmarks as string[] | null | undefined
+    if (
+      (Array.isArray(list) && list.includes(name)) ||
+      (Array.isArray(hidden) && hidden.includes(name))
+    ) {
+      found = pos
+      return false
+    }
+    return !node.isLeaf
+  })
+  return found
+}
+
+/**
+ * Word's "Place in This Document" jump: ⌘/Ctrl+click an internal hyperlink
+ * (href="#anchor") scrolls the target into view and moves the caret there.
+ * Plain clicks keep Word semantics (place the caret, no navigation) and
+ * external links keep their app-level open handling.
+ */
+export const InternalLinkNavExtension = Extension.create({
+  name: 'internalLinkNav',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          handleDOMEvents: {
+            click: (view, event) => {
+              if (!(event as MouseEvent).metaKey && !(event as MouseEvent).ctrlKey) return false
+              const a = (event.target as HTMLElement | null)?.closest?.('a.doc-link')
+              const href = a?.getAttribute('href') ?? ''
+              if (!href.startsWith('#')) return false
+              const at = resolveInternalLinkTarget(view.state.doc, href.slice(1))
+              if (at === null) return false
+              const dom = view.nodeDOM(at) as HTMLElement | null
+              dom?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+              view.dispatch(
+                view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(at + 1))),
+              )
+              view.focus()
+              return false
+            },
+          },
+        },
+      }),
+    ]
+  },
+})
+
 export const editorExtensions = [
   DocDocument,
   DocText,
@@ -5553,6 +5612,7 @@ export const editorExtensions = [
   ImageCopyExtension,
   EnterReplacesSelection,
   AutoLinkOnDelimiter,
+  InternalLinkNavExtension,
   WordEditorShortcuts,
   CaretMarksMemory,
   ColumnLayoutExtension,

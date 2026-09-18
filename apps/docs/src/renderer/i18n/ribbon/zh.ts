@@ -311,6 +311,11 @@ export const zh = {
   ribbonLinkText: '要显示的文字',
   ribbonLinkTextPh: '链接文字(留空则显示地址)',
   ribbonLinkAddress: '地址',
+  ribbonLinkTabAddress: '现有文件或网页',
+  ribbonLinkTabDocument: '本文档中的位置',
+  ribbonLinkTargetHeadings: '标题',
+  ribbonLinkTargetBookmarks: '书签',
+  ribbonLinkTargetEmpty: '文档中还没有标题或书签',
   // Shapes
   ribbonShapeRect: '矩形',
   ribbonShapeRoundRect: '圆角矩形',
