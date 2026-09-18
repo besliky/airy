@@ -3840,6 +3840,7 @@ function RibbonInner({
             sources={sources}
             onAddSource={onAddSource}
             headingPages={headingPages}
+            anchorPage={anchorPage}
           />
         ) : tab === 'review' ? (
           <ReviewTab

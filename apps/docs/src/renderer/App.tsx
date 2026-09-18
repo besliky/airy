@@ -153,6 +153,7 @@ import { cachedByDoc } from './doc-cache'
 import { useShallowStable, useStableCallbacks } from './use-stable'
 import { FindPanel } from './components/FindPanel'
 import { refCacheOf } from './components/cross-ref'
+import { updateTocField } from './components/ribbon-references-tab'
 import { Ribbon } from './components/Ribbon'
 import { computeFormatState } from './components/ribbon-format-state'
 import { IconRedo, IconSave, IconUndo } from './components/icons'
@@ -2666,17 +2667,24 @@ export function App() {
         jobs.push({ from: r.pos, to: r.pos + r.nodeSize, text: next, marks: r.marks })
       }
     }
-    if (jobs.length === 0) {
+    if (jobs.length > 0) {
+      let tr = state.tr
+      for (const j of jobs.sort((a, b) => b.from - a.from)) {
+        tr = tr.replaceWith(j.from, j.to, state.schema.text(j.text, [...j.marks]))
+      }
+      view.dispatch(tr)
+    }
+    // TOC / table of figures: F9 rebuilds the cached field (entries + pages)
+    // like Word's update — the authored switches are read back from the field
+    const toc = updateTocField(editor, doc?.parsed.blocks ?? [], headingPages, anchorPage, {
+      silent: true,
+    })
+    if (jobs.length === 0 && toc !== 'updated') {
       setStatus(t('appNoFieldsToUpdate'))
       return
     }
-    let tr = state.tr
-    for (const j of jobs.sort((a, b) => b.from - a.from)) {
-      tr = tr.replaceWith(j.from, j.to, state.schema.text(j.text, [...j.marks]))
-    }
-    view.dispatch(tr)
-    setStatus(t('appFieldsUpdated', { n: jobs.length }))
-  }, [editor, fieldValue, nodePagesFactory, doc])
+    setStatus(t('appFieldsUpdated', { n: jobs.length + (toc === 'updated' ? 1 : 0) }))
+  }, [editor, fieldValue, nodePagesFactory, doc, headingPages, anchorPage])
 
   // status-bar page number: real page slicing (same algorithm as the pagination preview). Edits remeasure with debounce; scrolling only relocates
   useEffect(() => {
@@ -4259,6 +4267,14 @@ export function App() {
                 '.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6',
               ),
             ].find((h) => (h.textContent ?? '').replace(/\s+/g, '') === title) ?? null
+          // table-of-figures entries point at caption paragraphs (protected
+          // field blocks), not headings — match the caption's own text
+          if (!target) {
+            target =
+              [...document.querySelectorAll('.ProseMirror .doc-field-text')].find(
+                (el) => (el.textContent ?? '').replace(/\s+/g, '') === title,
+              ) ?? null
+          }
         }
       }
       target?.scrollIntoView({ behavior: 'smooth', block: 'start' })

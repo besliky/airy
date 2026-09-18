@@ -111,15 +111,21 @@ export function renderFieldSpec(field: FieldDisplay): DomSpec | null {
     const num: DomSpec[] = field.num
       ? [['span', { class: 'doc-toc-num', contenteditable: 'false' }, field.num]]
       : []
+    // TOC \n entries have no leader/page number at all: title-only line
+    const tail: DomSpec[] = field.noPage
+      ? []
+      : [
+          // real dot glyphs (clipped to the free width), not a border decoration:
+          // Word/LO leader dots are text, and exported-PDF text comparison sees them
+          ['span', { class: 'doc-toc-dots', contenteditable: 'false' }, '.'.repeat(220)],
+          ['span', { class: 'doc-toc-page', contenteditable: 'false' }, field.right ?? ''],
+        ]
     return [
       'div',
       attrs,
       ...num,
       ['span', { class: 'doc-toc-title', contenteditable: 'false' }, field.left || '\u00a0'],
-      // real dot glyphs (clipped to the free width), not a border decoration:
-      // Word/LO leader dots are text, and exported-PDF text comparison sees them
-      ['span', { class: 'doc-toc-dots', contenteditable: 'false' }, '.'.repeat(220)],
-      ['span', { class: 'doc-toc-page', contenteditable: 'false' }, field.right ?? ''],
+      ...tail,
     ]
   }
   if (field.kind === 'pageBreak') {
