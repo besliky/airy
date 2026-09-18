@@ -1,14 +1,22 @@
 import { useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { getMarkRange } from '@tiptap/core'
 import type { Editor } from '@tiptap/core'
 import { ShapePreview, WORDART_PRESETS, wordArtStrokePx } from '@airy-office/ui'
-import type { ChartDisplay, HeaderFooter, NewChart } from '@airy-office/docx-engine'
+import type {
+  ChartDisplay,
+  DiagramDisplay,
+  HeaderFooter,
+  NewChart,
+  NewDiagram,
+  NewDiagramPreset,
+} from '@airy-office/docx-engine'
+import { buildDiagramDisplay } from '@airy-office/docx-engine'
 import { hfHasPageField, hfWithoutPageMarks } from '../editor/hf-dom'
 import { EquationGallery, EquationModal } from './EquationModal'
 import { COVER_PRESETS, insertCoverPage, type CoverPreset } from '../editor/cover-pages'
 import { startShapeDrawMode } from '../editor/shape-draw'
-import { useI18n, type StringKey } from '../i18n/locale'
+import { useI18n, type StringKey, type TFunc } from '../i18n/locale'
 import { useModalKeys } from './modal-keys'
 import {
   IconBook,
@@ -28,6 +36,7 @@ import {
   IconPicture,
   IconRefresh,
   IconShapes,
+  IconSmartArt,
   IconSymbol,
   IconTable,
   IconTextBox,
@@ -558,6 +567,263 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
   )
 }
 
+const SMARTART_GALLERY: Array<{ kind: NewDiagramPreset; labelKey: StringKey }> = [
+  { kind: 'blockList', labelKey: 'ribbonSmartBlockList' },
+  { kind: 'vBulletList', labelKey: 'ribbonSmartVBulletList' },
+  { kind: 'process', labelKey: 'ribbonSmartProcess' },
+  { kind: 'hier', labelKey: 'ribbonSmartHierarchy' },
+]
+
+const SMARTART_MAX_NODES = 8
+
+type SmartArtNode = { text: string; level: number }
+
+/** default node set per preset (3 items flat; the classic 5-node org tree) */
+function smartArtDefaults(kind: NewDiagramPreset, t: TFunc): SmartArtNode[] {
+  if (kind !== 'hier') {
+    return [1, 2, 3].map((n) => ({ text: t('ribbonSmartItemN', { n }), level: 0 }))
+  }
+  return [
+    { text: t('ribbonSmartItemN', { n: 1 }), level: 0 },
+    { text: t('ribbonSmartItemN', { n: 2 }), level: 1 },
+    { text: t('ribbonSmartItemN', { n: 3 }), level: 2 },
+    { text: t('ribbonSmartItemN', { n: 4 }), level: 1 },
+    { text: t('ribbonSmartItemN', { n: 5 }), level: 1 },
+  ]
+}
+
+/** clamp the indent sequence: first node level 0, each next at most one deeper */
+function clampSmartArtLevels(nodes: SmartArtNode[]): SmartArtNode[] {
+  let prev = 0
+  return nodes.map((node, i) => {
+    const level = i === 0 ? 0 : Math.min(Math.max(0, node.level), prev + 1)
+    prev = level
+    return { ...node, level }
+  })
+}
+
+/** Miniature of a DiagramDisplay: the same shape model the editor block renders. */
+function SmartArtThumb({ display, w, h }: { display: DiagramDisplay; w: number; h: number }) {
+  const scale = Math.min(w / display.widthPx, h / display.heightPx)
+  const ox = (w - display.widthPx * scale) / 2
+  const oy = (h - display.heightPx * scale) / 2
+  const fontSize = 14 * scale
+  return (
+    <span className="smartart-thumb" style={{ width: w, height: h }}>
+      {display.shapes.map((s, i) => {
+        // document-data colors: inline per shape, never themed (CLAUDE theming rules)
+        if (s.lnHex && (s.wPx <= 0 || s.hPx <= 0)) {
+          const stroke = Math.max(1, (s.lnWPx ?? 1) * scale)
+          const style: CSSProperties =
+            s.hPx <= 0
+              ? {
+                  left: ox + s.xPx * scale,
+                  top: oy + s.yPx * scale - stroke / 2,
+                  width: Math.max(1, s.wPx * scale),
+                  height: stroke,
+                  background: `#${s.lnHex}`,
+                }
+              : {
+                  left: ox + s.xPx * scale - stroke / 2,
+                  top: oy + s.yPx * scale,
+                  width: stroke,
+                  height: Math.max(1, s.hPx * scale),
+                  background: `#${s.lnHex}`,
+                }
+          return <span key={i} className="smartart-thumb-rule" style={style} />
+        }
+        const width = Math.max(1, s.wPx * scale)
+        const height = Math.max(1, s.hPx * scale)
+        const style: CSSProperties = {
+          left: ox + s.xPx * scale,
+          top: oy + s.yPx * scale,
+          width,
+          height,
+          borderRadius:
+            s.prst === 'ellipse'
+              ? '50%'
+              : s.prst === 'roundRect'
+                ? Math.min(width, height) * 0.12
+                : 1,
+        }
+        if (s.fillHex) style.background = `#${s.fillHex}`
+        const kids: ReactNode[] = []
+        if (s.texts?.length && fontSize >= 5.5) {
+          kids.push(
+            <span
+              key="t"
+              className="smartart-thumb-text"
+              style={{
+                fontSize,
+                color: s.textColorHex ? `#${s.textColorHex}` : undefined,
+                fontWeight: s.textColorHex === 'FFFFFF' ? 600 : 400,
+              }}
+            >
+              {s.texts.join('\n')}
+            </span>,
+          )
+        }
+        return (
+          <span key={i} className="smartart-thumb-shape" style={style}>
+            {kids}
+          </span>
+        )
+      })}
+    </span>
+  )
+}
+
+/** Word's Insert SmartArt: pick a layout from the gallery, edit node texts, insert */
+export function SmartArtInsertModal({ editor, onClose }: { editor: Editor; onClose: () => void }) {
+  const { t } = useI18n()
+  const modalKeys = useModalKeys(onClose)
+  const [kind, setKind] = useState<NewDiagramPreset>('blockList')
+  const [nodes, setNodes] = useState<SmartArtNode[]>(() => smartArtDefaults('blockList', t))
+
+  const liveItems = clampSmartArtLevels(
+    nodes.map((n) => ({ ...n, text: n.text.trim() })).filter((n) => n.text),
+  )
+  const preview = buildDiagramDisplay({
+    kind,
+    items: liveItems.length > 0 ? liveItems : smartArtDefaults(kind, t),
+  })
+
+  const setNode = (i: number, patch: Partial<SmartArtNode>) =>
+    setNodes((prev) => prev.map((n, j) => (j === i ? { ...n, ...patch } : n)))
+  const removeNode = (i: number) =>
+    setNodes((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : prev))
+  const addNode = () =>
+    setNodes((prev) => {
+      if (prev.length >= SMARTART_MAX_NODES) return prev
+      const lastLevel = prev[prev.length - 1]?.level ?? 0
+      return [
+        ...prev,
+        {
+          text: t('ribbonSmartItemN', { n: prev.length + 1 }),
+          level: kind === 'hier' ? lastLevel : 0,
+        },
+      ]
+    })
+  const indent = (i: number, dir: 1 | -1) =>
+    setNodes((prev) =>
+      clampSmartArtLevels(prev.map((n, j) => (j === i ? { ...n, level: n.level + dir } : n))),
+    )
+
+  const insert = () => {
+    if (!editor.isEditable || liveItems.length === 0) return
+    const spec: NewDiagram = { kind, items: liveItems }
+    const display = buildDiagramDisplay(spec)
+    const inserted = insertTopLevelBlockAtSelection(editor, {
+      type: 'docProtected',
+      attrs: {
+        docxIndex: null,
+        blockType: 'diagram',
+        label: t('ribbonSmartArt'),
+        genDiagram: spec,
+        diagramDisplay: display,
+      },
+    })
+    if (inserted) onClose()
+  }
+
+  return (
+    <div
+      className="modal-backdrop"
+      ref={modalKeys.ref}
+      onKeyDown={modalKeys.onKeyDown}
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="modal modal-smartart">
+        <h2>{t('ribbonSmartArtInsertTitle')}</h2>
+        <div className="smartart-gallery">
+          {SMARTART_GALLERY.map((preset) => (
+            <button
+              key={preset.kind}
+              className={`smartart-cell${kind === preset.kind ? ' selected' : ''}`}
+              onClick={() => {
+                setKind(preset.kind)
+                setNodes(smartArtDefaults(preset.kind, t))
+              }}
+            >
+              <SmartArtThumb
+                display={buildDiagramDisplay({
+                  kind: preset.kind,
+                  items: smartArtDefaults(preset.kind, t),
+                })}
+                w={84}
+                h={52}
+              />
+              <span className="smartart-cell-label">{t(preset.labelKey)}</span>
+            </button>
+          ))}
+        </div>
+        <div className="smartart-preview">
+          <SmartArtThumb
+            display={preview}
+            w={Math.min(420, preview.widthPx)}
+            h={Math.min(160, preview.heightPx)}
+          />
+        </div>
+        <div className="smartart-nodes">
+          {clampSmartArtLevels(nodes).map((node, i, all) => (
+            <div
+              key={i}
+              className="smartart-node-row"
+              style={{ paddingLeft: kind === 'hier' ? node.level * 22 : 0 }}
+            >
+              {kind === 'hier' && (
+                <>
+                  <button
+                    className="smartart-level-btn"
+                    aria-label={t('ribbonSmartOutdent')}
+                    disabled={node.level === 0}
+                    onClick={() => indent(i, -1)}
+                  >
+                    ‹
+                  </button>
+                  <button
+                    className="smartart-level-btn"
+                    aria-label={t('ribbonSmartIndent')}
+                    disabled={i === 0 || node.level >= (all[i - 1]?.level ?? 0) + 1}
+                    onClick={() => indent(i, 1)}
+                  >
+                    ›
+                  </button>
+                </>
+              )}
+              <input
+                value={node.text}
+                placeholder={t('ribbonSmartNodeText')}
+                onChange={(e) => setNode(i, { text: e.target.value })}
+                onKeyDown={(e) => e.key === 'Enter' && insert()}
+              />
+              <button
+                className="smartart-level-btn"
+                aria-label={t('ribbonSmartRemoveNode')}
+                disabled={nodes.length <= 1}
+                onClick={() => removeNode(i)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="modal-row">
+          <button onClick={addNode} disabled={nodes.length >= SMARTART_MAX_NODES}>
+            {t('ribbonSmartAddNode')}
+          </button>
+        </div>
+        <div className="modal-actions">
+          <button className="btn-primary" onClick={insert} disabled={liveItems.length === 0}>
+            {t('ribbonInsert')}
+          </button>
+          <button onClick={onClose}>{t('ribbonCancel')}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /** Word's Insert Table dialog: explicit row/column counts beyond the hover grid's reach */
 export function TableInsertModal({ editor, onClose }: { editor: Editor; onClose: () => void }) {
   const { t } = useI18n()
@@ -917,6 +1183,7 @@ export function InsertTab({
   const [bookmarkOpen, setBookmarkOpen] = useState(false)
   const [crossRefOpen, setCrossRefOpen] = useState(false)
   const [chartOpen, setChartOpen] = useState(false)
+  const [smartArtOpen, setSmartArtOpen] = useState(false)
 
   const insertTable = (rows: number, cols: number) => {
     insertTableAt(editor, rows, cols)
@@ -1067,6 +1334,17 @@ export function InsertTab({
               <IconChart size={BIG} />
             </span>
             <span>{t('ribbonChart')}</span>
+          </button>
+          <button
+            className="rb-big"
+            disabled={!hasDoc}
+            data-tip={t('ribbonSmartArtTip')}
+            onClick={() => setSmartArtOpen(true)}
+          >
+            <span className="rb-big-icon">
+              <IconSmartArt size={BIG} />
+            </span>
+            <span>{t('ribbonSmartArt')}</span>
           </button>
           <div className="rb-split-wrap">
             <button
@@ -1522,6 +1800,9 @@ export function InsertTab({
       {bookmarkOpen && <BookmarkModal editor={editor} onClose={() => setBookmarkOpen(false)} />}
       {crossRefOpen && <CrossRefModal editor={editor} onClose={() => setCrossRefOpen(false)} />}
       {chartOpen && <ChartInsertModal editor={editor} onClose={() => setChartOpen(false)} />}
+      {smartArtOpen && (
+        <SmartArtInsertModal editor={editor} onClose={() => setSmartArtOpen(false)} />
+      )}
     </>
   )
 }

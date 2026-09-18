@@ -5776,6 +5776,126 @@ body.docs-crop-active .doc-protected[data-doc-protected='image'] .doc-img-wrap {
   min-width: 460px;
 }
 
+/* Insert SmartArt dialog: gallery of the four layout presets + node text editor.
+   Shape fills/texts inside thumbnails are document data (inline, never themed). */
+.modal-smartart {
+  min-width: 480px;
+}
+
+.smartart-gallery {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.smartart-cell {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 6px 4px 4px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.smartart-cell:hover {
+  background: var(--hover);
+}
+
+.smartart-cell.selected {
+  border-color: var(--word-blue);
+}
+
+.smartart-cell-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.smartart-cell.selected .smartart-cell-label {
+  color: var(--word-blue);
+}
+
+.smartart-thumb {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+}
+
+.smartart-thumb-shape {
+  position: absolute;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.smartart-thumb-text {
+  white-space: pre-line;
+  line-height: 1.1;
+}
+
+.smartart-thumb-rule {
+  position: absolute;
+}
+
+.smartart-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+  margin-bottom: 8px;
+  min-height: 80px;
+  overflow: hidden;
+}
+
+.smartart-nodes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.smartart-node-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.smartart-node-row input {
+  flex: 1;
+}
+
+.smartart-level-btn {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.smartart-level-btn:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.smartart-level-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .chart-data-grid {
   border-collapse: collapse;
   margin-bottom: 8px;

@@ -23,12 +23,14 @@ import {
   type ChartDisplay,
   type ChartPatch,
   type ChartSeriesPatch,
+  type DiagramDisplay,
   type FieldDisplay,
   type FieldTextPatch,
   type FormulaDisplay,
   type GeneratedBlock,
   type ImageWrap,
   type NewChart,
+  type NewDiagram,
   type NewImage,
   type ParaFormat,
   type Run,
@@ -1802,6 +1804,18 @@ export function pmDocToSavePlan(doc: PmNode, originalBlocks: Block[]): SavePlan 
         pushBlock({
           kind: 'chart',
           chart: spec,
+          ...(display?.widthPx && display.heightPx
+            ? { extentPx: { w: display.widthPx, h: display.heightPx } }
+            : {}),
+        })
+      } else if (node.attrs?.genDiagram) {
+        // editor-created SmartArt: the engine writes the five diagram parts
+        changedCount++
+        const spec = { ...(node.attrs.genDiagram as NewDiagram) }
+        const display = node.attrs.diagramDisplay as DiagramDisplay | null
+        pushBlock({
+          kind: 'diagram',
+          diagram: spec,
           ...(display?.widthPx && display.heightPx
             ? { extentPx: { w: display.widthPx, h: display.heightPx } }
             : {}),
