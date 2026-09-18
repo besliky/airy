@@ -90,7 +90,9 @@
   --slides-ai-error-border: rgb(198 40 40 / 45%);
   --slides-ai-error-bg: rgb(198 40 40 / 8%);
   --slides-ai-step-error: #b91c1c;
-  --slides-focus-ring: rgb(35 36 37 / 20%);
+  /* WCAG non-text: keyboard focus ring must clear 3:1 on --chrome-bg
+   * (55% gives 3.60:1 on white; was 20% = 1.50:1) */
+  --slides-focus-ring: rgb(35 36 37 / 55%);
   --slides-focus-ring-soft: rgb(35 36 37 / 18%);
   --slides-focus-ring-strong: rgb(35 36 37 / 35%);
   --slides-focus-ring-blue: rgb(74 141 246 / 30%);
@@ -222,7 +224,8 @@
   --slides-ai-error-border: rgb(242 139 130 / 45%);
   --slides-ai-error-bg: rgb(242 139 130 / 12%);
   --slides-ai-step-error: #f28b82;
-  --slides-focus-ring: rgb(228 228 228 / 25%);
+  /* WCAG non-text: >=3:1 on --chrome-bg #252525 (4.15:1; was 25% = 2.06:1) */
+  --slides-focus-ring: rgb(228 228 228 / 50%);
   --slides-focus-ring-soft: rgb(228 228 228 / 22%);
   --slides-focus-ring-strong: rgb(228 228 228 / 40%);
   --slides-focus-ring-blue: rgb(74 158 255 / 40%);
@@ -270,7 +273,8 @@
     --slides-ai-error-border: rgb(242 139 130 / 45%);
     --slides-ai-error-bg: rgb(242 139 130 / 12%);
     --slides-ai-step-error: #f28b82;
-    --slides-focus-ring: rgb(228 228 228 / 25%);
+    /* WCAG non-text: >=3:1 on --chrome-bg #252525 (4.15:1; was 25% = 2.06:1) */
+    --slides-focus-ring: rgb(228 228 228 / 50%);
     --slides-focus-ring-soft: rgb(228 228 228 / 22%);
     --slides-focus-ring-strong: rgb(228 228 228 / 40%);
     --slides-focus-ring-blue: rgb(74 158 255 / 40%);

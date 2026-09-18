@@ -555,7 +555,6 @@ function FileSearchBox({
           className="file-search-clear"
           aria-label={t('searchClear')}
           onClick={() => onChange('')}
-          tabIndex={-1}
         >
           <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
             <path

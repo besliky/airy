@@ -810,6 +810,9 @@ export default function App() {
   const [insertAfterInvalid, setInsertAfterInvalid] = useState(false)
   const [insertRange, setInsertRange] = useState('')
   const [insertRangeInvalid, setInsertRangeInvalid] = useState(false)
+  // Insert is running (file rewrite + reload): the dialog stays open with its
+  // controls disabled and a busy indicator until it settles
+  const [insertBusy, setInsertBusy] = useState(false)
   const [pageSizeDlg, setPageSizeDlg] = useState(false)
   const [splitPagesDlg, setSplitPagesDlg] = useState(false)
   /** Page-crop dialog: rendered page bitmap + which page it shows */
@@ -4779,13 +4782,17 @@ export default function App() {
       setInsertAfterInvalid(false)
       setInsertRange(`1-${picked.pages.length}`)
       setInsertRangeInvalid(false)
+      setInsertBusy(false)
       setInsertPdfDlg(true)
     })
   }
 
-  /** Insert-dialog confirm: range + position → one in-place insert, then reload */
+  /** Insert-dialog confirm: range + position → one in-place insert, then reload.
+   * The dialog stays open with a busy indicator (controls disabled) while the
+   * file is rewritten and reloaded; on failure it unlocks for retry/cancel and
+   * the error arrives through the usual opFailed toast. */
   const confirmInsertPdf = () => {
-    if (!insertSource) return
+    if (!insertSource || insertBusy) return
     const nums = parsePageRanges(insertRange, insertSource.pages.length)
     if (!nums) {
       setInsertRangeInvalid(true)
@@ -4804,18 +4811,23 @@ export default function App() {
       }
       afterVisIdx = n - 1
     }
-    setInsertPdfDlg(false)
+    setInsertBusy(true)
     void (async () => {
-      const result = await window.pdfApi.insertPdf({
-        path: filePath,
-        afterPageIndex: afterVisIdx,
-        pages: nums.map((n) => n - 1),
-      })
-      if (!result.ok) {
-        opFailed(result.error)
-        return
+      try {
+        const result = await window.pdfApi.insertPdf({
+          path: filePath,
+          afterPageIndex: afterVisIdx,
+          pages: nums.map((n) => n - 1),
+        })
+        if (!result.ok) {
+          opFailed(result.error)
+          return
+        }
+        await loadDoc(filePath, doc)
+        setInsertPdfDlg(false)
+      } finally {
+        setInsertBusy(false)
       }
-      await loadDoc(filePath, doc)
     })()
   }
 
@@ -8525,8 +8537,11 @@ export default function App() {
                   setInsertRangeInvalid(false)
                 }}
                 rangeInvalid={insertRangeInvalid}
+                busy={insertBusy}
                 onConfirm={confirmInsertPdf}
-                onClose={() => setInsertPdfDlg(false)}
+                onClose={() => {
+                  if (!insertBusy) setInsertPdfDlg(false)
+                }}
               />
             )}
             {pageSizeDlg && (

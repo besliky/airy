@@ -29,24 +29,34 @@ export function InsertPagesDialog(props: {
   readonly range: string
   readonly onRange: (value: string) => void
   readonly rangeInvalid: boolean
+  /** Insert is running: every control disables and a spinner shows until the
+   * rewritten file has reloaded (App keeps the dialog open meanwhile) */
+  readonly busy: boolean
   readonly onConfirm: () => void
   readonly onClose: () => void
 }) {
   const { t } = useI18n()
   const dialog = useModalDialog(props.onClose)
   const { source, currentPage, pos, onPos, afterPage, onAfterPage, afterInvalid } = props
-  const { range, onRange, rangeInvalid, onConfirm, onClose } = props
+  const { range, onRange, rangeInvalid, busy, onConfirm, onClose } = props
 
   return (
     <div className="pdf-modal-mask" {...dialog.backdropProps} onClick={onClose}>
-      <div className="pdf-modal" {...dialog.dialogProps} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="pdf-modal"
+        {...dialog.dialogProps}
+        aria-busy={busy}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="pdf-modal-title" {...dialog.titleProps}>
           {t('insertPdfPagesTitle')}
         </div>
         <div className="pdf-modal-hint">
           {t('insertPdfSourceInfo', { name: source.name, total: source.pages.length })}
         </div>
-        <div className="insert-source-pages">
+        {/* Preview tiles are decorative: the source line above already names
+         * the file and page count, so the 12 numbers + "+N" are SR noise */}
+        <div className="insert-source-pages" aria-hidden="true">
           {source.pages.slice(0, 12).map((shape, i) => {
             const tile = insertTileSize(shape)
             return (
@@ -76,6 +86,7 @@ export function InsertPagesDialog(props: {
               type="radio"
               name="insert-pos"
               checked={pos === 'front'}
+              disabled={busy}
               onChange={() => onPos('front')}
             />
             {t('insertPosFront')}
@@ -85,6 +96,7 @@ export function InsertPagesDialog(props: {
               type="radio"
               name="insert-pos"
               checked={pos === 'current'}
+              disabled={busy}
               onChange={() => onPos('current')}
             />
             {t('insertPosCurrent', { page: currentPage })}
@@ -97,13 +109,14 @@ export function InsertPagesDialog(props: {
               type="radio"
               name="insert-pos"
               checked={pos === 'after'}
+              disabled={busy}
               onChange={() => onPos('after')}
             />
             {t('insertPosAfter')}
             <input
               className={`pdf-modal-input insert-after-page${afterInvalid ? ' invalid' : ''}`}
               value={afterPage}
-              disabled={pos !== 'after'}
+              disabled={busy || pos !== 'after'}
               onChange={(e) => onAfterPage(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && onConfirm()}
             />
@@ -113,6 +126,7 @@ export function InsertPagesDialog(props: {
               type="radio"
               name="insert-pos"
               checked={pos === 'end'}
+              disabled={busy}
               onChange={() => onPos('end')}
             />
             {t('insertPosEnd')}
@@ -123,14 +137,20 @@ export function InsertPagesDialog(props: {
           value={range}
           placeholder={t('insertPdfRangeHint', { total: source.pages.length })}
           autoFocus
+          disabled={busy}
           onChange={(e) => onRange(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && onConfirm()}
         />
+        {busy && (
+          <div className="pdf-modal-busy" role="status">
+            {t('insertPdfBusy')}
+          </div>
+        )}
         <div className="pdf-modal-actions">
-          <button className="pdf-modal-btn" onClick={onClose}>
+          <button className="pdf-modal-btn" disabled={busy} onClick={onClose}>
             {t('cancel')}
           </button>
-          <button className="pdf-modal-btn primary" onClick={onConfirm}>
+          <button className="pdf-modal-btn primary" disabled={busy} onClick={onConfirm}>
             {t('ok')}
           </button>
         </div>

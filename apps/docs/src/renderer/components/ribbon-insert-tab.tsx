@@ -784,10 +784,14 @@ export function SmartArtInsertModal({ editor, onClose }: { editor: Editor; onClo
     >
       <div className="modal modal-smartart" {...dialog.dialogProps}>
         <h2 {...dialog.titleProps}>{t('ribbonSmartArtInsertTitle')}</h2>
-        <div className="smartart-gallery">
+        {/* Layout gallery is a functional radio group: one of four mutually
+         * exclusive layouts, selection matters for the insert */}
+        <div className="smartart-gallery" role="radiogroup" aria-label={t('ribbonSmartArt')}>
           {SMARTART_GALLERY.map((preset) => (
             <button
               key={preset.kind}
+              role="radio"
+              aria-checked={kind === preset.kind}
               className={`smartart-cell${kind === preset.kind ? ' selected' : ''}`}
               onClick={() => {
                 setKind(preset.kind)
@@ -843,6 +847,7 @@ export function SmartArtInsertModal({ editor, onClose }: { editor: Editor; onClo
               <input
                 value={node.text}
                 placeholder={t('ribbonSmartNodeText')}
+                aria-label={t('ribbonSmartItemN', { n: i + 1 })}
                 onChange={(e) => setNode(i, { text: e.target.value })}
                 onKeyDown={(e) => e.key === 'Enter' && insert()}
               />
@@ -993,9 +998,17 @@ export function LinkInsertModal({ editor, onClose }: { editor: Editor; onClose: 
       : null
   const headings = targets.filter((tg) => tg.kind === 'heading')
   const bookmarks = targets.filter((tg) => tg.kind === 'bookmark')
-  const canApply = tab === 'address' ? !!linkUrl.trim() : pickedTarget !== null
+  // editability gates Apply too: the mode can flip while the modal is open,
+  // and the insert path below stamps a hidden bookmark into the document
+  const canApply =
+    editor.isEditable && (tab === 'address' ? !!linkUrl.trim() : pickedTarget !== null)
 
   const insertLink = () => {
+    // read-only guard BEFORE the anchor work: ensureHeadingTocAnchor dispatches
+    // (stamps a hidden `_Toc…` bookmark), so it must never run on an editor
+    // that stopped being editable since the modal opened — that would mutate
+    // the document with no link to show for it
+    if (!editor.isEditable) return
     // "Place in This Document": headings get a hidden `_Toc…` bookmark stamped
     // (re-emitted as w:bookmarkStart on save) and link to it; bookmarks link to
     // their own name. The href keeps the `#name` form the docx reader already
@@ -1010,7 +1023,7 @@ export function LinkInsertModal({ editor, onClose }: { editor: Editor; onClose: 
     }
     const href = anchor ? `#${anchor}` : linkUrl.trim()
     const text = linkText.trim() || (pickedTarget ? pickedTarget.label : '') || href
-    if (!href || !editor.isEditable) return
+    if (!href) return
     if (linkAtOpen) {
       if (text === linkAtOpen.text.trim()) {
         // address-only change: re-mark the existing run so character
@@ -1113,15 +1126,20 @@ export function LinkInsertModal({ editor, onClose }: { editor: Editor; onClose: 
             placeholder={t('ribbonLinkTextPh')}
           />
         </label>
+        {/* Word's two link panes as toggle buttons: aria-pressed announces
+         * which pane is active (a full tablist would need roving tabindex +
+         * arrow keys for the same two-way switch) */}
         <div className="modal-row">
           <button
             className={tab === 'address' ? 'btn-primary' : ''}
+            aria-pressed={tab === 'address'}
             onClick={() => setTab('address')}
           >
             {t('ribbonLinkTabAddress')}
           </button>
           <button
             className={tab === 'document' ? 'btn-primary' : ''}
+            aria-pressed={tab === 'document'}
             onClick={() => setTab('document')}
           >
             {t('ribbonLinkTabDocument')}
