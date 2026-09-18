@@ -35,6 +35,16 @@ const MAX_OPEN_BYTES = 8 * 1024 * 1024
 const READ_MAX_CHARS = 30_000
 const INSERT_MAX_CHARS = 200_000
 const OPS_TEXT_MAX_CHARS = 200_000
+/**
+ * Largest range span a read materializes: the request schema does not bound
+ * `end`, so the session must reject a huge span BEFORE building the index
+ * array (a range like 0..2^53 would otherwise hang/OOM the server).
+ */
+const RANGE_MAX_SPAN = 10_000
+/** how many headings the read summary lists before eliding */
+const HEADING_LIST_MAX = 200
+/** per-heading text width in the read summary (megabyte heading lines stay bounded) */
+const HEADING_TEXT_MAX_CHARS = 80
 
 /** U+FEFF as pure-ASCII source (a literal BOM char in source trips tooling) */
 const BOM_CHAR = String.fromCharCode(0xfeff)
@@ -378,8 +388,9 @@ export class MarkdownSession {
 
   /**
    * Agent-facing read: file header (stats + EOL/BOM), the heading list with
-   * line positions, then the full text - truncated at the 30k budget with a
-   * hint to request line ranges instead. With lines/range selected, the full
+   * line positions, then the full text. The whole assembly shares the 30k
+   * budget (the heading list is capped per-heading and per-list first), with
+   * a hint to request line ranges instead. With lines/range selected, the full
    * text section is replaced by exactly those lines.
    */
   readDocument(options: MarkdownReadOptions = {}): string {
@@ -389,52 +400,87 @@ export class MarkdownSession {
       `${String(meta.charCount)} characters. Line endings: ${
         meta.eol === '\r\n' ? 'CRLF' : meta.eol === '\r' ? 'CR' : 'LF'
       }.${meta.bom ? ' Starts with a BOM.' : ''}`
-    const headingLines = this.headings().map(
-      (h) => `${h.ordinal}|${h.line}|${'#'.repeat(h.level)}|${h.text}`,
+    const headings = this.headings()
+    const headingLines = headings.map(
+      (h) => `${h.ordinal}|${h.line}|${'#'.repeat(h.level)}|${clipText(h.text)}`,
     )
     const headingsBlock = [
-      `Headings (ordinal|line|level|text):${headingLines.length === 0 ? ' none' : ''}`,
-      ...headingLines,
+      `Headings (ordinal|line|level|text):${headingLines.length === 0 ? ' none' : ''}${
+        headings.length > HEADING_LIST_MAX
+          ? ` (first ${String(HEADING_LIST_MAX)} of ${String(headings.length)} - use range reads for the rest)`
+          : ''
+      }`,
+      ...headingLines.slice(0, HEADING_LIST_MAX),
     ].join('\n')
 
     const selected = this.selectedIndexes(options)
     if (selected === null) {
       const fullText = this.lines.map((l) => l.text).join('\n')
-      const clipped = clip(fullText, READ_MAX_CHARS, 'request a line range to read the rest')
-      return [header, headingsBlock, '', 'Full text (EOLs normalized to LF):', clipped].join('\n')
+      return clip(
+        [header, headingsBlock, '', 'Full text (EOLs normalized to LF):', fullText].join('\n'),
+        READ_MAX_CHARS,
+        'request a line range to read the rest',
+      )
     }
     const body = selected.map((i) => this.lines[i]!.text).join('\n')
-    const clipped = clip(body, READ_MAX_CHARS, 'request a narrower selection')
-    return [
-      header,
-      headingsBlock,
-      '',
-      `Selected ${String(selected.length)} line(s) (EOLs normalized to LF):`,
-      clipped,
-    ].join('\n')
+    return clip(
+      [
+        header,
+        headingsBlock,
+        '',
+        `Selected ${String(selected.length)} line(s) (EOLs normalized to LF):`,
+        body,
+      ].join('\n'),
+      READ_MAX_CHARS,
+      'request a narrower selection',
+    )
   }
 
   /** Resolve blocks/range-style selections to validated, sorted line indexes. */
   private selectedIndexes(options: MarkdownReadOptions): number[] | null {
     const count = this.lines.length
-    let indexes: number[] | null = null
     if (options.lines !== undefined) {
-      indexes = options.lines
-    } else if (options.range !== undefined) {
+      const valid = options.lines.filter((i) => Number.isInteger(i) && i >= 0 && i < count)
+      const invalid = options.lines.length - valid.length
+      if (invalid > 0) {
+        throw new Error(
+          `${String(invalid)} of the requested line indexes are out of range (file has ${String(count)} lines)`,
+        )
+      }
+      if (valid.length === 0) throw new Error('No lines selected (empty lines/range)')
+      return [...new Set(valid)].sort((a, b) => a - b)
+    }
+    if (options.range !== undefined) {
+      // validate arithmetically and only then materialize: a huge `end` must
+      // fail fast instead of allocating the index array first
       const { start, end } = options.range
-      indexes = []
-      for (let i = start; i <= end; i++) indexes.push(i)
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start) {
+        throw new Error(
+          `range start/end must be integers with 0 <= start <= end (got start=${start}, end=${end})`,
+        )
+      }
+      const span = end - start + 1
+      if (span > RANGE_MAX_SPAN) {
+        throw new Error(
+          `range ${String(start)}..${String(end)} spans ${String(span)} lines; the cap is ${String(
+            RANGE_MAX_SPAN,
+          )} per read (split large ranges into smaller reads)`,
+        )
+      }
+      const validEnd = Math.min(end, count - 1)
+      const validCount = Math.max(0, validEnd - start + 1)
+      const invalid = span - validCount
+      if (invalid > 0) {
+        throw new Error(
+          `${String(invalid)} of the requested line indexes are out of range (file has ${String(count)} lines)`,
+        )
+      }
+      if (validCount === 0) throw new Error('No lines selected (empty lines/range)')
+      const indexes: number[] = []
+      for (let i = start; i <= validEnd; i++) indexes.push(i)
+      return indexes
     }
-    if (indexes === null) return null
-    const valid = indexes.filter((i) => Number.isInteger(i) && i >= 0 && i < count)
-    const invalid = indexes.length - valid.length
-    if (invalid > 0) {
-      throw new Error(
-        `${String(invalid)} of the requested line indexes are out of range (file has ${String(count)} lines)`,
-      )
-    }
-    if (valid.length === 0) throw new Error('No lines selected (empty lines/range)')
-    return [...new Set(valid)].sort((a, b) => a - b)
+    return null
   }
 
   // ---- editing ----
@@ -806,4 +852,9 @@ function clip(text: string, max: number, hint: string): string {
   return text.length <= max
     ? text
     : `${text.slice(0, max)}\n...(output truncated at ${String(max)} characters; ${hint})`
+}
+
+/** cap one heading's text in the read summary (heading lines can be megabytes) */
+function clipText(text: string, max = HEADING_TEXT_MAX_CHARS): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}...`
 }

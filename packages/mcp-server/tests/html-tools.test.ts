@@ -285,10 +285,20 @@ describe('html tools over MCP', () => {
       await call(client, 'insert_content', { handle, html: '<p>More</p>' })
       const saved = await call(client, 'save_document', { handle })
       expect(saved.isError).toBeFalsy()
-      expect(String((saved.structuredContent?.warnings as string[] | undefined)?.[0])).toContain(
-        'UTF-8',
+      const warnings = (saved.structuredContent?.warnings as string[] | undefined) ?? []
+      expect(warnings.join(' ')).toContain('UTF-8')
+      expect(warnings.join(' ')).toContain('rewritten')
+      // the saved bytes are UTF-8 AND the declaration says so: a browser (or
+      // any declaration-trusting decoder) must not read the file as mojibake
+      const savedBytes = await readFile(join(root, 'legacy.html'))
+      const savedText = savedBytes.toString('utf8')
+      expect(savedText).toContain('<meta charset="utf-8">')
+      expect(savedText).not.toContain('windows-1252')
+      const declared = /<meta[^>]+charset\s*=\s*["']?\s*([a-z0-9_.:-]+)/i.exec(savedText)?.[1]
+      expect(declared?.toLowerCase()).toBe('utf-8')
+      expect(new TextDecoder(declared ?? 'utf-8', { fatal: true }).decode(savedBytes)).toContain(
+        'café',
       )
-      expect((await readFile(join(root, 'legacy.html'))).toString('utf8')).toContain('café')
     } finally {
       await close()
     }
@@ -341,6 +351,15 @@ describe('html tools over MCP', () => {
       const badAt = await call(client, 'insert_content', { handle, html: '<p>x</p>', at: 99 })
       expect(badAt.isError).toBe(true)
       expect(text(badAt)).toContain('out of range')
+      // afterHeading is markdown-only: the html branch must reject it instead
+      // of silently ignoring the position
+      const mdOnly = await call(client, 'insert_content', {
+        handle,
+        html: '<p>x</p>',
+        afterHeading: 1,
+      })
+      expect(mdOnly.isError).toBe(true)
+      expect(text(mdOnly)).toContain('afterHeading is a markdown-session option')
     } finally {
       await close()
     }
@@ -400,6 +419,58 @@ describe('html tools over MCP', () => {
         ops: Array.from({ length: 101 }, () => ({ op: 'deleteLines', from: 0, to: 0 })),
       })
       expect(tooMany.isError).toBe(true)
+    } finally {
+      await close()
+    }
+  })
+
+  it('rejects an enormous read range fast, before allocating the index array', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const handle = await openFixture(client)
+      // before the span cap this loop built the whole index array first and
+      // hung/OOMed the server; it must now fail fast with the cap message
+      const exploded = await call(client, 'read_document', {
+        handle,
+        range: { start: 0, end: Number.MAX_SAFE_INTEGER },
+      })
+      expect(exploded.isError).toBe(true)
+      expect(text(exploded)).toContain('the cap is 10000 per read')
+      // out-of-range counting still works without materializing the tail
+      const beyond = await call(client, 'read_document', {
+        handle,
+        range: { start: 10, end: 20 },
+      })
+      expect(beyond.isError).toBe(true)
+      expect(text(beyond)).toContain('out of range')
+    } finally {
+      await close()
+    }
+  })
+
+  it('caps the heading list and counts the structure summary toward the 30k budget', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // 300 headings plus a 31k text line: without the caps the heading list
+      // was uncapped (a heading-heavy file could flood the answer) and the
+      // text got its own full 30k on top of the structure block
+      const flood = [
+        '<html><body>',
+        ...Array.from({ length: 300 }, (_, i) => `<h2>heading ${String(i)}</h2>`),
+        `<p>${'x'.repeat(31_000)}</p>`,
+        '</body></html>',
+      ].join('\n')
+      const handle = await openFixture(client, 'flood.html', new TextEncoder().encode(flood))
+      const read = await call(client, 'read_document', { handle })
+      expect(read.isError).toBeFalsy()
+      const body = text(read)
+      expect(body).toContain('(first 200 of 300 - use range reads for the rest)')
+      expect(body).toContain('|h2|heading 0')
+      expect(body).not.toContain('|h2|heading 250')
+      // the structure block counts toward the budget: the 31k text no longer
+      // gets its own full 30k slice on top of the summary
+      expect(body).toContain('output truncated at 30000 characters')
+      expect(body.length).toBeLessThan(31_500)
     } finally {
       await close()
     }

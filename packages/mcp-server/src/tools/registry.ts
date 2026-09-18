@@ -205,9 +205,11 @@ export function registerTools(server: McpServer): void {
         'h1-h6, ul/ol/li, strong/em/u/s, a, br, table). Block indexes are the addressing scheme ' +
         'for insert_content (at) and apply_ops targets; re-read after edits — indexes shift. ' +
         'Markdown sessions: the default read shows stats (EOL/BOM included), the heading list ' +
-        '"ordinal|line|level|text" and the full text (truncated at 30k characters — narrow with ' +
-        'blocks/range, which address LINES). HTML sessions: the default read adds the title and ' +
-        'a parse5 structure summary — links "ordinal|line|text -> href" with line positions. ' +
+        '"ordinal|line|level|text" (capped at 200 entries) and the full text; the whole read is ' +
+        'truncated at 30k characters — narrow with blocks/range, which address LINES. HTML ' +
+        'sessions: the default read adds the title and a parse5 structure summary — headings ' +
+        '"ordinal|line|level|text" and links "ordinal|line|text -> href" with line positions ' +
+        '(both capped at 200 entries, counted toward the 30k budget). ' +
         'For workbook (.xlsx) sessions use ' +
         'read_workbook instead.',
       inputSchema: {
@@ -220,7 +222,10 @@ export function registerTools(server: McpServer): void {
         range: z
           .object({ start: z.number().int().min(0), end: z.number().int().min(0) })
           .optional()
-          .describe('Inclusive block/line range to return in full (alternative to blocks)'),
+          .describe(
+            'Inclusive block/line range to return in full (alternative to blocks; ' +
+              'spans cap at 10,000 — split larger ranges)',
+          ),
       },
       annotations: {
         readOnlyHint: true,
@@ -376,8 +381,9 @@ export function registerTools(server: McpServer): void {
         'sessions take the fragment VERBATIM (no reparse or rewrite — exactly these bytes land ' +
         "on disk, modulo the file's EOL style) at one of two positions: after the first line " +
         'containing `marker` (e.g. "</body>" to append rendered content), or after line `at` ' +
-        '(-1 = document start; default: end of document; marker > at). Insertion happens in ' +
-        'memory; persist with save_document.',
+        '(-1 = document start; default: end of document; marker > at). Passing afterHeading to ' +
+        'an html session is an explicit error — it is a markdown-session option. Insertion ' +
+        'happens in memory; persist with save_document.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
         html: z
@@ -445,6 +451,12 @@ export function registerTools(server: McpServer): void {
         )
       }
       if (session instanceof HtmlSession) {
+        if (afterHeading !== undefined) {
+          throw new Error(
+            'afterHeading is a markdown-session option; html sessions position inserts ' +
+              'via marker or at.',
+          )
+        }
         const result = session.insertContent(html ?? '', {
           ...(at !== undefined ? { at } : {}),
           ...(marker !== undefined ? { marker } : {}),
@@ -540,8 +552,9 @@ export function registerTools(server: McpServer): void {
         'saves keep untouched parts byte-identical and a zero-edit save writes the original bytes ' +
         'back verbatim; markdown and html sessions behave the same at line granularity ' +
         '(untouched lines keep their exact bytes, EOLs included, and a zero-edit save round-trips ' +
-        'the file verbatim; an edited save writes UTF-8 with the original BOM flag re-applied ' +
-        'and the format parameter is not accepted); xlsx saves keep untouched zip entries ' +
+        'the file verbatim; an edited save writes UTF-8 with the original BOM flag re-applied, ' +
+        'html additionally rewriting a legacy charset declaration to utf-8, and the format ' +
+        'parameter is not accepted); xlsx saves keep untouched zip entries ' +
         'byte-identical except ' +
         'xl/workbook.xml, which is rewritten when needed to force recalculation on open (the ' +
         'fullCalcOnLoad flag) — so even a zero-edit xlsx save may touch that one entry, and for ' +

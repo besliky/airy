@@ -245,9 +245,10 @@ editable headlessly.
 
 Markdown editing (`.md` / `.markdown`) is line-based. `read_document` shows
 stats (including the file's EOL style and BOM), the heading list
-(`ordinal|line|level|text`, ATX headings outside fenced code blocks and YAML
-front matter — setext `===`/`---` headings are plain lines) and the full
-text; `blocks`/`range` select lines. `insert_content` takes markdown `text`
+(`ordinal|line|level|text` — ATX headings outside fenced code blocks and
+YAML front matter, setext `===`/`---` headings are plain lines; capped at
+200 entries with 80-character texts) and the full text; the whole read
+shares the 30k budget (`blocks`/`range` select lines). `insert_content` takes markdown `text`
 (not `html`) at one of three positions — after the first line containing
 `marker`, after heading N (`afterHeading`, 1-based ordinal from the read),
 or after line `at` (`-1` = start; default: end). `apply_ops` runs line ops
@@ -265,12 +266,15 @@ HTML editing (`.html` / `.htm`) is line-based, like a source editor.
 `read_document` shows the title, stats (including the file's EOL style and
 BOM), a parse5 structure summary — headings (`ordinal|line|level|text`) and
 links (`ordinal|line|text -> href`) with 0-based line positions, from the
-same parser the Airy HTML editor builds on — and the full text (30k budget;
-`blocks`/`range` select lines). `insert_content` splices the fragment
+same parser the Airy HTML editor builds on — and the full text; heading and
+link lists cap at 200 entries each and share the 30k read budget with the
+text (`blocks`/`range` select lines). `insert_content` splices the fragment
 **verbatim** (no reparse or rewrite — exactly what you send lands on disk,
 modulo the file's EOL style) after the first line containing `marker` (e.g.
 `</body>` to append rendered content) or after line `at` (`-1` = start;
-default: end). `apply_ops` runs line ops instead of block ops:
+default: end). `afterHeading` is a markdown-session option — passing it to an
+html session is an explicit error (html has no heading addressing; position
+via `marker` or `at`). `apply_ops` runs line ops instead of block ops:
 `insertLines after text`, `replaceLines from to text` (empty text deletes
 the range), `deleteLines from to`, and `findReplace find replace matchCase?
 from? to?` (line-scoped, optional inclusive line window). Line indexes are
@@ -280,8 +284,11 @@ open only when the document declares a usable `<meta charset>` — undeclared
 non-UTF-8 is refused with a conversion hint. A leading BOM survives saves,
 untouched lines keep their exact bytes (EOLs included — a CRLF file stays
 CRLF, mixed line endings keep their own), and a zero-edit save writes the
-original bytes back verbatim. HTML files cap at 8 MiB; documents above 1M
-characters skip the structure scan (read shows the text only).
+original bytes back verbatim; an edited save of a legacy-charset original
+writes UTF-8 **and rewrites the charset declaration to `utf-8`** (with a
+warning) — browsers trust the declaration, so leaving a stale legacy claim
+would render the saved file as mojibake. HTML files cap at 8 MiB; documents
+above 1M characters skip the structure scan (read shows the text only).
 
 ## Live mode
 
@@ -327,21 +334,23 @@ deliberate choice) and its result says whose turn it was (`anotherClient`).
 
 ## Formats and limitations
 
-| Format              | Open                                                             | Save                                                                                                    |
-| ------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `.docx`             | native, fully editable                                           | byte-preserving `.docx`                                                                                 |
-| `.xlsx` / `.xlsm`   | native (Rust sidecar), formulas recalc                           | `.xlsx`                                                                                                 |
-| `.xls` / `.ods`     | converted import (calamine) — **styles are lost**, tools warn    | `.xlsx` sibling; `format: "origin"` best-effort `.ods` via soffice; true `.xls` output is not supported |
-| `.doc`              | via soffice → editable `.docx`; without soffice → read-only text | `.docx`; `format: "origin"` best-effort `.doc` via soffice                                              |
-| `.odt`              | via soffice → editable `.docx` (without soffice: clear error)    | `.docx`; `format: "origin"` best-effort `.odt` via soffice                                              |
-| `.md` / `.markdown` | native (UTF-8, BOM accepted; invalid UTF-8 refused)              | line-preserving UTF-8; zero-edit saves round-trip verbatim; UTF-16 originals convert to UTF-8 on save   |
-| `.html` / `.htm`    | native (UTF-8, BOM accepted; declared legacy charsets accepted)  | line-preserving UTF-8; zero-edit saves round-trip verbatim; legacy/UTF-16 originals convert to UTF-8    |
+| Format              | Open                                                             | Save                                                                                                                                                  |
+| ------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.docx`             | native, fully editable                                           | byte-preserving `.docx`                                                                                                                               |
+| `.xlsx` / `.xlsm`   | native (Rust sidecar), formulas recalc                           | `.xlsx`                                                                                                                                               |
+| `.xls` / `.ods`     | converted import (calamine) — **styles are lost**, tools warn    | `.xlsx` sibling; `format: "origin"` best-effort `.ods` via soffice; true `.xls` output is not supported                                               |
+| `.doc`              | via soffice → editable `.docx`; without soffice → read-only text | `.docx`; `format: "origin"` best-effort `.doc` via soffice                                                                                            |
+| `.odt`              | via soffice → editable `.docx` (without soffice: clear error)    | `.docx`; `format: "origin"` best-effort `.odt` via soffice                                                                                            |
+| `.md` / `.markdown` | native (UTF-8, BOM accepted; invalid UTF-8 refused)              | line-preserving UTF-8; zero-edit saves round-trip verbatim; UTF-16 originals convert to UTF-8 on save                                                 |
+| `.html` / `.htm`    | native (UTF-8, BOM accepted; declared legacy charsets accepted)  | line-preserving UTF-8; zero-edit saves round-trip verbatim; legacy/UTF-16 originals convert to UTF-8 (legacy charset declarations rewritten to utf-8) |
 
 Byte preservation differs by format. `docx` saves keep untouched parts
 byte-identical, and a zero-edit save writes the original bytes back verbatim.
 `markdown` and `html` sessions behave the same at line granularity: untouched lines keep
 their exact bytes (EOLs included) and a zero-edit save round-trips the file
-verbatim; an edited save writes UTF-8 with the original BOM re-applied.
+verbatim; an edited save writes UTF-8 with the original BOM re-applied (html
+sessions also rewrite a legacy charset declaration to `utf-8`, so the saved
+file renders correctly in browsers).
 `xlsx` saves keep untouched zip entries byte-identical **except
 `xl/workbook.xml`**: the save gateway always ensures the `fullCalcOnLoad`
 flag so edited formulas recalculate on open, so even a zero-edit workbook
@@ -351,13 +360,16 @@ journal-based for workbooks (no edits journaled), not a byte guarantee.
 Headless slides and PDF tools are planned (backlog).
 
 Reads are bounded to keep tool answers inside the ~30k-character MCP budget:
-`read_document` truncates its output at 30,000 characters (the block
-overview tightens previews and elides the middle first; a selected-blocks
-read tells you to narrow the range), `read_document`'s `blocks` parameter
-accepts at most 200 indexes per call, and `read_workbook` ranges cap at
-20,000 cells (split larger ranges into smaller reads). Markdown and HTML sessions add
-an 8 MiB open cap (larger files are refused with a clear error); HTML documents above
-1M characters skip the parse5 structure scan.
+`read_document` truncates its output at 30,000 characters (markdown/html
+reads count the structure summary toward that budget — heading and link
+lists cap at 200 entries each; the block overview tightens previews and
+elides the middle first; a selected-blocks read tells you to narrow the
+range), `read_document`'s `blocks` parameter accepts at most 200 indexes per
+call, a `range` may span at most 10,000 blocks/lines (a larger span is
+rejected up front — split it into several reads), and `read_workbook` ranges
+cap at 20,000 cells (split larger ranges into smaller reads). Markdown and
+HTML sessions add an 8 MiB open cap (larger files are refused with a clear
+error); HTML documents above 1M characters skip the parse5 structure scan.
 
 ## Security model
 

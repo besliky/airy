@@ -443,6 +443,67 @@ describe('markdown tools over MCP', () => {
     }
   })
 
+  it('rejects an enormous read range fast, before allocating the index array', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const handle = await openFixture(client)
+      // before the span cap this loop built the whole index array first and
+      // hung/OOMed the server; it must now fail fast with the cap message
+      const exploded = await call(client, 'read_document', {
+        handle,
+        range: { start: 0, end: Number.MAX_SAFE_INTEGER },
+      })
+      expect(exploded.isError).toBe(true)
+      expect(text(exploded)).toContain('the cap is 10000 per read')
+      // a span just over the cap is refused too; at or under it still works
+      const over = await call(client, 'read_document', {
+        handle,
+        range: { start: 0, end: 10_000 },
+      })
+      expect(over.isError).toBe(true)
+      expect(text(over)).toContain('the cap is 10000 per read')
+      // out-of-range counting still works without materializing the tail
+      const beyond = await call(client, 'read_document', {
+        handle,
+        range: { start: 10, end: 20 },
+      })
+      expect(beyond.isError).toBe(true)
+      expect(text(beyond)).toContain('out of range')
+      const ok = await call(client, 'read_document', { handle, range: { start: 0, end: 12 } })
+      expect(text(ok)).toContain('Selected 13 line(s)')
+    } finally {
+      await close()
+    }
+  })
+
+  it('caps the heading list and the whole read stays inside the 30k budget (heading flood)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // one megabyte-long heading line + 250 short ones: without the caps the
+      // heading block alone carried the whole file (~100 KB) into the answer
+      const flood = [
+        `# ${'h'.repeat(100_000)}`,
+        ...Array.from({ length: 250 }, (_, i) => `# heading ${String(i)}`),
+        '',
+      ].join('\n')
+      const handle = await openFixture(client, 'flood.md', new TextEncoder().encode(flood))
+      const read = await call(client, 'read_document', { handle })
+      expect(read.isError).toBeFalsy()
+      const body = text(read)
+      expect(body).toContain('(first 200 of 251 - use range reads for the rest)')
+      expect(body).toContain('2|1|#|heading 0')
+      expect(body).toContain('200|199|#|heading 198')
+      expect(body).not.toContain('201|')
+      // the megabyte heading text is clipped in the list ... and the whole
+      // assembly is truncated at the 30k budget
+      expect(body).toMatch(/^1\|0\|#\|h{1,80}\.\.\.$/m)
+      expect(body).toContain('output truncated at 30000 characters')
+      expect(body.length).toBeLessThan(31_500)
+    } finally {
+      await close()
+    }
+  })
+
   it('guards saves: refuses existing targets without overwrite, fences external writers', async () => {
     const { client, close } = await connectSession()
     try {

@@ -19,7 +19,8 @@
 // file-parse decodeHtmlText approach minus its silent generic fallback,
 // which would bless mojibake with a save). A leading BOM lives in a flag,
 // stays out of the editable text, and is re-applied on every save; edited
-// saves always write UTF-8.
+// saves always write UTF-8, and a legacy charset declaration is rewritten to
+// utf-8 so the re-encoded file renders correctly in browsers.
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -44,6 +45,14 @@ const OPS_TEXT_MAX_CHARS = 200_000
 const STRUCTURE_SCAN_MAX_CHARS = 1_000_000
 /** how many links the read summary lists before eliding */
 const LINK_LIST_MAX = 200
+/** how many headings the read summary lists before eliding (links' twin) */
+const HEADING_LIST_MAX = 200
+/**
+ * Largest range span a read materializes: the request schema does not bound
+ * `end`, so the session must reject a huge span BEFORE building the index
+ * array (a range like 0..2^53 would otherwise hang/OOM the server).
+ */
+const RANGE_MAX_SPAN = 10_000
 
 /** U+FEFF as pure-ASCII source (a literal BOM char in source trips tooling) */
 const BOM_CHAR = String.fromCharCode(0xfeff)
@@ -451,10 +460,10 @@ export class HtmlSession {
 
   /**
    * Agent-facing read: file header (title, stats, EOL/BOM), the structural
-   * summary (headings and links with line positions), then the full text -
-   * truncated at the 30k budget with a hint to request line ranges instead.
-   * With lines/range selected, the full text section is replaced by exactly
-   * those lines.
+   * summary (headings and links with line positions - both lists capped), then
+   * the full text. The whole assembly shares the 30k budget, with a hint to
+   * request line ranges instead. With lines/range selected, the full text
+   * section is replaced by exactly those lines.
    */
   readDocument(options: HtmlReadOptions = {}): string {
     const meta = this.meta()
@@ -466,16 +475,22 @@ export class HtmlSession {
       `${meta.bom ? ' Starts with a BOM.' : ''}`
     const structure = this.structure()
     const oversize = joinLines(this.lines, false).length > STRUCTURE_SCAN_MAX_CHARS
-    const headingLines = structure.headings.map(
-      (h) => `${h.ordinal}|${h.line}|h${h.level}|${h.text}`,
-    )
+    const headingLines = structure.headings
+      .slice(0, HEADING_LIST_MAX)
+      .map((h) => `${h.ordinal}|${h.line}|h${h.level}|${h.text}`)
     const linkLines = structure.links
       .slice(0, LINK_LIST_MAX)
       .map((l) => `${l.ordinal}|${l.line}|${l.text || '(no text)'} -> ${l.href}`)
     const structureBlock = oversize
       ? 'Structure (ordinal|line|tag|text): skipped - the document exceeds the 1M-character scan budget; address lines directly.'
       : [
-          `Headings (ordinal|line|level|text):${headingLines.length === 0 ? ' none' : ''}`,
+          `Headings (ordinal|line|level|text):${structure.headings.length === 0 ? ' none' : ''}${
+            structure.headings.length > HEADING_LIST_MAX
+              ? ` (first ${String(HEADING_LIST_MAX)} of ${String(
+                  structure.headings.length,
+                )} - use range reads for the rest)`
+              : ''
+          }`,
           ...headingLines,
           `Links (ordinal|line|text -> href):${
             structure.links.length === 0 ? ' none' : ''
@@ -486,41 +501,71 @@ export class HtmlSession {
     const selected = this.selectedIndexes(options)
     if (selected === null) {
       const fullText = this.lines.map((l) => l.text).join('\n')
-      const clipped = clip(fullText, READ_MAX_CHARS, 'request a line range to read the rest')
-      return [header, structureBlock, '', 'Full text (EOLs normalized to LF):', clipped].join('\n')
+      return clip(
+        [header, structureBlock, '', 'Full text (EOLs normalized to LF):', fullText].join('\n'),
+        READ_MAX_CHARS,
+        'request a line range to read the rest',
+      )
     }
     const body = selected.map((i) => this.lines[i]!.text).join('\n')
-    const clipped = clip(body, READ_MAX_CHARS, 'request a narrower selection')
-    return [
-      header,
-      structureBlock,
-      '',
-      `Selected ${String(selected.length)} line(s) (EOLs normalized to LF):`,
-      clipped,
-    ].join('\n')
+    return clip(
+      [
+        header,
+        structureBlock,
+        '',
+        `Selected ${String(selected.length)} line(s) (EOLs normalized to LF):`,
+        body,
+      ].join('\n'),
+      READ_MAX_CHARS,
+      'request a narrower selection',
+    )
   }
 
   /** Resolve blocks/range-style selections to validated, sorted line indexes. */
   private selectedIndexes(options: HtmlReadOptions): number[] | null {
     const count = this.lines.length
-    let indexes: number[] | null = null
     if (options.lines !== undefined) {
-      indexes = options.lines
-    } else if (options.range !== undefined) {
+      const valid = options.lines.filter((i) => Number.isInteger(i) && i >= 0 && i < count)
+      const invalid = options.lines.length - valid.length
+      if (invalid > 0) {
+        throw new Error(
+          `${String(invalid)} of the requested line indexes are out of range (file has ${String(count)} lines)`,
+        )
+      }
+      if (valid.length === 0) throw new Error('No lines selected (empty lines/range)')
+      return [...new Set(valid)].sort((a, b) => a - b)
+    }
+    if (options.range !== undefined) {
+      // validate arithmetically and only then materialize: a huge `end` must
+      // fail fast instead of allocating the index array first
       const { start, end } = options.range
-      indexes = []
-      for (let i = start; i <= end; i++) indexes.push(i)
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start) {
+        throw new Error(
+          `range start/end must be integers with 0 <= start <= end (got start=${start}, end=${end})`,
+        )
+      }
+      const span = end - start + 1
+      if (span > RANGE_MAX_SPAN) {
+        throw new Error(
+          `range ${String(start)}..${String(end)} spans ${String(span)} lines; the cap is ${String(
+            RANGE_MAX_SPAN,
+          )} per read (split large ranges into smaller reads)`,
+        )
+      }
+      const validEnd = Math.min(end, count - 1)
+      const validCount = Math.max(0, validEnd - start + 1)
+      const invalid = span - validCount
+      if (invalid > 0) {
+        throw new Error(
+          `${String(invalid)} of the requested line indexes are out of range (file has ${String(count)} lines)`,
+        )
+      }
+      if (validCount === 0) throw new Error('No lines selected (empty lines/range)')
+      const indexes: number[] = []
+      for (let i = start; i <= validEnd; i++) indexes.push(i)
+      return indexes
     }
-    if (indexes === null) return null
-    const valid = indexes.filter((i) => Number.isInteger(i) && i >= 0 && i < count)
-    const invalid = indexes.length - valid.length
-    if (invalid > 0) {
-      throw new Error(
-        `${String(invalid)} of the requested line indexes are out of range (file has ${String(count)} lines)`,
-      )
-    }
-    if (valid.length === 0) throw new Error('No lines selected (empty lines/range)')
-    return [...new Set(valid)].sort((a, b) => a - b)
+    return null
   }
 
   // ---- editing ----
@@ -804,12 +849,38 @@ export class HtmlSession {
   // ---- saving ----
 
   /**
+   * Point the document's charset declaration at UTF-8 before an edited save
+   * writes UTF-8 bytes: browsers trust <meta charset>, so a stale legacy label
+   * would decode the re-encoded file as mojibake (the GUI editor follows the
+   * same decode-declared / save-UTF-8 policy). Returns the replaced label, or
+   * null when nothing needed rewriting. The charset token itself cannot span
+   * lines, so the joined-text offset maps onto exactly one line.
+   */
+  private pinCharsetDeclaration(): string | null {
+    const text = this.lines.map((l) => l.text).join('\n')
+    const match = META_CHARSET_RE.exec(text)
+    if (match === null || /^utf-?8$/i.test(match[1]!)) return null
+    const tokenStart = match.index + match[0].length - match[1]!.length
+    let offset = 0
+    for (const line of this.lines) {
+      if (tokenStart >= offset && tokenStart < offset + line.text.length) {
+        const at = tokenStart - offset
+        line.text = `${line.text.slice(0, at)}utf-8${line.text.slice(at + match[1]!.length)}`
+        return match[1]!
+      }
+      offset += line.text.length + 1
+    }
+    return null
+  }
+
+  /**
    * Save atomically (tmp + rename) with the docx session's fences: saving over
    * the opened file refuses when it changed on disk since open; a target that
    * exists is refused unless the session owns it or overwrite is true. With no
    * edits the original bytes round-trip verbatim (an untouched file never
    * changes on disk, whatever its encoding was); an edited save writes UTF-8
-   * with the original BOM flag re-applied.
+   * with the original BOM flag re-applied, and a legacy charset declaration is
+   * rewritten to utf-8 so the saved file decodes correctly in browsers.
    */
   async save(rawPath?: string, options: { overwrite?: boolean } = {}): Promise<HtmlSaveResult> {
     const target = resolveConfined(rawPath ?? this.path)
@@ -833,6 +904,15 @@ export class HtmlSession {
       bytes = this.originalBytes
       unchanged = true
     } else {
+      if (!decodedIsUtf8(this.encoding)) {
+        const replaced = this.pinCharsetDeclaration()
+        if (replaced !== null) {
+          warnings.push(
+            `Charset declaration rewritten from "${replaced}" to "utf-8" ` +
+              '(the edited copy is UTF-8; a stale legacy claim would render as mojibake).',
+          )
+        }
+      }
       bytes = new TextEncoder().encode(joinLines(this.lines, this.bom))
       if (!decodedIsUtf8(this.encoding)) {
         warnings.push(`Original encoding was ${this.encoding}; the edited copy is saved as UTF-8.`)
