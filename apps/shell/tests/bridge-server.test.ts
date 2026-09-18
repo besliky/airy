@@ -12,8 +12,10 @@ import {
   bridgeSocketPath,
   BRIDGE_INFO_NAME,
   BRIDGE_SOCKET_NAME,
+  createBackpressureWriter,
   startBridgeServer,
   writeBridgeInfoFile,
+  type BackpressureSocket,
   type BridgeEndpointInfo,
   type BridgeServerHandle,
 } from '../src/main/bridge/server'
@@ -70,6 +72,10 @@ function connectClient(socketPath: string) {
     closed,
     send(payload: unknown): void {
       socket.write(`${JSON.stringify(payload)}\n`)
+    },
+    /** raw write for flood-shaped payloads the JSON helper would chunk one-by-one */
+    writeRaw(text: string): void {
+      socket.write(text)
     },
     async next(): Promise<string> {
       const line = lines.shift()
@@ -286,5 +292,82 @@ describe('bridge server over a live socket', () => {
     // a fresh server can bind the same socket again (stale socket cleanup)
     server = await startBridgeServer({ userDataDir: dir, methods: {} })
     expect(existsSync(server.info.socketPath)).toBe(true)
+  })
+
+  it('closes the connection when a peer pipelines past the queue cap', async () => {
+    // A peer may only pipeline a bounded number of unanswered requests:
+    // each one is a chained promise plus a buffered response, and a flood
+    // from a client that never reads would grow both without bound.
+    const stalls: (() => void)[] = []
+    server = await startBridgeServer({
+      userDataDir: dir,
+      maxQueuedRequests: 4,
+      methods: {
+        stall: () =>
+          new Promise((resolve) => {
+            stalls.push(resolve)
+          }),
+      },
+    })
+    const client = connectClient(server.info.socketPath)
+    await client.ready
+    await handshake(client, server.info.token)
+    const flood = `${Array.from({ length: 9 }, () => JSON.stringify({ protocol_version: 1, method: 'stall' })).join('\n')}\n`
+    client.writeRaw(flood)
+    // the rejection jumps the stalled FIFO chain on purpose: the connection
+    // is being closed and the reason must reach the peer first
+    const rejection = JSON.parse(await client.next())
+    expect(rejection).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_request', message: expect.stringContaining('pipelined') },
+    })
+    await client.closed
+    for (const release of stalls) release()
+    client.end()
+  })
+})
+
+describe('createBackpressureWriter', () => {
+  function fakeSocket() {
+    const listeners: Record<string, (() => void)[]> = {}
+    const calls: string[] = []
+    const socket: BackpressureSocket & { calls: string[]; emit(event: string): void } = {
+      calls,
+      write: () => {
+        calls.push('write')
+        return calls.filter((call) => call === 'write').length < 2 // second write reports backpressure
+      },
+      pause: () => calls.push('pause'),
+      resume: () => calls.push('resume'),
+      on: (event, listener) => {
+        ;(listeners[event] ??= []).push(listener)
+      },
+      emit: (event) => {
+        for (const listener of listeners[event] ?? []) listener()
+      },
+    }
+    return socket
+  }
+
+  it('pauses ingress when the socket buffer fills and resumes on drain', () => {
+    const socket = fakeSocket()
+    const writer = createBackpressureWriter(socket)
+    expect(writer.paused).toBe(false)
+    writer.write('first\n') // accepted without backpressure
+    expect(writer.paused).toBe(false)
+    writer.write('second\n') // write() now returns false
+    expect(writer.paused).toBe(true)
+    expect(socket.calls).toEqual(['write', 'write', 'pause'])
+    socket.emit('drain')
+    expect(writer.paused).toBe(false)
+    expect(socket.calls).toEqual(['write', 'write', 'pause', 'resume'])
+  })
+
+  it('ignores drain events while flowing', () => {
+    const socket = fakeSocket()
+    const writer = createBackpressureWriter(socket)
+    socket.emit('drain') // spurious drain with no pause outstanding
+    expect(writer.paused).toBe(false)
+    expect(socket.calls).toEqual([]) // no resume, no pause
   })
 })

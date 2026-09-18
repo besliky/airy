@@ -46,6 +46,43 @@ export function generateBridgeToken(): string {
   return randomBytes(32).toString('hex')
 }
 
+/// The socket surface the backpressure writer needs (satisfied by net.Socket,
+/// faked in tests).
+export interface BackpressureSocket {
+  write(payload: string): boolean
+  pause(): void
+  resume(): void
+  on(event: 'drain', listener: () => void): void
+}
+
+/**
+ * Write-side backpressure for one connection. A peer that reads slowly makes
+ * socket.write() return false once the kernel buffer fills; writing on
+ * regardless would buffer responses in memory without bound. Pause the
+ * socket — request ingress stops with it — until the buffer drains.
+ */
+export function createBackpressureWriter(socket: BackpressureSocket): {
+  write(payload: string): void
+  readonly paused: boolean
+} {
+  let paused = false
+  socket.on('drain', () => {
+    if (!paused) return
+    paused = false
+    socket.resume()
+  })
+  return {
+    get paused() {
+      return paused
+    },
+    write(payload) {
+      if (socket.write(payload)) return
+      paused = true
+      socket.pause()
+    },
+  }
+}
+
 /**
  * Write the info file and tighten it to 0600 — Node creates files 0775 &
   umask, and the token grants full document-edit access, so owner-only is the
@@ -67,9 +104,12 @@ export async function startBridgeServer(options: {
   userDataDir: string
   methods: Record<string, BridgeMethodHandler>
   timeoutMs?: number
+  /** requests a connection may pipeline before it is closed as abusive */
+  maxQueuedRequests?: number
   log?: (message: string) => void
 }): Promise<BridgeServerHandle> {
   const { userDataDir, methods, timeoutMs, log = () => {} } = options
+  const maxQueuedRequests = options.maxQueuedRequests ?? 256
   const socketPath = bridgeSocketPath(userDataDir)
   const infoPath = bridgeInfoPath(userDataDir)
   const token = generateBridgeToken()
@@ -100,9 +140,13 @@ export async function startBridgeServer(options: {
     // responses are chained per connection: request N+1 only starts after N's
     // response was written — the FIFO contract, even when handlers are async
     let chain: Promise<void> = Promise.resolve()
+    // requests accepted but not yet answered; a peer pipelining faster than
+    // it reads would grow this (and the socket buffer) without bound
+    let queued = 0
+    const wire = createBackpressureWriter(socket)
     const write = (response: BridgeResponse) => {
       if (closed || socket.destroyed) return
-      socket.write(`${encodeResponse(response)}\n`)
+      wire.write(`${encodeResponse(response)}\n`)
     }
     const close = () => {
       if (closed) return
@@ -137,17 +181,39 @@ export async function startBridgeServer(options: {
           return
         }
         const request = parsed.value
+        queued += 1
+        // The queue is unbounded work in memory while the earlier responses
+        // wait on a stalled or slow-reading peer; refuse the flood outright.
+        // The rejection jumps the FIFO chain on purpose — the connection is
+        // being closed, and the reason must reach the peer before it does.
+        if (queued > maxQueuedRequests) {
+          write(
+            bridgeError(
+              'invalid_request',
+              `too many pipelined requests (over ${maxQueuedRequests}) — closing`,
+            ),
+          )
+          close()
+          return
+        }
         chain = chain
           .then(() => dispatcher.call(request, { clientId }))
-          .then(write, (err: unknown) => {
-            // dispatcher.call never rejects, but a write failure must not break the chain
-            write(
-              bridgeError(
-                'internal',
-                err instanceof Error ? err.message : 'unexpected bridge failure',
-              ),
-            )
-          })
+          .then(
+            (response) => {
+              write(response)
+              queued -= 1
+            },
+            (err: unknown) => {
+              // dispatcher.call never rejects, but a write failure must not break the chain
+              write(
+                bridgeError(
+                  'internal',
+                  err instanceof Error ? err.message : 'unexpected bridge failure',
+                ),
+              )
+              queued -= 1
+            },
+          )
       }
     })
     socket.on('error', (err) => log(`bridge connection error: ${String(err)}`))
