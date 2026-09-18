@@ -10,4 +10,6 @@ export const en = {
   reviewCompareIdentical: 'No differences with {name}: the documents are identical',
   reviewCompareDegraded:
     'The documents are too large for exact paragraph matching: differences were paired by position',
+  reviewComparePendingRevisions:
+    'The document has pending tracked changes. Accept or reject them before comparing again',
 } satisfies Record<keyof typeof zh, string>

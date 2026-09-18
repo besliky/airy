@@ -10,4 +10,6 @@ export const it = {
     'Confrontato con {name}: {added} inserimenti, {removed} eliminazioni e {changed} modifiche uniti come revisioni (documenti troppo grandi per un allineamento esatto dei paragrafi)',
   reviewCompareDegraded:
     'I documenti sono troppo grandi per un allineamento esatto dei paragrafi: le differenze sono state abbinate per posizione',
+  reviewComparePendingRevisions:
+    'Il documento contiene revisioni in sospeso. Accettale o rifiutale prima di confrontare di nuovo',
 } satisfies Record<keyof typeof zh, string>

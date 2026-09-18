@@ -10,4 +10,6 @@ export const pl = {
     'Porównano z {name}: scalono {added} wstawień, {removed} usunięć i {changed} zmian jako śledzone zmiany (dokumenty zbyt duże do dokładnego dopasowania akapitów)',
   reviewCompareDegraded:
     'Dokumenty są zbyt duże do dokładnego dopasowania akapitów: różnice sparowano według pozycji',
+  reviewComparePendingRevisions:
+    'Dokument zawiera oczekujące śledzone zmiany. Zaakceptuj lub odrzuć je przed ponownym porównaniem',
 } satisfies Record<keyof typeof zh, string>

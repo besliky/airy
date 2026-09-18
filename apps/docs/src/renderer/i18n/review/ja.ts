@@ -10,4 +10,6 @@ export const ja = {
     '{name} と比較しました：挿入 {added} 件、削除 {removed} 件、変更 {changed} 件を変更履歴としてマージしました（ドキュメントが大きすぎて段落を正確に照合できません）',
   reviewCompareDegraded:
     'ドキュメントが大きすぎて段落を正確に照合できません：差分は位置でペアリングされました',
+  reviewComparePendingRevisions:
+    'ドキュメントに未処理の変更履歴があります。再度比較する前に、これらを承認または却下してください',
 } satisfies Record<keyof typeof zh, string>

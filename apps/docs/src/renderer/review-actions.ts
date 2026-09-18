@@ -28,6 +28,7 @@ import type { InkAnnotation } from './editor/ink'
 import {
   acceptAllRevisions,
   acceptCurrentRevision,
+  collectRevisions,
   rejectAllRevisions,
   rejectCurrentRevision,
   TRACK_IGNORE,
@@ -292,6 +293,17 @@ export function clearInks(ctx: ReviewContext): void {
 export async function compareWithFile(ctx: ReviewContext, mode: 'panel' | 'merge'): Promise<void> {
   if (!ctx.doc) return
   const editor = ctx.editor
+  if (mode === 'merge' && editor) {
+    // BUG-915: refuse to stack a second blackline over pending revisions —
+    // the paragraph keys would count struck/underlined text as plain text,
+    // the pairing slides and spans get re-stamped, mixing authors/dates from
+    // two sessions (Word instead offers to discard pending changes; an
+    // honest refusal is the cheap correct option)
+    if (collectRevisions(editor.state.doc).length > 0) {
+      ctx.setStatus(t('reviewComparePendingRevisions'))
+      return
+    }
+  }
   const other = await window.desktop.openDocx()
   if (!other) return
   // password-protected comparison target: not wired through the decrypt prompt (yet)
@@ -311,7 +323,7 @@ export async function compareWithFile(ctx: ReviewContext, mode: 'panel' | 'merge
       if (degraded) ctx.setStatus(t('reviewCompareDegraded'))
       return
     }
-    // panel mode returned above; only the merge path continues
+    // panel mode returned above; only the merge path continues (guarded above)
     if (!editor) return
     const { content, summary, degraded } = mergeCompareDocs(
       editor.getJSON().content ?? [],

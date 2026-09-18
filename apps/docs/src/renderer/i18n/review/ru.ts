@@ -10,4 +10,6 @@ export const ru = {
   reviewCompareIdentical: 'Различий с {name} нет: документы идентичны',
   reviewCompareDegraded:
     'Документы слишком велики для точного выравнивания абзацев: различия сопоставлены по позиции',
+  reviewComparePendingRevisions:
+    'В документе есть непринятые исправления. Сначала примите или отклоните их, затем сравнивайте снова',
 } satisfies Record<keyof typeof zh, string>

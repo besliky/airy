@@ -10,4 +10,6 @@ export const ms = {
     'Dibandingkan dengan {name}: {added} sisipan, {removed} pemadaman dan {changed} perubahan digabungkan sebagai perubahan dijejak (dokumen terlalu besar untuk padanan perenggan tepat)',
   reviewCompareDegraded:
     'Dokumen terlalu besar untuk padanan perenggan tepat: perbezaan dipasangkan mengikut kedudukan',
+  reviewComparePendingRevisions:
+    'Dokumen mengandungi perubahan dijejak yang tertunda. Terima atau tolak dahulu sebelum membanding semula',
 } satisfies Record<keyof typeof zh, string>

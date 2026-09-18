@@ -10,4 +10,6 @@ export const es = {
     'Comparado con {name}: {added} inserciones, {removed} eliminaciones y {changed} cambios fusionados como cambios controlados (documentos demasiado grandes para una coincidencia exacta de párrafos)',
   reviewCompareDegraded:
     'Los documentos son demasiado grandes para una coincidencia exacta de párrafos: las diferencias se emparejaron por posición',
+  reviewComparePendingRevisions:
+    'El documento tiene cambios controlados pendientes. Acéptelos o rechácelos antes de volver a comparar',
 } satisfies Record<keyof typeof zh, string>

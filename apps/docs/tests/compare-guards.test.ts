@@ -13,9 +13,9 @@ Object.assign(window, { desktop: { openDocx } })
 
 setModuleLang('en')
 
-const para = (text: string): PmNode => ({
+const para = (text: string, marks?: PmNode['marks']): PmNode => ({
   type: 'docParagraph',
-  ...(text ? { content: [{ type: 'text', text }] } : {}),
+  ...(text ? { content: [{ type: 'text', text, ...(marks ? { marks } : {}) }] } : {}),
 })
 
 function createEditor(content: PmNode[]): Editor {
@@ -40,7 +40,7 @@ function makeCtx(editor: Editor | null, parsedBlocks: unknown[] = []) {
   return { ctx, status }
 }
 
-describe('compareWithFile paragraph budget warning (BUG-913)', () => {
+describe('compareWithFile guards (BUG-913 budget, BUG-915 pending revisions)', () => {
   beforeAll(async () => {
     const bytes = await buildDocx({ bodyXml: '<w:p><w:r><w:t>New text</w:t></w:r></w:p>' })
     openDocx.mockResolvedValue({ name: 'other.docx', data: bytes })
@@ -61,6 +61,22 @@ describe('compareWithFile paragraph budget warning (BUG-913)', () => {
     expect(status.at(-1)).toBe(
       t('reviewCompareMerged', { name: 'other.docx', added: 0, removed: 0, changed: 1 }),
     )
+    editor.destroy()
+  })
+
+  it('refuses the merge over pending revisions instead of mixing stamps (BUG-915)', async () => {
+    const editor = createEditor([
+      para('pending edit', [
+        { type: 'ins', attrs: { author: 'Other', date: '2020-01-01T00:00:00Z', id: null } },
+      ]),
+    ])
+    const dispatch = vi.spyOn(editor.view, 'dispatch')
+    const { ctx, status } = makeCtx(editor)
+    await compareWithFile(ctx, 'merge')
+    expect(openDocx).not.toHaveBeenCalled()
+    expect(dispatch).not.toHaveBeenCalled()
+    expect(ctx.dirtyRef.current).toBe(false)
+    expect(status.at(-1)).toBe(t('reviewComparePendingRevisions'))
     editor.destroy()
   })
 
