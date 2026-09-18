@@ -163,6 +163,27 @@ jobs:
       - name: Build apps
         run: npm run build:all
 
+      # PERF-903 (completes PERF-501): sheets renderer bundle-size gate.
+      # build:all above already produced out/renderer, so this step only reads
+      # the chunks. The JSON size table lands in the job log and is uploaded
+      # as an artifact (bundle sizes diffable across runs/PRs); both
+      # invocations exit non-zero when a chunk crosses the budget, failing
+      # the job before the (slower) e2e minutes are spent.
+      - name: Sheets bundle-size report (budget gate)
+        run: |
+          mkdir -p reports
+          npm run bundle-report -w @airy-office/sheets -- --json > reports/bundle-sizes.json
+          cat reports/bundle-sizes.json
+          npm run bundle-report -w @airy-office/sheets
+
+      - name: Upload bundle-size report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bundle-sizes
+          path: reports/bundle-sizes.json
+          retention-days: 30
+
       - name: Generate sheets fixtures
         run: npm run fixtures -w @airy-office/sheets
 
