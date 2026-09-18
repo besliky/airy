@@ -665,7 +665,7 @@ export async function savePptx(opened: OpenedPptx): Promise<Uint8Array> {
 }
 
 /**
- * Same output as savePptx, written straight to `filePath`.
+ * Same output as savePptx, written straight to `filePath` — atomically.
  *
  * Prefer this for anything that lands on disk: savePptx has to assemble the whole
  * package into one contiguous buffer, which on a large deck fails outright with
@@ -673,17 +673,37 @@ export async function savePptx(opened: OpenedPptx): Promise<Uint8Array> {
  * time. JSZip throws stream errors from inside its own scheduled callbacks, so the
  * stream's 'error' event — not just the returned promise — has to be handled or the
  * throw escapes as an uncaught exception and takes the process down.
+ *
+ * The stream lands in a same-directory `.<name>.<rand>.tmp` file (same naming
+ * scheme as atomicWriteFile in electron-utils — this package can't depend on it,
+ * so the few lines are mirrored here) that is renamed over the target only once
+ * complete. A crash or ENOSPC mid-write can damage the dot-prefixed temp file,
+ * never the user's deck: on any failure the temp is deleted and the error
+ * propagates with the target's previous bytes untouched.
  */
 export async function savePptxToFile(opened: OpenedPptx, filePath: string): Promise<void> {
   const { createWriteStream } = await import('node:fs')
+  const { rename, unlink } = await import('node:fs/promises')
   const { pipeline } = await import('node:stream/promises')
+  const { randomBytes } = await import('node:crypto')
+  const { basename, dirname, join } = await import('node:path')
+  const tempPath = join(
+    dirname(filePath),
+    `.${basename(filePath)}.${randomBytes(6).toString('hex')}.tmp`,
+  )
   const source = buildZip(opened).generateNodeStream({
     type: 'nodebuffer',
     compression: 'DEFLATE',
     compressionOptions: { level: 6 },
     streamFiles: true,
   })
-  await pipeline(source, createWriteStream(filePath))
+  try {
+    await pipeline(source, createWriteStream(tempPath))
+    await rename(tempPath, filePath)
+  } catch (error) {
+    await unlink(tempPath).catch(() => {})
+    throw error
+  }
 }
 
 /**
