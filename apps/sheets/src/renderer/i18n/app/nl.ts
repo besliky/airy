@@ -324,6 +324,8 @@ export const nl = {
   appDialogCancel: 'Annuleren',
   appPivotSheetNoMove:
     'Dit werkblad bevat een draaitabel — bereiken verplaatsen wordt nog niet ondersteund.',
+  appMoveRangeReplaceOnly:
+    'Alleen bereikverplaatsingen op hetzelfde blad naar een even groot gebied kunnen worden opgeslagen — deze verplaatsing is geannuleerd.',
   appMergeOverTable:
     'De selectie overlapt een Excel-tabel — cellen samenvoegen in een tabel wordt nog niet ondersteund.',
   appTableFilterNoEdit:

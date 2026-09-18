@@ -273,6 +273,8 @@ export const zhTW = {
   appFullLoadTooLarge: '此活頁簿過大，無法完整載入記憶體，篩選在此檔案上暫不可用。',
   appDialogCancel: '取消',
   appPivotSheetNoMove: '該工作表含樞紐分析表——暫不支援移動範圍。',
+  appMoveRangeReplaceOnly:
+    '僅支援在工作表內把區域移動到等大的目標位置（替換式移動）——已取消本次移動。',
   appMergeOverTable: '所選範圍位於 Excel 表格內——暫不支援合併表格中的儲存格。',
   appTableFilterNoEdit: '該工作表的篩選屬於 Excel 表格——編輯後暫時無法儲存。',
   appAutofillStreaming: '暫不允許向仍在串流載入的範圍自動填入。',

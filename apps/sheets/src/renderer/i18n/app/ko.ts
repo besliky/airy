@@ -312,6 +312,8 @@ export const ko = {
     '이 통합 문서는 너무 커서 메모리에 전부 로드할 수 없습니다. 이 파일에서는 필터를 사용할 수 없습니다.',
   appDialogCancel: '취소',
   appPivotSheetNoMove: '이 시트에는 피벗 테이블이 있어 아직 범위 이동을 지원하지 않습니다.',
+  appMoveRangeReplaceOnly:
+    '같은 시트에서 같은 크기의 영역으로 이동하는 경우만 저장할 수 있습니다. 이 이동은 취소되었습니다.',
   appMergeOverTable: '선택 영역이 Excel 표와 겹칩니다 — 표 안의 셀 병합은 아직 지원되지 않습니다.',
   appTableFilterNoEdit:
     '이 시트의 필터는 Excel 표에 속해 있어 편집 후에도 당분간 저장할 수 없습니다.',

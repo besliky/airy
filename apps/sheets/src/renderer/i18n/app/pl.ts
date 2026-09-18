@@ -326,6 +326,8 @@ export const pl = {
   appDialogCancel: 'Anuluj',
   appPivotSheetNoMove:
     'Ten arkusz zawiera tabelę przestawną — przenoszenie zakresów nie jest jeszcze obsługiwane.',
+  appMoveRangeReplaceOnly:
+    'Zapisywalne są tylko przeniesienia zakresu w tym samym arkuszu na obszar o tym samym rozmiarze — to przeniesienie zostało anulowane.',
   appMergeOverTable:
     'Zaznaczenie nachodzi na tabelę programu Excel — scalanie komórek w tabeli nie jest jeszcze obsługiwane.',
   appTableFilterNoEdit:

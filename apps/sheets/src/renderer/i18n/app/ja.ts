@@ -324,6 +324,8 @@ export const ja = {
   appDialogCancel: 'キャンセル',
   appPivotSheetNoMove:
     'このシートにはピボットテーブルが含まれています — 範囲の移動には未対応です。',
+  appMoveRangeReplaceOnly:
+    '保存できるのは、同じワークシート内で同じ大きさの領域への範囲移動のみです。この移動はキャンセルされました。',
   appMergeOverTable:
     '選択範囲が Excel テーブルと重なっています — テーブル内のセル結合は現時点では対応していません。',
   appTableFilterNoEdit:

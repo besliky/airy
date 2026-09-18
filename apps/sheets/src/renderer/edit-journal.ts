@@ -70,6 +70,13 @@ export type StructuralJournalOp =
       readonly count: number
       readonly before: number
     }
+  /// Same-sheet rectangle move with replace semantics (drag a selection by
+  /// its edge): cells inside `from` relocate to the equal-size rectangle
+  /// `to`, destroying what sat there. Journaled cells, fills, and hyperlinks
+  /// shift through the same 2D map; undo arrives as the exact reverse move
+  /// and cancels the pair. Only ever recorded on fully-loaded sheets (the
+  /// command gate), so the streaming coordinate maps never see it.
+  | { readonly kind: 'move-range'; readonly from: CellRange; readonly to: CellRange }
   | {
       readonly kind: 'merge-cells' | 'unmerge-cells'
       readonly range: {
@@ -1198,15 +1205,86 @@ function shiftSeriesEntry<
   return next
 }
 
+/// Rectangle-move counterpart of shiftSeriesRef: fully inside `from`
+/// follows, fully inside `to` dies (null — literal-value fallback), anything
+/// else keeps its text. References to other sheets are verbatim.
+function moveRangeSeriesRef(
+  ref: string,
+  sheetName: string,
+  op: Extract<StructuralJournalOp, { kind: 'move-range' }>,
+): string | null {
+  const split = splitSheetRef(ref)
+  if (!split || split.sheetName !== sheetName) return ref
+  let area: CellRange
+  try {
+    area = parseRange(split.range)
+  } catch {
+    return ref
+  }
+  const contains = (outer: CellRange): boolean =>
+    area.startRow >= outer.startRow &&
+    area.endRow <= outer.endRow &&
+    area.startColumn >= outer.startColumn &&
+    area.endColumn <= outer.endColumn
+  const format = (moved: CellRange): string => {
+    const name = sheetName.replace(/'/g, "''")
+    const cell = (row: number, column: number): string => `$${columnLabel(column)}$${row + 1}`
+    const head = cell(moved.startRow, moved.startColumn)
+    const tail = cell(moved.endRow, moved.endColumn)
+    return `'${name}'!${head}${head === tail ? '' : `:${tail}`}`
+  }
+  if (contains(op.from)) {
+    return format({
+      startRow: area.startRow + op.to.startRow - op.from.startRow,
+      endRow: area.endRow + op.to.startRow - op.from.startRow,
+      startColumn: area.startColumn + op.to.startColumn - op.from.startColumn,
+      endColumn: area.endColumn + op.to.startColumn - op.from.startColumn,
+    })
+  }
+  if (contains(op.to)) return null
+  return ref
+}
+
+function moveRangeSeriesEntry<
+  T extends { valuesRef?: string | undefined; categoriesRef?: string | undefined },
+>(entry: T, sheetName: string, op: Extract<StructuralJournalOp, { kind: 'move-range' }>): T {
+  const next = { ...entry }
+  if (entry.valuesRef !== undefined) {
+    const moved = moveRangeSeriesRef(entry.valuesRef, sheetName, op)
+    if (moved === null) delete next.valuesRef
+    else next.valuesRef = moved
+  }
+  if (entry.categoriesRef !== undefined) {
+    const moved = moveRangeSeriesRef(entry.categoriesRef, sheetName, op)
+    if (moved === null) delete next.categoriesRef
+    else next.categoriesRef = moved
+  }
+  return next
+}
+
 /// Shifts one visual's anchor (own sheet) and chart references (matched by
 /// sheet name) into the post-operation coordinate space. Also used on the
 /// in-memory file visuals so the preview and live sync track the new space.
+/// A rectangle move leaves the anchor where it was (floating objects never
+/// follow a replace move) and only remaps the chart series references.
 export function shiftVisualForStructuralOp(
   visual: WorkbookVisualObject,
   sheetId: string,
   sheetName: string | undefined,
   op: StructuralJournalOp,
 ): WorkbookVisualObject {
+  if (op.kind === 'move-range') {
+    const chart =
+      visual.chart === undefined || sheetName === undefined
+        ? visual.chart
+        : {
+            ...visual.chart,
+            series: visual.chart.series.map((series) =>
+              moveRangeSeriesEntry(series, sheetName, op),
+            ),
+          }
+    return { ...visual, ...(chart === undefined ? {} : { chart }) }
+  }
   if (!('index' in op)) return visual
   const shift = toRowColumnShift(op)
   const anchor =
@@ -1240,6 +1318,211 @@ export function removeStructuralOp(
   if (ops.length === 0) journal.structuralOps.delete(sheetId)
 }
 
+/// True when `op` is the exact inverse of `last`: an insert as its remove, a
+/// whole-line move as the mirrored move (either axis), or a rectangle move
+/// as the reversed (from/to swapped) move. Cancelling the pair keeps the
+/// journal from stacking ops that compose to identity.
+function undoCancelsLastOp(
+  op: StructuralJournalOp,
+  last: StructuralJournalOp | undefined,
+): boolean {
+  if (last === undefined) return false
+  if (!('index' in op) || !('index' in last)) {
+    return (
+      op.kind === 'move-range' &&
+      last.kind === 'move-range' &&
+      rangesEqual(op.from, last.to) &&
+      rangesEqual(op.to, last.from)
+    )
+  }
+  if (
+    (op.kind === 'remove-rows' || op.kind === 'remove-cols') &&
+    last.kind === (op.kind === 'remove-rows' ? 'insert-rows' : 'insert-cols') &&
+    last.index === op.index &&
+    last.count === op.count
+  ) {
+    return true
+  }
+  // Undo of a move arrives as its exact inverse move (either axis).
+  return (
+    (op.kind === 'move-rows' || op.kind === 'move-cols') &&
+    last.kind === op.kind &&
+    op.count === last.count &&
+    op.index === (last.before > last.index ? last.before - last.count : last.before) &&
+    op.before === (last.before > last.index ? last.index : last.index + last.count)
+  )
+}
+
+function rangesEqual(left: CellRange, right: CellRange): boolean {
+  return (
+    left.startRow === right.startRow &&
+    left.endRow === right.endRow &&
+    left.startColumn === right.startColumn &&
+    left.endColumn === right.endColumn
+  )
+}
+
+function rangeContains(outer: CellRange, row: number, column: number): boolean {
+  return (
+    row >= outer.startRow &&
+    row <= outer.endRow &&
+    column >= outer.startColumn &&
+    column <= outer.endColumn
+  )
+}
+
+function intersectRanges(left: CellRange, right: CellRange): CellRange | null {
+  const startRow = Math.max(left.startRow, right.startRow)
+  const endRow = Math.min(left.endRow, right.endRow)
+  const startColumn = Math.max(left.startColumn, right.startColumn)
+  const endColumn = Math.min(left.endColumn, right.endColumn)
+  if (startRow > endRow || startColumn > endColumn) return null
+  return { startRow, endRow, startColumn, endColumn }
+}
+
+/// Subtracts `hole` from `area`, returning the surviving rectangles (a
+/// guillotine split — at most four pieces, in no particular order).
+function subtractRange(area: CellRange, hole: CellRange): CellRange[] {
+  const startRow = Math.max(area.startRow, hole.startRow)
+  const endRow = Math.min(area.endRow, hole.endRow)
+  const startColumn = Math.max(area.startColumn, hole.startColumn)
+  const endColumn = Math.min(area.endColumn, hole.endColumn)
+  if (startRow > endRow || startColumn > endColumn) return [area]
+  if (
+    startRow === area.startRow &&
+    endRow === area.endRow &&
+    startColumn === area.startColumn &&
+    endColumn === area.endColumn
+  ) {
+    return []
+  }
+  const out: CellRange[] = []
+  if (hole.startRow > area.startRow) {
+    out.push({ ...area, endRow: hole.startRow - 1 })
+  }
+  if (hole.endRow < area.endRow) {
+    out.push({ ...area, startRow: hole.endRow + 1 })
+  }
+  const band = {
+    startRow,
+    endRow,
+    startColumn: area.startColumn,
+    endColumn: area.endColumn,
+  }
+  if (hole.startColumn > area.startColumn) {
+    out.push({ ...band, endColumn: hole.startColumn - 1 })
+  }
+  if (hole.endColumn < area.endColumn) {
+    out.push({ ...band, startColumn: hole.endColumn + 1 })
+  }
+  return out
+}
+
+/// Shifts the journal's own journaled state through a rectangle move — the
+/// same 2D cell map the save replays: entries inside `from` translate,
+/// entries inside `to` (outside `from`) were overwritten and drop. Bulk
+/// fills split into the surviving rectangles plus the translated overlap
+/// with `from`. Floating anchors stay put (a replace move never carries
+/// objects), but their chart series references follow the three-way rule
+/// like every other reference.
+function shiftJournalThroughRangeMove(
+  journal: EditJournal,
+  sheetId: string,
+  op: Extract<StructuralJournalOp, { kind: 'move-range' }>,
+  sheetName: string | undefined,
+): void {
+  const delta = {
+    row: op.to.startRow - op.from.startRow,
+    column: op.to.startColumn - op.from.startColumn,
+  }
+  const mapPoint = (row: number, column: number): { row: number; column: number } | null => {
+    if (rangeContains(op.from, row, column)) {
+      return { row: row + delta.row, column: column + delta.column }
+    }
+    if (rangeContains(op.to, row, column)) return null
+    return { row, column }
+  }
+  const sheetEntries = journal.cells.get(sheetId)
+  if (sheetEntries && sheetEntries.size > 0) {
+    const shifted = new Map<string, JournalEntry>()
+    for (const entry of sheetEntries.values()) {
+      const moved = mapPoint(entry.row, entry.column)
+      if (moved === null) continue
+      shifted.set(`${moved.row}:${moved.column}`, {
+        ...entry,
+        row: moved.row,
+        column: moved.column,
+      })
+    }
+    journal.cells.set(sheetId, shifted)
+  }
+  const fills = journal.bulkConstantFills.get(sheetId)
+  if (fills && fills.length > 0) {
+    const shiftedFills: JournalBulkConstantFill[] = []
+    for (const fill of fills) {
+      const area = {
+        startRow: fill.startRow,
+        endRow: fill.endRow,
+        startColumn: fill.startColumn,
+        endColumn: fill.endColumn,
+      }
+      // The moved part of the fill translates; the part landing under `to`
+      // (outside `from`) is overwritten; the rest keeps its rectangle.
+      let images = subtractRange(area, op.from).flatMap((piece) => subtractRange(piece, op.to))
+      const moved = intersectRanges(area, op.from)
+      if (moved !== null) {
+        images = [
+          ...images,
+          {
+            startRow: moved.startRow + delta.row,
+            endRow: moved.endRow + delta.row,
+            startColumn: moved.startColumn + delta.column,
+            endColumn: moved.endColumn + delta.column,
+          },
+        ]
+      }
+      for (const image of images) {
+        shiftedFills.push({ ...fill, ...image })
+      }
+    }
+    if (shiftedFills.length > 0) journal.bulkConstantFills.set(sheetId, shiftedFills)
+    else journal.bulkConstantFills.delete(sheetId)
+  }
+  const links = journal.hyperlinks.get(sheetId)
+  if (links && links.size > 0) {
+    const shiftedLinks = new Map<string, string | null>()
+    for (const [key, target] of links) {
+      const [row, column] = key.split(':').map(Number)
+      if (row === undefined || column === undefined) continue
+      const moved = mapPoint(row, column)
+      if (moved === null) continue
+      shiftedLinks.set(`${moved.row}:${moved.column}`, target)
+    }
+    journal.hyperlinks.set(sheetId, shiftedLinks)
+  }
+  // Manual page breaks are row/column boundaries — a replace move shifts no
+  // axis line, so they stay exactly where they were.
+  journal.visualAdds.forEach((visual, at) => {
+    journal.visualAdds[at] = shiftVisualForStructuralOp(visual, sheetId, sheetName, op)
+  })
+  if (sheetName !== undefined) {
+    for (const [chartPath, edit] of journal.chartEdits) {
+      if (edit.series === undefined && edit.seriesSet === undefined) continue
+      journal.chartEdits.set(chartPath, {
+        ...edit,
+        ...(edit.series === undefined
+          ? {}
+          : { series: edit.series.map((entry) => moveRangeSeriesEntry(entry, sheetName, op)) }),
+        ...(edit.seriesSet === undefined
+          ? {}
+          : {
+              seriesSet: edit.seriesSet.map((entry) => moveRangeSeriesEntry(entry, sheetName, op)),
+            }),
+      })
+    }
+  }
+}
+
 export function recordStructuralOp(
   journal: EditJournal,
   sheetId: string,
@@ -1252,21 +1535,7 @@ export function recordStructuralOp(
   // structural-shift guard) could never be cleared from the journal and every later
   // save would keep hitting the same guard.
   const last = ops[ops.length - 1]
-  const cancels =
-    'index' in op &&
-    last !== undefined &&
-    'index' in last &&
-    ((op.kind === 'remove-rows' || op.kind === 'remove-cols') &&
-    last.kind === (op.kind === 'remove-rows' ? 'insert-rows' : 'insert-cols') &&
-    last.index === op.index &&
-    last.count === op.count
-      ? true
-      : // Undo of a move arrives as its exact inverse move (either axis).
-        (op.kind === 'move-rows' || op.kind === 'move-cols') &&
-        last.kind === op.kind &&
-        op.count === last.count &&
-        op.index === (last.before > last.index ? last.before - last.count : last.before) &&
-        op.before === (last.before > last.index ? last.index : last.index + last.count))
+  const cancels = undoCancelsLastOp(op, last)
   if (cancels) {
     ops.pop()
     if (ops.length === 0) journal.structuralOps.delete(sheetId)
@@ -1278,7 +1547,10 @@ export function recordStructuralOp(
 
   // Merges don't move cells; covered-cell clears arrive as value mutations.
   // (`in` narrowing: TS doesn't compose `||` checks on multi-literal kinds.)
-  if (!('index' in op)) return
+  if (!('index' in op)) {
+    if (op.kind === 'move-range') shiftJournalThroughRangeMove(journal, sheetId, op, sheetName)
+    return
+  }
   const rowColumnOp = op
   const axis =
     op.kind === 'insert-cols' || op.kind === 'remove-cols' || op.kind === 'move-cols'

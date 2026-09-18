@@ -341,6 +341,8 @@ export const fr = {
   appDialogCancel: 'Annuler',
   appPivotSheetNoMove:
     "Cette feuille contient un tableau croisé dynamique — le déplacement de plages n'est pas encore pris en charge.",
+  appMoveRangeReplaceOnly:
+    'Seuls les déplacements de plage vers une zone de même taille sur la même feuille sont enregistrables — ce déplacement a été annulé.',
   appMergeOverTable:
     'La sélection chevauche un tableau Excel — la fusion de cellules dans un tableau n’est pas encore prise en charge.',
   appTableFilterNoEdit:

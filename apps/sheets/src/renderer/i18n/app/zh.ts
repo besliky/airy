@@ -274,6 +274,8 @@ export const zh = {
   appFullLoadTooLarge: '此工作簿过大，无法完整载入内存，筛选在此文件上暂不可用。',
   appDialogCancel: '取消',
   appPivotSheetNoMove: '该工作表含数据透视表——暂不支持移动区域。',
+  appMoveRangeReplaceOnly:
+    '仅支持在工作表内把区域移动到等大的目标位置（替换式移动）——已取消本次移动。',
   appMergeOverTable: '所选区域位于 Excel 表格内——暂不支持合并表格中的单元格。',
   appTableFilterNoEdit: '该工作表的筛选属于 Excel 表格——编辑后暂时无法保存。',
   appAutofillStreaming: '暂不允许向仍在流式加载的区域自动填充。',

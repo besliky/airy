@@ -1705,9 +1705,420 @@ describe('applyStructuralOps set-col-style (r124)', () => {
     const before = await fixtureWorksheet()
     const xml = applyStructuralOps(
       before,
-      [{ kind: 'set-col-style', start: 0, end: 3, style: { fontFamily: 'Calibri' } }],
+      [{ kind: 'set-col-style', start: 0, end: 0, style: { fontFamily: 'Calibri' } }],
       SHEET,
     )
     expect(xml).toBe(before)
+  })
+})
+
+describe('applyStructuralOps range moves', () => {
+  const area = (startRow: number, startColumn: number, endRow: number, endColumn: number) => ({
+    startRow,
+    startColumn,
+    endRow,
+    endColumn,
+  })
+  const move = (from: ReturnType<typeof area>, to: ReturnType<typeof area>) =>
+    ({ kind: 'move-range', from, to }) as const
+
+  it('relocates cells across row boundaries, keeping rows and cells ascending', () => {
+    // A1:B2 (rows 0-1, cols 0-1) lands on C4:D5; the vacated rows keep
+    // their attributes but lose their cells; the target rows are created.
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1" spans="1:4"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="D1"><v>8</v></c></row>' +
+      '<row r="2" ht="20" customHeight="1"><c r="A2"><v>3</v></c><c r="B2"><v>4</v></c></row>' +
+      '<row r="5"><c r="A5"><v>7</v></c></row>' +
+      '</sheetData></worksheet>'
+    const moved = applyStructuralOps(xml, [move(area(0, 0, 1, 1), area(3, 2, 4, 3))], SHEET)
+    expect(moved).toBe(
+      '<worksheet><sheetData>' +
+        '<row r="1"><c r="D1"><v>8</v></c></row>' +
+        '<row r="2" ht="20" customHeight="1"/>' +
+        '<row r="4"><c r="C4"><v>1</v></c><c r="D4"><v>2</v></c></row>' +
+        '<row r="5"><c r="A5"><v>7</v></c><c r="C5"><v>3</v></c><c r="D5"><v>4</v></c></row>' +
+        '</sheetData></worksheet>',
+    )
+  })
+
+  it('destroys the overwritten destination cells', () => {
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><v>1</v></c><c r="C1"><v>old</v></c></row>' +
+      '</sheetData></worksheet>'
+    const moved = applyStructuralOps(xml, [move(area(0, 0, 0, 0), area(0, 2, 0, 2))], SHEET)
+    expect(moved).toBe(
+      '<worksheet><sheetData>' +
+        '<row r="1"><c r="C1"><v>1</v></c></row>' +
+        '</sheetData></worksheet>',
+    )
+  })
+
+  it('remaps formula tokens by the three-way rule', () => {
+    // B2:C3 (rows 1-2, cols 1-2) moves to D5:E6: SUM($B$2:$C$3) follows;
+    // E5 (inside the landing zone) dies as #REF!; B1:C3 (partial overlap)
+    // stays; whole-line refs and string literals stay; the moved cell's own
+    // body keeps pointing at unmoved cells (C1 unchanged).
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="C1"><f>SUM($B$2:$C$3)+E5+B1:C3+SUM(A:A)+SUM(1:1)+"B2"</f></c></row>' +
+      '<row r="2"><c r="B2"><f>C1*2</f></c><c r="C2"><v>2</v></c></row>' +
+      '<row r="3"><c r="B3"><v>3</v></c><c r="C3"><v>4</v></c></row>' +
+      '<row r="5"><c r="E5"><v>gone</v></c></row>' +
+      '</sheetData></worksheet>'
+    const moved = applyStructuralOps(xml, [move(area(1, 1, 2, 2), area(4, 3, 5, 4))], SHEET)
+    expect(moved).toContain('<f>SUM($D$5:$E$6)+#REF!+B1:C3+SUM(A:A)+SUM(1:1)+"B2"</f>')
+    // The moved formula cell itself travels with its body.
+    expect(moved).toContain('<c r="D5"><f>C1*2</f></c>')
+    // The overwritten target cell is gone.
+    expect(moved).not.toContain('<v>gone</v>')
+  })
+
+  it('keeps a partial-overlap reference untouched (Excel R3)', () => {
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="C1"><f>SUM(A1:B2)</f></c></row>' +
+      '<row r="2"><c r="A2"><v>1</v></c><c r="B2"><v>2</v></c></row>' +
+      '</sheetData></worksheet>'
+    // B2 moves to D4: A1:B2 is torn (A side stays, B side moves) — Excel
+    // leaves the reference at its old coordinates.
+    const moved = applyStructuralOps(xml, [move(area(1, 1, 1, 1), area(3, 3, 3, 3))], SHEET)
+    expect(moved).toContain('<f>SUM(A1:B2)</f>')
+  })
+
+  it('handles a landing rectangle that overlaps the source (one-cell nudge)', () => {
+    // A1:B2 shifts right by one onto B1:C2: the overlap cells (B column)
+    // belong to the source and move, C column dies, A column vacates.
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1"><v>old</v></c></row>' +
+      '<row r="2"><c r="A2"><v>3</v></c><c r="B2"><v>4</v></c></row>' +
+      '</sheetData></worksheet>'
+    const moved = applyStructuralOps(xml, [move(area(0, 0, 1, 1), area(0, 1, 1, 2))], SHEET)
+    expect(moved).toBe(
+      '<worksheet><sheetData>' +
+        '<row r="1"><c r="B1"><v>1</v></c><c r="C1"><v>2</v></c></row>' +
+        '<row r="2"><c r="B2"><v>3</v></c><c r="C2"><v>4</v></c></row>' +
+        '</sheetData></worksheet>',
+    )
+  })
+
+  it('moves merges from-side, removes merges onto the target, fails closed on tears', () => {
+    const xml =
+      '<worksheet><sheetData><row r="1"/><row r="4"/></sheetData>' +
+      '<mergeCells count="3">' +
+      '<mergeCell ref="A1:B2"/><mergeCell ref="D4:E5"/><mergeCell ref="G1:H2"/>' +
+      '</mergeCells></worksheet>'
+    const moved = applyStructuralOps(xml, [move(area(0, 0, 1, 1), area(3, 3, 4, 4))], SHEET)
+    expect(moved).toContain('<mergeCells count="2">')
+    expect(moved).toContain('<mergeCell ref="D4:E5"/>')
+    expect(moved).toContain('<mergeCell ref="G1:H2"/>')
+    expect(moved).not.toContain('A1:B2')
+    const torn =
+      '<worksheet><sheetData><row r="1"/></sheetData>' +
+      '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>'
+    expect(() =>
+      applyStructuralOps(torn, [move(area(0, 0, 0, 0), area(0, 2, 0, 2))], SHEET),
+    ).toThrow(/merged range/)
+  })
+
+  it('travels hyperlinks and CF/DV scopes with their rule bodies', () => {
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="E1"><v>3</v></c><c r="F1"><v>4</v></c></row>' +
+      '</sheetData>' +
+      '<hyperlinks><hyperlink ref="A1" location="https://example.com"/></hyperlinks>' +
+      '<conditionalFormatting sqref="A1:B1"><cfRule type="expression" priority="1"><formula>A1&gt;G1</formula></cfRule></conditionalFormatting>' +
+      '<dataValidations count="2">' +
+      '<dataValidation type="whole" sqref="B1" allowBlank="1"><formula1>2</formula1></dataValidation>' +
+      '<dataValidation type="list" sqref="F1" allowBlank="1"><formula1>"a,b"</formula1></dataValidation>' +
+      '</dataValidations>' +
+      '</worksheet>'
+    // A1:B1 lands on E1:F1: the hyperlink and the CF rule (scope + body)
+    // travel, the DV rule on the vacated cell follows, and the list rule
+    // sitting on the overwritten target dies with its cells.
+    const moved = applyStructuralOps(xml, [move(area(0, 0, 0, 1), area(0, 4, 0, 5))], SHEET)
+    expect(moved).toContain('<hyperlink ref="E1"')
+    expect(moved).toContain('<conditionalFormatting sqref="E1:F1">')
+    expect(moved).toContain('<formula>E1&gt;G1</formula>')
+    expect(moved).toContain('<dataValidations count="1">')
+    expect(moved).toContain('sqref="F1" allowBlank="1"><formula1>2</formula1>')
+    expect(moved).not.toContain('"a,b"')
+  })
+
+  it('fails closed when a CF/DV sqref is torn by either rectangle', () => {
+    const base =
+      '<worksheet><sheetData><row r="1"><c r="A1"><v>1</v></c><c r="C1"><v>3</v></c><c r="E1"><v>5</v></c></row></sheetData>'
+    // B2:C3 rides over half of the CF scope (A1:C1) — no faithful image.
+    const fromTorn =
+      base +
+      '<conditionalFormatting sqref="A1:C1"><formula1>A1&gt;0</formula1></conditionalFormatting></worksheet>'
+    expect(() =>
+      applyStructuralOps(fromTorn, [move(area(0, 1, 0, 2), area(2, 3, 2, 4))], SHEET),
+    ).toThrow(/conditional-formatting rule/)
+    // E1 lands on B1, tearing the DV scope A1:C1 from the target side.
+    const toTorn =
+      base +
+      '<dataValidations count="1"><dataValidation type="list" sqref="A1:C1"><formula1>"a"</formula1></dataValidation></dataValidations></worksheet>'
+    expect(() =>
+      applyStructuralOps(toTorn, [move(area(0, 4, 0, 4), area(0, 1, 0, 1))], SHEET),
+    ).toThrow(/data-validation rule/)
+  })
+
+  it('expands the dimension to the envelope union', () => {
+    const xml =
+      '<worksheet><dimension ref="A1:C3"/><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>'
+    const moved = applyStructuralOps(xml, [move(area(0, 0, 0, 0), area(5, 5, 5, 5))], SHEET)
+    expect(moved).toContain('<dimension ref="A1:F6"/>')
+  })
+
+  it('fails closed when any shared/array anchor touches either rectangle', () => {
+    const anchor = (ref: string): string =>
+      '<worksheet><sheetData>' +
+      `<row r="1"><c r="B1"><f t="shared" ref="${ref}" si="0">B2*2</f></c></row>` +
+      '</sheetData></worksheet>'
+    // Overlapping the source and fully inside it both refuse (v1: no
+    // wholesale group moves yet).
+    expect(() =>
+      applyStructuralOps(anchor('B1:B3'), [move(area(2, 0, 2, 1), area(5, 0, 5, 1))], SHEET),
+    ).toThrow(/shared\/array formula anchor/)
+    expect(() =>
+      applyStructuralOps(anchor('B2:B2'), [move(area(1, 1, 1, 2), area(3, 3, 3, 4))], SHEET),
+    ).toThrow(/shared\/array formula anchor/)
+    // No contact: untouched, including its body.
+    const safe = applyStructuralOps(
+      anchor('B1:B1'),
+      [move(area(3, 3, 3, 3), area(6, 6, 6, 6))],
+      SHEET,
+    )
+    expect(safe).toContain('ref="B1:B1"')
+    expect(safe).toContain('<f t="shared" ref="B1:B1" si="0">B2*2</f>')
+  })
+
+  it('fails closed on auto-filter, protected-range, and sort-condition overlap', () => {
+    const sheet = (extra: string): string =>
+      '<worksheet><sheetData><row r="1"><c r="A1"><v>1</v></c><c r="C1"><v>3</v></c></row></sheetData>' +
+      extra +
+      '</worksheet>'
+    // The moved source (B5) overlaps every pinned range below; the landing
+    // rectangle is far away.
+    const touching = move(area(4, 1, 4, 1), area(6, 6, 6, 6))
+    expect(() => applyStructuralOps(sheet('<autoFilter ref="A1:C9"/>'), [touching], SHEET)).toThrow(
+      /auto-filter/,
+    )
+    expect(() =>
+      applyStructuralOps(
+        sheet(
+          '<protectedRanges><protectedRange password="x" sqref="A1:C9" name="r1"/></protectedRanges>',
+        ),
+        [touching],
+        SHEET,
+      ),
+    ).toThrow(/allow-edit/)
+    expect(() =>
+      applyStructuralOps(
+        sheet('<sortState ref="A1"><sortCondition ref="A1:C9" descending="1"/></sortState>'),
+        [touching],
+        SHEET,
+      ),
+    ).toThrow(/sort condition/)
+  })
+
+  it('refuses a landing rectangle of a different size (insert-style move)', () => {
+    expect(() =>
+      applyStructuralOps(
+        '<worksheet><sheetData/></worksheet>',
+        [move(area(0, 0, 1, 1), area(3, 3, 3, 3))],
+        SHEET,
+      ),
+    ).toThrow(/equally sized/)
+  })
+
+  it('rewrites cross-sheet formulas, defined names, and chart series', () => {
+    const other =
+      '<worksheet><sheetData><row r="1"><c r="A1"><f>Data!B2+Data!D4+Data!B9</f></c></row></sheetData></worksheet>'
+    // B2 moves to D4 (both referenced): B2 follows, D4 was already the
+    // landing target so it dies as #REF!, B9 stays.
+    const op = move(area(1, 1, 1, 1), area(3, 3, 3, 3))
+    expect(shiftCrossSheetFormulas(other, SHEET, [op])).toContain('<f>Data!D4+#REF!+Data!B9</f>')
+    const names =
+      '<workbook><definedNames>' +
+      '<definedName name="moved">Data!$B$2</definedName>' +
+      '<definedName name="dead">Data!$D$4</definedName>' +
+      '<definedName name="kept">Data!$B$9</definedName>' +
+      '</definedNames></workbook>'
+    expect(shiftDefinedNames(names, SHEET, [op])).toContain(
+      '<definedName name="moved">Data!$D$4</definedName>',
+    )
+    expect(shiftDefinedNames(names, SHEET, [op])).toContain(
+      '<definedName name="dead">#REF!</definedName>',
+    )
+    expect(shiftDefinedNames(names, SHEET, [op])).toContain(
+      '<definedName name="kept">Data!$B$9</definedName>',
+    )
+    const chart =
+      '<c:chartSpace><c:ser><c:f>Data!$B$1:$B$9</c:f></c:ser><c:ser><c:f>Data!$D$1:$D$9</c:f></c:ser></c:chartSpace>'
+    const shiftedChart = shiftChartReferences(chart, SHEET, [
+      move(area(0, 1, 8, 1), area(0, 3, 8, 3)),
+    ])
+    expect(shiftedChart).toContain('<c:f>Data!$D$1:$D$9</c:f>')
+    // The series that pointed at the overwritten target keeps a #REF!.
+    const deadChart = '<c:chartSpace><c:ser><c:f>Data!$D$4</c:f></c:ser></c:chartSpace>'
+    expect(shiftChartReferences(deadChart, SHEET, [op])).toContain('<c:f>#REF!</c:f>')
+  })
+
+  it('rejects any range move overlapping a table', () => {
+    const table =
+      '<table name="T1" ref="B2:D4" headerRowCount="1" totalsRowCount="0">' +
+      '<tableColumns count="3"><tableColumn id="1" name="a"/></tableColumns>' +
+      '</table>'
+    expect(() => shiftTablePart(table, [move(area(1, 1, 1, 1), area(9, 9, 9, 9))])).toThrow(
+      /overlaps table/,
+    )
+    expect(() => shiftTablePart(table, [move(area(9, 9, 9, 9), area(1, 1, 1, 1))])).toThrow(
+      /overlaps table/,
+    )
+    // Disjoint rectangles leave the table alone.
+    expect(shiftTablePart(table, [move(area(0, 5, 0, 6), area(2, 8, 2, 9))])).toContain(
+      'ref="B2:D4"',
+    )
+  })
+
+  it('round-trips through the exact reverse move', () => {
+    const xml =
+      '<worksheet><dimension ref="A1:F6"/><sheetData>' +
+      '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="D1"><v>8</v></c></row>' +
+      '<row r="2"><c r="A2"><v>3</v></c><c r="B2"><v>4</v></c></row>' +
+      '<row r="4"><c r="C4"><f>SUM(A1:B2)</f></c></row>' +
+      '</sheetData>' +
+      '<hyperlinks><hyperlink ref="A1" location="https://example.com"/></hyperlinks>' +
+      '</worksheet>'
+    const round = applyStructuralOps(
+      xml,
+      [move(area(0, 0, 1, 1), area(3, 3, 4, 4)), move(area(3, 3, 4, 4), area(0, 0, 1, 1))],
+      SHEET,
+    )
+    expect(round).toContain('<c r="C4"><f>SUM(A1:B2)</f></c>')
+    expect(round).toContain('<hyperlink ref="A1"')
+    expect(round).toContain(
+      '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="D1"><v>8</v></c></row>',
+    )
+    expect(round).toContain('<row r="2"><c r="A2"><v>3</v></c><c r="B2"><v>4</v></c></row>')
+  })
+})
+
+describe('range move save integration', () => {
+  const area = (startRow: number, startColumn: number, endRow: number, endColumn: number) => ({
+    startRow,
+    startColumn,
+    endRow,
+    endColumn,
+  })
+
+  /// B2:C3 moves to E5:F6. Features: cross-sheet formula (Other), defined
+  /// name, chart series, merge inside the moved rectangle, hyperlink, CF/DV
+  /// scope with body, and a formula referencing the overwritten target.
+  const worksheet =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<dimension ref="A1:F6"/>' +
+    '<sheetData>' +
+    '<row r="1" spans="1:6"><c r="B1"><f>SUM(B2:C3)+E5+SUM(B1:C3)+"B2"</f><v>0</v></c></row>' +
+    '<row r="2"><c r="B2"><v>1</v></c><c r="C2"><v>2</v></c></row>' +
+    '<row r="3"><c r="B3"><v>3</v></c><c r="C3"><v>4</v></c></row>' +
+    '<row r="5"><c r="E5"><v>99</v></c></row>' +
+    '</sheetData>' +
+    '<mergeCells count="1"><mergeCell ref="B2:C3"/></mergeCells>' +
+    '<hyperlinks><hyperlink ref="C2" location="https://example.com"/></hyperlinks>' +
+    '<conditionalFormatting sqref="B2:C3"><cfRule type="expression" priority="1"><formula>B2&gt;1</formula></cfRule></conditionalFormatting>' +
+    '<dataValidations count="1"><dataValidation type="whole" sqref="B2:C3" allowBlank="1"><formula1>5</formula1></dataValidation></dataValidations>' +
+    '</worksheet>'
+  const otherWorksheet =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<sheetData><row r="1"><c r="A1"><f>Data!B2+Data!E5</f></c></row></sheetData>' +
+    '</worksheet>'
+  const workbook =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+    '<sheets><sheet name="Data" sheetId="1" r:id="rId1"/><sheet name="Other" sheetId="2" r:id="rId2"/></sheets>' +
+    '<definedNames><definedName name="Moved">Data!$B$2:$C$3</definedName></definedNames>' +
+    '</workbook>'
+  const chart =
+    '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">' +
+    '<c:ser><c:f>Data!$B$2:$B$3</c:f></c:ser>' +
+    '</c:chartSpace>'
+
+  async function buildRangeMoveFixture(): Promise<Buffer> {
+    const zip = await JSZip.loadAsync(await buildStructureFixture())
+    zip.file('xl/worksheets/sheet1.xml', worksheet, { createFolders: false })
+    zip.file('xl/worksheets/sheet2.xml', otherWorksheet, { createFolders: false })
+    zip.file('xl/workbook.xml', workbook, { createFolders: false })
+    zip.file('xl/charts/chart1.xml', chart, { createFolders: false })
+    return zip.generateAsync({ type: 'nodebuffer' })
+  }
+
+  it('relocates cells and remaps every reference type through the move', async () => {
+    const mutation = await applyCellEditsToXlsx(
+      await buildRangeMoveFixture(),
+      [],
+      [
+        {
+          sheetName: SHEET,
+          ops: [{ kind: 'move-range', from: area(1, 1, 2, 2), to: area(4, 4, 5, 5) }],
+        },
+      ],
+    )
+    expect(() => assertOnlyTouchedEntriesChanged(mutation)).not.toThrow()
+    expect(mutation.removedEntries).toEqual(['xl/calcChain.xml'])
+    const zip = await JSZip.loadAsync(mutation.buffer)
+    const sheet = await zip.file('xl/worksheets/sheet1.xml')?.async('text')
+    // Cells moved (B2:C3 → E5:F6), target cells destroyed; the vacated rows
+    // carried no attributes and drop out entirely.
+    expect(sheet).not.toContain('<row r="2"')
+    expect(sheet).not.toContain('<row r="3"')
+    expect(sheet).toContain('<row r="5"><c r="E5"><v>1</v></c><c r="F5"><v>2</v></c></row>')
+    expect(sheet).toContain('<row r="6"><c r="E6"><v>3</v></c><c r="F6"><v>4</v></c></row>')
+    expect(sheet).not.toContain('<v>99</v>')
+    // SUM(B2:C3) follows to E5:F6; E5 (overwritten target) → #REF!;
+    // B1:C3 (partial overlap) stays; the string literal survives.
+    expect(sheet).toContain('<f>SUM(E5:F6)+#REF!+SUM(B1:C3)+"B2"</f>')
+    expect(sheet).toContain('<mergeCell ref="E5:F6"/>')
+    expect(sheet).toContain('<hyperlink ref="F5"')
+    expect(sheet).toContain('<conditionalFormatting sqref="E5:F6">')
+    expect(sheet).toContain('<formula>E5&gt;1</formula>')
+    expect(sheet).toContain('sqref="E5:F6" allowBlank="1"><formula1>5</formula1>')
+    // Other sheet's qualified formula: B2 followed, E5 died.
+    const other = await zip.file('xl/worksheets/sheet2.xml')?.async('text')
+    expect(other).toContain('<f>Data!E5+#REF!</f>')
+    // Defined name and chart series follow.
+    const workbookXml = await zip.file('xl/workbook.xml')?.async('text')
+    expect(workbookXml).toContain('<definedName name="Moved">Data!$E$5:$F$6</definedName>')
+    const chartXml = await zip.file('xl/charts/chart1.xml')?.async('text')
+    expect(chartXml).toContain('<c:f>Data!$E$5:$E$6</c:f>')
+    // The workbook flags a recalc (calcChain was dropped).
+    expect(workbookXml).toContain('fullCalcOnLoad="1"')
+  })
+
+  it('fails closed on a torn merge and leaves the package unwritten', async () => {
+    const zip = await JSZip.loadAsync(await buildRangeMoveFixture())
+    zip.file(
+      'xl/worksheets/sheet1.xml',
+      worksheet.replace('<mergeCell ref="B2:C3"/>', '<mergeCell ref="B2:D2"/>'),
+      { createFolders: false },
+    )
+    await expect(
+      applyCellEditsToXlsx(
+        await zip.generateAsync({ type: 'nodebuffer' }),
+        [],
+        [
+          {
+            sheetName: SHEET,
+            ops: [{ kind: 'move-range', from: area(1, 1, 2, 2), to: area(4, 4, 5, 5) }],
+          },
+        ],
+      ),
+    ).rejects.toThrow(StructuralShiftError)
   })
 })

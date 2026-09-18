@@ -333,6 +333,8 @@ export const it = {
   appDialogCancel: 'Annulla',
   appPivotSheetNoMove:
     'Questo foglio contiene una tabella pivot — lo spostamento di intervalli non è ancora supportato.',
+  appMoveRangeReplaceOnly:
+    "Si possono salvare solo gli spostamenti di intervallo sullo stesso foglio verso un'area di eguale dimensione — spostamento annullato.",
   appMergeOverTable:
     'La selezione si sovrappone a una tabella di Excel — l’unione di celle in una tabella non è ancora supportata.',
   appTableFilterNoEdit:

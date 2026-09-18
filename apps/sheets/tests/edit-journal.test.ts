@@ -27,6 +27,7 @@ import {
   recordSheetRemove,
   recordSheetRename,
   recordChartEdit,
+  recordHyperlinkEdit,
   recordPivotAdd,
   recordStructuralOp,
   recordTableAdd,
@@ -1303,5 +1304,146 @@ describe('recordStructuralOp page-break remapping', () => {
     recordStructuralOp(journal, 'sheet-1', { kind: 'remove-rows', index: 0, count: 4 })
     expect(journal.structuralOps.get('sheet-1')).toBeUndefined()
     expect(journal.pageSetup.get('sheet-1')?.rowBreaks).toEqual([6])
+  })
+})
+
+describe('recordStructuralOp move-range', () => {
+  const area = (startRow: number, startColumn: number, endRow: number, endColumn: number) => ({
+    startRow,
+    startColumn,
+    endRow,
+    endColumn,
+  })
+
+  it('shifts journaled cells through the 2D map and cancels the reverse move', () => {
+    const journal = createEditJournal()
+    recordSetRangeValues(journal, 'sheet-1', {
+      0: { 0: { v: 'moved' } },
+      2: { 3: { v: 'overwritten' } },
+      4: { 1: { v: 'outside' } },
+    })
+    // A1:B2 (rows 0-1, cols 0-1) lands on C3:D4 (rows 2-3, cols 2-3): the
+    // entry inside `from` translates, the entry inside `to` (outside
+    // `from`) dies with its cell.
+    recordStructuralOp(journal, 'sheet-1', {
+      kind: 'move-range',
+      from: area(0, 0, 1, 1),
+      to: area(2, 2, 3, 3),
+    })
+    let cells = journal.cells.get('sheet-1')
+    expect(cells?.get('2:2')?.value).toBe('moved')
+    expect(cells?.get('2:3')).toBeUndefined()
+    expect(cells?.get('4:1')?.value).toBe('outside')
+    expect(toSaveStructuralOps(journal)).toEqual([
+      {
+        sheetId: 'sheet-1',
+        kind: 'move-range',
+        from: area(0, 0, 1, 1),
+        to: area(2, 2, 3, 3),
+      },
+    ])
+
+    // Undo arrives as the exact reverse move and cancels the pair.
+    recordStructuralOp(journal, 'sheet-1', {
+      kind: 'move-range',
+      from: area(2, 2, 3, 3),
+      to: area(0, 0, 1, 1),
+    })
+    expect(journal.structuralOps.get('sheet-1')).toBeUndefined()
+    cells = journal.cells.get('sheet-1')
+    expect(cells?.get('0:0')?.value).toBe('moved')
+    expect(cells?.get('2:3')).toBeUndefined()
+  })
+
+  it('does not cancel a move that only chains onto the last one', () => {
+    const journal = createEditJournal()
+    const first = { kind: 'move-range' as const, from: area(0, 0, 0, 0), to: area(2, 2, 2, 2) }
+    const chain = { kind: 'move-range' as const, from: area(2, 2, 2, 2), to: area(4, 4, 4, 4) }
+    recordStructuralOp(journal, 'sheet-1', first)
+    recordStructuralOp(journal, 'sheet-1', chain)
+    expect(journal.structuralOps.get('sheet-1')).toEqual([first, chain])
+  })
+
+  it('splits a bulk fill through the rectangles and translates the moved part', () => {
+    const journal = createEditJournal()
+    recordBulkConstantFill(journal, {
+      sheetId: 'sheet-1',
+      startRow: 0,
+      endRow: 3,
+      startColumn: 0,
+      endColumn: 3,
+      value: 7,
+    })
+    // A2:B3 moves to C6:D7: the fill keeps rows 0 and 3 full-width plus the
+    // C-D band of rows 1-2, and gains the translated A2:B3 part.
+    recordStructuralOp(journal, 'sheet-1', {
+      kind: 'move-range',
+      from: area(1, 0, 2, 1),
+      to: area(5, 2, 6, 3),
+    })
+    const fills = journal.bulkConstantFills.get('sheet-1') ?? []
+    const areas = fills.map(({ startRow, endRow, startColumn, endColumn }) => ({
+      startRow,
+      endRow,
+      startColumn,
+      endColumn,
+    }))
+    expect(areas).toContainEqual({ startRow: 0, endRow: 0, startColumn: 0, endColumn: 3 })
+    expect(areas).toContainEqual({ startRow: 3, endRow: 3, startColumn: 0, endColumn: 3 })
+    expect(areas).toContainEqual({ startRow: 1, endRow: 2, startColumn: 2, endColumn: 3 })
+    expect(areas).toContainEqual({ startRow: 5, endRow: 6, startColumn: 2, endColumn: 3 })
+    expect(areas).toHaveLength(4)
+  })
+
+  it('shifts hyperlinks and chart series refs, leaving anchors alone', () => {
+    const journal = createEditJournal()
+    recordHyperlinkEdit(journal, 'sheet-1', 1, 1, 'https://example.com')
+    recordHyperlinkEdit(journal, 'sheet-1', 5, 5, 'https://other.com')
+    recordVisualAdd(journal, {
+      id: 'added-1',
+      sheetId: 'sheet-1',
+      kind: 'chart',
+      anchor: {
+        fromRow: 10,
+        fromColumn: 3,
+        fromRowOffset: 5,
+        fromColumnOffset: 5,
+        toRow: 20,
+        toColumn: 4,
+        toRowOffset: 5,
+        toColumnOffset: 5,
+      },
+      chart: {
+        chartTypes: ['barChart'],
+        title: 'T',
+        series: [
+          {
+            name: 'S',
+            categories: ['a', 'b'],
+            values: [1, 2],
+            valuesRef: "'Data'!$B$2:$B$3",
+            categoriesRef: "'Data'!$F$6:$F$7",
+          },
+        ],
+      },
+    })
+    // B2:C3 moves to E6:F7: the B2 hyperlink travels, the F6 one dies with
+    // its cell; the valuesRef follows, the categoriesRef (onto the target)
+    // drops to literals, and the anchor stays put.
+    recordStructuralOp(
+      journal,
+      'sheet-1',
+      { kind: 'move-range', from: area(1, 1, 2, 2), to: area(5, 4, 6, 5) },
+      'Data',
+    )
+    const links = journal.hyperlinks.get('sheet-1')
+    expect(links?.get('5:4')).toBe('https://example.com')
+    expect(links?.get('5:5')).toBeUndefined()
+    const visual = journal.visualAdds[0]
+    expect(visual?.anchor.fromRow).toBe(10)
+    expect(visual?.anchor.fromColumn).toBe(3)
+    expect(visual?.chart?.series[0]?.valuesRef).toBe("'Data'!$E$6:$E$7")
+    expect(visual?.chart?.series[0]?.categoriesRef).toBeUndefined()
+    expect(visual?.chart?.series[0]?.values).toEqual([1, 2])
   })
 })
