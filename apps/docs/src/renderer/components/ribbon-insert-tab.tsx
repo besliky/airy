@@ -998,9 +998,17 @@ export function LinkInsertModal({ editor, onClose }: { editor: Editor; onClose: 
       : null
   const headings = targets.filter((tg) => tg.kind === 'heading')
   const bookmarks = targets.filter((tg) => tg.kind === 'bookmark')
-  const canApply = tab === 'address' ? !!linkUrl.trim() : pickedTarget !== null
+  // editability gates Apply too: the mode can flip while the modal is open,
+  // and the insert path below stamps a hidden bookmark into the document
+  const canApply =
+    editor.isEditable && (tab === 'address' ? !!linkUrl.trim() : pickedTarget !== null)
 
   const insertLink = () => {
+    // read-only guard BEFORE the anchor work: ensureHeadingTocAnchor dispatches
+    // (stamps a hidden `_Toc…` bookmark), so it must never run on an editor
+    // that stopped being editable since the modal opened — that would mutate
+    // the document with no link to show for it
+    if (!editor.isEditable) return
     // "Place in This Document": headings get a hidden `_Toc…` bookmark stamped
     // (re-emitted as w:bookmarkStart on save) and link to it; bookmarks link to
     // their own name. The href keeps the `#name` form the docx reader already
@@ -1015,7 +1023,7 @@ export function LinkInsertModal({ editor, onClose }: { editor: Editor; onClose: 
     }
     const href = anchor ? `#${anchor}` : linkUrl.trim()
     const text = linkText.trim() || (pickedTarget ? pickedTarget.label : '') || href
-    if (!href || !editor.isEditable) return
+    if (!href) return
     if (linkAtOpen) {
       if (text === linkAtOpen.text.trim()) {
         // address-only change: re-mark the existing run so character
