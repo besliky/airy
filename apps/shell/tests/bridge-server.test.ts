@@ -282,6 +282,36 @@ describe('bridge server over a live socket', () => {
     b.end()
   })
 
+  it('answers an oversized result with invalid_request instead of killing the connection', async () => {
+    // BUG-904: responses had no size guard — a result over the 8MB line cap
+    // (get_context of a huge document) would be written anyway and die on
+    // the client's framer, dropping the connection with no typed error. The
+    // server must replace it with an invalid_request and stay in sync.
+    server = await startBridgeServer({
+      userDataDir: dir,
+      methods: {
+        huge: () => 'x'.repeat(9 * 1024 * 1024),
+        ping: () => 'pong',
+      },
+    })
+    const client = connectClient(server.info.socketPath)
+    await client.ready
+    await handshake(client, server.info.token)
+    client.send({ protocol_version: 1, method: 'huge' })
+    const rejection = JSON.parse(await client.next())
+    expect(rejection).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_request',
+        message: expect.stringContaining('response exceeds'),
+      },
+    })
+    // the FIFO stream stays usable: the next call answers normally
+    client.send({ protocol_version: 1, method: 'ping' })
+    expect(JSON.parse(await client.next())).toEqual({ ok: true, result: 'pong' })
+    client.end()
+  })
+
   it('stop() removes the socket and the info file', async () => {
     if (process.platform === 'win32') return
     const handle = await startBridgeServer({ userDataDir: dir, methods: {} })

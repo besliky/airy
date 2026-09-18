@@ -80,6 +80,16 @@ const COALESCE_LIMIT_BYTES = 64 * 1024
 const SCRATCH_MIN_BYTES = 4 * 1024
 
 /**
+ * Size contract (both directions): one NDJSON message — request or response —
+ * must fit inside maxLineBytes (8MB by default). A request over the cap is
+ * answered invalid_request and the connection is closed; a response over the
+ * cap is replaced by the server with a typed invalid_request error so the
+ * client sees the failure instead of its framer silently dropping the
+ * connection (BUG-904). Tools that can return unbounded payloads must
+ * paginate or truncate before the wire, not after.
+ */
+
+/**
  * Accumulates socket chunks into complete NDJSON lines. Carriage returns are
  * tolerated so a CRLF-flavored peer still frames cleanly (same contract as the
  * bridge server's framer).
