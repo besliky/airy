@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ReactElement } from 'react'
+import type { ReactElement, RefObject } from 'react'
 import airyMark from '@airy-office/ui/assets/airy-mark.png'
 import iconDocx from './assets/file-docx.svg'
 import iconXlsx from './assets/file-xlsx.svg'
@@ -16,6 +16,7 @@ import type {
 import { useDismissablePopover } from '@airy-office/ui'
 import { fileCountKey, visiblePageCount } from './counts'
 import { showErrorToast } from './error-toast'
+import { filterFileEntries, isSearchActive, mergeFileLists } from './home-search'
 import { useI18n } from './locale'
 import type { I18n, StringKey } from './locale'
 import { SettingsModal } from './SettingsModal'
@@ -500,6 +501,102 @@ function SettingsEntry() {
   )
 }
 
+// ── File search (sidebar field; filters the visible lists live) ──
+
+/**
+ * Sidebar search box: a live file-NAME filter over everything loaded on Home
+ * (recent / starred / the open project's files). Purely client-side — typing
+ * never refetches; Escape clears the field and blurs it (⌘/Ctrl+F focuses
+ * it, handled in Home).
+ */
+function FileSearchBox({
+  value,
+  onChange,
+  inputRef,
+}: {
+  value: string
+  onChange: (next: string) => void
+  inputRef: RefObject<HTMLInputElement | null>
+}) {
+  const { t } = useI18n()
+  return (
+    <div className="file-search">
+      <svg
+        className="file-search-icon"
+        width="14"
+        height="14"
+        viewBox="0 0 16 16"
+        fill="none"
+        aria-hidden="true"
+      >
+        <circle cx="7" cy="7" r="4.7" stroke="currentColor" strokeWidth="1.4" />
+        <path d="M10.6 10.6L14 14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      </svg>
+      <input
+        ref={inputRef}
+        className="file-search-input"
+        type="text"
+        placeholder={t('searchFilesPlaceholder')}
+        aria-label={t('searchFilesPlaceholder')}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          // IME (e.g. pinyin): Escape during composition only cancels the
+          // composition, it must not wipe the field
+          if (event.nativeEvent.isComposing) return
+          if (event.key === 'Escape') {
+            onChange('')
+            event.currentTarget.blur()
+          }
+        }}
+      />
+      {value !== '' && (
+        <button
+          className="file-search-clear"
+          aria-label={t('searchClear')}
+          onClick={() => onChange('')}
+          tabIndex={-1}
+        >
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path
+              d="M2.5 2.5l7 7M9.5 2.5l-7 7"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** localized "nothing matched" empty state for a non-blank search */
+function SearchEmpty({ query }: { query: string }): ReactElement {
+  const { t } = useI18n()
+  return (
+    <p className="empty proj-empty">
+      <svg
+        className="proj-empty-icon"
+        width="48"
+        height="48"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <circle cx="10.5" cy="10.5" r="6.6" stroke="currentColor" strokeWidth="1.5" />
+        <path
+          d="M15.6 15.6L20.8 20.8"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </svg>
+      <span className="empty-hint">{t('searchNoResults', { query })}</span>
+    </p>
+  )
+}
+
 // ── Drop-to-open overlay ────────────────────────────────
 
 /**
@@ -587,6 +684,10 @@ export function Home() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [view, setView] = useState<'recent' | 'starred'>('recent')
   const [filter, setFilter] = useState('all')
+  /** live file-name filter for the visible lists (blank = no filter) */
+  const [search, setSearch] = useState('')
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const searchActive = isSearchActive(search)
   // modified-column sort (WPS-style header popover), shared by the global and project tables
   const [fileSort, setFileSort] = useState<'recent' | 'oldest'>('recent')
   const [fileSortMenuOpen, setFileSortMenuOpen] = useState(false)
@@ -702,11 +803,28 @@ export function Home() {
   const loadMoreRef = useRef(loadMore)
   loadMoreRef.current = loadMore
 
-  // oldest-first over a partially loaded list would miss the tail pages —
-  // keep pulling until the list is complete (backend caps recents at 100)
+  // oldest-first over a partially loaded list would miss the tail pages, and
+  // a name search must see every page before "no matches" can be true — keep
+  // pulling until the list is complete (backend caps recents at 100)
   useEffect(() => {
-    if (fileSort === 'oldest' && hasMore) loadMoreRef.current()
-  }, [fileSort, hasMore, entries.length])
+    if ((fileSort === 'oldest' || searchActive) && hasMore) loadMoreRef.current()
+  }, [fileSort, hasMore, entries.length, searchActive])
+
+  // ⌘/Ctrl+F focuses the file search (Home has no in-page find of its own);
+  // Escape clearing the field is handled on the input itself. Match the
+  // physical key too — non-Latin layouts glyph the F key as another character.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isF = event.code === 'KeyF' || event.key.toLowerCase() === 'f'
+      if ((event.metaKey || event.ctrlKey) && isF) {
+        event.preventDefault()
+        searchInputRef.current?.focus()
+        searchInputRef.current?.select()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   // Load the next page once the bottom sentinel enters the viewport (240px early);
   // depending on entries.length rebuilds the observer after each page — observe fires an immediate
@@ -877,16 +995,21 @@ export function Home() {
     </div>
   )
 
-  // ── Plain view (no project selected): filtering runs in the main process; entries is the visible list ──
-  const selectedPaths = entries.filter((e) => selected.has(e.path)).map((e) => e.path)
-  const allSelected = entries.length > 0 && selectedPaths.length === entries.length
+  // ── Plain view (no project selected): type filtering runs in the main
+  // process; the name search filters the loaded rows client-side. Search
+  // corpus: everything loaded right now — the active view's list plus the
+  // open project's files — deduped by path, earlier list first. ──
+  const visibleEntries = filterFileEntries(mergeFileLists(entries, projectFileEntries), search)
+  const selectedPaths = visibleEntries.filter((e) => selected.has(e.path)).map((e) => e.path)
+  const allSelected = visibleEntries.length > 0 && selectedPaths.length === visibleEntries.length
 
   // project view shares the same `selected` set (keyed by path)
-  const projSelectedPaths = projectFileEntries
+  const visibleProjectEntries = filterFileEntries(projectFileEntries, search)
+  const projSelectedPaths = visibleProjectEntries
     .filter((e) => selected.has(e.path))
     .map((e) => e.path)
   const projAllSelected =
-    projectFileEntries.length > 0 && projSelectedPaths.length === projectFileEntries.length
+    visibleProjectEntries.length > 0 && projSelectedPaths.length === visibleProjectEntries.length
 
   const changeView = (next: 'recent' | 'starred') => {
     setView(next)
@@ -910,11 +1033,11 @@ export function Home() {
   }
 
   const toggleSelectAll = () => {
-    setSelected(allSelected ? new Set() : new Set(entries.map((e) => e.path)))
+    setSelected(allSelected ? new Set() : new Set(visibleEntries.map((e) => e.path)))
   }
 
   const toggleSelectAllProject = () => {
-    setSelected(projAllSelected ? new Set() : new Set(projectFileEntries.map((e) => e.path)))
+    setSelected(projAllSelected ? new Set() : new Set(visibleProjectEntries.map((e) => e.path)))
   }
 
   const toggleStar = (path: string) => {
@@ -1305,6 +1428,7 @@ export function Home() {
     const proj = projects.find((p) => p.id === selectedProjectId)
     if (!proj) return null
     const otherProjects = projects.filter((p) => p.id !== proj.id)
+    const shownCount = searchActive ? visibleProjectEntries.length : projectFileEntries.length
 
     return (
       <main className="content">
@@ -1319,9 +1443,7 @@ export function Home() {
           <div className="recents-toolbar">
             <div className="recents-heading">
               <span className="section-label">{t('secProjectFiles')}</span>
-              <span className="file-count">
-                {t(fileCountKey(projectFileEntries.length), { n: projectFileEntries.length })}
-              </span>
+              <span className="file-count">{t(fileCountKey(shownCount), { n: shownCount })}</span>
             </div>
             {projSelectedPaths.length > 0 && (
               <div className="selection-bar">
@@ -1388,6 +1510,8 @@ export function Home() {
               </svg>
               <span className="empty-hint">{t('projEmptyHint')}</span>
             </p>
+          ) : searchActive && visibleProjectEntries.length === 0 ? (
+            <SearchEmpty query={search.trim()} />
           ) : (
             <div className="recent-table">
               <div className="recent-columns">
@@ -1408,8 +1532,8 @@ export function Home() {
               </div>
               <ul className="recent-list">
                 {(fileSort === 'oldest'
-                  ? [...projectFileEntries].reverse()
-                  : projectFileEntries
+                  ? [...visibleProjectEntries].reverse()
+                  : visibleProjectEntries
                 ).map((entry) => renderFileRow(entry, 'project'))}
               </ul>
             </div>
@@ -1434,6 +1558,8 @@ export function Home() {
             : 'greetEvening'
     const cjk = lang === 'zh' || lang === 'zh-TW' || lang === 'ja'
     const greeting = `${t(greetKey)}${cjk ? '。' : '. '}`
+    // badge count: the search shows surviving rows, otherwise the list total
+    const shownCount = searchActive ? visibleEntries.length : listTotal
     return (
       <main className="content">
         <section className="quick-start" aria-label={t('secQuickStart')}>
@@ -1486,11 +1612,11 @@ export function Home() {
               <span className="section-label">
                 {view === 'recent' ? t('secRecent') : t('secStarred')}
               </span>
-              <span className="file-count">{t(fileCountKey(listTotal), { n: listTotal })}</span>
+              <span className="file-count">{t(fileCountKey(shownCount), { n: shownCount })}</span>
             </div>
           </div>
 
-          {entries.length === 0 ? (
+          {entries.length === 0 && !searchActive ? (
             <p className="empty proj-empty">
               <svg
                 className="proj-empty-icon"
@@ -1519,6 +1645,8 @@ export function Home() {
                     : t('emptyFiltered')}
               </span>
             </p>
+          ) : searchActive && visibleEntries.length === 0 && !hasMore ? (
+            <SearchEmpty query={search.trim()} />
           ) : (
             <div className={`recent-table${selectedPaths.length > 0 ? ' has-selection' : ''}`}>
               <div className="recent-columns">
@@ -1538,8 +1666,8 @@ export function Home() {
                 <span />
               </div>
               <ul className="recent-list">
-                {(fileSort === 'oldest' ? [...entries].reverse() : entries).map((entry) =>
-                  renderFileRow(entry, 'global'),
+                {(fileSort === 'oldest' ? [...visibleEntries].reverse() : visibleEntries).map(
+                  (entry) => renderFileRow(entry, 'global'),
                 )}
               </ul>
               {hasMore && (
@@ -1561,6 +1689,8 @@ export function Home() {
           <img className="logo-mark" src={airyMark} alt="" aria-hidden="true" />
           <span className="logo-word">airy</span>
         </div>
+
+        <FileSearchBox value={search} onChange={setSearch} inputRef={searchInputRef} />
 
         <nav className="sidebar-nav">
           <button

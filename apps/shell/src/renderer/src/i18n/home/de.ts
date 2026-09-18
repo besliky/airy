@@ -65,6 +65,9 @@ export const de = {
   emptyRecent:
     'Keine zuletzt verwendeten Dateien — erstellen oder öffnen Sie eine Datei, um zu beginnen.',
   emptyFiltered: 'Keine Dateien dieses Typs.',
+  searchFilesPlaceholder: 'Dateien suchen',
+  searchClear: 'Suche löschen',
+  searchNoResults: 'Keine Dateien stimmen mit „{query}“ überein.',
   deleteModalTitle: 'Dateien löschen',
   deleteConfirmOne: '„{name}“ in den Papierkorb verschieben?',
   deleteConfirmMany: 'Diese {n} Dateien in den Papierkorb verschieben?',
