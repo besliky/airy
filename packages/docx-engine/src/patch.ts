@@ -235,6 +235,8 @@ export interface StyleUpsert {
   type: 'paragraph' | 'character'
   name: string
   basedOn?: string
+  /** built-in style (Heading1…/Normal…): omit w:customStyle, Word marks it the built-in */
+  builtin?: boolean
   rPr?: {
     bold?: boolean
     italic?: boolean
@@ -243,7 +245,10 @@ export interface StyleUpsert {
     /** hex without '#' */
     color?: string
     sizeHalfPoints?: number
+    /** latin face (w:rFonts w:ascii/w:hAnsi) */
     font?: string
+    /** east-asian face when it differs from the latin one (w:rFonts w:eastAsia) */
+    fontEa?: string
   }
   pPr?: {
     align?: 'left' | 'center' | 'right' | 'justify'
@@ -251,6 +256,14 @@ export interface StyleUpsert {
     spaceAfterTwips?: number
     /** line spacing as a multiple (auto) */
     lineSpacing?: number
+    /** non-auto line rule with its raw twips (w:lineRule + w:line); used when lineSpacing is unset */
+    lineRule?: 'atLeast' | 'exact'
+    lineRawTwips?: number
+    /** outline level 1-9 (w:outlineLvl = value - 1); omit for body text */
+    outlineLevel?: number
+    indentLeftTwips?: number
+    indentRightTwips?: number
+    indentFirstLineTwips?: number
   }
 }
 
@@ -258,7 +271,8 @@ function buildStyleXml(up: StyleUpsert): string {
   const rPr: string[] = []
   if (up.rPr?.font) {
     const f = escapeXmlAttr(up.rPr.font)
-    rPr.push(`<w:rFonts w:ascii="${f}" w:hAnsi="${f}" w:eastAsia="${f}"/>`)
+    const ea = escapeXmlAttr(up.rPr.fontEa ?? up.rPr.font)
+    rPr.push(`<w:rFonts w:ascii="${f}" w:hAnsi="${f}" w:eastAsia="${ea}"/>`)
   }
   if (up.rPr?.bold) rPr.push('<w:b/>')
   if (up.rPr?.italic) rPr.push('<w:i/>')
@@ -274,20 +288,50 @@ function buildStyleXml(up: StyleUpsert): string {
     sp &&
     (sp.spaceBeforeTwips !== undefined ||
       sp.spaceAfterTwips !== undefined ||
-      sp.lineSpacing !== undefined)
+      sp.lineSpacing !== undefined ||
+      sp.lineRawTwips !== undefined)
   ) {
+    const lineAttrs =
+      sp.lineSpacing !== undefined
+        ? ` w:line="${Math.round(sp.lineSpacing * 240)}" w:lineRule="auto"`
+        : sp.lineRawTwips !== undefined
+          ? ` w:line="${sp.lineRawTwips}" w:lineRule="${sp.lineRule ?? 'atLeast'}"`
+          : ''
     const attrs = [
       sp.spaceBeforeTwips !== undefined ? ` w:before="${sp.spaceBeforeTwips}"` : '',
       sp.spaceAfterTwips !== undefined ? ` w:after="${sp.spaceAfterTwips}"` : '',
-      sp.lineSpacing !== undefined
-        ? ` w:line="${Math.round(sp.lineSpacing * 240)}" w:lineRule="auto"`
-        : '',
+      lineAttrs,
     ].join('')
     pPr.push(`<w:spacing${attrs}/>`)
   }
+  // CT_PPr schema order: spacing, ind, jc, …, outlineLvl
+  if (
+    sp &&
+    (sp.indentLeftTwips !== undefined ||
+      sp.indentRightTwips !== undefined ||
+      sp.indentFirstLineTwips !== undefined)
+  ) {
+    const attrs = [
+      sp.indentLeftTwips !== undefined ? ` w:left="${sp.indentLeftTwips}"` : '',
+      sp.indentRightTwips !== undefined ? ` w:right="${sp.indentRightTwips}"` : '',
+      // a negative first line is a hanging indent (w:hanging, positive twips)
+      sp.indentFirstLineTwips !== undefined
+        ? sp.indentFirstLineTwips < 0
+          ? ` w:hanging="${-sp.indentFirstLineTwips}"`
+          : ` w:firstLine="${sp.indentFirstLineTwips}"`
+        : '',
+    ].join('')
+    pPr.push(`<w:ind${attrs}/>`)
+  }
   if (sp?.align) pPr.push(`<w:jc w:val="${sp.align === 'justify' ? 'both' : sp.align}"/>`)
+  if (sp?.outlineLevel) {
+    const lvl = Math.min(Math.max(Math.round(sp.outlineLevel), 1), 9)
+    pPr.push(`<w:outlineLvl w:val="${lvl - 1}"/>`)
+  }
   return (
-    `<w:style w:type="${up.type}" w:styleId="${escapeXmlAttr(up.styleId)}" w:customStyle="1">` +
+    `<w:style w:type="${up.type}" w:styleId="${escapeXmlAttr(up.styleId)}"` +
+    (up.builtin ? '' : ' w:customStyle="1"') +
+    `>` +
     `<w:name w:val="${escapeXmlAttr(up.name)}"/>` +
     (up.basedOn ? `<w:basedOn w:val="${escapeXmlAttr(up.basedOn)}"/>` : '') +
     '<w:qFormat/>' +

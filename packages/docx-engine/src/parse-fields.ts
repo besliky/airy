@@ -1,6 +1,7 @@
 // Field-code display (PAGE, TOC, REF, ...) and TOC entry numbering.
 import { computeListMarkers, type ListItemRef } from './list-markers'
 import { decodeEntities, lineTwipsOf, plainText } from './parse-xml-text'
+import type { TocFieldOptions } from './generate'
 import type { Block, FieldDisplay, NumberingDef, StyleInfo } from './types'
 
 /**
@@ -34,6 +35,25 @@ function leadingRunFont(rPr: string, text: string): string | undefined {
   return ea ?? /w:ascii="([^"]+)"/.exec(fonts)?.[1] ?? /w:hAnsi="([^"]+)"/.exec(fonts)?.[1]
 }
 
+/**
+ * Parse a TOC field instruction back into its dialog options, so an update can
+ * regenerate the field with the author's chosen switches instead of the
+ * defaults (`\o` level range, `\n` hidden page numbers, `\h` off, `\t`
+ * source styles, `\c` table-of-figures SEQ label).
+ */
+export function parseTocInstruction(instr: string): TocFieldOptions {
+  const options: TocFieldOptions = {}
+  const seq = /\\c\s+"([^"]*)"/.exec(instr)
+  if (seq) options.seqIdentifier = decodeEntities(seq[1])
+  const styles = /\\t\s+"([^"]*)"/.exec(instr)
+  if (styles) options.styles = decodeEntities(styles[1])
+  const range = /\\o\s+"(\d+)-(\d+)"/.exec(instr)
+  if (range) options.levels = Math.min(Math.max(parseInt(range[2], 10) || 1, 1), 9)
+  if (/\\n(?:\s|$)/.test(instr)) options.hidePageNumbers = true
+  options.hyperlinks = /\\h(?:\s|$)/.test(instr)
+  return options
+}
+
 /** a w:del run wrapper with its content (not the self-closing paragraph-mark w:del in pPr/rPr) */
 const DEL_WRAPPER_RE = /<w:del(?:\s[^>]*)?(?<!\/)>[\s\S]*?<\/w:del>/g
 
@@ -58,7 +78,9 @@ export function fieldDisplayOf(
       if (m[0] === '<w:tab/>') segs.push('')
       else segs[segs.length - 1] += m[1]
     }
-    const right = segs.length > 1 ? segs.pop()! : ''
+    // TOC \n entries carry no tab/page number at all: title-only display
+    const hadTabs = segs.length > 1
+    const right = hadTabs ? segs.pop()! : ''
     // a short space-free first segment at its own tab stop is the outline
     // number; it renders in the num cell so the title stays clean for
     // heading matching (toc-refresh keys on `left`)
@@ -115,6 +137,7 @@ export function fieldDisplayOf(
       level: tocLevel,
       ...(num ? { num } : {}),
       ...(anchor ? { anchor } : {}),
+      ...(!hadTabs ? { noPage: true } : {}),
       ...(deleted ? { deleted } : {}),
       ...(deleted && /<w:del\b[^>]*\/>/.test(pPr) ? { markDeleted: true } : {}),
       ...(sz > 0 ? { szHalfPoints: sz } : {}),

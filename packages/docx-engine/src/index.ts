@@ -27,6 +27,7 @@ export {
   generateTableModelXml,
   generateTableXml,
   generateTocFieldXml,
+  buildTocInstruction,
   mergePPrFormat,
   setPPrChange,
   stripPPrChange,
@@ -52,7 +53,9 @@ export {
   type TextboxParasPatchSet,
   type TableGenOptions,
   type TocEntry,
+  type TocFieldOptions,
 } from './generate'
+export { parseTocInstruction } from './parse-fields'
 export {
   buildChartPartXml,
   buildChartWorkbookXlsxBase64,

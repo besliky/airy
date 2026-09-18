@@ -829,6 +829,8 @@ export interface FieldDisplay {
   fontFamily?: string
   /** tocLine whose leading result run is bold */
   bold?: boolean
+  /** tocLine without tab leader / page number (TOC \n entries): title-only */
+  noPage?: boolean
   /** formatted result runs of a text field (italic journal names, a manual
    *  drop-cap letter next to body text); their joined text equals `left` */
   runs?: FieldRun[]

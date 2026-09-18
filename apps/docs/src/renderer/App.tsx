@@ -157,6 +157,7 @@ import { cachedByDoc } from './doc-cache'
 import { useShallowStable, useStableCallbacks } from './use-stable'
 import { FindPanel } from './components/FindPanel'
 import { refCacheOf } from './components/cross-ref'
+import { updateTocField } from './components/ribbon-references-tab'
 import { Ribbon } from './components/Ribbon'
 import { computeFormatState } from './components/ribbon-format-state'
 import { IconRedo, IconSave, IconUndo } from './components/icons'
@@ -182,6 +183,7 @@ import {
   ParagraphDialog,
   type ContextMenuState,
 } from './components/ContextMenu'
+import { StyleDialog } from './components/StyleDialog'
 import { PromptModal } from './components/PromptModal'
 import { ShortcutsDialog } from './components/ShortcutsDialog'
 import { SHORTCUTS, shortcutKeys } from './shortcuts'
@@ -854,6 +856,10 @@ export function App() {
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null)
   const [showFontDialog, setShowFontDialog] = useState(false)
   const [showParaDialog, setShowParaDialog] = useState(false)
+  /** Home ▸ Styles Modify Style target (paragraph styleId); null = dialog closed */
+  const [modifyStyleId, setModifyStyleId] = useState<string | null>(null)
+  /** bumped by every live style modify so the ribbon's styles map refreshes */
+  const [stylesRev, setStylesRev] = useState(0)
   const [, forceRender] = useReducer((x: number) => x + 1, 0)
   const dirtyRef = useRef(false)
   // serializes save(): overlapping saves (Cmd+S vs autosave timer vs blur) would
@@ -2759,17 +2765,24 @@ export function App() {
         jobs.push({ from: r.pos, to: r.pos + r.nodeSize, text: next, marks: r.marks })
       }
     }
-    if (jobs.length === 0) {
+    if (jobs.length > 0) {
+      let tr = state.tr
+      for (const j of jobs.sort((a, b) => b.from - a.from)) {
+        tr = tr.replaceWith(j.from, j.to, state.schema.text(j.text, [...j.marks]))
+      }
+      view.dispatch(tr)
+    }
+    // TOC / table of figures: F9 rebuilds the cached field (entries + pages)
+    // like Word's update — the authored switches are read back from the field
+    const toc = updateTocField(editor, doc?.parsed.blocks ?? [], headingPages, anchorPage, {
+      silent: true,
+    })
+    if (jobs.length === 0 && toc !== 'updated') {
       setStatus(t('appNoFieldsToUpdate'))
       return
     }
-    let tr = state.tr
-    for (const j of jobs.sort((a, b) => b.from - a.from)) {
-      tr = tr.replaceWith(j.from, j.to, state.schema.text(j.text, [...j.marks]))
-    }
-    view.dispatch(tr)
-    setStatus(t('appFieldsUpdated', { n: jobs.length }))
-  }, [editor, fieldValue, nodePagesFactory, doc])
+    setStatus(t('appFieldsUpdated', { n: jobs.length + (toc === 'updated' ? 1 : 0) }))
+  }, [editor, fieldValue, nodePagesFactory, doc, headingPages, anchorPage])
 
   // status-bar page number: real page slicing (same algorithm as the pagination preview). Edits remeasure with debounce; scrolling only relocates
   useEffect(() => {
@@ -4361,6 +4374,14 @@ export function App() {
                 '.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6',
               ),
             ].find((h) => (h.textContent ?? '').replace(/\s+/g, '') === title) ?? null
+          // table-of-figures entries point at caption paragraphs (protected
+          // field blocks), not headings — match the caption's own text
+          if (!target) {
+            target =
+              [...document.querySelectorAll('.ProseMirror .doc-field-text')].find(
+                (el) => (el.textContent ?? '').replace(/\s+/g, '') === title,
+              ) ?? null
+          }
         }
       }
       target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -4437,7 +4458,12 @@ export function App() {
     computeFormatState(editor, doc?.parsed.styles, doc?.parsed.docDefaults),
   )
 
-  const ribbonStyles = useMemo(() => (doc ? new Map(doc.parsed.styles) : undefined), [doc])
+  const ribbonStyles = useMemo(
+    () => (doc ? new Map(doc.parsed.styles) : undefined),
+    // stylesRev: a Modify Style changes entries of the same parsed map in place
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [doc, stylesRev],
+  )
 
   /** every function prop of the memoized Ribbon, with stable identities (dispatches into the latest render's closures) */
   // ---- selection-scoped AI edit queue ----
@@ -4599,6 +4625,7 @@ export function App() {
     allocateNumId: (kind: 'bullet' | 'ordered') => allocateListNumId(kind),
     createListDef: (levels: CustomNumberingLevel[]) => createCustomListDef(levels),
     onParagraphDialog: () => setShowParaDialog(true),
+    onModifyStyle: (styleId: string) => setModifyStyleId(styleId),
     onOpen: () => void openFile(),
     onSave: () => void save(false),
     onSaveAs: () => void save(true),
@@ -5288,6 +5315,34 @@ export function App() {
       )}
       {doc && showParaDialog && (
         <ParagraphDialog editor={editor} onClose={() => setShowParaDialog(false)} />
+      )}
+      {doc && modifyStyleId && (
+        <StyleDialog
+          editor={editor}
+          styles={doc.parsed.styles}
+          docDefaults={doc.parsed.docDefaults}
+          styleId={modifyStyleId}
+          onClose={() => setModifyStyleId(null)}
+          onApply={(upsert, display, headingLevel) => {
+            // save path: styles.xml is patched from the pending upserts on save
+            setStyleUpserts((prev) => ({ ...prev, [upsert.styleId]: upsert }))
+            // live path: swap the style's resolved display and regenerate the
+            // document style CSS — every paragraph carrying the pStyle updates
+            // at once (basedOn children re-resolve on the next open)
+            const info = doc.parsed.styles.get(upsert.styleId)
+            doc.parsed.styles.set(upsert.styleId, {
+              styleId: upsert.styleId,
+              name: upsert.name,
+              type: 'paragraph',
+              ...(headingLevel ? { headingLevel } : {}),
+              ...(info?.semiHidden ? { semiHidden: true } : {}),
+              qFormat: true,
+              display,
+            })
+            setDocCss(docStyleCss(doc.parsed))
+            setStylesRev((v) => v + 1)
+          }}
+        />
       )}
 
       {doc && notePrompt && (

@@ -4,6 +4,7 @@
 // byte-level round-trips (BOM, EOLs, untouched lines), the failure paths
 // (missing file, outside the workspace root, undeclared non-UTF-8, binary,
 // size caps) and the save fences.
+import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -280,6 +281,9 @@ describe('html tools over MCP', () => {
       expect(String((opened.structuredContent?.warnings as string[] | undefined)?.[0])).toContain(
         'windows-1252',
       )
+      // the open summary keeps a space between the warning sentence and the
+      // Handle pointer (they used to glue: "…original bytes).Handle: …")
+      expect(text(opened)).toContain('original bytes). Handle:')
       const read = await call(client, 'read_document', { handle })
       expect(text(read)).toContain('café')
       await call(client, 'insert_content', { handle, html: '<p>More</p>' })
@@ -360,6 +364,14 @@ describe('html tools over MCP', () => {
       })
       expect(mdOnly.isError).toBe(true)
       expect(text(mdOnly)).toContain('afterHeading is a markdown-session option')
+      // `text` is markdown-only too: the html branch must reject it instead of
+      // silently discarding it (the markdown branch rejects `html` the same way)
+      const wrongPayload = await call(client, 'insert_content', {
+        handle,
+        text: '<p>x</p>',
+      })
+      expect(wrongPayload.isError).toBe(true)
+      expect(text(wrongPayload)).toContain('pass the fragment in `html`, not `text`')
     } finally {
       await close()
     }
@@ -419,6 +431,23 @@ describe('html tools over MCP', () => {
         ops: Array.from({ length: 101 }, () => ({ op: 'deleteLines', from: 0, to: 0 })),
       })
       expect(tooMany.isError).toBe(true)
+    } finally {
+      await close()
+    }
+  })
+
+  it('caps the line count at open: a file of bare EOLs is refused before the model is built', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // 2,000,001 lines in ~2 MB: under the byte cap, but the line model
+      // would be millions of objects. The refusal must come from the line
+      // cap (counted before splitLines), not from the byte cap.
+      await writeFile(join(root, 'eol-flood.html'), Buffer.from('\n'.repeat(2_000_000)))
+      const flooded = await call(client, 'open_document', { path: 'eol-flood.html' })
+      expect(flooded.isError).toBe(true)
+      expect(text(flooded)).toContain('2000001 lines')
+      expect(text(flooded)).toContain('cap at 2000000 lines')
+      expect(text(flooded)).not.toContain('8 MiB')
     } finally {
       await close()
     }
@@ -518,6 +547,36 @@ describe('html tools over MCP', () => {
     }
   })
 
+  it('rejects findReplace text containing line breaks (line-model invariant)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const handle = await openFixture(client)
+      const multilineFind = await call(client, 'apply_ops', {
+        handle,
+        ops: [{ op: 'findReplace', find: 'Revenue\nDetail', replace: 'x' }],
+      })
+      expect(multilineFind.isError).toBe(true)
+      expect(text(multilineFind)).toContain('find must not contain line breaks')
+      // a replace with an embedded EOL would leave a line break inside one
+      // line object; it must refuse and point at the multi-line ops instead
+      const multilineReplace = await call(client, 'apply_ops', {
+        handle,
+        ops: [{ op: 'findReplace', find: 'Revenue', replace: 'Sales\nGrowth' }],
+      })
+      expect(multilineReplace.isError).toBe(true)
+      expect(text(multilineReplace)).toContain('replace must not contain line breaks')
+      expect(text(multilineReplace)).toContain('insertLines or replaceLines')
+      // single-line replacements keep working
+      const ok = await call(client, 'apply_ops', {
+        handle,
+        ops: [{ op: 'findReplace', find: 'Revenue', replace: 'Sales' }],
+      })
+      expect(ok.isError).toBeFalsy()
+    } finally {
+      await close()
+    }
+  })
+
   it('supports dryRun ops and case-insensitive find/replace', async () => {
     const { client, close } = await connectSession()
     try {
@@ -536,6 +595,38 @@ describe('html tools over MCP', () => {
       expect(applied.isError).toBeFalsy()
       const read = await call(client, 'read_document', { handle })
       expect(text(read)).toContain('sales grew by')
+    } finally {
+      await close()
+    }
+  })
+
+  it('confines saves to the workspace root captured at open, not a later one', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const handle = await openFixture(client, 'pinned.html')
+      await call(client, 'insert_content', { handle, html: '<p>edit</p>' })
+      // drift AIRY_WORKSPACE_ROOT after open: before the fix the default
+      // save re-confined the absolute opened path against the NEW root and
+      // failed with PathOutsideWorkspaceError; a relative save-as resolved
+      // into the wrong directory
+      const driftRoot = await mkdtemp(join(tmpdir(), 'airy-mcp-html-drift-'))
+      process.env[WORKSPACE_ROOT_ENV] = driftRoot
+      try {
+        const inPlace = await call(client, 'save_document', { handle })
+        expect(inPlace.isError).toBeFalsy()
+        expect(String(inPlace.structuredContent?.path)).toBe(join(root, 'pinned.html'))
+        const saveAs = await call(client, 'save_document', { handle, path: 'pinned-out.html' })
+        expect(saveAs.isError).toBeFalsy()
+        // the relative target resolved against the OPEN-time root
+        expect(existsSync(join(root, 'pinned-out.html'))).toBe(true)
+        expect(existsSync(join(driftRoot, 'pinned-out.html'))).toBe(false)
+        expect(
+          (await readFile(join(root, 'pinned-out.html'), 'utf8')).includes('<p>edit</p>'),
+        ).toBe(true)
+      } finally {
+        process.env[WORKSPACE_ROOT_ENV] = root
+        await rm(driftRoot, { recursive: true, force: true })
+      }
     } finally {
       await close()
     }

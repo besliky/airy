@@ -2137,34 +2137,94 @@ export interface TocEntry {
   text: string
   /** page number computed by real pagination (cached text; begin is dirty, so Word still recalculates on open) */
   pageNo?: number
+  /** bookmark anchor (`_Toc…` headings, `_Ref…` captions): the entry wraps in a
+   *  w:hyperlink so both Word and the editor jump on click */
+  anchor?: string
+}
+
+/**
+ * Switches of the TOC field instruction, mirroring Word's Table of Contents
+ * options dialog. Left unset the builder emits Word's default instruction
+ * (`TOC \o "1-N" \h \z \u`); `seqIdentifier` builds a table of figures
+ * (`TOC \h \z \c "Figure"`).
+ */
+export interface TocFieldOptions {
+  /** \o "1-N": deepest outline level included (default: deepest entry level) */
+  levels?: number
+  /** \n: omit the tab leader and page numbers */
+  hidePageNumbers?: boolean
+  /** \h: hyperlink entries (default on, like Word's built-in TOC) */
+  hyperlinks?: boolean
+  /** \t "Style,level,…" (e.g. "Chapter 1,1,Appendix,2"): build from paragraph
+   *  styles instead of outline levels (drops \o and \u, like Word) */
+  styles?: string
+  /** \c "Figure": build a table of figures from SEQ captions of that label */
+  seqIdentifier?: string
+}
+
+const clampTocLevel = (level: number): number => Math.min(Math.max(Math.round(level), 1), 9)
+
+/**
+ * The TOC field instruction text (without its padding spaces) for the given
+ * options. Switch order is canonical, matching Word's own output:
+ * `\o` (or `\t` for source styles, which Word appends after \z and pairs with
+ * neither \o nor \u), `\n`, `\h`, `\z`, `\u`; a table of figures is always
+ * `TOC \h \z \c "label"`.
+ */
+export function buildTocInstruction(options: TocFieldOptions = {}): string {
+  if (options.seqIdentifier) return `TOC \\h \\z \\c "${escapeXmlAttr(options.seqIdentifier)}"`
+  const parts = ['TOC']
+  if (!options.styles) parts.push(`\\o "1-${clampTocLevel(options.levels ?? 9)}"`)
+  if (options.hidePageNumbers) parts.push('\\n')
+  if (options.hyperlinks !== false) parts.push('\\h')
+  parts.push('\\z')
+  if (!options.styles) parts.push('\\u')
+  else parts.push(`\\t "${escapeXmlAttr(options.styles)}"`)
+  return parts.join(' ')
 }
 
 /**
  * Generate a real TOC field as one w:p fragment per line. The begin fldChar is
  * marked dirty so Word recalculates entries and page numbers on open; the
- * static entry texts serve as the visible result until then.
+ * static entry texts serve as the visible result until then. With
+ * `options.levels` entries deeper than the level are dropped from the cache
+ * (Word regenerates them anyway on open).
  */
-export function generateTocFieldXml(entries: TocEntry[]): string[] {
-  if (entries.length === 0) return []
-  const maxLevel = Math.min(Math.max(...entries.map((e) => e.level), 1), 9)
+export function generateTocFieldXml(entries: TocEntry[], options: TocFieldOptions = {}): string[] {
+  const shown =
+    options.levels === undefined
+      ? entries
+      : entries.filter((e) => e.level <= clampTocLevel(options.levels!))
+  if (shown.length === 0) return []
+  // no explicit level range: cover 1..deepest entry level (byte-identical to
+  // the pre-options instruction, so untouched callers keep their output)
+  const opts: TocFieldOptions =
+    options.levels === undefined && !options.seqIdentifier
+      ? { ...options, levels: Math.min(Math.max(...shown.map((e) => e.level), 1), 9) }
+      : options
   const pPr = (level: number) =>
-    `<w:pPr><w:pStyle w:val="TOC${Math.min(Math.max(level, 1), 9)}"/>` +
+    `<w:pPr><w:pStyle w:val="TOC${clampTocLevel(level)}"/>` +
     '<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9350"/></w:tabs>' +
     '<w:rPr><w:noProof/></w:rPr></w:pPr>'
+  const run = (inner: string) => `<w:r><w:rPr><w:noProof/></w:rPr>${inner}</w:r>`
+  // \n hides the tab leader and page number: the cached entry is title-only
   const entryRuns = (text: string, pageNo?: number) =>
-    `<w:r><w:rPr><w:noProof/></w:rPr><w:t xml:space="preserve">${escapeXmlText(text)}</w:t></w:r>` +
-    '<w:r><w:rPr><w:noProof/></w:rPr><w:tab/></w:r>' +
-    (pageNo !== undefined ? `<w:r><w:rPr><w:noProof/></w:rPr><w:t>${pageNo}</w:t></w:r>` : '')
+    run(`<w:t xml:space="preserve">${escapeXmlText(text)}</w:t>`) +
+    (options.hidePageNumbers ? '' : run('<w:tab/>')) +
+    (!options.hidePageNumbers && pageNo !== undefined ? run(`<w:t>${pageNo}</w:t>`) : '')
   const begin =
     '<w:r><w:fldChar w:fldCharType="begin" w:dirty="true"/></w:r>' +
-    `<w:r><w:instrText xml:space="preserve"> TOC \\o "1-${maxLevel}" \\h \\z \\u </w:instrText></w:r>` +
+    `<w:r><w:instrText xml:space="preserve"> ${buildTocInstruction(opts)} </w:instrText></w:r>` +
     '<w:r><w:fldChar w:fldCharType="separate"/></w:r>'
   const end = '<w:r><w:fldChar w:fldCharType="end"/></w:r>'
 
-  return entries.map((entry, i) => {
+  return shown.map((entry, i) => {
     const first = i === 0 ? begin : ''
-    const last = i === entries.length - 1 ? end : ''
-    return `<w:p>${pPr(entry.level)}${first}${entryRuns(entry.text, entry.pageNo)}${last}</w:p>`
+    const last = i === shown.length - 1 ? end : ''
+    let content = entryRuns(entry.text, entry.pageNo)
+    if (entry.anchor)
+      content = `<w:hyperlink w:anchor="${escapeXmlAttr(entry.anchor)}" w:history="1">${content}</w:hyperlink>`
+    return `<w:p>${pPr(entry.level)}${first}${content}${last}</w:p>`
   })
 }
 

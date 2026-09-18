@@ -1,4 +1,4 @@
-/** References-tab note-options strings (zh defines the key set every sibling shard must match) */
+/** References-tab strings: note options + TOC/TOF (zh defines the key set every sibling shard must match) */
 export const zh = {
   refsNoteOptionsTitle: '脚注和尾注',
   refsNoteMenu: '注释',
@@ -28,4 +28,17 @@ export const zh = {
   refsNextNote: '下一条注释',
   refsPrevNote: '上一条注释',
   refsNoNotes: '文档中没有注释',
+  refsTocMenuAuto: '自动目录',
+  refsTocMenuCustom: '自定义目录…',
+  refsTocMenuTof: '插入图表目录…',
+  refsTocOptionsTitle: '目录选项',
+  refsTocLevels: '显示级别',
+  refsTocPageNumbers: '显示页码',
+  refsTocHyperlinks: '使用超链接',
+  refsTocStyles: '从样式构建',
+  refsTocStylesPh: '标题 1,1,标题 2,2',
+  refsTofTitle: '图表目录',
+  refsTofLabel: '标签',
+  refsTofNoCaptions: '文档中没有该标签的题注。',
+  refsTofFieldLabel: '图表目录字段',
 }

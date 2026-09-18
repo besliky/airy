@@ -5,6 +5,7 @@
 // is a no-op (no temp files, no sidecar session).
 import { randomUUID } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
+import { basename } from 'node:path'
 
 import { countWords } from '../docx/session.js'
 import { resolveConfined } from '../docx/paths.js'
@@ -77,7 +78,7 @@ export class TextSession {
       handle: this.handle,
       kind: 'text',
       path: this.path,
-      fileName: this.path.split('/').pop() ?? this.path,
+      fileName: basename(this.path) || this.path,
       format: this.format,
       converted: false,
       editable: false,
@@ -95,7 +96,7 @@ export class TextSession {
         ? `${this.text.slice(0, maxChars)}\n…(output truncated at ${String(maxChars)} characters)`
         : this.text
     return [
-      `Read-only text extracted from "${this.path.split('/').pop() ?? this.path}" (format .${this.format}, editable: false).`,
+      `Read-only text extracted from "${basename(this.path) || this.path}" (format .${this.format}, editable: false).`,
       this.warning,
       '',
       body,

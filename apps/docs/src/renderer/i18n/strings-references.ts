@@ -21,6 +21,7 @@ import { hi } from './references/hi'
 import { zhTW } from './references/zh-TW'
 
 /** Strings for the references-domain note options (References tab, review-actions) */
+/** Strings for the References ribbon tab (TOC options, table of figures) */
 export const referencesStrings = defineStrings({
   zh,
   en,

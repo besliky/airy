@@ -141,11 +141,18 @@ export function InsertPagesDialog(props: {
           onChange={(e) => onRange(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && onConfirm()}
         />
-        {busy && (
-          <div className="pdf-modal-busy" role="status">
-            {t('insertPdfBusy')}
-          </div>
-        )}
+        {/* UX-910: the live region stays mounted (empty when idle) so screen
+         * readers announce the busy line as a content change — regions that
+         * appear in the DOM mid-action are missed by part of them. Polite,
+         * like the shell toasts: progress feedback must not interrupt */}
+        <div className="pdf-modal-busy" role="status" aria-live="polite" aria-atomic="true">
+          {busy && (
+            <>
+              <span className="pdf-modal-busy-spin" aria-hidden="true" />
+              {t('insertPdfBusy')}
+            </>
+          )}
+        </div>
         <div className="pdf-modal-actions">
           <button className="pdf-modal-btn" disabled={busy} onClick={onClose}>
             {t('cancel')}
