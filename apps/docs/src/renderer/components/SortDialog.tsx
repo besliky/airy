@@ -6,9 +6,8 @@
  */
 import { useState } from 'react'
 import type { Editor } from '@tiptap/core'
-import { Dropdown, type DropdownOption } from '@airy-office/ui'
+import { Dropdown, type DropdownOption, useModalDialog } from '@airy-office/ui'
 import { useI18n } from '../i18n/locale'
-import { useModalKeys } from './modal-keys'
 import {
   sortScope,
   sortSelectedParagraphs,
@@ -27,7 +26,7 @@ const NONE = 'none'
 
 export function SortDialog({ editor, onClose }: { editor: Editor; onClose: () => void }) {
   const { t } = useI18n()
-  const modalKeys = useModalKeys(onClose)
+  const dialog = useModalDialog(onClose)
   // computed once per open: the dialog describes the selection it was opened on
   const [scope] = useState(() => sortScope(editor.state))
   const table = scope?.kind === 'table' ? scope : null
@@ -131,12 +130,11 @@ export function SortDialog({ editor, onClose }: { editor: Editor; onClose: () =>
   return (
     <div
       className="modal-backdrop"
-      ref={modalKeys.ref}
-      onKeyDown={modalKeys.onKeyDown}
+      {...dialog.backdropProps}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="modal" role="dialog" aria-label={t('appSortDialogTitle')}>
-        <h2>{t('appSortDialogTitle')}</h2>
+      <div className="modal" {...dialog.dialogProps}>
+        <h2 {...dialog.titleProps}>{t('appSortDialogTitle')}</h2>
         <p className="sort-scope">
           {table
             ? t('appSortScopeTable', { rows: table.rowCount, cols: table.columnCount })

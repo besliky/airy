@@ -262,6 +262,9 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
     refresh(query)
   }, [editor, flushPending, matches, replacement, query, refresh])
 
+  // option toggles announce on/off (aria-pressed mirrors the visual `on`
+  // state, so W reads off while wildcards own the search, é off under match
+  // case) — same convention as the shared FindPanel's Aa/W buttons
   return (
     <div className="find-panel">
       <div className="find-row">
@@ -283,6 +286,8 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
         <button
           className={`find-opt ${matchCase ? 'on' : ''}`}
           data-tip={t('appMatchCase')}
+          aria-label={t('appMatchCase')}
+          aria-pressed={matchCase}
           onClick={() => {
             setMatchCase(!matchCase)
             refresh(query, index, { matchCase: !matchCase })
@@ -293,6 +298,8 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
         <button
           className={`find-opt ${wholeWord && !useWildcards ? 'on' : ''}`}
           data-tip={t('appWholeWord')}
+          aria-label={t('appWholeWord')}
+          aria-pressed={wholeWord && !useWildcards}
           onClick={() => {
             setWholeWord(!wholeWord)
             refresh(query, index, { wholeWord: !wholeWord })
@@ -305,6 +312,7 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
           className={`find-opt ${useWildcards ? 'on' : ''}`}
           data-tip={t('appUseWildcards')}
           aria-label={t('appUseWildcards')}
+          aria-pressed={useWildcards}
           onClick={() => {
             setUseWildcards(!useWildcards)
             refresh(query, index, { useWildcards: !useWildcards })
@@ -316,6 +324,7 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
           className={`find-opt ${ignoreDiacritics && !matchCase ? 'on' : ''}`}
           data-tip={t('appIgnoreDiacritics')}
           aria-label={t('appIgnoreDiacritics')}
+          aria-pressed={ignoreDiacritics && !matchCase}
           onClick={() => {
             setIgnoreDiacritics(!ignoreDiacritics)
             refresh(query, index, { ignoreDiacritics: !ignoreDiacritics })
