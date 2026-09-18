@@ -3,6 +3,7 @@ import { type LineNumberSettings, type SectionSettings } from '@airy-office/docx
 import { WRAP_OPTIONS } from './ContextMenu'
 import { MarginDialog, cmFromTwips, marginsFitPage, type PageMargins } from './MarginDialog'
 import { LineNumbersDialog } from './LineNumbersDialog'
+import { ColumnsDialog } from './ColumnsDialog'
 import { useI18n, type StringKey } from '../i18n/locale'
 import {
   IconCaret,
@@ -118,6 +119,7 @@ export function LayoutTab({
   const enabled = hasDoc && !!section
   const [marginDialog, setMarginDialog] = useState(false)
   const [lnDialog, setLnDialog] = useState(false)
+  const [columnsDialog, setColumnsDialog] = useState(false)
 
   const applyMargins = (m: PageMargins) => {
     if (!section || !marginsFitPage(m, section.pageWidth, section.pageHeight)) return
@@ -430,6 +432,15 @@ export function LayoutTab({
                         : t('ribbonThreeColumns')}
                   </button>
                 ))}
+                <button
+                  className={section.colWidths || section.columnSep ? 'active' : ''}
+                  onClick={() => {
+                    setDropdown(() => null)
+                    setColumnsDialog(true)
+                  }}
+                >
+                  <b>{t('layoutColsMore')}</b>
+                </button>
               </div>
             )}
           </div>
@@ -705,6 +716,14 @@ export function LayoutTab({
           value={section.lineNumbers}
           onApply={applyLineNumbers}
           onClose={() => setLnDialog(false)}
+        />
+      )}
+
+      {columnsDialog && section && (
+        <ColumnsDialog
+          section={section}
+          onApply={onSection}
+          onClose={() => setColumnsDialog(false)}
         />
       )}
     </>

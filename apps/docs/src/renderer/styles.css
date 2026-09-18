@@ -4000,6 +4000,41 @@ th.cell-rev-del {
   position: relative;
 }
 
+/* w:cols w:sep ("line between columns"): hairline centered in each gap; the
+   ink is document data (CLAUDE.md theming rule 4), not a chrome token */
+.pv-colrule {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid var(--docs-paper-ink);
+  pointer-events: none;
+}
+
+/* canvas copy of the same separator (mixed-column print view, see syncColumnRules) */
+.page-colrule-overlays {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.page-colrule {
+  position: absolute;
+  width: 0;
+  border-left: 1px solid var(--docs-paper-ink);
+}
+
+/* Columns dialog: preset chips in a row, active preset highlighted */
+.cols-preset {
+  flex: 1 1 auto;
+}
+
+.cols-preset.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* the clone is a gapless continuous flow (slices use virtual coordinates); canvas page gaps don't enter the clone */
 .pv-clip .page-gap,
 .pv-clip .page-gap-cut,

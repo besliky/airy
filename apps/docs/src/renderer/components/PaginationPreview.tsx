@@ -1432,6 +1432,17 @@ export function PaginationPreview({
                                   : { marginRight: gapAfter(ci) }),
                               }}
                             >
+                              {/* w:cols w:sep: hairline centered in the gap (document data, not chrome ink) */}
+                              {rSec?.settings.columnSep && ci < region.columns.length - 1 && (
+                                <div
+                                  className="pv-colrule"
+                                  style={
+                                    rtl
+                                      ? { left: -(gapAfter(ci) / 2) }
+                                      : { right: -(gapAfter(ci) / 2) }
+                                  }
+                                />
+                              )}
                               {rSec?.settings.lineNumbers &&
                                 lnMarks
                                   .filter((m) => m.page === i && m.region === ri && m.col === ci)

@@ -2,8 +2,65 @@ import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { EditorView } from '@tiptap/pm/view'
+import type { SectionInfo } from '@airy-office/docx-engine'
 import type { LineAnchor } from '../pagination'
 import { rangeSlot } from '../dom-range'
+import { sectionBidi, sectionColGeom } from '../pagination-sections'
+import type { PageSlice } from '../pagination-types'
+/**
+ * Column separators (w:cols > w:sep) on the mixed-column canvas: one hairline
+ * centered in each column gap, spanning the page's content band (the uniform
+ * CSS-multicol path draws its own column-rule). Page rects come from the gap
+ * widgets like syncPageBorders; must run after the gaps are placed.
+ */
+export function syncColumnRules(
+  wrap: HTMLElement,
+  slices: PageSlice[],
+  sections: SectionInfo[],
+  zoomFactor: number,
+): void {
+  const anySep = sections.some((s) => s.settings.columnSep === true)
+  let layer = wrap.querySelector(':scope > .page-colrule-overlays') as HTMLElement | null
+  if (!anySep) {
+    layer?.remove()
+    return
+  }
+  const bounds = canvasPageBounds(wrap, zoomFactor)
+  if (bounds.length < 3) return
+  if (!layer) {
+    layer = document.createElement('div')
+    layer.className = 'page-colrule-overlays'
+    wrap.appendChild(layer)
+  }
+  layer.textContent = ''
+  const px = (twips: number) => (twips / 1440) * 96
+  for (let k = 0; 2 * k + 1 < bounds.length; k++) {
+    const slice = slices[k]
+    const sec = slice ? sections[Math.min(slice.section ?? 0, sections.length - 1)] : undefined
+    if (!sec || sec.settings.columnSep !== true) continue
+    const geom = sectionColGeom(sec)
+    if (geom.cols < 2) continue
+    const set = sec.settings
+    const top = bounds[2 * k]! + px(set.marginTop)
+    const bottom = bounds[2 * k + 1]! - px(set.marginBottom)
+    if (bottom - top <= 10) continue
+    const rtl = sectionBidi(sec)
+    // gap centers: cumulative widths + gaps from the text-area origin
+    let x = 0
+    for (let c = 0; c + 1 < geom.cols; c++) {
+      x += geom.widths[c] ?? geom.colWidthPx
+      const center = x + (geom.gaps[c] ?? geom.gapPx) / 2
+      const el = document.createElement('div')
+      el.className = 'page-colrule'
+      el.style.top = `${top}px`
+      el.style.height = `${bottom - top}px`
+      el.style.left = `${rtl ? px(set.pageWidth - set.marginRight - center) : px(set.marginLeft) + center}px`
+      layer.appendChild(el)
+      x += geom.gaps[c] ?? geom.gapPx
+    }
+  }
+}
+
 
 const anchorRange = rangeSlot()
 

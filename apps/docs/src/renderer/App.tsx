@@ -119,6 +119,7 @@ import {
   syncCutOverlays,
   syncFloatShifts,
   syncPageBorders,
+  syncColumnRules,
   clampCellBoxTops,
   pageBorderStyleOf,
   type PageGapSpec,
@@ -3597,6 +3598,12 @@ export function App() {
           const pbSec = secList?.[0]?.settings ?? section
           const borderStyle = pbSec ? pageBorderStyleOf(pbSec) : null
           syncPageBorders((pm.closest('.page-wrap') as HTMLElement) ?? pm, borderStyle, factor)
+        // column separators (w:cols w:sep): mixed-column pages draw overlay
+        // hairlines (uniform CSS-multicol paints its own column-rule below);
+        // print view only, after the page gaps so page rects are final
+        if (viewMode === 'print' && !readMode && colMode === 'mixed' && secList) {
+          syncColumnRules((pm.closest('.page-wrap') as HTMLElement) ?? pm, slices, secList, factor)
+        }
         }
         // line numbers (w:lnNumType): margin numerals at each line's position;
         // after setPageGaps so the sampled line rects are final (print view
@@ -3777,6 +3784,9 @@ export function App() {
     singleFirstContentH,
     singleHfPx,
     hfHeightsOf,
+    // gates the column-separator overlay painting (uniform CSS-multicol draws
+    // its own column-rule)
+    colMode,
     measureSingleFlow,
     colGeomsFor,
     header,
@@ -4858,6 +4868,8 @@ export function App() {
       {doc && section && (
         // over-wide tables may spill into the margins (Word/LO), capped at the paper edge
         <style>{`.doc-page { --doc-margin-left:${twipsToPx(section.marginLeft)}px; --doc-margin-right:${twipsToPx(section.marginRight)}px }`}</style>
+        // w:sep ("line between columns"): document-data hairline, not a chrome token
+        <style>{`.editor-scroll .doc-page { column-count: ${colFlow.cols}; column-gap: ${colFlow.gapPx}px; column-fill: balance;${sections[0]?.settings.columnSep ? ' column-rule: 1px solid var(--docs-paper-ink);' : ''} }
       )}
       {/* Theme CSS comes from live state, so a Design ▸ Themes/Fonts/Colors pick shows
           on the page immediately instead of only in the saved file */}
@@ -4871,7 +4883,6 @@ export function App() {
         // is the single-flow measuring state (columns removed, content-box width = column width,
         // toggled instantaneously for measurement, invisible).
         // .doc-page is border-box, so the measured width must add back the left/right margin padding
-        <style>{`.editor-scroll .doc-page { column-count: ${colFlow.cols}; column-gap: ${colFlow.gapPx}px; column-fill: balance; }
 .editor-scroll .doc-page.measuring-columns { column-count: auto; width: ${colFlow.colWidthPx + twipsToPx(canvasSection?.marginLeft ?? section?.marginLeft ?? 0) + twipsToPx(canvasSection?.marginRight ?? section?.marginRight ?? 0)}px; }`}</style>
       )}
       <Ribbon
