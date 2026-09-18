@@ -266,7 +266,10 @@ describe('captions', () => {
     expect(xml.indexOf('<w:bookmarkEnd')).toBeGreaterThan(xml.indexOf('w:fldCharType="end"'))
     // visible display is unchanged by the bookmark
     const doc = await parseDocx(await buildDocx({ bodyXml: xml }))
-    expect(doc.blocks[0].fieldDisplay).toMatchObject({ kind: 'text', left: 'Figure 2 System architecture' })
+    expect(doc.blocks[0].fieldDisplay).toMatchObject({
+      kind: 'text',
+      left: 'Figure 2 System architecture',
+    })
   })
 })
 
