@@ -51,7 +51,9 @@ export function findMatches(editor: Editor, query: string, opts: FindOptions): R
         text += child.text
       } else {
         posAt.push(pos + 1 + offset)
-        text += '\u0000' // leaf placeholder (hard break) never matches
+        // leaf placeholder for hard break / inline image / math / ruby / note
+        // ref — never matched, not even by wildcards (BUG-741)
+        text += '\u0000'
       }
     })
     if (re) {

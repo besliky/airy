@@ -20,6 +20,12 @@
  * `?`/`*` and classes match by code point, so CJK and emoji work; reversed
  * ranges like `[z-a]` simply match nothing (a negated reversed range matches
  * any character), matching Word's behavior.
+ *
+ * The block text fed to the matcher represents non-text inline nodes (hard
+ * breaks, inline images/math/ruby/note refs) as a U+0000 placeholder. Word
+ * never treats those objects as characters, so `?`, `*` and negated classes
+ * all refuse to match the placeholder: only real text can be matched (and
+ * thus only real text is ever inside a Replace range).
  */
 
 /** regex-special characters that must be escaped when literal (u-flag safe) */
@@ -31,8 +37,12 @@ const escClass = (ch: string) => ch.replace(RE_CLASS_SPECIALS, '\\$&')
 
 /** class that never matches (an empty `[]` is illegal under the u flag) */
 const NEVER = '[^\\s\\S]'
-/** class that matches any single code point */
-const ANY = '[\\s\\S]'
+/**
+ * Class that matches any single code point except the U+0000 leaf placeholder
+ * (see the header comment): `\u0000` is not a document character, so no
+ * wildcard may match it (BUG-741). Valid under the `u` flag.
+ */
+const ANY = '[^\\u0000]'
 
 interface ClassFragment {
   fragment: string | null
@@ -73,7 +83,8 @@ function compileClass(pcs: string[], start: number): ClassFragment {
   }
   if (k >= pcs.length) return { fragment: null, next: -1 }
   if (atoms === 0) return { fragment: negate ? ANY : NEVER, next: k + 1 }
-  return { fragment: negate ? `[^${inner}]` : `[${inner}]`, next: k + 1 }
+  // a negated class also refuses the leaf placeholder, like `?` and `*`
+  return { fragment: negate ? `[^${inner}\\u0000]` : `[${inner}]`, next: k + 1 }
 }
 
 /**

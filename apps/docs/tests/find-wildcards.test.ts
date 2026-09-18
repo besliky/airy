@@ -154,6 +154,60 @@ describe('wildcards findMatches', () => {
     expect(matchTexts(editor, 't??st')).toEqual(['toast'])
     editor.destroy()
   })
+
+  it('an astral placeholder-free text keeps UTF-16 offsets exact', () => {
+    const editor = createEditor('🙂a🙂b')
+    expect(matchTexts(editor, 'a?b')).toEqual(['a🙂b'])
+    editor.destroy()
+  })
+})
+
+describe('leaf placeholders are invisible to wildcards (BUG-741)', () => {
+  /** paragraph `a` + hardBreak + `b` — the break flattens to `\u0000` */
+  const makeWithBreak = () =>
+    new Editor({
+      element: document.createElement('div'),
+      extensions: editorExtensions,
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'docParagraph',
+            attrs: { docxIndex: 0 },
+            content: [
+              { type: 'text', text: 'a' },
+              { type: 'hardBreak' },
+              { type: 'text', text: 'b' },
+            ],
+          },
+        ],
+      },
+    })
+
+  it('? never matches the \\u0000 placeholder of an inline leaf node', () => {
+    const editor = makeWithBreak()
+    // a hardBreak (same for inline image/math/ruby/note ref) sits between a and b
+    expect(findMatches(editor, 'a?b', OFF)).toEqual([])
+    // the two real characters still match
+    expect(matchTexts(editor, '?')).toEqual(['a', 'b'])
+    editor.destroy()
+  })
+
+  it('* cannot span the placeholder, so Replace never eats an inline node', () => {
+    const editor = makeWithBreak()
+    expect(findMatches(editor, 'a*b', OFF)).toEqual([])
+    expect(matchTexts(editor, 'a*')).toEqual(['a'])
+    editor.destroy()
+  })
+
+  it('negated classes refuse the placeholder as well', () => {
+    const editor = makeWithBreak()
+    expect(findMatches(editor, 'a[!x]b', OFF)).toEqual([])
+    expect(matchTexts(editor, '[!a]')).toEqual(['b'])
+    // a negated empty/reversed class is "any character" — but still not the placeholder
+    expect(matchTexts(editor, '[!z-a]')).toEqual(['a', 'b'])
+    editor.destroy()
+  })
 })
 
 describe('foldDiacritics', () => {
