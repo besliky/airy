@@ -1509,7 +1509,9 @@ button {
 }
 
 /* Insert-pages busy state: the dialog stays open with its controls disabled
- * while the file is rewritten and reloaded */
+ * while the file is rewritten and reloaded. The row is always mounted as the
+ * polite live region (UX-910); the spinner is a real element so it only
+ * exists while busy */
 .pdf-modal-busy {
   display: flex;
   align-items: center;
@@ -1518,8 +1520,7 @@ button {
   font-size: 13px;
 }
 
-.pdf-modal-busy::before {
-  content: '';
+.pdf-modal-busy-spin {
   flex-shrink: 0;
   width: 12px;
   height: 12px;
@@ -1536,7 +1537,7 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pdf-modal-busy::before {
+  .pdf-modal-busy-spin {
     animation: none;
   }
 }
