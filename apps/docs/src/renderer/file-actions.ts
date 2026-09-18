@@ -14,12 +14,7 @@ import {
   BLANK_BULLET_NUM_ID,
   BLANK_ORDERED_NUM_ID,
   buildBlankDocx,
-  findChartWorkbookPath,
-  parseChartPartXml,
   parseDocx,
-  patchChartPartXml,
-  patchChartWorkbookXlsxBase64,
-  readDocxPartBase64,
   readPageColor,
   readSections,
   readSectionSettings,
@@ -53,6 +48,7 @@ import {
 import { docStyleCss } from './doc-style-css'
 import { setDocNoteNumbering } from './note-format'
 import type { CompareEntry } from './editor/compare'
+import { applyChartEdits } from './editor/chart'
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from './editor/convert'
 import { TABLE_TRAILING_SKIP } from './editor/extensions'
 import { TRACK_IGNORE } from './editor/revisions'
@@ -581,36 +577,13 @@ export async function buildDocBytes(ctx: FileActionContext): Promise<Uint8Array 
   const { doc, editor } = ctx
   if (!doc || !editor) return null
   const plan = pmDocToSavePlan(editor.getJSON() as PmNode, doc.parsed.blocks)
-  // chart data edits patch the chart's own zip part, not the body XML
-  const partXml: Record<string, string> = {}
-  const partBinary: Record<string, string> = {}
-  for (const { partPath, patch } of plan.chartPatches) {
-    const originalPart = doc.parsed.extras.chartParts[partPath]
-    if (originalPart) {
-      const patchedXml = patchChartPartXml(originalPart, patch)
-      partXml[partPath] = patchedXml
-      // Also update the embedded workbook so Word's "Edit Data" shows correct data
-      const wbPath = await findChartWorkbookPath(doc.parsed.internal.originalBytes, partPath)
-      if (wbPath) {
-        const existingBase64 = await readDocxPartBase64(doc.parsed.internal.originalBytes, wbPath)
-        if (existingBase64) {
-          const display = parseChartPartXml(patchedXml, partPath)
-          if (display) {
-            const namedSeries = display.series.map((s, i) => ({
-              name: s.name ?? `Series${i + 1}`,
-              values: s.values as (number | null)[],
-            }))
-            const updated = await patchChartWorkbookXlsxBase64(
-              existingBase64,
-              display.categories,
-              namedSeries,
-            )
-            if (updated) partBinary[wbPath] = updated
-          }
-        }
-      }
-    }
-  }
+  // chart data edits patch the chart's own zip part (and its embedded
+  // workbook, so Word's "Edit Data" shows the edited numbers), not the body XML
+  const { partXml, partBinary } = await applyChartEdits(
+    doc.parsed.internal.originalBytes,
+    doc.parsed.extras.chartParts,
+    plan.chartPatches,
+  )
   // Ink must be passed whenever any annotation exists (not only when
   // dirty): a regenerated anchor paragraph loses its ink run, and the
   // engine re-injects the full layer from this list.

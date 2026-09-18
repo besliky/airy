@@ -3,6 +3,7 @@ import type { Mark, Node as ProseMirrorNode } from '@tiptap/pm/model'
 import type { ChartDisplay, CommentInfo, NewChart } from '@airy-office/docx-engine'
 import type { AgentToolCall, AgentToolDef, CreateDocumentType } from '../../shared/ipc'
 import { t } from '../i18n/locale'
+import { displayFromSpec } from '../editor/chart'
 import { executeOps, opNames } from './ops'
 import {
   blockRangePositions,
@@ -911,8 +912,9 @@ function executeSyncTool(
 
     case 'insert_chart': {
       const kind = String(call.input.kind ?? '') as NewChart['kind']
-      if (!['bar', 'line', 'pie'].includes(kind))
-        return fail(t('aiSumInsertChart'), 'kind must be one of bar/line/pie')
+      const chartKinds = ['bar', 'line', 'pie', 'area', 'scatter', 'bubble', 'doughnut']
+      if (!chartKinds.includes(kind))
+        return fail(t('aiSumInsertChart'), `kind must be one of ${chartKinds.join('/')}`)
       const categories = Array.isArray(call.input.categories)
         ? (call.input.categories as unknown[]).map((c) => String(c ?? ''))
         : []
@@ -934,7 +936,7 @@ function executeSyncTool(
       })
       const title = String(call.input.title ?? '').trim() || 'Chart title'
       const spec: NewChart = { kind, title, categories, series }
-      const display: ChartDisplay = { partPath: '', kind, title, categories, series }
+      const display = displayFromSpec(spec)
       const count = editor.state.doc.childCount
       const after =
         call.input.afterBlockIndex === undefined
