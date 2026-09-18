@@ -233,11 +233,20 @@ export const HIGHLIGHT_CSS: Record<string, string> = {
   white: '#FFFFFF',
 }
 
-/** Cross-reference (REF field): gray background, title hints the target bookmark, text is the cached display result */
+/** Cross-reference (REF field): gray background, title hints the target bookmark, text is the cached display result.
+ * instr keeps the full field instruction (REF … \\p/\\r/\\h switches) so edited
+ * paragraphs regenerate the same switches instead of the plain-text default */
 export const RefFieldMark = Mark.create({
   name: 'refField',
   addAttributes() {
-    return { name: { default: '' } }
+    return {
+      name: { default: '' },
+      instr: {
+        default: null as string | null,
+        parseHTML: (el) => (el as HTMLElement).getAttribute('data-ref-instr') || null,
+        renderHTML: (attrs) => (attrs.instr ? { 'data-ref-instr': String(attrs.instr) } : {}),
+      },
+    }
   },
   parseHTML() {
     return [{ tag: 'span[data-ref-field]' }]
