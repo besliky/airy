@@ -362,6 +362,7 @@ export const ja = {
   appFindPlaceholder: '検索',
   appMatchCase: '大文字と小文字を区別する',
   appWholeWord: '完全に一致する単語だけを検索する',
+  appUseWildcards: 'ワイルドカードを使用する',
   appNoResults: '一致なし',
   appPrevMatch: '前へ (Shift+Enter)',
   appNextMatch: '次へ (Enter)',

@@ -341,6 +341,7 @@ export const it = {
   appFindPlaceholder: 'Trova',
   appMatchCase: 'Maiuscole/minuscole',
   appWholeWord: 'Solo parole intere',
+  appUseWildcards: 'Usa caratteri jolly',
   appNoResults: 'Nessun risultato',
   appPrevMatch: 'Precedente (Maiusc+Invio)',
   appNextMatch: 'Successivo (Invio)',

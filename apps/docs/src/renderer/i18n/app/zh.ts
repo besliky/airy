@@ -351,6 +351,7 @@ export const zh = {
   appFindPlaceholder: '查找',
   appMatchCase: '区分大小写',
   appWholeWord: '全字匹配',
+  appUseWildcards: '使用通配符',
   appNoResults: '无结果',
   appPrevMatch: '上一个 (Shift+Enter)',
   appNextMatch: '下一个 (Enter)',

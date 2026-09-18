@@ -343,6 +343,7 @@ export const es = {
   appFindPlaceholder: 'Buscar',
   appMatchCase: 'Coincidir mayúsculas y minúsculas',
   appWholeWord: 'Solo palabras completas',
+  appUseWildcards: 'Usar caracteres comodín',
   appNoResults: 'Sin resultados',
   appPrevMatch: 'Anterior (Mayús+Entrar)',
   appNextMatch: 'Siguiente (Entrar)',

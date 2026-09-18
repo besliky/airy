@@ -327,6 +327,7 @@ export const zhTW = {
   appFindPlaceholder: '尋找',
   appMatchCase: '大小寫須相符',
   appWholeWord: '全字拼寫須相符',
+  appUseWildcards: '使用萬用字元',
   appNoResults: '沒有結果',
   appPrevMatch: '上一個 (Shift+Enter)',
   appNextMatch: '下一個 (Enter)',

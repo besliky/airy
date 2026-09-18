@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/core'
 import { useI18n } from '../i18n/locale'
 import { searchPluginKey } from '../editor/extensions'
+import { compileWildcards } from '../find-wildcards'
 
 interface Range {
   from: number
@@ -11,6 +12,7 @@ interface Range {
 interface FindOptions {
   matchCase: boolean
   wholeWord: boolean
+  useWildcards: boolean
 }
 
 const isWordChar = (ch: string | undefined) => !!ch && /[\p{L}\p{N}_]/u.test(ch)
@@ -29,6 +31,8 @@ export function foldCase(s: string): string {
 export function findMatches(editor: Editor, query: string, opts: FindOptions): Range[] {
   const found: Range[] = []
   if (!query) return found
+  // in wildcards mode wholeWord is ignored (like Word, which disables it there)
+  const re = opts.useWildcards ? compileWildcards(query, !opts.matchCase) : null
   const needle = opts.matchCase ? query : foldCase(query)
   editor.state.doc.descendants((node, pos) => {
     if (!node.isTextblock) return true
@@ -44,6 +48,20 @@ export function findMatches(editor: Editor, query: string, opts: FindOptions): R
         text += '\u0000' // leaf placeholder (hard break) never matches
       }
     })
+    if (re) {
+      // wildcards match the original text: the regex's `i` flag handles case,
+      // so no length-changing folding is needed and offsets stay exact
+      re.lastIndex = 0
+      for (let m = re.exec(text); m; m = re.exec(text)) {
+        if (m[0].length > 0) {
+          found.push({ from: posAt[m.index], to: posAt[m.index + m[0].length - 1] + 1 })
+          re.lastIndex = m.index + m[0].length
+        } else {
+          re.lastIndex++ // a bare `*` can match empty — report nothing, move on
+        }
+      }
+      return false
+    }
     const haystack = opts.matchCase ? text : foldCase(text)
     let i = 0
     while ((i = haystack.indexOf(needle, i)) !== -1) {
@@ -78,6 +96,7 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
   const [index, setIndex] = useState(0)
   const [matchCase, setMatchCase] = useState(false)
   const [wholeWord, setWholeWord] = useState(false)
+  const [useWildcards, setUseWildcards] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const replaceInputRef = useRef<HTMLInputElement>(null)
   const indexRef = useRef(0)
@@ -102,7 +121,12 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
   // rescan only updates matches/highlight; scrolling happens on explicit navigation
   const refresh = useCallback(
     (q: string, keepIndex = 0, opts?: Partial<FindOptions>) => {
-      const ranges = findMatches(editor, q, { matchCase, wholeWord, ...opts })
+      const ranges = findMatches(editor, q, {
+        matchCase,
+        wholeWord,
+        useWildcards,
+        ...opts,
+      })
       const active = ranges.length === 0 ? 0 : Math.min(keepIndex, ranges.length - 1)
       setMatches(ranges)
       setIndex(active)
@@ -110,7 +134,7 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
       highlight(ranges, active)
       return ranges
     },
-    [editor, highlight, matchCase, wholeWord],
+    [editor, highlight, matchCase, wholeWord, useWildcards],
   )
 
   const refreshRef = useRef(refresh)
@@ -256,14 +280,26 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
           Aa
         </button>
         <button
-          className={`find-opt ${wholeWord ? 'on' : ''}`}
+          className={`find-opt ${wholeWord && !useWildcards ? 'on' : ''}`}
           data-tip={t('appWholeWord')}
           onClick={() => {
             setWholeWord(!wholeWord)
             refresh(query, index, { wholeWord: !wholeWord })
           }}
+          disabled={useWildcards}
         >
           W
+        </button>
+        <button
+          className={`find-opt ${useWildcards ? 'on' : ''}`}
+          data-tip={t('appUseWildcards')}
+          aria-label={t('appUseWildcards')}
+          onClick={() => {
+            setUseWildcards(!useWildcards)
+            refresh(query, index, { useWildcards: !useWildcards })
+          }}
+        >
+          *?
         </button>
         <span className="find-count">
           {query

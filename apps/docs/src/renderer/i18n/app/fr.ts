@@ -347,6 +347,7 @@ export const fr = {
   appFindPlaceholder: 'Rechercher',
   appMatchCase: 'Respecter la casse',
   appWholeWord: 'Mot entier',
+  appUseWildcards: 'Utiliser les caractères génériques',
   appNoResults: 'Aucun résultat',
   appPrevMatch: 'Précédent (Maj+Entrée)',
   appNextMatch: 'Suivant (Entrée)',

@@ -362,6 +362,7 @@ export const ko = {
   appFindPlaceholder: '찾기',
   appMatchCase: '대/소문자 구분',
   appWholeWord: '단어 단위로',
+  appUseWildcards: '와일드카드 사용',
   appNoResults: '결과 없음',
   appPrevMatch: '이전 (Shift+Enter)',
   appNextMatch: '다음 (Enter)',

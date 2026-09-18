@@ -339,6 +339,7 @@ export const id = {
   appFindPlaceholder: 'Temukan',
   appMatchCase: 'Cocokkan huruf besar/kecil',
   appWholeWord: 'Hanya kata utuh',
+  appUseWildcards: 'Gunakan karakter wildcard',
   appNoResults: 'Tidak ada hasil',
   appPrevMatch: 'Sebelumnya (Shift+Enter)',
   appNextMatch: 'Berikutnya (Enter)',

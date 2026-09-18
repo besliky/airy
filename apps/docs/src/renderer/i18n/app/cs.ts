@@ -337,6 +337,7 @@ export const cs = {
   appFindPlaceholder: 'Najít',
   appMatchCase: 'Rozlišovat velikost písmen',
   appWholeWord: 'Pouze celá slova',
+  appUseWildcards: 'Použít zástupné znaky',
   appNoResults: 'Žádné výsledky',
   appPrevMatch: 'Předchozí (Shift+Enter)',
   appNextMatch: 'Další (Enter)',

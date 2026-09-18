@@ -332,6 +332,7 @@ export const he = {
   appFindPlaceholder: 'חיפוש',
   appMatchCase: 'התאמת אותיות רישיות/קטנות',
   appWholeWord: 'מילים שלמות בלבד',
+  appUseWildcards: 'שימוש בתווים כלליים',
   appNoResults: 'אין תוצאות',
   appPrevMatch: 'הקודם (Shift+Enter)',
   appNextMatch: 'הבא (Enter)',

@@ -333,6 +333,7 @@ export const en = {
   appFindPlaceholder: 'Find',
   appMatchCase: 'Match case',
   appWholeWord: 'Whole words only',
+  appUseWildcards: 'Use wildcards',
   appNoResults: 'No results',
   appPrevMatch: 'Previous (Shift+Enter)',
   appNextMatch: 'Next (Enter)',

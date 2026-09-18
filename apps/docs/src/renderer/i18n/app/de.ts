@@ -347,6 +347,7 @@ export const de = {
   appFindPlaceholder: 'Suchen',
   appMatchCase: 'Groß-/Kleinschreibung beachten',
   appWholeWord: 'Nur ganzes Wort suchen',
+  appUseWildcards: 'Platzhalterzeichen verwenden',
   appNoResults: 'Keine Ergebnisse',
   appPrevMatch: 'Zurück (Umschalt+Eingabetaste)',
   appNextMatch: 'Weiter (Eingabetaste)',

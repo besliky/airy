@@ -337,6 +337,7 @@ export const hi = {
   appFindPlaceholder: 'खोजें',
   appMatchCase: 'अक्षर के आकार का मिलान करें',
   appWholeWord: 'केवल पूर्ण शब्द',
+  appUseWildcards: 'वाइल्डकार्ड का उपयोग करें',
   appNoResults: 'कोई परिणाम नहीं',
   appPrevMatch: 'पिछला (Shift+Enter)',
   appNextMatch: 'अगला (Enter)',
