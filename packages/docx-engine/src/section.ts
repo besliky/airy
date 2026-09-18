@@ -309,8 +309,9 @@ export function applySectionSettings(sectPrXml: string, settings: SectionSetting
 
   // line numbering (w:lnNumType between pgBorders and pgNumType in CT_SectPr):
   // undefined = numbering off, the tag is dropped; attrs are omitted when unset.
-  // Insert before the first present later-schema element, else after pgMar
-  // (applySectionSettings guarantees pgSz/pgMar exist by this point).
+  // Insert before the first present later-schema element, else after the last
+  // present earlier-schema one (pgBorders > paperSrc > pgMar; applySectionSettings
+  // guarantees pgSz/pgMar exist by this point).
   xml = xml.replace(/<w:lnNumType[^>]*\/>/, '')
   if (settings.lineNumbers) {
     const ln = settings.lineNumbers
@@ -337,7 +338,11 @@ export function applySectionSettings(sectPrXml: string, settings: SectionSetting
     if (later) {
       xml = xml.replace(new RegExp(`(<w:${later}[\\s/>])`), `${tag}$1`)
     } else {
-      xml = xml.replace(/(<w:pgMar[^>]*\/>)/, `$1${tag}`)
+      const anchor =
+        /<w:pgBorders[^>]*\/>|<w:pgBorders[\s\S]*?<\/w:pgBorders>/.exec(xml)?.[0] ??
+        /<w:paperSrc[^>]*\/?>/.exec(xml)?.[0] ??
+        /<w:pgMar[^>]*\/>/.exec(xml)![0]
+      xml = xml.replace(anchor, `${anchor}${tag}`)
     }
   }
 
