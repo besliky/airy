@@ -3,8 +3,7 @@ import { existsSync } from 'node:fs'
 import { copyFile, mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import type { Page } from '@playwright/test'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl } from './helpers'
+import { launchShell, closeAndSaveVideo, waitForPageWithUrl, waitForSheetsGrid } from './helpers'
 
 const FIXTURE = resolve(__dirname, '../apps/sheets/fixtures/generated/compatibility-basic.xlsx')
 // has a cached formula (B3 =SUM(C1:C2)) so the CSV flows hit the loss warning;
@@ -13,13 +12,6 @@ const FORMULA_FIXTURE = resolve(
   __dirname,
   '../apps/sheets/fixtures/generated/compatibility-edit.xlsx',
 )
-
-async function waitForWorkbook(page: Page, sheetName = 'Sheet1'): Promise<void> {
-  await page.waitForFunction((name) => document.body.textContent?.includes(name), sheetName, {
-    timeout: 30_000,
-  })
-  await page.waitForTimeout(1_500)
-}
 
 /// Stubs the native dialogs: the save picker returns `csvPath`, and every
 /// message box answers with its "Continue as CSV" button, recording each box
@@ -63,7 +55,7 @@ test.describe('sheets: export the active sheet as CSV', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
 
       // Stub the native dialogs: pick the target path, answer "Continue as
       // CSV" (button index 1) if the formula-loss warning appears.
@@ -106,7 +98,7 @@ test.describe('sheets: export the active sheet as CSV', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets, 'Data')
+      await waitForSheetsGrid(sheets, 'Data')
       await stubDialogs(launched.app, target)
 
       await expect(async () => {
@@ -151,7 +143,7 @@ test.describe('sheets: export the active sheet as CSV', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets, 'Data')
+      await waitForSheetsGrid(sheets, 'Data')
       await stubDialogs(launched.app, target)
 
       await expect(async () => {

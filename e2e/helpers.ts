@@ -190,3 +190,51 @@ export async function waitForPageWithUrl(
     await app.waitForEvent('window', { timeout: Math.min(remaining, 1_000) }).catch(() => {})
   }
 }
+
+/**
+ * Wait until the sheets grid is live and interactive: the sheet tab strip has
+ * named the sheet (the snapshot is loading in), the worksheet canvas is laid
+ * out, and Univer reached its Rendered lifecycle stage — surfaced as
+ * `<html data-univer-rendered="true">` by univer-sync.ts — where input
+ * handlers exist and the first paint is done. Replaces the old fixed
+ * post-launch sleeps (1.5s/3s) that timed poorly on slow runners.
+ */
+export async function waitForSheetsGrid(page: Page, sheetName = 'Sheet1'): Promise<void> {
+  await page.waitForFunction(
+    (name) => {
+      const named = (document.body.textContent ?? '').includes(name)
+      const grid = Array.from(document.querySelectorAll('canvas')).some((canvas) => {
+        const rect = canvas.getBoundingClientRect()
+        return rect.width > 500 && rect.height > 300
+      })
+      return named && grid && document.documentElement.dataset.univerRendered === 'true'
+    },
+    sheetName,
+    { timeout: 30_000 },
+  )
+}
+
+/**
+ * Wait until repainting has caught up with async font loads: fonts resolved,
+ * then two animation frames passed, so canvas redraws queued behind
+ * `fonts.ready` (Konva/Univer text) and font-driven reflows have actually
+ * painted. Replaces fixed settle sleeps before captures and first clicks.
+ */
+export async function waitForPaintSettled(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as unknown as { __airyPaintSettled?: boolean }
+    w.__airyPaintSettled = false
+    void document.fonts.ready.then(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          w.__airyPaintSettled = true
+        })
+      })
+    })
+  })
+  await page.waitForFunction(
+    () => (window as unknown as { __airyPaintSettled?: boolean }).__airyPaintSettled === true,
+    undefined,
+    { timeout: 30_000 },
+  )
+}

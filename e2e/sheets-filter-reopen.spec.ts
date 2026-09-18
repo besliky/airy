@@ -3,10 +3,23 @@ import { execSync } from 'node:child_process'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl } from './helpers'
+import { launchShell, closeAndSaveVideo, waitForPageWithUrl, waitForSheetsGrid } from './helpers'
 
 // the preload exposes window.__airyDebug only under this env var
 process.env.AIRY_DEBUG_HOOKS = '1'
+
+/** rows the active sheet's filter currently hides, through Univer's Facade */
+function filteredOutRows(page: import('@playwright/test').Page): Promise<number[]> {
+  return page.evaluate(() => {
+    const debug = (window as unknown as Record<string, unknown>).__airyDebug as {
+      univerAPI: { getActiveWorkbook(): { getActiveSheet(): unknown } }
+    }
+    const sheet = debug.univerAPI.getActiveWorkbook().getActiveSheet() as {
+      getFilter(): { getFilteredOutRows(): number[] } | null
+    }
+    return sheet.getFilter()?.getFilteredOutRows() ?? []
+  })
+}
 
 /**
  * Regression for "filter dropdown selections vanish after reopening the
@@ -37,10 +50,7 @@ test.describe('sheets: filter criteria survive save and reopen', () => {
       await page.locator('.quick-card').nth(1).click()
 
       const sheets = await waitForPageWithUrl(app, 'sheets/out')
-      await sheets.waitForFunction(() => document.body.textContent?.includes('Sheet1'), null, {
-        timeout: 30_000,
-      })
-      await sheets.waitForTimeout(1_500)
+      await waitForSheetsGrid(sheets)
 
       // A1:B5 — header row plus four data rows, then filter B to "keep"
       await sheets.evaluate(async () => {
@@ -71,7 +81,9 @@ test.describe('sheets: filter criteria survive save and reopen', () => {
           filters: { filters: ['keep'] },
         })
       })
-      await sheets.waitForTimeout(800)
+      // the criteria apply asynchronously — poll the filter model until the
+      // rows are really filtered out before saving
+      await expect.poll(() => filteredOutRows(sheets)).toEqual([2, 4])
 
       // The quick-created workbook is untitled-staged (4eb93d5): its first
       // plain Save opens the Save dialog anchored in the default save dir —
@@ -172,7 +184,9 @@ test.describe('sheets: filter criteria survive save and reopen', () => {
           filters: { filters: ['keep', 'drop'] },
         })
       })
-      await sheets.waitForTimeout(500)
+      // broadening unhide is asynchronous too — poll until nothing is
+      // filtered out instead of a fixed settle
+      await expect.poll(() => filteredOutRows(sheets)).toEqual([])
       const widened = await sheets.evaluate(() => {
         const debug = (window as unknown as Record<string, unknown>).__airyDebug as {
           univerAPI: { getActiveWorkbook(): { getActiveSheet(): unknown } }

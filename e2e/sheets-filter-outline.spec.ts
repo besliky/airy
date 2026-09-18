@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl, screenshotPath } from './helpers'
+import {
+  launchShell,
+  closeAndSaveVideo,
+  waitForPageWithUrl,
+  screenshotPath,
+  waitForSheetsGrid,
+} from './helpers'
 
 // the preload exposes window.__airyDebug only under this env var
 process.env.AIRY_DEBUG_HOOKS = '1'
@@ -109,10 +115,7 @@ test.describe('sheets: no outline around a filtered range', () => {
       await page.locator('.quick-card').nth(1).click()
 
       const sheets = await waitForPageWithUrl(app, 'sheets/out')
-      await sheets.waitForFunction(() => document.body.textContent?.includes('Sheet1'), null, {
-        timeout: 30_000,
-      })
-      await sheets.waitForTimeout(1_500)
+      await waitForSheetsGrid(sheets)
 
       await sheets.evaluate(async () => {
         const debug = (window as unknown as Record<string, unknown>).__airyDebug as {
@@ -133,7 +136,6 @@ test.describe('sheets: no outline around a filtered range', () => {
         ])
         sheet.getRange(0, 0, 3, 2).createFilter()
       })
-      await sheets.waitForTimeout(1_000)
 
       // deselect: park the selection far from the filter range so its own
       // selection border cannot be mistaken for the filter outline
@@ -151,8 +153,11 @@ test.describe('sheets: no outline around a filtered range', () => {
         }
         sheet.getRange(19, 7, 1, 1).activate()
       })
-      await sheets.waitForTimeout(500)
-
+      // the funnel buttons and the parked border are canvas paint: polling the
+      // parked cell's border until the pixel probe sees it doubles as the
+      // paint-settled wait (the filter render, queued earlier, flushed too)
+      const parked = await cellRect(sheets, 19, 7)
+      await expect.poll(() => bottomEdge(sheets, parked)).toBeGreaterThan(80)
       await sheets.screenshot({ path: screenshotPath('sheets-filter-outline') })
 
       const hasFilter = await sheets.evaluate(() => {
@@ -168,7 +173,6 @@ test.describe('sheets: no outline around a filtered range', () => {
 
       // positive control: the parked active cell's own selection border is
       // what the filter outline looked like, and the probe must see it
-      const parked = await cellRect(sheets, 19, 7)
       expect(await bottomEdge(sheets, parked)).toBeGreaterThan(80)
 
       const topLeft = await cellRect(sheets, 0, 0)

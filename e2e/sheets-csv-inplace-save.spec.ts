@@ -4,14 +4,7 @@ import { readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl } from './helpers'
-
-async function waitForWorkbook(page: Page): Promise<void> {
-  await page.waitForFunction(() => document.body.textContent?.includes('Sheet1'), null, {
-    timeout: 30_000,
-  })
-  await page.waitForTimeout(1_500)
-}
+import { launchShell, closeAndSaveVideo, waitForPageWithUrl, waitForSheetsGrid } from './helpers'
 
 /** center of cell A1: right of the ~46px row header, below the ~24px column header */
 async function cellA1(page: Page): Promise<{ x: number; y: number }> {
@@ -39,7 +32,7 @@ test.describe('sheets: a CSV keeps its identity through Save', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
 
       const a1 = await cellA1(sheets)
       await sheets.mouse.click(a1.x, a1.y)

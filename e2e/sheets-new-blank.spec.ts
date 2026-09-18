@@ -4,7 +4,13 @@ import { existsSync } from 'node:fs'
 import { mkdtemp, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl, screenshotPath } from './helpers'
+import {
+  launchShell,
+  closeAndSaveVideo,
+  waitForPageWithUrl,
+  screenshotPath,
+  waitForSheetsGrid,
+} from './helpers'
 
 /**
  * Regression for "new spreadsheet cannot be saved" (feedback 2368785): the
@@ -28,10 +34,7 @@ test.describe('sheets: new blank workbook', () => {
       await page.locator('.quick-card').nth(1).click()
 
       const sheets = await waitForPageWithUrl(app, 'sheets/out')
-      await sheets.waitForFunction(() => document.body.textContent?.includes('Sheet1'), null, {
-        timeout: 30_000,
-      })
-      await sheets.waitForTimeout(1_500)
+      await waitForSheetsGrid(sheets)
 
       // the backing file exists before any edit — staged under userData, and
       // nothing is written into the default save dir yet
