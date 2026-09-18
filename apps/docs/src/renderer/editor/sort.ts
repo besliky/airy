@@ -167,6 +167,19 @@ const MONTHS: Record<string, number> = {
 
 const dateAt = (y: number, m: number, d: number, hh = 0, mm = 0): number | null => {
   if (m < 1 || m > 12 || d < 1 || d > 31) return null
+  if (hh > 23 || mm > 59) return null
+  // reject rollover readings Word treats as text: Feb 30, Apr 31, 25:00 —
+  // Date.UTC would silently normalize them into the next month/day
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0
+  const lengthOfMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1]!
+  if (d > lengthOfMonth) return null
+  // Date.UTC maps years 0-99 to 1900 + y (its two-digit rule) — re-pin the
+  // written year so "0066-05-05" reads as year 66, not 1966
+  if (y >= 0 && y <= 99) {
+    const utc = new Date(Date.UTC(y, m - 1, d, hh, mm))
+    utc.setUTCFullYear(y)
+    return utc.getTime()
+  }
   return Date.UTC(y, m - 1, d, hh, mm)
 }
 

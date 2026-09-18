@@ -47,6 +47,24 @@ describe('sort key parsing', () => {
     expect(parseSortDate('2026-01-05')!).toBeGreaterThan(parseSortDate('2025-12-01')!)
     expect(parseSortDate('31/12/99')!).toBeLessThan(parseSortDate('01/01/26')!)
   })
+
+  it('rejects rollover dates instead of normalizing them (BUG-705)', () => {
+    // Date.UTC would silently roll these into the next month/day; Word
+    // treats them as text, so they must read as null (sort last)
+    expect(parseSortDate('30/02/2026')).toBeNull() // Feb 30 -> Mar 2
+    expect(parseSortDate('31/04/2026')).toBeNull() // Apr 31 -> May 1
+    expect(parseSortDate('29/02/2023')).toBeNull() // non-leap Feb 29
+    expect(parseSortDate('2026-03-14T25:00')).toBeNull() // hour 25 rolls a day
+    expect(parseSortDate('2026-03-14T23:59')).not.toBeNull()
+    // leap years keep Feb 29
+    expect(parseSortDate('29/02/2024')).not.toBeNull()
+  })
+
+  it('reads short ISO years literally, not as 1900+year (BUG-705)', () => {
+    // Date.UTC maps years 0-99 to 1900+y; the written year must win
+    expect(new Date(parseSortDate('0066-05-05')!).getUTCFullYear()).toBe(66)
+    expect(parseSortDate('0066-05-05')!).toBeLessThan(parseSortDate('1000-01-01')!)
+  })
 })
 
 /* ================= table sorting ================= */
