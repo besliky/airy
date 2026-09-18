@@ -426,6 +426,22 @@ export interface DocGrid {
   charSpace?: number
 }
 
+/**
+ * Line numbering (sectPr w:lnNumType): numbers every counted text line of the
+ * section in the page margin. Word counts body flow lines but skips tables,
+ * text boxes, footnotes/endnotes and header/footer content.
+ */
+export interface LineNumberSettings {
+  /** count increment (w:count): a number shows on every Nth line; default 1 */
+  countBy?: number
+  /** value of the first counted line (w:start); applied at every restart; default 1 */
+  start?: number
+  /** restart policy (w:restart): newPage (default) / newSection / continuous */
+  restart?: 'newPage' | 'newSection' | 'continuous'
+  /** gap between number and text edge (w:distance, twips); undefined = Word's auto */
+  distance?: number
+}
+
 /** Page setup stored in the trailing w:sectPr. All lengths in twips. */
 export interface SectionSettings {
   pageWidth: number
@@ -491,6 +507,8 @@ export interface SectionSettings {
   docGrid?: DocGrid
   /** text flow direction (sectPr w:textDirection), e.g. tbRl = vertical CJK; absent = horizontal lrTb */
   textDirection?: string
+  /** line numbering (sectPr w:lnNumType): absent = numbering off for this section */
+  lineNumbers?: LineNumberSettings
 }
 
 /** One section: settings + start type + block ownership + header/footer refs (read-only enumeration; editing still goes through sectPr XML) */
