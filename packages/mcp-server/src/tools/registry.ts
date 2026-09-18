@@ -12,13 +12,16 @@
 // .md/.markdown open as line-based text sessions: read_document shows the
 // heading structure plus the text (blocks/range address lines), insert_content
 // takes markdown text at marker/heading/line positions, and apply_ops runs a
-// line-op vocabulary on markdown sessions.
+// line-op vocabulary on markdown sessions. Since PAR-004, .html/.htm do the
+// same with a parse5 structure summary (headings, links, title) and verbatim
+// HTML fragment inserts.
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
 import { DocxSession, type SessionMeta } from '../docx/session.js'
 import { opSignatures, type Op } from '../docx/ops.js'
 import { openDocument } from '../import/open.js'
+import { HtmlSession } from '../html/session.js'
 import { BridgeClientError, sharedLiveBridge } from '../live/client.js'
 import { MarkdownSession } from '../markdown/session.js'
 import { getSession, removeSession, storeSession, type DocumentSession } from '../sessions/store.js'
@@ -40,6 +43,15 @@ const OPS_GUIDE = [
   'Each op is a flat record { op, target?, ...fields }; fields are patches: present = set, null = clear, absent = keep.',
   'Target conditions (AND, at least one): nodeType ("heading"|"paragraph"|"listItem"|"image"; the renderer spellings "docHeading"|"docParagraph"|"docListItem" are accepted aliases), headingLevel (1-6), containsText (+ matchCase: false), blockIndexes[].',
   ...opSignatures().map((s) => `- ${s}`),
+].join('\n')
+
+/** line-op vocabulary html sessions accept in apply_ops */
+const HTML_OPS_GUIDE = [
+  'HTML sessions accept a line-op vocabulary instead (no target; line indexes are 0-based and shift after every splice, so re-read between batches):',
+  '- insertLines after(-1 = start) text — splice HTML/markup source after a line',
+  '- replaceLines from to text — replace an inclusive line range (empty text deletes the range)',
+  '- deleteLines from to — remove an inclusive line range',
+  '- findReplace find replace matchCase?(default true) from? to? — line-scoped replace, optionally within an inclusive line window',
 ].join('\n')
 
 /** line-op vocabulary markdown sessions accept in apply_ops */
@@ -156,7 +168,10 @@ export function registerTools(server: McpServer): void {
         'back); without LibreOffice a .doc still opens read-only as extracted text (editable: ' +
         'false). .md/.markdown open as line-based text sessions (read_document shows heading ' +
         'structure plus text; insert_content inserts markdown source; apply_ops runs line ops; ' +
-        'UTF-8 with BOM/EOL preservation — files that are not valid UTF-8 are refused). The path ' +
+        'UTF-8 with BOM/EOL preservation — files that are not valid UTF-8 are refused), and ' +
+        '.html/.htm likewise (read_document shows a parse5 structure summary — ' +
+        'headings/links/title; insert_content splices an HTML fragment verbatim; declared legacy ' +
+        'charsets accepted, undeclared non-UTF-8 refused). The path ' +
         'must be absolute or workspace-relative and stay inside the server ' +
         'workspace root (AIRY_WORKSPACE_ROOT env var, default: the process working directory). ' +
         'Read-only: nothing is written until save_document. Close sessions with close_document.',
@@ -183,7 +198,7 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Read document',
       description:
-        'Read an open text document (.docx sessions, markdown sessions, or read-only text ' +
+        'Read an open text document (.docx, markdown, or html sessions, or read-only text ' +
         'sessions from legacy .doc). By default returns the block overview ("index|type|content ' +
         'preview" one line per block, plus full-text word/character stats). Pass blocks (indexes) ' +
         'or range ({start,end}) to get the full content of those blocks as restricted HTML (p, ' +
@@ -191,7 +206,9 @@ export function registerTools(server: McpServer): void {
         'for insert_content (at) and apply_ops targets; re-read after edits — indexes shift. ' +
         'Markdown sessions: the default read shows stats (EOL/BOM included), the heading list ' +
         '"ordinal|line|level|text" and the full text (truncated at 30k characters — narrow with ' +
-        'blocks/range, which address LINES for markdown). For workbook (.xlsx) sessions use ' +
+        'blocks/range, which address LINES). HTML sessions: the default read adds the title and ' +
+        'a parse5 structure summary — links "ordinal|line|text -> href" with line positions. ' +
+        'For workbook (.xlsx) sessions use ' +
         'read_workbook instead.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
@@ -199,7 +216,7 @@ export function registerTools(server: McpServer): void {
           .array(z.number().int().min(0))
           .max(200)
           .optional()
-          .describe('Block indexes to return in full (lines, for markdown sessions)'),
+          .describe('Block indexes to return in full (lines, for markdown/html sessions)'),
         range: z
           .object({ start: z.number().int().min(0), end: z.number().int().min(0) })
           .optional()
@@ -219,7 +236,7 @@ export function registerTools(server: McpServer): void {
       if (session instanceof TextSession) {
         return { content: [{ type: 'text' as const, text: session.readDocument() }] }
       }
-      if (session instanceof MarkdownSession) {
+      if (session instanceof MarkdownSession || session instanceof HtmlSession) {
         const text = session.readDocument({
           ...(blocks !== undefined ? { lines: blocks } : {}),
           ...(range !== undefined ? { range } : {}),
@@ -345,7 +362,7 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Insert content',
       description:
-        'Insert new content into an open .docx or markdown document. Docx sessions take a ' +
+        'Insert new content into an open .docx, markdown, or html document. Docx sessions take a ' +
         'restricted HTML fragment (no DOM features needed). Supported tags: p, h1-h6, ul, ol, li ' +
         '(nested lists allowed), strong/b, em/i, u, s, a[href], br, blockquote, pre, table/tr/th/td ' +
         '(header row styled, cells plain text). Unknown tags keep their text; markdown fences and ' +
@@ -355,15 +372,21 @@ export function registerTools(server: McpServer): void {
         "instead take `text` (markdown source; the file's EOL style and BOM are preserved) at one " +
         'of three positions: after the first line containing `marker`, after heading N ' +
         '(`afterHeading`, 1-based ordinal from the read structure), or after line `at` ' +
-        '(-1 = document start; default: end of document; marker > afterHeading > at). ' +
-        'Insertion happens in memory; persist with save_document.',
+        '(-1 = document start; default: end of document; marker > afterHeading > at). HTML ' +
+        'sessions take the fragment VERBATIM (no reparse or rewrite — exactly these bytes land ' +
+        "on disk, modulo the file's EOL style) at one of two positions: after the first line " +
+        'containing `marker` (e.g. "</body>" to append rendered content), or after line `at` ' +
+        '(-1 = document start; default: end of document; marker > at). Insertion happens in ' +
+        'memory; persist with save_document.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
         html: z
           .string()
           .min(1)
           .optional()
-          .describe('Restricted HTML fragment to insert (docx sessions)'),
+          .describe(
+            'Restricted HTML fragment (docx sessions) or verbatim fragment (html sessions)',
+          ),
         text: z
           .string()
           .min(1)
@@ -390,7 +413,8 @@ export function registerTools(server: McpServer): void {
           .min(1)
           .optional()
           .describe(
-            'Markdown sessions: insert after the first line containing this exact substring',
+            'Markdown/HTML sessions: insert after the first line containing this exact substring ' +
+              '(html: e.g. "</body>"); ignored for docx sessions',
           ),
       },
       annotations: {
@@ -420,11 +444,26 @@ export function registerTools(server: McpServer): void {
           `${result.detail}. Subsequent line indexes have shifted; call read_document if you need the new state.`,
         )
       }
+      if (session instanceof HtmlSession) {
+        const result = session.insertContent(html ?? '', {
+          ...(at !== undefined ? { at } : {}),
+          ...(marker !== undefined ? { marker } : {}),
+        })
+        return content(
+          {
+            inserted: result.inserted,
+            at: result.at,
+            lineCount: result.lineCount,
+            dirty: result.dirty,
+          },
+          `${result.detail}. Subsequent line indexes have shifted; call read_document if you need the new state.`,
+        )
+      }
       const docx = requireDocxSession(session)
       if (text !== undefined || afterHeading !== undefined || marker !== undefined) {
         throw new Error(
-          'text/afterHeading/marker are markdown-session insert options; a .docx session takes ' +
-            'html (and optionally at).',
+          'text/afterHeading/marker are markdown/html-session insert options; a .docx session ' +
+            'takes html (and optionally at).',
         )
       }
       const { inserted } = docx.insertContent(html ?? '', at ?? Number.MAX_SAFE_INTEGER)
@@ -445,10 +484,10 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Apply edit operations',
       description:
-        'Apply a batch of canonical edit operations to an open .docx or markdown document. The ' +
-        'batch is validated up front and applied atomically: any invalid op rejects the whole ' +
+        'Apply a batch of canonical edit operations to an open .docx, markdown, or html document. ' +
+        'The batch is validated up front and applied atomically: any invalid op rejects the whole ' +
         'batch with an error and nothing is applied. ' +
-        `Operations:\n${OPS_GUIDE}\n${MARKDOWN_OPS_GUIDE}\nEdits happen in memory; persist with save_document.`,
+        `Operations:\n${OPS_GUIDE}\n${MARKDOWN_OPS_GUIDE}\n${HTML_OPS_GUIDE}\nEdits happen in memory; persist with save_document.`,
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
         ops: z
@@ -467,7 +506,7 @@ export function registerTools(server: McpServer): void {
     },
     async ({ handle, ops, dryRun }) => {
       const session = getSession(handle)
-      if (session instanceof MarkdownSession) {
+      if (session instanceof MarkdownSession || session instanceof HtmlSession) {
         const result = session.applyOps(ops, dryRun === true)
         return content(
           { results: result.results, summary: result.summary, dryRun: result.dryRun },
@@ -499,10 +538,11 @@ export function registerTools(server: McpServer): void {
         'back to the original .doc/.odt/.ods through LibreOffice (best-effort; .xls output is ' +
         'not supported — use the default .xlsx save). Byte preservation differs by format: docx ' +
         'saves keep untouched parts byte-identical and a zero-edit save writes the original bytes ' +
-        'back verbatim; markdown sessions behave the same at line granularity (untouched lines ' +
-        'keep their exact bytes, EOLs included, and a zero-edit save round-trips the file ' +
-        'verbatim; an edited save writes UTF-8 with the original BOM flag re-applied and the ' +
-        'format parameter is not accepted); xlsx saves keep untouched zip entries byte-identical except ' +
+        'back verbatim; markdown and html sessions behave the same at line granularity ' +
+        '(untouched lines keep their exact bytes, EOLs included, and a zero-edit save round-trips ' +
+        'the file verbatim; an edited save writes UTF-8 with the original BOM flag re-applied ' +
+        'and the format parameter is not accepted); xlsx saves keep untouched zip entries ' +
+        'byte-identical except ' +
         'xl/workbook.xml, which is rewritten when needed to force recalculation on open (the ' +
         'fullCalcOnLoad flag) — so even a zero-edit xlsx save may touch that one entry, and for ' +
         'workbooks the unchanged result flag reflects the edit journal, not the bytes. Returns ' +
@@ -545,6 +585,21 @@ export function registerTools(server: McpServer): void {
         if (format !== undefined) {
           throw new Error(
             `format "${format}" is not valid for a markdown session; it always saves UTF-8 markdown.`,
+          )
+        }
+        const saveOptions = overwrite === undefined ? {} : { overwrite }
+        const result = await session.save(path, saveOptions)
+        return content(
+          result,
+          `Saved ${result.bytes} bytes to ${result.path}` +
+            `${result.unchanged ? ' (no changes: bytes round-tripped verbatim)' : ''}` +
+            `${result.warnings.length > 0 ? `. ${result.warnings.join(' ')}` : ''}`,
+        )
+      }
+      if (session instanceof HtmlSession) {
+        if (format !== undefined) {
+          throw new Error(
+            `format "${format}" is not valid for an html session; it always saves UTF-8 html.`,
           )
         }
         const saveOptions = overwrite === undefined ? {} : { overwrite }
@@ -868,6 +923,7 @@ type AnyOpenMeta =
   | XlsxSessionMeta
   | ReturnType<TextSession['meta']>
   | ReturnType<MarkdownSession['meta']>
+  | ReturnType<HtmlSession['meta']>
 
 function summarizeOpenMeta(meta: AnyOpenMeta): string {
   if (meta.kind === 'xlsx') {
@@ -890,6 +946,14 @@ function summarizeOpenMeta(meta: AnyOpenMeta): string {
     return (
       `Opened ${meta.fileName} as an editable markdown session: ${String(meta.lineCount)} lines, ` +
       `${String(meta.headingCount)} heading(s), ${String(meta.wordCount)} words. ` +
+      `${meta.warnings[0] ?? ''}Handle: ${meta.handle}. Path: ${meta.path}`
+    )
+  }
+  if (meta.kind === 'html') {
+    return (
+      `Opened ${meta.fileName} as an editable html session: ${String(meta.lineCount)} lines, ` +
+      `${String(meta.headingCount)} heading(s), ${String(meta.linkCount)} link(s)` +
+      `${meta.title ? `, title "${meta.title}"` : ''}. ` +
       `${meta.warnings[0] ?? ''}Handle: ${meta.handle}. Path: ${meta.path}`
     )
   }

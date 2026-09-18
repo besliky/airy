@@ -13,6 +13,8 @@
 //                       without LibreOffice -> actionable error
 //   .md/.markdown    -> MarkdownSession (native text session, line-based
 //                       editing; PAR-003)
+//   .html/.htm       -> HtmlSession (native text session, line-based editing
+//                       with a parse5 structure summary; PAR-004)
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { extname, join } from 'node:path'
@@ -21,6 +23,7 @@ import { docToText } from '@airy-office/file-parse'
 
 import { DocxSession, type SessionOrigin } from '../docx/session.js'
 import { resolveConfined } from '../docx/paths.js'
+import { HtmlSession } from '../html/session.js'
 import { MarkdownSession } from '../markdown/session.js'
 import { TextSession } from '../sessions/text.js'
 import { XlsxSession } from '../xlsx/session.js'
@@ -36,9 +39,11 @@ export const SUPPORTED_OPEN_EXTENSIONS = [
   'odt',
   'md',
   'markdown',
+  'html',
+  'htm',
 ] as const
 
-export type OpenedDocument = DocxSession | XlsxSession | TextSession | MarkdownSession
+export type OpenedDocument = DocxSession | XlsxSession | TextSession | MarkdownSession | HtmlSession
 
 export function extensionOf(path: string): string {
   return extname(path).replace('.', '').toLowerCase()
@@ -94,6 +99,9 @@ export async function openDocument(rawPath: string, root?: string): Promise<Open
     case 'md':
     case 'markdown':
       return MarkdownSession.open(rawPath, root)
+    case 'html':
+    case 'htm':
+      return HtmlSession.open(rawPath, root)
     default:
       throw new Error(
         `Unsupported file type ".${ext || '(none)'}". Supported extensions: ` +
