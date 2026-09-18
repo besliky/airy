@@ -138,6 +138,37 @@ describe('NdjsonFramer (live protocol)', () => {
     concat.mockRestore()
   })
 
+  it('coalesces a 1-byte dribble into a bounded number of live chunks', () => {
+    // BUG-903: the chunk list kept every socket chunk as its own Buffer, so
+    // a dribbled line amplified memory ~100x — an 8MB line sent one byte at
+    // a time stayed within the byte cap but amounted to millions of Buffer
+    // objects. The dribble must coalesce into a bounded tail structure and
+    // still decode exactly.
+    const framer = new NdjsonFramer()
+    const pushes = 100_000
+    for (let i = 0; i < pushes; i += 1) framer.push('x')
+    const liveChunks = (framer as unknown as { chunks: Buffer[] }).chunks
+    expect(liveChunks.length).toBeLessThanOrEqual(2)
+    const result = framer.push('\n')
+    expect(result.lines).toEqual(['x'.repeat(pushes)])
+    expect(result.overflow).toBe(false)
+  })
+
+  it('frames a line that mixes dribbled and by-reference chunks', () => {
+    // the scratch tail, a chunk stored by reference (over the coalesce
+    // limit), and a fresh scratch after it must concatenate as one line
+    const framer = new NdjsonFramer()
+    for (let i = 0; i < 5; i += 1) framer.push('ab')
+    framer.push(Buffer.alloc(70 * 1024, 0x62))
+    for (let i = 0; i < 5; i += 1) framer.push('cd')
+    const result = framer.push('\n')
+    expect(result.lines.length).toBe(1)
+    const line = result.lines[0] ?? ''
+    expect(line.length).toBe(10 + 70 * 1024 + 10)
+    expect(line.startsWith('ababababab')).toBe(true)
+    expect(line.endsWith('cdcdcdcdcd')).toBe(true)
+  })
+
   it('flags a completed line over the cap even within a single chunk', () => {
     // Net chunks stay small, but push() itself may be handed one huge
     // buffer: a whole 10-byte line inside one chunk must trip an 8-byte cap
