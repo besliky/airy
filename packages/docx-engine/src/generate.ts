@@ -2442,6 +2442,16 @@ function runFragmentXml(run: Run, insideLink: boolean): string {
   }
   if (run.noteRef) {
     const tag = run.noteRef.kind === 'footnote' ? 'w:footnoteReference' : 'w:endnoteReference'
+    // custom mark: w:customMarkFollows + the literal symbol as run text (the
+    // number is suppressed; Word prints the same symbol in the note body)
+    if (run.noteRef.customMark) {
+      const mark = escapeXmlText(run.noteRef.customMark)
+      return (
+        '<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr>' +
+        `<${tag} w:id="${escapeXmlAttr(run.noteRef.id)}" w:customMarkFollows="1"/>` +
+        `<w:t xml:space="preserve">${mark}</w:t></w:r>`
+      )
+    }
     return (
       '<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr>' +
       `<${tag} w:id="${escapeXmlAttr(run.noteRef.id)}"/></w:r>`

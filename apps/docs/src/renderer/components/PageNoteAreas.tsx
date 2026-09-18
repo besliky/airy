@@ -1,5 +1,5 @@
 import type { NoteInfo } from '@airy-office/docx-engine'
-import { toRoman } from '../note-format'
+import { docNoteMark } from '../note-format'
 import { useI18n } from '../i18n/locale'
 
 function NoteRow({
@@ -61,7 +61,7 @@ export function PageFootnotes({
       {shown.map((n) => (
         <NoteRow
           key={`f${n.id}`}
-          marker={String(notes.indexOf(n) + 1)}
+          marker={docNoteMark('footnote', notes.indexOf(n) + 1)}
           note={n}
           editTip={t('appEditFootnote')}
           deleteTip={t('appDeleteFootnote')}
@@ -74,10 +74,11 @@ export function PageFootnotes({
 }
 
 /**
- * Endnote area, roman-numbered, never mixed into the footnote block. Word shows
- * no heading and places it right after the last body line, so when the measured
- * flow-end anchor is available the area is absolutely positioned there instead
- * of stacking after the (page-tall) editor.
+ * Endnote area, never mixed into the footnote block (lowercase roman unless the
+ * document's note options say otherwise). Word shows no heading and places it
+ * right after the last body line, so when the measured flow-end anchor is
+ * available the area is absolutely positioned there instead of stacking after
+ * the (page-tall) editor.
  */
 export function PageEndnotes({
   notes,
@@ -101,7 +102,7 @@ export function PageEndnotes({
       {notes.map((n, i) => (
         <NoteRow
           key={`e${n.id}`}
-          marker={toRoman(i + 1)}
+          marker={docNoteMark('endnote', i + 1)}
           note={n}
           editTip={t('appEditEndnote')}
           deleteTip={t('appDeleteEndnote')}

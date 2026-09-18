@@ -32,6 +32,7 @@ import type {
   HfTableRow,
   HfPartInfo,
   NumberingDef,
+  NoteNumbering,
   ParaAlign,
   ParaFormat,
   ParsedDoc,
@@ -421,6 +422,7 @@ export async function parseDocx(bytes: Uint8Array): Promise<ParsedDoc & { extras
   const titlePg = xmlFlagOn(documentXml, 'w:titlePg')
   const evenAndOddHeaders = await parseEvenAndOddHeaders(zip)
   const layoutSettings = await parseLayoutSettings(zip)
+  const noteNumbering = await parseNoteNumbering(zip)
   const hfParts = await parseAllHfParts(
     zip,
     rels,
@@ -472,6 +474,7 @@ export async function parseDocx(bytes: Uint8Array): Promise<ParsedDoc & { extras
     removePersonalInfo,
     footnotes,
     endnotes,
+    ...(noteNumbering ? { noteNumbering } : {}),
     sources,
     inks,
     themeFonts: theme.fonts,
@@ -3172,7 +3175,22 @@ function extractRuns(
       const id = attrsOf(noteRefNode)['w:id']
       if (id) {
         const num = ctx.noteNumbers.get(`${kind}:${id}`)
-        pushRun({ text: String(num ?? '*'), noteRef: { kind, id } }, rev)
+        // w:customMarkFollows: the literal mark run text replaces the number
+        // (Word shows the same symbol at the reference and in the note body)
+        const mark =
+          attrsOf(noteRefNode)['w:customMarkFollows'] === '1'
+            ? findChildren(node, 'w:t')
+                .map((t) => textOf(t))
+                .join('')
+                .trim()
+            : undefined
+        pushRun(
+          {
+            text: mark ?? String(num ?? '*'),
+            ...(mark ? { noteRef: { kind, id, customMark: mark } } : { noteRef: { kind, id } }),
+          },
+          rev,
+        )
         return
       }
     }
@@ -4615,9 +4633,10 @@ async function parseCompatibilityMode(zip: JSZip): Promise<number> {
   return m ? parseInt(m[1], 10) : 0
 }
 
-/** settings.xml w:autoHyphenation + w:defaultTabStop (absent = Word's 720 twips) */
+/** settings.xml w:autoHyphenation + w:hyphenationZone + w:defaultTabStop (absent = Word's 720 twips) */
 async function parseLayoutSettings(zip: JSZip): Promise<{
   autoHyphenation?: boolean
+  hyphenationZoneTwips?: number
   defaultTabStopTwips?: number
   balanceDbcsSpacing?: boolean
   compressPunctuation?: boolean
@@ -4627,13 +4646,55 @@ async function parseLayoutSettings(zip: JSZip): Promise<{
   if (!file) return {}
   const xml = await file.async('string')
   const tab = /<w:defaultTabStop[^>]*w:val="(-?\d+)"/.exec(xml)
+  const zone = /<w:hyphenationZone[^>]*w:val="(\d+)"/.exec(xml)
   const csc = /<w:characterSpacingControl[^>]*w:val="(\w+)"/.exec(xml)
   return {
     ...(xmlFlagOn(xml, 'w:autoHyphenation') ? { autoHyphenation: true } : {}),
+    ...(zone ? { hyphenationZoneTwips: parseInt(zone[1], 10) } : {}),
     ...(tab ? { defaultTabStopTwips: parseInt(tab[1], 10) } : {}),
     ...(xmlFlagOn(xml, 'w:balanceSingleByteDoubleByteWidth') ? { balanceDbcsSpacing: true } : {}),
     ...(csc && csc[1].startsWith('compressPunctuation') ? { compressPunctuation: true } : {}),
     ...(xmlFlagOn(xml, 'w:adjustLineHeightInTable') ? { adjustLineHeightInTable: true } : {}),
+  }
+}
+
+/** ST_NumberFormat values the note-options model round-trips */
+const NOTE_NUM_FMTS = new Set(['decimal', 'lowerLetter', 'upperLetter', 'lowerRoman', 'upperRoman'])
+
+/**
+ * Document-wide note numbering (settings.xml w:footnotePr / w:endnotePr):
+ * numFmt/numStart/numRestart of each note kind. Unmodeled children (w:pos,
+ * whole-document custom text marks) are ignored; the tag pair is only
+ * reported when at least one modeled option is present.
+ */
+function noteNumberingOf(xml: string, root: 'footnotePr' | 'endnotePr'): NoteNumbering | undefined {
+  const el = new RegExp(`<w:${root}[^>]*>([\\s\\S]*?)</w:${root}>`).exec(xml)
+  if (!el) return undefined
+  const fmt = /<w:numFmt[^>]*w:val="([^"]+)"/.exec(el[1])?.[1]
+  const start = /<w:numStart[^>]*w:val="(\d+)"/.exec(el[1])?.[1]
+  const restart = /<w:numRestart[^>]*w:val="(continuous|eachSect|eachPage)"/.exec(el[1])?.[1]
+  const known = fmt !== undefined && NOTE_NUM_FMTS.has(fmt)
+  if (!known && start === undefined && restart === undefined) return undefined
+  return {
+    numFmt: known ? (fmt as NoteNumbering['numFmt']) : 'decimal',
+    ...(start !== undefined ? { numStart: parseInt(start, 10) } : {}),
+    ...(restart ? { numRestart: restart as NoteNumbering['numRestart'] } : {}),
+  }
+}
+
+/** settings.xml note numbering of both kinds, absent when neither is modeled */
+async function parseNoteNumbering(
+  zip: JSZip,
+): Promise<{ footnotes?: NoteNumbering; endnotes?: NoteNumbering } | undefined> {
+  const file = zip.file('word/settings.xml')
+  if (!file) return undefined
+  const xml = await file.async('string')
+  const footnotes = noteNumberingOf(xml, 'footnotePr')
+  const endnotes = noteNumberingOf(xml, 'endnotePr')
+  if (!footnotes && !endnotes) return undefined
+  return {
+    ...(footnotes ? { footnotes } : {}),
+    ...(endnotes ? { endnotes } : {}),
   }
 }
 

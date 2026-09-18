@@ -45,6 +45,7 @@ import {
   type TextboxParasPatchSet,
 } from '@airy-office/docx-engine'
 import { t } from '../i18n/locale'
+import { docNoteCustomMark, docNoteMark } from '../note-format'
 import {
   canvasMetrics,
   charScaleEm,
@@ -1195,16 +1196,23 @@ export function runsToInline(runs: Run[]): PmNode[] {
       continue
     }
     if (run.noteRef) {
+      const kind = run.noteRef.kind
+      const num = parseInt(run.text, 10) || 1
+      // doc-level custom mark applies to every reference of the kind
+      const customMark = run.noteRef.customMark ?? docNoteCustomMark(kind)
       nodes.push({
         type: 'docNoteRef',
         attrs: {
-          kind: run.noteRef.kind,
+          kind,
           id: run.noteRef.id,
-          num: parseInt(run.text, 10) || 1,
+          num,
+          customMark,
+          mark: customMark ?? docNoteMark(kind, num),
         },
       })
       continue
     }
+
     const marks = runMarks(run)
     // \n = soft line break, \f = in-paragraph page break, \v = column break
     const breakMarks = marks.length > 0 ? { marks } : {}
@@ -2548,11 +2556,16 @@ export function inlineToRuns(content: PmNode[]): Run[] {
       continue
     }
     if (node.type === 'docNoteRef') {
+      const customMark =
+        typeof node.attrs?.customMark === 'string' && node.attrs.customMark !== ''
+          ? String(node.attrs.customMark)
+          : undefined
       runs.push({
         text: String(node.attrs?.num ?? 1),
         noteRef: {
           kind: (node.attrs?.kind as 'footnote' | 'endnote') ?? 'footnote',
           id: String(node.attrs?.id ?? ''),
+          ...(customMark ? { customMark } : {}),
         },
       })
       continue

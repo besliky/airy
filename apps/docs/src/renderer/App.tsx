@@ -32,6 +32,7 @@ import {
   type HeaderFooter,
   type HfImage,
   type NoteInfo,
+  type NoteNumbering,
   type SectionInfo,
   type SectionSettings,
   type SourceInfo,
@@ -54,6 +55,8 @@ import { CommentsPanel } from './components/CommentsPanel'
 import { EquationModal } from './components/EquationModal'
 import { HeaderFooterArea } from './components/HeaderFooterArea'
 import { PageFootnotes, PageEndnotes } from './components/PageNoteAreas'
+import { NoteOptionsDialog } from './components/NoteOptionsDialog'
+import { docNoteMark, setDocNoteNumbering } from './note-format'
 import { PaginationPreview } from './components/PaginationPreview'
 import { PrintDialog } from './components/PrintDialog'
 import {
@@ -116,6 +119,7 @@ import {
   syncCutOverlays,
   syncFloatShifts,
   syncPageBorders,
+  syncColumnRules,
   clampCellBoxTops,
   pageBorderStyleOf,
   type PageGapSpec,
@@ -182,6 +186,7 @@ import {
 import { StyleDialog } from './components/StyleDialog'
 import { PromptModal } from './components/PromptModal'
 import { ShortcutsDialog } from './components/ShortcutsDialog'
+import { SHORTCUTS, shortcutKeys } from './shortcuts'
 import { WordCountDialog, type DocStats } from './components/WordCountDialog'
 import { applyCase, nextCaseMode, selectionText } from './editor/case-transform'
 import { stepHangingIndent, stepParagraphIndent } from './editor/indent'
@@ -225,6 +230,7 @@ import {
 } from './doc-state'
 import {
   applyAiDocContent as applyAiDocContentImpl,
+  applyHyphenationLive,
   exportPdf as exportPdfImpl,
   exportHtml as exportHtmlImpl,
   loadFile as loadFileImpl,
@@ -247,11 +253,15 @@ import {
   cancelNewComment as cancelNewCommentImpl,
   clearInks as clearInksImpl,
   compareWithFile as compareWithFileImpl,
+  convertNotes as convertNotesImpl,
   deleteComment as deleteCommentImpl,
   deleteNote as deleteNoteImpl,
   editComment as editCommentImpl,
   effectiveAuthorName,
   handleRevision as handleRevisionImpl,
+  navigateNote as navigateNoteImpl,
+  noteRefAtSelection,
+  refreshNoteMarks,
   removeInks as removeInksImpl,
   replyToComment as replyToCommentImpl,
   resolveComment as resolveCommentImpl,
@@ -374,7 +384,7 @@ function blockNoteScanRuns(b: Block): NonNullable<Block['runs']> {
 function appendNoteRuns(row: HTMLElement, it: Omit<PageNoteItem, 'height' | 'id'>): void {
   if (!it.noRefMark) {
     const sup = document.createElement('sup')
-    sup.textContent = String(it.no)
+    sup.textContent = it.no
     row.append(sup)
   }
   if (it.richParas) {
@@ -750,6 +760,16 @@ export function App() {
   /** Endnote-area anchor: measured flow-end Y (layout px from the page-wrap top); null until measured */
   const [endnotesAreaTop, setEndnotesAreaTop] = useState<number | null>(null)
   const [notesDirty, setNotesDirty] = useState(false)
+  /** document-wide note numbering (References → note options); drives marker rendering + settings.xml save */
+  const [noteNumbering, setNoteNumbering] = useState<{
+    footnotes?: NoteNumbering
+    endnotes?: NoteNumbering
+  }>({})
+  const [noteNumberingDirty, setNoteNumberingDirty] = useState(false)
+  const [showNoteOptions, setShowNoteOptions] = useState(false)
+  /** settings.xml w:autoHyphenation authoring (Layout → Hyphenation) */
+  const [hyphAuto, setHyphAuto] = useState(false)
+  const [hyphDirty, setHyphDirty] = useState(false)
   const [sources, setSources] = useState<SourceInfo[]>([])
   const [sourcesDirty, setSourcesDirty] = useState(false)
   const [themeFonts, setThemeFonts] = useState<ThemeFonts | null>(null)
@@ -1442,6 +1462,14 @@ export function App() {
     setFootnotes,
     setEndnotes,
     setNotesDirty,
+    noteNumbering,
+    noteNumberingDirty,
+    setNoteNumbering,
+    setNoteNumberingDirty,
+    hyphAuto,
+    hyphDirty,
+    setHyphAuto,
+    setHyphDirty,
     sources,
     sourcesDirty,
     setSources,
@@ -1973,6 +2001,67 @@ export function App() {
     [],
   )
 
+  /**
+   * Note options applied: state + module-level options update first, then every
+   * reference marker re-renders under them and the entries of a custom-marked
+   * kind carry the mark into the notes part rebuild.
+   */
+  const applyNoteOptions = useCallback(
+    (next: { footnotes?: NoteNumbering; endnotes?: NoteNumbering }) => {
+      setNoteNumbering(next)
+      setNoteNumberingDirty(true)
+      setDocNoteNumbering(next)
+      if (!editor) return
+      refreshNoteMarks(editor)
+      const stamp = (list: NoteInfo[], opts?: NoteNumbering): NoteInfo[] =>
+        list.map((n) =>
+          n.customMark === opts?.customMark
+            ? n
+            : { ...n, ...(opts?.customMark ? { customMark: opts.customMark } : {}) },
+        )
+      setFootnotes((prev) => stamp(prev, next.footnotes))
+      setEndnotes((prev) => stamp(prev, next.endnotes))
+      setNotesDirty(true)
+      setStatus(t('refsOptionsApplied'))
+    },
+    [editor],
+  )
+
+  const convertNotes = useCallback(
+    (from: 'footnote' | 'endnote', which: 'all' | 'current') => {
+      const id = which === 'current' ? noteRefAtSelection(editor!)?.id : undefined
+      if (which === 'current' && !id) return
+      convertNotesImpl(reviewCtxRef.current, from, which === 'current' && id ? id : 'all')
+    },
+    [editor],
+  )
+
+  const navigateNote = useCallback((dir: 1 | -1) => navigateNoteImpl(reviewCtxRef.current, dir), [])
+
+  /**
+   * Layout → Hyphenation: Automatic/None flip the unsaved-parsed override
+   * immediately (CSS hyphens + the lang attribute Chromium needs), the flag
+   * persists through SaveOptions.hyphenation on the next save. Manual is a
+   * no-op on the file (Word keeps it in UI state too) and only reminds of the
+   * optional-hyphen chord.
+   */
+  const applyHyphenation = useCallback(
+    (mode: 'none' | 'manual' | 'automatic') => {
+      if (mode === 'manual') {
+        const chord = SHORTCUTS.find((s) => s.id === 'soft-hyphen')
+        setStatus(t('layoutHyphManualHint', { keys: chord ? shortcutKeys(chord) : '' }))
+        return
+      }
+      const on = mode === 'automatic'
+      setHyphAuto(on)
+      setHyphDirty(on !== (doc?.parsed.autoHyphenation === true))
+      if (editor && doc) applyHyphenationLive(editor, doc.parsed, on)
+      if (doc) setDocCss(docStyleCss({ ...doc.parsed, autoHyphenation: on }))
+      setStatus(t(on ? 'layoutHyphSet' : 'layoutHyphUnset'))
+    },
+    [doc, editor],
+  )
+
   // Word: body shading of resolved threads is hidden
   useEffect(() => {
     if (!editor) return
@@ -2147,11 +2236,11 @@ export function App() {
     >()
     return (
       fn: NoteInfo | undefined,
-      no: number,
+      mark: string,
       sec: SectionSettings,
     ): { height: number; lineHeightPx: number; fontSizePt: number; fontFamily?: string } => {
       const contentW = twipsToPx(sec.pageWidth - sec.marginLeft - sec.marginRight)
-      const key = `${fn?.id ?? ''}|${no}|${Math.round(contentW)}|${fn?.styleId ?? ''}|${fn?.text ?? ''}`
+      const key = `${fn?.id ?? ''}|${mark}|${Math.round(contentW)}|${fn?.styleId ?? ''}|${fn?.text ?? ''}`
       let v = cache.get(key)
       if (!v) {
         const style = noteStyleOf(fn)
@@ -2161,7 +2250,7 @@ export function App() {
         const height =
           measureNoteHeightDom(
             {
-              no,
+              no: mark,
               text: fn?.text ?? '',
               ...(fn?.richParas ? { richParas: fn.richParas } : {}),
               ...(fn?.noRefMark ? { noRefMark: true as const } : {}),
@@ -2203,7 +2292,11 @@ export function App() {
         if (!sec) continue
         const fn = footnotes.find((f) => f.id === run.noteRef!.id)
         bands.push({
-          heightPx: noteRenderInfoOf(fn, noOf.get(run.noteRef!.id) ?? 0, sec).height,
+          heightPx: noteRenderInfoOf(
+            fn,
+            docNoteMark('footnote', noOf.get(run.noteRef!.id) ?? 0),
+            sec,
+          ).height,
         })
       }
       // the once-per-page separator is charged by the pagination engine, not per block
@@ -2434,9 +2527,9 @@ export function App() {
           const page = band
             ? pageAt(slices, b.top + (b.spaceBeforePx ?? 0) + band.offset + 0.5) - 1
             : blockPage
-          const info = noteRenderInfoOf(fn, noOf.get(id) ?? 0, sec)
+          const info = noteRenderInfoOf(fn, docNoteMark('footnote', noOf.get(id) ?? 0), sec)
           out[page]?.push({
-            no: noOf.get(id) ?? 0,
+            no: docNoteMark('footnote', noOf.get(id) ?? 0),
             id,
             text: fn.text,
             ...(fn.richParas ? { richParas: fn.richParas } : {}),
@@ -2458,9 +2551,9 @@ export function App() {
     if (!section || endnotes.length === 0) return []
     const sec = sections[sections.length - 1]?.settings ?? section
     return endnotes.map((n, i) => {
-      const info = noteRenderInfoOf(n, i + 1, sec)
+      const info = noteRenderInfoOf(n, docNoteMark('endnote', i + 1), sec)
       return {
-        no: i + 1,
+        no: docNoteMark('endnote', i + 1),
         id: n.id,
         text: n.text,
         ...(n.richParas ? { richParas: n.richParas } : {}),
@@ -3518,6 +3611,12 @@ export function App() {
             : [],
           factor,
         )
+        // column separators (w:cols w:sep): mixed-column pages draw overlay
+        // hairlines (uniform CSS-multicol paints its own column-rule below);
+        // print view only, after the page gaps so page rects are final
+        if (viewMode === 'print' && !readMode && colMode === 'mixed' && secList) {
+          syncColumnRules((pm.closest('.page-wrap') as HTMLElement) ?? pm, slices, secList, factor)
+        }
         syncMarginAnnotations(
           (pm.closest('.page-wrap') as HTMLElement) ?? pm,
           pm,
@@ -3698,6 +3797,9 @@ export function App() {
     // the change bars, but dispatch no doc change: remeasure must follow them
     revisionDisplay,
     delSectBreaks,
+    // gates the column-separator overlay painting (uniform CSS-multicol draws
+    // its own column-rule)
+    colMode,
   ])
 
   // section at the cursor: the target the Layout tab acts on
@@ -4543,6 +4645,7 @@ export function App() {
     },
     onInsertSectionBreak: (type: 'nextPage' | 'continuous' | 'evenPage' | 'oddPage') =>
       insertSectionBreak(type),
+    onHyphenation: applyHyphenation,
     onPageColor: (next: string | null) => {
       setPageColor(next)
       setPageColorDirty(true)
@@ -4567,6 +4670,8 @@ export function App() {
     onInkHighlighter: setInkHighlighter,
     onInkClearAll: clearInks,
     onInsertNote: insertNote,
+    onNoteOptions: () => setShowNoteOptions(true),
+    onNavigateNote: navigateNote,
     onAddSource: (source: SourceInfo) => {
       setSources((prev) => [...prev, source])
       setSourcesDirty(true)
@@ -4790,7 +4895,8 @@ export function App() {
         // is the single-flow measuring state (columns removed, content-box width = column width,
         // toggled instantaneously for measurement, invisible).
         // .doc-page is border-box, so the measured width must add back the left/right margin padding
-        <style>{`.editor-scroll .doc-page { column-count: ${colFlow.cols}; column-gap: ${colFlow.gapPx}px; column-fill: balance; }
+        // w:sep ("line between columns"): document-data hairline, not a chrome token
+        <style>{`.editor-scroll .doc-page { column-count: ${colFlow.cols}; column-gap: ${colFlow.gapPx}px; column-fill: balance;${sections[0]?.settings.columnSep ? ' column-rule: 1px solid var(--docs-paper-ink);' : ''} }
 .editor-scroll .doc-page.measuring-columns { column-count: auto; width: ${colFlow.colWidthPx + twipsToPx(canvasSection?.marginLeft ?? section?.marginLeft ?? 0) + twipsToPx(canvasSection?.marginRight ?? section?.marginRight ?? 0)}px; }`}</style>
       )}
       <Ribbon
@@ -4805,6 +4911,7 @@ export function App() {
         showAi={showAi}
         section={sections[activeSection]?.settings ?? section}
         activeSection={sections.length > 1 ? activeSection : null}
+        hyphAuto={hyphAuto}
         pageColor={pageColor}
         watermark={watermark}
         themeFonts={themeFonts}
@@ -5264,6 +5371,17 @@ export function App() {
           multiline
           onSubmit={submitNote}
           onClose={() => setNotePrompt(null)}
+        />
+      )}
+
+      {doc && showNoteOptions && (
+        <NoteOptionsDialog
+          value={noteNumbering}
+          hasSelection={Boolean(editor && noteRefAtSelection(editor))}
+          selectionKind={editor ? noteRefAtSelection(editor)?.kind : undefined}
+          onApply={applyNoteOptions}
+          onConvert={convertNotes}
+          onClose={() => setShowNoteOptions(false)}
         />
       )}
 

@@ -186,6 +186,9 @@ interface RibbonProps {
   /** Multi-section documents: index of the cursor's section (0-based); null for single-section */
   activeSection: number | null
   onInsertSectionBreak: (type: 'nextPage' | 'continuous' | 'evenPage' | 'oddPage') => void
+  /** Layout → Hyphenation: settings.xml w:autoHyphenation state + None/Manual/Automatic picker */
+  hyphAuto?: boolean
+  onHyphenation?: (mode: 'none' | 'manual' | 'automatic') => void
   pageColor: string | null
   onPageColor: (hex: string | null) => void
   /** Design → Watermark / Themes */
@@ -206,6 +209,10 @@ interface RibbonProps {
   onInkClearAll: () => void
   /** References → footnotes / endnotes / citations */
   onInsertNote: (kind: 'footnote' | 'endnote') => void
+  /** References → note options dialog (numbering, conversion) */
+  onNoteOptions?: () => void
+  /** References → Next/Previous note marker navigation */
+  onNavigateNote?: (dir: 1 | -1) => void
   sources: SourceInfo[]
   onAddSource: (source: SourceInfo) => void
   /** TOC page-number backfill: docHeadings in document order → real page numbers (null when not computable) */
@@ -697,6 +704,8 @@ function RibbonInner({
   onSection,
   activeSection,
   onInsertSectionBreak,
+  hyphAuto,
+  onHyphenation,
   pageColor,
   onPageColor,
   watermark,
@@ -714,6 +723,8 @@ function RibbonInner({
   inkCount,
   onInkClearAll,
   onInsertNote,
+  onNoteOptions,
+  onNavigateNote,
   sources,
   onAddSource,
   headingPages,
@@ -3988,6 +3999,8 @@ function RibbonInner({
             onSection={onSection}
             activeSection={activeSection}
             onInsertSectionBreak={onInsertSectionBreak}
+            hyphAuto={hyphAuto ?? false}
+            onHyphenation={onHyphenation ?? (() => {})}
           />
         ) : tab === 'references' ? (
           <ReferencesTab
@@ -3997,6 +4010,8 @@ function RibbonInner({
             dropdown={dropdown}
             setDropdown={setDropdown}
             onInsertNote={onInsertNote}
+            onNoteOptions={onNoteOptions}
+            onNavigateNote={onNavigateNote}
             sources={sources}
             onAddSource={onAddSource}
             headingPages={headingPages}

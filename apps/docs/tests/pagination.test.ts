@@ -2542,7 +2542,7 @@ describe('formatPageNumber', () => {
 })
 
 describe('appendEndnotesBlock — endnote layout', () => {
-  const item = (id: string, height: number) => ({ no: 1, id, text: 'x', height })
+  const item = (id: string, height: number) => ({ no: '1', id, text: 'x', height })
 
   it('returns null without endnotes; block list unchanged', () => {
     const blocks: BlockBox[] = [{ top: 0, height: 100 }]

@@ -29,6 +29,7 @@ import {
   type DocProtection,
   type HeaderFooter,
   type NoteInfo,
+  type NoteNumbering,
   type ParsedDocFull,
   type SectionInfo,
   type SectionSettings,
@@ -50,6 +51,7 @@ import {
   type PendingNumbering,
 } from './doc-state'
 import { docStyleCss } from './doc-style-css'
+import { setDocNoteNumbering } from './note-format'
 import type { CompareEntry } from './editor/compare'
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from './editor/convert'
 import { TABLE_TRAILING_SKIP } from './editor/extensions'
@@ -173,6 +175,15 @@ export interface FileActionContext {
   setFootnotes: (value: NoteInfo[]) => void
   setEndnotes: (value: NoteInfo[]) => void
   setNotesDirty: (dirty: boolean) => void
+  noteNumbering: { footnotes?: NoteNumbering; endnotes?: NoteNumbering }
+  noteNumberingDirty: boolean
+  setNoteNumbering: (value: { footnotes?: NoteNumbering; endnotes?: NoteNumbering }) => void
+  setNoteNumberingDirty: (dirty: boolean) => void
+  /** settings.xml w:autoHyphenation authoring state (Layout → Hyphenation) */
+  hyphAuto: boolean
+  hyphDirty: boolean
+  setHyphAuto: (value: boolean) => void
+  setHyphDirty: (dirty: boolean) => void
   sources: SourceInfo[]
   sourcesDirty: boolean
   setSources: (value: SourceInfo[]) => void
@@ -245,7 +256,7 @@ function resetEditorHistory(editor: Editor): void {
   editor.registerPlugin(history((plugin.spec as { config?: object }).config))
 }
 
-/** doc-level layout inputs living outside CSS: default tab grid + hyphenation lang */
+/** doc-level layout inputs living outside CSS: default tab grid, hyphenation lang, note numbering */
 function applyDocLayoutSettings(editor: Editor, parsed: ParsedDocFull): void {
   editor.storage.tabStops.defaultTabStopTwips = parsed.defaultTabStopTwips ?? null
   // Word 2013+ justified lines pull words up by shrinking spaces; legacy
@@ -260,6 +271,9 @@ function applyDocLayoutSettings(editor: Editor, parsed: ParsedDocFull): void {
   const lang = parsed.autoHyphenation ? parsed.docDefaults?.lang : undefined
   if (lang) editor.view.dom.setAttribute('lang', lang)
   else editor.view.dom.removeAttribute('lang')
+  // reference markers format under the document's note options (read again by
+  // runsToInline below in the same load pass)
+  setDocNoteNumbering(parsed.noteNumbering)
 }
 
 /**
@@ -394,6 +408,10 @@ export async function loadFile(
     ctx.setFootnotes(parsed.footnotes)
     ctx.setEndnotes(parsed.endnotes)
     ctx.setNotesDirty(false)
+    ctx.setNoteNumbering(parsed.noteNumbering ?? {})
+    ctx.setNoteNumberingDirty(false)
+    ctx.setHyphAuto(parsed.autoHyphenation === true)
+    ctx.setHyphDirty(false)
     ctx.setSources(parsed.sources)
     ctx.setSourcesDirty(false)
     ctx.setThemeFonts(parsed.themeFonts ?? null)
@@ -484,6 +502,10 @@ export async function newFile(ctx: FileActionContext): Promise<boolean | undefin
     ctx.setFootnotes(parsed.footnotes)
     ctx.setEndnotes(parsed.endnotes)
     ctx.setNotesDirty(false)
+    ctx.setNoteNumbering(parsed.noteNumbering ?? {})
+    ctx.setNoteNumberingDirty(false)
+    ctx.setHyphAuto(parsed.autoHyphenation === true)
+    ctx.setHyphDirty(false)
     ctx.setSources([])
     ctx.setSourcesDirty(false)
     ctx.setThemeFonts(parsed.themeFonts ?? null)
@@ -664,11 +686,27 @@ export async function buildDocBytes(ctx: FileActionContext): Promise<Uint8Array 
     watermark: ctx.watermarkDirty ? ctx.watermark : undefined,
     footnotes: ctx.notesDirty ? ctx.footnotes : undefined,
     endnotes: ctx.notesDirty ? ctx.endnotes : undefined,
+    noteNumbering:
+      ctx.noteNumberingDirty && (ctx.noteNumbering.footnotes || ctx.noteNumbering.endnotes)
+        ? ctx.noteNumbering
+        : undefined,
+    hyphenation: ctx.hyphDirty ? { auto: ctx.hyphAuto } : undefined,
     sources: ctx.sourcesDirty ? ctx.sources : undefined,
     themeFonts: ctx.themeFontsDirty && ctx.themeFonts ? ctx.themeFonts : undefined,
     themeColors: ctx.themeColorsDirty && ctx.themeColors ? ctx.themeColors : undefined,
   })
   return bytes
+}
+
+/**
+ * Live toggle of settings.xml w:autoHyphenation before any save: the lang
+ * attribute (Chromium hyphenates only under an explicit lang) follows the
+ * flag exactly like a fresh load does in applyDocLayoutSettings.
+ */
+export function applyHyphenationLive(editor: Editor, parsed: ParsedDocFull, on: boolean): void {
+  const lang = on ? parsed.docDefaults?.lang : undefined
+  if (lang) editor.view.dom.setAttribute('lang', lang)
+  else editor.view.dom.removeAttribute('lang')
 }
 
 /**
@@ -992,6 +1030,10 @@ async function saveOnce(
     ctx.setFootnotes(reparsed.footnotes)
     ctx.setEndnotes(reparsed.endnotes)
     ctx.setNotesDirty(false)
+    ctx.setNoteNumbering(reparsed.noteNumbering ?? {})
+    ctx.setNoteNumberingDirty(false)
+    ctx.setHyphAuto(reparsed.autoHyphenation === true)
+    ctx.setHyphDirty(false)
     ctx.setSources(reparsed.sources)
     ctx.setSourcesDirty(false)
     ctx.setThemeFonts(reparsed.themeFonts ?? null)

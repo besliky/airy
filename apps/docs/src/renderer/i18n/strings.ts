@@ -1,9 +1,10 @@
 import { aiStrings } from './strings-ai'
+import { referencesStrings } from './strings-references'
+import { layoutStrings } from './strings-layout'
 import { appStrings } from './strings-app'
 import { editorStrings } from './strings-editor'
 import { reviewStrings } from './strings-review'
 import { ribbonStrings } from './strings-ribbon'
-import { referencesStrings } from './strings-references'
 import { tableStrings } from './strings-table'
 
 export const strings = {
@@ -15,6 +16,7 @@ export const strings = {
     ...editorStrings.zh,
     ...reviewStrings.zh,
     ...aiStrings.zh,
+    ...layoutStrings.zh,
   },
   en: {
     ...appStrings.en,
@@ -24,6 +26,7 @@ export const strings = {
     ...editorStrings.en,
     ...reviewStrings.en,
     ...aiStrings.en,
+    ...layoutStrings.en,
   },
   ja: {
     ...appStrings.ja,
@@ -33,6 +36,7 @@ export const strings = {
     ...editorStrings.ja,
     ...reviewStrings.ja,
     ...aiStrings.ja,
+    ...layoutStrings.ja,
   },
   ko: {
     ...appStrings.ko,
@@ -42,6 +46,7 @@ export const strings = {
     ...editorStrings.ko,
     ...reviewStrings.ko,
     ...aiStrings.ko,
+    ...layoutStrings.ko,
   },
   fr: {
     ...appStrings.fr,
@@ -51,6 +56,7 @@ export const strings = {
     ...editorStrings.fr,
     ...reviewStrings.fr,
     ...aiStrings.fr,
+    ...layoutStrings.fr,
   },
   de: {
     ...appStrings.de,
@@ -60,6 +66,7 @@ export const strings = {
     ...editorStrings.de,
     ...reviewStrings.de,
     ...aiStrings.de,
+    ...layoutStrings.de,
   },
   es: {
     ...appStrings.es,
@@ -69,6 +76,7 @@ export const strings = {
     ...editorStrings.es,
     ...reviewStrings.es,
     ...aiStrings.es,
+    ...layoutStrings.es,
   },
   th: {
     ...appStrings.th,
@@ -78,6 +86,7 @@ export const strings = {
     ...editorStrings.th,
     ...reviewStrings.th,
     ...aiStrings.th,
+    ...layoutStrings.th,
   },
   id: {
     ...appStrings.id,
@@ -87,6 +96,7 @@ export const strings = {
     ...editorStrings.id,
     ...reviewStrings.id,
     ...aiStrings.id,
+    ...layoutStrings.id,
   },
   ru: {
     ...appStrings.ru,
@@ -96,6 +106,7 @@ export const strings = {
     ...editorStrings.ru,
     ...reviewStrings.ru,
     ...aiStrings.ru,
+    ...layoutStrings.ru,
   },
   ar: {
     ...appStrings.ar,
@@ -105,6 +116,7 @@ export const strings = {
     ...editorStrings.ar,
     ...reviewStrings.ar,
     ...aiStrings.ar,
+    ...layoutStrings.ar,
   },
   pt: {
     ...appStrings.pt,
@@ -114,6 +126,7 @@ export const strings = {
     ...editorStrings.pt,
     ...reviewStrings.pt,
     ...aiStrings.pt,
+    ...layoutStrings.pt,
   },
   it: {
     ...appStrings.it,
@@ -123,6 +136,7 @@ export const strings = {
     ...editorStrings.it,
     ...reviewStrings.it,
     ...aiStrings.it,
+    ...layoutStrings.it,
   },
   pl: {
     ...appStrings.pl,
@@ -132,6 +146,7 @@ export const strings = {
     ...editorStrings.pl,
     ...reviewStrings.pl,
     ...aiStrings.pl,
+    ...layoutStrings.pl,
   },
   cs: {
     ...appStrings.cs,
@@ -141,6 +156,7 @@ export const strings = {
     ...editorStrings.cs,
     ...reviewStrings.cs,
     ...aiStrings.cs,
+    ...layoutStrings.cs,
   },
   nl: {
     ...appStrings.nl,
@@ -150,6 +166,7 @@ export const strings = {
     ...editorStrings.nl,
     ...reviewStrings.nl,
     ...aiStrings.nl,
+    ...layoutStrings.nl,
   },
   ms: {
     ...appStrings.ms,
@@ -159,6 +176,7 @@ export const strings = {
     ...editorStrings.ms,
     ...reviewStrings.ms,
     ...aiStrings.ms,
+    ...layoutStrings.ms,
   },
   he: {
     ...appStrings.he,
@@ -168,6 +186,7 @@ export const strings = {
     ...editorStrings.he,
     ...reviewStrings.he,
     ...aiStrings.he,
+    ...layoutStrings.he,
   },
   hi: {
     ...appStrings.hi,
@@ -177,6 +196,7 @@ export const strings = {
     ...editorStrings.hi,
     ...reviewStrings.hi,
     ...aiStrings.hi,
+    ...layoutStrings.hi,
   },
   'zh-TW': {
     ...appStrings['zh-TW'],
@@ -186,5 +206,6 @@ export const strings = {
     ...editorStrings['zh-TW'],
     ...reviewStrings['zh-TW'],
     ...aiStrings['zh-TW'],
+    ...layoutStrings['zh-TW'],
   },
 }

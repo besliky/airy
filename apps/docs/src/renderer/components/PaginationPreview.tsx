@@ -58,7 +58,6 @@ import {
 } from '../editor/margin-annotations'
 import { pageBorderStyleOf } from '../editor/pagination-gaps'
 import { textColorValue } from '../editor/text-color'
-import { toRoman } from '../note-format'
 import { useI18n } from '../i18n/locale'
 import {
   HF_WASHOUT_FILTER,
@@ -1433,6 +1432,17 @@ export function PaginationPreview({
                                   : { marginRight: gapAfter(ci) }),
                               }}
                             >
+                              {/* w:cols w:sep: hairline centered in the gap (document data, not chrome ink) */}
+                              {rSec?.settings.columnSep && ci < region.columns.length - 1 && (
+                                <div
+                                  className="pv-colrule"
+                                  style={
+                                    rtl
+                                      ? { left: -(gapAfter(ci) / 2) }
+                                      : { right: -(gapAfter(ci) / 2) }
+                                  }
+                                />
+                              )}
                               {rSec?.settings.lineNumbers &&
                                 lnMarks
                                   .filter((m) => m.page === i && m.region === ri && m.col === ci)
@@ -1676,7 +1686,7 @@ export function PaginationPreview({
                           }}
                         >
                           {withSeparator && <div className="pv-endnote-separator" />}
-                          {!n.noRefMark && <sup>{toRoman(n.no)}</sup>}
+                          {!n.noRefMark && <sup>{n.no}</sup>}
                           {n.richParas
                             ? n.richParas.map((para, pi) => (
                                 <span key={pi}>

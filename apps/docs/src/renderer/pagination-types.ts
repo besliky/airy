@@ -306,9 +306,10 @@ export interface FloatBox {
   pageRelFromPage?: boolean
 }
 
-/** Page-bottom footnote entry (number/text/estimated height): shared by canvas page gaps and the pagination preview */
+/** Page-bottom footnote entry (marker/text/estimated height): shared by canvas page gaps and the pagination preview */
 export interface PageNoteItem {
-  no: number
+  /** formatted marker (follows the document's note-numbering options) */
+  no: string
   id: string
   text: string
   /** note body has no self-reference mark run: Word draws the entry without a numeral */

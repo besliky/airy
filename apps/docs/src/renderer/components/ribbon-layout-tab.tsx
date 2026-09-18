@@ -3,10 +3,12 @@ import { type LineNumberSettings, type SectionSettings } from '@airy-office/docx
 import { WRAP_OPTIONS } from './ContextMenu'
 import { MarginDialog, cmFromTwips, marginsFitPage, type PageMargins } from './MarginDialog'
 import { LineNumbersDialog } from './LineNumbersDialog'
+import { ColumnsDialog } from './ColumnsDialog'
 import { useI18n, type StringKey } from '../i18n/locale'
 import {
   IconCaret,
   IconColumns,
+  IconHyphenation,
   IconLineNumbers,
   IconMargins,
   IconOrientation,
@@ -93,6 +95,9 @@ interface LayoutTabProps extends TabProps {
   /** Multi-section documents: index of the cursor's section (0-based); null for single-section */
   activeSection: number | null
   onInsertSectionBreak: (type: 'nextPage' | 'continuous' | 'evenPage' | 'oddPage') => void
+  /** settings.xml w:autoHyphenation state (Layout → Hyphenation) */
+  hyphAuto: boolean
+  onHyphenation: (mode: 'none' | 'manual' | 'automatic') => void
 }
 
 const PT_PER_TWIP = 1 / 20
@@ -106,12 +111,15 @@ export function LayoutTab({
   onSection,
   activeSection,
   onInsertSectionBreak,
+  hyphAuto,
+  onHyphenation,
 }: LayoutTabProps) {
   const { t } = useI18n()
   const paraAttrs = activeParaAttrs(editor)
   const enabled = hasDoc && !!section
   const [marginDialog, setMarginDialog] = useState(false)
   const [lnDialog, setLnDialog] = useState(false)
+  const [columnsDialog, setColumnsDialog] = useState(false)
 
   const applyMargins = (m: PageMargins) => {
     if (!section || !marginsFitPage(m, section.pageWidth, section.pageHeight)) return
@@ -424,6 +432,15 @@ export function LayoutTab({
                         : t('ribbonThreeColumns')}
                   </button>
                 ))}
+                <button
+                  className={section.colWidths || section.columnSep ? 'active' : ''}
+                  onClick={() => {
+                    setDropdown(() => null)
+                    setColumnsDialog(true)
+                  }}
+                >
+                  <b>{t('layoutColsMore')}</b>
+                </button>
               </div>
             )}
           </div>
@@ -536,6 +553,45 @@ export function LayoutTab({
                 >
                   <b>{t('ribbonLineNumbersOptions')}</b>
                 </button>
+              </div>
+            )}
+          </div>
+          <div className="rb-split-wrap">
+            <button
+              className={`rb-big ${hyphAuto ? 'active' : ''}`}
+              disabled={!hasDoc}
+              data-tip={t('layoutHyphenation')}
+              onClick={() => toggleDropdown(setDropdown, 'hyphenation')}
+            >
+              <span className="rb-big-icon">
+                <IconHyphenation size={BIG} />
+                <IconCaret />
+              </span>
+              <span>{t('layoutHyphenation')}</span>
+            </button>
+            {dropdown === 'hyphenation' && (
+              <div data-rb-panel="" className="layout-menu">
+                {(['none', 'manual', 'automatic'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    className={
+                      mode === 'automatic' ? (hyphAuto ? 'active' : '') : !hyphAuto ? 'active' : ''
+                    }
+                    onClick={() => {
+                      onHyphenation(mode)
+                      setDropdown(() => null)
+                    }}
+                  >
+                    <b>
+                      {mode === 'none'
+                        ? t('layoutHyphNone')
+                        : mode === 'manual'
+                          ? t('layoutHyphManual')
+                          : t('layoutHyphAutomatic')}
+                    </b>
+                    {mode === 'manual' && <span>{t('layoutHyphManualDesc')}</span>}
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -662,6 +718,14 @@ export function LayoutTab({
           value={section.lineNumbers}
           onApply={applyLineNumbers}
           onClose={() => setLnDialog(false)}
+        />
+      )}
+
+      {columnsDialog && section && (
+        <ColumnsDialog
+          section={section}
+          onApply={onSection}
+          onClose={() => setColumnsDialog(false)}
         />
       )}
     </>

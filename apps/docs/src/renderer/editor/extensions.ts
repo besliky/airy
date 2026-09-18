@@ -738,12 +738,22 @@ export const DocNoteRef = Node.create({
       kind: { default: 'footnote' as 'footnote' | 'endnote' },
       id: { default: '' },
       num: { default: 1 },
+      /** fixed symbol replacing the number (w:customMarkFollows); saved back on the run */
+      customMark: { default: null as string | null },
+      /** rendered marker text (format-aware; recomputed when note options change) */
+      mark: { default: null as string | null },
     }
   },
   parseHTML() {
     return [{ tag: 'sup[data-note-ref]' }]
   },
   renderHTML({ node }) {
+    const kind = node.attrs.kind as 'footnote' | 'endnote'
+    const custom = node.attrs.customMark ? String(node.attrs.customMark) : ''
+    const shown =
+      typeof node.attrs.mark === 'string' && node.attrs.mark !== ''
+        ? String(node.attrs.mark)
+        : custom || noteMarkText(kind, Number(node.attrs.num) || 1)
     return [
       'sup',
       {
@@ -753,7 +763,7 @@ export const DocNoteRef = Node.create({
         title: node.attrs.kind === 'footnote' ? t('editorFootnote') : t('editorEndnote'),
       },
       // bare superscript number, matching Word; hover/selection accents live in CSS
-      noteMarkText(node.attrs.kind as 'footnote' | 'endnote', Number(node.attrs.num) || 1),
+      shown,
     ]
   },
 })
@@ -1244,6 +1254,9 @@ export const WordEditorShortcuts = Extension.create({
       // U+00A0 and U+2011: the characters Word inserts for these two chords
       'Mod-Shift-Space': () => this.editor.commands.insertContent('\u00a0'),
       'Mod-Shift--': () => this.editor.commands.insertContent('\u2011'),
+      // optional hyphen (U+00AD): Word's ⌘-/Ctrl+- chord is this app's zoom-out
+      // menu accelerator and never reaches the renderer, so Alt joins the chord
+      'Alt-Mod--': () => this.editor.commands.insertContent('\u00ad'),
       'Alt-Shift-ArrowUp': () => moveBlocks(this.editor, -1),
       'Alt-Shift-ArrowDown': () => moveBlocks(this.editor, 1),
     }
