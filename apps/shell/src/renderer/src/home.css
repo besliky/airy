@@ -129,6 +129,70 @@ body.vib .home {
   color: var(--text-primary);
 }
 
+/* ---- file search (sidebar field; live name filter for the home lists) ---- */
+
+.file-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 0 2px 14px;
+}
+
+.file-search-icon {
+  position: absolute;
+  inset-inline-start: 9px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.file-search-input {
+  width: 100%;
+  height: 34px;
+  padding-inline: 28px 26px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--checkbox-bg);
+  outline: none;
+}
+
+/* placeholder follows the suite convention (AI input boxes): tertiary text */
+.file-search-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.file-search-input:hover {
+  background: var(--bg-hover-subtle);
+}
+
+.file-search-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.file-search-clear {
+  position: absolute;
+  inset-inline-end: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.file-search-clear:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
 .sidebar-nav {
   display: flex;
   flex-direction: column;
