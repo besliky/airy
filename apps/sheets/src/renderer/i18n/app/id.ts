@@ -320,8 +320,6 @@ export const id = {
   appPivotSheetNoDuplicate: 'Lembar ini berisi PivotTable — menduplikasinya belum didukung.',
   appDuplicateScopedNames:
     'Lembar ini memiliki nama terdefinisi berlingkup lembar — menduplikasinya belum didukung.',
-  appMoveRowsColsUnsaved:
-    'Memindahkan seluruh kolom belum dapat disimpan pada buku kerja yang diimpor — memindahkan seluruh baris sudah didukung.',
   appNoWorkbookOpen: 'Tidak ada buku kerja yang terbuka.',
   appDvListOptions: 'Daftar: {items}',
   appDvListFromRange: 'Daftar (dari rentang {range})',

@@ -33,6 +33,30 @@ describe('mapProtectedRanges', () => {
     expect(mapped).toEqual([range('Data', 'A2 A5:A6')])
   })
 
+  it('splits a partially moved column range into exact column runs', () => {
+    // Columns 2-3 (file) move to the tail: file columns 1,2,3 land on screen
+    // 4,5,1 — the envelope (B:E) would whitelist the unrelated screen C-D too.
+    const mapped = mapProtectedRanges(
+      [range('Data', 'B2:D2')],
+      [{ kind: 'move-cols', index: 1, count: 2, before: 6 }],
+    )
+    expect(mapped).toEqual([range('Data', 'B2 E2:F2')])
+  })
+
+  it('crosses exact row runs with exact column runs under both move kinds', () => {
+    // Row 1 and column A each relocate before line 5: file rows 2-4 land on
+    // screens 1-3 (row 1 sits at screen 4), and file columns A-C land on
+    // screens A-B plus E. The image is the cross product of the runs.
+    const mapped = mapProtectedRanges(
+      [range('Data', 'A2:C4')],
+      [
+        { kind: 'move-rows', index: 0, count: 1, before: 5 },
+        { kind: 'move-cols', index: 0, count: 1, before: 5 },
+      ],
+    )
+    expect(mapped).toEqual([range('Data', 'A1:B3 E1:E3')])
+  })
+
   it('returns the input unchanged without ops and keeps unparseable parts', () => {
     const untouched = [range('Data', 'B3:D6')]
     expect(mapProtectedRanges(untouched, [])).toEqual(untouched)

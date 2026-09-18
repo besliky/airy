@@ -311,8 +311,6 @@ export const ar = {
   appPivotSheetNoDuplicate: 'تحتوي هذه الورقة على جدول محوري — تكرارها غير مدعوم بعد.',
   appDuplicateScopedNames:
     'تحتوي هذه الورقة على أسماء معرفة على مستوى الورقة — تكرارها غير مدعوم بعد.',
-  appMoveRowsColsUnsaved:
-    'لا يمكن بعد حفظ نقل أعمدة كاملة في المصنفات المستوردة — أما نقل صفوف كاملة فمدعوم.',
   appNoWorkbookOpen: 'لا يوجد مصنف مفتوح.',
   appDvListOptions: 'قائمة: {items}',
   appDvListFromRange: 'قائمة (من النطاق {range})',

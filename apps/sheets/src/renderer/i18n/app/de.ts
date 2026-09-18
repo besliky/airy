@@ -344,8 +344,6 @@ export const de = {
     'Dieses Blatt enthält eine PivotTable — sein Duplizieren wird noch nicht unterstützt.',
   appDuplicateScopedNames:
     'Dieses Blatt enthält blattbezogene definierte Namen — das Duplizieren wird noch nicht unterstützt.',
-  appMoveRowsColsUnsaved:
-    'Das Verschieben ganzer Spalten kann bei importierten Arbeitsmappen noch nicht gespeichert werden — das Verschieben ganzer Zeilen wird unterstützt.',
   appNoWorkbookOpen: 'Keine Arbeitsmappe geöffnet.',
   appDvListOptions: 'Liste: {items}',
   appDvListFromRange: 'Liste (aus Bereich {range})',

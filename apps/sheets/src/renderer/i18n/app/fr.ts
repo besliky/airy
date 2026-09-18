@@ -355,8 +355,6 @@ export const fr = {
     "Cette feuille contient un tableau croisé dynamique — sa duplication n'est pas encore prise en charge.",
   appDuplicateScopedNames:
     'Cette feuille contient des noms définis limités à la feuille — sa duplication n’est pas encore prise en charge.',
-  appMoveRowsColsUnsaved:
-    'Le déplacement de colonnes entières ne peut pas encore être enregistré dans les classeurs importés — le déplacement de lignes entières est pris en charge.',
   appNoWorkbookOpen: "Aucun classeur n'est ouvert.",
   appDvListOptions: 'Liste : {items}',
   appDvListFromRange: 'Liste (depuis la plage {range})',

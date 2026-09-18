@@ -2115,13 +2115,19 @@ function parseSaveRequest(input: WorkbookSaveRequest): WorkbookSaveRequest {
     }
     const { index, count } = op
     if ('before' in op) {
+      // Axis-appropriate bounds: 1 048 576 rows vs 16 384 columns.
+      const columnMove = op.kind === 'move-cols'
+      const indexMax = columnMove ? 16_383 : 1_048_575
+      const beforeMax = columnMove ? 16_384 : 1_048_576
       if (
-        op.kind !== 'move-rows' ||
+        (op.kind !== 'move-rows' && !columnMove) ||
         !isNonnegativeInteger(index) ||
+        index > indexMax ||
         !isNonnegativeInteger(count) ||
         count === 0 ||
         count > 10_000 ||
         !isNonnegativeInteger(op.before) ||
+        op.before > beforeMax ||
         (op.before >= index && op.before <= index + count)
       ) {
         throw new Error('Invalid workbook structural operation.')

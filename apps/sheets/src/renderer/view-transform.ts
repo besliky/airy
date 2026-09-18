@@ -19,7 +19,9 @@ interface CellArea {
 type RowColumnOp = Extract<StructuralOp, { index: number }>
 
 function axisOf(op: RowColumnOp): Axis {
-  return op.kind === 'insert-cols' || op.kind === 'remove-cols' ? 'column' : 'row'
+  return op.kind === 'insert-cols' || op.kind === 'remove-cols' || op.kind === 'move-cols'
+    ? 'column'
+    : 'row'
 }
 
 /// The two adjacent pre-move blocks a move swaps: `first` then `second`,
@@ -303,6 +305,18 @@ export function fileRangeToScreenRange(
     startColumn: columns.start,
     endColumn: columns.end,
   }
+}
+
+/// One axis of fileRangeToScreenRange: the bounding envelope of a span's
+/// surviving screen images (may span gaps between survivors); null when none
+/// survive. Consumers that split the other axis into exact runs still need
+/// this axis's extent without collapsing a rectangle to a probe line.
+export function fileSpanToScreenEnvelope(
+  ops: readonly StructuralOp[],
+  axis: Axis,
+  span: { start: number; end: number },
+): { start: number; end: number } | null {
+  return spanEnvelope(ops, axis, span, true)
 }
 
 /// Exact screen-space images of a file-space range, as disjoint rectangles

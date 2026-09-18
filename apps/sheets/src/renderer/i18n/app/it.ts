@@ -347,8 +347,6 @@ export const it = {
     'Questo foglio contiene una tabella pivot — la sua duplicazione non è ancora supportata.',
   appDuplicateScopedNames:
     'Questo foglio contiene nomi definiti a livello di foglio — la duplicazione non è ancora supportata.',
-  appMoveRowsColsUnsaved:
-    'Lo spostamento di intere colonne non può ancora essere salvato nelle cartelle di lavoro importate — lo spostamento di intere righe è supportato.',
   appNoWorkbookOpen: 'Nessuna cartella di lavoro aperta.',
   appDvListOptions: 'Elenco: {items}',
   appDvListFromRange: 'Elenco (dall’intervallo {range})',

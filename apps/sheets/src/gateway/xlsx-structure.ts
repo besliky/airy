@@ -12,11 +12,12 @@ export type StructuralOp =
       readonly index: number
       readonly count: number
     }
-  /// Whole-row move: rows [index, index+count) relocate to sit before the
-  /// pre-move row `before`. A bijection (nothing is deleted), so row
-  /// attributes travel with their rows and references never turn into #REF!.
+  /// Whole-row/column move: lines [index, index+count) relocate to sit before
+  /// the pre-move line `before` (a row for move-rows, a column for move-cols).
+  /// A bijection (nothing is deleted), so axis attributes travel with their
+  /// lines and references never turn into #REF!.
   | {
-      readonly kind: 'move-rows'
+      readonly kind: 'move-rows' | 'move-cols'
       readonly index: number
       readonly count: number
       readonly before: number
@@ -667,6 +668,7 @@ export function shiftTablePart(
     const shift = toShift(op)
     remapInsertionRecords(records, shift, axis)
     if (axis === 'row') assertTableRowShiftSupported(table, shift)
+    else if (shift.swap) assertTableColumnMoveSupported(table, shift.swap)
     else xml = reshapeTableColumns(xml, table, shift, records)
     xml = xml.replace(
       /(<(?:table|autoFilter|sortState|sortCondition)\b[^>]*?\bref=")([^"]+)(")/g,
@@ -943,6 +945,23 @@ function assertTableRowMoveSupported(table: TablePartArea, swap: BlockSwap['swap
   }
 }
 
+/// Column-swap counterpart: a table whose column span sits fully inside one
+/// swapped block relocates wholesale (the tableColumn list travels intact
+/// with its headers); any other overlap with the swap envelope would reorder
+/// the table's interior columns and desync the tableColumn names/ids from
+/// the moved header cells — reshapeTableColumns deliberately ignores swaps,
+/// so fail closed instead. Rows are untouched by a column move, which is why
+/// the header/totals logic above stays row-only.
+function assertTableColumnMoveSupported(table: TablePartArea, swap: BlockSwap['swap']): void {
+  const within = (span: Span): boolean =>
+    table.startColumn >= span.start && table.endColumn <= span.end
+  if (within(swap.first) || within(swap.second)) return
+  if (!spansOverlap(table.startColumn, table.endColumn, swap.first.start, swap.second.end)) return
+  throw new StructuralShiftError(
+    `A column move partially overlaps table "${table.name}" — the move cannot be saved.`,
+  )
+}
+
 export type Axis = 'row' | 'column'
 
 interface Span {
@@ -969,13 +988,19 @@ interface BlockSwap {
 export type Shift = LinearShift | BlockSwap
 
 function axisOf(op: RowColumnOp): Axis {
-  return op.kind === 'insert-cols' || op.kind === 'remove-cols' ? 'column' : 'row'
+  return op.kind === 'insert-cols' || op.kind === 'remove-cols' || op.kind === 'move-cols'
+    ? 'column'
+    : 'row'
 }
 
 function toShift(op: RowColumnOp): Shift {
-  if (op.kind === 'move-rows') {
+  if (op.kind === 'move-rows' || op.kind === 'move-cols') {
     if (op.before >= op.index && op.before <= op.index + op.count) {
-      throw new StructuralShiftError('A row move has a target inside the moved block — aborted.')
+      throw new StructuralShiftError(
+        op.kind === 'move-rows'
+          ? 'A row move has a target inside the moved block — aborted.'
+          : 'A column move has a target inside the moved block — aborted.',
+      )
     }
     return op.before > op.index
       ? {
@@ -1107,6 +1132,30 @@ function sortSheetDataRows(xml: string): string {
   )
 }
 
+/// Column-swap counterpart of sortSheetDataRows: the re-address pass rewrites
+/// each `<c>` in place, so a row whose cells traded places holds them out of
+/// ascending column order — Excel repairs such files, so re-sort instead.
+/// Self-closing rows have no cells to order.
+function sortRowCells(rowXml: string): string {
+  if (rowXml.endsWith('/>')) return rowXml
+  const open = /^<row\b[^>]*>/.exec(rowXml)
+  if (!open) return rowXml
+  const inner = rowXml.slice(open[0].length, -'</row>'.length)
+  const cells: { column: number; text: string }[] = []
+  const leftover = inner.replace(
+    /<c\b[^>]*?\br="([A-Z]{1,3})[0-9]+"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g,
+    (full, letters: string) => {
+      cells.push({ column: lettersToColumn(letters), text: full })
+      return ''
+    },
+  )
+  if (leftover.trim() !== '') {
+    throw new StructuralShiftError('A row holds content other than cells — move aborted.')
+  }
+  cells.sort((a, b) => a.column - b.column)
+  return `${open[0]}${cells.map((cell) => cell.text).join('')}</row>`
+}
+
 /**
  * A column operation used to run four whole-worksheet replacements in
  * sequence (row spans/cells, formulas, ranged features, and <col> metadata).
@@ -1189,6 +1238,7 @@ function transformColumnOperation(xml: string, sheetName: string, shift: Shift):
         )
       },
     )
+    if (shift.swap) row = sortRowCells(row)
     row = transformFormulas(row, sheetName, shift, 'column')
     if (row === full) continue
     parts.push(body.slice(cursor, openMatch.index), row)
@@ -1244,11 +1294,13 @@ function transformSheetColumns(xml: string, shift: Shift): string {
       )
     },
   )
-  return result
+  // A swap leaves re-addressed cells out of column order inside their rows.
+  if (!shift.swap) return result
+  return result.replace(/<row\b[^>]*?(?:\/>|>[\s\S]*?<\/row>)/g, (row) => sortRowCells(row))
 }
 
 function transformColDefinitions(xml: string, shift: Shift): string {
-  return xml.replace(
+  const rewritten = xml.replace(
     /<col\b([^>]*?)\bmin="([0-9]+)"([^>]*?)\bmax="([0-9]+)"([^>]*?)\/>/g,
     (_full, b1: string, min: string, b2: string, max: string, b3: string) => {
       const moved = moveRange(Number(min) - 1, Number(max) - 1, shift)
@@ -1256,6 +1308,18 @@ function transformColDefinitions(xml: string, shift: Shift): string {
       return `<col${b1}min="${moved.start + 1}"${b2}max="${moved.end + 1}"${b3}/>`
     },
   )
+  if (!shift.swap) return rewritten
+  // A swap leaves the re-addressed <col> runs out of ascending order —
+  // re-sort the section like sortSheetDataRows does for rows.
+  return rewritten.replace(/<cols\b[^>]*>([\s\S]*?)<\/cols>/g, (_full, inner: string) => {
+    const elements: { min: number; text: string }[] = []
+    for (const element of inner.matchAll(/<col\b[^>]*\/>/g)) {
+      const min = Number(/\bmin="([0-9]+)"/.exec(element[0])?.[1])
+      if (Number.isInteger(min)) elements.push({ min, text: element[0] })
+    }
+    elements.sort((a, b) => a.min - b.min)
+    return `<cols>${elements.map((element) => element.text).join('')}</cols>`
+  })
 }
 
 /// Rewrites `<f>` bodies plus shared/array formula `ref` attributes, and the
@@ -1276,8 +1340,9 @@ function transformFormulas(xml: string, sheetName: string, shift: Shift, axis: A
         (_m, prefix: string, ref: string, suffix: string) => {
           // A shared/array anchor spanning the swapped blocks would have its
           // si expansion reordered underneath it — only wholesale moves of
-          // the anchor (or no contact at all) are safe.
-          if (shift.swap && axis === 'row') assertSwapKeepsAnchorIntact(ref, shift.swap)
+          // the anchor (or no contact at all) are safe. Same hazard on both
+          // axes: a column swap reorders the expansion sideways.
+          if (shift.swap) assertSwapKeepsAnchorIntact(ref, shift.swap, axis)
           const moved = moveRefRange(ref, shift, axis)
           if (moved === null) {
             throw new StructuralShiftError(
@@ -1355,17 +1420,19 @@ function transformRangedFeatures(xml: string, shift: Shift, axis: Axis): string 
   return result
 }
 
-function assertSwapKeepsAnchorIntact(ref: string, swap: BlockSwap['swap']): void {
+function assertSwapKeepsAnchorIntact(ref: string, swap: BlockSwap['swap'], axis: Axis): void {
   const parts = ref.split(':')
   const start = parseA1(parts[0] ?? '')
   const end = parseA1(parts[1] ?? parts[0] ?? '')
   if (!start || !end) return
-  const outside = end.row < swap.first.start || start.row > swap.second.end
-  const insideFirst = start.row >= swap.first.start && end.row <= swap.first.end
-  const insideSecond = start.row >= swap.second.start && end.row <= swap.second.end
+  const from = axis === 'row' ? start.row : start.column
+  const to = axis === 'row' ? end.row : end.column
+  const outside = to < swap.first.start || from > swap.second.end
+  const insideFirst = from >= swap.first.start && to <= swap.first.end
+  const insideSecond = from >= swap.second.start && to <= swap.second.end
   if (outside || insideFirst || insideSecond) return
   throw new StructuralShiftError(
-    'A shared formula anchor overlaps the moved rows — the move cannot be saved.',
+    'A shared formula anchor overlaps the moved rows/columns — the move cannot be saved.',
   )
 }
 

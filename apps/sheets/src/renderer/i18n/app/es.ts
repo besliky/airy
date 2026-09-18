@@ -342,8 +342,6 @@ export const es = {
     'Esta hoja contiene una tabla dinámica — su duplicación aún no se admite.',
   appDuplicateScopedNames:
     'Esta hoja tiene nombres definidos con ámbito de hoja: duplicarla aún no es compatible.',
-  appMoveRowsColsUnsaved:
-    'Mover columnas enteras aún no se puede guardar en libros importados — mover filas enteras ya es compatible.',
   appNoWorkbookOpen: 'No hay ningún libro abierto.',
   appDvListOptions: 'Lista: {items}',
   appDvListFromRange: 'Lista (del rango {range})',

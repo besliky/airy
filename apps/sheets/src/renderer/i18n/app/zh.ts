@@ -281,7 +281,6 @@ export const zh = {
   appDuplicateNeedsFullLoad: '复制工作表需要完整加载模式——这个工作簿太大，只做了流式加载。',
   appPivotSheetNoDuplicate: '该工作表含数据透视表——暂不支持复制该表。',
   appDuplicateScopedNames: '该工作表含表级定义名称——暂不支持复制该表。',
-  appMoveRowsColsUnsaved: '整列移动暂时无法保存到导入的工作簿——整行移动已支持。',
   // Preview / apply / undo
   appNoWorkbookOpen: '当前没有打开的工作簿。',
   appDvListOptions: '列表：{items}',

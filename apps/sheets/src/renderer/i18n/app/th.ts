@@ -308,8 +308,6 @@ export const th = {
   appPivotSheetNoDuplicate: 'แผ่นงานนี้มี PivotTable — ยังไม่รองรับการทำสำเนาแผ่นงานนี้',
   appDuplicateScopedNames:
     'แผ่นงานนี้มีชื่อที่กำหนดระดับแผ่นงาน — ยังไม่รองรับการทำสำเนาแผ่นงานนี้',
-  appMoveRowsColsUnsaved:
-    'การย้ายทั้งคอลัมน์ยังบันทึกลงเวิร์กบุ๊กที่นำเข้าไม่ได้ — ส่วนการย้ายทั้งแถวรองรับแล้ว',
   appNoWorkbookOpen: 'ไม่มีเวิร์กบุ๊กที่เปิดอยู่',
   appDvListOptions: 'รายการ: {items}',
   appDvListFromRange: 'รายการ (จากช่วง {range})',

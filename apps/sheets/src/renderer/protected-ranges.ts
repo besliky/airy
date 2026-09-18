@@ -6,7 +6,7 @@
 
 import { columnLabel, parseRange } from '../domain/cell-address'
 import type { StructuralJournalOp } from './edit-journal'
-import { fileRangeToScreenRange, fileToScreen } from './view-transform'
+import { fileRangeToScreenRange, fileSpanToScreenEnvelope, fileToScreen } from './view-transform'
 
 export interface ProtectedRangeEntry {
   readonly name: string
@@ -32,47 +32,85 @@ interface Area {
   endColumn: number
 }
 
-/// The range envelope over-reads on a move-rows that partially overlaps the
-/// area (its span semantics serve viewport fetches) — for an edit whitelist
-/// that would fail open. With a move in play, rows are mapped one by one and
-/// the survivors split into contiguous runs instead.
-const EXACT_MOVE_ROW_CAP = 50_000
+/// The range envelope over-reads on a move that partially overlaps the area
+/// (its span semantics serve viewport fetches) — for an edit whitelist that
+/// would fail open. With a move in play on an axis, that axis's lines are
+/// mapped one by one and the survivors split into contiguous runs instead;
+/// the other axis keeps its envelope.
+const EXACT_MOVE_LINE_CAP = 50_000
+
+interface LineSpan {
+  start: number
+  end: number
+}
+
+/// Exact screen images of [start, end] as contiguous runs (empty when every
+/// line was deleted). Screen positions are sorted before splitting: a move's
+/// images are not monotonic in the file order.
+function survivorRuns(
+  ops: readonly StructuralJournalOp[],
+  axis: 'row' | 'column',
+  start: number,
+  end: number,
+): LineSpan[] {
+  const screens: number[] = []
+  for (let line = start; line <= end; line += 1) {
+    const screen = fileToScreen(ops, axis, line)
+    if (screen !== null) screens.push(screen)
+  }
+  screens.sort((a, b) => a - b)
+  const runs: LineSpan[] = []
+  for (const screen of screens) {
+    const last = runs[runs.length - 1]
+    if (last !== undefined && screen === last.end + 1) last.end = screen
+    else runs.push({ start: screen, end: screen })
+  }
+  return runs
+}
 
 function mapArea(area: Area, ops: readonly StructuralJournalOp[]): Area[] {
-  const hasMove = ops.some((op) => op.kind === 'move-rows')
-  if (!hasMove || area.endRow - area.startRow > EXACT_MOVE_ROW_CAP) {
+  const exactRows =
+    ops.some((op) => op.kind === 'move-rows') && area.endRow - area.startRow <= EXACT_MOVE_LINE_CAP
+  const exactColumns =
+    ops.some((op) => op.kind === 'move-cols') &&
+    area.endColumn - area.startColumn <= EXACT_MOVE_LINE_CAP
+  if (!exactRows && !exactColumns) {
     const moved = fileRangeToScreenRange(ops, area)
     return moved === null ? [] : [moved]
   }
-  let probeRow: number | null = null
-  const rows: number[] = []
-  for (let row = area.startRow; row <= area.endRow; row += 1) {
-    const screen = fileToScreen(ops, 'row', row)
-    if (screen === null) continue
-    if (probeRow === null) probeRow = row
-    rows.push(screen)
-  }
-  if (probeRow === null) return []
-  // Moves never touch columns; the column span still shifts through any
-  // insert/remove-cols in the op list.
-  const columns = fileRangeToScreenRange(ops, { ...area, startRow: probeRow, endRow: probeRow })
-  if (columns === null) return []
-  rows.sort((a, b) => a - b)
+  const rows = exactRows
+    ? survivorRuns(ops, 'row', area.startRow, area.endRow)
+    : envelopeRuns(ops, 'row', area.startRow, area.endRow)
+  if (rows.length === 0) return []
+  const columns = exactColumns
+    ? survivorRuns(ops, 'column', area.startColumn, area.endColumn)
+    : envelopeRuns(ops, 'column', area.startColumn, area.endColumn)
+  if (columns.length === 0) return []
+  // Both axes moved: the exact image is the cross product of their runs.
   const areas: Area[] = []
   for (const row of rows) {
-    const last = areas[areas.length - 1]
-    if (last && row === last.endRow + 1) {
-      last.endRow = row
-    } else {
+    for (const column of columns) {
       areas.push({
-        startRow: row,
-        endRow: row,
-        startColumn: columns.startColumn,
-        endColumn: columns.endColumn,
+        startRow: row.start,
+        endRow: row.end,
+        startColumn: column.start,
+        endColumn: column.end,
       })
     }
   }
   return areas
+}
+
+/// The unmoved axis keeps the envelope: its lines were never shuffled, so
+/// the bounding box of the survivors is the exact whitelisted span.
+function envelopeRuns(
+  ops: readonly StructuralJournalOp[],
+  axis: 'row' | 'column',
+  start: number,
+  end: number,
+): LineSpan[] {
+  const envelope = fileSpanToScreenEnvelope(ops, axis, { start, end })
+  return envelope === null ? [] : [envelope]
 }
 
 /// Maps a sqref (one or more space-separated A1 areas) through structural

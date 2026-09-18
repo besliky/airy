@@ -296,8 +296,6 @@ export const he = {
     'שכפול גיליון דורש מצב טעינה מלאה — חוברת עבודה זו גדולה מדי ונטענת בהזרמה חלקית.',
   appPivotSheetNoDuplicate: 'גיליון זה מכיל טבלת ציר — שכפולו אינו נתמך עדיין.',
   appDuplicateScopedNames: 'גיליון זה מכיל שמות מוגדרים ברמת הגיליון — שכפולו אינו נתמך עדיין.',
-  appMoveRowsColsUnsaved:
-    'הזזת עמודות שלמות אינה ניתנת לשמירה עדיין בחוברות עבודה מיובאות — הזזת שורות שלמות כבר נתמכת.',
   appNoWorkbookOpen: 'אין חוברת עבודה פתוחה.',
   appDvListOptions: 'רשימה: {items}',
   appDvListFromRange: 'רשימה (מהטווח {range})',

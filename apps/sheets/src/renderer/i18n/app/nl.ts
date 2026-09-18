@@ -338,8 +338,6 @@ export const nl = {
     'Dit werkblad bevat een draaitabel — dupliceren wordt nog niet ondersteund.',
   appDuplicateScopedNames:
     'Dit blad bevat gedefinieerde namen op bladniveau — dupliceren wordt nog niet ondersteund.',
-  appMoveRowsColsUnsaved:
-    'Het verplaatsen van hele kolommen kan nog niet worden opgeslagen in geïmporteerde werkmappen — het verplaatsen van hele rijen wordt wel ondersteund.',
   appNoWorkbookOpen: 'Er is geen werkmap geopend.',
   appDvListOptions: 'Lijst: {items}',
   appDvListFromRange: 'Lijst (uit bereik {range})',

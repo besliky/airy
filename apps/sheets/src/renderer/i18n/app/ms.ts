@@ -323,8 +323,6 @@ export const ms = {
     'Helaian ini mengandungi Jadual Pangsi — pendupikasiannya belum disokong.',
   appDuplicateScopedNames:
     'Helaian ini mempunyai nama tertakrif berskop helaian — penduaan belum disokong.',
-  appMoveRowsColsUnsaved:
-    'Pengalihan keseluruhan lajur belum boleh disimpan ke buku kerja yang diimport — pengalihan keseluruhan baris sudah disokong.',
   appNoWorkbookOpen: 'Tiada buku kerja dibuka.',
   appDvListOptions: 'Senarai: {items}',
   appDvListFromRange: 'Senarai (dari julat {range})',

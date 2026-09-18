@@ -5,6 +5,7 @@ import { applyCellEditsToXlsx, assertOnlyTouchedEntriesChanged } from '../src/ga
 import {
   applyStructuralOps,
   shiftCellArea,
+  shiftChartReferences,
   shiftCrossSheetFormulas,
   shiftDefinedNames,
   shiftDrawingAnchors,
@@ -1330,6 +1331,230 @@ describe('applyStructuralOps row moves', () => {
     const relocated = shiftTablePart(table, [move(1, 3, 6)])
     expect(relocated).toContain('ref="A4:B6"')
     expect(() => shiftTablePart(table, [move(1, 2, 5)])).toThrow(/header row/)
+  })
+})
+
+describe('applyStructuralOps column moves', () => {
+  const move = (index: number, count: number, before: number) =>
+    ({ kind: 'move-cols', index, count, before }) as const
+
+  it('re-addresses the cells of a row and keeps them in ascending column order', () => {
+    // Column B trades places with C: the re-addressed cells would otherwise
+    // sit out of order inside the row, which Excel repairs — re-sort instead.
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1"><v>3</v></c><c r="D1"><v>4</v></c></row>' +
+      '</sheetData></worksheet>'
+    const moved = applyStructuralOps(xml, [move(1, 1, 3)], SHEET)
+    expect(moved).toBe(
+      '<worksheet><sheetData>' +
+        '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>3</v></c><c r="C1"><v>2</v></c><c r="D1"><v>4</v></c></row>' +
+        '</sheetData></worksheet>',
+    )
+  })
+
+  it('moves a block left and renumbers the displaced columns', () => {
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1"><v>3</v></c></row>' +
+      '</sheetData></worksheet>'
+    const moved = applyStructuralOps(xml, [move(2, 1, 0)], SHEET)
+    expect(moved).toBe(
+      '<worksheet><sheetData>' +
+        '<row r="1"><c r="A1"><v>3</v></c><c r="B1"><v>1</v></c><c r="C1"><v>2</v></c></row>' +
+        '</sheetData></worksheet>',
+    )
+  })
+
+  it('remaps references into the moved columns and re-letters whole-column refs', () => {
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><f>B1+SUM(A1:C1)+SUM(B:B)+SUM(2:2)</f></c>' +
+      '<c r="B1"><v>2</v></c><c r="C1"><v>3</v></c></row>' +
+      '</sheetData></worksheet>'
+    const moved = applyStructuralOps(xml, [move(1, 1, 3)], SHEET)
+    // B1 follows the block; A1:C1 spans both swapped blocks and stays;
+    // B:B re-letters; the whole-row ref 2:2 is column-op invariant.
+    expect(moved).toContain('<f>C1+SUM(A1:C1)+SUM(C:C)+SUM(2:2)</f>')
+  })
+
+  it('fails closed when a formula range is torn by the move', () => {
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><f>SUM(A1:C1)</f></c><c r="B1"><v>2</v></c><c r="C1"><v>3</v></c><c r="D1"><v>4</v></c></row>' +
+      '</sheetData></worksheet>'
+    expect(() => applyStructuralOps(xml, [move(2, 2, 0)], SHEET)).toThrow(StructuralShiftError)
+  })
+
+  it('moves merges inside the block, keeps spanning merges, tears fail closed', () => {
+    const xml =
+      '<worksheet><sheetData><row r="1"/><row r="2"/><row r="3"/></sheetData>' +
+      '<mergeCells count="2"><mergeCell ref="B2:B3"/><mergeCell ref="A1:C1"/></mergeCells>' +
+      '</worksheet>'
+    const moved = applyStructuralOps(xml, [move(1, 1, 3)], SHEET)
+    expect(moved).toContain('<mergeCell ref="C2:C3"/>')
+    expect(moved).toContain('<mergeCell ref="A1:C1"/>')
+    const torn =
+      '<worksheet><sheetData><row r="1"/><row r="2"/></sheetData>' +
+      '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>'
+    expect(() => applyStructuralOps(torn, [move(1, 1, 3)], SHEET)).toThrow(StructuralShiftError)
+  })
+
+  it('fails closed when a shared formula anchor spans the swapped columns', () => {
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><f t="shared" ref="A1:C1" si="0">A2*2</f></c></row>' +
+      '<row r="2"><c r="B2"><f t="shared" si="0"/></c></row>' +
+      '</sheetData></worksheet>'
+    expect(() => applyStructuralOps(xml, [move(1, 1, 3)], SHEET)).toThrow(/shared formula anchor/)
+    // An anchor fully inside one swapped block moves with it.
+    const inside =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="B1"><f t="shared" ref="B1:B2" si="0">B2*2</f></c></row>' +
+      '<row r="2"><c r="B2"><f t="shared" si="0"/></c></row>' +
+      '</sheetData></worksheet>'
+    expect(applyStructuralOps(inside, [move(1, 1, 3)], SHEET)).toContain('ref="C1:C2"')
+  })
+
+  it('rejects a move whose target sits inside the moved block', () => {
+    expect(() =>
+      applyStructuralOps('<worksheet><sheetData/></worksheet>', [move(2, 3, 4)], SHEET),
+    ).toThrow(/column move/)
+  })
+
+  it('rewrites cross-sheet references and defined names through the swap', () => {
+    const other =
+      '<worksheet><sheetData><row r="1"><c r="A1"><f>Data!B2</f></c></row></sheetData></worksheet>'
+    expect(shiftCrossSheetFormulas(other, SHEET, [move(1, 1, 3)])).toContain('<f>Data!C2</f>')
+    const names =
+      '<workbook><definedNames><definedName name="x">Data!$B$2</definedName></definedNames></workbook>'
+    expect(shiftDefinedNames(names, SHEET, [move(1, 1, 3)])).toContain('Data!$C$2')
+    const chart = '<c:chartSpace><c:ser><c:f>Data!$B$1:$B$9</c:f></c:ser></c:chartSpace>'
+    expect(shiftChartReferences(chart, SHEET, [move(1, 1, 3)])).toContain(
+      '<c:f>Data!$C$1:$C$9</c:f>',
+    )
+  })
+
+  it('shifts <cols> runs with the swap and fails closed on torn runs', () => {
+    const xml =
+      '<worksheet><cols><col min="1" max="1" width="10" customWidth="1"/><col min="2" max="3" width="20" customWidth="1"/></cols>' +
+      '<sheetData><row r="1"/></sheetData></worksheet>'
+    // Column A trades places with the B-C block: the width-10 run moves to C,
+    // the width-20 run to A-B — and the section reads back ascending.
+    const moved = applyStructuralOps(xml, [move(0, 1, 3)], SHEET)
+    expect(moved).toContain(
+      '<cols><col min="1" max="2" width="20" customWidth="1"/><col min="3" max="3" width="10" customWidth="1"/></cols>',
+    )
+    const torn =
+      '<worksheet><cols><col min="2" max="3" width="20" customWidth="1"/></cols>' +
+      '<sheetData><row r="1"/></sheetData></worksheet>'
+    expect(() => applyStructuralOps(torn, [move(0, 1, 2)], SHEET)).toThrow(StructuralShiftError)
+  })
+
+  it('moves drawing anchors as pairs on the column axis and fails closed on straddles', () => {
+    const drawing =
+      '<xdr:wsDr><xdr:twoCellAnchor>' +
+      '<xdr:from><xdr:col>2</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>1</xdr:row><xdr:rowOff>5</xdr:rowOff></xdr:from>' +
+      '<xdr:to><xdr:col>3</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>4</xdr:row><xdr:rowOff>7</xdr:rowOff></xdr:to>' +
+      '</xdr:twoCellAnchor></xdr:wsDr>'
+    // Columns 2-3 sit fully inside the second swapped block: shift left one.
+    const moved = shiftDrawingAnchors(drawing, [move(2, 2, 1)])
+    expect(moved).toContain('<xdr:col>1</xdr:col>')
+    expect(moved).toContain('<xdr:col>2</xdr:col>')
+    expect(moved).toContain('<xdr:row>1</xdr:row>')
+    expect(() => shiftDrawingAnchors(drawing, [move(3, 2, 1)])).toThrow(StructuralShiftError)
+  })
+
+  it('relocates a whole table inside the block and rejects interior column swaps', () => {
+    const table =
+      '<table name="T1" ref="B2:D4" headerRowCount="1" totalsRowCount="0">' +
+      '<autoFilter ref="B2:D4"/>' +
+      '<tableColumns count="3"><tableColumn id="1" name="a"/><tableColumn id="2" name="b"/><tableColumn id="3" name="c"/></tableColumns>' +
+      '</table>'
+    // The whole table sits inside the first swapped block: moves right two,
+    // tableColumn list travels intact.
+    const relocated = shiftTablePart(table, [move(1, 4, 7)])
+    expect(relocated).toContain('ref="D2:F4"')
+    expect(relocated).toContain('<autoFilter ref="D2:F4"/>')
+    expect(relocated).toContain('<tableColumn id="1" name="a"/>')
+    // A swap overlapping the table's column span without containing it would
+    // desync the tableColumn names from the moved header cells.
+    expect(() => shiftTablePart(table, [move(2, 2, 5)])).toThrow(/partially overlaps table/)
+    expect(() => shiftTablePart(table, [move(0, 2, 4)])).toThrow(/partially overlaps table/)
+    // Column swaps outside the table's span leave it alone.
+    expect(shiftTablePart(table, [move(5, 1, 8)])).toContain('ref="B2:D4"')
+  })
+})
+
+describe('column move save integration', () => {
+  const move = (index: number, count: number, before: number) => ({
+    kind: 'move-cols' as const,
+    index,
+    count,
+    before,
+  })
+
+  /// Columns A-B swap with the C-D block; every ranged feature below sits
+  /// fully inside one block or outside both.
+  const worksheet =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<dimension ref="A1:F10"/>' +
+    '<cols><col min="1" max="2" width="20" customWidth="1"/><col min="5" max="6" width="30" customWidth="1"/></cols>' +
+    '<sheetData>' +
+    '<row r="1" spans="1:6"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1"><v>3</v></c><c r="D1"><v>4</v></c><c r="F1"><v>6</v></c></row>' +
+    '<row r="2"><c r="A2"><v>2</v></c><c r="F2"><f>SUM(A1:A2)+F1</f><v>3</v></c></row>' +
+    '</sheetData>' +
+    '<mergeCells count="1"><mergeCell ref="B3:B4"/></mergeCells>' +
+    '<hyperlinks><hyperlink ref="A1" location="https://example.com"/></hyperlinks>' +
+    '<conditionalFormatting sqref="B1:B9"><cfRule type="expression" priority="1"><formula>$A2&gt;5</formula></cfRule></conditionalFormatting>' +
+    '<dataValidations count="1"><dataValidation type="list" sqref="B5:B6" allowBlank="1"><formula1>"a,b"</formula1></dataValidation></dataValidations>' +
+    '</worksheet>'
+
+  async function buildColumnMoveFixture(): Promise<Buffer> {
+    const zip = await JSZip.loadAsync(await buildStructureFixture())
+    zip.file('xl/worksheets/sheet1.xml', worksheet, { createFolders: false })
+    return zip.generateAsync({ type: 'nodebuffer' })
+  }
+
+  it('re-addresses cells in ascending order and shifts every ranged feature', async () => {
+    const mutation = await applyCellEditsToXlsx(
+      await buildColumnMoveFixture(),
+      [],
+      [{ sheetName: SHEET, ops: [move(0, 2, 4)] }],
+    )
+    expect(() => assertOnlyTouchedEntriesChanged(mutation)).not.toThrow()
+    expect(mutation.removedEntries).toEqual(['xl/calcChain.xml'])
+    const zip = await JSZip.loadAsync(mutation.buffer)
+    const sheet = await zip.file('xl/worksheets/sheet1.xml')?.async('text')
+    // A1/B1 moved to C1/D1 and the displaced C1/D1 landed at B1/A1 — the row
+    // must read back sorted by column.
+    expect(sheet).toContain(
+      '<row r="1"><c r="A1"><v>3</v></c><c r="B1"><v>4</v></c><c r="C1"><v>1</v></c><c r="D1"><v>2</v></c><c r="F1"><v>6</v></c></row>',
+    )
+    expect(sheet).toContain('<row r="2"><c r="C2"><v>2</v></c><c r="F2"><f>SUM(C1:C2)+F1</f>')
+    expect(sheet).toContain('<col min="3" max="4" width="20" customWidth="1"/>')
+    expect(sheet).toContain('<col min="5" max="6" width="30" customWidth="1"/>')
+    expect(sheet).toContain('<mergeCell ref="D3:D4"/>')
+    expect(sheet).toContain('<hyperlink ref="C1"')
+    expect(sheet).toContain('sqref="D1:D9"')
+    expect(sheet).toContain('<formula>$C2&gt;5</formula>')
+    expect(sheet).toContain('sqref="D5:D6"')
+    // The workbook flags a recalc (calcChain was dropped).
+    const workbook = await zip.file('xl/workbook.xml')?.async('text')
+    expect(workbook).toContain('fullCalcOnLoad="1"')
+  })
+
+  it('fails closed on a torn <cols> run and leaves the package unwritten', async () => {
+    // The B-C width run straddles the B/C swap boundary (cols 0-1 vs blocks
+    // {1} and {2}): no faithful single-run image exists.
+    await expect(
+      applyCellEditsToXlsx(
+        await buildColumnMoveFixture(),
+        [],
+        [{ sheetName: SHEET, ops: [move(1, 1, 3)] }],
+      ),
+    ).rejects.toThrow(StructuralShiftError)
   })
 })
 

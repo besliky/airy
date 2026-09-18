@@ -334,6 +334,48 @@ describe('move-rows mapping', () => {
   })
 })
 
+describe('move-cols mapping', () => {
+  const move = (index: number, count: number, before: number) =>
+    ({ kind: 'move-cols', index, count, before }) as const
+
+  it('maps column positions as a bijection in both directions', () => {
+    const ops = [move(1, 2, 5)] // columns 1-2 relocate before column 5
+    // Post-move screen order of file columns: 0, 3, 4, 1, 2, 5, …
+    expect([0, 1, 2, 3, 4, 5].map((column) => fileToScreen(ops, 'column', column))).toEqual([
+      0, 3, 4, 1, 2, 5,
+    ])
+    for (let column = 0; column < 8; column += 1) {
+      const screen = fileToScreen(ops, 'column', column)
+      expect(screen).not.toBeNull()
+      expect(screenToFile(ops, 'column', screen ?? -1)).toBe(column)
+    }
+    // A column move never touches the row axis.
+    expect(fileToScreen(ops, 'row', 3)).toBe(3)
+    expect(netAxisDelta(ops, 'column')).toBe(0)
+  })
+
+  it('composes with column inserts and removals', () => {
+    const ops = [insertCols(0, 1), move(2, 1, 5)]
+    // File column 1 → screen 2 after the insert, then moves before column 5.
+    expect(fileToScreen(ops, 'column', 1)).toBe(4)
+    expect(screenToFile(ops, 'column', 4)).toBe(1)
+  })
+
+  it('widens span mapping to an envelope across the swap', () => {
+    const ops = [move(0, 1, 10)] // column 0 relocates to the end of 0-9
+    // Screen columns 8-9 are file columns 9 and 0 — the file span covers both.
+    const range = screenRangeToFileRange(ops, {
+      startRow: 0,
+      endRow: 0,
+      startColumn: 8,
+      endColumn: 9,
+    })
+    expect(range).not.toBeNull()
+    expect(range?.startColumn).toBeLessThanOrEqual(0)
+    expect(range?.endColumn).toBeGreaterThanOrEqual(9)
+  })
+})
+
 describe('fileRangeToScreenRanges', () => {
   const move = (index: number, count: number, before: number) =>
     ({ kind: 'move-rows', index, count, before }) as const

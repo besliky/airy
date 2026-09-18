@@ -280,7 +280,6 @@ export const zhTW = {
   appDuplicateNeedsFullLoad: '複製工作表需要完整載入模式——這個活頁簿太大，只做了串流載入。',
   appPivotSheetNoDuplicate: '該工作表含樞紐分析表——暫不支援複製該表。',
   appDuplicateScopedNames: '該工作表含表級定義名稱——暫不支援複製該表。',
-  appMoveRowsColsUnsaved: '整欄移動暫時無法儲存到匯入的活頁簿——整列移動已支援。',
   appNoWorkbookOpen: '目前沒有開啟的活頁簿。',
   appDvListOptions: '清單：{items}',
   appDvListFromRange: '清單（來自範圍 {range}）',

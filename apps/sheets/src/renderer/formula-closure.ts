@@ -298,10 +298,13 @@ export function shiftPinnedCells<T>(
   entries: ReadonlyMap<string, T>,
   op: { kind: string; index: number; count: number; before?: number },
 ): Map<string, T> {
-  const axis = op.kind === 'insert-cols' || op.kind === 'remove-cols' ? 'column' : 'row'
+  const axis =
+    op.kind === 'insert-cols' || op.kind === 'remove-cols' || op.kind === 'move-cols'
+      ? 'column'
+      : 'row'
   const removing = op.kind === 'remove-rows' || op.kind === 'remove-cols'
   const swap =
-    op.kind === 'move-rows' && op.before !== undefined
+    (op.kind === 'move-rows' || op.kind === 'move-cols') && op.before !== undefined
       ? toSwapSpans({ index: op.index, count: op.count, before: op.before })
       : null
   const shifted = new Map<string, T>()

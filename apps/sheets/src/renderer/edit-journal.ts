@@ -61,10 +61,11 @@ export type StructuralJournalOp =
       readonly index: number
       readonly count: number
     }
-  /// Whole-row move: rows [index, index+count) relocate before the pre-move
-  /// row `before` — a bijection over the row axis (never deletes anything).
+  /// Whole-row/column move: lines [index, index+count) relocate before the
+  /// pre-move line `before` — a bijection over the op's axis (never deletes
+  /// anything).
   | {
-      readonly kind: 'move-rows'
+      readonly kind: 'move-rows' | 'move-cols'
       readonly index: number
       readonly count: number
       readonly before: number
@@ -1062,11 +1063,14 @@ function toRowColumnShift(op: {
   before?: number
 }): RowColumnShift {
   return {
-    axis: op.kind === 'insert-cols' || op.kind === 'remove-cols' ? 'column' : 'row',
+    axis:
+      op.kind === 'insert-cols' || op.kind === 'remove-cols' || op.kind === 'move-cols'
+        ? 'column'
+        : 'row',
     removing: op.kind === 'remove-rows' || op.kind === 'remove-cols',
     index: op.index,
     count: op.count,
-    ...(op.kind === 'move-rows' && op.before !== undefined
+    ...((op.kind === 'move-rows' || op.kind === 'move-cols') && op.before !== undefined
       ? { swap: toSwapSpans({ index: op.index, count: op.count, before: op.before }) }
       : {}),
   }
@@ -1099,14 +1103,17 @@ function shiftVisualAnchor(
     // Judged as a pair: only anchors fully inside one swapped block move;
     // anchors outside or spanning the blocks stay, straddles stay untouched
     // (the session visual just keeps its screen position).
-    const fromRow = anchor.fromRow
-    const toRow = anchor.toRow
+    const from = shift.axis === 'row' ? anchor.fromRow : anchor.fromColumn
+    const to = shift.axis === 'row' ? anchor.toRow : anchor.toColumn
     const { first, second } = shift.swap
     const inside = (span: { start: number; end: number }): boolean =>
-      fromRow >= span.start && toRow <= span.end
+      from >= span.start && to <= span.end
     if (!inside(first) && !inside(second)) return anchor
-    const mappedFrom = swapPosition(fromRow, shift.swap)
-    return { ...anchor, fromRow: mappedFrom, toRow: mappedFrom + (toRow - fromRow) }
+    const mappedFrom = swapPosition(from, shift.swap)
+    const height = to - from
+    return shift.axis === 'row'
+      ? { ...anchor, fromRow: mappedFrom, toRow: mappedFrom + height }
+      : { ...anchor, fromColumn: mappedFrom, toColumn: mappedFrom + height }
   }
   const from = moveAnchorMark(shift.axis === 'row' ? anchor.fromRow : anchor.fromColumn, shift)
   const to = moveAnchorMark(shift.axis === 'row' ? anchor.toRow : anchor.toColumn, shift)
@@ -1254,9 +1261,9 @@ export function recordStructuralOp(
     last.index === op.index &&
     last.count === op.count
       ? true
-      : // Undo of a move arrives as its exact inverse move.
-        op.kind === 'move-rows' &&
-        last.kind === 'move-rows' &&
+      : // Undo of a move arrives as its exact inverse move (either axis).
+        (op.kind === 'move-rows' || op.kind === 'move-cols') &&
+        last.kind === op.kind &&
         op.count === last.count &&
         op.index === (last.before > last.index ? last.before - last.count : last.before) &&
         op.before === (last.before > last.index ? last.index : last.index + last.count))
@@ -1273,9 +1280,15 @@ export function recordStructuralOp(
   // (`in` narrowing: TS doesn't compose `||` checks on multi-literal kinds.)
   if (!('index' in op)) return
   const rowColumnOp = op
-  const axis = op.kind === 'insert-cols' || op.kind === 'remove-cols' ? 'column' : 'row'
+  const axis =
+    op.kind === 'insert-cols' || op.kind === 'remove-cols' || op.kind === 'move-cols'
+      ? 'column'
+      : 'row'
   const removing = op.kind === 'remove-rows' || op.kind === 'remove-cols'
-  const swap = rowColumnOp.kind === 'move-rows' ? toSwapSpans(rowColumnOp) : null
+  const swap =
+    rowColumnOp.kind === 'move-rows' || rowColumnOp.kind === 'move-cols'
+      ? toSwapSpans(rowColumnOp)
+      : null
   const movePosition = (position: number): number | null => {
     const { index, count } = rowColumnOp
     if (swap) return swapPosition(position, swap)

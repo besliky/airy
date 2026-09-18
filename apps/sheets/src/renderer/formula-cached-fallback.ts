@@ -22,6 +22,7 @@ const COORDINATE_SHIFTING_OPS = new Set([
   'insert-cols',
   'remove-cols',
   'move-rows',
+  'move-cols',
 ])
 
 /**
