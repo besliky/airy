@@ -40,6 +40,12 @@ import {
   buildThemeXml,
 } from './theme'
 import { buildChartPartXml, buildChartWorkbookXlsxBase64, CHART_WORKBOOK_REL_TYPE } from './chart'
+import {
+  buildDiagramPartsXml,
+  diagramDefaultExtentEmu,
+  diagramParagraphXml,
+} from './smartart-diagram'
+import { SMARTART_PRESET_PARTS } from './smartart-vendor'
 import type {
   CommentInfo,
   DocProtection,
@@ -47,6 +53,7 @@ import type {
   GeneratedBlock,
   HeaderFooter,
   NewChart,
+  NewDiagram,
   NewImage,
   NewInkImage,
   NoteInfo,
@@ -82,6 +89,8 @@ export type SaveBlock = (
   | { kind: 'image'; image: NewImage }
   /** a new embedded chart; data becomes word/charts/chartN.xml + relationship */
   | { kind: 'chart'; chart: NewChart; extentPx?: { w: number; h: number } }
+  /** a new embedded SmartArt diagram; becomes word/diagrams/{data,layout,colors,quickStyle,drawing}N.xml */
+  | { kind: 'diagram'; diagram: NewDiagram; extentPx?: { w: number; h: number } }
 ) & {
   /** Top-level tracked insertion/deletion wrapper. */
   revision?: { kind: 'ins' | 'del'; author: string; date?: string; id?: string }
@@ -287,6 +296,25 @@ const SETTINGS_REL_TYPE =
 const CHART_REL_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart'
 const CHART_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml'
 const XLSX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+// diagram quartet relationships + content types — the asymmetric strings are the
+// classic repair-prompt traps (rel type says diagramQuickStyle, content type
+// says diagramStyle; the drawing part is an MS extension with a vnd.ms-office type)
+const DIAGRAM_REL_TYPES = {
+  data: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData',
+  layout: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout',
+  quickStyle:
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle',
+  colors: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors',
+  drawing: 'http://schemas.microsoft.com/office/2007/relationships/diagramDrawing',
+} as const
+const DIAGRAM_CONTENT_TYPES = {
+  data: 'application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml',
+  layout: 'application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml',
+  quickStyle: 'application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml',
+  colors: 'application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml',
+  drawing: 'application/vnd.ms-office.drawingml.diagramDrawing+xml',
+} as const
 
 const IMAGE_EXT: Record<NewImage['mime'], string> = {
   'image/png': 'png',
@@ -578,6 +606,101 @@ export async function saveDocx(
       `<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="${rId}"/>` +
       '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>'
     )
+  }
+
+  // ---- new embedded SmartArt diagrams: the five diagram parts + relationships ----
+  // One shared part index N across data/layout/colors/quickStyle/drawing — the
+  // reader (and Word) derive drawingN.xml from dataN.xml by name pairing.
+  const newDiagramParts: Array<{ path: string; xml: string; contentType: string }> = []
+  let diagramDocPrId = 8600
+  const embedDiagram = (diagram: NewDiagram, extentPx?: { w: number; h: number }): string => {
+    const partNames = ['data', 'layout', 'colors', 'quickStyle', 'drawing'] as const
+    let n = 1
+    while (
+      partNames.some(
+        (name) =>
+          zip.file(`word/diagrams/${name}${n}.xml`) !== null ||
+          newDiagramParts.some((p) => p.path === `word/diagrams/${name}${n}.xml`),
+      )
+    ) {
+      n++
+    }
+    const dmRId = `rId${nextRelNum++}`
+    const loRId = `rId${nextRelNum++}`
+    const qsRId = `rId${nextRelNum++}`
+    const csRId = `rId${nextRelNum++}`
+    const drawingRId = `rId${nextRelNum++}`
+    // the diagramDrawing relationship lives in the document rels (Word's own
+    // layout; data1.xml's dsp:dataModelExt points back at it by relId)
+    newRels.push({
+      rId: dmRId,
+      type: DIAGRAM_REL_TYPES.data,
+      target: `diagrams/data${n}.xml`,
+      external: false,
+    })
+    newRels.push({
+      rId: loRId,
+      type: DIAGRAM_REL_TYPES.layout,
+      target: `diagrams/layout${n}.xml`,
+      external: false,
+    })
+    newRels.push({
+      rId: qsRId,
+      type: DIAGRAM_REL_TYPES.quickStyle,
+      target: `diagrams/quickStyle${n}.xml`,
+      external: false,
+    })
+    newRels.push({
+      rId: csRId,
+      type: DIAGRAM_REL_TYPES.colors,
+      target: `diagrams/colors${n}.xml`,
+      external: false,
+    })
+    newRels.push({
+      rId: drawingRId,
+      type: DIAGRAM_REL_TYPES.drawing,
+      target: `diagrams/drawing${n}.xml`,
+      external: false,
+    })
+
+    const preset = SMARTART_PRESET_PARTS[diagram.kind]
+    const extent = extentPx
+      ? {
+          cx: Math.max(1, Math.round(extentPx.w * 9525)),
+          cy: Math.max(1, Math.round(extentPx.h * 9525)),
+        }
+      : diagramDefaultExtentEmu(diagram)
+    const { dataXml, drawingXml } = buildDiagramPartsXml(diagram, {
+      drawingRelId: drawingRId,
+      extent,
+    })
+    newDiagramParts.push({
+      path: `word/diagrams/data${n}.xml`,
+      xml: dataXml,
+      contentType: DIAGRAM_CONTENT_TYPES.data,
+    })
+    newDiagramParts.push({
+      path: `word/diagrams/layout${n}.xml`,
+      xml: preset.layoutXml,
+      contentType: DIAGRAM_CONTENT_TYPES.layout,
+    })
+    newDiagramParts.push({
+      path: `word/diagrams/colors${n}.xml`,
+      xml: preset.colorsXml,
+      contentType: DIAGRAM_CONTENT_TYPES.colors,
+    })
+    newDiagramParts.push({
+      path: `word/diagrams/quickStyle${n}.xml`,
+      xml: preset.quickStyleXml,
+      contentType: DIAGRAM_CONTENT_TYPES.quickStyle,
+    })
+    newDiagramParts.push({
+      path: `word/diagrams/drawing${n}.xml`,
+      xml: drawingXml,
+      contentType: DIAGRAM_CONTENT_TYPES.drawing,
+    })
+
+    return diagramParagraphXml({ docPrId: diagramDocPrId++, extent, dmRId, loRId, qsRId, csRId })
   }
 
   // ---- ink annotations: floating anchored pictures, re-emitted wholesale ----
@@ -957,6 +1080,8 @@ export async function saveDocx(
       if (fb.replaceImage) xml = retargetImageBlip(xml, embedImageMedia(fb.replaceImage))
     } else if (fb.kind === 'chart') {
       xml = await embedChart(fb.chart, fb.extentPx)
+    } else if (fb.kind === 'diagram') {
+      xml = embedDiagram(fb.diagram, fb.extentPx)
     } else {
       xml = embedImage(fb.image)
     }
@@ -1114,6 +1239,7 @@ export async function saveDocx(
     hfOverrides.length > 0 ||
     newChartParts.length > 0 ||
     newChartWorkbooks.length > 0 ||
+    newDiagramParts.length > 0 ||
     settingsIsNew ||
     commentsIsNew ||
     commentsExtIsNew ||
@@ -1174,6 +1300,7 @@ export async function saveDocx(
       }
       for (const part of newChartParts) addOverride(`/${part.path}`, CHART_CONTENT_TYPE)
       for (const wb of newChartWorkbooks) addOverride(`/${wb.xlsxPath}`, XLSX_CONTENT_TYPE)
+      for (const part of newDiagramParts) addOverride(`/${part.path}`, part.contentType)
       for (const part of notesParts) {
         if (part.isNew) addOverride(`/${part.path}`, NOTE_CONTENT_TYPE[part.kind])
       }
@@ -1265,6 +1392,9 @@ export async function saveDocx(
       out.file(wb.relsPath, wb.relsXml)
     }
     out.file(wb.xlsxPath, wb.base64, { base64: true })
+  }
+  for (const part of newDiagramParts) {
+    out.file(part.path, part.xml)
   }
   for (const part of notesParts) {
     if (part.isNew) out.file(part.path, part.xml)

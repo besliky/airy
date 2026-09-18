@@ -59,6 +59,7 @@ import {
   type FieldDisplay,
   type FormulaDisplay,
   type NewChart,
+  type NewDiagram,
   type NumberingDef,
   type NumberingLevel,
   type Run,
@@ -3104,6 +3105,8 @@ export const DocProtected = Node.create({
       imageReplace: { default: null as { base64: string; mime: string } | null },
       /** new chart awaiting embedding at save time (data snapshot; edits live in chartDisplay) */
       genChart: { default: null as NewChart | null },
+      /** new SmartArt diagram awaiting embedding at save time (quartet parts written by the engine) */
+      genDiagram: { default: null as NewDiagram | null },
     }
   },
   parseHTML() {

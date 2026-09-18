@@ -217,8 +217,24 @@ export async function cleanupDocxOwnedResources(zip: JSZip, documentPath: string
 
   const documentXml = await documentFile.async('string')
   const referencedIds = referencedRelationshipIds(documentXml)
-  const candidateRoots = new Set<string>()
   const relsXml = await relsFile.async('string')
+  // SmartArt drawing-cache pointer: the data part's dsp:dataModelExt references
+  // the document-level diagramDrawing relationship id (Word's layout — the id
+  // is scoped to the document rels even though the reference lives in
+  // diagrams/dataN.xml). Keep that rel alive while the data part survives.
+  for (const tag of relsXml.match(RELATIONSHIP_TAG_RE) ?? []) {
+    if (relationshipTypeName(xmlAttr(tag, 'Type') ?? '') !== 'diagramdata') continue
+    const id = xmlAttr(tag, 'Id')
+    if (!id || !referencedIds.has(id)) continue
+    const target = resolveTargetPath(documentPath, xmlAttr(tag, 'Target') ?? '')
+    const dataFile = target ? zip.file(target) : null
+    if (!dataFile) continue
+    const extRelId = /<dsp:dataModelExt[^>]*\srelId="([^"]+)"/.exec(
+      await dataFile.async('string'),
+    )?.[1]
+    if (extRelId) referencedIds.add(extRelId)
+  }
+  const candidateRoots = new Set<string>()
   const cleanedRelsXml = relsXml.replace(RELATIONSHIP_TAG_RE, (tag) => {
     const id = xmlAttr(tag, 'Id')
     const type = xmlAttr(tag, 'Type')

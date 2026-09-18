@@ -902,6 +902,21 @@ export interface NewChart {
   series: Array<{ name: string; values: (number | null)[] }>
 }
 
+/** SmartArt preset kinds the editor can insert as real Diagram quartets. */
+export type NewDiagramPreset = 'blockList' | 'vBulletList' | 'process' | 'hier'
+
+/** One diagram node: text plus indent level (hierarchy; flat presets ignore level). */
+export interface NewDiagramItem {
+  text: string
+  level?: number
+}
+
+/** A new SmartArt diagram to embed at save time (becomes word/diagrams/* parts). */
+export interface NewDiagram {
+  kind: NewDiagramPreset
+  items: NewDiagramItem[]
+}
+
 /** Editable interchange model of one table cell (type === 'table' blocks). */
 export interface TableParagraph extends ParaFormat {
   runs: Run[]

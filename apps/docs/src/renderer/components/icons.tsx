@@ -459,6 +459,17 @@ export function IconShapes(props: IconProps) {
   )
 }
 
+/** SmartArt: block-list glyph (stacked blocks plus the gallery's flow arrow) */
+export function IconSmartArt(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="2.9" y="2.7" width="8.2" height="2.55" rx="0.55" fill="currentColor" stroke="none" />
+      <rect x="2.9" y="6.7" width="5.1" height="2.55" rx="0.55" fill="currentColor" stroke="none" />
+      <path d="M 10.05 7.97 h 3.1 m 0 0 -1.28 -1.2 m 1.28 1.2 -1.28 1.2" />
+    </Svg>
+  )
+}
+
 export function IconSearch(props: IconProps) {
   return (
     <Svg {...props}>
