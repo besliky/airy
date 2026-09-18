@@ -296,7 +296,7 @@ export const ms = {
   ribbonCrossRefTypeText: 'Teks rujukan',
   ribbonCrossRefTypePage: 'Nombor halaman',
   ribbonCrossRefTypeNumber: 'Nombor',
-  ribbonCrossRefNoAnchor: 'Tidak dapat menambahkan sauh tersembunyi dalam dokumen baca-sahaja',
+  ribbonCrossRefNoAnchor: 'Tidak dapat membuat sauh tersembunyi untuk sasaran',
   ribbonChartInsertTitle: 'Sisipkan Carta',
   ribbonChartTitlePh: 'Tajuk Carta',
   ribbonChartBar: 'Bar',
@@ -545,7 +545,7 @@ export const ms = {
   ribbonLnDialogTitle: 'Nombor Baris',
   ribbonLnStartAt: 'Mula pada',
   ribbonLnCountBy: 'Kira setiap',
-  ribbonLnDistance: 'Jarak daripada teks',
+  ribbonLnDistance: 'Jarak daripada teks (pt)',
   ribbonLnDistanceAuto: 'Automatik',
   ribbonGroupPageSetup: 'Persediaan Halaman',
   ribbonGroupPageSetupSection: 'Persediaan Halaman (Seksyen {n})',
@@ -688,7 +688,8 @@ export const ms = {
   ribbonNextChangeTip: 'Pergi ke perubahan seterusnya',
   ribbonGroupTracking: 'Penjejakan',
   ribbonCompare: 'Banding',
-  ribbonCompareTip: 'Banding: pilih dokumen lain dan bandingkan perbezaan mengikut perenggan',
+  ribbonCompareTip:
+    'Banding: gabungkan dokumen lain sebagai perubahan dijejak, atau buka panel perbezaan',
   ribbonProtectDoc: 'Lindungi Dokumen',
   ribbonProtectDocTip:
     'Lindungi dokumen: kata laluan buka/ubah suai, sekatan penyuntingan dan privasi',

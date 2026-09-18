@@ -407,6 +407,8 @@ export function CrossRefModal({
           ? stampCaptionAnchor(editor, blocks, src, tr)
           : src.anchor
     if (!anchor) {
+      // not a read-only refusal (that is gated above): the target's node could
+      // not be resolved, e.g. its position went stale while the dialog was open
       window.alert(t('ribbonCrossRefNoAnchor'))
       return
     }

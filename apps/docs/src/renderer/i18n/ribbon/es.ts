@@ -299,7 +299,7 @@ export const es = {
   ribbonCrossRefTypeText: 'Texto de la referencia',
   ribbonCrossRefTypePage: 'Número de página',
   ribbonCrossRefTypeNumber: 'Número',
-  ribbonCrossRefNoAnchor: 'No se puede añadir un marcador oculto en un documento de solo lectura',
+  ribbonCrossRefNoAnchor: 'No se pudo crear un marcador oculto para el destino',
   ribbonChartInsertTitle: 'Insertar gráfico',
   ribbonChartTitlePh: 'Título del gráfico',
   ribbonChartBar: 'Columnas',
@@ -549,7 +549,7 @@ export const es = {
   ribbonLnDialogTitle: 'Números de línea',
   ribbonLnStartAt: 'Empezar en',
   ribbonLnCountBy: 'Contar por',
-  ribbonLnDistance: 'Distancia del texto',
+  ribbonLnDistance: 'Distancia del texto (pt)',
   ribbonLnDistanceAuto: 'Automático',
   ribbonGroupPageSetup: 'Configurar página',
   ribbonGroupPageSetupSection: 'Configurar página (sección {n})',
@@ -691,7 +691,8 @@ export const es = {
   ribbonNextChangeTip: 'Ir al cambio siguiente',
   ribbonGroupTracking: 'Seguimiento',
   ribbonCompare: 'Comparar',
-  ribbonCompareTip: 'Comparar: elegir otro documento y comparar las diferencias párrafo a párrafo',
+  ribbonCompareTip:
+    'Comparar: combinar otro documento como cambios controlados, o abrir un panel de diferencias',
   ribbonProtectDoc: 'Proteger documento',
   ribbonProtectDocTip:
     'Proteger documento: contraseñas de apertura/modificación, restricciones de edición y privacidad',

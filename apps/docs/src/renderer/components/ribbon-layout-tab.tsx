@@ -486,6 +486,8 @@ export function LayoutTab({
               className={`rb-big ${section?.lineNumbers ? 'active' : ''}`}
               disabled={!enabled}
               data-tip={t('ribbonLineNumbers')}
+              aria-haspopup="menu"
+              aria-expanded={dropdown === 'linenumbers'}
               onClick={() => toggleDropdown(setDropdown, 'linenumbers')}
             >
               <span className="rb-big-icon">

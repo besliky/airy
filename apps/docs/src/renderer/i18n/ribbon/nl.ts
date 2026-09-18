@@ -298,7 +298,7 @@ export const nl = {
   ribbonCrossRefTypeText: 'Verwijzingstekst',
   ribbonCrossRefTypePage: 'Paginanummer',
   ribbonCrossRefTypeNumber: 'Nummer',
-  ribbonCrossRefNoAnchor: 'Kan geen verborgen anker toevoegen in een alleen-lezen document',
+  ribbonCrossRefNoAnchor: 'Kan geen verborgen anker maken voor het doel',
   ribbonChartInsertTitle: 'Grafiek invoegen',
   ribbonChartTitlePh: 'Grafiektitel',
   ribbonChartBar: 'Kolom',
@@ -548,7 +548,7 @@ export const nl = {
   ribbonLnDialogTitle: 'Regelnummers',
   ribbonLnStartAt: 'Beginnen bij',
   ribbonLnCountBy: 'Tellen per',
-  ribbonLnDistance: 'Afstand tot tekst',
+  ribbonLnDistance: 'Afstand tot tekst (pt)',
   ribbonLnDistanceAuto: 'Automatisch',
   ribbonGroupPageSetup: 'Pagina-instelling',
   ribbonGroupPageSetupSection: 'Pagina-instelling (sectie {n})',
@@ -690,7 +690,8 @@ export const nl = {
   ribbonNextChangeTip: 'Naar de volgende wijziging gaan',
   ribbonGroupTracking: 'Bijhouden',
   ribbonCompare: 'Vergelijken',
-  ribbonCompareTip: 'Vergelijken: kies een ander document en vergelijk de verschillen per alinea',
+  ribbonCompareTip:
+    'Vergelijken: een ander document samenvoegen als bijgehouden wijzigingen, of het verschillenpaneel openen',
   ribbonProtectDoc: 'Document beveiligen',
   ribbonProtectDocTip:
     'Document beveiligen: wachtwoorden voor openen/wijzigen, bewerkingsbeperkingen en privacy',

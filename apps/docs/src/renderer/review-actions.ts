@@ -319,6 +319,10 @@ export async function compareWithFile(ctx: ReviewContext, mode: 'panel' | 'merge
     ctx.setStatus(t('appCompareFailed', { error: t('appDocPwdTitle') }))
     return
   }
+  // UX-906: parsing a big file plus the LCS diff take a visible while — say so
+  // up front (the status bar is a polite live region); every path below
+  // overwrites the line or clears it when the pane itself is the result
+  ctx.setStatus(t('reviewComparing'))
   try {
     const otherParsed = await parseDocx(new Uint8Array(other.data))
     if (mode === 'panel') {
@@ -329,6 +333,7 @@ export async function compareWithFile(ctx: ReviewContext, mode: 'panel' | 'merge
       ctx.setCompareResult({ otherName: other.name, entries })
       // BUG-913: above the paragraph-LCS cell budget the pairing is positional
       if (degraded) ctx.setStatus(t('reviewCompareDegraded'))
+      else ctx.setStatus('')
       return
     }
     // panel mode returned above; only the merge path continues (editor guarded above)

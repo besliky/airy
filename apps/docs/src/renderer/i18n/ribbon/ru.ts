@@ -296,7 +296,7 @@ export const ru = {
   ribbonCrossRefTypeText: 'Текст ссылки',
   ribbonCrossRefTypePage: 'Номер страницы',
   ribbonCrossRefTypeNumber: 'Номер',
-  ribbonCrossRefNoAnchor: 'Невозможно добавить скрытый якорь в документе только для чтения',
+  ribbonCrossRefNoAnchor: 'Не удалось создать скрытый якорь для цели',
   ribbonChartInsertTitle: 'Вставка диаграммы',
   ribbonChartTitlePh: 'Название диаграммы',
   ribbonChartBar: 'Гистограмма',
@@ -545,7 +545,7 @@ export const ru = {
   ribbonLnDialogTitle: 'Нумерация строк',
   ribbonLnStartAt: 'Начать с',
   ribbonLnCountBy: 'Шаг нумерации',
-  ribbonLnDistance: 'Расстояние от текста',
+  ribbonLnDistance: 'Расстояние от текста (пт)',
   ribbonLnDistanceAuto: 'Авто',
   ribbonGroupPageSetup: 'Параметры страницы',
   ribbonGroupPageSetupSection: 'Параметры страницы (раздел {n})',
@@ -686,7 +686,8 @@ export const ru = {
   ribbonNextChangeTip: 'Перейти к следующему исправлению',
   ribbonGroupTracking: 'Запись исправлений',
   ribbonCompare: 'Сравнить',
-  ribbonCompareTip: 'Сравнить: выбрать другой документ и сравнить различия по абзацам',
+  ribbonCompareTip:
+    'Сравнить: объединить другой документ как исправления или открыть панель различий',
   ribbonProtectDoc: 'Защитить документ',
   ribbonProtectDocTip:
     'Защита документа: пароли на открытие/изменение, ограничения редактирования и конфиденциальность',

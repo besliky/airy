@@ -299,8 +299,7 @@ export const fr = {
   ribbonCrossRefTypeText: 'Texte de la référence',
   ribbonCrossRefTypePage: 'Numéro de page',
   ribbonCrossRefTypeNumber: 'Numéro',
-  ribbonCrossRefNoAnchor:
-    "Impossible d'ajouter une ancre masquée dans un document en lecture seule",
+  ribbonCrossRefNoAnchor: 'Impossible de créer une ancre masquée pour la cible',
   ribbonChartInsertTitle: 'Insérer un graphique',
   ribbonChartTitlePh: 'Titre du graphique',
   ribbonChartBar: 'Histogramme',
@@ -550,7 +549,7 @@ export const fr = {
   ribbonLnDialogTitle: 'Numéros de ligne',
   ribbonLnStartAt: 'Commencer à',
   ribbonLnCountBy: 'Compter par',
-  ribbonLnDistance: 'Distance du texte',
+  ribbonLnDistance: 'Distance du texte (pt)',
   ribbonLnDistanceAuto: 'Automatique',
   ribbonGroupPageSetup: 'Mise en page',
   ribbonGroupPageSetupSection: 'Mise en page (section {n})',
@@ -693,7 +692,7 @@ export const fr = {
   ribbonGroupTracking: 'Suivi',
   ribbonCompare: 'Comparer',
   ribbonCompareTip:
-    'Comparer : choisir un autre document et comparer les différences paragraphe par paragraphe',
+    'Comparer : fusionner un autre document sous forme de modifications suivies, ou ouvrir un volet de différences',
   ribbonProtectDoc: 'Protéger le document',
   ribbonProtectDocTip:
     'Protéger le document : mots de passe d’ouverture/modification, restrictions de modification et confidentialité',

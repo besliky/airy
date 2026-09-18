@@ -1,7 +1,7 @@
 import { useState } from 'react'
+import { useModalDialog } from '@airy-office/ui'
 import type { LineNumberSettings } from '@airy-office/docx-engine'
 import { useI18n } from '../i18n/locale'
-import { useModalKeys } from './modal-keys'
 
 const TWIPS_PER_PT = 20
 
@@ -36,7 +36,7 @@ export function LineNumbersDialog({
   const [distance, setDistance] = useState(
     String(value?.distance !== undefined ? value.distance / TWIPS_PER_PT : 24),
   )
-  const modalKeys = useModalKeys(onClose)
+  const dialog = useModalDialog(onClose)
 
   const submit = () => {
     if (restart === 'none') {
@@ -74,12 +74,11 @@ export function LineNumbersDialog({
   return (
     <div
       className="modal-backdrop"
-      ref={modalKeys.ref}
-      onKeyDown={modalKeys.onKeyDown}
+      {...dialog.backdropProps}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="modal">
-        <h2>{t('ribbonLnDialogTitle')}</h2>
+      <div className="modal" {...dialog.dialogProps}>
+        <h2 {...dialog.titleProps}>{t('ribbonLnDialogTitle')}</h2>
         <div className="modal-row ln-modes">
           {radio('none', 'ribbonLineNumbersNone')}
           {radio('newPage', 'ribbonLineNumbersRestartPage')}
@@ -118,7 +117,7 @@ export function LineNumbersDialog({
         </div>
         <div className="modal-row margin-row">
           <label>
-            {t('ribbonLnDistance')} (pt)
+            {t('ribbonLnDistance')}
             <input
               type="number"
               min={0}

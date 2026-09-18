@@ -297,8 +297,7 @@ export const pt = {
   ribbonCrossRefTypeText: 'Texto da referência',
   ribbonCrossRefTypePage: 'Número da página',
   ribbonCrossRefTypeNumber: 'Número',
-  ribbonCrossRefNoAnchor:
-    'Não é possível adicionar uma âncora oculta num documento somente leitura',
+  ribbonCrossRefNoAnchor: 'Não foi possível criar uma âncora oculta para o destino',
   ribbonChartInsertTitle: 'Inserir Gráfico',
   ribbonChartTitlePh: 'Título do Gráfico',
   ribbonChartBar: 'Colunas',
@@ -547,7 +546,7 @@ export const pt = {
   ribbonLnDialogTitle: 'Números de linha',
   ribbonLnStartAt: 'Começar em',
   ribbonLnCountBy: 'Contar por',
-  ribbonLnDistance: 'Distância do texto',
+  ribbonLnDistance: 'Distância do texto (pt)',
   ribbonLnDistanceAuto: 'Automático',
   ribbonGroupPageSetup: 'Configurar Página',
   ribbonGroupPageSetupSection: 'Configurar Página (Seção {n})',
@@ -688,7 +687,8 @@ export const pt = {
   ribbonNextChangeTip: 'Ir para a próxima alteração',
   ribbonGroupTracking: 'Controle',
   ribbonCompare: 'Comparar',
-  ribbonCompareTip: 'Comparar: escolher outro documento e comparar as diferenças por parágrafo',
+  ribbonCompareTip:
+    'Comparar: intercalar outro documento como alterações controladas, ou abrir um painel de diferenças',
   ribbonProtectDoc: 'Proteger Documento',
   ribbonProtectDocTip:
     'Proteger documento: senhas de abertura/modificação, restrições de edição e privacidade',

@@ -298,8 +298,7 @@ export const it = {
   ribbonCrossRefTypeText: 'Testo del riferimento',
   ribbonCrossRefTypePage: 'Numero di pagina',
   ribbonCrossRefTypeNumber: 'Numero',
-  ribbonCrossRefNoAnchor:
-    "Impossibile aggiungere un'ancora nascosta in un documento di sola lettura",
+  ribbonCrossRefNoAnchor: "Impossibile creare un'ancora nascosta per la destinazione",
   ribbonChartInsertTitle: 'Inserisci grafico',
   ribbonChartTitlePh: 'Titolo del grafico',
   ribbonChartBar: 'Istogramma',
@@ -549,7 +548,7 @@ export const it = {
   ribbonLnDialogTitle: 'Numeri di riga',
   ribbonLnStartAt: 'Inizia da',
   ribbonLnCountBy: 'Conta per',
-  ribbonLnDistance: 'Distanza dal testo',
+  ribbonLnDistance: 'Distanza dal testo (pt)',
   ribbonLnDistanceAuto: 'Automatico',
   ribbonGroupPageSetup: 'Imposta pagina',
   ribbonGroupPageSetupSection: 'Imposta pagina (sezione {n})',
@@ -691,7 +690,8 @@ export const it = {
   ribbonNextChangeTip: 'Vai alla revisione successiva',
   ribbonGroupTracking: 'Rilevamento modifiche',
   ribbonCompare: 'Confronta',
-  ribbonCompareTip: 'Confronta: scegli un altro documento e confronta le differenze per paragrafo',
+  ribbonCompareTip:
+    'Confronta: unisci un altro documento come modifiche registrate, oppure apri un riquadro delle differenze',
   ribbonProtectDoc: 'Proteggi documento',
   ribbonProtectDocTip:
     'Proteggi documento: password di apertura/modifica, limitazioni di modifica e privacy',

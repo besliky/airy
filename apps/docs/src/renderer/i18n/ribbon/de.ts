@@ -300,8 +300,7 @@ export const de = {
   ribbonCrossRefTypeText: 'Verweistext',
   ribbonCrossRefTypePage: 'Seitenzahl',
   ribbonCrossRefTypeNumber: 'Nummer',
-  ribbonCrossRefNoAnchor:
-    'In einem schreibgeschützten Dokument kann keine ausgeblendete Marke hinzugefügt werden',
+  ribbonCrossRefNoAnchor: 'Für das Ziel konnte keine ausgeblendete Marke erstellt werden',
   ribbonChartInsertTitle: 'Diagramm einfügen',
   ribbonChartTitlePh: 'Diagrammtitel',
   ribbonChartBar: 'Säulendiagramm',
@@ -551,7 +550,7 @@ export const de = {
   ribbonLnDialogTitle: 'Zeilennummern',
   ribbonLnStartAt: 'Beginnen bei',
   ribbonLnCountBy: 'Nummerieren alle',
-  ribbonLnDistance: 'Abstand vom Text',
+  ribbonLnDistance: 'Abstand vom Text (Pt)',
   ribbonLnDistanceAuto: 'Automatisch',
   ribbonGroupPageSetup: 'Seite einrichten',
   ribbonGroupPageSetupSection: 'Seite einrichten (Abschnitt {n})',
@@ -693,7 +692,8 @@ export const de = {
   ribbonNextChangeTip: 'Zur nächsten Änderung wechseln',
   ribbonGroupTracking: 'Nachverfolgung',
   ribbonCompare: 'Vergleichen',
-  ribbonCompareTip: 'Vergleichen: ein anderes Dokument auswählen und absatzweise vergleichen',
+  ribbonCompareTip:
+    'Vergleichen: ein anderes Dokument als nachverfolgte Änderungen einmischen oder den Unterschiedsbereich öffnen',
   ribbonProtectDoc: 'Dokument schützen',
   ribbonProtectDocTip:
     'Dokument schützen: Öffnen-/Ändern-Kennwörter, Bearbeitungseinschränkungen und Datenschutz',
