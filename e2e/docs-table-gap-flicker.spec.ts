@@ -74,8 +74,25 @@ test.describe('docs table page-gap stability', () => {
         })
         editor.commands.insertContentAt(editor.state.doc.content.size, nodes)
       })
-      // let pagination settle before sampling
-      await editorPage.waitForTimeout(3500)
+      // pagination runs async after the insert — wait for the sampled layout
+      // (page count + first cell width) to hold still across consecutive
+      // polls at the flicker period instead of a fixed sleep; an oscillating
+      // remeasure loop keeps resetting the stability counter
+      await editorPage.waitForFunction(
+        () => {
+          const w = window as unknown as { __gapStable?: { key: string; count: number } }
+          const table = document.querySelector('.ProseMirror table.doc-table')
+          const cell = table?.querySelector('tr:not(.page-gap):not(.page-repeat-header) td')
+          const pages = (window as unknown as AidocsWindow).__pageDebug?.slices?.length ?? -1
+          const key = `${pages}:${cell ? Math.round(cell.getBoundingClientRect().width) : -1}`
+          const stable = w.__gapStable
+          if (stable && stable.key === key) stable.count += 1
+          else w.__gapStable = { key, count: 0 }
+          return w.__gapStable.count >= 3
+        },
+        undefined,
+        { timeout: 30_000, polling: 300 },
+      )
 
       // sample layout at the pre-fix flicker period (~300ms remeasure debounce)
       const samples: Array<{ pages: number; cellW: number; gapColspans: number[] }> = []
@@ -96,6 +113,8 @@ test.describe('docs table page-gap stability', () => {
             }
           }),
         )
+        // sampling cadence: the probe must catch a ~300ms remeasure loop,
+        // this interval IS the measurement, not a settle wait
         await editorPage.waitForTimeout(300)
       }
 

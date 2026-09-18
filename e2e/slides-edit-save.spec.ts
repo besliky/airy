@@ -4,7 +4,13 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Page } from '@playwright/test'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl, screenshotPath } from './helpers'
+import {
+  launchShell,
+  closeAndSaveVideo,
+  waitForPageWithUrl,
+  screenshotPath,
+  waitForPaintSettled,
+} from './helpers'
 
 /**
  * The fixture deck reuses the font-manager corpus parts (a plain single-slide
@@ -63,12 +69,17 @@ test.describe('slides: edit a text run and save the deck', () => {
     try {
       const editor = await waitForPageWithUrl(launched.app, 'slides/out')
       await editor.waitForSelector('.stage-wrap canvas', { timeout: 30_000 })
-      await editor.waitForTimeout(1_000)
+      // font-triggered canvas redraws queue behind fonts.ready — wait for the
+      // paint to settle so the dblclick overlay positions over real text
+      await waitForPaintSettled(editor)
 
       // Select the headline shape, then double-click it: the run-level
       // contentEditable overlay opens over the canvas text (TextEditOverlay).
       const headline = await headlinePoint(editor)
       await editor.mouse.click(headline.x, headline.y)
+      // small settle so the selection click and the dblclick register as two
+      // gestures (Konva pairs a too-fast second click into the first one);
+      // no DOM signal exists for a canvas selection commit
       await editor.waitForTimeout(300)
       await editor.mouse.dblclick(headline.x, headline.y)
       const overlay = editor.locator('[contenteditable="true"]').first()
