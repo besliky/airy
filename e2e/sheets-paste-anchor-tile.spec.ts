@@ -74,9 +74,14 @@ test.describe('sheets: paste repeats into an anchor-shaped target', () => {
         sheet.getRange(0, 0, 1, 3).activate()
       })
       await sheets.keyboard.press('Control+c')
-      // the copy command writes the clipboard asynchronously and no DOM state
-      // mirrors it — a short settle is the cheapest reliable gap (≤300ms)
-      await sheets.waitForTimeout(300)
+      // the copy command writes the clipboard asynchronously — poll it
+      // through the main process (cross-platform, no pbpaste needed) so the
+      // paste below never races the copy; clearing first keeps the poll
+      // honest about THIS copy, not some earlier pasteboard content
+      await app.evaluate(({ clipboard }) => clipboard.clear())
+      await expect
+        .poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
+        .toContain('a\tb\tc')
 
       // paste into the 4×1 anchor selection A2:A5
       await sheets.evaluate(() => {

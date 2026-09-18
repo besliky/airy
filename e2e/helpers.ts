@@ -202,7 +202,12 @@ export async function waitForPageWithUrl(
 export async function waitForSheetsGrid(page: Page, sheetName = 'Sheet1'): Promise<void> {
   await page.waitForFunction(
     (name) => {
-      const named = (document.body.textContent ?? '').includes(name)
+      // sheet-bar tabs only, NOT document.body.textContent: a sheet named
+      // "Data" would otherwise always match the ribbon's Data tab and this
+      // condition would degenerate into a permanently-true background check
+      const named = Array.from(document.querySelectorAll('[data-u-comp="slide-tab-item"]')).some(
+        (tab) => (tab.textContent ?? '').includes(name),
+      )
       const grid = Array.from(document.querySelectorAll('canvas')).some((canvas) => {
         const rect = canvas.getBoundingClientRect()
         return rect.width > 500 && rect.height > 300

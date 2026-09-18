@@ -188,7 +188,10 @@ test.describe('sheets: Insert → Timeline', () => {
 
       // A freshly created pivot lives only in the edit journal; slicers and
       // timelines bind to file-loaded pivots, and saving reopens the session
-      // over the newly written definition.
+      // over the newly written definition. waitForSheetsGrid is strict here
+      // again (data-univer-rendered resets on the session swap), and the
+      // toPass retry below remains insurance for the pivot streaming in —
+      // not a replacement for this gate.
       await saveWorkbook(launched.app)
       await waitForSheetsGrid(sheets)
 
