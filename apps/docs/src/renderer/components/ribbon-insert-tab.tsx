@@ -24,8 +24,9 @@ import {
   collectCrossRefSources,
   crossRefCache,
   crossRefInstr,
-  ensureCaptionAnchor,
   ensureHeadingTocAnchor,
+  stampCaptionAnchor,
+  stampHeadingTocAnchor,
   headingTocAnchor,
   type CrossRefSource,
   type CrossRefSourceKind,
@@ -391,26 +392,39 @@ export function CrossRefModal({
   }
 
   const insertRef = (src: CrossRefSource) => {
+    // read-only guard BEFORE the anchor work (UX-715 pattern): the mode can
+    // flip while the dialog is open, and the anchor stamp below mutates the
+    // document — a locked editor must neither stamp nor insert
+    if (!editor.isEditable) return
+    // anchor stamp and REF insert land in ONE transaction: a single Ctrl+Z
+    // removes the reference together with its hidden bookmark, instead of
+    // leaving a stray `_Toc…`/`_Ref…` anchor behind that saves into the file
+    const tr = editor.state.tr
     const anchor =
       src.kind === 'heading'
-        ? ensureHeadingTocAnchor(editor, src.pos)
+        ? stampHeadingTocAnchor(editor, src.pos, tr)
         : src.kind === 'caption'
-          ? ensureCaptionAnchor(editor, blocks, src)
+          ? stampCaptionAnchor(editor, blocks, src, tr)
           : src.anchor
     if (!anchor) {
       window.alert(t('ribbonCrossRefNoAnchor'))
       return
     }
     const cache = crossRefCache(src, type, anchorPage)
-    editor
-      .chain()
-      .focus()
-      .insertContent({
-        type: 'text',
-        text: cache,
-        marks: [{ type: 'refField', attrs: { name: anchor, instr: crossRefInstr(anchor, type) } }],
-      })
-      .run()
+    // inheritMarks=false keeps the refField mark exactly (the default makes
+    // the caret's marks REPLACE the node's — tiptap's insertContent, used
+    // here before, never inherited them either)
+    tr.replaceSelectionWith(
+      editor.state.schema.text(cache, [
+        editor.state.schema.marks.refField.create({
+          name: anchor,
+          instr: crossRefInstr(anchor, type),
+        }),
+      ]),
+      false,
+    )
+    editor.view.dispatch(tr)
+    editor.commands.focus()
     onClose()
   }
 

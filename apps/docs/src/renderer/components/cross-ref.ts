@@ -131,6 +131,27 @@ export function uniqueTocAnchor(taken: Set<string>): string {
  * is still returned — reading it mutates nothing).
  */
 export function ensureHeadingTocAnchor(editor: Editor, pos: number): string | null {
+  // the stamp folds into the caller's transaction when there is one (the
+  // cross-reference dialog shares it with the REF insert = one undo step);
+  // standalone callers dispatch it here
+  const tr = editor.state.tr
+  const name = stampHeadingTocAnchor(editor, pos, tr)
+  if (tr.steps.length > 0) editor.view.dispatch(tr)
+  return name
+}
+
+/**
+ * The plan half of ensureHeadingTocAnchor: computes the heading's anchor and
+ * appends the stamping step to `tr` WITHOUT dispatching, so the caller can
+ * land the anchor together with its own insert in one transaction (one undo
+ * step). Null when the node is gone or editing is locked; an existing anchor
+ * is returned with no step attached.
+ */
+export function stampHeadingTocAnchor(
+  editor: Editor,
+  pos: number,
+  tr: Editor['state']['tr'],
+): string | null {
   const node = editor.state.doc.nodeAt(pos)
   if (!node) return null
   const existing = headingTocAnchor(node)
@@ -138,12 +159,10 @@ export function ensureHeadingTocAnchor(editor: Editor, pos: number): string | nu
   if (!editor.isEditable) return null
   const name = uniqueTocAnchor(allBookmarkNames(editor.state.doc))
   const hidden = (node.attrs?.hiddenBookmarks as string[] | null) ?? []
-  editor.view.dispatch(
-    editor.state.tr.setNodeMarkup(pos, undefined, {
-      ...node.attrs,
-      hiddenBookmarks: [...hidden, name],
-    }),
-  )
+  tr.setNodeMarkup(pos, undefined, {
+    ...node.attrs,
+    hiddenBookmarks: [...hidden, name],
+  })
   return name
 }
 
@@ -231,6 +250,23 @@ export function ensureCaptionAnchor(
   blocks: Block[],
   source: CrossRefSource,
 ): string | null {
+  // same one-transaction pattern as ensureHeadingTocAnchor
+  const tr = editor.state.tr
+  const name = stampCaptionAnchor(editor, blocks, source, tr)
+  if (tr.steps.length > 0) editor.view.dispatch(tr)
+  return name
+}
+
+/** the plan half of ensureCaptionAnchor: computes the `_Ref…` anchor and
+ * appends the genXml stamping step to `tr` WITHOUT dispatching (see
+ * stampHeadingTocAnchor). Null when the caption is gone, has no XML to
+ * anchor, or editing is locked; an existing anchor adds no step. */
+export function stampCaptionAnchor(
+  editor: Editor,
+  blocks: Block[],
+  source: CrossRefSource,
+  tr: Editor['state']['tr'],
+): string | null {
   const node = editor.state.doc.nodeAt(source.pos)
   if (!node || node.type.name !== 'docProtected') return null
   const xml = xmlOfNode(node as never, blocks)
@@ -249,13 +285,11 @@ export function ensureCaptionAnchor(
   const anchored = withStart.endsWith('</w:p>')
     ? `${withStart.slice(0, -'</w:p>'.length)}${end}</w:p>`
     : withStart + end
-  editor.view.dispatch(
-    editor.state.tr.setNodeMarkup(source.pos, undefined, {
-      ...node.attrs,
-      docxIndex: null,
-      genXml: anchored,
-    }),
-  )
+  tr.setNodeMarkup(source.pos, undefined, {
+    ...node.attrs,
+    docxIndex: null,
+    genXml: anchored,
+  })
   return name
 }
 
