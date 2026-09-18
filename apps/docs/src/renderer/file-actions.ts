@@ -179,6 +179,11 @@ export interface FileActionContext {
   noteNumberingDirty: boolean
   setNoteNumbering: (value: { footnotes?: NoteNumbering; endnotes?: NoteNumbering }) => void
   setNoteNumberingDirty: (dirty: boolean) => void
+  /** settings.xml w:autoHyphenation authoring state (Layout → Hyphenation) */
+  hyphAuto: boolean
+  hyphDirty: boolean
+  setHyphAuto: (value: boolean) => void
+  setHyphDirty: (dirty: boolean) => void
   sources: SourceInfo[]
   sourcesDirty: boolean
   setSources: (value: SourceInfo[]) => void
@@ -251,7 +256,7 @@ function resetEditorHistory(editor: Editor): void {
   editor.registerPlugin(history((plugin.spec as { config?: object }).config))
 }
 
-/** doc-level layout inputs living outside CSS: default tab grid + hyphenation lang */
+/** doc-level layout inputs living outside CSS: default tab grid, hyphenation lang, note numbering */
 function applyDocLayoutSettings(editor: Editor, parsed: ParsedDocFull): void {
   editor.storage.tabStops.defaultTabStopTwips = parsed.defaultTabStopTwips ?? null
   // Word 2013+ justified lines pull words up by shrinking spaces; legacy
@@ -405,6 +410,8 @@ export async function loadFile(
     ctx.setNotesDirty(false)
     ctx.setSources(parsed.sources)
     ctx.setSourcesDirty(false)
+    ctx.setHyphAuto(parsed.autoHyphenation === true)
+    ctx.setHyphDirty(false)
     ctx.setThemeFonts(parsed.themeFonts ?? null)
     ctx.setThemeFontsDirty(false)
     ctx.setThemeColors(parsed.themeColors ?? null)
@@ -497,6 +504,8 @@ export async function newFile(ctx: FileActionContext): Promise<boolean | undefin
     ctx.setNotesDirty(false)
     ctx.setSources([])
     ctx.setSourcesDirty(false)
+    ctx.setHyphAuto(parsed.autoHyphenation === true)
+    ctx.setHyphDirty(false)
     ctx.setThemeFonts(parsed.themeFonts ?? null)
     ctx.setThemeFontsDirty(false)
     ctx.setThemeColors(parsed.themeColors ?? null)
@@ -681,6 +690,7 @@ export async function buildDocBytes(ctx: FileActionContext): Promise<Uint8Array 
     themeFonts: ctx.themeFontsDirty && ctx.themeFonts ? ctx.themeFonts : undefined,
     themeColors: ctx.themeColorsDirty && ctx.themeColors ? ctx.themeColors : undefined,
   })
+    hyphenation: ctx.hyphDirty ? { auto: ctx.hyphAuto } : undefined,
   return bytes
 }
 
@@ -688,6 +698,17 @@ export async function buildDocBytes(ctx: FileActionContext): Promise<Uint8Array 
  * Crash-recovery copy: serialize the dirty document and hand the
     noteNumbering:
       ctx.noteNumberingDirty && (ctx.noteNumbering.footnotes || ctx.noteNumbering.endnotes)
+/**
+ * Live toggle of settings.xml w:autoHyphenation before any save: the lang
+ * attribute (Chromium hyphenates only under an explicit lang) follows the
+ * flag exactly like a fresh load does in applyDocLayoutSettings.
+ */
+export function applyHyphenationLive(editor: Editor, parsed: ParsedDocFull, on: boolean): void {
+  const lang = on ? parsed.docDefaults?.lang : undefined
+  if (lang) editor.view.dom.setAttribute('lang', lang)
+  else editor.view.dom.removeAttribute('lang')
+}
+
         ? ctx.noteNumbering
         : undefined,
  * bytes to the main process, which stores them under userData. Best-effort —
@@ -1011,6 +1032,8 @@ async function saveOnce(
     ctx.setNotesDirty(false)
     ctx.setSources(reparsed.sources)
     ctx.setSourcesDirty(false)
+    ctx.setHyphAuto(reparsed.autoHyphenation === true)
+    ctx.setHyphDirty(false)
     ctx.setThemeFonts(reparsed.themeFonts ?? null)
     ctx.setThemeFontsDirty(false)
     ctx.setThemeColors(reparsed.themeColors ?? null)

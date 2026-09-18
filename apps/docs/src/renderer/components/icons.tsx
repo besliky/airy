@@ -568,6 +568,21 @@ export function IconLineNumbers(props: IconProps) {
   )
 }
 
+/** Layout → Hyphenation: a word breaking at a line end */
+export function IconHyphenation(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <TextGlyph x={2.6} y={10.2} s={6.4}>
+        hy
+      </TextGlyph>
+      <TextGlyph x={8.9} y={13.8} s={6.4}>
+        ph
+      </TextGlyph>
+      <path d="M 7.55 10 h 1.3" strokeWidth="1.2" opacity="0.9" />
+    </Svg>
+  )
+}
+
 export function IconSymbol(props: IconProps) {
   return (
     <Svg {...props}>

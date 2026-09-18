@@ -1,0 +1,23 @@
+/** Layout-tab hyphenation + columns strings (zh defines the key set every sibling shard must match) */
+export const zh = {
+  layoutHyphenation: '断字',
+  layoutHyphNone: '无',
+  layoutHyphManual: '手动',
+  layoutHyphAutomatic: '自动',
+  layoutHyphManualDesc: '在需要断字的位置插入可选连字符',
+  layoutHyphManualHint: '手动断字：按 {keys} 插入可选连字符',
+  layoutHyphSet: '已开启自动断字',
+  layoutHyphUnset: '已关闭自动断字',
+  layoutSoftHyphen: '可选连字符',
+  layoutColsDialogTitle: '列',
+  layoutColsMore: '更多列…',
+  layoutColOne: '一',
+  layoutColTwo: '二',
+  layoutColThree: '三',
+  layoutColLeft: '左',
+  layoutColRight: '右',
+  layoutColSpacing: '间距',
+  layoutColWidth: '列宽',
+  layoutColWidth1: '第 1 列宽度',
+  layoutLineBetween: '栏间分隔线',
+}

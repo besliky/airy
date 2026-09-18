@@ -184,6 +184,7 @@ import {
 import { PromptModal } from './components/PromptModal'
 import { ShortcutsDialog } from './components/ShortcutsDialog'
 import { WordCountDialog, type DocStats } from './components/WordCountDialog'
+import { SHORTCUTS, shortcutKeys } from './shortcuts'
 import { applyCase, nextCaseMode, selectionText } from './editor/case-transform'
 import { stepHangingIndent, stepParagraphIndent } from './editor/indent'
 import { PasswordDialog } from './components/PasswordDialog'
@@ -212,8 +213,8 @@ import { InkOverlay } from './components/InkOverlay'
 import { collectRevisions, gotoRevision, type TrackChangesStorage } from './editor/revisions'
 import { NavPane } from './components/NavPane'
 import { Ruler } from './components/Ruler'
-import { docBodyFont, docLineFactor, docThemeCss } from './doc-style-css'
 import { isDocDirty } from './doc-dirty'
+import { docBodyFont, docLineFactor, docStyleCss, docThemeCss } from './doc-style-css'
 import {
   EMPTY_HF_VARIANTS,
   hfFromPart,
@@ -227,6 +228,7 @@ import {
 import {
   applyAiDocContent as applyAiDocContentImpl,
   exportPdf as exportPdfImpl,
+  applyHyphenationLive,
   exportHtml as exportHtmlImpl,
   loadFile as loadFileImpl,
   newFile as newFileImpl,
@@ -763,6 +765,12 @@ export function App() {
     footnotes?: NoteNumbering
     endnotes?: NoteNumbering
   }>({})
+  /** settings.xml w:autoHyphenation authoring (Layout → Hyphenation) */
+  const [hyphAuto, setHyphAuto] = useState(false)
+  const [hyphDirty, setHyphDirty] = useState(false)
+  const [sources, setSources] = useState<SourceInfo[]>([])
+  const [sourcesDirty, setSourcesDirty] = useState(false)
+  const [themeFonts, setThemeFonts] = useState<ThemeFonts | null>(null)
   const [noteNumberingDirty, setNoteNumberingDirty] = useState(false)
   const [showNoteOptions, setShowNoteOptions] = useState(false)
   const [themeFontsDirty, setThemeFontsDirty] = useState(false)
@@ -1452,6 +1460,10 @@ export function App() {
     setNotesDirty,
     sources,
     sourcesDirty,
+    hyphAuto,
+    hyphDirty,
+    setHyphAuto,
+    setHyphDirty,
     setSources,
     setSourcesDirty,
     themeFonts,
@@ -2021,7 +2033,39 @@ export function App() {
     [editor],
   )
 
+   * Layout → Hyphenation: Automatic/None flip the unsaved-parsed override
+   * immediately (CSS hyphens + the lang attribute Chromium needs), the flag
+   * persists through SaveOptions.hyphenation on the next save. Manual is a
   const convertNotes = useCallback(
+   * optional-hyphen chord.
+   */
+  const applyHyphenation = useCallback(
+    (mode: 'none' | 'manual' | 'automatic') => {
+      if (mode === 'manual') {
+        const chord = SHORTCUTS.find((s) => s.id === 'soft-hyphen')
+        setStatus(t('layoutHyphManualHint', { keys: chord ? shortcutKeys(chord) : '' }))
+        return
+      }
+      const on = mode === 'automatic'
+      setHyphAuto(on)
+      setHyphDirty(on !== (doc?.parsed.autoHyphenation === true))
+      if (editor && doc) applyHyphenationLive(editor, doc.parsed, on)
+      if (doc) setDocCss(docStyleCss({ ...doc.parsed, autoHyphenation: on }))
+      setStatus(t(on ? 'layoutHyphSet' : 'layoutHyphUnset'))
+    },
+    [doc, editor],
+  )
+
+  // Word: body shading of resolved threads is hidden
+  useEffect(() => {
+    if (!editor) return
+    const done = new Set(comments.filter((c) => c.done).map((c) => c.id))
+    editor.view.dispatch(editor.state.tr.setMeta(resolvedCommentsPluginKey, done))
+  }, [editor, comments])
+
+  const cancelNewComment = useCallback(() => cancelNewCommentImpl(reviewCtxRef.current), [])
+  const startNewComment = useCallback(() => startNewCommentImpl(reviewCtxRef.current), [])
+  const submitNewComment = useCallback(
     (from: 'footnote' | 'endnote', which: 'all' | 'current') => {
       const id = which === 'current' ? noteRefAtSelection(editor!)?.id : undefined
       if (which === 'current' && !id) return
@@ -4574,6 +4618,7 @@ export function App() {
         setSectionsDirty((d) => (d.includes(activeSection) ? d : [...d, activeSection]))
         setStatus(t('appSectionSettingsApplied', { n: activeSection + 1 }))
       }
+    onHyphenation: applyHyphenation,
     },
     onInsertSectionBreak: (type: 'nextPage' | 'continuous' | 'evenPage' | 'oddPage') =>
       insertSectionBreak(type),
@@ -4839,6 +4884,7 @@ export function App() {
         styles={ribbonStyles}
         docDefaults={doc?.parsed.docDefaults}
         showAi={showAi}
+        hyphAuto={hyphAuto}
         section={sections[activeSection]?.settings ?? section}
         activeSection={sections.length > 1 ? activeSection : null}
         pageColor={pageColor}

@@ -8,6 +8,7 @@ import {
   IconCaret,
   IconColumns,
   IconLineNumbers,
+  IconHyphenation,
   IconMargins,
   IconOrientation,
   IconPageBreak,
@@ -94,6 +95,9 @@ interface LayoutTabProps extends TabProps {
   activeSection: number | null
   onInsertSectionBreak: (type: 'nextPage' | 'continuous' | 'evenPage' | 'oddPage') => void
 }
+  /** settings.xml w:autoHyphenation state (Layout → Hyphenation) */
+  hyphAuto: boolean
+  onHyphenation: (mode: 'none' | 'manual' | 'automatic') => void
 
 const PT_PER_TWIP = 1 / 20
 
@@ -107,6 +111,8 @@ export function LayoutTab({
   activeSection,
   onInsertSectionBreak,
 }: LayoutTabProps) {
+  hyphAuto,
+  onHyphenation,
   const { t } = useI18n()
   const paraAttrs = activeParaAttrs(editor)
   const enabled = hasDoc && !!section
@@ -548,6 +554,45 @@ export function LayoutTab({
       <div className="ribbon-sep" />
 
       <div className="ribbon-group">
+          <div className="rb-split-wrap">
+            <button
+              className={`rb-big ${hyphAuto ? 'active' : ''}`}
+              disabled={!hasDoc}
+              data-tip={t('layoutHyphenation')}
+              onClick={() => toggleDropdown(setDropdown, 'hyphenation')}
+            >
+              <span className="rb-big-icon">
+                <IconHyphenation size={BIG} />
+                <IconCaret />
+              </span>
+              <span>{t('layoutHyphenation')}</span>
+            </button>
+            {dropdown === 'hyphenation' && (
+              <div data-rb-panel="" className="layout-menu">
+                {(['none', 'manual', 'automatic'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    className={
+                      mode === 'automatic' ? (hyphAuto ? 'active' : '') : !hyphAuto ? 'active' : ''
+                    }
+                    onClick={() => {
+                      onHyphenation(mode)
+                      setDropdown(() => null)
+                    }}
+                  >
+                    <b>
+                      {mode === 'none'
+                        ? t('layoutHyphNone')
+                        : mode === 'manual'
+                          ? t('layoutHyphManual')
+                          : t('layoutHyphAutomatic')}
+                    </b>
+                    {mode === 'manual' && <span>{t('layoutHyphManualDesc')}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         <div className="ribbon-group-items layout-para">
           <div className="layout-col">
             {ptInput('indentLeft', t('ribbonIndentLeft'), -400)}

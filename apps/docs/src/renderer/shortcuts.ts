@@ -151,6 +151,15 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
   { id: 'field-time', group: 'insert', labelKey: 'ribbonFieldTime', keys: '⌥⇧T' },
   { id: 'nbsp', group: 'insert', labelKey: 'appScNbsp', keys: '⇧⌘␣' },
   { id: 'nb-hyphen', group: 'insert', labelKey: 'appScNbHyphen', keys: '⇧⌘-' },
+  // Word's own ⌘-/Ctrl+- is this app's zoom-out menu accelerator, so the
+  // optional hyphen takes an Alt-qualified chord
+  {
+    id: 'soft-hyphen',
+    group: 'insert',
+    labelKey: 'layoutSoftHyphen',
+    keys: '⌥⌘-',
+    win: 'Ctrl+Alt+-',
+  },
 
   // ---- Review & tools ----
   { id: 'track-changes', group: 'review', labelKey: 'ribbonTrackChanges', keys: '⇧⌘E' },

@@ -1254,6 +1254,9 @@ export const WordEditorShortcuts = Extension.create({
       // U+00A0 and U+2011: the characters Word inserts for these two chords
       'Mod-Shift-Space': () => this.editor.commands.insertContent('\u00a0'),
       'Mod-Shift--': () => this.editor.commands.insertContent('\u2011'),
+      // optional hyphen (U+00AD): Word's ⌘-/Ctrl+- chord is this app's zoom-out
+      // menu accelerator and never reaches the renderer, so Alt joins the chord
+      'Alt-Mod--': () => this.editor.commands.insertContent('\u00ad'),
       'Alt-Shift-ArrowUp': () => moveBlocks(this.editor, -1),
       'Alt-Shift-ArrowDown': () => moveBlocks(this.editor, 1),
     }

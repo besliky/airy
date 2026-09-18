@@ -181,6 +181,9 @@ interface RibbonProps {
   /** Multi-section documents: index of the cursor's section (0-based); null for single-section */
   activeSection: number | null
   onInsertSectionBreak: (type: 'nextPage' | 'continuous' | 'evenPage' | 'oddPage') => void
+  /** Layout → Hyphenation: settings.xml w:autoHyphenation state + None/Manual/Automatic picker */
+  hyphAuto?: boolean
+  onHyphenation?: (mode: 'none' | 'manual' | 'automatic') => void
   pageColor: string | null
   onPageColor: (hex: string | null) => void
   /** Design → Watermark / Themes */
@@ -646,6 +649,8 @@ function RibbonInner({
   onSection,
   activeSection,
   onInsertSectionBreak,
+  hyphAuto,
+  onHyphenation,
   pageColor,
   onPageColor,
   watermark,
@@ -3834,6 +3839,8 @@ function RibbonInner({
             onSection={onSection}
             activeSection={activeSection}
             onInsertSectionBreak={onInsertSectionBreak}
+            hyphAuto={hyphAuto ?? false}
+            onHyphenation={onHyphenation ?? (() => {})}
           />
         ) : tab === 'references' ? (
           <ReferencesTab

@@ -50,8 +50,7 @@ describe('w:autoHyphenation / w:hyphenationZone parse', () => {
   it('absent flag = undefined; w:val="0|false" counts as off', async () => {
     expect((await parseDocx(await settingsDocx(''))).autoHyphenation).toBeUndefined()
     expect(
-      (await parseDocx(await settingsDocx('<w:autoHyphenation w:val="false"/>')))
-        .autoHyphenation,
+      (await parseDocx(await settingsDocx('<w:autoHyphenation w:val="false"/>'))).autoHyphenation,
     ).toBeUndefined()
   })
 })
