@@ -179,6 +179,7 @@ import {
   ParagraphDialog,
   type ContextMenuState,
 } from './components/ContextMenu'
+import { StyleDialog } from './components/StyleDialog'
 import { PromptModal } from './components/PromptModal'
 import { ShortcutsDialog } from './components/ShortcutsDialog'
 import { WordCountDialog, type DocStats } from './components/WordCountDialog'
@@ -210,7 +211,7 @@ import { InkOverlay } from './components/InkOverlay'
 import { collectRevisions, gotoRevision, type TrackChangesStorage } from './editor/revisions'
 import { NavPane } from './components/NavPane'
 import { Ruler } from './components/Ruler'
-import { docBodyFont, docLineFactor, docThemeCss } from './doc-style-css'
+import { docBodyFont, docLineFactor, docStyleCss, docThemeCss } from './doc-style-css'
 import { isDocDirty } from './doc-dirty'
 import {
   EMPTY_HF_VARIANTS,
@@ -835,6 +836,10 @@ export function App() {
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null)
   const [showFontDialog, setShowFontDialog] = useState(false)
   const [showParaDialog, setShowParaDialog] = useState(false)
+  /** Home ▸ Styles Modify Style target (paragraph styleId); null = dialog closed */
+  const [modifyStyleId, setModifyStyleId] = useState<string | null>(null)
+  /** bumped by every live style modify so the ribbon's styles map refreshes */
+  const [stylesRev, setStylesRev] = useState(0)
   const [, forceRender] = useReducer((x: number) => x + 1, 0)
   const dirtyRef = useRef(false)
   // serializes save(): overlapping saves (Cmd+S vs autosave timer vs blur) would
@@ -4351,7 +4356,12 @@ export function App() {
     computeFormatState(editor, doc?.parsed.styles, doc?.parsed.docDefaults),
   )
 
-  const ribbonStyles = useMemo(() => (doc ? new Map(doc.parsed.styles) : undefined), [doc])
+  const ribbonStyles = useMemo(
+    () => (doc ? new Map(doc.parsed.styles) : undefined),
+    // stylesRev: a Modify Style changes entries of the same parsed map in place
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [doc, stylesRev],
+  )
 
   /** every function prop of the memoized Ribbon, with stable identities (dispatches into the latest render's closures) */
   // ---- selection-scoped AI edit queue ----
@@ -4513,6 +4523,7 @@ export function App() {
     allocateNumId: (kind: 'bullet' | 'ordered') => allocateListNumId(kind),
     createListDef: (levels: CustomNumberingLevel[]) => createCustomListDef(levels),
     onParagraphDialog: () => setShowParaDialog(true),
+    onModifyStyle: (styleId: string) => setModifyStyleId(styleId),
     onOpen: () => void openFile(),
     onSave: () => void save(false),
     onSaveAs: () => void save(true),
@@ -5197,6 +5208,34 @@ export function App() {
       )}
       {doc && showParaDialog && (
         <ParagraphDialog editor={editor} onClose={() => setShowParaDialog(false)} />
+      )}
+      {doc && modifyStyleId && (
+        <StyleDialog
+          editor={editor}
+          styles={doc.parsed.styles}
+          docDefaults={doc.parsed.docDefaults}
+          styleId={modifyStyleId}
+          onClose={() => setModifyStyleId(null)}
+          onApply={(upsert, display, headingLevel) => {
+            // save path: styles.xml is patched from the pending upserts on save
+            setStyleUpserts((prev) => ({ ...prev, [upsert.styleId]: upsert }))
+            // live path: swap the style's resolved display and regenerate the
+            // document style CSS — every paragraph carrying the pStyle updates
+            // at once (basedOn children re-resolve on the next open)
+            const info = doc.parsed.styles.get(upsert.styleId)
+            doc.parsed.styles.set(upsert.styleId, {
+              styleId: upsert.styleId,
+              name: upsert.name,
+              type: 'paragraph',
+              ...(headingLevel ? { headingLevel } : {}),
+              ...(info?.semiHidden ? { semiHidden: true } : {}),
+              qFormat: true,
+              display,
+            })
+            setDocCss(docStyleCss(doc.parsed))
+            setStylesRev((v) => v + 1)
+          }}
+        />
       )}
 
       {doc && notePrompt && (

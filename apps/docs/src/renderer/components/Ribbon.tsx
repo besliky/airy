@@ -25,6 +25,7 @@ import type {
   Run,
   SectionSettings,
   SourceInfo,
+  StyleDisplay,
   StyleInfo,
   TableAutoFitMode,
   TableLook,
@@ -77,7 +78,9 @@ import {
   type RevisionDisplayMode,
   type ViewMode,
   insertImageFromDataUrl,
+  applyDocumentParagraphStyle,
   applyParagraphStyle,
+  builtinHeadingStyleId,
   setParaAttrs,
 } from './ribbon-tabs'
 import { WRAP_OPTIONS } from './ContextMenu'
@@ -171,6 +174,8 @@ interface RibbonProps {
   docDefaults?: DocDefaults
   /** Open the paragraph dialog (line-spacing rule / exact value entry lives there) */
   onParagraphDialog?: () => void
+  /** Home ▸ Styles: open the Modify Style dialog for a paragraph style (styleId) */
+  onModifyStyle?: (styleId: string) => void
   onOpen: () => void
   onSave: () => void
   onSaveAs: () => void
@@ -580,12 +585,61 @@ function previewLevelText(levels: CustomNumberingLevel[], ilvl: number): string 
   )
 }
 
-const STYLE_GALLERY = [
-  { key: 'p', labelKey: 'ribbonStyleNormal', className: 'style-normal' },
-  { key: 'h1', labelKey: 'ribbonStyleHeading1', className: 'style-h1' },
-  { key: 'h2', labelKey: 'ribbonStyleHeading2', className: 'style-h2' },
-  { key: 'h3', labelKey: 'ribbonStyleHeading3', className: 'style-h3' },
-] as const satisfies ReadonlyArray<{ key: string; labelKey: StringKey; className: string }>
+/** Word's built-in paragraph-style levels the gallery always offers (Normal is the
+ * un-styled card); localized labels, look previewed from styles.xml when present */
+const HEADING_STYLE_KEYS = [
+  'ribbonStyleHeading1',
+  'ribbonStyleHeading2',
+  'ribbonStyleHeading3',
+  'ribbonStyleHeading4',
+  'ribbonStyleHeading5',
+  'ribbonStyleHeading6',
+  'ribbonStyleHeading7',
+  'ribbonStyleHeading8',
+  'ribbonStyleHeading9',
+] as const satisfies ReadonlyArray<StringKey>
+
+/** fixed card look for heading levels styles.xml does not define (mirrors the
+ * built-in .doc-page h1-h6 rules: 16/13/12pt, 11pt italic from level 4 on) */
+const HEADING_PREVIEW_FALLBACK: CSSProperties[] = [
+  { fontSize: '18px', color: 'var(--word-heading)' },
+  { fontSize: '15px', color: 'var(--word-heading)' },
+  { fontSize: '13px', color: 'var(--docs-heading-3)' },
+  { fontSize: '12.5px', fontStyle: 'italic', color: 'var(--docs-heading-3)' },
+  { fontSize: '12.5px', fontStyle: 'italic', color: 'var(--docs-heading-3)' },
+  { fontSize: '12.5px', fontStyle: 'italic', color: 'var(--docs-heading-3)' },
+  { fontSize: '12.5px', color: 'var(--docs-heading-3)' },
+  { fontSize: '12.5px', color: 'var(--docs-heading-3)' },
+  { fontSize: '12.5px', color: 'var(--docs-heading-3)' },
+]
+
+/** one paragraph-style gallery card (Normal, Heading 1-9, document custom styles) */
+interface ParaStyleCard {
+  key: string
+  label: string
+  /** pStyle applied on click; null = clear back to the document default */
+  styleId: string | null
+  /** outline level the style carries (heading cards and custom heading styles) */
+  headingLevel?: number
+  preview: CSSProperties
+  /** styleId of the definition the preview came from (Modify Style target) */
+  modifyId: string | null
+}
+
+/** gallery card preview from the style's resolved display definition */
+function paraStylePreview(display?: StyleDisplay): CSSProperties {
+  const css: CSSProperties = {}
+  if (!display) return css
+  if (display.fontAscii ?? display.font)
+    css.fontFamily = cssFontFamily(display.fontAscii ?? display.font!)
+  if (display.sizeHalfPoints)
+    css.fontSize = `${Math.min(18, Math.max(11, (display.sizeHalfPoints / 2) * 1.25))}px`
+  if (display.color && display.color !== 'auto') css.color = `#${display.color}`
+  if (display.bold) css.fontWeight = 'bold'
+  if (display.italic) css.fontStyle = 'italic'
+  if (display.underline) css.textDecoration = 'underline'
+  return css
+}
 
 /** Fallback character styles shown when the document has no character styles.
  * Emphasis = italic + accent color, Intense Emphasis = bold + accent color;
@@ -631,6 +685,7 @@ function RibbonInner({
   allocateNumId,
   createListDef,
   onParagraphDialog,
+  onModifyStyle,
   styles,
   docDefaults,
   onOpen,
@@ -1312,8 +1367,72 @@ function RibbonInner({
     !activeCharStyleId &&
     (mark === 'italic' ? fs.italic : fs.bold) &&
     (fs.textColor ?? '').toUpperCase() === presetAccent
-  const activeStyleKey =
-    fs.headingLevel !== null
+
+  /**
+   * Paragraph-style gallery cards, Word's order: Normal, the nine built-in
+   * heading levels, then every remaining paragraph style of the document
+   * (custom styles from styles.xml included). Heading cards resolve to the
+   * document's own styleId for their level (mirrors the engine's
+   * headingStyleIds); when styles.xml defines none, the built-in id is applied
+   * and the save side falls back to it too.
+   */
+  const paraStyleCards: ParaStyleCard[] = (() => {
+    const cards: ParaStyleCard[] = [
+      {
+        key: 'p',
+        label: t('ribbonStyleNormal'),
+        styleId: null,
+        preview: {},
+        modifyId: null,
+      },
+    ]
+    // the document's heading style per level: first styles.xml entry with that
+    // outline level (same rule as the engine's parse-side headingStyleIds)
+    const headingStyleOf = new Map<number, string>()
+    if (styles)
+      for (const info of styles.values()) {
+        if (info.type !== 'paragraph' || !info.headingLevel) continue
+        if (!headingStyleOf.has(info.headingLevel))
+          headingStyleOf.set(info.headingLevel, info.styleId)
+      }
+    HEADING_STYLE_KEYS.forEach((labelKey, i) => {
+      const level = i + 1
+      const styleId = headingStyleOf.get(level) ?? null
+      const preview = paraStylePreview(styles?.get(styleId ?? '')?.display)
+      cards.push({
+        key: styleId ? `p:${styleId}` : `h${level}`,
+        label: t(labelKey),
+        styleId: styleId ?? builtinHeadingStyleId(level),
+        headingLevel: level,
+        preview: Object.keys(preview).length > 0 ? preview : HEADING_PREVIEW_FALLBACK[i],
+        modifyId: styleId,
+      })
+    })
+    if (styles)
+      for (const info of styles.values()) {
+        if (info.type !== 'paragraph' || info.semiHidden) continue
+        // the default paragraph style is the Normal card; heading styles the
+        // gallery already offers as their level's card
+        if (info.isDefault) continue
+        if (info.headingLevel && headingStyleOf.get(info.headingLevel) === info.styleId) continue
+        cards.push({
+          key: `p:${info.styleId}`,
+          label: info.name,
+          styleId: info.styleId,
+          ...(info.headingLevel ? { headingLevel: info.headingLevel } : {}),
+          preview: paraStylePreview(info.display),
+          modifyId: info.styleId,
+        })
+      }
+    return cards
+  })()
+
+  // Active card: the cursor paragraph's pStyle first (matched back to its card,
+  // so a style applied before styles.xml knew it still highlights the level's
+  // card), then heading level, then the character-style/preset fallbacks.
+  const activeStyleKey = fs.paraStyleId
+    ? (paraStyleCards.find((c) => c.styleId === fs.paraStyleId)?.key ?? `p:${fs.paraStyleId}`)
+    : fs.headingLevel !== null
       ? `h${fs.headingLevel}`
       : activeCharStyleId
         ? `char:${activeCharStyleId}`
@@ -1322,6 +1441,18 @@ function RibbonInner({
           : presetActive('italic')
             ? 'char:__preset_emphasis'
             : 'p'
+
+  /** style the Modify Style dialog opens on: the active card's own definition,
+   *  else the document's default paragraph style (the Normal card) */
+  const activeModifyStyleId =
+    paraStyleCards.find((c) => c.key === activeStyleKey)?.modifyId ??
+    (styles
+      ? ((
+          [...styles.values()].find((i) => i.type === 'paragraph' && i.isDefault) ??
+          styles.get('Normal') ??
+          null
+        )?.styleId ?? null)
+      : null)
 
   // Style gallery overflow: cards that don't fit wrap onto a second row that
   // the fixed-height gallery clips (whole cards only, never a half-cut one),
@@ -1353,7 +1484,7 @@ function RibbonInner({
     return () => ro.disconnect()
     // re-check when the card set can change, and after the expander mounts or
     // unmounts (it takes row width, which can change how many cards fit)
-  }, [tab, charStyleItems.length, lang, styleGalleryOverflow])
+  }, [tab, charStyleItems.length, paraStyleCards.length, lang, styleGalleryOverflow])
 
   const currentSize = fs.fontSizePt
   const currentFont = fs.fontFamily
@@ -1392,6 +1523,17 @@ function RibbonInner({
   }
 
   const applyStyle = (key: string) => {
+    const paraCard = paraStyleCards.find((c) => c.key === key)
+    if (paraCard) {
+      if (sub || !canEdit) return // textboxes have no heading styles
+      if (paraCard.styleId === null) applyParagraphStyle(editor, 'p')
+      else
+        applyDocumentParagraphStyle(editor, {
+          styleId: paraCard.styleId,
+          ...(paraCard.headingLevel ? { headingLevel: paraCard.headingLevel } : {}),
+        })
+      return
+    }
     if (key.startsWith('char:')) {
       const styleId = key.slice(5)
       const preset = CHAR_STYLE_PRESETS.find((p) => p.styleId === styleId)
@@ -1416,8 +1558,6 @@ function RibbonInner({
       }
       return
     }
-    if (sub || !canEdit) return // textboxes have no heading styles
-    applyParagraphStyle(editor, key as 'p' | 'h1' | 'h2' | 'h3')
   }
 
   /** Style cards, shared by the inline gallery and its overflow menu */
@@ -1426,17 +1566,26 @@ function RibbonInner({
       applyStyle(key)
       if (inMenu) setDropdown(null)
     }
+    // Word's style pane: right-click a style offers "Modify…"
+    const cardContextMenu = (e: React.MouseEvent, modifyId: string | null) => {
+      e.preventDefault()
+      if (modifyId) onModifyStyle?.(modifyId)
+    }
     return (
       <>
-        {STYLE_GALLERY.map((s) => (
+        {paraStyleCards.map((s) => (
           <button
             key={s.key}
             className={`style-card ${activeStyleKey === s.key ? 'active' : ''}`}
             disabled={!canEdit || !!sub}
+            data-tip={s.label}
             onClick={() => apply(s.key)}
+            onContextMenu={(e) => cardContextMenu(e, s.modifyId)}
           >
-            <span className={`style-card-preview ${s.className}`}>{t('ribbonStylePreview')}</span>
-            <span className="style-card-label">{t(s.labelKey)}</span>
+            <span className="style-card-preview" style={s.preview}>
+              {t('ribbonStylePreview')}
+            </span>
+            <span className="style-card-label">{s.label}</span>
           </button>
         ))}
         {charStyleItems.map((s) => (
@@ -3761,6 +3910,17 @@ function RibbonInner({
                 {dropdown === 'styleGallery' && (
                   <div data-rb-panel="" className="style-gallery-menu">
                     {renderStyleCards(true)}
+                    <button
+                      className="style-gallery-modify"
+                      disabled={!hasDoc || !activeModifyStyleId}
+                      data-tip={t('ribbonStylePaneTip')}
+                      onClick={() => {
+                        if (activeModifyStyleId) onModifyStyle?.(activeModifyStyleId)
+                        setDropdown(null)
+                      }}
+                    >
+                      {t('ribbonModifyStyle')}
+                    </button>
                   </div>
                 )}
               </div>
