@@ -1686,6 +1686,7 @@ export function PaginationPreview({
                           }}
                         >
                           {withSeparator && <div className="pv-endnote-separator" />}
+                          {!n.noRefMark && <sup>{n.no}</sup>}
                           {n.richParas
                             ? n.richParas.map((para, pi) => (
                                 <span key={pi}>
@@ -1697,7 +1698,6 @@ export function PaginationPreview({
                                         fontWeight: run.bold ? 600 : undefined,
                                         fontStyle: run.italic ? 'italic' : undefined,
                                         textDecoration:
-                          {!n.noRefMark && <sup>{n.no}</sup>}
                                           [
                                             run.underline && 'underline',
                                             run.strike && 'line-through',

@@ -72,6 +72,9 @@ export function noteMarkerOf(opts: NoteNumbering | undefined, no: number): strin
 }
 
 /** Word's built-in display when a document carries no note options */
+export function noteMarkText(kind: 'footnote' | 'endnote', no: number): string {
+  return kind === 'endnote' ? toRoman(no) : String(no)
+}
 
 /** document-wide note options of the loaded document (set before first render) */
 let docNoteNumbering: { footnotes?: NoteNumbering; endnotes?: NoteNumbering } | undefined
@@ -102,7 +105,4 @@ export function docNoteMark(kind: 'footnote' | 'endnote', no: number): string {
 /** fixed symbol of a kind under the loaded options, when one is set */
 export function docNoteCustomMark(kind: 'footnote' | 'endnote'): string | null {
   return noteNumberingOfKind(kind)?.customMark ?? null
-}
-export function noteMarkText(kind: 'footnote' | 'endnote', no: number): string {
-  return kind === 'endnote' ? toRoman(no) : String(no)
 }

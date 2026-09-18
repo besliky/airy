@@ -8,8 +8,8 @@ import { useI18n, type StringKey } from '../i18n/locale'
 import {
   IconCaret,
   IconColumns,
-  IconLineNumbers,
   IconHyphenation,
+  IconLineNumbers,
   IconMargins,
   IconOrientation,
   IconPageBreak,
@@ -95,10 +95,10 @@ interface LayoutTabProps extends TabProps {
   /** Multi-section documents: index of the cursor's section (0-based); null for single-section */
   activeSection: number | null
   onInsertSectionBreak: (type: 'nextPage' | 'continuous' | 'evenPage' | 'oddPage') => void
-}
   /** settings.xml w:autoHyphenation state (Layout → Hyphenation) */
   hyphAuto: boolean
   onHyphenation: (mode: 'none' | 'manual' | 'automatic') => void
+}
 
 const PT_PER_TWIP = 1 / 20
 
@@ -111,9 +111,9 @@ export function LayoutTab({
   onSection,
   activeSection,
   onInsertSectionBreak,
-}: LayoutTabProps) {
   hyphAuto,
   onHyphenation,
+}: LayoutTabProps) {
   const { t } = useI18n()
   const paraAttrs = activeParaAttrs(editor)
   const enabled = hasDoc && !!section
@@ -554,17 +554,6 @@ export function LayoutTab({
               </div>
             )}
           </div>
-        </div>
-        <div className="ribbon-group-label">
-          {activeSection !== null
-            ? t('ribbonGroupPageSetupSection', { n: activeSection + 1 })
-            : t('ribbonGroupPageSetup')}
-        </div>
-      </div>
-
-      <div className="ribbon-sep" />
-
-      <div className="ribbon-group">
           <div className="rb-split-wrap">
             <button
               className={`rb-big ${hyphAuto ? 'active' : ''}`}
@@ -604,6 +593,17 @@ export function LayoutTab({
               </div>
             )}
           </div>
+        </div>
+        <div className="ribbon-group-label">
+          {activeSection !== null
+            ? t('ribbonGroupPageSetupSection', { n: activeSection + 1 })
+            : t('ribbonGroupPageSetup')}
+        </div>
+      </div>
+
+      <div className="ribbon-sep" />
+
+      <div className="ribbon-group">
         <div className="ribbon-group-items layout-para">
           <div className="layout-col">
             {ptInput('indentLeft', t('ribbonIndentLeft'), -400)}

@@ -134,6 +134,13 @@ export function deleteNote(ctx: ReviewContext, kind: 'footnote' | 'endnote', id:
           num,
           mark: node.attrs.customMark ?? docNoteMark(kind, num),
         })
+      }
+    }
+  })
+  for (const { pos, size } of removals.reverse()) tr.delete(pos, pos + size)
+  if (tr.docChanged) editor.view.dispatch(tr)
+}
+
 /**
  * Recompute every reference marker under the current note options (numbering
  * format / start / custom mark). Attrs change so the atom node views re-render.
@@ -277,13 +284,6 @@ export function navigateNote(ctx: ReviewContext, dir: 1 | -1): void {
     .setTextSelection({ from: target, to: target + 1 })
     .scrollIntoView()
     .run()
-}
-
-      }
-    }
-  })
-  for (const { pos, size } of removals.reverse()) tr.delete(pos, pos + size)
-  if (tr.docChanged) editor.view.dispatch(tr)
 }
 
 // ---- Review: comments / revisions / compare / protection ----

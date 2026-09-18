@@ -204,13 +204,13 @@ interface RibbonProps {
   onInkClearAll: () => void
   /** References → footnotes / endnotes / citations */
   onInsertNote: (kind: 'footnote' | 'endnote') => void
-  sources: SourceInfo[]
-  onAddSource: (source: SourceInfo) => void
-  /** TOC page-number backfill: docHeadings in document order → real page numbers (null when not computable) */
   /** References → note options dialog (numbering, conversion) */
   onNoteOptions?: () => void
   /** References → Next/Previous note marker navigation */
   onNavigateNote?: (dir: 1 | -1) => void
+  sources: SourceInfo[]
+  onAddSource: (source: SourceInfo) => void
+  /** TOC page-number backfill: docHeadings in document order → real page numbers (null when not computable) */
   headingPages?: () => number[] | null
   /** displayed page of a node position from live pagination (REF \p cross-references); null = unavailable */
   anchorPage?: (pos: number) => number | null
@@ -668,13 +668,13 @@ function RibbonInner({
   inkCount,
   onInkClearAll,
   onInsertNote,
+  onNoteOptions,
+  onNavigateNote,
   sources,
   onAddSource,
   headingPages,
   anchorPage,
   zoom,
-  onNoteOptions,
-  onNavigateNote,
   onZoom,
   onZoomFit,
   darkPage,
@@ -3850,6 +3850,8 @@ function RibbonInner({
             dropdown={dropdown}
             setDropdown={setDropdown}
             onInsertNote={onInsertNote}
+            onNoteOptions={onNoteOptions}
+            onNavigateNote={onNavigateNote}
             sources={sources}
             onAddSource={onAddSource}
             headingPages={headingPages}
@@ -3857,8 +3859,6 @@ function RibbonInner({
         ) : tab === 'review' ? (
           <ReviewTab
             editor={editor}
-            onNoteOptions={onNoteOptions}
-            onNavigateNote={onNavigateNote}
             hasDoc={hasDoc}
             canEdit={canEdit}
             dropdown={dropdown}

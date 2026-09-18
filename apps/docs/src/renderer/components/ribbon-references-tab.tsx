@@ -22,6 +22,7 @@ import {
   IconCitation,
   IconEndnote,
   IconFootnote,
+  IconGear,
   IconIndex,
   IconRefresh,
   IconToc,
@@ -341,11 +342,11 @@ function SourceModal({
 interface ReferencesTabProps extends TabProps {
   blocks: Block[]
   onInsertNote: (kind: 'footnote' | 'endnote') => void
-  sources: SourceInfo[]
   /** open the Footnote and Endnote options dialog (numbering format, conversion) */
   onNoteOptions?: () => void
   /** Next / Previous note reference navigation (Word's Next Footnote) */
   onNavigateNote?: (dir: 1 | -1) => void
+  sources: SourceInfo[]
   onAddSource: (source: SourceInfo) => void
   /** TOC page-number backfill: docHeadings in document order → real page numbers */
   headingPages?: () => number[] | null
@@ -358,51 +359,9 @@ export function ReferencesTab({
   dropdown,
   setDropdown,
   onInsertNote,
-  sources,
   onNoteOptions,
   onNavigateNote,
-          <div className="rb-split-wrap">
-            <button
-              className="rb-big"
-              disabled={!hasDoc}
-              data-tip={t('refsNoteMenuTip')}
-              onClick={() => toggleDropdown(setDropdown, 'noteoptions')}
-            >
-              <span className="rb-big-icon">
-                <IconGear size={BIG} />
-                <IconCaret />
-              </span>
-              <span>{t('refsNoteMenu')}</span>
-            </button>
-            {dropdown === 'noteoptions' && (
-              <div data-rb-panel="" className="layout-menu">
-                <button
-                  onClick={() => {
-                    onNoteOptions?.()
-                    setDropdown(() => null)
-                  }}
-                >
-                  <b>{t('refsNoteOptionsTitle')}</b>
-                </button>
-                <button
-                  onClick={() => {
-                    onNavigateNote?.(1)
-                    setDropdown(() => null)
-                  }}
-                >
-                  <b>{t('refsNextNote')}</b>
-                </button>
-                <button
-                  onClick={() => {
-                    onNavigateNote?.(-1)
-                    setDropdown(() => null)
-                  }}
-                >
-                  <b>{t('refsPrevNote')}</b>
-                </button>
-              </div>
-            )}
-          </div>
+  sources,
   onAddSource,
   headingPages,
 }: ReferencesTabProps) {
@@ -561,6 +520,48 @@ export function ReferencesTab({
             </span>
             <span>{t('ribbonEndnote')}</span>
           </button>
+          <div className="rb-split-wrap">
+            <button
+              className="rb-big"
+              disabled={!hasDoc}
+              data-tip={t('refsNoteMenuTip')}
+              onClick={() => toggleDropdown(setDropdown, 'noteoptions')}
+            >
+              <span className="rb-big-icon">
+                <IconGear size={BIG} />
+                <IconCaret />
+              </span>
+              <span>{t('refsNoteMenu')}</span>
+            </button>
+            {dropdown === 'noteoptions' && (
+              <div data-rb-panel="" className="layout-menu">
+                <button
+                  onClick={() => {
+                    onNoteOptions?.()
+                    setDropdown(() => null)
+                  }}
+                >
+                  <b>{t('refsNoteOptionsTitle')}</b>
+                </button>
+                <button
+                  onClick={() => {
+                    onNavigateNote?.(1)
+                    setDropdown(() => null)
+                  }}
+                >
+                  <b>{t('refsNextNote')}</b>
+                </button>
+                <button
+                  onClick={() => {
+                    onNavigateNote?.(-1)
+                    setDropdown(() => null)
+                  }}
+                >
+                  <b>{t('refsPrevNote')}</b>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         <div className="ribbon-group-label">{t('ribbonGroupFootnotes')}</div>
       </div>

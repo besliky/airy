@@ -1212,6 +1212,7 @@ export function runsToInline(runs: Run[]): PmNode[] {
       })
       continue
     }
+
     const marks = runMarks(run)
     // \n = soft line break, \f = in-paragraph page break, \v = column break
     const breakMarks = marks.length > 0 ? { marks } : {}
@@ -2555,16 +2556,16 @@ export function inlineToRuns(content: PmNode[]): Run[] {
       continue
     }
     if (node.type === 'docNoteRef') {
-      runs.push({
       const customMark =
         typeof node.attrs?.customMark === 'string' && node.attrs.customMark !== ''
           ? String(node.attrs.customMark)
           : undefined
-          ...(customMark ? { customMark } : {}),
+      runs.push({
         text: String(node.attrs?.num ?? 1),
         noteRef: {
           kind: (node.attrs?.kind as 'footnote' | 'endnote') ?? 'footnote',
           id: String(node.attrs?.id ?? ''),
+          ...(customMark ? { customMark } : {}),
         },
       })
       continue

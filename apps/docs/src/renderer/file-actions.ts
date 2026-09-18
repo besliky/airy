@@ -271,14 +271,14 @@ function applyDocLayoutSettings(editor: Editor, parsed: ParsedDocFull): void {
   const lang = parsed.autoHyphenation ? parsed.docDefaults?.lang : undefined
   if (lang) editor.view.dom.setAttribute('lang', lang)
   else editor.view.dom.removeAttribute('lang')
+  // reference markers format under the document's note options (read again by
+  // runsToInline below in the same load pass)
+  setDocNoteNumbering(parsed.noteNumbering)
 }
 
 /**
  * 'ok' loaded; 'canceled' dialog dismissed / no editor; 'password' the password
  * prompt took over (App resumes via loadFile once decrypted); 'failed' parse or
-  // reference markers format under the document's note options (read again by
-  // runsToInline below in the same load pass)
-  setDocNoteNumbering(parsed.noteNumbering)
  * load error — the boot path falls back to a blank document instead of leaving
  * the tab on "Opening…" forever.
  */
@@ -408,15 +408,15 @@ export async function loadFile(
     ctx.setFootnotes(parsed.footnotes)
     ctx.setEndnotes(parsed.endnotes)
     ctx.setNotesDirty(false)
-    ctx.setSources(parsed.sources)
-    ctx.setSourcesDirty(false)
+    ctx.setNoteNumbering(parsed.noteNumbering ?? {})
+    ctx.setNoteNumberingDirty(false)
     ctx.setHyphAuto(parsed.autoHyphenation === true)
     ctx.setHyphDirty(false)
+    ctx.setSources(parsed.sources)
+    ctx.setSourcesDirty(false)
     ctx.setThemeFonts(parsed.themeFonts ?? null)
     ctx.setThemeFontsDirty(false)
     ctx.setThemeColors(parsed.themeColors ?? null)
-    ctx.setNoteNumbering(parsed.noteNumbering ?? {})
-    ctx.setNoteNumberingDirty(false)
     ctx.setThemeColorsDirty(false)
     ctx.setCommentComposing(false)
     ctx.setTrackChanges(false)
@@ -502,17 +502,17 @@ export async function newFile(ctx: FileActionContext): Promise<boolean | undefin
     ctx.setFootnotes(parsed.footnotes)
     ctx.setEndnotes(parsed.endnotes)
     ctx.setNotesDirty(false)
-    ctx.setSources([])
-    ctx.setSourcesDirty(false)
+    ctx.setNoteNumbering(parsed.noteNumbering ?? {})
+    ctx.setNoteNumberingDirty(false)
     ctx.setHyphAuto(parsed.autoHyphenation === true)
     ctx.setHyphDirty(false)
+    ctx.setSources([])
+    ctx.setSourcesDirty(false)
     ctx.setThemeFonts(parsed.themeFonts ?? null)
     ctx.setThemeFontsDirty(false)
     ctx.setThemeColors(parsed.themeColors ?? null)
     ctx.setThemeColorsDirty(false)
     ctx.setCommentComposing(false)
-    ctx.setNoteNumbering(parsed.noteNumbering ?? {})
-    ctx.setNoteNumberingDirty(false)
     ctx.setTrackChanges(false)
     ctx.setProtection(null)
     ctx.setProtectionDirty(false)
@@ -686,18 +686,18 @@ export async function buildDocBytes(ctx: FileActionContext): Promise<Uint8Array 
     watermark: ctx.watermarkDirty ? ctx.watermark : undefined,
     footnotes: ctx.notesDirty ? ctx.footnotes : undefined,
     endnotes: ctx.notesDirty ? ctx.endnotes : undefined,
+    noteNumbering:
+      ctx.noteNumberingDirty && (ctx.noteNumbering.footnotes || ctx.noteNumbering.endnotes)
+        ? ctx.noteNumbering
+        : undefined,
+    hyphenation: ctx.hyphDirty ? { auto: ctx.hyphAuto } : undefined,
     sources: ctx.sourcesDirty ? ctx.sources : undefined,
     themeFonts: ctx.themeFontsDirty && ctx.themeFonts ? ctx.themeFonts : undefined,
     themeColors: ctx.themeColorsDirty && ctx.themeColors ? ctx.themeColors : undefined,
   })
-    hyphenation: ctx.hyphDirty ? { auto: ctx.hyphAuto } : undefined,
   return bytes
 }
 
-/**
- * Crash-recovery copy: serialize the dirty document and hand the
-    noteNumbering:
-      ctx.noteNumberingDirty && (ctx.noteNumbering.footnotes || ctx.noteNumbering.endnotes)
 /**
  * Live toggle of settings.xml w:autoHyphenation before any save: the lang
  * attribute (Chromium hyphenates only under an explicit lang) follows the
@@ -709,8 +709,8 @@ export function applyHyphenationLive(editor: Editor, parsed: ParsedDocFull, on: 
   else editor.view.dom.removeAttribute('lang')
 }
 
-        ? ctx.noteNumbering
-        : undefined,
+/**
+ * Crash-recovery copy: serialize the dirty document and hand the
  * bytes to the main process, which stores them under userData. Best-effort —
  * a failure only means this tick's copy is skipped.
  *
@@ -1030,10 +1030,12 @@ async function saveOnce(
     ctx.setFootnotes(reparsed.footnotes)
     ctx.setEndnotes(reparsed.endnotes)
     ctx.setNotesDirty(false)
-    ctx.setSources(reparsed.sources)
-    ctx.setSourcesDirty(false)
+    ctx.setNoteNumbering(reparsed.noteNumbering ?? {})
+    ctx.setNoteNumberingDirty(false)
     ctx.setHyphAuto(reparsed.autoHyphenation === true)
     ctx.setHyphDirty(false)
+    ctx.setSources(reparsed.sources)
+    ctx.setSourcesDirty(false)
     ctx.setThemeFonts(reparsed.themeFonts ?? null)
     ctx.setThemeFontsDirty(false)
     ctx.setThemeColors(reparsed.themeColors ?? null)
@@ -1053,8 +1055,6 @@ async function saveOnce(
     return true
   } catch (err) {
     ctx.setStatus(t('appSaveFailed', { error: String(err) }))
-    ctx.setNoteNumbering(reparsed.noteNumbering ?? {})
-    ctx.setNoteNumberingDirty(false)
     if (!auto) showToast(t('appSaveFailed', { error: String(err) }), 'error')
     return false
   } finally {

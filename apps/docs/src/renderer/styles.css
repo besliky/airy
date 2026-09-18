@@ -4025,16 +4025,6 @@ th.cell-rev-del {
   border-left: 1px solid var(--docs-paper-ink);
 }
 
-/* Columns dialog: preset chips in a row, active preset highlighted */
-.cols-preset {
-  flex: 1 1 auto;
-}
-
-.cols-preset.active {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 /* the clone is a gapless continuous flow (slices use virtual coordinates); canvas page gaps don't enter the clone */
 .pv-clip .page-gap,
 .pv-clip .page-gap-cut,
@@ -6049,6 +6039,16 @@ body.docs-crop-active .doc-protected[data-doc-protected='image'] .doc-img-wrap {
 
 .ln-auto input {
   flex: none;
+}
+
+/* Columns dialog: preset chips in a row, active preset highlighted */
+.cols-preset {
+  flex: 1 1 auto;
+}
+
+.cols-preset.active {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .bookmark-list {
