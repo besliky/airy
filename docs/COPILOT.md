@@ -2,7 +2,7 @@
 
 `packages/mcp-server` (npm name `@airy-office/mcp`) is a Model Context
 Protocol server that lets CLI coding agents work with real office files:
-headless `.docx` / `.xlsx` / Markdown editing through the suite's own engines,
+headless `.docx` / `.xlsx` / Markdown / HTML editing through the suite's own engines,
 plus a live bridge into the running Airy desktop app. It speaks MCP over stdio,
 runs as a plain Node process (no Electron, no display), and needs no
 installed app for the headless tools.
@@ -192,17 +192,17 @@ of which copy of the server connects to it.
 
 Headless (no app required):
 
-| Tool                 | Signature (short)                                                                                                                                              |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ping`               | `()` — liveness probe                                                                                                                                          |
-| `open_document`      | `(path)` — open `.docx/.xlsx/.xlsm/.xls/.ods/.doc/.odt/.md/.markdown`, returns a session handle + meta                                                         |
-| `read_document`      | `(handle, blocks? \| range?)` — block overview or full restricted HTML for text documents; markdown: heading structure + full text (blocks/range select lines) |
-| `read_workbook`      | `(handle, sheet?, range?)` — sheet overview or a pipe table of an A1 range                                                                                     |
-| `insert_content`     | `(handle, html, at?)` — docx: insert a restricted-HTML fragment after block `at`; markdown: `text` + `at`/`afterHeading`/`marker` positions                    |
-| `apply_ops`          | `(handle, ops, dryRun?)` — validated, atomic batch of edit ops (max 100): block ops for docx, line ops for markdown                                            |
-| `apply_workbook_ops` | `(handle, edits, dryRun?)` — validated batch of cell edits: value / formula / style / rich text (max 100)                                                      |
-| `save_document`      | `(handle, path?, overwrite?, format?)` — atomic save; refuses existing targets without `overwrite: true`; `format: "origin"` exports back to the legacy format |
-| `close_document`     | `(handle)` — close the session, clean up temp files                                                                                                            |
+| Tool                 | Signature (short)                                                                                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ping`               | `()` — liveness probe                                                                                                                                              |
+| `open_document`      | `(path)` — open `.docx/.xlsx/.xlsm/.xls/.ods/.doc/.odt/.md/.markdown/.html/.htm`, returns a session handle + meta                                                  |
+| `read_document`      | `(handle, blocks? \| range?)` — block overview or full restricted HTML for text documents; markdown: heading structure; html: parse5 structure summary (lines)     |
+| `read_workbook`      | `(handle, sheet?, range?)` — sheet overview or a pipe table of an A1 range                                                                                         |
+| `insert_content`     | `(handle, html, at?)` — docx: restricted-HTML fragment after block `at`; markdown: `text` + `at`/`afterHeading`/`marker`; html: verbatim fragment at `at`/`marker` |
+| `apply_ops`          | `(handle, ops, dryRun?)` — validated, atomic batch of edit ops (max 100): block ops for docx, line ops for markdown/html                                           |
+| `apply_workbook_ops` | `(handle, edits, dryRun?)` — validated batch of cell edits: value / formula / style / rich text (max 100)                                                          |
+| `save_document`      | `(handle, path?, overwrite?, format?)` — atomic save; refuses existing targets without `overwrite: true`; `format: "origin"` exports back to the legacy format     |
+| `close_document`     | `(handle)` — close the session, clean up temp files                                                                                                                |
 
 Live (app running; always target the _active_ tab):
 
@@ -261,6 +261,28 @@ saves, untouched lines keep their exact bytes (EOLs included — a CRLF file
 stays CRLF, mixed line endings keep their own), and a zero-edit save writes
 the original bytes back verbatim. Markdown files cap at 8 MiB.
 
+HTML editing (`.html` / `.htm`) is line-based, like a source editor.
+`read_document` shows the title, stats (including the file's EOL style and
+BOM), a parse5 structure summary — headings (`ordinal|line|level|text`) and
+links (`ordinal|line|text -> href`) with 0-based line positions, from the
+same parser the Airy HTML editor builds on — and the full text (30k budget;
+`blocks`/`range` select lines). `insert_content` splices the fragment
+**verbatim** (no reparse or rewrite — exactly what you send lands on disk,
+modulo the file's EOL style) after the first line containing `marker` (e.g.
+`</body>` to append rendered content) or after line `at` (`-1` = start;
+default: end). `apply_ops` runs line ops instead of block ops:
+`insertLines after text`, `replaceLines from to text` (empty text deletes
+the range), `deleteLines from to`, and `findReplace find replace matchCase?
+from? to?` (line-scoped, optional inclusive line window). Line indexes are
+0-based and shift after every splice — re-read between edits. Encoding:
+UTF-8 (BOM-prefixed UTF-8/UTF-16 accepted); bytes that are not valid UTF-8
+open only when the document declares a usable `<meta charset>` — undeclared
+non-UTF-8 is refused with a conversion hint. A leading BOM survives saves,
+untouched lines keep their exact bytes (EOLs included — a CRLF file stays
+CRLF, mixed line endings keep their own), and a zero-edit save writes the
+original bytes back verbatim. HTML files cap at 8 MiB; documents above 1M
+characters skip the structure scan (read shows the text only).
+
 ## Live mode
 
 When the Airy app runs, its main process starts a bridge server on a local
@@ -313,10 +335,11 @@ deliberate choice) and its result says whose turn it was (`anotherClient`).
 | `.doc`              | via soffice → editable `.docx`; without soffice → read-only text | `.docx`; `format: "origin"` best-effort `.doc` via soffice                                              |
 | `.odt`              | via soffice → editable `.docx` (without soffice: clear error)    | `.docx`; `format: "origin"` best-effort `.odt` via soffice                                              |
 | `.md` / `.markdown` | native (UTF-8, BOM accepted; invalid UTF-8 refused)              | line-preserving UTF-8; zero-edit saves round-trip verbatim; UTF-16 originals convert to UTF-8 on save   |
+| `.html` / `.htm`    | native (UTF-8, BOM accepted; declared legacy charsets accepted)  | line-preserving UTF-8; zero-edit saves round-trip verbatim; legacy/UTF-16 originals convert to UTF-8    |
 
 Byte preservation differs by format. `docx` saves keep untouched parts
 byte-identical, and a zero-edit save writes the original bytes back verbatim.
-`markdown` sessions behave the same at line granularity: untouched lines keep
+`markdown` and `html` sessions behave the same at line granularity: untouched lines keep
 their exact bytes (EOLs included) and a zero-edit save round-trips the file
 verbatim; an edited save writes UTF-8 with the original BOM re-applied.
 `xlsx` saves keep untouched zip entries byte-identical **except
@@ -325,15 +348,16 @@ flag so edited formulas recalculate on open, so even a zero-edit workbook
 save may rewrite that one entry — and the save result's `unchanged` flag is
 journal-based for workbooks (no edits journaled), not a byte guarantee.
 
-Headless slides, PDF and HTML tools are planned (backlog).
+Headless slides and PDF tools are planned (backlog).
 
 Reads are bounded to keep tool answers inside the ~30k-character MCP budget:
 `read_document` truncates its output at 30,000 characters (the block
 overview tightens previews and elides the middle first; a selected-blocks
 read tells you to narrow the range), `read_document`'s `blocks` parameter
 accepts at most 200 indexes per call, and `read_workbook` ranges cap at
-20,000 cells (split larger ranges into smaller reads). Markdown sessions add
-an 8 MiB open cap (larger files are refused with a clear error).
+20,000 cells (split larger ranges into smaller reads). Markdown and HTML sessions add
+an 8 MiB open cap (larger files are refused with a clear error); HTML documents above
+1M characters skip the parse5 structure scan.
 
 ## Security model
 
