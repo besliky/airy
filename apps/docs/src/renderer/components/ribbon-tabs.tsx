@@ -1034,6 +1034,8 @@ export function ReviewTab({
               className="rb-big"
               disabled={!hasDoc}
               data-tip={t('ribbonCompareTip')}
+              aria-haspopup="menu"
+              aria-expanded={dropdown === 'compare'}
               onClick={() => toggleDropdown(setDropdown, 'compare')}
             >
               <span className="rb-big-icon">
