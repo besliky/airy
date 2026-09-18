@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import type { Editor, JSONContent } from '@tiptap/core'
+import type { Command, Editor, JSONContent } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import {
   SHAPE_GALLERY_GROUPS,
@@ -130,16 +130,22 @@ export function clearParagraphFormatting(editor: Editor): void {
   setParaAttrs(editor, { ...DIRECT_PARA_ATTRS })
 }
 
-/** apply a gallery paragraph style; not for textbox sub-editors (no docHeading in their schema) */
-export function applyParagraphStyle(editor: Editor, key: 'p' | 'h1' | 'h2' | 'h3'): void {
-  let c = editor.chain().focus()
-  if (key === 'p') c = c.setNode('docParagraph')
-  else c = c.setNode('docHeading', { level: Number(key.slice(1)) })
-  // Word-like: applying a paragraph style sheds the runs' direct font/size/color.
-  // Those render as inline span styles and would otherwise mask the style's look
-  // entirely (the click would seem to do nothing on documents whose body runs
-  // carry explicit rPr, common in CJK templates).
-  c.command(({ tr }) => {
+/** gallery paragraph-style keys: Normal plus Word's nine built-in heading levels */
+export type ParagraphStyleKey = 'p' | `h${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`
+
+/** heading styleId the engine falls back to when styles.xml defines none for a level */
+export function builtinHeadingStyleId(level: number): string {
+  return `Heading${Math.min(Math.max(Math.round(level), 1), 9)}`
+}
+
+/**
+ * Word-like: applying a paragraph style sheds the runs' direct font/size/color.
+ * Those render as inline span styles and would otherwise mask the style's look
+ * entirely (the click would seem to do nothing on documents whose body runs
+ * carry explicit rPr, common in CJK templates).
+ */
+function shedDirectRunFormat(editor: Editor): Command {
+  return ({ tr }) => {
     const { from, to } = tr.selection
     let start = from
     let end = to
@@ -175,7 +181,101 @@ export function applyParagraphStyle(editor: Editor, key: 'p' | 'h1' | 'h2' | 'h3
       if (job.attrs) tr.addMark(job.from, job.to, type.create(job.attrs))
     }
     return true
-  }).run()
+  }
+}
+
+/** apply a gallery paragraph style; not for textbox sub-editors (no docHeading in their schema) */
+export function applyParagraphStyle(
+  editor: Editor,
+  key: ParagraphStyleKey,
+  styleId?: string | null,
+): void {
+  let c = editor.chain().focus()
+  // the styleId is always set explicitly: tiptap's setNode copies the previous
+  // block's attrs, so without it a h2→Normal switch would keep pStyle Heading2
+  if (key === 'p') c = c.setNode('docParagraph', { styleId: styleId ?? null })
+  else
+    c = c.setNode('docHeading', {
+      level: Number(key.slice(1)),
+      styleId: styleId ?? builtinHeadingStyleId(Number(key.slice(1))),
+    })
+  c.command(shedDirectRunFormat(editor)).run()
+}
+
+/**
+ * Apply a document paragraph style by styleId (styles.xml entries incl. custom
+ * ones). A style carrying an outline level turns the paragraphs into headings
+ * of that level; a non-heading style turns headings back into body paragraphs.
+ * List paragraphs keep their numbering and only change the pStyle (Word keeps
+ * list-ness when a paragraph style is applied).
+ */
+export function applyDocumentParagraphStyle(
+  editor: Editor,
+  style: { styleId: string; headingLevel?: number },
+): void {
+  if (style.headingLevel) {
+    const level = Math.min(Math.max(Math.round(style.headingLevel), 1), 9)
+    applyParagraphStyle(editor, `h${level}` as ParagraphStyleKey, style.styleId)
+    return
+  }
+  const c = editor
+    .chain()
+    .focus()
+    .command(({ tr, state }) => {
+      const { from, to } = tr.selection
+      tr.doc.nodesBetween(from, to, (node, pos) => {
+        if (!node.isTextblock) return
+        if (node.type.name === 'docHeading') {
+          tr.setNodeMarkup(pos, state.schema.nodes.docParagraph, {
+            ...node.attrs,
+            styleId: style.styleId,
+          })
+        } else if (node.type.name !== 'docProtected') {
+          tr.setNodeMarkup(pos, undefined, { ...node.attrs, styleId: style.styleId })
+        }
+      })
+      return true
+    })
+  c.command(shedDirectRunFormat(editor)).run()
+}
+
+/**
+ * Modify Style with a changed outline level: the paragraphs already carrying the
+ * pStyle follow it live — headings retag to the new level (or drop to body
+ * paragraphs at "body text"), body paragraphs of a newly-outlined style become
+ * headings. Unmodified documents are untouched.
+ */
+export function retagStyleParagraphs(
+  editor: Editor,
+  styleId: string,
+  headingLevel: number | null,
+): void {
+  const { state } = editor
+  const tr = state.tr
+  let touched = false
+  state.doc.descendants((node, pos) => {
+    if (node.type.name === 'docHeading') {
+      if (node.attrs.styleId !== styleId) return
+      if (headingLevel == null) {
+        tr.setNodeMarkup(pos, state.schema.nodes.docParagraph, { ...node.attrs })
+        touched = true
+      } else if (Number(node.attrs.level) !== headingLevel) {
+        tr.setNodeMarkup(pos, undefined, { ...node.attrs, level: headingLevel })
+        touched = true
+      }
+    } else if (
+      headingLevel != null &&
+      node.type.name === 'docParagraph' &&
+      node.attrs.styleId === styleId
+    ) {
+      tr.setNodeMarkup(pos, state.schema.nodes.docHeading, {
+        ...node.attrs,
+        level: headingLevel,
+      })
+      touched = true
+    }
+  })
+  if (touched) editor.view.dispatch(tr)
 }
 
 /** attrs of the paragraph-like node at the cursor */

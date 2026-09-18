@@ -65,6 +65,8 @@ export interface RibbonFormatState {
   fontSizePt: number
   fontFamily: string
   headingLevel: number | null
+  /** pStyle of the paragraph-like node at the cursor (paragraph-style gallery highlight) */
+  paraStyleId: string | null
   listBullet: boolean
   listOrdered: boolean
   align: string | null
@@ -121,6 +123,7 @@ export const EMPTY_FORMAT_STATE: RibbonFormatState = {
   fontSizePt: 11,
   fontFamily: '',
   headingLevel: null,
+  paraStyleId: null,
   listBullet: false,
   listOrdered: false,
   align: null,
@@ -296,6 +299,7 @@ export function computeFormatState(
     headingLevel: editor.isActive('docHeading')
       ? Number(editor.getAttributes('docHeading').level ?? 1)
       : null,
+    paraStyleId: str(mainPara.styleId),
     listBullet: editor.isActive('docListItem', { kind: 'bullet' }),
     listOrdered: editor.isActive('docListItem', { kind: 'ordered' }),
     align: str(paraAttrs.align),

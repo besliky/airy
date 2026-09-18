@@ -178,7 +178,9 @@ describe('style gallery overflow', () => {
 
   it('shows no expander while every card fits', () => {
     expect(container.querySelector('.style-gallery')).not.toBeNull()
-    expect(container.querySelectorAll('.style-gallery .style-card').length).toBe(6)
+    // no styles.xml map passed: Normal + the nine built-in heading levels
+    // (PAR-114) + the two preset character styles
+    expect(container.querySelectorAll('.style-gallery .style-card').length).toBe(12)
     expect(container.querySelector('.style-gallery-more')).toBeNull()
   })
 
@@ -191,7 +193,7 @@ describe('style gallery overflow', () => {
     // the gallery is capped right after the last visible card (2 × 78 - 4 gap)
     expect((gallery as HTMLElement).style.maxWidth).toBe('152px')
 
-    setRowLayout(gallery, 6)
+    setRowLayout(gallery, 12)
     act(() => FakeResizeObserver.fire(wrap))
     expect(container.querySelector('.style-gallery-more')).toBeNull()
     expect((gallery as HTMLElement).style.maxWidth).toBe('')
@@ -208,8 +210,8 @@ describe('style gallery overflow', () => {
 
     const menu = container.querySelector('.style-gallery-menu')!
     const cards = menu.querySelectorAll<HTMLButtonElement>('.style-card')
-    // 4 paragraph styles + 2 preset character styles: nothing is dropped
-    expect(cards.length).toBe(6)
+    // Normal + 9 heading levels + 2 preset character styles: nothing is dropped
+    expect(cards.length).toBe(12)
 
     editor.commands.setTextSelection(3)
     act(() => cards[1].click()) // Heading 1
