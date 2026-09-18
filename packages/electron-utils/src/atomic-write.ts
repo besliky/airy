@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { rename, unlink, writeFile } from 'node:fs/promises'
+import { open, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 
 /** Transient Windows codes: antivirus/indexer briefly locks the rename target. */
@@ -15,6 +15,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
  * atomicity for that one save beats failing a save a plain writeFileSync would
  * have completed. Shared by every app main (docs/sheets/pdf/markdown/html);
  * formerly one near-identical copy per app.
+ *
+ * Durability (power-loss, not crash): the temp file is fsynced before the
+ * rename — without it a renamed entry can surface empty or truncated after
+ * power loss on several filesystems. On POSIX the parent directory is fsynced
+ * after the rename so the new directory entry itself is durable. Windows
+ * cannot open a directory for fsync (EPERM), so there the directory flush is
+ * skipped: NTFS's metadata journaling is the accepted residual risk.
  */
 export async function atomicWriteFile(filePath: string, data: Uint8Array): Promise<void> {
   const tmp = join(
@@ -22,10 +29,21 @@ export async function atomicWriteFile(filePath: string, data: Uint8Array): Promi
     `.${basename(filePath)}.${randomBytes(6).toString('hex')}.tmp`,
   )
   try {
-    await writeFile(tmp, data)
+    const handle = await open(tmp, 'w')
+    try {
+      await handle.writeFile(data)
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
     for (let attempt = 0; ; attempt += 1) {
       try {
         await rename(tmp, filePath)
+        // best-effort: the rename already succeeded, a failing directory
+        // flush must not fail the save (unusual filesystems reject dir fsync)
+        if (process.platform !== 'win32') {
+          await syncDirectory(dirname(filePath))
+        }
         return
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code ?? ''
@@ -44,6 +62,19 @@ export async function atomicWriteFile(filePath: string, data: Uint8Array): Promi
     }
     await unlink(tmp).catch(() => {})
     throw error
+  }
+}
+
+async function syncDirectory(directory: string): Promise<void> {
+  const handle = await open(directory, 'r').catch(() => null)
+  if (handle === null) return
+  try {
+    await handle.sync()
+  } catch {
+    // journaled/network filesystems may refuse a directory fsync — the file
+    // data itself is already durable at this point
+  } finally {
+    await handle.close().catch(() => {})
   }
 }
 

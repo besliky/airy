@@ -1,7 +1,8 @@
 // Slides ribbon groups are named ARIA groups: the shared Group component
-// renders role=group + aria-label (the localized visible label) in both the
-// expanded and the collapsed dropdown form, mirroring the sheets ribbon
-// groups' named <section> wrappers.
+// names itself with aria-labelledby pointing at its visible label element in
+// both the expanded and the collapsed dropdown form (a single source of
+// truth — a duplicated aria-label could drift from the visible text),
+// mirroring the sheets ribbon groups' named <section> wrappers.
 import { beforeAll, describe, expect, it } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -26,7 +27,7 @@ function unmount(container: HTMLElement, root: Root) {
 }
 
 describe('ribbon Group aria structure', () => {
-  it('names the expanded group by its visible label', () => {
+  it('names the expanded group through its visible label element', () => {
     const { container, root } = mount(
       createElement(Group, {
         label: 'Clipboard',
@@ -36,10 +37,15 @@ describe('ribbon Group aria structure', () => {
     )
     const group = container.querySelector('.ribbon-group') as HTMLElement
     expect(group.getAttribute('role')).toBe('group')
-    expect(group.getAttribute('aria-label')).toBe('Clipboard')
+    // the name comes from the label element, not from a second copy of the text
+    expect(group.getAttribute('aria-label')).toBeNull()
+    const labelId = group.getAttribute('aria-labelledby')
+    expect(labelId).toBeTruthy()
+    const label = group.querySelector('.ribbon-group-label') as HTMLElement
+    expect(label.getAttribute('id')).toBe(labelId)
+    // the accessible name resolves to the visible text
+    expect(label.textContent).toBe('Clipboard')
     expect(group.getAttribute('data-rbgroup')).toBe('clip')
-    // the visible label stays rendered for sighted users
-    expect(group.querySelector('.ribbon-group-label')?.textContent).toBe('Clipboard')
     unmount(container, root)
   })
 
@@ -54,9 +60,39 @@ describe('ribbon Group aria structure', () => {
     )
     const group = container.querySelector('.ribbon-group') as HTMLElement
     expect(group.getAttribute('role')).toBe('group')
-    expect(group.getAttribute('aria-label')).toBe('Font')
+    const labelId = group.getAttribute('aria-labelledby')
+    expect(labelId).toBeTruthy()
+    expect((group.querySelector('.ribbon-group-label') as HTMLElement).getAttribute('id')).toBe(
+      labelId,
+    )
     // collapsed groups surface their contents through the toggle button
     expect(group.querySelector('button.rb-big')).not.toBeNull()
+    unmount(container, root)
+  })
+
+  it('gives sibling groups distinct label ids', () => {
+    const { container, root } = mount(
+      createElement(
+        'div',
+        null,
+        createElement(Group, {
+          label: 'Clipboard',
+          groupId: 'clip',
+          children: createElement('button', null, 'Copy'),
+        }),
+        createElement(Group, {
+          label: 'Clipboard',
+          groupId: 'clip2',
+          children: createElement('button', null, 'Paste'),
+        }),
+      ),
+    )
+    const ids = [...container.querySelectorAll('.ribbon-group-label')].map((label) =>
+      label.getAttribute('id'),
+    )
+    expect(ids[0]).toBeTruthy()
+    expect(ids[1]).toBeTruthy()
+    expect(ids[0]).not.toBe(ids[1])
     unmount(container, root)
   })
 })

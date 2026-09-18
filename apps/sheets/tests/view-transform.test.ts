@@ -135,6 +135,37 @@ describe('mapRangeResultToScreen', () => {
     expect(mapped.merges).toEqual([{ startRow: 1, endRow: 2, startColumn: 1, endColumn: 1 }])
     expect(mapped.hyperlinks).toEqual([{ row: 1, column: 1, target: 'https://example.com' }])
   })
+
+  it('normalizes merge edges that a move inverts (BUG-706)', () => {
+    // Rows 0-1 swap with rows 2-3. A merge straddling the boundary maps its
+    // edges independently (row 1 → 3, row 2 → 0): the raw image is an
+    // invalid start>end rectangle — normalize per axis instead.
+    const ops: StructuralOp[] = [{ kind: 'move-rows', index: 0, count: 2, before: 4 }]
+    const mapped = mapRangeResultToScreen(ops, {
+      cells: [],
+      rows: [],
+      merges: [
+        { startRow: 1, endRow: 2, startColumn: 0, endColumn: 1 },
+        { startRow: 4, endRow: 5, startColumn: 0, endColumn: 0 },
+      ],
+      hyperlinks: [],
+      conditionalRules: [],
+      autoFilter: null,
+      autoFilterColumns: [],
+      dataValidations: [],
+      sheetProtection: null,
+      rowBreaks: [],
+      colBreaks: [],
+      protectedRanges: [],
+      pageSetup: null,
+      indexedThroughRow: null,
+      indexingComplete: true,
+    })
+    expect(mapped.merges).toEqual([
+      { startRow: 0, endRow: 3, startColumn: 0, endColumn: 1 },
+      { startRow: 4, endRow: 5, startColumn: 0, endColumn: 0 },
+    ])
+  })
 })
 
 describe('indexedThroughScreenRow', () => {

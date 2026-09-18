@@ -6,9 +6,31 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { atomicWriteFile, looksLikeZip } from '../src/atomic-write'
 
+// fsync order is the durability contract: temp-file sync must precede the
+// rename, and the directory sync (POSIX only) must follow it.
+const { order } = vi.hoisted(() => ({ order: [] as string[] }))
+
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
-  return { ...actual, rename: vi.fn(actual.rename), writeFile: vi.fn(actual.writeFile) }
+  return {
+    ...actual,
+    rename: vi.fn((...args: Parameters<typeof actual.rename>) => {
+      order.push('rename')
+      return actual.rename(...args)
+    }),
+    writeFile: vi.fn(actual.writeFile),
+    open: vi.fn(async (...args: Parameters<typeof actual.open>) => {
+      const handle = await actual.open(...args)
+      const path = args[0]
+      const isDirectory = typeof path === 'string' && !path.includes('.tmp')
+      const realSync = handle.sync.bind(handle)
+      handle.sync = async () => {
+        order.push(isDirectory ? 'dir-sync' : 'file-sync')
+        await realSync()
+      }
+      return handle
+    }),
+  }
 })
 
 let dir = ''
@@ -18,6 +40,7 @@ afterEach(() => {
   dir = ''
   vi.mocked(rename).mockClear()
   vi.mocked(writeFile).mockClear()
+  order.length = 0
 })
 
 const epermError = () =>
@@ -80,11 +103,10 @@ describe('atomicWriteFile', () => {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       vi.mocked(rename).mockRejectedValueOnce(epermError())
     }
-    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
     const fallbackError = Object.assign(new Error('EIO: fallback write failed'), { code: 'EIO' })
-    vi.mocked(writeFile)
-      .mockImplementationOnce(actual.writeFile)
-      .mockRejectedValueOnce(fallbackError)
+    // the temp write rides a file handle now, so the first module-level
+    // writeFile call is the non-atomic fallback itself
+    vi.mocked(writeFile).mockRejectedValueOnce(fallbackError)
 
     await expect(atomicWriteFile(target, Buffer.from('new'))).rejects.toThrow(
       'fallback write failed',
@@ -108,6 +130,24 @@ describe('atomicWriteFile', () => {
 
     expect(['first', 'second']).toContain(readFileSync(target, 'utf-8'))
     expect(readdirSync(dir)).toEqual(['a.docx'])
+  })
+
+  // Durability (BUG-710): an un-synced rename can surface as an empty or
+  // truncated file after power loss; the bytes must reach the disk first.
+  it('fsyncs the temp file before the rename and the directory after it', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'aw-'))
+    const target = join(dir, 'a.docx')
+    writeFileSync(target, 'old')
+
+    await atomicWriteFile(target, Buffer.from('new'))
+
+    expect(readFileSync(target, 'utf-8')).toBe('new')
+    if (process.platform === 'win32') {
+      // no directory handle is opened on Windows (fsync on a dir is EPERM)
+      expect(order).toEqual(['file-sync', 'rename'])
+    } else {
+      expect(order).toEqual(['file-sync', 'rename', 'dir-sync'])
+    }
   })
 })
 

@@ -87,4 +87,35 @@ describe('workbookSaveRequestSchema', () => {
       }),
     ).toThrow()
   })
+
+  it('rejects moves whose block runs past the sheet edge (index+count)', () => {
+    // index and count are each in bounds, but the block they describe must
+    // still fit inside the sheet — a renderer-side op with the sum over the
+    // edge would swap blocks past the last row/column.
+    const request = (op: Record<string, unknown>) => ({
+      ...emptyRequest('save'),
+      structuralOps: [{ sheetId: 'sh1', ...op }],
+    })
+    expect(() =>
+      workbookSaveRequestSchema.parse(
+        request({ kind: 'move-rows', index: 1_048_575, count: 2, before: 0 }),
+      ),
+    ).toThrow(/fit inside the sheet/)
+    expect(() =>
+      workbookSaveRequestSchema.parse(
+        request({ kind: 'move-cols', index: 16_383, count: 2, before: 0 }),
+      ),
+    ).toThrow(/fit inside the sheet/)
+    // The largest block that exactly reaches the edge stays valid.
+    expect(() =>
+      workbookSaveRequestSchema.parse(
+        request({ kind: 'move-rows', index: 1_048_575, count: 1, before: 0 }),
+      ),
+    ).not.toThrow()
+    expect(() =>
+      workbookSaveRequestSchema.parse(
+        request({ kind: 'move-cols', index: 16_383, count: 1, before: 0 }),
+      ),
+    ).not.toThrow()
+  })
 })

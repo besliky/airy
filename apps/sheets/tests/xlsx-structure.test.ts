@@ -1356,6 +1356,84 @@ describe('applyStructuralOps row moves', () => {
       '</worksheet>'
     expect(() => applyStructuralOps(torn, [move(1, 1, 3)], SHEET)).toThrow(StructuralShiftError)
   })
+
+  it('remaps file-side protectedRanges through the swap (BUG-781 replay path)', () => {
+    const xml =
+      '<worksheet><sheetData><row r="1"/><row r="2"/><row r="3"/><row r="4"/></sheetData>' +
+      '<protectedRanges>' +
+      '<protectedRange password="x" sqref="B2:C2" name="locked"/>' +
+      '<protectedRange sqref="A1:D1" name="edge"/>' +
+      '<protectedRange sqref="2:2" name="whole"/>' +
+      '<protectedRange sqref="A2:B4" name="span"/>' +
+      '</protectedRanges>' +
+      '</worksheet>'
+    // Row 2 trades places with row 3: the locked range follows its cells
+    // (password attribute travels along), the untouched row-1 edge and the
+    // spanning A2:B4 rectangle stay put, and the whole-row area re-numbers.
+    const moved = applyStructuralOps(xml, [move(1, 1, 3)], SHEET)
+    expect(moved).toContain('<protectedRange password="x" sqref="B3:C3" name="locked"/>')
+    expect(moved).toContain('<protectedRange sqref="A1:D1" name="edge"/>')
+    expect(moved).toContain('<protectedRange sqref="3:3" name="whole"/>')
+    expect(moved).toContain('<protectedRange sqref="A2:B4" name="span"/>')
+  })
+
+  it('drops fully deleted allow-edit ranges and their emptied section', () => {
+    const partial =
+      '<worksheet><sheetData><row r="1"/><row r="2"/></sheetData>' +
+      '<protectedRanges>' +
+      '<protectedRange sqref="A5:B6" name="dies"/>' +
+      '<protectedRange sqref="A1:B2" name="lives"/>' +
+      '</protectedRanges>' +
+      '</worksheet>'
+    const kept = applyStructuralOps(partial, [{ kind: 'remove-rows', index: 4, count: 2 }], SHEET)
+    expect(kept).toContain('<protectedRange sqref="A1:B2" name="lives"/>')
+    expect(kept).not.toContain('A5:B6')
+    const allDead =
+      '<worksheet><sheetData><row r="1"/></sheetData>' +
+      '<protectedRanges><protectedRange sqref="A5:B6" name="dies"/></protectedRanges>' +
+      '</worksheet>'
+    expect(
+      applyStructuralOps(allDead, [{ kind: 'remove-rows', index: 4, count: 2 }], SHEET),
+    ).not.toContain('protectedRanges')
+  })
+
+  it('fails closed when an allow-edit range is torn by the move', () => {
+    const torn =
+      '<worksheet><sheetData><row r="1"/><row r="2"/><row r="3"/><row r="4"/></sheetData>' +
+      '<protectedRanges><protectedRange sqref="A1:B2" name="torn"/></protectedRanges>' +
+      '</worksheet>'
+    // A1:B2 straddles the swapped edge (row 1 outside, row 2 moves) — no
+    // single-range image, and the error must name the axis (BUG-704).
+    expect(() => applyStructuralOps(torn, [move(1, 1, 3)], SHEET)).toThrow(/moved rows/)
+  })
+
+  it('remaps the worksheet sortState and its sort conditions through the swap', () => {
+    const xml =
+      '<worksheet><sheetData><row r="1"/><row r="2"/><row r="3"/><row r="4"/></sheetData>' +
+      '<sortState ref="A1:A4"><sortCondition ref="A2" descending="1"/></sortState>' +
+      '</worksheet>'
+    // Row 2 trades places with row 3: the spanning sortState ref keeps
+    // covering both blocks, its condition follows the moved row.
+    const moved = applyStructuralOps(xml, [move(1, 1, 3)], SHEET)
+    expect(moved).toContain(
+      '<sortState ref="A1:A4"><sortCondition ref="A3" descending="1"/></sortState>',
+    )
+    // Conditions over deleted rows drop out; a sortState left without
+    // conditions is removed, like the table-part pass does.
+    const dead =
+      '<worksheet><sheetData><row r="1"/></sheetData>' +
+      '<sortState ref="A1:A6"><sortCondition ref="A2"/><sortCondition ref="A5"/></sortState>' +
+      '</worksheet>'
+    const removed = applyStructuralOps(dead, [{ kind: 'remove-rows', index: 4, count: 2 }], SHEET)
+    expect(removed).toContain('<sortState ref="A1:A4"><sortCondition ref="A2"/></sortState>')
+    const allDead =
+      '<worksheet><sheetData><row r="1"/></sheetData>' +
+      '<sortState ref="A5:B6"><sortCondition ref="A5"/></sortState>' +
+      '</worksheet>'
+    expect(
+      applyStructuralOps(allDead, [{ kind: 'remove-rows', index: 4, count: 2 }], SHEET),
+    ).not.toContain('sortState')
+  })
 })
 
 describe('applyStructuralOps column moves', () => {
@@ -1431,6 +1509,41 @@ describe('applyStructuralOps column moves', () => {
     // the move, B stays behind) — the save must refuse instead of leaving a
     // stale sqref over the vacated columns while the rule body moves on.
     expect(() => applyStructuralOps(xml, [move(0, 1, 3)], SHEET)).toThrow(StructuralShiftError)
+  })
+
+  it('remaps protectedRanges and sortState on the column axis', () => {
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1"><v>3</v></c></row>' +
+      '</sheetData>' +
+      '<protectedRanges><protectedRange sqref="B2:B4" name="follows"/></protectedRanges>' +
+      '<sortState ref="A1:C1"><sortCondition ref="B2"/></sortState>' +
+      '</worksheet>'
+    // Column B trades places with C: the allow-edit range and the sort
+    // condition both follow their column.
+    const moved = applyStructuralOps(xml, [move(1, 1, 3)], SHEET)
+    expect(moved).toContain('<protectedRange sqref="C2:C4" name="follows"/>')
+    expect(moved).toContain('<sortState ref="A1:C1"><sortCondition ref="C2"/></sortState>')
+  })
+
+  it('names the axis in the torn-range save error', () => {
+    // A column move tearing a merge must blame the columns, not "moved rows"
+    // — the message lands verbatim in the save error the user reads.
+    const tornByColumns =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1"><v>3</v></c></row>' +
+      '</sheetData>' +
+      '<mergeCells count="1"><mergeCell ref="A1:B2"/></mergeCells>' +
+      '</worksheet>'
+    expect(() => applyStructuralOps(tornByColumns, [move(0, 1, 3)], SHEET)).toThrow(
+      /partially overlaps the moved columns/,
+    )
+    const tornByRows =
+      '<worksheet><sheetData><row r="1"/><row r="2"/></sheetData>' +
+      '<mergeCells count="1"><mergeCell ref="A1:B2"/></mergeCells></worksheet>'
+    expect(() =>
+      applyStructuralOps(tornByRows, [{ kind: 'move-rows', index: 0, count: 1, before: 3 }], SHEET),
+    ).toThrow(/partially overlaps the moved rows/)
   })
 
   it('expands and shrinks whole-column sqrefs through column inserts and deletes', () => {

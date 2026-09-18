@@ -18,9 +18,36 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 // modules bind electron values at import time and never call them here.
 vi.mock('electron', () => ({ ipcRenderer: {}, webUtils: {}, shell: {} }))
 
+// atomicWriteFile stages through a file handle (write + fsync + rename), so
+// the mid-write death is simulated on the handle's writeFile.
+const { staging } = vi.hoisted(() => ({ staging: { failOnce: false } }))
+
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
-  return { ...actual, writeFile: vi.fn(actual.writeFile) }
+  return {
+    ...actual,
+    writeFile: vi.fn(actual.writeFile),
+    open: vi.fn(async (...args: Parameters<typeof actual.open>) => {
+      const handle = await actual.open(...args)
+      const realWriteFile = handle.writeFile.bind(handle)
+      handle.writeFile = (async (
+        data: string | NodeJS.ArrayBufferView,
+        options?: Parameters<typeof realWriteFile>[1],
+      ) => {
+        if (!staging.failOnce) return realWriteFile(data, options)
+        staging.failOnce = false
+        // land a few bytes, then die the way a full disk or a killed
+        // process does
+        const staged =
+          typeof data === 'string' ? Buffer.from(data, 'utf8') : Buffer.from(data as Uint8Array)
+        await realWriteFile(staged.subarray(0, 3), options)
+        throw Object.assign(new Error('ENOSPC: no space left on device, write'), {
+          code: 'ENOSPC',
+        })
+      }) as typeof handle.writeFile
+      return handle
+    }),
+  }
 })
 const writeFileMock = vi.mocked(writeFile)
 const actualWriteFile = writeFileMock.getMockImplementation()!
@@ -39,6 +66,7 @@ async function scratchDir(): Promise<string> {
 afterEach(async () => {
   writeFileMock.mockReset()
   writeFileMock.mockImplementation(actualWriteFile)
+  staging.failOnce = false
   for (const dir of scratches.splice(0)) {
     await rm(dir, { recursive: true, force: true })
   }
@@ -65,14 +93,7 @@ describe('writeCsvBackAtomic', () => {
     // The staging write lands a few bytes then dies the way a full disk or a
     // killed process does. The old direct writeFile(path, …) had already
     // truncated the user's csv by this point.
-    writeFileMock.mockImplementationOnce(async (file, data, options) => {
-      // atomicWriteFile always stages a Buffer; the union just reflects
-      // everything fs.writeFile accepts.
-      const staged =
-        typeof data === 'string' ? Buffer.from(data, 'utf8') : Buffer.from(data as Uint8Array)
-      await actualWriteFile(file, staged.subarray(0, 3), options)
-      throw Object.assign(new Error('ENOSPC: no space left on device, write'), { code: 'ENOSPC' })
-    })
+    staging.failOnce = true
     await expect(writeCsvBackAtomic(path, 'a,b\r\n3,4\r\n')).rejects.toMatchObject({
       code: 'ENOSPC',
     })
