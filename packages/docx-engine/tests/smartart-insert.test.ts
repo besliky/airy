@@ -184,7 +184,7 @@ describe('saveDocx kind:diagram — package anatomy per preset', () => {
     const cxns = [...dataXml.matchAll(/<dgm:cxn [^>]*\/>/g)].map((m) => m[0])
     const edgeOf = (from: string, to: string) =>
       cxns.find((c) => c.includes(`srcId="${from}"`) && c.includes(`destId="${to}"`))
-    // doc → 总经理, 总经理 → each department, 研发部 → 平台组
+    // doc -> general manager -> each department; R&D dept -> platform group (CJK node texts below are string data)
     expect(edgeOf(docId!, idsByText.get('总经理')!)).toBeTruthy()
     expect(edgeOf(idsByText.get('总经理')!, idsByText.get('研发部')!)).toBeTruthy()
     expect(edgeOf(idsByText.get('总经理')!, idsByText.get('销售部')!)).toBeTruthy()
