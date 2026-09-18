@@ -296,7 +296,7 @@ export const pl = {
   ribbonCrossRefTypeText: 'Tekst odwołania',
   ribbonCrossRefTypePage: 'Numer strony',
   ribbonCrossRefTypeNumber: 'Numer',
-  ribbonCrossRefNoAnchor: 'Nie można dodać ukrytej kotwicy w dokumencie tylko do odczytu',
+  ribbonCrossRefNoAnchor: 'Nie można utworzyć ukrytej kotwicy dla elementu docelowego',
   ribbonChartInsertTitle: 'Wstaw wykres',
   ribbonChartTitlePh: 'Tytuł wykresu',
   ribbonChartBar: 'Kolumnowy',

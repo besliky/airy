@@ -293,7 +293,7 @@ export const ar = {
   ribbonCrossRefTypeText: 'نص المرجع',
   ribbonCrossRefTypePage: 'رقم الصفحة',
   ribbonCrossRefTypeNumber: 'الرقم',
-  ribbonCrossRefNoAnchor: 'تعذّر إضافة إسناد مخفي في مستند للقراءة فقط',
+  ribbonCrossRefNoAnchor: 'تعذّر إنشاء إسناد مخفي للهدف',
   ribbonChartInsertTitle: 'إدراج مخطط',
   ribbonChartTitlePh: 'عنوان المخطط',
   ribbonChartBar: 'مخطط أعمدة',

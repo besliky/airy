@@ -294,7 +294,7 @@ export const th = {
   ribbonCrossRefTypeText: 'ข้อความอ้างอิง',
   ribbonCrossRefTypePage: 'เลขหน้า',
   ribbonCrossRefTypeNumber: 'หมายเลข',
-  ribbonCrossRefNoAnchor: 'ไม่สามารถเพิ่มจุดยึดที่ซ่อนไว้ในเอกสารแบบอ่านอย่างเดียวได้',
+  ribbonCrossRefNoAnchor: 'ไม่สามารถสร้างจุดยึดที่ซ่อนไว้สำหรับเป้าหมายได้',
   ribbonChartInsertTitle: 'แทรกแผนภูมิ',
   ribbonChartTitlePh: 'ชื่อแผนภูมิ',
   ribbonChartBar: 'แผนภูมิคอลัมน์',

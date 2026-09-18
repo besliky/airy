@@ -293,7 +293,7 @@ export const he = {
   ribbonCrossRefTypeText: 'טקסט ההפניה',
   ribbonCrossRefTypePage: 'מספר עמוד',
   ribbonCrossRefTypeNumber: 'מספר',
-  ribbonCrossRefNoAnchor: 'לא ניתן להוסיף עוגן מוסתר במסמך לקריאה בלבד',
+  ribbonCrossRefNoAnchor: 'לא ניתן ליצור עוגן מוסתר עבור היעד',
   ribbonChartInsertTitle: 'הוספת תרשים',
   ribbonChartTitlePh: 'כותרת התרשים',
   ribbonChartBar: 'עמודות',

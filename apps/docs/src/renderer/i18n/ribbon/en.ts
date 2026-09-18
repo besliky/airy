@@ -295,7 +295,7 @@ export const en = {
   ribbonCrossRefTypeText: 'Reference text',
   ribbonCrossRefTypePage: 'Page number',
   ribbonCrossRefTypeNumber: 'Number',
-  ribbonCrossRefNoAnchor: 'Cannot add a hidden anchor in a read-only document',
+  ribbonCrossRefNoAnchor: 'Could not create a hidden anchor for the target',
   ribbonChartInsertTitle: 'Insert Chart',
   ribbonChartTitlePh: 'Chart Title',
   ribbonChartBar: 'Bar',

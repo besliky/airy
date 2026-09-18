@@ -297,8 +297,7 @@ export const pt = {
   ribbonCrossRefTypeText: 'Texto da referência',
   ribbonCrossRefTypePage: 'Número da página',
   ribbonCrossRefTypeNumber: 'Número',
-  ribbonCrossRefNoAnchor:
-    'Não é possível adicionar uma âncora oculta num documento somente leitura',
+  ribbonCrossRefNoAnchor: 'Não foi possível criar uma âncora oculta para o destino',
   ribbonChartInsertTitle: 'Inserir Gráfico',
   ribbonChartTitlePh: 'Título do Gráfico',
   ribbonChartBar: 'Colunas',

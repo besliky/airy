@@ -298,8 +298,7 @@ export const it = {
   ribbonCrossRefTypeText: 'Testo del riferimento',
   ribbonCrossRefTypePage: 'Numero di pagina',
   ribbonCrossRefTypeNumber: 'Numero',
-  ribbonCrossRefNoAnchor:
-    "Impossibile aggiungere un'ancora nascosta in un documento di sola lettura",
+  ribbonCrossRefNoAnchor: "Impossibile creare un'ancora nascosta per la destinazione",
   ribbonChartInsertTitle: 'Inserisci grafico',
   ribbonChartTitlePh: 'Titolo del grafico',
   ribbonChartBar: 'Istogramma',

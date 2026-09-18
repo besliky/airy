@@ -295,7 +295,7 @@ export const cs = {
   ribbonCrossRefTypeText: 'Text odkazu',
   ribbonCrossRefTypePage: 'Číslo stránky',
   ribbonCrossRefTypeNumber: 'Číslo',
-  ribbonCrossRefNoAnchor: 'Do dokumentu jen pro čtení nelze přidat skrytou kotvu',
+  ribbonCrossRefNoAnchor: 'Cíli nelze vytvořit skrytou kotvu',
   ribbonChartInsertTitle: 'Vložit graf',
   ribbonChartTitlePh: 'Název grafu',
   ribbonChartBar: 'Sloupcový',

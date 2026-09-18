@@ -307,7 +307,7 @@ export const ja = {
   ribbonCrossRefTypeText: '参照テキスト',
   ribbonCrossRefTypePage: 'ページ番号',
   ribbonCrossRefTypeNumber: '番号',
-  ribbonCrossRefNoAnchor: '読み取り専用のドキュメントには非表示のアンカーを追加できません',
+  ribbonCrossRefNoAnchor: '対象の非表示アンカーを作成できません',
   // Chart dialog
   ribbonChartInsertTitle: 'グラフの挿入',
   ribbonChartTitlePh: 'グラフ タイトル',

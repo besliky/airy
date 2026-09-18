@@ -299,7 +299,7 @@ export const es = {
   ribbonCrossRefTypeText: 'Texto de la referencia',
   ribbonCrossRefTypePage: 'Número de página',
   ribbonCrossRefTypeNumber: 'Número',
-  ribbonCrossRefNoAnchor: 'No se puede añadir un marcador oculto en un documento de solo lectura',
+  ribbonCrossRefNoAnchor: 'No se pudo crear un marcador oculto para el destino',
   ribbonChartInsertTitle: 'Insertar gráfico',
   ribbonChartTitlePh: 'Título del gráfico',
   ribbonChartBar: 'Columnas',

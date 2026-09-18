@@ -296,7 +296,7 @@ export const hi = {
   ribbonCrossRefTypeText: 'संदर्भ पाठ',
   ribbonCrossRefTypePage: 'पृष्ठ संख्या',
   ribbonCrossRefTypeNumber: 'क्रमांक',
-  ribbonCrossRefNoAnchor: 'केवल-पढ़ने योग्य दस्तावेज़ में छिपा एंकर नहीं जोड़ सकते',
+  ribbonCrossRefNoAnchor: 'लक्ष्य के लिए छिपा एंकर नहीं बनाया जा सका',
   ribbonChartInsertTitle: 'चार्ट सम्मिलित करें',
   ribbonChartTitlePh: 'चार्ट शीर्षक',
   ribbonChartBar: 'स्तंभ',

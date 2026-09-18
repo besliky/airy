@@ -300,8 +300,7 @@ export const de = {
   ribbonCrossRefTypeText: 'Verweistext',
   ribbonCrossRefTypePage: 'Seitenzahl',
   ribbonCrossRefTypeNumber: 'Nummer',
-  ribbonCrossRefNoAnchor:
-    'In einem schreibgeschützten Dokument kann keine ausgeblendete Marke hinzugefügt werden',
+  ribbonCrossRefNoAnchor: 'Für das Ziel konnte keine ausgeblendete Marke erstellt werden',
   ribbonChartInsertTitle: 'Diagramm einfügen',
   ribbonChartTitlePh: 'Diagrammtitel',
   ribbonChartBar: 'Säulendiagramm',

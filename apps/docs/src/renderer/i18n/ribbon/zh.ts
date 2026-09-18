@@ -303,7 +303,7 @@ export const zh = {
   ribbonCrossRefTypeText: '引用文本',
   ribbonCrossRefTypePage: '页码',
   ribbonCrossRefTypeNumber: '编号',
-  ribbonCrossRefNoAnchor: '只读文档中无法添加隐藏锚点',
+  ribbonCrossRefNoAnchor: '无法为目标创建隐藏锚点',
   // Chart dialog
   ribbonChartInsertTitle: '插入图表',
   ribbonChartTitlePh: '图表标题',

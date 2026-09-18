@@ -299,8 +299,7 @@ export const fr = {
   ribbonCrossRefTypeText: 'Texte de la référence',
   ribbonCrossRefTypePage: 'Numéro de page',
   ribbonCrossRefTypeNumber: 'Numéro',
-  ribbonCrossRefNoAnchor:
-    "Impossible d'ajouter une ancre masquée dans un document en lecture seule",
+  ribbonCrossRefNoAnchor: 'Impossible de créer une ancre masquée pour la cible',
   ribbonChartInsertTitle: 'Insérer un graphique',
   ribbonChartTitlePh: 'Titre du graphique',
   ribbonChartBar: 'Histogramme',

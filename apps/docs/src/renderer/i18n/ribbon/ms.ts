@@ -296,7 +296,7 @@ export const ms = {
   ribbonCrossRefTypeText: 'Teks rujukan',
   ribbonCrossRefTypePage: 'Nombor halaman',
   ribbonCrossRefTypeNumber: 'Nombor',
-  ribbonCrossRefNoAnchor: 'Tidak dapat menambahkan sauh tersembunyi dalam dokumen baca-sahaja',
+  ribbonCrossRefNoAnchor: 'Tidak dapat membuat sauh tersembunyi untuk sasaran',
   ribbonChartInsertTitle: 'Sisipkan Carta',
   ribbonChartTitlePh: 'Tajuk Carta',
   ribbonChartBar: 'Bar',

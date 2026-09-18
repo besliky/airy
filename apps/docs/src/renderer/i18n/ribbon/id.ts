@@ -295,7 +295,7 @@ export const id = {
   ribbonCrossRefTypeText: 'Teks referensi',
   ribbonCrossRefTypePage: 'Nomor halaman',
   ribbonCrossRefTypeNumber: 'Nomor',
-  ribbonCrossRefNoAnchor: 'Tidak dapat menambahkan jangkar tersembunyi dalam dokumen hanya-baca',
+  ribbonCrossRefNoAnchor: 'Tidak dapat membuat jangkar tersembunyi untuk target',
   ribbonChartInsertTitle: 'Sisipkan Bagan',
   ribbonChartTitlePh: 'Judul Bagan',
   ribbonChartBar: 'Kolom',

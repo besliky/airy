@@ -305,7 +305,7 @@ export const ko = {
   ribbonCrossRefTypeText: '참조 텍스트',
   ribbonCrossRefTypePage: '페이지 번호',
   ribbonCrossRefTypeNumber: '번호',
-  ribbonCrossRefNoAnchor: '읽기 전용 문서에는 숨은 앵커를 추가할 수 없습니다',
+  ribbonCrossRefNoAnchor: '대상의 숨은 앵커를 만들 수 없습니다',
   // Chart dialog
   ribbonChartInsertTitle: '차트 삽입',
   ribbonChartTitlePh: '차트 제목',

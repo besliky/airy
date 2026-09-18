@@ -298,7 +298,7 @@ export const nl = {
   ribbonCrossRefTypeText: 'Verwijzingstekst',
   ribbonCrossRefTypePage: 'Paginanummer',
   ribbonCrossRefTypeNumber: 'Nummer',
-  ribbonCrossRefNoAnchor: 'Kan geen verborgen anker toevoegen in een alleen-lezen document',
+  ribbonCrossRefNoAnchor: 'Kan geen verborgen anker maken voor het doel',
   ribbonChartInsertTitle: 'Grafiek invoegen',
   ribbonChartTitlePh: 'Grafiektitel',
   ribbonChartBar: 'Kolom',

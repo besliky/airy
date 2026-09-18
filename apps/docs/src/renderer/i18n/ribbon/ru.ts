@@ -296,7 +296,7 @@ export const ru = {
   ribbonCrossRefTypeText: 'Текст ссылки',
   ribbonCrossRefTypePage: 'Номер страницы',
   ribbonCrossRefTypeNumber: 'Номер',
-  ribbonCrossRefNoAnchor: 'Невозможно добавить скрытый якорь в документе только для чтения',
+  ribbonCrossRefNoAnchor: 'Не удалось создать скрытый якорь для цели',
   ribbonChartInsertTitle: 'Вставка диаграммы',
   ribbonChartTitlePh: 'Название диаграммы',
   ribbonChartBar: 'Гистограмма',

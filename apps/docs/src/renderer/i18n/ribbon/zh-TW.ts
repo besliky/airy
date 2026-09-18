@@ -291,7 +291,7 @@ export const zhTW = {
   ribbonCrossRefTypeText: '參照文字',
   ribbonCrossRefTypePage: '頁碼',
   ribbonCrossRefTypeNumber: '編號',
-  ribbonCrossRefNoAnchor: '唯讀文件中無法新增隱藏錨點',
+  ribbonCrossRefNoAnchor: '無法為目標建立隱藏錨點',
   ribbonChartInsertTitle: '插入圖表',
   ribbonChartTitlePh: '圖表標題',
   ribbonChartBar: '直條圖',
