@@ -39,6 +39,22 @@ export function refTextPreview(text: string): string {
   return text.trim().slice(0, 80)
 }
 
+/** Word's field-update error for a REF whose target cannot be resolved (gone
+ * bookmark, emptied heading). Word writes the same line into the cached field
+ * result on update; it is document data, so it stays the canonical English
+ * string (like the fixed field formats) instead of UI i18n. */
+export const REF_TARGET_GONE = 'Error! Reference source not found.'
+
+/** a heading's outline number when its text carries a numbered-style prefix
+ * ("3.2 Details" → "3.2", "1. Introduction" → "1"). A single bare number
+ * followed by whitespace is prose — usually a year ("2026 Report") — so only
+ * multi-level numbers may end at whitespace; a single number needs a real
+ * list separator ("." or the CJK "、") right behind it. */
+function headingNumberOf(text: string): string | null {
+  const m = /^(\d+(?:\.\d+)+)[.、\s]|^(\d+)[.、]/.exec(text)
+  return m ? (m[1] ?? m[2]) : null
+}
+
 /** OOXML of a top-level PM node: editor-generated fragment or original slice */
 function xmlOfNode(node: { attrs: Record<string, unknown> }, blocks: Block[]): string {
   if (node.attrs.genXml) return String(node.attrs.genXml)
@@ -264,10 +280,11 @@ export function crossRefCache(
     if (source.kind === 'caption') return String(source.seqNumber ?? 1)
     // heading: REF \r shows the outline number — only computable when the
     // heading text itself carries it (numbered style prefix)
-    const m = /^(\d+(?:\.\d+)*)[.、\s]/.exec(source.label)
-    return m ? m[1] : ' '
+    return headingNumberOf(source.label) ?? ' '
   }
-  return source.kind === 'bookmark' ? source.preview || source.label : source.label
+  // an emptied bookmark shows Word's reference error, never the anchor name
+  // as visible text
+  return source.kind === 'bookmark' ? source.preview || REF_TARGET_GONE : source.label
 }
 
 /** position of the node carrying `name` (node bookmark attrs or a protected-XML anchor) */
@@ -315,9 +332,11 @@ function seqNumberAt(
 }
 
 /**
- * F9 cache recompute for one REF instruction. Returns the new display text, or
- * null when the target is gone / the value is not computable locally (page
- * number before pagination): the existing cache stays untouched then.
+ * F9 cache recompute for one REF instruction. Returns the new display text —
+ * including REF_TARGET_GONE for an unresolvable target (Word writes the same
+ * error into the cache on field update) — or null when the value is not
+ * computable locally (page number before pagination): the existing cache
+ * stays untouched then.
  */
 export function refCacheOf(
   editor: Editor,
@@ -329,7 +348,9 @@ export function refCacheOf(
   if (!m) return null
   const name = m[1] ?? m[2]
   const pos = findAnchorPos(editor.state.doc, blocks, name)
-  if (pos === null) return null
+  // gone target: Word's F9 replaces the cached result with the reference
+  // error instead of silently keeping a stale number forever
+  if (pos === null) return REF_TARGET_GONE
   if (instr.includes('\\p')) {
     const page = pageOf?.(pos)
     return page !== undefined && page !== null ? String(page) : null
@@ -340,10 +361,10 @@ export function refCacheOf(
       const label = seqLabelOf(xmlOfNode(node as never, blocks))
       return label ? seqNumberAt(editor.state.doc, blocks, pos, label) : null
     }
-    const hm = /^(\d+(?:\.\d+)*)[.、\s]/.exec(node?.textContent.trim() ?? '')
-    return hm ? hm[1] : null
+    return headingNumberOf(node?.textContent.trim() ?? '')
   }
   const node = editor.state.doc.nodeAt(pos)
   const text = refTextPreview(node?.textContent ?? '')
-  return text || name
+  // emptied target: the error line, never the raw anchor name as visible text
+  return text || REF_TARGET_GONE
 }

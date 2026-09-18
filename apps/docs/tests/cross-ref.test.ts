@@ -11,6 +11,7 @@ import {
 import { describe, expect, it } from 'vitest'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
 import {
+  REF_TARGET_GONE,
   collectCrossRefSources,
   crossRefCache,
   crossRefInstr,
@@ -175,6 +176,19 @@ describe('cross-reference instructions and caches', () => {
     // heading number is only computable when the heading text carries it
     expect(crossRefCache({ ...heading, label: '3.2 Details' }, 'number')).toBe('3.2')
     expect(crossRefCache(heading, 'number')).toBe(' ')
+    // a bare leading number is prose (a year), not a numbering prefix; a
+    // single number needs a real list separator behind it (BUG-916b)
+    expect(crossRefCache({ ...heading, label: '2026 Report' }, 'number')).toBe(' ')
+    expect(crossRefCache({ ...heading, label: '1. Introduction' }, 'number')).toBe('1')
+    expect(crossRefCache({ ...heading, label: '1、はじめに' }, 'number')).toBe('1')
+    // an emptied bookmark shows Word's reference error, never the anchor
+    // name as visible field text (BUG-916a)
+    expect(
+      crossRefCache(
+        { kind: 'bookmark', label: 'EmptyTarget', preview: '', level: 1, anchor: 'EmptyTarget', pos: 0 },
+        'text',
+      ),
+    ).toBe(REF_TARGET_GONE)
   })
 })
 
@@ -258,8 +272,27 @@ describe('F9 REF cache recompute', () => {
     )!
     const anchor = ensureCaptionAnchor(editor, blocks, caption)
     expect(refCacheOf(editor, blocks, ` REF ${anchor} \\r \\h `)).toBe('2')
-    // gone target: cache stays untouched (null)
-    expect(refCacheOf(editor, blocks, ' REF Missing \\h ')).toBeNull()
+    // gone target: Word's F9 writes the reference error into the cache (BUG-916a)
+    expect(refCacheOf(editor, blocks, ' REF Missing \\h ')).toBe(REF_TARGET_GONE)
+    editor.destroy()
+  })
+
+  it('F9 gives emptied and year-headed targets Word semantics (BUG-916)', async () => {
+    const yearHeadingXml = generateParagraphXml(
+      { type: 'heading', level: 1, runs: [{ text: '2026 Report' }] },
+      GEN_CTX,
+    )
+    const emptyBookmarkXml =
+      '<w:p><w:bookmarkStart w:id="7" w:name="EmptyTarget"/><w:bookmarkEnd w:id="7"/></w:p>'
+    const { editor, parsed } = await open(yearHeadingXml + emptyBookmarkXml + PLAIN_XML)
+    const blocks = parsed.blocks
+    // a bookmark resolving to an empty paragraph shows the error line, not
+    // the raw anchor name as visible text
+    expect(refCacheOf(editor, blocks, ' REF EmptyTarget \\h ')).toBe(REF_TARGET_GONE)
+    // "2026 Report" is a year-headed heading, not number 2026: \r stays
+    // uncomputable locally (cache untouched) while real prefixes resolve
+    const anchor = ensureHeadingTocAnchor(editor, 0)
+    expect(refCacheOf(editor, blocks, ` REF ${anchor} \\r \\h `)).toBeNull()
     editor.destroy()
   })
 
