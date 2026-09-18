@@ -57,6 +57,7 @@ import type {
   NewImage,
   NewInkImage,
   NoteInfo,
+  NoteNumbering,
   ParsedDoc,
   SectionSettings,
   SourceInfo,
@@ -191,6 +192,11 @@ export interface SaveOptions {
    */
   footnotes?: NoteInfo[]
   endnotes?: NoteInfo[]
+  /**
+   * Document-wide note numbering (settings.xml w:footnotePr/w:endnotePr).
+   * A kind set to null has its tag removed; undefined keeps it untouched.
+   */
+  noteNumbering?: { footnotes?: NoteNumbering | null; endnotes?: NoteNumbering | null }
   /**
    * Text watermark in the default page header: a string sets it, null removes
    * it, undefined keeps whatever the header already has.
@@ -444,6 +450,7 @@ export async function saveDocx(
     options.removePersonalInfo === undefined &&
     options.footnotes === undefined &&
     options.endnotes === undefined &&
+    options.noteNumbering === undefined &&
     options.watermark === undefined &&
     options.inks === undefined &&
     options.sources === undefined &&
@@ -1173,7 +1180,8 @@ export async function saveDocx(
     options.protection !== undefined ||
     options.writeProtection !== undefined ||
     options.removePersonalInfo !== undefined ||
-    options.evenAndOddHeaders !== undefined
+    options.evenAndOddHeaders !== undefined ||
+    options.noteNumbering !== undefined
   ) {
     const file = zip.file(settingsPath)
     let xml: string
@@ -1215,6 +1223,10 @@ export async function saveDocx(
     }
     if (options.evenAndOddHeaders !== undefined) {
       xml = applyEvenAndOddHeaders(xml, options.evenAndOddHeaders)
+      touched = true
+    }
+    if (options.noteNumbering !== undefined) {
+      xml = applyNoteNumbering(xml, options.noteNumbering)
       touched = true
     }
     if (touched) settingsXml = xml
@@ -1961,6 +1973,36 @@ function applyTitlePg(sectPrXml: string, on: boolean): string {
 function applyEvenAndOddHeaders(xml: string, on: boolean): string {
   const out = xml.replace(/<w:evenAndOddHeaders[^>]*\/>/, '')
   return on ? out.replace(/(<w:settings[^>]*>)/, '$1<w:evenAndOddHeaders/>') : out
+}
+
+/**
+ * Note numbering (settings.xml w:footnotePr/w:endnotePr, Word's Footnote and
+ * Endnote dialog): each kind's tag is rewritten wholesale — a modeled subset
+ * replaces whatever the document carried (pos etc. drop), null removes it.
+ * Inserted before w:compat when present (they precede it in CT_Settings),
+ * else right after the settings root.
+ */
+function applyNoteNumbering(
+  xml: string,
+  opts: { footnotes?: NoteNumbering | null; endnotes?: NoteNumbering | null },
+): string {
+  let out = xml
+  for (const root of ['footnotePr', 'endnotePr'] as const) {
+    const model = root === 'footnotePr' ? opts.footnotes : opts.endnotes
+    if (model === undefined) continue // undefined = keep the document's tag untouched
+    out = out.replace(new RegExp(`<w:${root}[^>]*>[\\s\\S]*?</w:${root}>`), '')
+    if (!model) continue
+    const tag =
+      `<w:${root}>` +
+      `<w:numFmt w:val="${escapeXmlAttr(model.numFmt)}"/>` +
+      (model.numStart !== undefined ? `<w:numStart w:val="${model.numStart}"/>` : '') +
+      (model.numRestart !== undefined ? `<w:numRestart w:val="${model.numRestart}"/>` : '') +
+      `</w:${root}>`
+    out = /<w:compat[\s/>]/.test(out)
+      ? out.replace(/(<w:compat[\s/>])/, `${tag}$1`)
+      : out.replace(/(<w:settings[^>]*>)/, `$1${tag}`)
+  }
+  return out
 }
 
 /** Set, replace or remove <w:background> (must be the first child of w:document). */

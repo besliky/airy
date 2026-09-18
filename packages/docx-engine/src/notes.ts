@@ -244,6 +244,15 @@ function noteRunXml(run: NoteRun): string {
 function noteEntryXml(kind: NoteKind, note: NoteInfo): string {
   const entry = ENTRY[kind]
   const refTag = kind === 'footnote' ? 'w:footnoteRef' : 'w:endnoteRef'
+  // custom mark: the literal symbol replaces the self-reference mark run (the
+  // entry re-parses without one → no number is shown, like Word)
+  const markRun = (szXml = '', spacerSz?: number) =>
+    note.customMark
+      ? `<w:r><w:rPr><w:vertAlign w:val="superscript"/>${szXml}</w:rPr>` +
+        `<w:t xml:space="preserve">${escapeXmlText(note.customMark)}</w:t></w:r>` +
+        `<w:r>${spacerSz ? `<w:rPr>${szXml}</w:rPr>` : ''}<w:t xml:space="preserve"> </w:t></w:r>`
+      : `<w:r><w:rPr><w:vertAlign w:val="superscript"/>${szXml}</w:rPr><${refTag}/></w:r>` +
+        `<w:r>${spacerSz ? `<w:rPr>${szXml}</w:rPr>` : ''}<w:t xml:space="preserve"> </w:t></w:r>`
   if (note.richParas?.length) {
     // rich rebuild (P17): runs keep their measured size/font, the reference
     // mark + spacer shrink to the first run's size, and the paragraph pins
@@ -253,11 +262,7 @@ function noteEntryXml(kind: NoteKind, note: NoteInfo): string {
     const paras = note.richParas.map((runs, i) => {
       const sz = runs[0]?.sizeHalfPoints
       const szXml = sz ? `<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>` : ''
-      const refRun =
-        i === 0
-          ? `<w:r><w:rPr><w:vertAlign w:val="superscript"/>${szXml}</w:rPr><${refTag}/></w:r>` +
-            `<w:r>${sz ? `<w:rPr>${szXml}</w:rPr>` : ''}<w:t xml:space="preserve"> </w:t></w:r>`
-          : ''
+      const refRun = i === 0 ? markRun(szXml, sz) : ''
       const pPr = '<w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>'
       return `<w:p>${pPr}${refRun}${runs.map(noteRunXml).join('')}</w:p>`
     })
@@ -265,11 +270,7 @@ function noteEntryXml(kind: NoteKind, note: NoteInfo): string {
   }
   const paras = note.text.split('\n').map((line, i) => {
     // OOXML convention: the note body starts with the self-reference mark
-    const refRun =
-      i === 0
-        ? `<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><${refTag}/></w:r>` +
-          '<w:r><w:t xml:space="preserve"> </w:t></w:r>'
-        : ''
+    const refRun = i === 0 ? markRun() : ''
     const textRun =
       line === '' ? '' : `<w:r><w:t xml:space="preserve">${escapeXmlText(line)}</w:t></w:r>`
     return `<w:p>${refRun}${textRun}</w:p>`

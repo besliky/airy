@@ -91,9 +91,11 @@ export interface Run {
   /**
    * The run is a footnote/endnote reference marker (w:footnoteReference /
    * w:endnoteReference). `text` holds the display number; the marker itself
-   * is what saves (Word renumbers automatically).
+   * is what saves (Word renumbers automatically). `customMark` (from
+   * w:customMarkFollows="1") replaces the number with a fixed symbol: the
+   * reference and the note body both display the literal mark.
    */
-  noteRef?: { kind: 'footnote' | 'endnote'; id: string }
+  noteRef?: { kind: 'footnote' | 'endnote'; id: string; customMark?: string }
   /**
    * An index entry (XE) field attached AFTER this run's text. Invisible in
    * Word; kept in the run model so marked paragraphs stay editable.
@@ -760,6 +762,31 @@ export interface NoteInfo {
     lineRule?: 'auto' | 'atLeast' | 'exact'
     lineRawTwips?: number
   }
+  /** fixed symbol replacing the entry's number mark (w:customMarkFollows on the reference) */
+  customMark?: string
+}
+
+/** ST_NumberFormat subset Word's note-options dialog offers */
+export type NoteNumberFmt =
+  | 'decimal'
+  | 'lowerLetter'
+  | 'upperLetter'
+  | 'lowerRoman'
+  | 'upperRoman'
+
+/**
+ * Document-wide note numbering (settings.xml w:footnotePr / w:endnotePr):
+ * number format, first value and restart mode. numRestart semantics are
+ * round-tripped only (renderer numbering stays document order).
+ */
+export interface NoteNumbering {
+  numFmt: NoteNumberFmt
+  /** w:numStart — first displayed value (default 1) */
+  numStart?: number
+  /** w:numRestart (continuous | eachSect | eachPage; default continuous) */
+  numRestart?: 'continuous' | 'eachSect' | 'eachPage'
+  /** fixed mark replacing every reference number of this kind (w:customMarkFollows) */
+  customMark?: string
 }
 
 /** display-only run of a field result: the Run subset the passthrough renderer paints */
@@ -1880,6 +1907,8 @@ export interface ParsedDoc {
   footnotes: NoteInfo[]
   /** endnotes from word/endnotes.xml (separators excluded), file order */
   endnotes: NoteInfo[]
+  /** document-wide note numbering from settings.xml w:footnotePr/w:endnotePr, absent when neither carries modeled options */
+  noteNumbering?: { footnotes?: NoteNumbering; endnotes?: NoteNumbering }
   /** bibliography sources from the customXml b:Sources part */
   sources: SourceInfo[]
   /** aidocs-ink annotations (freehand strokes) found on body paragraphs, file order */
