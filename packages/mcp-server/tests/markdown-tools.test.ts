@@ -3,7 +3,7 @@
 // -> insert -> apply_ops -> save -> reopen cycle, byte-level round-trips
 // (BOM, EOLs, untouched lines), the failure paths (missing file, outside the
 // workspace root, invalid UTF-8, binary, size caps) and the save fences.
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -559,6 +559,33 @@ describe('markdown tools over MCP', () => {
       const after = await call(client, 'read_document', { handle })
       expect(after.isError).toBe(true)
       expect(text(after)).toContain('Unknown document handle')
+    } finally {
+      await close()
+    }
+  })
+
+  it('labels sessions and builds temp names from the file basename, not the whole path', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // basename (node:path) rather than a '/'-split: on Windows a
+      // `\`-separated path never splits, which used to leak the whole path
+      // into meta.fileName and into the atomic-save temp file name
+      await mkdir(join(root, 'nested/deep'), { recursive: true })
+      await writeFile(join(root, 'nested/deep/notes.md'), LF_FIXTURE, 'utf8')
+      const opened = await call(client, 'open_document', { path: 'nested/deep/notes.md' })
+      expect(opened.isError).toBeFalsy()
+      expect(opened.structuredContent?.fileName).toBe('notes.md')
+      expect(text(opened)).toContain('Opened notes.md as an editable markdown session')
+      // a save into the nested dir exercises the same basename-derived temp
+      // name inside the target directory
+      const handle = String(opened.structuredContent?.handle)
+      const saved = await call(client, 'save_document', { handle, path: 'nested/deep/copy.md' })
+      expect(saved.isError).toBeFalsy()
+      const onDisk = await readFile(join(root, 'nested/deep/copy.md'), 'utf8')
+      expect(onDisk).toContain('# Quarterly Report')
+      // no leftover temp files in the target directory
+      const entries = await readdir(join(root, 'nested/deep'))
+      expect(entries.sort()).toEqual(['copy.md', 'notes.md'])
     } finally {
       await close()
     }

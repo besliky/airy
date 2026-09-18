@@ -16,6 +16,7 @@
 // same with a parse5 structure summary (headings, links, title) and verbatim
 // HTML fragment inserts.
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { basename } from 'node:path'
 import { z } from 'zod'
 
 import { DocxSession, type SessionMeta } from '../docx/session.js'
@@ -945,7 +946,7 @@ function summarizeOpenMeta(meta: AnyOpenMeta): string {
       ? ` (imported from .${meta.format} — ${meta.warnings[0] ?? 'conversion'})`
       : ''
     return (
-      `Opened ${meta.path.split('/').pop() ?? meta.path} as an editable workbook${suffix}: ` +
+      `Opened ${basename(meta.path) || meta.path} as an editable workbook${suffix}: ` +
       `${String(meta.sheets.length)} sheet(s) — ${names}. Handle: ${meta.handle}. Path: ${meta.path}`
     )
   }

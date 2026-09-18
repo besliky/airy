@@ -20,7 +20,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Stats } from 'node:fs'
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 
 import {
   assertSaveTargetFree,
@@ -420,7 +420,9 @@ export class MarkdownSession {
       handle: this.handle,
       kind: 'markdown',
       path: this.path,
-      fileName: this.path.split('/').pop() ?? this.path,
+      // path.basename is platform-aware: on Windows a `\`-separated path
+      // never split on '/', which made the label the whole path (BUG-706)
+      fileName: basename(this.path) || this.path,
       format: 'md',
       converted: false,
       editable: true,
@@ -875,10 +877,9 @@ export class MarkdownSession {
       }
     }
     await mkdir(dirname(target), { recursive: true })
-    const tmp = join(
-      dirname(target),
-      `.${target.split('/').pop() ?? 'markdown'}.airy-${randomUUID()}`,
-    )
+    // basename, not a '/'-split: on Windows the split leaves the whole path
+    // in the temp name and writeFile fails on the colons/backslashes
+    const tmp = join(dirname(target), `.${basename(target) || 'markdown'}.airy-${randomUUID()}`)
     await writeFile(tmp, bytes)
     if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
       await rename(tmp, target)

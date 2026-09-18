@@ -327,7 +327,9 @@ export class DocxSession {
       handle: this.handle,
       kind: 'docx',
       path: this.origin?.path ?? this.path,
-      fileName: (this.origin?.path ?? this.path).split('/').pop() ?? this.path,
+      // basename, not a '/'-split: on Windows a `\`-separated path never
+      // split on '/', which made the label the whole path (BUG-706)
+      fileName: basename(this.origin?.path ?? this.path) || this.path,
       format: 'docx',
       converted: this.origin !== null,
       editable: true,
@@ -557,7 +559,9 @@ export class DocxSession {
     const bytes = await this.serialize()
 
     await mkdir(dirname(target), { recursive: true })
-    const tmp = join(dirname(target), `.${target.split('/').pop() ?? 'doc'}.airy-${randomUUID()}`)
+    // basename, not a '/'-split: on Windows the split leaves the whole path
+    // in the temp name and writeFile fails on the colons/backslashes
+    const tmp = join(dirname(target), `.${basename(target) || 'doc'}.airy-${randomUUID()}`)
     await writeFile(tmp, bytes)
     // a fresh (guarded) target promotes exclusively: a file created between
     // the guard's stat and this write surfaces the clobber error instead of
