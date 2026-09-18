@@ -385,7 +385,10 @@ documents above 1M characters skip the parse5 structure scan.
 
 - **Path confinement.** Every input and output path must resolve inside the
   workspace root (`AIRY_WORKSPACE_ROOT`, default the server's cwd); traversal
-  that escapes the root is rejected with a clear error. Symlinks are resolved
+  that escapes the root is rejected with a clear error. Each session pins the
+  root at open time and keeps confining its saves against that root, so a
+  later `AIRY_WORKSPACE_ROOT`/cwd change never re-confines a live session.
+  Symlinks are resolved
   for both the root and the candidate before the check, so a link that lives
   inside the root but points outside cannot smuggle paths out (links that
   resolve back inside the root stay usable). On Windows the comparison folds

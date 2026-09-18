@@ -3,6 +3,7 @@
 // -> insert -> apply_ops -> save -> reopen cycle, byte-level round-trips
 // (BOM, EOLs, untouched lines), the failure paths (missing file, outside the
 // workspace root, invalid UTF-8, binary, size caps) and the save fences.
+import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -586,6 +587,36 @@ describe('markdown tools over MCP', () => {
       // no leftover temp files in the target directory
       const entries = await readdir(join(root, 'nested/deep'))
       expect(entries.sort()).toEqual(['copy.md', 'notes.md'])
+    } finally {
+      await close()
+    }
+  })
+
+  it('confines saves to the workspace root captured at open, not a later one', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const handle = await openFixture(client, 'pinned.md')
+      await call(client, 'insert_content', { handle, text: 'Edit.' })
+      // drift AIRY_WORKSPACE_ROOT after open: before the fix the default
+      // save re-confined the absolute opened path against the NEW root and
+      // failed with PathOutsideWorkspaceError; a relative save-as resolved
+      // into the wrong directory
+      const driftRoot = await mkdtemp(join(tmpdir(), 'airy-mcp-md-drift-'))
+      process.env[WORKSPACE_ROOT_ENV] = driftRoot
+      try {
+        const inPlace = await call(client, 'save_document', { handle })
+        expect(inPlace.isError).toBeFalsy()
+        expect(String(inPlace.structuredContent?.path)).toBe(join(root, 'pinned.md'))
+        const saveAs = await call(client, 'save_document', { handle, path: 'pinned-out.md' })
+        expect(saveAs.isError).toBeFalsy()
+        // the relative target resolved against the OPEN-time root
+        expect(existsSync(join(root, 'pinned-out.md'))).toBe(true)
+        expect(existsSync(join(driftRoot, 'pinned-out.md'))).toBe(false)
+        expect((await readFile(join(root, 'pinned-out.md'), 'utf8')).endsWith('Edit.')).toBe(true)
+      } finally {
+        process.env[WORKSPACE_ROOT_ENV] = root
+        await rm(driftRoot, { recursive: true, force: true })
+      }
     } finally {
       await close()
     }

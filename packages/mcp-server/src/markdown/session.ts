@@ -28,7 +28,7 @@ import {
   FencingError,
   promoteNewFileExclusively,
 } from '../docx/session.js'
-import { resolveConfined } from '../docx/paths.js'
+import { resolveConfined, workspaceRoot } from '../docx/paths.js'
 
 // ---- limits (mirror the docx session, scaled to the MCP 30k answer budget) ----
 
@@ -312,6 +312,8 @@ export class MarkdownSession {
   readonly handle: string
   readonly path: string
 
+  /** confinement root captured at open (save must not follow a later drift) */
+  private readonly root: string
   private readonly originalBytes: Uint8Array
   private lines: MarkdownLine[]
   private readonly bom: boolean
@@ -323,6 +325,7 @@ export class MarkdownSession {
   private constructor(
     handle: string,
     path: string,
+    root: string,
     originalBytes: Uint8Array,
     lines: MarkdownLine[],
     bom: boolean,
@@ -331,6 +334,7 @@ export class MarkdownSession {
   ) {
     this.handle = handle
     this.path = path
+    this.root = root
     this.originalBytes = originalBytes
     this.lines = lines
     this.bom = bom
@@ -404,6 +408,7 @@ export class MarkdownSession {
     return new MarkdownSession(
       randomUUID(),
       path,
+      root ?? workspaceRoot(),
       bytes,
       splitLines(text),
       decoded.bom,
@@ -850,7 +855,10 @@ export class MarkdownSession {
    * with the original BOM flag re-applied.
    */
   async save(rawPath?: string, options: { overwrite?: boolean } = {}): Promise<MarkdownSaveResult> {
-    const target = resolveConfined(rawPath ?? this.path)
+    // the root captured at open, not the live one: a drifted
+    // AIRY_WORKSPACE_ROOT/cwd between open and save must not re-confine the
+    // session (the docx session has the same pinned-root semantics)
+    const target = resolveConfined(rawPath ?? this.path, this.root)
     await assertSaveTargetFree(target, [this.path, ...this.savedTargets], options.overwrite)
     if (target === this.path && this.baseline) {
       let current: FileStamp

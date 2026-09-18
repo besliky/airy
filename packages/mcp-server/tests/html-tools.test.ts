@@ -4,6 +4,7 @@
 // byte-level round-trips (BOM, EOLs, untouched lines), the failure paths
 // (missing file, outside the workspace root, undeclared non-UTF-8, binary,
 // size caps) and the save fences.
+import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -553,6 +554,38 @@ describe('html tools over MCP', () => {
       expect(applied.isError).toBeFalsy()
       const read = await call(client, 'read_document', { handle })
       expect(text(read)).toContain('sales grew by')
+    } finally {
+      await close()
+    }
+  })
+
+  it('confines saves to the workspace root captured at open, not a later one', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const handle = await openFixture(client, 'pinned.html')
+      await call(client, 'insert_content', { handle, html: '<p>edit</p>' })
+      // drift AIRY_WORKSPACE_ROOT after open: before the fix the default
+      // save re-confined the absolute opened path against the NEW root and
+      // failed with PathOutsideWorkspaceError; a relative save-as resolved
+      // into the wrong directory
+      const driftRoot = await mkdtemp(join(tmpdir(), 'airy-mcp-html-drift-'))
+      process.env[WORKSPACE_ROOT_ENV] = driftRoot
+      try {
+        const inPlace = await call(client, 'save_document', { handle })
+        expect(inPlace.isError).toBeFalsy()
+        expect(String(inPlace.structuredContent?.path)).toBe(join(root, 'pinned.html'))
+        const saveAs = await call(client, 'save_document', { handle, path: 'pinned-out.html' })
+        expect(saveAs.isError).toBeFalsy()
+        // the relative target resolved against the OPEN-time root
+        expect(existsSync(join(root, 'pinned-out.html'))).toBe(true)
+        expect(existsSync(join(driftRoot, 'pinned-out.html'))).toBe(false)
+        expect(
+          (await readFile(join(root, 'pinned-out.html'), 'utf8')).includes('<p>edit</p>'),
+        ).toBe(true)
+      } finally {
+        process.env[WORKSPACE_ROOT_ENV] = root
+        await rm(driftRoot, { recursive: true, force: true })
+      }
     } finally {
       await close()
     }
