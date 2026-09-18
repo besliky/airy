@@ -2,8 +2,15 @@ import { useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { getMarkRange } from '@tiptap/core'
 import type { Editor } from '@tiptap/core'
-import { ShapePreview, useModalDialog, WORDART_PRESETS, wordArtStrokePx } from '@airy-office/ui'
+import {
+  Dropdown,
+  ShapePreview,
+  useModalDialog,
+  WORDART_PRESETS,
+  wordArtStrokePx,
+} from '@airy-office/ui'
 import type {
+  Block,
   ChartDisplay,
   DiagramDisplay,
   HeaderFooter,
@@ -12,6 +19,26 @@ import type {
   NewDiagramPreset,
 } from '@airy-office/docx-engine'
 import { buildDiagramDisplay } from '@airy-office/docx-engine'
+import {
+  CROSS_REF_TYPES,
+  collectCrossRefSources,
+  crossRefCache,
+  crossRefInstr,
+  ensureCaptionAnchor,
+  ensureHeadingTocAnchor,
+  headingTocAnchor,
+  type CrossRefSource,
+  type CrossRefSourceKind,
+  type CrossRefType,
+} from './cross-ref'
+
+// re-exported for existing import paths (link dialog + tests)
+export {
+  allBookmarkNames,
+  ensureHeadingTocAnchor,
+  headingTocAnchor,
+  uniqueTocAnchor,
+} from './cross-ref'
 import { hfHasPageField, hfWithoutPageMarks } from '../editor/hf-dom'
 import { EquationGallery, EquationModal } from './EquationModal'
 import { COVER_PRESETS, insertCoverPage, type CoverPreset } from '../editor/cover-pages'
@@ -187,36 +214,6 @@ function bookmarkTargetAtCursor(editor: Editor): { pos: number; typeName: string
   return null
 }
 
-/** every bookmark name in the document (visible + hidden) — anchor uniqueness pool */
-export function allBookmarkNames(doc: Editor['state']['doc']): Set<string> {
-  const names = new Set<string>()
-  doc.descendants((node) => {
-    for (const attr of ['bookmarks', 'hiddenBookmarks'] as const) {
-      const list = node.attrs?.[attr] as string[] | null | undefined
-      if (Array.isArray(list)) for (const name of list) names.add(name)
-    }
-    return !node.isLeaf
-  })
-  return names
-}
-
-/** Word's hidden heading anchor (`_Toc…`) already on the node, if any */
-export function headingTocAnchor(
-  node: { attrs?: Record<string, unknown> } | null | undefined,
-): string | null {
-  const hidden = node?.attrs?.hiddenBookmarks as string[] | null | undefined
-  if (!Array.isArray(hidden)) return null
-  return hidden.find((name) => /^_Toc\d+$/.test(name)) ?? null
-}
-
-/** a fresh Word-style `_Toc` + 9-digit anchor name not colliding with `taken` */
-export function uniqueTocAnchor(taken: Set<string>): string {
-  for (;;) {
-    const name = `_Toc${Math.floor(100000000 + Math.random() * 900000000)}`
-    if (!taken.has(name)) return name
-  }
-}
-
 /** one "Place in This Document" pickable target */
 export interface LinkTarget {
   kind: 'heading' | 'bookmark'
@@ -257,31 +254,6 @@ export function collectLinkTargets(editor: Editor): LinkTarget[] {
     })
   }
   return targets
-}
-
-/**
- * The heading's link anchor: its existing hidden `_Toc…` bookmark, or a fresh
- * one stamped onto the node (hidden bookmarks re-emit as w:bookmarkStart on
- * save, so Word can resolve the w:anchor we write on the hyperlink). Stamping
- * is a document mutation, so it never happens on a read-only editor: callers
- * that reach here from the app/context menu while editing is locked get null
- * (an existing anchor is still returned — reading it mutates nothing).
- */
-export function ensureHeadingTocAnchor(editor: Editor, pos: number): string | null {
-  const node = editor.state.doc.nodeAt(pos)
-  if (!node) return null
-  const existing = headingTocAnchor(node)
-  if (existing) return existing
-  if (!editor.isEditable) return null
-  const name = uniqueTocAnchor(allBookmarkNames(editor.state.doc))
-  const hidden = (node.attrs?.hiddenBookmarks as string[] | null) ?? []
-  editor.view.dispatch(
-    editor.state.tr.setNodeMarkup(pos, undefined, {
-      ...node.attrs,
-      hiddenBookmarks: [...hidden, name],
-    }),
-  )
-  return name
 }
 
 /** Word's Bookmark dialog: list + add (cursor's paragraph) / go to / delete */
@@ -388,36 +360,110 @@ export function BookmarkModal({ editor, onClose }: { editor: Editor; onClose: ()
   )
 }
 
-/** Word's Cross-reference dialog: pick a bookmark, insert a REF field at the cursor (displays the bookmark paragraph's text) */
-export function CrossRefModal({ editor, onClose }: { editor: Editor; onClose: () => void }) {
+/**
+ * Word's Cross-reference dialog: pick a source kind (headings / captions /
+ * bookmarks) and a reference type (text / page number / number), click a
+ * target to insert a REF field at the cursor. Headings and captions without an
+ * anchor get a hidden `_Toc…` / `_Ref…` bookmark stamped on insert.
+ */
+export function CrossRefModal({
+  editor,
+  blocks,
+  anchorPage,
+  onClose,
+}: {
+  editor: Editor
+  blocks: Block[]
+  /** displayed page of a node position from live pagination (REF \p caches) */
+  anchorPage?: (pos: number) => number | null
+  onClose: () => void
+}) {
   const { t } = useI18n()
-  const bookmarks = collectBookmarks(editor)
-  const insertRef = (b: { name: string; preview: string }) => {
+  const [kind, setKind] = useState<CrossRefSourceKind>('heading')
+  const [type, setType] = useState<CrossRefType>('text')
+  const sources = collectCrossRefSources(editor, blocks).filter((s) => s.kind === kind)
+  const types = CROSS_REF_TYPES[kind]
+
+  const pickKind = (next: CrossRefSourceKind) => {
+    setKind(next)
+    if (!CROSS_REF_TYPES[next].includes(type)) setType(CROSS_REF_TYPES[next][0])
+  }
+
+  const insertRef = (src: CrossRefSource) => {
+    const anchor =
+      src.kind === 'heading'
+        ? ensureHeadingTocAnchor(editor, src.pos)
+        : src.kind === 'caption'
+          ? ensureCaptionAnchor(editor, blocks, src)
+          : src.anchor
+    if (!anchor) {
+      window.alert(t('ribbonCrossRefNoAnchor'))
+      return
+    }
+    const cache = crossRefCache(src, type, anchorPage)
     editor
       .chain()
       .focus()
       .insertContent({
         type: 'text',
-        text: b.preview || b.name,
-        marks: [{ type: 'refField', attrs: { name: b.name } }],
+        text: cache,
+        marks: [{ type: 'refField', attrs: { name: anchor, instr: crossRefInstr(anchor, type) } }],
       })
       .run()
     onClose()
   }
+
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <h2>{t('ribbonCrossRef')}</h2>
-        {bookmarks.length === 0 ? (
+        <label>
+          {t('ribbonCrossRefRefType')}
+          <Dropdown
+            value={kind}
+            ariaLabel={t('ribbonCrossRefRefType')}
+            options={(
+              [
+                ['heading', t('ribbonCrossRefKindHeading')],
+                ['caption', t('ribbonCrossRefKindCaption')],
+                ['bookmark', t('ribbonCrossRefKindBookmark')],
+              ] as Array<[CrossRefSourceKind, string]>
+            ).map(([value, label]) => ({ value, label }))}
+            onPick={pickKind}
+          />
+        </label>
+        <label>
+          {t('ribbonCrossRefInsertAs')}
+          <Dropdown
+            value={type}
+            ariaLabel={t('ribbonCrossRefInsertAs')}
+            options={types.map((v) => ({
+              value: v,
+              label:
+                v === 'text'
+                  ? t('ribbonCrossRefTypeText')
+                  : v === 'page'
+                    ? t('ribbonCrossRefTypePage')
+                    : t('ribbonCrossRefTypeNumber'),
+            }))}
+            onPick={setType}
+          />
+        </label>
+        {sources.length === 0 ? (
           <p className="bookmark-empty">{t('ribbonCrossRefEmpty')}</p>
         ) : (
           <div className="bookmark-list">
-            {bookmarks.map((b) => (
-              <div key={`${b.name}-${b.pos}`} className="bookmark-row">
-                <button className="bookmark-name" onClick={() => insertRef(b)}>
-                  {b.name}
+            {sources.map((s) => (
+              <div key={`${s.kind}-${s.pos}-${s.label}`} className="bookmark-row">
+                <button
+                  className="bookmark-name"
+                  data-tip={s.preview}
+                  style={{ paddingLeft: `${Math.min(Math.max(s.level, 1), 6) * 10}px` }}
+                  onClick={() => insertRef(s)}
+                >
+                  {s.label}
                 </button>
-                <span className="bookmark-preview">{b.preview}</span>
+                <span className="bookmark-preview">{s.preview}</span>
               </div>
             ))}
           </div>
@@ -1170,6 +1216,8 @@ export function InsertTab({
   onFooter,
   onPageNumFormat,
   onInsertField,
+  blocks,
+  anchorPage,
   titlePg,
   onTitlePg,
   evenOddHf,
@@ -1802,7 +1850,14 @@ export function InsertTab({
       {linkOpen && <LinkInsertModal editor={editor} onClose={() => setLinkOpen(false)} />}
       {equationOpen && <EquationModal editor={editor} onClose={() => setEquationOpen(false)} />}
       {bookmarkOpen && <BookmarkModal editor={editor} onClose={() => setBookmarkOpen(false)} />}
-      {crossRefOpen && <CrossRefModal editor={editor} onClose={() => setCrossRefOpen(false)} />}
+      {crossRefOpen && (
+        <CrossRefModal
+          editor={editor}
+          blocks={blocks}
+          anchorPage={anchorPage}
+          onClose={() => setCrossRefOpen(false)}
+        />
+      )}
       {chartOpen && <ChartInsertModal editor={editor} onClose={() => setChartOpen(false)} />}
       {smartArtOpen && (
         <SmartArtInsertModal editor={editor} onClose={() => setSmartArtOpen(false)} />

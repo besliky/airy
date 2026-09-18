@@ -12,6 +12,7 @@ import {
 } from '@airy-office/docx-engine'
 import { Dropdown } from '@airy-office/ui'
 import { PromptModal } from './PromptModal'
+import { allRefAnchorNames, uniqueAnchor } from './cross-ref'
 import { collectHeadings } from '../editor/headings'
 import { t, useI18n, type StringKey } from '../i18n/locale'
 import {
@@ -176,7 +177,9 @@ function CaptionModal({
 
   const insert = () => {
     const number = nextNumber(label)
-    const xml = generateCaptionXml(label, number, text.trim())
+    // hidden _Ref anchor wraps the SEQ field so cross-references can target this caption
+    const anchor = uniqueAnchor('_Ref', allRefAnchorNames(editor.state.doc, blocks))
+    const xml = generateCaptionXml(label, number, text.trim(), anchor)
     const display = `${label} ${number}${text.trim() ? ` ${text.trim()}` : ''}`
     editor
       .chain()

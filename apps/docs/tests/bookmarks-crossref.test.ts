@@ -88,4 +88,39 @@ describe('bookmarks & cross-references in the editor', () => {
     expect(refRun?.text).toBe('Conclusion paragraph.')
     editor.destroy()
   })
+
+  it('editing a paragraph with a switched REF (\\p) keeps the instruction verbatim', async () => {
+    const body =
+      BODY +
+      '<w:p><w:r><w:t>See p.</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText xml:space="preserve"> REF Conclusion \\p \\h </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>1</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+    const source = await buildDocx({ bodyXml: body })
+    const parsed = await parseDocx(source)
+    const editor = new Editor({
+      element: document.createElement('div'),
+      extensions: editorExtensions,
+      content: blocksToPmDoc(parsed.blocks) as never,
+    })
+    // the mark carries the original instruction through the editor model
+    const marks: Array<{ type: { name: string }; attrs: Record<string, unknown> }> = []
+    editor.state.doc.descendants((node) => {
+      for (const m of node.marks) marks.push(m as never)
+    })
+    const mark = marks.find((m) => m.type.name === 'refField')
+    expect(mark?.attrs.instr).toBe(' REF Conclusion \\p \\h ')
+    // edit the paragraph (append text after the field) and save
+    const end = editor.state.doc.content.size
+    editor.chain().insertContentAt(end, { type: 'text', text: '!' }).run()
+    const plan = pmDocToSavePlan(editor.getJSON() as PmNode, parsed.blocks)
+    expect(plan.changedCount).toBeGreaterThan(0)
+    const saved = await saveDocx(parsed, plan.saveBlocks)
+    const xml = await docXmlOf(saved)
+    expect(xml).toContain(' REF Conclusion \\p \\h ')
+    expect(xml).toContain('<w:t>1</w:t>')
+    editor.destroy()
+  })
 })

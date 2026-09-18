@@ -289,7 +289,17 @@ export const it = {
   ribbonBookmarkEmpty: 'Non ci sono ancora segnalibri in questo documento',
   ribbonBookmarkDeleteTip: 'Elimina segnalibro',
   ribbonCrossRefEmpty:
-    'Nessun segnalibro presente. Usa "Inserisci → Segnalibro" per contrassegnare il punto a cui fare riferimento.',
+    'Nessuna destinazione di riferimento: aggiungi un titolo, un segnalibro o una didascalia.',
+  ribbonCrossRefRefType: 'Tipo di riferimento',
+  ribbonCrossRefKindHeading: 'Titoli',
+  ribbonCrossRefKindCaption: 'Didascalie (figure e tabelle)',
+  ribbonCrossRefKindBookmark: 'Segnalibri',
+  ribbonCrossRefInsertAs: 'Inserisci riferimento a',
+  ribbonCrossRefTypeText: 'Testo del riferimento',
+  ribbonCrossRefTypePage: 'Numero di pagina',
+  ribbonCrossRefTypeNumber: 'Numero',
+  ribbonCrossRefNoAnchor:
+    "Impossibile aggiungere un'ancora nascosta in un documento di sola lettura",
   ribbonChartInsertTitle: 'Inserisci grafico',
   ribbonChartTitlePh: 'Titolo del grafico',
   ribbonChartBar: 'Istogramma',

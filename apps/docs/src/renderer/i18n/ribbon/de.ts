@@ -291,7 +291,17 @@ export const de = {
   ribbonBookmarkEmpty: 'Noch keine Textmarken in diesem Dokument',
   ribbonBookmarkDeleteTip: 'Textmarke löschen',
   ribbonCrossRefEmpty:
-    'Noch keine Textmarken vorhanden. Markieren Sie die zu referenzierende Stelle zuerst über „Einfügen → Textmarke".',
+    'Noch keine Verweisziele: Überschrift, Textmarke oder Beschriftung einfügen.',
+  ribbonCrossRefRefType: 'Verweistyp',
+  ribbonCrossRefKindHeading: 'Überschriften',
+  ribbonCrossRefKindCaption: 'Beschriftungen (Abbildungen und Tabellen)',
+  ribbonCrossRefKindBookmark: 'Textmarken',
+  ribbonCrossRefInsertAs: 'Verweis einfügen auf',
+  ribbonCrossRefTypeText: 'Verweistext',
+  ribbonCrossRefTypePage: 'Seitenzahl',
+  ribbonCrossRefTypeNumber: 'Nummer',
+  ribbonCrossRefNoAnchor:
+    'In einem schreibgeschützten Dokument kann keine ausgeblendete Marke hinzugefügt werden',
   ribbonChartInsertTitle: 'Diagramm einfügen',
   ribbonChartTitlePh: 'Diagrammtitel',
   ribbonChartBar: 'Säulendiagramm',

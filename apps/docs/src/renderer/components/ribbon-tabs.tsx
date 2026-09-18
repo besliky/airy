@@ -13,6 +13,7 @@ import {
   buildTextboxParagraphXml,
   buildWordArtParagraphXml,
   LINE_KINDS,
+  type Block,
   type HeaderFooter,
   type TextboxDisplay,
 } from '@airy-office/docx-engine'
@@ -602,6 +603,10 @@ export interface InsertTabProps extends TabProps {
   onPageNumFormat: () => void
   /** Insert an inline field (DATE/TIME/PAGE/NUMPAGES/FILENAME) */
   onInsertField: (instr: string) => void
+  /** original parsed blocks (cross-reference caption XML lives in originalXml) */
+  blocks: Block[]
+  /** displayed page number of a node position from live pagination (REF \p caches); null = unavailable */
+  anchorPage?: (pos: number) => number | null
   titlePg: boolean
   onTitlePg: (v: boolean) => void
   evenOddHf: boolean

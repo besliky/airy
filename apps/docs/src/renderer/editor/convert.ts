@@ -1279,7 +1279,8 @@ function runMarks(run: Run): PmMark[] {
       type: 'link',
       attrs: { href: run.link.href, rId: run.link.rId ?? null, tooltip: run.link.tooltip ?? null },
     })
-  if (run.refField !== undefined) marks.push({ type: 'refField', attrs: { name: run.refField } })
+  if (run.refField !== undefined)
+    marks.push({ type: 'refField', attrs: { name: run.refField, instr: run.refInstr ?? null } })
   if (run.instrField !== undefined)
     marks.push({
       type: 'instrField',
@@ -2618,6 +2619,7 @@ function runFromMarks(text: string, marks: PmMark[]): Run {
       }
     } else if (mark.type === 'refField') {
       run.refField = String(mark.attrs?.name ?? '')
+      if (mark.attrs?.instr) run.refInstr = String(mark.attrs.instr)
     } else if (mark.type === 'instrField') {
       run.instrField = String(mark.attrs?.instr ?? '')
       if (mark.attrs?.beginXml) run.fldBeginXml = String(mark.attrs.beginXml)
@@ -2715,6 +2717,7 @@ function runStyleKey(run: Run): string {
     run.noteRef ? [run.noteRef.kind, run.noteRef.id] : null,
     run.xeTerm ?? null,
     run.refField ?? null,
+    run.refInstr ?? null,
     run.instrField ?? null,
     run.fldBeginXml ?? null,
     run.math?.omml ?? null,
@@ -2762,6 +2765,7 @@ function normalizedRuns(runs: Run[]): unknown[] {
           r.noteRef ? [r.noteRef.kind, r.noteRef.id] : null,
           r.xeTerm ?? null,
           r.refField ?? null,
+          r.refInstr ?? null,
           r.instrField ?? null,
           r.fldBeginXml ?? null,
           r.math?.omml ?? null,

@@ -151,6 +151,7 @@ import { SPELLCHECK_KEY, spellcheckEnabled } from './spellcheck-pref'
 import { cachedByDoc } from './doc-cache'
 import { useShallowStable, useStableCallbacks } from './use-stable'
 import { FindPanel } from './components/FindPanel'
+import { refCacheOf } from './components/cross-ref'
 import { Ribbon } from './components/Ribbon'
 import { computeFormatState } from './components/ribbon-format-state'
 import { IconRedo, IconSave, IconUndo } from './components/icons'
@@ -1775,32 +1776,6 @@ export function App() {
     [editor, fieldValue],
   )
 
-  /** F9: recompute all inline field caches (PAGE/NUMPAGES/date-time/file name); REF/TOC are recomputed when Word opens the file */
-  const updateFields = useCallback(() => {
-    if (!editor) return
-    const { state, view } = editor
-    const jobs: Array<{ from: number; to: number; text: string; marks: readonly PmMark[] }> = []
-    state.doc.descendants((node, pos) => {
-      if (!node.isText) return
-      const mark = node.marks.find((m) => m.type.name === 'instrField')
-      if (!mark) return
-      const next = fieldValue(String(mark.attrs.instr))
-      if (next && next !== node.text) {
-        jobs.push({ from: pos, to: pos + node.nodeSize, text: next, marks: node.marks })
-      }
-    })
-    if (jobs.length === 0) {
-      setStatus(t('appNoFieldsToUpdate'))
-      return
-    }
-    let tr = state.tr
-    for (const j of jobs.sort((a, b) => b.from - a.from)) {
-      tr = tr.replaceWith(j.from, j.to, state.schema.text(j.text, [...j.marks]))
-    }
-    view.dispatch(tr)
-    setStatus(t('appFieldsUpdated', { n: jobs.length }))
-  }, [editor, fieldValue])
-
   // editorRef: lets the handlePaste closure (the useEditor config exists before the instance) reach the instance
   useEffect(() => {
     editorRef.current = editor
@@ -2561,9 +2536,11 @@ export function App() {
     [colMode, viewMode],
   )
 
-  // real TOC page-number backfill: compute each heading's (docHeading) page from the current real page slicing.
-  // Returns page numbers matching docHeadings in document order 1:1; returns null when not computable (page numbers left blank).
-  const headingPages = useCallback((): number[] | null => {
+  // real page-number lookup from the current page slicing: measures once and
+  // returns node pos → displayed page number (null per node when not
+  // measurable); null itself when pagination is unavailable (no canvas yet).
+  // Shared by the TOC page-number backfill and REF \p cross-reference caches.
+  const nodePagesFactory = useCallback((): ((pos: number) => number | null) | null => {
     if (!editor || !section) return null
     const pm = document.querySelector('.editor-scroll .ProseMirror') as HTMLElement | null
     if (!pm) return null
@@ -2605,14 +2582,13 @@ export function App() {
     // same page-number algorithm as the footer path (w:pgNumType start offsets apply to single-section docs too)
     const nums = secs.length > 0 ? pageNumbers(slices, secs) : slices.map((_, i) => i + 1)
     const byEl = new Map(mBlocks.filter((b) => b.el).map((b) => [b.el as HTMLElement, b.top]))
-    const pages: number[] = []
-    for (const h of collectHeadings(editor.state.doc)) {
-      const dom = editor.view.nodeDOM(h.pos) as HTMLElement | null
+    return (pos: number): number | null => {
+      const dom = editor.view.nodeDOM(pos) as HTMLElement | null
       const top = dom ? byEl.get(dom) : undefined
-      const idx = top === undefined ? 1 : pageAt(slices, top + 1)
-      pages.push(nums[Math.min(Math.max(idx, 1), nums.length) - 1] ?? idx)
+      if (top === undefined) return null
+      const idx = pageAt(slices, top + 1)
+      return nums[Math.min(Math.max(idx, 1), nums.length) - 1] ?? idx
     }
-    return pages
   }, [
     editor,
     section,
@@ -2628,6 +2604,78 @@ export function App() {
     measureSingleFlow,
     colGeomsFor,
   ])
+
+  // real TOC page-number backfill: compute each heading's (docHeading) page from the current real page slicing.
+  // Returns page numbers matching docHeadings in document order 1:1; returns null when not computable (page numbers left blank).
+  const headingPages = useCallback((): number[] | null => {
+    if (!editor) return null
+    const pageOf = nodePagesFactory()
+    if (!pageOf) return null
+    return collectHeadings(editor.state.doc).map((h) => pageOf(h.pos) ?? 1)
+  }, [editor, nodePagesFactory])
+
+  /** REF \p cross-reference caches: displayed page of any node position from live pagination */
+  const anchorPage = useCallback(
+    (pos: number) => nodePagesFactory()?.(pos) ?? null,
+    [nodePagesFactory],
+  )
+
+  /** F9: recompute inline field caches (PAGE/NUMPAGES/date-time/file name) and REF
+   * cross-reference caches (bookmark text / page \p from live pagination / SEQ number \r);
+   * TOC is recomputed when Word opens the file */
+  const updateFields = useCallback(() => {
+    if (!editor) return
+    const { state, view } = editor
+    const jobs: Array<{ from: number; to: number; text: string; marks: readonly PmMark[] }> = []
+    const refs: Array<{
+      pos: number
+      text: string | undefined
+      nodeSize: number
+      marks: readonly PmMark[]
+      instr: string
+    }> = []
+    state.doc.descendants((node, pos) => {
+      if (!node.isText) return
+      const mark = node.marks.find((m) => m.type.name === 'instrField')
+      if (mark) {
+        const next = fieldValue(String(mark.attrs.instr))
+        if (next && next !== node.text) {
+          jobs.push({ from: pos, to: pos + node.nodeSize, text: next, marks: node.marks })
+        }
+        return
+      }
+      const ref = node.marks.find((m) => m.type.name === 'refField')
+      if (ref) {
+        refs.push({
+          pos,
+          text: node.text,
+          nodeSize: node.nodeSize,
+          marks: node.marks,
+          // legacy references without a stored instruction fall back to the plain default
+          instr: String(ref.attrs.instr || ` REF ${ref.attrs.name} \\h `),
+        })
+      }
+    })
+    // pagination only when a \p reference actually needs it (measuring is not free)
+    let pageOf: ((pos: number) => number | null) | null = null
+    for (const r of refs) {
+      if (r.instr.includes('\\p') && pageOf === null) pageOf = nodePagesFactory()
+      const next = refCacheOf(editor, doc?.parsed.blocks ?? [], r.instr, pageOf)
+      if (next !== null && next !== r.text) {
+        jobs.push({ from: r.pos, to: r.pos + r.nodeSize, text: next, marks: r.marks })
+      }
+    }
+    if (jobs.length === 0) {
+      setStatus(t('appNoFieldsToUpdate'))
+      return
+    }
+    let tr = state.tr
+    for (const j of jobs.sort((a, b) => b.from - a.from)) {
+      tr = tr.replaceWith(j.from, j.to, state.schema.text(j.text, [...j.marks]))
+    }
+    view.dispatch(tr)
+    setStatus(t('appFieldsUpdated', { n: jobs.length }))
+  }, [editor, fieldValue, nodePagesFactory, doc])
 
   // status-bar page number: real page slicing (same algorithm as the pagination preview). Edits remeasure with debounce; scrolling only relocates
   useEffect(() => {
@@ -4485,6 +4533,7 @@ export function App() {
       setStatus(t('appSourceAdded', { title: source.title }))
     },
     headingPages,
+    anchorPage,
     onZoom: setZoom,
     onZoomFit: zoomFit,
     onDarkPage: setDarkPage,

@@ -205,6 +205,8 @@ interface RibbonProps {
   onAddSource: (source: SourceInfo) => void
   /** TOC page-number backfill: docHeadings in document order → real page numbers (null when not computable) */
   headingPages?: () => number[] | null
+  /** displayed page of a node position from live pagination (REF \p cross-references); null = unavailable */
+  anchorPage?: (pos: number) => number | null
   zoom: number
   onZoom: (zoom: number) => void
   /** compute zoom from the current window size (Word: page width / whole page) */
@@ -660,6 +662,7 @@ function RibbonInner({
   sources,
   onAddSource,
   headingPages,
+  anchorPage,
   zoom,
   onZoom,
   onZoomFit,
@@ -3786,6 +3789,8 @@ function RibbonInner({
             onHeader={onHeader}
             onPageNumFormat={onPageNumFormat}
             onInsertField={onInsertField}
+            blocks={blocks}
+            anchorPage={anchorPage}
             footer={footer}
             onFooter={onFooter}
             titlePg={titlePg}
