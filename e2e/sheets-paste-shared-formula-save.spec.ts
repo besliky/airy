@@ -65,9 +65,14 @@ test.describe('sheets: tiled paste of formulas survives save', () => {
         sheet.getRange(0, 0, 1, 3).activate()
       })
       await sheets.keyboard.press('Control+c')
-      // the copy command writes the clipboard asynchronously and no DOM state
-      // mirrors it — a short settle is the cheapest reliable gap (≤300ms)
-      await sheets.waitForTimeout(300)
+      // the copy command writes the clipboard asynchronously — poll it
+      // through the main process (cross-platform, no pbpaste needed) so the
+      // paste below never races the copy; clearing first keeps the poll
+      // honest about THIS copy, not some earlier pasteboard content
+      await app.evaluate(({ clipboard }) => clipboard.clear())
+      await expect
+        .poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
+        .toContain('10\thi')
 
       // tile-paste into A2:C3 — row 3's formula cell becomes an si follower
       await sheets.evaluate(() => {
