@@ -360,4 +360,22 @@ export const pt = {
   appUpdateStyleTip: 'Atualizar este estilo com a seleção atual (gravado de volta em styles.xml)',
   appNewStyleFromSelection: 'Novo estilo a partir da seleção atual',
   appStyleNamePlaceholder: 'Nome do estilo',
+  // Sort dialog (Home > Sort)
+  appSortDialogTitle: 'Classificar',
+  appSortScopeTable: 'Tabela: {rows} linhas × {cols} colunas',
+  appSortScopeParagraphs: 'Parágrafos selecionados: {n}',
+  appSortNoScope: 'Selecione uma tabela ou parágrafos para classificar',
+  appSortBy: 'Classificar por',
+  appSortThenBy: 'Em seguida por',
+  appSortColumn: 'Coluna {n}',
+  appSortType: 'Tipo',
+  appSortTypeText: 'Texto',
+  appSortTypeNumber: 'Número',
+  appSortTypeDate: 'Data',
+  appSortAscending: 'Crescente',
+  appSortDescending: 'Decrescente',
+  appSortHeaderRow: 'Linha de cabeçalho (não classificar a primeira linha)',
+  appSortMergedUnsupported:
+    'Não é possível classificar: tabelas com células mescladas ainda não são suportadas',
+  appSortNone: '(nenhuma)',
 } satisfies Record<keyof typeof zh, string>

@@ -64,7 +64,6 @@ export const es = {
   ribbonAuto: 'Auto',
   ribbonAutomatic: 'Automático',
   ribbonCm: 'cm',
-  ribbonNotSupportedSuffix: '{label} (aún no compatible)',
   ribbonOpen: 'Abrir…',
   ribbonSave: 'Guardar',
   ribbonSaveAs: 'Guardar como…',

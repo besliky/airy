@@ -365,4 +365,22 @@ export const pl = {
     'Zaktualizuj ten styl formatem bieżącego zaznaczenia (zapisywane z powrotem do styles.xml)',
   appNewStyleFromSelection: 'Nowy styl z bieżącego zaznaczenia',
   appStyleNamePlaceholder: 'Nazwa stylu',
+  // Sort dialog (Home > Sort)
+  appSortDialogTitle: 'Sortuj',
+  appSortScopeTable: 'Tabela: {rows} wierszy × {cols} kolumn',
+  appSortScopeParagraphs: 'Zaznaczone akapity: {n}',
+  appSortNoScope: 'Zaznacz tabelę lub akapity do posortowania',
+  appSortBy: 'Sortuj według',
+  appSortThenBy: 'Następnie według',
+  appSortColumn: 'Kolumna {n}',
+  appSortType: 'Typ',
+  appSortTypeText: 'Tekst',
+  appSortTypeNumber: 'Liczba',
+  appSortTypeDate: 'Data',
+  appSortAscending: 'Rosnąco',
+  appSortDescending: 'Malejąco',
+  appSortHeaderRow: 'Wiersz nagłówka (pierwszy wiersz bez sortowania)',
+  appSortMergedUnsupported:
+    'Nie można sortować: tabele ze scalonymi komórkami nie są jeszcze obsługiwane',
+  appSortNone: '(brak)',
 } satisfies Record<keyof typeof zh, string>

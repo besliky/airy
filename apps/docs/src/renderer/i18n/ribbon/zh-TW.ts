@@ -62,7 +62,6 @@ export const zhTW = {
   ribbonAuto: '自動',
   ribbonAutomatic: '自動',
   ribbonCm: '公分',
-  ribbonNotSupportedSuffix: '{label}(暫不支援)',
   ribbonOpen: '開啟…',
   ribbonSave: '儲存',
   ribbonSaveAs: '另存新檔…',

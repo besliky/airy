@@ -363,4 +363,22 @@ export const it = {
   appUpdateStyleTip: 'Aggiorna questo stile con la selezione corrente (riscritto in styles.xml)',
   appNewStyleFromSelection: 'Nuovo stile dalla selezione corrente',
   appStyleNamePlaceholder: 'Nome dello stile',
+  // Sort dialog (Home > Sort)
+  appSortDialogTitle: 'Ordina',
+  appSortScopeTable: 'Tabella: {rows} righe × {cols} colonne',
+  appSortScopeParagraphs: 'Paragrafi selezionati: {n}',
+  appSortNoScope: 'Seleziona una tabella o paragrafi da ordinare',
+  appSortBy: 'Ordina per',
+  appSortThenBy: 'Quindi per',
+  appSortColumn: 'Colonna {n}',
+  appSortType: 'Tipo',
+  appSortTypeText: 'Testo',
+  appSortTypeNumber: 'Numero',
+  appSortTypeDate: 'Data',
+  appSortAscending: 'Crescente',
+  appSortDescending: 'Decrescente',
+  appSortHeaderRow: 'Riga di intestazione (non ordinare la prima riga)',
+  appSortMergedUnsupported:
+    'Impossibile ordinare: le tabelle con celle unite non sono ancora supportate',
+  appSortNone: '(nessuna)',
 } satisfies Record<keyof typeof zh, string>

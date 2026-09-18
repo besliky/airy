@@ -371,4 +371,22 @@ export const de = {
     'Diese Formatvorlage mit der Formatierung der aktuellen Auswahl aktualisieren (wird in styles.xml zurückgeschrieben)',
   appNewStyleFromSelection: 'Neue Formatvorlage aus der aktuellen Auswahl',
   appStyleNamePlaceholder: 'Name der Formatvorlage',
+  // Sort dialog (Home > Sort)
+  appSortDialogTitle: 'Sortieren',
+  appSortScopeTable: 'Tabelle: {rows} Zeilen × {cols} Spalten',
+  appSortScopeParagraphs: 'Ausgewählte Absätze: {n}',
+  appSortNoScope: 'Tabelle oder zu sortierende Absätze auswählen',
+  appSortBy: 'Sortieren nach',
+  appSortThenBy: 'Dann nach',
+  appSortColumn: 'Spalte {n}',
+  appSortType: 'Typ',
+  appSortTypeText: 'Text',
+  appSortTypeNumber: 'Zahl',
+  appSortTypeDate: 'Datum',
+  appSortAscending: 'Aufsteigend',
+  appSortDescending: 'Absteigend',
+  appSortHeaderRow: 'Kopfzeile (erste Zeile nicht sortieren)',
+  appSortMergedUnsupported:
+    'Sortieren nicht möglich: Tabellen mit verbundenen Zellen werden noch nicht unterstützt',
+  appSortNone: '(keine)',
 } satisfies Record<keyof typeof zh, string>

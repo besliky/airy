@@ -64,7 +64,6 @@ export const ms = {
   ribbonAuto: 'Auto',
   ribbonAutomatic: 'Automatik',
   ribbonCm: 'cm',
-  ribbonNotSupportedSuffix: '{label} (belum disokong)',
   ribbonOpen: 'Buka…',
   ribbonSave: 'Simpan',
   ribbonSaveAs: 'Simpan Sebagai…',

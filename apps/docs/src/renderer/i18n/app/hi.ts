@@ -359,4 +359,22 @@ export const hi = {
   appUpdateStyleTip: 'वर्तमान चयन से इस शैली को अपडेट करें (styles.xml में वापस लिखा जाता है)',
   appNewStyleFromSelection: 'वर्तमान चयन से नई शैली',
   appStyleNamePlaceholder: 'शैली का नाम',
+  // Sort dialog (Home > Sort)
+  appSortDialogTitle: 'क्रमबद्ध करें',
+  appSortScopeTable: 'तालिका: {rows} पंक्तियाँ × {cols} कॉलम',
+  appSortScopeParagraphs: 'चुने गए अनुच्छेद: {n}',
+  appSortNoScope: 'क्रमबद्ध करने के लिए तालिका या अनुच्छेद चुनें',
+  appSortBy: 'इनके अनुसार क्रमबद्ध करें',
+  appSortThenBy: 'फिर इनके अनुसार',
+  appSortColumn: 'कॉलम {n}',
+  appSortType: 'प्रकार',
+  appSortTypeText: 'पाठ',
+  appSortTypeNumber: 'संख्या',
+  appSortTypeDate: 'तिथि',
+  appSortAscending: 'आरोही',
+  appSortDescending: 'अवरोही',
+  appSortHeaderRow: 'हेडर पंक्ति (पहली पंक्ति को क्रमबद्ध न करें)',
+  appSortMergedUnsupported:
+    'क्रमबद्ध नहीं किया जा सकता: मर्ज किए गए सेल वाली तालिकाएँ अभी समर्थित नहीं हैं',
+  appSortNone: '(कोई नहीं)',
 } satisfies Record<keyof typeof zh, string>

@@ -64,7 +64,6 @@ export const pt = {
   ribbonAuto: 'Auto',
   ribbonAutomatic: 'Automático',
   ribbonCm: 'cm',
-  ribbonNotSupportedSuffix: '{label} (ainda não suportado)',
   ribbonOpen: 'Abrir…',
   ribbonSave: 'Salvar',
   ribbonSaveAs: 'Salvar Como…',

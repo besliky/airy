@@ -63,7 +63,6 @@ export const ru = {
   ribbonAuto: 'Авто',
   ribbonAutomatic: 'Автоматически',
   ribbonCm: 'см',
-  ribbonNotSupportedSuffix: '{label} (пока не поддерживается)',
   ribbonOpen: 'Открыть…',
   ribbonSave: 'Сохранить',
   ribbonSaveAs: 'Сохранить как…',

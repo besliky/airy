@@ -370,4 +370,22 @@ export const nl = {
     'Deze stijl bijwerken met de huidige selectie (teruggeschreven naar styles.xml)',
   appNewStyleFromSelection: 'Nieuwe stijl op basis van de huidige selectie',
   appStyleNamePlaceholder: 'Stijlnaam',
+  // Sort dialog (Home > Sort)
+  appSortDialogTitle: 'Sorteren',
+  appSortScopeTable: 'Tabel: {rows} rijen × {cols} kolommen',
+  appSortScopeParagraphs: "Geselecteerde alinea's: {n}",
+  appSortNoScope: "Selecteer een tabel of alinea's om te sorteren",
+  appSortBy: 'Sorteren op',
+  appSortThenBy: 'Vervolgens op',
+  appSortColumn: 'Kolom {n}',
+  appSortType: 'Type',
+  appSortTypeText: 'Tekst',
+  appSortTypeNumber: 'Getal',
+  appSortTypeDate: 'Datum',
+  appSortAscending: 'Oplopend',
+  appSortDescending: 'Aflopend',
+  appSortHeaderRow: 'Kopregel (eerste regel niet sorteren)',
+  appSortMergedUnsupported:
+    'Kan niet sorteren: tabellen met samengevoegde cellen worden nog niet ondersteund',
+  appSortNone: '(geen)',
 } satisfies Record<keyof typeof zh, string>
