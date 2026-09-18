@@ -71,6 +71,55 @@ describe('computeLineNumberMarks semantics', () => {
     ])
   })
 
+  it('restart newPage does not restart at a mid-page continuous section break (BUG-920)', () => {
+    // both sections number "each page" and share one page via a continuous
+    // break: Word counts pages, not sections — the counter must keep running
+    // (no second "1" series on the same page)
+    const lines = [line(0, 0), line(20, 0), line(40, 1), line(60, 1)]
+    const sections = [
+      { settings: { lineNumbers: { restart: 'newPage' as const } } },
+      { settings: { lineNumbers: { restart: 'newPage' as const } } },
+    ]
+    const marks = computeLineNumberMarks(lines, [slice(0, 300, 0)], sections)
+    expect(marks.map((m) => [m.page, m.label])).toEqual([
+      [0, '1'],
+      [0, '2'],
+      [0, '3'],
+      [0, '4'],
+    ])
+  })
+
+  it('restart newPage turns the counter over on the next real page, at that section start', () => {
+    // the continuous-break page keeps counting; the page after it restarts at
+    // the start of the section owning its first line (start 7), whether the
+    // section changed mid-page or exactly at the page turn
+    const midPage = computeLineNumberMarks(
+      [line(0, 0), line(40, 1), line(500, 1)],
+      [slice(0, 300, 0), slice(300, 1000, 1)],
+      [
+        { settings: { lineNumbers: { restart: 'newPage' as const } } },
+        { settings: { lineNumbers: { restart: 'newPage' as const, start: 7 } } },
+      ],
+    )
+    expect(midPage.map((m) => [m.page, m.label])).toEqual([
+      [0, '1'],
+      [0, '2'],
+      [1, '7'],
+    ])
+    const atPageTurn = computeLineNumberMarks(
+      [line(0, 0), line(500, 1)],
+      [slice(0, 300, 0), slice(300, 1000, 1)],
+      [
+        { settings: { lineNumbers: { restart: 'newPage' as const } } },
+        { settings: { lineNumbers: { restart: 'newPage' as const, start: 7 } } },
+      ],
+    )
+    expect(atPageTurn.map((m) => [m.page, m.label])).toEqual([
+      [0, '1'],
+      [1, '7'],
+    ])
+  })
+
   it('continuous keeps one counter across pages and sections', () => {
     const lines = [line(0, 0), line(500, 0), line(1500, 1), line(2500, 1)]
     const marks = computeLineNumberMarks(

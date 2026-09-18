@@ -58,8 +58,11 @@ const windowsOfSlice = (
  * shows 5, 10, 15… — the first line's value can stay unshown).
  *
  * Sections without w:lnNumType neither display nor count lines; `continuous`
- * keeps one running counter across pages and numbered sections, while
- * newPage/newSection reset it to that section's start.
+ * keeps one running counter across pages and numbered sections, `newSection`
+ * resets it at the section boundary, and `newPage` resets it when the page
+ * actually turns: Word counts pages, not sections, so a mid-page `continuous`
+ * section break keeps the counter running — the restart lands on the first
+ * line of the next real page, at that line's section start.
  */
 export function computeLineNumberMarks(
   lines: LnLine[],
@@ -95,7 +98,10 @@ export function computeLineNumberMarks(
     const newSection = line.section !== counterSection
     const newPage = loc.page !== lastNumberedPage
     if (counterSection < 0) counter = start
-    else if (restart === 'newPage' && (newPage || newSection)) counter = start
+    // newPage restarts on the page turn only: a mid-page continuous section
+    // break must not mint a second "1" on the same page; the next real page
+    // restarts at the start of the section owning its first line
+    else if (restart === 'newPage' && newPage) counter = start
     else if (restart === 'newSection' && newSection) counter = start
     // continuous: the running counter survives pages and section breaks
     counterSection = line.section
