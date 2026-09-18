@@ -2053,6 +2053,29 @@ function parseSaveRequest(input: WorkbookSaveRequest): WorkbookSaveRequest {
     if (!isRecord(op) || typeof op.sheetId !== 'string' || op.sheetId.length === 0) {
       throw new Error('Invalid workbook structural operation.')
     }
+    if ('from' in op) {
+      // Rectangle move: both rectangles must be valid areas of equal size
+      // (the replace gesture never resizes; a mismatch would be the
+      // unsupported insert-style move).
+      if (op.kind !== 'move-range' || !isRecord(op.from) || !isRecord(op.to)) {
+        throw new Error('Invalid workbook structural operation.')
+      }
+      const from = parseCellArea(op.from)
+      const to = parseCellArea(op.to)
+      if (
+        from.endRow - from.startRow !== to.endRow - to.startRow ||
+        from.endColumn - from.startColumn !== to.endColumn - to.startColumn ||
+        to.endRow - to.startRow >= 10_000 ||
+        to.endColumn - to.startColumn >= 10_000 ||
+        from.endRow > 1_048_575 ||
+        to.endRow > 1_048_575 ||
+        from.endColumn > 16_383 ||
+        to.endColumn > 16_383
+      ) {
+        throw new Error('Invalid workbook structural operation.')
+      }
+      continue
+    }
     if ('range' in op) {
       if (op.kind !== 'merge-cells' && op.kind !== 'unmerge-cells') {
         throw new Error('Invalid workbook structural operation.')

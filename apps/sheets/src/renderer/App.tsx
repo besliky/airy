@@ -1909,7 +1909,12 @@ export function App(): React.JSX.Element {
           setPendingEdits(journalSize(state.editJournal))
           return
         }
-        // Move-range carries its sheet ids inside from/to, not at top level.
+        // Move-range is journaled as a first-class rectangle move: the save
+        // relocates the cells and remaps every reference through Excel's
+        // three-way rule (inside `from` follows, onto `to` dies as #REF!,
+        // partial overlap stays), so the file matches what the screen shows
+        // after Univer's own rewrite. Cross-sheet and resized moves are
+        // cancelled at the command gate; skip journaling anything malformed.
         if (event.id === MOVE_RANGE_MUTATION) {
           const move = event.params as
             | {
@@ -1923,8 +1928,51 @@ export function App(): React.JSX.Element {
           const toSheet = move?.to?.subUnitId ?? params.subUnitId
           const fromRange = move?.fromRange ?? matrixBounds(move?.from?.value)
           const toRange = move?.toRange ?? matrixBounds(move?.to?.value)
-          if (fromSheet && fromRange) journalRangeSnapshot(runtime, state, fromSheet, fromRange)
-          if (toSheet && toRange) journalRangeSnapshot(runtime, state, toSheet, toRange)
+          const structuralSheetName = fromSheet
+            ? (runtime.univerAPI
+                .getActiveWorkbook()
+                ?.getSheetBySheetId(fromSheet)
+                ?.getSheetName() ?? state.file.sheets.find((sheet) => sheet.id === fromSheet)?.name)
+            : undefined
+          const sameShape =
+            fromRange != null &&
+            toRange != null &&
+            fromRange.endRow - fromRange.startRow === toRange.endRow - toRange.startRow &&
+            fromRange.endColumn - fromRange.startColumn === toRange.endColumn - toRange.startColumn
+          if (fromSheet && fromSheet === toSheet && fromRange && toRange && sameShape) {
+            const rangeMoveOp: StructuralJournalOp = {
+              kind: 'move-range',
+              from: {
+                startRow: fromRange.startRow,
+                endRow: fromRange.endRow,
+                startColumn: fromRange.startColumn,
+                endColumn: fromRange.endColumn,
+              },
+              to: {
+                startRow: toRange.startRow,
+                endRow: toRange.endRow,
+                startColumn: toRange.startColumn,
+                endColumn: toRange.endColumn,
+              },
+            }
+            recordStructuralOp(state.editJournal, fromSheet, rangeMoveOp, structuralSheetName)
+            // Floating objects never follow a replace move (Excel semantics)
+            // — only their chart series references do, keeping the preview
+            // honest with the save's own c:f rewrite.
+            state.file.visuals.forEach((visual, at) => {
+              state.file.visuals[at] = shiftVisualForStructuralOp(
+                visual,
+                fromSheet,
+                structuralSheetName,
+                rangeMoveOp,
+              )
+            })
+            refreshLazyVisuals(state)
+            // The recalc fallback reads the on-disk file; the move desynced
+            // its coordinates, so its overlays must not re-apply.
+            state.recalc.overlay.clear()
+            state.recalc.formulaCells.clear()
+          }
           // Moved cells feed charts too, same as value mutations.
           if (fromSheet && fromRange) queueChartDataSync(fromSheet, fromRange)
           if (toSheet && toRange) queueChartDataSync(toSheet, toRange)
@@ -2500,6 +2548,34 @@ export function App(): React.JSX.Element {
             event.cancel = true
             setMessage(t('appPivotSheetNoMove'))
             return
+          }
+          // A range move is only saveable in its replace form: the same-size
+          // landing rectangle. Univer's command also models cross-sheet and
+          // (future) insert-style moves — neither has a file-side transform,
+          // so cancel them before the model diverges from the journal.
+          if (event.id === MOVE_RANGE_COMMAND) {
+            const move = event.params as
+              | {
+                  fromSubUnitId?: string
+                  toSubUnitId?: string
+                  fromRange?: IRange
+                  toRange?: IRange
+                }
+              | undefined
+            const fromSheet = move?.fromSubUnitId ?? subUnitId
+            const toSheet = move?.toSubUnitId ?? subUnitId
+            const sameShape =
+              move?.fromRange &&
+              move.toRange &&
+              move.fromRange.endRow - move.fromRange.startRow ===
+                move.toRange.endRow - move.toRange.startRow &&
+              move.fromRange.endColumn - move.fromRange.startColumn ===
+                move.toRange.endColumn - move.toRange.startColumn
+            if (fromSheet === undefined || fromSheet !== toSheet || !sameShape) {
+              event.cancel = true
+              setMessage(t('appMoveRangeReplaceOnly'))
+              return
+            }
           }
           if (
             FILTER_COMMAND_PATTERN.test(event.id) &&

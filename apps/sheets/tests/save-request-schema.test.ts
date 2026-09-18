@@ -50,4 +50,41 @@ describe('workbookSaveRequestSchema', () => {
     }
     expect(() => workbookSaveRequestSchema.parse(request)).not.toThrow()
   })
+
+  it('accepts a same-size range move and rejects a resized or off-sheet one', () => {
+    const area = (startRow: number, startColumn: number, endRow: number, endColumn: number) => ({
+      startRow,
+      startColumn,
+      endRow,
+      endColumn,
+    })
+    const request = {
+      ...emptyRequest('save'),
+      structuralOps: [
+        { sheetId: 'sh1', kind: 'move-range', from: area(0, 0, 1, 2), to: area(4, 5, 5, 7) },
+      ],
+    }
+    expect(() => workbookSaveRequestSchema.parse(request)).not.toThrow()
+    expect(() =>
+      workbookSaveRequestSchema.parse({
+        ...request,
+        structuralOps: [
+          { sheetId: 'sh1', kind: 'move-range', from: area(0, 0, 1, 2), to: area(4, 5, 5, 6) },
+        ],
+      }),
+    ).toThrow(/equally sized/)
+    expect(() =>
+      workbookSaveRequestSchema.parse({
+        ...request,
+        structuralOps: [
+          {
+            sheetId: 'sh1',
+            kind: 'move-range',
+            from: area(0, 0, 1, 2),
+            to: area(1_048_575, 5, 1_048_576, 7),
+          },
+        ],
+      }),
+    ).toThrow()
+  })
 })

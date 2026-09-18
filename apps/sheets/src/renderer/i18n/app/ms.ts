@@ -310,6 +310,8 @@ export const ms = {
     'Buku kerja ini terlalu besar untuk dimuatkan sepenuhnya ke ingatan; penapisan tidak tersedia untuk fail ini.',
   appDialogCancel: 'Batal',
   appPivotSheetNoMove: 'Helaian ini mengandungi Jadual Pangsi — pengalihan julat belum disokong.',
+  appMoveRangeReplaceOnly:
+    'Hanya pergerakan julat dalam helaian yang sama ke kawasan bersaiz sama boleh disimpan — pergerakan ini dibatalkan.',
   appMergeOverTable:
     'Pilihan bertindih dengan jadual Excel — mencantumkan sel di dalam jadual belum disokong.',
   appTableFilterNoEdit:

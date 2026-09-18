@@ -302,6 +302,8 @@ export const en = {
     'This workbook is too large to load fully into memory; filtering is unavailable for this file.',
   appDialogCancel: 'Cancel',
   appPivotSheetNoMove: 'This sheet contains a PivotTable — moving ranges is not supported yet.',
+  appMoveRangeReplaceOnly:
+    'Only same-sheet range moves onto an equally sized area can be saved — this move was cancelled.',
   appMergeOverTable:
     'The selection overlaps an Excel table — merging cells inside a table is not supported yet.',
   appTableFilterNoEdit:

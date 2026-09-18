@@ -309,6 +309,8 @@ export const id = {
     'Buku kerja ini terlalu besar untuk dimuat sepenuhnya ke memori; filter tidak tersedia untuk file ini.',
   appDialogCancel: 'Batal',
   appPivotSheetNoMove: 'Lembar ini berisi PivotTable — memindahkan rentang belum didukung.',
+  appMoveRangeReplaceOnly:
+    'Hanya perpindahan rentang di lembar yang sama ke area berukuran sama yang dapat disimpan — perpindahan ini dibatalkan.',
   appMergeOverTable:
     'Pilihan tumpang tindih dengan tabel Excel — menggabungkan sel di dalam tabel belum didukung.',
   appTableFilterNoEdit: 'Filter lembar ini milik tabel Excel — pengeditannya belum dapat disimpan.',

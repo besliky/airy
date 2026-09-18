@@ -18,6 +18,12 @@ interface CellArea {
 
 type RowColumnOp = Extract<StructuralOp, { index: number }>
 
+// Invariant: `move-range` ops (2D rectangle replaces) never appear on a
+// sheet that still streams — the command gate confines them to fully-loaded
+// formula-mode sheets. That is why the per-axis maps below simply ignore
+// them: for every cell outside the moved/overwritten rectangles the identity
+// is exact (a replace move shifts no axis line), and inside them nothing
+// ever streams in. netAxisDelta likewise reads them as zero on both axes.
 function axisOf(op: RowColumnOp): Axis {
   return op.kind === 'insert-cols' || op.kind === 'remove-cols' || op.kind === 'move-cols'
     ? 'column'

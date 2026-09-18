@@ -15,7 +15,8 @@ import type { LazyWorkbookState, UniverRuntime } from './univer-state'
 
 /// Journal ops that renumber rows/columns; the recorded cache coordinates are
 /// stale after these. Layout-only ops (sizing, hiding, outlining, merging)
-/// leave addresses intact.
+/// leave addresses intact. A range move relocates cells, so cached results
+/// drift the same way.
 const COORDINATE_SHIFTING_OPS = new Set([
   'insert-rows',
   'remove-rows',
@@ -23,6 +24,7 @@ const COORDINATE_SHIFTING_OPS = new Set([
   'remove-cols',
   'move-rows',
   'move-cols',
+  'move-range',
 ])
 
 /**
