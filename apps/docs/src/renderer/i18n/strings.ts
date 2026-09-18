@@ -3,12 +3,14 @@ import { appStrings } from './strings-app'
 import { editorStrings } from './strings-editor'
 import { reviewStrings } from './strings-review'
 import { ribbonStrings } from './strings-ribbon'
+import { referencesStrings } from './strings-references'
 import { tableStrings } from './strings-table'
 
 export const strings = {
   zh: {
     ...appStrings.zh,
     ...ribbonStrings.zh,
+    ...referencesStrings.zh,
     ...tableStrings.zh,
     ...editorStrings.zh,
     ...reviewStrings.zh,
@@ -17,6 +19,7 @@ export const strings = {
   en: {
     ...appStrings.en,
     ...ribbonStrings.en,
+    ...referencesStrings.en,
     ...tableStrings.en,
     ...editorStrings.en,
     ...reviewStrings.en,
@@ -25,6 +28,7 @@ export const strings = {
   ja: {
     ...appStrings.ja,
     ...ribbonStrings.ja,
+    ...referencesStrings.ja,
     ...tableStrings.ja,
     ...editorStrings.ja,
     ...reviewStrings.ja,
@@ -33,6 +37,7 @@ export const strings = {
   ko: {
     ...appStrings.ko,
     ...ribbonStrings.ko,
+    ...referencesStrings.ko,
     ...tableStrings.ko,
     ...editorStrings.ko,
     ...reviewStrings.ko,
@@ -41,6 +46,7 @@ export const strings = {
   fr: {
     ...appStrings.fr,
     ...ribbonStrings.fr,
+    ...referencesStrings.fr,
     ...tableStrings.fr,
     ...editorStrings.fr,
     ...reviewStrings.fr,
@@ -49,6 +55,7 @@ export const strings = {
   de: {
     ...appStrings.de,
     ...ribbonStrings.de,
+    ...referencesStrings.de,
     ...tableStrings.de,
     ...editorStrings.de,
     ...reviewStrings.de,
@@ -57,6 +64,7 @@ export const strings = {
   es: {
     ...appStrings.es,
     ...ribbonStrings.es,
+    ...referencesStrings.es,
     ...tableStrings.es,
     ...editorStrings.es,
     ...reviewStrings.es,
@@ -65,6 +73,7 @@ export const strings = {
   th: {
     ...appStrings.th,
     ...ribbonStrings.th,
+    ...referencesStrings.th,
     ...tableStrings.th,
     ...editorStrings.th,
     ...reviewStrings.th,
@@ -73,6 +82,7 @@ export const strings = {
   id: {
     ...appStrings.id,
     ...ribbonStrings.id,
+    ...referencesStrings.id,
     ...tableStrings.id,
     ...editorStrings.id,
     ...reviewStrings.id,
@@ -81,6 +91,7 @@ export const strings = {
   ru: {
     ...appStrings.ru,
     ...ribbonStrings.ru,
+    ...referencesStrings.ru,
     ...tableStrings.ru,
     ...editorStrings.ru,
     ...reviewStrings.ru,
@@ -89,6 +100,7 @@ export const strings = {
   ar: {
     ...appStrings.ar,
     ...ribbonStrings.ar,
+    ...referencesStrings.ar,
     ...tableStrings.ar,
     ...editorStrings.ar,
     ...reviewStrings.ar,
@@ -97,6 +109,7 @@ export const strings = {
   pt: {
     ...appStrings.pt,
     ...ribbonStrings.pt,
+    ...referencesStrings.pt,
     ...tableStrings.pt,
     ...editorStrings.pt,
     ...reviewStrings.pt,
@@ -105,6 +118,7 @@ export const strings = {
   it: {
     ...appStrings.it,
     ...ribbonStrings.it,
+    ...referencesStrings.it,
     ...tableStrings.it,
     ...editorStrings.it,
     ...reviewStrings.it,
@@ -113,6 +127,7 @@ export const strings = {
   pl: {
     ...appStrings.pl,
     ...ribbonStrings.pl,
+    ...referencesStrings.pl,
     ...tableStrings.pl,
     ...editorStrings.pl,
     ...reviewStrings.pl,
@@ -121,6 +136,7 @@ export const strings = {
   cs: {
     ...appStrings.cs,
     ...ribbonStrings.cs,
+    ...referencesStrings.cs,
     ...tableStrings.cs,
     ...editorStrings.cs,
     ...reviewStrings.cs,
@@ -129,6 +145,7 @@ export const strings = {
   nl: {
     ...appStrings.nl,
     ...ribbonStrings.nl,
+    ...referencesStrings.nl,
     ...tableStrings.nl,
     ...editorStrings.nl,
     ...reviewStrings.nl,
@@ -137,6 +154,7 @@ export const strings = {
   ms: {
     ...appStrings.ms,
     ...ribbonStrings.ms,
+    ...referencesStrings.ms,
     ...tableStrings.ms,
     ...editorStrings.ms,
     ...reviewStrings.ms,
@@ -145,6 +163,7 @@ export const strings = {
   he: {
     ...appStrings.he,
     ...ribbonStrings.he,
+    ...referencesStrings.he,
     ...tableStrings.he,
     ...editorStrings.he,
     ...reviewStrings.he,
@@ -153,6 +172,7 @@ export const strings = {
   hi: {
     ...appStrings.hi,
     ...ribbonStrings.hi,
+    ...referencesStrings.hi,
     ...tableStrings.hi,
     ...editorStrings.hi,
     ...reviewStrings.hi,
@@ -161,6 +181,7 @@ export const strings = {
   'zh-TW': {
     ...appStrings['zh-TW'],
     ...ribbonStrings['zh-TW'],
+    ...referencesStrings['zh-TW'],
     ...tableStrings['zh-TW'],
     ...editorStrings['zh-TW'],
     ...reviewStrings['zh-TW'],

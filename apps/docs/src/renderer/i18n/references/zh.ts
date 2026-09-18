@@ -1,0 +1,15 @@
+export const zh = {
+  refsTocMenuAuto: '自动目录',
+  refsTocMenuCustom: '自定义目录…',
+  refsTocMenuTof: '插入图表目录…',
+  refsTocOptionsTitle: '目录选项',
+  refsTocLevels: '显示级别',
+  refsTocPageNumbers: '显示页码',
+  refsTocHyperlinks: '使用超链接',
+  refsTocStyles: '从样式构建',
+  refsTocStylesPh: '标题 1,1,标题 2,2',
+  refsTofTitle: '图表目录',
+  refsTofLabel: '标签',
+  refsTofNoCaptions: '文档中没有该标签的题注。',
+  refsTofFieldLabel: '图表目录字段',
+}
