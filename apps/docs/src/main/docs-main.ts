@@ -8,7 +8,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { copyFile, mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, readdir, stat, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import {
   BrowserWindow,
@@ -4115,13 +4115,13 @@ export async function createAiDocument(
           new BrowserWindow({ show: false, webPreferences: { sandbox: true, javascript: false } }),
       )
       const filePath = uniquePathIn(defaultSaveDir(), `${title}.pdf`)
-      await writeFile(filePath, bytes)
+      await atomicWriteFile(filePath, bytes)
       openGeneratedFile(filePath)
       return { ok: true, path: filePath }
     }
     if (type === 'md' || type === 'html') {
       const filePath = uniquePathIn(defaultSaveDir(), `${title}.${type}`)
-      await writeFile(filePath, content, 'utf8')
+      await atomicWriteFile(filePath, Buffer.from(content, 'utf8'))
       openGeneratedFile(filePath)
       return { ok: true, path: filePath }
     }

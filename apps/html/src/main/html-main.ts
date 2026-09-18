@@ -1690,7 +1690,7 @@ function registerHtmlIpc(): void {
         await writeFile(htmlPath, buildPreviewDocument(request.html, base), 'utf8')
         driver = await ElectronBrowserDriver.create(HTML2DOCX_VIEWPORT)
         const { docx } = await convertHtmlToDocx({ url: pathToFileURL(htmlPath).href }, driver)
-        await writeFile(picked.filePath, docx)
+        await atomicWriteFile(picked.filePath, docx)
         openExportedDocx(picked.filePath)
         return { ok: true, path: picked.filePath }
       } catch (err) {
@@ -1724,7 +1724,7 @@ function registerHtmlIpc(): void {
       const workDir = await mkdtemp(join(tmpdir(), 'airy-html-pdf-'))
       try {
         const docPath = savePathByWc.get(e.sender.id)
-        await writeFile(picked.filePath, await renderPrintPdf(request.html, docPath, workDir))
+        await atomicWriteFile(picked.filePath, await renderPrintPdf(request.html, docPath, workDir))
         openExportedPdf(picked.filePath)
         return { ok: true, path: picked.filePath }
       } catch (err) {
