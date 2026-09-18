@@ -32,7 +32,9 @@
   --sheets-statusbar-border: #e1e4e8;
   --sheets-statusbar-hover: rgb(0 0 0 / 8%);
   --sheets-zoom-slider: #8a8886;
-  --sheets-focus-ring: rgb(35 36 37 / 20%);
+  /* WCAG non-text: keyboard focus ring must clear 3:1 on --chrome-bg
+   * (55% gives 3.60:1 on white; was 20% = 1.50:1) */
+  --sheets-focus-ring: rgb(35 36 37 / 55%);
   --sheets-shimmer-base: #666666;
   --sheets-shimmer-hi: #d9d9d9;
   --sheets-scroll-thumb: rgb(0 0 0 / 25%);
@@ -121,7 +123,8 @@
   --sheets-statusbar-border: #3a3a3a;
   --sheets-statusbar-hover: rgb(255 255 255 / 10%);
   --sheets-zoom-slider: #777;
-  --sheets-focus-ring: rgb(228 228 228 / 25%);
+  /* WCAG non-text: >=3:1 on --chrome-bg #252525 (4.15:1; was 25% = 2.06:1) */
+  --sheets-focus-ring: rgb(228 228 228 / 50%);
   --sheets-shimmer-base: #8a8a8a;
   --sheets-shimmer-hi: #d0d0d0;
   --sheets-scroll-thumb: rgb(255 255 255 / 28%);
@@ -153,7 +156,8 @@
     --sheets-statusbar-border: #3a3a3a;
     --sheets-statusbar-hover: rgb(255 255 255 / 10%);
     --sheets-zoom-slider: #777;
-    --sheets-focus-ring: rgb(228 228 228 / 25%);
+    /* WCAG non-text: >=3:1 on --chrome-bg #252525 (4.15:1; was 25% = 2.06:1) */
+    --sheets-focus-ring: rgb(228 228 228 / 50%);
     --sheets-shimmer-base: #8a8a8a;
     --sheets-shimmer-hi: #d0d0d0;
     --sheets-scroll-thumb: rgb(255 255 255 / 28%);
