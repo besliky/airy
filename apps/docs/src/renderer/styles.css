@@ -5748,7 +5748,7 @@ body.docs-crop-active .doc-protected[data-doc-protected='image'] .doc-img-wrap {
   height: 100%;
 }
 
-/* find option toggles (match case / whole word) */
+/* find option toggles (match case / whole word / wildcards) */
 .find-opt {
   border: 1px solid var(--border);
   background: var(--surface);
@@ -5763,6 +5763,12 @@ body.docs-crop-active .doc-protected[data-doc-protected='image'] .doc-img-wrap {
   background: var(--word-blue);
   border-color: var(--word-blue);
   color: var(--docs-on-accent);
+}
+
+/* e.g. whole word while wildcards are on, like Word's grayed-out options */
+.find-opt:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* data grid of the Insert Chart dialog */

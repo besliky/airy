@@ -340,6 +340,8 @@ export const ru = {
   appFindPlaceholder: 'Найти',
   appMatchCase: 'Учитывать регистр',
   appWholeWord: 'Только слово целиком',
+  appUseWildcards: 'Использовать подстановочные знаки',
+  appIgnoreDiacritics: 'Игнорировать диакритические знаки',
   appNoResults: 'Нет результатов',
   appPrevMatch: 'Назад (Shift+Enter)',
   appNextMatch: 'Далее (Enter)',

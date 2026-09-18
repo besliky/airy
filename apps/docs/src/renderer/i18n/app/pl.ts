@@ -342,6 +342,8 @@ export const pl = {
   appFindPlaceholder: 'Znajdź',
   appMatchCase: 'Uwzględnij wielkość liter',
   appWholeWord: 'Tylko całe wyrazy',
+  appUseWildcards: 'Użyj symboli wieloznacznych',
+  appIgnoreDiacritics: 'Ignoruj znaki diakrytyczne',
   appNoResults: 'Brak wyników',
   appPrevMatch: 'Poprzedni (Shift+Enter)',
   appNextMatch: 'Następny (Enter)',

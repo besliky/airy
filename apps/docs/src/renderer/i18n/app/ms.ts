@@ -341,6 +341,8 @@ export const ms = {
   appFindPlaceholder: 'Cari',
   appMatchCase: 'Padankan huruf besar/kecil',
   appWholeWord: 'Perkataan penuh sahaja',
+  appUseWildcards: 'Guna aksara kad liar',
+  appIgnoreDiacritics: 'Abaikan tanda diakritik',
   appNoResults: 'Tiada hasil',
   appPrevMatch: 'Sebelumnya (Shift+Enter)',
   appNextMatch: 'Berikutnya (Enter)',

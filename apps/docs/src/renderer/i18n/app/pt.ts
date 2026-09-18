@@ -338,6 +338,8 @@ export const pt = {
   appFindPlaceholder: 'Localizar',
   appMatchCase: 'Diferenciar maiúsculas de minúsculas',
   appWholeWord: 'Somente palavras inteiras',
+  appUseWildcards: 'Usar caracteres curinga',
+  appIgnoreDiacritics: 'Ignorar diacríticos',
   appNoResults: 'Sem resultados',
   appPrevMatch: 'Anterior (Shift+Enter)',
   appNextMatch: 'Próximo (Enter)',

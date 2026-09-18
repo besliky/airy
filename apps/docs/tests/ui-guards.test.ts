@@ -55,7 +55,12 @@ describe('foldCase', () => {
 describe('findMatches', () => {
   it('keeps offsets aligned after a length-changing lowercase char', () => {
     const editor = createEditor('İİİ test')
-    const [m] = findMatches(editor, 'TEST', { matchCase: false, wholeWord: false })
+    const [m] = findMatches(editor, 'TEST', {
+      matchCase: false,
+      wholeWord: false,
+      useWildcards: false,
+      ignoreDiacritics: false,
+    })
     expect(m).toBeDefined()
     expect(editor.state.doc.textBetween(m.from, m.to)).toBe('test')
     editor.destroy()
@@ -63,9 +68,30 @@ describe('findMatches', () => {
 
   it('respects matchCase and wholeWord', () => {
     const editor = createEditor('Cat cats CAT')
-    expect(findMatches(editor, 'cat', { matchCase: false, wholeWord: false })).toHaveLength(3)
-    expect(findMatches(editor, 'cat', { matchCase: false, wholeWord: true })).toHaveLength(2)
-    expect(findMatches(editor, 'CAT', { matchCase: true, wholeWord: false })).toHaveLength(1)
+    expect(
+      findMatches(editor, 'cat', {
+        matchCase: false,
+        wholeWord: false,
+        useWildcards: false,
+        ignoreDiacritics: false,
+      }),
+    ).toHaveLength(3)
+    expect(
+      findMatches(editor, 'cat', {
+        matchCase: false,
+        wholeWord: true,
+        useWildcards: false,
+        ignoreDiacritics: false,
+      }),
+    ).toHaveLength(2)
+    expect(
+      findMatches(editor, 'CAT', {
+        matchCase: true,
+        wholeWord: false,
+        useWildcards: false,
+        ignoreDiacritics: false,
+      }),
+    ).toHaveLength(1)
     editor.destroy()
   })
 })
@@ -117,6 +143,85 @@ describe('FindPanel', () => {
       vi.advanceTimersByTime(200)
     })
     expect(count()).toBe('1/1')
+    unmount()
+    editor.destroy()
+  })
+
+  const optButton = (container: HTMLElement, label: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('.find-opt')].find(
+      (b) => b.textContent === label,
+    )!
+
+  const click = (el: Element) =>
+    act(() => {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+  it('disables the whole-word toggle while wildcards are on', () => {
+    const editor = createEditor('hello world')
+    const { container, unmount } = render(createElement(FindPanel, { editor, onClose: () => {} }))
+    const word = optButton(container, 'W')
+    const wild = optButton(container, '*?')
+    expect(word.disabled).toBe(false)
+    click(wild)
+    expect(word.disabled).toBe(true)
+    expect(wild.className).toContain('on')
+    click(wild)
+    expect(word.disabled).toBe(false)
+    unmount()
+    editor.destroy()
+  })
+
+  it('finds and replaces using wildcards', () => {
+    vi.useFakeTimers()
+    const editor = createEditor('hello hallo')
+    const { container, unmount } = render(createElement(FindPanel, { editor, onClose: () => {} }))
+    click(optButton(container, '*?'))
+    const input = container.querySelector<HTMLInputElement>('.find-input')!
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(input, 'h?llo')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+    expect(container.querySelector('.find-count')!.textContent).toBe('1/2')
+    const replaceInput = container.querySelectorAll<HTMLInputElement>('.find-input')[1]!
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(replaceInput, 'X')
+      replaceInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    click(container.querySelectorAll('.find-action')[1]!) // Replace All
+    expect(editor.state.doc.textContent).toBe('X X')
+    unmount()
+    editor.destroy()
+  })
+
+  it('ignore-diacritics widens the count and yields to match case', () => {
+    vi.useFakeTimers()
+    const editor = createEditor('café cafe')
+    const { container, unmount } = render(createElement(FindPanel, { editor, onClose: () => {} }))
+    const input = container.querySelector<HTMLInputElement>('.find-input')!
+    const type = (el: HTMLInputElement, value: string) =>
+      act(() => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+        setter.call(el, value)
+        el.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    type(input, 'cafe')
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+    expect(container.querySelector('.find-count')!.textContent).toBe('1/1') // café differs
+    const dia = optButton(container, 'é')
+    click(dia)
+    expect(container.querySelector('.find-count')!.textContent).toBe('1/2')
+    const caseBtn = optButton(container, 'Aa')
+    click(caseBtn)
+    expect(dia.disabled).toBe(true) // accents always differ when match case is on
+    expect(container.querySelector('.find-count')!.textContent).toBe('1/1')
     unmount()
     editor.destroy()
   })

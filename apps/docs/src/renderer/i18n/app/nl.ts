@@ -347,6 +347,8 @@ export const nl = {
   appFindPlaceholder: 'Zoeken',
   appMatchCase: 'Identieke hoofdletters/kleine letters',
   appWholeWord: 'Alleen hele woorden',
+  appUseWildcards: 'Jokertekens gebruiken',
+  appIgnoreDiacritics: 'Diakritische tekens negeren',
   appNoResults: 'Geen resultaten',
   appPrevMatch: 'Vorige (Shift+Enter)',
   appNextMatch: 'Volgende (Enter)',

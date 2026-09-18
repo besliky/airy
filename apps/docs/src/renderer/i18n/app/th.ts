@@ -337,6 +337,8 @@ export const th = {
   appFindPlaceholder: 'ค้นหา',
   appMatchCase: 'ตรงตามตัวพิมพ์ใหญ่-เล็ก',
   appWholeWord: 'ทั้งคำเท่านั้น',
+  appUseWildcards: 'ใช้อักขระตัวแทน',
+  appIgnoreDiacritics: 'ละเว้นเครื่องหมายกำกับการออกเสียง',
   appNoResults: 'ไม่พบผลลัพธ์',
   appPrevMatch: 'ก่อนหน้า (Shift+Enter)',
   appNextMatch: 'ถัดไป (Enter)',

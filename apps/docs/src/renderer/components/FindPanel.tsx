@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/core'
 import { useI18n } from '../i18n/locale'
 import { searchPluginKey } from '../editor/extensions'
+import { compileWildcards, foldDiacritics } from '../find-wildcards'
 
 interface Range {
   from: number
@@ -11,6 +12,8 @@ interface Range {
 interface FindOptions {
   matchCase: boolean
   wholeWord: boolean
+  useWildcards: boolean
+  ignoreDiacritics: boolean
 }
 
 const isWordChar = (ch: string | undefined) => !!ch && /[\p{L}\p{N}_]/u.test(ch)
@@ -29,7 +32,14 @@ export function foldCase(s: string): string {
 export function findMatches(editor: Editor, query: string, opts: FindOptions): Range[] {
   const found: Range[] = []
   if (!query) return found
-  const needle = opts.matchCase ? query : foldCase(query)
+  // in wildcards mode wholeWord is ignored (like Word, which disables it there);
+  // diacritic folding applies to pattern and text alike, but only to
+  // case-insensitive search — with matchCase on, accents are always
+  // distinguished (Word behavior)
+  const foldDia = opts.ignoreDiacritics && !opts.matchCase
+  const plainQuery = foldDia ? foldDiacritics(query) : query
+  const re = opts.useWildcards ? compileWildcards(plainQuery, !opts.matchCase) : null
+  const needle = opts.matchCase ? query : foldCase(plainQuery)
   editor.state.doc.descendants((node, pos) => {
     if (!node.isTextblock) return true
     // flatten the block's inline content so matches spanning marks are found
@@ -44,14 +54,31 @@ export function findMatches(editor: Editor, query: string, opts: FindOptions): R
         text += '\u0000' // leaf placeholder (hard break) never matches
       }
     })
-    const haystack = opts.matchCase ? text : foldCase(text)
+    if (re) {
+      // wildcards match the (optionally folded) text directly: the regex's
+      // `i` flag handles case and both folds keep length, so offsets stay exact
+      const hayText = foldDia ? foldDiacritics(text) : text
+      re.lastIndex = 0
+      for (let m = re.exec(hayText); m; m = re.exec(hayText)) {
+        if (m[0].length > 0) {
+          found.push({ from: posAt[m.index], to: posAt[m.index + m[0].length - 1] + 1 })
+          re.lastIndex = m.index + m[0].length
+        } else {
+          re.lastIndex++ // a bare `*` can match empty — report nothing, move on
+        }
+      }
+      return false
+    }
+    const haystack = opts.matchCase ? text : foldCase(foldDia ? foldDiacritics(text) : text)
     let i = 0
     while ((i = haystack.indexOf(needle, i)) !== -1) {
+      // foldCase and foldDiacritics never change length, so needle.length
+      // indexes the original text too
       const isWhole =
-        !opts.wholeWord || (!isWordChar(text[i - 1]) && !isWordChar(text[i + query.length]))
+        !opts.wholeWord || (!isWordChar(text[i - 1]) && !isWordChar(text[i + needle.length]))
       if (isWhole) {
-        found.push({ from: posAt[i], to: posAt[i + query.length - 1] + 1 })
-        i += query.length
+        found.push({ from: posAt[i], to: posAt[i + needle.length - 1] + 1 })
+        i += needle.length
       } else {
         i += 1
       }
@@ -78,6 +105,8 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
   const [index, setIndex] = useState(0)
   const [matchCase, setMatchCase] = useState(false)
   const [wholeWord, setWholeWord] = useState(false)
+  const [useWildcards, setUseWildcards] = useState(false)
+  const [ignoreDiacritics, setIgnoreDiacritics] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const replaceInputRef = useRef<HTMLInputElement>(null)
   const indexRef = useRef(0)
@@ -102,7 +131,13 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
   // rescan only updates matches/highlight; scrolling happens on explicit navigation
   const refresh = useCallback(
     (q: string, keepIndex = 0, opts?: Partial<FindOptions>) => {
-      const ranges = findMatches(editor, q, { matchCase, wholeWord, ...opts })
+      const ranges = findMatches(editor, q, {
+        matchCase,
+        wholeWord,
+        useWildcards,
+        ignoreDiacritics,
+        ...opts,
+      })
       const active = ranges.length === 0 ? 0 : Math.min(keepIndex, ranges.length - 1)
       setMatches(ranges)
       setIndex(active)
@@ -110,7 +145,7 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
       highlight(ranges, active)
       return ranges
     },
-    [editor, highlight, matchCase, wholeWord],
+    [editor, highlight, matchCase, wholeWord, useWildcards, ignoreDiacritics],
   )
 
   const refreshRef = useRef(refresh)
@@ -256,14 +291,38 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
           Aa
         </button>
         <button
-          className={`find-opt ${wholeWord ? 'on' : ''}`}
+          className={`find-opt ${wholeWord && !useWildcards ? 'on' : ''}`}
           data-tip={t('appWholeWord')}
           onClick={() => {
             setWholeWord(!wholeWord)
             refresh(query, index, { wholeWord: !wholeWord })
           }}
+          disabled={useWildcards}
         >
           W
+        </button>
+        <button
+          className={`find-opt ${useWildcards ? 'on' : ''}`}
+          data-tip={t('appUseWildcards')}
+          aria-label={t('appUseWildcards')}
+          onClick={() => {
+            setUseWildcards(!useWildcards)
+            refresh(query, index, { useWildcards: !useWildcards })
+          }}
+        >
+          *?
+        </button>
+        <button
+          className={`find-opt ${ignoreDiacritics && !matchCase ? 'on' : ''}`}
+          data-tip={t('appIgnoreDiacritics')}
+          aria-label={t('appIgnoreDiacritics')}
+          onClick={() => {
+            setIgnoreDiacritics(!ignoreDiacritics)
+            refresh(query, index, { ignoreDiacritics: !ignoreDiacritics })
+          }}
+          disabled={matchCase}
+        >
+          é
         </button>
         <span className="find-count">
           {query
