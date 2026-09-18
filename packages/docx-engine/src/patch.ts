@@ -670,7 +670,18 @@ export async function saveDocx(
   // One shared part index N across data/layout/colors/quickStyle/drawing — the
   // reader (and Word) derive drawingN.xml from dataN.xml by name pairing.
   const newDiagramParts: Array<{ path: string; xml: string; contentType: string }> = []
-  let diagramDocPrId = 8600
+  // BUG-714: fixed 8600-base docPr ids collide when the source document
+  // already carries drawing ids in that range (Word numbers docPr ids
+  // monotonically; some producers pick large ones) — start above every id
+  // present in the original document
+  let maxExistingDocPrId = 0
+  for (const block of parsed.blocks) {
+    for (const m of (block.originalXml ?? '').matchAll(/<([\w.-]+:)?docPr\b[^>]*\bid="(\d+)"/g)) {
+      const n = Number(m[2])
+      if (Number.isFinite(n) && n > maxExistingDocPrId) maxExistingDocPrId = n
+    }
+  }
+  let diagramDocPrId = Math.max(8600, maxExistingDocPrId + 1)
   const embedDiagram = (diagram: NewDiagram, extentPx?: { w: number; h: number }): string => {
     const partNames = ['data', 'layout', 'colors', 'quickStyle', 'drawing'] as const
     let n = 1

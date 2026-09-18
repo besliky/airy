@@ -31,6 +31,18 @@ describe('sort key parsing', () => {
     expect(parseSortNumber('')).toBeNull()
   })
 
+  it('treats non-Word numerals as text, not numbers (BUG-707)', () => {
+    // Number() alone accepts these; Word reads them as text -> sort last
+    expect(parseSortNumber('0x10')).toBeNull() // hex literal
+    expect(parseSortNumber('1e3')).toBeNull() // scientific
+    expect(parseSortNumber('Infinity')).toBeNull()
+    expect(parseSortNumber('1 2')).toBeNull() // digits glued around a bare space
+    // grouped spacing is still a thousands separator, not gluing
+    expect(parseSortNumber('1 300')).toBe(1300)
+    expect(parseSortNumber('1 300 000')).toBe(1300000)
+    expect(parseSortNumber('50 %')).toBe(50)
+  })
+
   it('reads common date formats', () => {
     expect(parseSortDate('2026-03-14')).not.toBeNull()
     expect(parseSortDate('25/12/2026')).not.toBeNull() // day forced by >12
@@ -46,6 +58,33 @@ describe('sort key parsing', () => {
   it('orders numeric and date keys sensibly', () => {
     expect(parseSortDate('2026-01-05')!).toBeGreaterThan(parseSortDate('2025-12-01')!)
     expect(parseSortDate('31/12/99')!).toBeLessThan(parseSortDate('01/01/26')!)
+  })
+
+  it('rejects rollover dates instead of normalizing them (BUG-705)', () => {
+    // Date.UTC would silently roll these into the next month/day; Word
+    // treats them as text, so they must read as null (sort last)
+    expect(parseSortDate('30/02/2026')).toBeNull() // Feb 30 -> Mar 2
+    expect(parseSortDate('31/04/2026')).toBeNull() // Apr 31 -> May 1
+    expect(parseSortDate('29/02/2023')).toBeNull() // non-leap Feb 29
+    expect(parseSortDate('2026-03-14T25:00')).toBeNull() // hour 25 rolls a day
+    expect(parseSortDate('2026-03-14T23:59')).not.toBeNull()
+    // leap years keep Feb 29
+    expect(parseSortDate('29/02/2024')).not.toBeNull()
+  })
+
+  it('reads short ISO years literally, not as 1900+year (BUG-705)', () => {
+    // Date.UTC maps years 0-99 to 1900+y; the written year must win
+    expect(new Date(parseSortDate('0066-05-05')!).getUTCFullYear()).toBe(66)
+    expect(parseSortDate('0066-05-05')!).toBeLessThan(parseSortDate('1000-01-01')!)
+  })
+
+  it('applies the Office 2029 pivot to two-digit years (BUG-706)', () => {
+    // 00-29 -> 2000s, 30-99 -> 1900s (the split Excel 97 used, 00-39, is
+    // not what current Word/Excel apply)
+    expect(new Date(parseSortDate('01/01/29')!).getUTCFullYear()).toBe(2029)
+    expect(new Date(parseSortDate('31/12/30')!).getUTCFullYear()).toBe(1930)
+    expect(new Date(parseSortDate('15/06/45')!).getUTCFullYear()).toBe(1945)
+    expect(parseSortDate('31/12/30')!).toBeLessThan(parseSortDate('01/01/29')!)
   })
 })
 

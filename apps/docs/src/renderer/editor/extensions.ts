@@ -5541,6 +5541,19 @@ export function resolveInternalLinkTarget(doc: PmNode, name: string): number | n
   return found
 }
 
+/** Word's jump modifier for internal links: Cmd+click on macOS — Ctrl+click
+ *  there is the right-click context menu, so accepting it too would open the
+ *  menu AND navigate — and Ctrl/Cmd+click elsewhere. */
+export function isInternalLinkNavClick(
+  event: { metaKey: boolean; ctrlKey: boolean },
+  isMac: boolean,
+): boolean {
+  if (isMac) return event.metaKey && !event.ctrlKey
+  return event.metaKey || event.ctrlKey
+}
+
+const IS_MAC = /mac/i.test(globalThis.navigator?.platform ?? '')
+
 /**
  * Word's "Place in This Document" jump: ⌘/Ctrl+click an internal hyperlink
  * (href="#anchor") scrolls the target into view and moves the caret there.
@@ -5555,7 +5568,7 @@ export const InternalLinkNavExtension = Extension.create({
         props: {
           handleDOMEvents: {
             click: (view, event) => {
-              if (!(event as MouseEvent).metaKey && !(event as MouseEvent).ctrlKey) return false
+              if (!isInternalLinkNavClick(event as MouseEvent, IS_MAC)) return false
               const a = (event.target as HTMLElement | null)?.closest?.('a.doc-link')
               const href = a?.getAttribute('href') ?? ''
               if (!href.startsWith('#')) return false

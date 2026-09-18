@@ -116,15 +116,18 @@ function cellText(cell: PmNode | null): string {
 
 /* ================= key parsing ================= */
 
-/** Word-style number reading: currency signs, percent, spaces, thousands
+/** Word-style number reading: currency signs, percent, thousands
  *  separators and parenthesized negatives are tolerated; null = not a number
  *  (sorts after numeric entries). */
 export function parseSortNumber(text: string): number | null {
-  let s = text.replace(/[\s\u00a0\u202f\u2009]/g, '')
+  // internal whitespace only counts as thousands grouping ("1 300"); digits
+  // glued around a bare space ("1 2") stay text, like in Word
+  let s = text.replace(/[\u00a0\u202f\u2009]/g, ' ').trim()
+  s = s.replace(/(\d) (?=\d{3}(?!\d))/g, '$1')
   if (!s) return null
   const negative = /^\((.*)\)$/.exec(s)
   if (negative) s = negative[1]
-  s = s.replace(/[$€£¥₹₽%°]/g, '')
+  s = s.replace(/[$€£¥₹₽%°]/g, '').trim()
   if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s))
     s = s.replace(/,/g, '') // thousands
   else if (/^\d+,\d+$/.test(s))
@@ -133,6 +136,9 @@ export function parseSortNumber(text: string): number | null {
     // 1.234,56: dot thousands + comma decimal
     s = s.replace(/\./g, '').replace(',', '.')
   }
+  // plain decimal digits only — spellings Number() would happily take but
+  // Word reads as text ("0x10", "1e3", "Infinity") sort last
+  if (!/^[-+]?\d*\.?\d+$/.test(s)) return null
   const value = Number(s)
   if (!Number.isFinite(value)) return null
   return negative ? -value : value
@@ -167,6 +173,19 @@ const MONTHS: Record<string, number> = {
 
 const dateAt = (y: number, m: number, d: number, hh = 0, mm = 0): number | null => {
   if (m < 1 || m > 12 || d < 1 || d > 31) return null
+  if (hh > 23 || mm > 59) return null
+  // reject rollover readings Word treats as text: Feb 30, Apr 31, 25:00 —
+  // Date.UTC would silently normalize them into the next month/day
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0
+  const lengthOfMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1]!
+  if (d > lengthOfMonth) return null
+  // Date.UTC maps years 0-99 to 1900 + y (its two-digit rule) — re-pin the
+  // written year so "0066-05-05" reads as year 66, not 1966
+  if (y >= 0 && y <= 99) {
+    const utc = new Date(Date.UTC(y, m - 1, d, hh, mm))
+    utc.setUTCFullYear(y)
+    return utc.getTime()
+  }
   return Date.UTC(y, m - 1, d, hh, mm)
 }
 
@@ -203,9 +222,10 @@ export function parseSortDate(text: string): number | null {
   return null
 }
 
-/** two-digit years: 00-39 -> 2000s, 40-99 -> 1900s (the Excel pivot) */
+/** two-digit years: 00-29 -> 2000s, 30-99 -> 1900s (Office's 2029 pivot —
+ *  current Word/Excel; the 00-39 split was Excel 97's default) */
 function year2k(two: number): boolean {
-  return two <= 39
+  return two <= 29
 }
 
 function compareByType(a: string, b: string, type: SortFieldType): number {
