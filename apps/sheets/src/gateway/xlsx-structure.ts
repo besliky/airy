@@ -1436,7 +1436,37 @@ function assertSwapKeepsAnchorIntact(ref: string, swap: BlockSwap['swap'], axis:
   )
 }
 
+/// Whole-column (`A:B`) and whole-row (`1:4`) refs carry no coordinate on
+/// their other axis, so only their own axis maps — the same axis discipline
+/// shiftReferenceToken applies to whole-line tokens inside formulas. Without
+/// these branches parseA1 rejects the form and the ref would slip through
+/// untouched while its rule bodies move (CF/DV sqref is the canonical case),
+/// silently leaving the rule on the vacated columns.
+function moveWholeLineRange(ref: string, shift: Shift, axis: Axis): string | null | undefined {
+  const wholeColumn = /^(\$?)([A-Z]{1,3}):(\$?)([A-Z]{1,3})$/.exec(ref)
+  if (wholeColumn) {
+    if (axis === 'row') return ref
+    const moved = moveRange(
+      lettersToColumn(wholeColumn[2] ?? 'A'),
+      lettersToColumn(wholeColumn[4] ?? 'A'),
+      shift,
+    )
+    if (moved === null) return null
+    return `${wholeColumn[1]}${columnToLetters(moved.start)}:${wholeColumn[3]}${columnToLetters(moved.end)}`
+  }
+  const wholeRow = /^(\$?)([0-9]+):(\$?)([0-9]+)$/.exec(ref)
+  if (wholeRow) {
+    if (axis === 'column') return ref
+    const moved = moveRange(Number(wholeRow[2]) - 1, Number(wholeRow[4]) - 1, shift)
+    if (moved === null) return null
+    return `${wholeRow[1]}${moved.start + 1}:${wholeRow[3]}${moved.end + 1}`
+  }
+  return undefined
+}
+
 function moveRefRange(ref: string, shift: Shift, axis: Axis): string | null {
+  const wholeLine = moveWholeLineRange(ref, shift, axis)
+  if (wholeLine !== undefined) return wholeLine
   const parts = ref.split(':')
   const start = parseA1(parts[0] ?? '')
   if (!start) return ref
