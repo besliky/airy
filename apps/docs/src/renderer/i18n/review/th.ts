@@ -6,4 +6,8 @@ export const th = {
   reviewCompareMerged:
     'เปรียบเทียบกับ {name} แล้ว: แทรก {added} จุด ลบ {removed} จุด แก้ไข {changed} จุด ถูกรวมเป็นการติดตามการแก้ไข',
   reviewCompareIdentical: 'ไม่มีความแตกต่างกับ {name}: เอกสารทั้งสองเหมือนกัน',
+  reviewCompareMergedApprox:
+    'เปรียบเทียบกับ {name} แล้ว: แทรก {added} จุด ลบ {removed} จุด แก้ไข {changed} จุด ถูกรวมเป็นการติดตามการแก้ไข (เอกสารใหญ่เกินกว่าจะจับคู่ย่อหน้าได้อย่างแม่นยำ)',
+  reviewCompareDegraded:
+    'เอกสารใหญ่เกินกว่าจะจับคู่ย่อหน้าได้อย่างแม่นยำ: ความแตกต่างถูกจับคู่ตามตำแหน่ง',
 } satisfies Record<keyof typeof zh, string>

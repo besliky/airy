@@ -6,4 +6,8 @@ export const id = {
   reviewCompareMerged:
     'Dibandingkan dengan {name}: {added} penyisipan, {removed} penghapusan, dan {changed} perubahan digabungkan sebagai perubahan terlacak',
   reviewCompareIdentical: 'Tidak ada perbedaan dengan {name}: dokumen identik',
+  reviewCompareMergedApprox:
+    'Dibandingkan dengan {name}: {added} penyisipan, {removed} penghapusan, dan {changed} perubahan digabungkan sebagai perubahan terlacak (dokumen terlalu besar untuk pencocokan paragraf yang tepat)',
+  reviewCompareDegraded:
+    'Dokumen terlalu besar untuk pencocokan paragraf yang tepat: perbedaan dipasangkan berdasarkan posisi',
 } satisfies Record<keyof typeof zh, string>

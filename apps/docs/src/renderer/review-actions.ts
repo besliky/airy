@@ -21,12 +21,7 @@ import {
   removeCommentFromDoc,
   wordRangeAtCaret,
 } from './editor/comments'
-import {
-  blockTexts,
-  compareParagraphs,
-  mergeCompareDocs,
-  type CompareEntry,
-} from './editor/compare'
+import { blockTexts, diffParagraphs, mergeCompareDocs, type CompareEntry } from './editor/compare'
 import { blocksToPmDoc } from './editor/convert'
 import { pendingCommentPluginKey } from './editor/extensions'
 import type { InkAnnotation } from './editor/ink'
@@ -284,13 +279,19 @@ export function clearInks(ctx: ReviewContext): void {
 
 /**
  * Compare: pick a second .docx and diff it against the open document.
- * - 'panel' shows the paragraph-level differences pane (unchanged behavior)
+ * - 'panel' shows the paragraph-level differences pane (unchanged behavior;
+ *   read-only safe — it diffs the SAVED document `doc.parsed.blocks`)
  * - 'merge' builds the Word legal blackline: the current document's content is
  *   rebuilt with the differences recorded as tracked changes, ready for the
  *   regular accept/reject machinery (Review tab)
+ *
+ * Known mode divergence: panel diffs the saved state while merge diffs the
+ * live editor (`editor.getJSON()`), so unsaved edits make the two modes
+ * disagree until the document is saved (documented, BUG-915 audit note).
  */
 export async function compareWithFile(ctx: ReviewContext, mode: 'panel' | 'merge'): Promise<void> {
   if (!ctx.doc) return
+  const editor = ctx.editor
   const other = await window.desktop.openDocx()
   if (!other) return
   // password-protected comparison target: not wired through the decrypt prompt (yet)
@@ -301,16 +302,18 @@ export async function compareWithFile(ctx: ReviewContext, mode: 'panel' | 'merge
   try {
     const otherParsed = await parseDocx(new Uint8Array(other.data))
     if (mode === 'panel') {
-      const entries = compareParagraphs(
+      const { entries, degraded } = diffParagraphs(
         blockTexts(ctx.doc.parsed.blocks),
         blockTexts(otherParsed.blocks),
       )
       ctx.setCompareResult({ otherName: other.name, entries })
+      // BUG-913: above the paragraph-LCS cell budget the pairing is positional
+      if (degraded) ctx.setStatus(t('reviewCompareDegraded'))
       return
     }
-    const editor = ctx.editor
+    // panel mode returned above; only the merge path continues
     if (!editor) return
-    const { content, summary } = mergeCompareDocs(
+    const { content, summary, degraded } = mergeCompareDocs(
       editor.getJSON().content ?? [],
       blocksToPmDoc(otherParsed.blocks, readSections(otherParsed)).content ?? [],
       {
@@ -335,12 +338,19 @@ export async function compareWithFile(ctx: ReviewContext, mode: 'panel' | 'merge
     ctx.setRevisionDisplay('all')
     ctx.dirtyRef.current = true
     ctx.setStatus(
-      t('reviewCompareMerged', {
-        name: other.name,
-        added: summary.added,
-        removed: summary.removed,
-        changed: summary.changed,
-      }),
+      degraded
+        ? t('reviewCompareMergedApprox', {
+            name: other.name,
+            added: summary.added,
+            removed: summary.removed,
+            changed: summary.changed,
+          })
+        : t('reviewCompareMerged', {
+            name: other.name,
+            added: summary.added,
+            removed: summary.removed,
+            changed: summary.changed,
+          }),
     )
   } catch (err) {
     ctx.setStatus(t('appCompareFailed', { error: String(err) }))

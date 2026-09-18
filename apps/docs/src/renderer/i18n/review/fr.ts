@@ -6,4 +6,8 @@ export const fr = {
   reviewCompareMerged:
     'Comparé avec {name} : {added} insertions, {removed} suppressions et {changed} modifications fusionnées en révisions',
   reviewCompareIdentical: 'Aucune différence avec {name} : les documents sont identiques',
+  reviewCompareMergedApprox:
+    'Comparé avec {name} : {added} insertions, {removed} suppressions et {changed} modifications fusionnées en révisions (documents trop volumineux pour un appariement exact des paragraphes)',
+  reviewCompareDegraded:
+    'Les documents sont trop volumineux pour un appariement exact des paragraphes : les différences ont été appariées par position',
 } satisfies Record<keyof typeof zh, string>

@@ -1,0 +1,78 @@
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Editor } from '@tiptap/core'
+import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
+import { editorExtensions } from '../src/renderer/editor/extensions'
+import { compareWithFile, type ReviewContext } from '../src/renderer/review-actions'
+import { t, setModuleLang } from '../src/renderer/i18n/locale'
+import type { DocState } from '../src/renderer/doc-state'
+import type { PmNode } from '../src/renderer/editor/convert'
+
+// compareWithFile reaches the shell file picker through window.desktop
+const openDocx = vi.fn()
+Object.assign(window, { desktop: { openDocx } })
+
+setModuleLang('en')
+
+const para = (text: string): PmNode => ({
+  type: 'docParagraph',
+  ...(text ? { content: [{ type: 'text', text }] } : {}),
+})
+
+function createEditor(content: PmNode[]): Editor {
+  return new Editor({
+    element: document.createElement('div'),
+    extensions: editorExtensions,
+    content: { type: 'doc', content },
+  })
+}
+
+/** minimal ReviewContext covering the fields compareWithFile touches */
+function makeCtx(editor: Editor | null, parsedBlocks: unknown[] = []) {
+  const status: string[] = []
+  const ctx = {
+    editor,
+    doc: { parsed: { blocks: parsedBlocks } } as unknown as DocState,
+    dirtyRef: { current: false },
+    setStatus: (value: string) => status.push(value),
+    setCompareResult: vi.fn(),
+    setRevisionDisplay: vi.fn(),
+  } as unknown as ReviewContext
+  return { ctx, status }
+}
+
+describe('compareWithFile paragraph budget warning (BUG-913)', () => {
+  beforeAll(async () => {
+    const bytes = await buildDocx({ bodyXml: '<w:p><w:r><w:t>New text</w:t></w:r></w:p>' })
+    openDocx.mockResolvedValue({ name: 'other.docx', data: bytes })
+  })
+
+  beforeEach(() => {
+    openDocx.mockClear()
+  })
+
+  it('merges into an editable document (positive control)', async () => {
+    const editor = createEditor([para('Original text')])
+    const dispatch = vi.spyOn(editor.view, 'dispatch')
+    const { ctx, status } = makeCtx(editor)
+    await compareWithFile(ctx, 'merge')
+    expect(openDocx).toHaveBeenCalledTimes(1)
+    expect(dispatch).toHaveBeenCalledTimes(1)
+    expect(ctx.dirtyRef.current).toBe(true)
+    expect(status.at(-1)).toBe(
+      t('reviewCompareMerged', { name: 'other.docx', added: 0, removed: 0, changed: 1 }),
+    )
+    editor.destroy()
+  })
+
+  it('warns when the compared documents exceed the paragraph budget', async () => {
+    // (2200+1)^2 = 4.84M cells > the 4M paragraph budget
+    const paras = Array.from({ length: 2200 }, (_, i) => `<w:p><w:r><w:t>p ${i}</w:t></w:r></w:p>`)
+    const bytes = await buildDocx({ bodyXml: paras.join('') })
+    openDocx.mockResolvedValueOnce({ name: 'big.docx', data: bytes })
+    const blocks = Array.from({ length: 2200 }, (_, i) => ({ runs: [{ text: `q ${i}` }] }))
+    const { ctx, status } = makeCtx(null, blocks)
+    await compareWithFile(ctx, 'panel')
+    expect(ctx.setCompareResult).toHaveBeenCalledTimes(1)
+    expect(status.at(-1)).toBe(t('reviewCompareDegraded'))
+  })
+})
