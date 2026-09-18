@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { createBridgeDispatcher } from '../src/main/bridge/dispatcher'
 import {
@@ -208,6 +208,43 @@ describe('NdjsonFramer', () => {
   it('strips a CR before the LF after multibyte content', () => {
     const framer = new NdjsonFramer()
     expect(framer.push(Buffer.from('中\r\n', 'utf8')).lines).toEqual(['中'])
+  })
+
+  it('strips a CR that lands in the previous chunk before a chunk-leading LF', () => {
+    const framer = new NdjsonFramer()
+    expect(framer.push(Buffer.from('x\r', 'utf8'))).toEqual({ lines: [], overflow: false })
+    expect(framer.push(Buffer.from('\ny', 'utf8'))).toEqual({ lines: ['x'], overflow: false })
+    expect(framer.push(Buffer.from('\n', 'utf8')).lines).toEqual(['y'])
+  })
+
+  it('keeps a dribbled unterminated tail without recopying it per push', () => {
+    // The old implementation rebuilt the pending buffer on every push
+    // (Buffer.concat of the whole tail), making a slow-dripped line O(n²) in
+    // copied bytes. The tail must accumulate as chunks; only a completed
+    // line may pay for a concat.
+    const concat = vi.spyOn(Buffer, 'concat')
+    const framer = new NdjsonFramer()
+    for (let i = 0; i < 2_000; i += 1) framer.push('x')
+    expect(concat).not.toHaveBeenCalled()
+    // completing the line concatenates exactly its own chunks, once
+    const result = framer.push('\n')
+    expect(result.lines).toEqual(['x'.repeat(2_000)])
+    expect(result.overflow).toBe(false)
+    expect(concat).toHaveBeenCalledTimes(1)
+    // a line that fits inside one chunk decodes without any concat
+    framer.push('done\n')
+    expect(concat).toHaveBeenCalledTimes(1)
+    concat.mockRestore()
+  })
+
+  it('flags a completed line over the cap even within a single chunk', () => {
+    // Net chunks stay small, but push() itself may be handed one huge
+    // buffer: a whole 10-byte line inside one chunk must trip an 8-byte cap
+    // instead of slipping past the pending-tail-only check.
+    const framer = new NdjsonFramer(8)
+    const result = framer.push('0123456789\n')
+    expect(result.overflow).toBe(true)
+    expect(result.lines).toEqual([])
   })
 })
 

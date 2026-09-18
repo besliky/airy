@@ -158,9 +158,17 @@ export interface FramerResult {
  * Input is accumulated as raw bytes and only complete lines are decoded: a
  * socket chunk may split a multi-byte UTF-8 sequence mid-character, and
  * decoding each chunk separately would turn the halves into U+FFFD.
+ *
+ * The pending tail is kept as the list of chunks it arrived in: rebuilding a
+ * single buffer per push made a dribbled unterminated line O(n²) in copied
+ * bytes, and only the extracted lines are ever concatenated.
  */
 export class NdjsonFramer {
-  private buffer: Buffer = Buffer.alloc(0)
+  private chunks: Buffer[] = []
+  private pending = 0
+  /** resume point of the LF scan, right after the last extracted line */
+  private scanChunk = 0
+  private scanOffset = 0
   constructor(
     /** caps a single message so a rogue client cannot grow memory without bound */
     readonly maxLineBytes = 8 * 1024 * 1024,
@@ -168,22 +176,80 @@ export class NdjsonFramer {
 
   push(chunk: string | Buffer): FramerResult {
     const incoming = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk
-    this.buffer = this.buffer.length === 0 ? incoming : Buffer.concat([this.buffer, incoming])
+    if (incoming.length > 0) {
+      this.chunks.push(incoming)
+      this.pending += incoming.length
+    }
     const lines: string[] = []
     // 0x0A never appears inside a multi-byte UTF-8 sequence (continuation
     // bytes are >= 0x80), so line boundaries are safe to find on raw bytes.
-    let newline = this.buffer.indexOf(0x0a)
-    while (newline !== -1) {
-      // a 0x0D directly before the LF is CRLF noise, never a sequence byte
-      const end = newline > 0 && this.buffer[newline - 1] === 0x0d ? newline - 1 : newline
-      lines.push(this.buffer.toString('utf8', 0, end))
-      this.buffer = this.buffer.subarray(newline + 1)
-      newline = this.buffer.indexOf(0x0a)
+    // The scan starts after the last extracted LF: earlier bytes hold none.
+    for (;;) {
+      let foundChunk = -1
+      let foundAt = -1
+      for (let index = this.scanChunk; index < this.chunks.length; index += 1) {
+        const from = index === this.scanChunk ? this.scanOffset : 0
+        const at = this.chunks[index]!.indexOf(0x0a, from)
+        if (at !== -1) {
+          foundChunk = index
+          foundAt = at
+          break
+        }
+      }
+      if (foundChunk === -1) break
+      // a 0x0D directly before the LF is CRLF noise, never a sequence byte;
+      // it can sit at the end of the previous chunk when the LF opens this one
+      const found = this.chunks[foundChunk]!
+      let crTrim = 0
+      if (foundAt > 0) {
+        if (found[foundAt - 1] === 0x0d) crTrim = 1
+      } else if (foundChunk > 0) {
+        const previous = this.chunks[foundChunk - 1]!
+        if (previous[previous.length - 1] === 0x0d) crTrim = 1
+      }
+      // the line = full earlier chunks + this chunk's prefix, minus the CR;
+      // when the CR closed the previous chunk, that chunk joins as a partial
+      let headParts: Buffer[]
+      if (foundChunk === 0) {
+        headParts = []
+      } else if (crTrim === 1 && foundAt === 0) {
+        const previous = this.chunks[foundChunk - 1]!
+        const kept = previous.subarray(0, previous.length - 1)
+        headParts = [...this.chunks.slice(0, foundChunk - 1), ...(kept.length > 0 ? [kept] : [])]
+      } else {
+        headParts = this.chunks.slice(0, foundChunk)
+      }
+      const tailPart = found.subarray(0, foundAt - (crTrim === 1 && foundAt > 0 ? 1 : 0))
+      let lineBytes = tailPart.length
+      for (const part of headParts) lineBytes += part.length
+      // the cap binds completed lines too, not just the pending tail: a
+      // push() caller may hand over one arbitrarily large buffer
+      if (lineBytes > this.maxLineBytes) return { lines, overflow: true }
+      lines.push(
+        (headParts.length === 0 ? tailPart : Buffer.concat([...headParts, tailPart])).toString(
+          'utf8',
+        ),
+      )
+      // consume everything through the LF; fully drained chunks drop off
+      this.pending -= lineBytes + crTrim + 1
+      const rest = found.subarray(foundAt + 1)
+      if (foundChunk > 0) this.chunks.splice(0, foundChunk)
+      if (rest.length === 0) this.chunks.shift()
+      else this.chunks[0] = rest
+      this.scanChunk = 0
+      this.scanOffset = 0
+    }
+    if (this.chunks.length === 0) {
+      this.scanChunk = 0
+      this.scanOffset = 0
+    } else {
+      this.scanChunk = this.chunks.length - 1
+      this.scanOffset = this.chunks[this.chunks.length - 1]!.length
     }
     // the tail without a newline stays as bytes until more chunks arrive (a
     // peer that never terminates it simply never gets the line); the cap
     // counts bytes of that pending tail
-    const overflow = this.buffer.length > this.maxLineBytes
+    const overflow = this.pending > this.maxLineBytes
     return { lines, overflow }
   }
 }
