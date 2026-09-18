@@ -389,7 +389,17 @@ export function mapRangeResultToScreen(
     const startColumn = fileToScreen(ops, 'column', merge.startColumn)
     const endColumn = fileToScreen(ops, 'column', merge.endColumn)
     if (startRow === null || endRow === null || startColumn === null || endColumn === null) continue
-    merges.push({ startRow, endRow, startColumn, endColumn })
+    // A move's forward image is not monotonic: a merge straddling the swap
+    // boundary maps its edges independently, and the images can arrive
+    // inverted (start > end). Normalize per axis so the rectangle stays
+    // well-formed — moves are gated to fully-loaded sheets today, this keeps
+    // the streamed map safe if that gate ever widens.
+    merges.push({
+      startRow: Math.min(startRow, endRow),
+      endRow: Math.max(startRow, endRow),
+      startColumn: Math.min(startColumn, endColumn),
+      endColumn: Math.max(startColumn, endColumn),
+    })
   }
   const hyperlinks: WorkbookRangeResult['hyperlinks'] = []
   for (const hyperlink of result.hyperlinks) {
