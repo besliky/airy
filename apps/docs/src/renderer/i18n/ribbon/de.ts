@@ -550,7 +550,7 @@ export const de = {
   ribbonLnDialogTitle: 'Zeilennummern',
   ribbonLnStartAt: 'Beginnen bei',
   ribbonLnCountBy: 'Nummerieren alle',
-  ribbonLnDistance: 'Abstand vom Text',
+  ribbonLnDistance: 'Abstand vom Text (Pt)',
   ribbonLnDistanceAuto: 'Automatisch',
   ribbonGroupPageSetup: 'Seite einrichten',
   ribbonGroupPageSetupSection: 'Seite einrichten (Abschnitt {n})',

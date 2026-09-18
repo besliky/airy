@@ -549,7 +549,7 @@ export const fr = {
   ribbonLnDialogTitle: 'Numéros de ligne',
   ribbonLnStartAt: 'Commencer à',
   ribbonLnCountBy: 'Compter par',
-  ribbonLnDistance: 'Distance du texte',
+  ribbonLnDistance: 'Distance du texte (pt)',
   ribbonLnDistanceAuto: 'Automatique',
   ribbonGroupPageSetup: 'Mise en page',
   ribbonGroupPageSetupSection: 'Mise en page (section {n})',

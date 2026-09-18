@@ -548,7 +548,7 @@ export const it = {
   ribbonLnDialogTitle: 'Numeri di riga',
   ribbonLnStartAt: 'Inizia da',
   ribbonLnCountBy: 'Conta per',
-  ribbonLnDistance: 'Distanza dal testo',
+  ribbonLnDistance: 'Distanza dal testo (pt)',
   ribbonLnDistanceAuto: 'Automatico',
   ribbonGroupPageSetup: 'Imposta pagina',
   ribbonGroupPageSetupSection: 'Imposta pagina (sezione {n})',

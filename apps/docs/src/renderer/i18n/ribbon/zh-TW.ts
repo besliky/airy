@@ -539,7 +539,7 @@ export const zhTW = {
   ribbonLnDialogTitle: '行號',
   ribbonLnStartAt: '起始編號',
   ribbonLnCountBy: '編號間隔',
-  ribbonLnDistance: '與正文的距離',
+  ribbonLnDistance: '與正文的距離（磅）',
   ribbonLnDistanceAuto: '自動',
   ribbonGroupPageSetup: '版面設定',
   ribbonGroupPageSetupSection: '版面設定(第 {n} 節)',

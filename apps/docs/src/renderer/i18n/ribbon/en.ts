@@ -544,7 +544,7 @@ export const en = {
   ribbonLnDialogTitle: 'Line Numbers',
   ribbonLnStartAt: 'Start at',
   ribbonLnCountBy: 'Count by',
-  ribbonLnDistance: 'Distance from text',
+  ribbonLnDistance: 'Distance from text (pt)',
   ribbonLnDistanceAuto: 'Auto',
   ribbonGroupPageSetup: 'Page Setup',
   ribbonGroupPageSetupSection: 'Page Setup (Section {n})',

@@ -559,7 +559,7 @@ export const ko = {
   ribbonLnDialogTitle: '줄 번호',
   ribbonLnStartAt: '시작 번호',
   ribbonLnCountBy: '번호 간격',
-  ribbonLnDistance: '본문과의 거리',
+  ribbonLnDistance: '본문과의 거리(pt)',
   ribbonLnDistanceAuto: '자동',
   ribbonGroupPageSetup: '페이지 설정',
   ribbonGroupPageSetupSection: '페이지 설정(구역 {n})',

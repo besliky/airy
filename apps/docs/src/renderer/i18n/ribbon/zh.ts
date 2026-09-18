@@ -557,7 +557,7 @@ export const zh = {
   ribbonLnDialogTitle: '行号',
   ribbonLnStartAt: '起始编号',
   ribbonLnCountBy: '编号间隔',
-  ribbonLnDistance: '与正文的距离',
+  ribbonLnDistance: '与正文的距离（磅）',
   ribbonLnDistanceAuto: '自动',
   ribbonGroupPageSetup: '页面设置',
   ribbonGroupPageSetupSection: '页面设置(第 {n} 节)',

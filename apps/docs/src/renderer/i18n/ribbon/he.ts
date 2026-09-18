@@ -541,7 +541,7 @@ export const he = {
   ribbonLnDialogTitle: 'מספרי שורות',
   ribbonLnStartAt: 'התחל ב-',
   ribbonLnCountBy: 'מספר כל',
-  ribbonLnDistance: 'מרחק מהטקסט',
+  ribbonLnDistance: 'מרחק מהטקסט (pt)',
   ribbonLnDistanceAuto: 'אוטומטי',
   ribbonGroupPageSetup: 'הגדרת עמוד',
   ribbonGroupPageSetupSection: 'הגדרת עמוד (מקטע {n})',

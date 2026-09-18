@@ -117,7 +117,7 @@ export function LineNumbersDialog({
         </div>
         <div className="modal-row margin-row">
           <label>
-            {t('ribbonLnDistance')} (pt)
+            {t('ribbonLnDistance')}
             <input
               type="number"
               min={0}

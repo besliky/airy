@@ -544,7 +544,7 @@ export const cs = {
   ribbonLnDialogTitle: 'Číslování řádků',
   ribbonLnStartAt: 'Začít od',
   ribbonLnCountBy: 'Číslovat po',
-  ribbonLnDistance: 'Vzdálenost od textu',
+  ribbonLnDistance: 'Vzdálenost od textu (bod)',
   ribbonLnDistanceAuto: 'Automaticky',
   ribbonGroupPageSetup: 'Vzhled stránky',
   ribbonGroupPageSetupSection: 'Vzhled stránky (oddíl {n})',

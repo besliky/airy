@@ -545,7 +545,7 @@ export const ms = {
   ribbonLnDialogTitle: 'Nombor Baris',
   ribbonLnStartAt: 'Mula pada',
   ribbonLnCountBy: 'Kira setiap',
-  ribbonLnDistance: 'Jarak daripada teks',
+  ribbonLnDistance: 'Jarak daripada teks (pt)',
   ribbonLnDistanceAuto: 'Automatik',
   ribbonGroupPageSetup: 'Persediaan Halaman',
   ribbonGroupPageSetupSection: 'Persediaan Halaman (Seksyen {n})',

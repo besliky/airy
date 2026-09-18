@@ -548,7 +548,7 @@ export const nl = {
   ribbonLnDialogTitle: 'Regelnummers',
   ribbonLnStartAt: 'Beginnen bij',
   ribbonLnCountBy: 'Tellen per',
-  ribbonLnDistance: 'Afstand tot tekst',
+  ribbonLnDistance: 'Afstand tot tekst (pt)',
   ribbonLnDistanceAuto: 'Automatisch',
   ribbonGroupPageSetup: 'Pagina-instelling',
   ribbonGroupPageSetupSection: 'Pagina-instelling (sectie {n})',

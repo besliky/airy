@@ -546,7 +546,7 @@ export const pt = {
   ribbonLnDialogTitle: 'Números de linha',
   ribbonLnStartAt: 'Começar em',
   ribbonLnCountBy: 'Contar por',
-  ribbonLnDistance: 'Distância do texto',
+  ribbonLnDistance: 'Distância do texto (pt)',
   ribbonLnDistanceAuto: 'Automático',
   ribbonGroupPageSetup: 'Configurar Página',
   ribbonGroupPageSetupSection: 'Configurar Página (Seção {n})',

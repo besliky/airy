@@ -544,7 +544,7 @@ export const id = {
   ribbonLnDialogTitle: 'Nomor Baris',
   ribbonLnStartAt: 'Mulai dari',
   ribbonLnCountBy: 'Hitung setiap',
-  ribbonLnDistance: 'Jarak dari teks',
+  ribbonLnDistance: 'Jarak dari teks (pt)',
   ribbonLnDistanceAuto: 'Otomatis',
   ribbonGroupPageSetup: 'Penyetelan Halaman',
   ribbonGroupPageSetupSection: 'Penyetelan Halaman (Bagian {n})',

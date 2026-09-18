@@ -562,7 +562,7 @@ export const ja = {
   ribbonLnDialogTitle: '行番号',
   ribbonLnStartAt: '開始番号',
   ribbonLnCountBy: '番号の間隔',
-  ribbonLnDistance: '本文からの距離',
+  ribbonLnDistance: '本文からの距離（ポイント）',
   ribbonLnDistanceAuto: '自動',
   ribbonGroupPageSetup: 'ページ設定',
   ribbonGroupPageSetupSection: 'ページ設定(第 {n} セクション)',

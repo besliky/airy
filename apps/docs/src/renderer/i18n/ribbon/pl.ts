@@ -546,7 +546,7 @@ export const pl = {
   ribbonLnDialogTitle: 'Numerowanie wierszy',
   ribbonLnStartAt: 'Zacznij od',
   ribbonLnCountBy: 'Numeruj co',
-  ribbonLnDistance: 'Odległość od tekstu',
+  ribbonLnDistance: 'Odległość od tekstu (pt)',
   ribbonLnDistanceAuto: 'Automatycznie',
   ribbonGroupPageSetup: 'Ustawienia strony',
   ribbonGroupPageSetupSection: 'Ustawienia strony (sekcja {n})',

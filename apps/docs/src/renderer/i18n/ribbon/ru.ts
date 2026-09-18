@@ -545,7 +545,7 @@ export const ru = {
   ribbonLnDialogTitle: 'Нумерация строк',
   ribbonLnStartAt: 'Начать с',
   ribbonLnCountBy: 'Шаг нумерации',
-  ribbonLnDistance: 'Расстояние от текста',
+  ribbonLnDistance: 'Расстояние от текста (пт)',
   ribbonLnDistanceAuto: 'Авто',
   ribbonGroupPageSetup: 'Параметры страницы',
   ribbonGroupPageSetupSection: 'Параметры страницы (раздел {n})',

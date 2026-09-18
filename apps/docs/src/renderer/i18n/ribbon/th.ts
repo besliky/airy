@@ -542,7 +542,7 @@ export const th = {
   ribbonLnDialogTitle: 'เลขบรรทัด',
   ribbonLnStartAt: 'เริ่มที่',
   ribbonLnCountBy: 'นับทุก ๆ',
-  ribbonLnDistance: 'ระยะห่างจากข้อความ',
+  ribbonLnDistance: 'ระยะห่างจากข้อความ (pt)',
   ribbonLnDistanceAuto: 'อัตโนมัติ',
   ribbonGroupPageSetup: 'ตั้งค่าหน้ากระดาษ',
   ribbonGroupPageSetupSection: 'ตั้งค่าหน้ากระดาษ (ส่วนที่ {n})',

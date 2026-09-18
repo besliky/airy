@@ -541,7 +541,7 @@ export const ar = {
   ribbonLnDialogTitle: 'أرقام الأسطر',
   ribbonLnStartAt: 'البدء عند',
   ribbonLnCountBy: 'الترقيم كل',
-  ribbonLnDistance: 'المسافة من النص',
+  ribbonLnDistance: 'المسافة من النص (pt)',
   ribbonLnDistanceAuto: 'تلقائي',
   ribbonGroupPageSetup: 'إعداد الصفحة',
   ribbonGroupPageSetupSection: 'إعداد الصفحة (المقطع {n})',

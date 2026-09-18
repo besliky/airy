@@ -545,7 +545,7 @@ export const hi = {
   ribbonLnDialogTitle: 'पंक्ति क्रमांक',
   ribbonLnStartAt: 'इस पर आरंभ',
   ribbonLnCountBy: 'गिनती हर',
-  ribbonLnDistance: 'पाठ से दूरी',
+  ribbonLnDistance: 'पाठ से दूरी (pt)',
   ribbonLnDistanceAuto: 'स्वतः',
   ribbonGroupPageSetup: 'पृष्ठ सेटअप',
   ribbonGroupPageSetupSection: 'पृष्ठ सेटअप (अनुभाग {n})',
