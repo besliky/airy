@@ -1,4 +1,5 @@
 /** Standalone HTML export: live editor DOM re-emitted with computed styles inlined, no app CSS needed. */
+import { sanitizeLinkHref } from './ai/doc-utils'
 
 const SKIP_CLASSES = new Set([
   'ProseMirror-widget',
@@ -401,10 +402,15 @@ function serializeNode(
   const after = pseudo(el, cs, '::after', win)
   const attrs: string[] = []
   for (const a of KEEP_ATTRS) {
-    const v = el.getAttribute(a)
+    // href is the one attribute that can smuggle a scheme out of the app: the
+    // user-side paths (pasted HTML, Insert-Link, docx-load) store raw hrefs
+    // for fidelity, inert while opening is gated by safeExternalUrl. The
+    // exported file has no such gate, so run the shared link whitelist — a
+    // javascript:/file:/data: href degrades to plain text, not a link.
+    const v = a === 'href' ? sanitizeLinkHref(el.getAttribute(a)) : el.getAttribute(a)
     if (v !== null && v !== '') attrs.push(` ${a}="${escHtml(v)}"`)
   }
-  if (tag === 'a' && !el.getAttribute('href')) attrs.length = 0
+  if (tag === 'a' && !attrs.some((attr) => attr.startsWith(' href='))) attrs.length = 0
   if (tag === 'img') {
     const w = Math.round(parseFloat(cs.width))
     const h = Math.round(parseFloat(cs.height))
