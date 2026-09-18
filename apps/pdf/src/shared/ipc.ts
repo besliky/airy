@@ -17,6 +17,7 @@ export const PDF_CHANNELS = {
   ocrPage: 'pdf:ocr-page',
   pagePreviewPng: 'pdf:page-preview-png',
   extractPages: 'pdf:extract-pages',
+  insertPdfPick: 'pdf:insert-pdf-pick',
   insertPdf: 'pdf:insert-pdf',
   insertBlankPage: 'pdf:insert-blank-page',
   splitPdf: 'pdf:split-pdf',
@@ -531,11 +532,32 @@ export interface ExtractPagesRequest {
 
 export type ExtractPagesResult = { ok: true; savedPath: string } | { ok: false; error: string }
 
-/** Insert (merge) another PDF after a page of the current file: main process shows a picker and writes back immediately */
+/** Pick the insert source PDF: main process shows the file dialog, remembers the
+ * pick for this view (the renderer never chooses the source path itself) and
+ * returns the page shapes the dialog previews */
+export interface InsertPdfPickRequest {
+  path: string
+}
+
+/** One source page's size in points (the pick dialog's preview model) */
+export interface InsertSourcePageShape {
+  width: number
+  height: number
+}
+
+export type InsertPdfPickResult =
+  | { ok: true; name: string; pages: InsertSourcePageShape[] }
+  | { ok: true; canceled: true }
+  | { ok: false; error: string; kind?: 'encrypted' | 'invalid' }
+
+/** Insert pages of the PDF picked via insertPdfPick into the current file,
+ * written back in place. The source is the remembered pick, not a renderer-supplied path. */
 export interface InsertPdfRequest {
   path: string
-  /** Insert after this original page index; -1 means front of the document */
+  /** Insert after this page index (post-flush visible position); -1 means front of the document */
   afterPageIndex: number
+  /** Source page indices in the given order; omitted = all source pages */
+  pages?: number[]
 }
 
 export type InsertPdfResult =
@@ -711,6 +733,8 @@ export interface PdfApi {
       the renderer patches it over the raster so touched images vanish before save */
   pagePreviewPng(request: PagePreviewRequest): Promise<string | null>
   extractPages(request: ExtractPagesRequest): Promise<ExtractPagesResult>
+  /** Show the native source picker for "insert pages from PDF"; main remembers the pick */
+  insertPdfPick(request: InsertPdfPickRequest): Promise<InsertPdfPickResult>
   insertPdf(request: InsertPdfRequest): Promise<InsertPdfResult>
   insertBlankPage(request: InsertBlankPageRequest): Promise<InsertBlankPageResult>
   splitPdf(request: SplitPdfRequest): Promise<SplitPdfResult>

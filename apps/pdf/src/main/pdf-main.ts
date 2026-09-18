@@ -35,6 +35,8 @@ import type {
   ExtractPagesResult,
   InsertBlankPageRequest,
   InsertBlankPageResult,
+  InsertPdfPickRequest,
+  InsertPdfPickResult,
   InsertPdfRequest,
   InsertPdfResult,
   MergePagesRequest,
@@ -66,12 +68,14 @@ import {
   extractPagesBytes,
   insertBlankPageBytes,
   insertPdfBytes,
+  InsertSourceLoadError,
   mergePagesBytes,
   mergePdfBytes,
   readStaticFormFills,
   replacePagesBytes,
   savePdfToPath,
   setPageSizeBytes,
+  sourcePageShapes,
   splitPagesBytes,
   splitPdfBytes,
 } from './save-pdf'
@@ -88,7 +92,7 @@ const tDlg = createI18n({
   zh: {
     dlgExportImages: '导出图片到文件夹',
     dlgExtract: '抽取页面为 PDF',
-    dlgInsert: '选择要导入的 PDF',
+    dlgInsert: '选择要插入页面的 PDF',
     dlgSplit: '拆分 PDF 到文件夹',
     dlgMerge: '选择要合并的 PDF',
     dlgMergeSave: '合并 PDF 保存为',
@@ -105,7 +109,7 @@ const tDlg = createI18n({
   en: {
     dlgExportImages: 'Export Images to Folder',
     dlgExtract: 'Extract Pages as PDF',
-    dlgInsert: 'Choose a PDF to Import',
+    dlgInsert: 'Choose a PDF to Insert Pages From',
     dlgSplit: 'Split PDF into Folder',
     dlgMerge: 'Choose PDFs to Merge',
     dlgMergeSave: 'Save Merged PDF As',
@@ -122,7 +126,7 @@ const tDlg = createI18n({
   ja: {
     dlgExportImages: '画像をフォルダに書き出す',
     dlgExtract: 'ページを PDF として抽出',
-    dlgInsert: 'インポートする PDF を選択',
+    dlgInsert: 'ページを挿入する PDF を選択',
     dlgSplit: 'PDF をフォルダに分割',
     dlgMerge: '結合する PDF を選択',
     dlgMergeSave: '結合した PDF の保存先',
@@ -139,7 +143,7 @@ const tDlg = createI18n({
   ko: {
     dlgExportImages: '이미지를 폴더로 내보내기',
     dlgExtract: '페이지를 PDF로 추출',
-    dlgInsert: '가져올 PDF 선택',
+    dlgInsert: '페이지를 가져올 PDF 선택',
     dlgSplit: 'PDF를 폴더로 분할',
     dlgMerge: '병합할 PDF 선택',
     dlgMergeSave: '병합된 PDF 저장',
@@ -156,7 +160,7 @@ const tDlg = createI18n({
   fr: {
     dlgExportImages: 'Exporter les images vers un dossier',
     dlgExtract: 'Extraire les pages en PDF',
-    dlgInsert: 'Choisir un PDF à importer',
+    dlgInsert: 'Choisir un PDF dont insérer les pages',
     dlgSplit: 'Diviser le PDF dans un dossier',
     dlgMerge: 'Choisir les PDF à fusionner',
     dlgMergeSave: 'Enregistrer le PDF fusionné sous',
@@ -173,7 +177,7 @@ const tDlg = createI18n({
   de: {
     dlgExportImages: 'Bilder in Ordner exportieren',
     dlgExtract: 'Seiten als PDF extrahieren',
-    dlgInsert: 'Zu importierendes PDF wählen',
+    dlgInsert: 'PDF mit einzufügenden Seiten wählen',
     dlgSplit: 'PDF in Ordner aufteilen',
     dlgMerge: 'Zu vereinende PDFs wählen',
     dlgMergeSave: 'Zusammengeführtes PDF speichern unter',
@@ -190,7 +194,7 @@ const tDlg = createI18n({
   es: {
     dlgExportImages: 'Exportar imágenes a una carpeta',
     dlgExtract: 'Extraer páginas como PDF',
-    dlgInsert: 'Elegir un PDF para importar',
+    dlgInsert: 'Elegir un PDF del que insertar páginas',
     dlgSplit: 'Dividir PDF en una carpeta',
     dlgMerge: 'Elegir PDF para combinar',
     dlgMergeSave: 'Guardar PDF combinado como',
@@ -207,7 +211,7 @@ const tDlg = createI18n({
   th: {
     dlgExportImages: 'ส่งออกรูปภาพไปยังโฟลเดอร์',
     dlgExtract: 'แยกหน้าเป็น PDF',
-    dlgInsert: 'เลือก PDF ที่จะนำเข้า',
+    dlgInsert: 'เลือก PDF ที่จะแทรกหน้า',
     dlgSplit: 'แยก PDF ไปยังโฟลเดอร์',
     dlgMerge: 'เลือก PDF ที่จะรวม',
     dlgMergeSave: 'บันทึก PDF ที่รวมแล้วเป็น',
@@ -224,7 +228,7 @@ const tDlg = createI18n({
   id: {
     dlgExportImages: 'Ekspor gambar ke folder',
     dlgExtract: 'Ekstrak halaman sebagai PDF',
-    dlgInsert: 'Pilih PDF untuk diimpor',
+    dlgInsert: 'Pilih PDF untuk disisipkan halamannya',
     dlgSplit: 'Pisahkan PDF ke folder',
     dlgMerge: 'Pilih PDF untuk digabung',
     dlgMergeSave: 'Simpan PDF gabungan sebagai',
@@ -241,7 +245,7 @@ const tDlg = createI18n({
   ru: {
     dlgExportImages: 'Экспорт изображений в папку',
     dlgExtract: 'Извлечь страницы в PDF',
-    dlgInsert: 'Выберите PDF для импорта',
+    dlgInsert: 'Выберите PDF для вставки страниц',
     dlgSplit: 'Разделить PDF в папку',
     dlgMerge: 'Выберите PDF для объединения',
     dlgMergeSave: 'Сохранить объединённый PDF как',
@@ -258,7 +262,7 @@ const tDlg = createI18n({
   ar: {
     dlgExportImages: 'تصدير الصور إلى مجلد',
     dlgExtract: 'استخراج الصفحات كملف PDF',
-    dlgInsert: 'اختر PDF للاستيراد',
+    dlgInsert: 'اختر PDF لإدراج صفحاته',
     dlgSplit: 'تقسيم PDF إلى مجلد',
     dlgMerge: 'اختر ملفات PDF للدمج',
     dlgMergeSave: 'حفظ PDF المدمج باسم',
@@ -275,7 +279,7 @@ const tDlg = createI18n({
   pt: {
     dlgExportImages: 'Exportar imagens para pasta',
     dlgExtract: 'Extrair páginas como PDF',
-    dlgInsert: 'Escolher um PDF para importar',
+    dlgInsert: 'Escolher um PDF de onde inserir páginas',
     dlgSplit: 'Dividir PDF em uma pasta',
     dlgMerge: 'Escolher PDFs para mesclar',
     dlgMergeSave: 'Salvar PDF mesclado como',
@@ -292,7 +296,7 @@ const tDlg = createI18n({
   it: {
     dlgExportImages: 'Esporta immagini in una cartella',
     dlgExtract: 'Estrai pagine come PDF',
-    dlgInsert: 'Scegli un PDF da importare',
+    dlgInsert: 'Scegli un PDF da cui inserire pagine',
     dlgSplit: 'Dividi il PDF in una cartella',
     dlgMerge: 'Scegli i PDF da unire',
     dlgMergeSave: 'Salva il PDF unito come',
@@ -309,7 +313,7 @@ const tDlg = createI18n({
   pl: {
     dlgExportImages: 'Eksportuj obrazy do folderu',
     dlgExtract: 'Wyodrębnij strony jako PDF',
-    dlgInsert: 'Wybierz PDF do zaimportowania',
+    dlgInsert: 'Wybierz PDF do wstawienia stron',
     dlgSplit: 'Podziel PDF do folderu',
     dlgMerge: 'Wybierz pliki PDF do scalenia',
     dlgMergeSave: 'Zapisz scalony PDF jako',
@@ -326,7 +330,7 @@ const tDlg = createI18n({
   cs: {
     dlgExportImages: 'Exportovat obrázky do složky',
     dlgExtract: 'Extrahovat stránky jako PDF',
-    dlgInsert: 'Vyberte PDF k importu',
+    dlgInsert: 'Vyberte PDF pro vložení stránek',
     dlgSplit: 'Rozdělit PDF do složky',
     dlgMerge: 'Vyberte soubory PDF ke sloučení',
     dlgMergeSave: 'Uložit sloučený PDF jako',
@@ -343,7 +347,7 @@ const tDlg = createI18n({
   nl: {
     dlgExportImages: 'Afbeeldingen naar map exporteren',
     dlgExtract: "Pagina's extraheren als PDF",
-    dlgInsert: 'Kies een PDF om te importeren',
+    dlgInsert: 'Kies een PDF om pagina’s uit in te voegen',
     dlgSplit: 'PDF splitsen naar map',
     dlgMerge: "Kies PDF's om samen te voegen",
     dlgMergeSave: 'Samengevoegde PDF opslaan als',
@@ -360,7 +364,7 @@ const tDlg = createI18n({
   ms: {
     dlgExportImages: 'Eksport imej ke folder',
     dlgExtract: 'Ekstrak halaman sebagai PDF',
-    dlgInsert: 'Pilih PDF untuk diimport',
+    dlgInsert: 'Pilih PDF untuk sisipkan halaman',
     dlgSplit: 'Pisahkan PDF ke folder',
     dlgMerge: 'Pilih PDF untuk digabungkan',
     dlgMergeSave: 'Simpan PDF gabungan sebagai',
@@ -377,7 +381,7 @@ const tDlg = createI18n({
   he: {
     dlgExportImages: 'ייצוא תמונות לתיקייה',
     dlgExtract: 'חילוץ עמודים כ-PDF',
-    dlgInsert: 'בחרו PDF לייבוא',
+    dlgInsert: 'בחרו PDF להוספת עמודים ממנו',
     dlgSplit: 'פיצול PDF לתיקייה',
     dlgMerge: 'בחרו קובצי PDF למיזוג',
     dlgMergeSave: 'שמירת ה-PDF הממוזג בשם',
@@ -394,7 +398,7 @@ const tDlg = createI18n({
   hi: {
     dlgExportImages: 'चित्र फ़ोल्डर में निर्यात करें',
     dlgExtract: 'पृष्ठों को PDF के रूप में निकालें',
-    dlgInsert: 'आयात करने के लिए PDF चुनें',
+    dlgInsert: 'पृष्ठ सम्मिलित करने के लिए PDF चुनें',
     dlgSplit: 'PDF को फ़ोल्डर में विभाजित करें',
     dlgMerge: 'मर्ज करने के लिए PDF चुनें',
     dlgMergeSave: 'मर्ज किया गया PDF इस रूप में सहेजें',
@@ -411,7 +415,7 @@ const tDlg = createI18n({
   'zh-TW': {
     dlgExportImages: '匯出圖片到資料夾',
     dlgExtract: '擷取頁面為 PDF',
-    dlgInsert: '選擇要匯入的 PDF',
+    dlgInsert: '選擇要插入頁面的 PDF',
     dlgSplit: '拆分 PDF 到資料夾',
     dlgMerge: '選擇要合併的 PDF',
     dlgMergeSave: '合併 PDF 儲存為',
@@ -557,6 +561,9 @@ const closeSaveWaiters = new Map<number, (ok: boolean) => void>()
 const saveAsWaiters = new Map<number, (ok: boolean) => void>()
 /** Save As destination granted per view (main-process dialog pick); the save handler refuses any other non-source target */
 const saveAsTargetByWc = new Map<number, string>()
+/** Source PDF picked for "insert pages from PDF", per view: the pick dialog grants
+ * the exact file the user chose; insertPdf only ever reads this remembered path */
+const insertSourceByWc = new Map<number, string>()
 
 export function pdfIsDirty(webContentsId: number): boolean {
   return dirtyByWc.has(webContentsId)
@@ -1093,9 +1100,9 @@ function registerPdfIpc(): void {
   )
 
   ipcMain.handle(
-    PDF_CHANNELS.insertPdf,
-    async (e, request: InsertPdfRequest): Promise<InsertPdfResult> => {
-      const { path, afterPageIndex } = request ?? {}
+    PDF_CHANNELS.insertPdfPick,
+    async (e, request: InsertPdfPickRequest): Promise<InsertPdfPickResult> => {
+      const { path } = request ?? {}
       if (typeof path !== 'string' || !allowedByWc.get(e.sender.id)?.has(path)) {
         return { ok: false, error: 'pdf: path not granted to this view' }
       }
@@ -1108,13 +1115,41 @@ function registerPdfIpc(): void {
       })
       const other = picked.filePaths[0]
       if (picked.canceled || !other) return { ok: true, canceled: true }
+      // A failed read drops any earlier pick: a stale remembered source must not
+      // survive a user-visible "this file won't work" answer
+      insertSourceByWc.delete(e.sender.id)
+      try {
+        const pages = await sourcePageShapes(new Uint8Array(await readFile(other)))
+        insertSourceByWc.set(e.sender.id, other)
+        return { ok: true, name: basename(other), pages }
+      } catch (err) {
+        const kind = err instanceof InsertSourceLoadError ? err.kind : undefined
+        return { ok: false, error: err instanceof Error ? err.message : String(err), kind }
+      }
+    },
+  )
+
+  ipcMain.handle(
+    PDF_CHANNELS.insertPdf,
+    async (e, request: InsertPdfRequest): Promise<InsertPdfResult> => {
+      const { path, afterPageIndex, pages } = request ?? {}
+      if (typeof path !== 'string' || !allowedByWc.get(e.sender.id)?.has(path)) {
+        return { ok: false, error: 'pdf: path not granted to this view' }
+      }
+      // Only the file the pick dialog granted for this view is ever read; the
+      // renderer cannot point the insert at an arbitrary path
+      const source = insertSourceByWc.get(e.sender.id)
+      if (!source) return { ok: false, error: 'pdf: no insert source picked for this view' }
       try {
         const { merged, count } = await insertPdfBytes(
           new Uint8Array(await readFile(path)),
-          new Uint8Array(await readFile(other)),
+          new Uint8Array(await readFile(source)),
           typeof afterPageIndex === 'number' ? afterPageIndex : -1,
+          Array.isArray(pages) ? pages : undefined,
         )
         await atomicWriteFile(path, merged)
+        // One-shot like a Save As grant: inserting again re-picks the source
+        insertSourceByWc.delete(e.sender.id)
         return { ok: true, insertedCount: count }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -1444,6 +1479,7 @@ function grantAndTrack(wc: WebContents, openPath?: string | null): void {
     allowedByWc.delete(wcId)
     dirtyByWc.delete(wcId)
     saveAsTargetByWc.delete(wcId)
+    insertSourceByWc.delete(wcId)
     closeSaveWaiters.get(wcId)?.(false)
     closeSaveWaiters.delete(wcId)
     saveAsWaiters.get(wcId)?.(false)

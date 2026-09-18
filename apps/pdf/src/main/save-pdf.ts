@@ -442,15 +442,79 @@ export async function extractPagesBytes(bytes: Uint8Array, pages: number[]): Pro
   return out.save({ useObjectStreams: false })
 }
 
-/** Insert all pages of another PDF after afterPageIndex (-1 = front); returns merged bytes and inserted page count */
+/** Why a picked insert source could not be read; the renderer localizes by kind */
+export type InsertSourceErrorKind = 'encrypted' | 'invalid'
+
+/** Thrown by the insert-source loaders below so the IPC layer can report a
+    categorized (localizable) reason instead of a raw pdf-lib message */
+export class InsertSourceLoadError extends Error {
+  readonly kind: InsertSourceErrorKind
+  constructor(kind: InsertSourceErrorKind, cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause))
+    this.kind = kind
+  }
+}
+
+/**
+ * Load a user-picked insert source. Password-protected files parse structurally
+ * with ignoreEncryption, but their content streams stay scrambled — copying them
+ * would silently produce garbage, so they fail with the 'encrypted' kind instead
+ * (pdf-lib's EncryptedPDFError transpiles to a plain Error, so the trailer flag,
+ * not instanceof, is the reliable detector).
+ */
+async function loadInsertSource(bytes: Uint8Array): Promise<PDFDocument> {
+  let src: PDFDocument
+  try {
+    src = await PDFDocument.load(bytes, { updateMetadata: false, ignoreEncryption: true })
+  } catch (err) {
+    throw new InsertSourceLoadError('invalid', err)
+  }
+  if (src.isEncrypted) {
+    throw new InsertSourceLoadError(
+      'encrypted',
+      new Error('the source PDF is password-protected and cannot be copied'),
+    )
+  }
+  // A header-only file parses but carries no page tree; touching it throws or
+  // yields zero pages — both mean "not a readable PDF" to the caller
+  try {
+    if (src.getPageCount() === 0) throw new Error('the source PDF has no readable page tree')
+  } catch (err) {
+    throw new InsertSourceLoadError('invalid', err)
+  }
+  return src
+}
+
+/** Page shape (width/height in points) of a candidate insert source — the
+    pick dialog's preview model: page count plus per-page size */
+export async function sourcePageShapes(
+  bytes: Uint8Array,
+): Promise<{ width: number; height: number }[]> {
+  const src = await loadInsertSource(bytes)
+  return src.getPages().map((p) => ({ width: p.getWidth(), height: p.getHeight() }))
+}
+
+/**
+ * Insert pages of another PDF after afterPageIndex (-1 = front) and return the
+ * merged bytes plus the inserted page count. `pages` selects source pages as
+ * 0-based indices in the given order (like extractPagesBytes); omitted or empty
+ * means all source pages. Out-of-range indices and duplicates are dropped.
+ * Page content, resources and annotations travel with the pages via pdf-lib's
+ * copyPages — the same convention as extract/split/replace; link annotations
+ * whose destinations point outside the copied set stay behind as inert links.
+ */
 export async function insertPdfBytes(
   bytes: Uint8Array,
   otherBytes: Uint8Array,
   afterPageIndex: number,
+  pages?: number[],
 ): Promise<{ merged: Uint8Array; count: number }> {
   const dst = await PDFDocument.load(bytes, { updateMetadata: false })
-  const src = await PDFDocument.load(otherBytes, { updateMetadata: false })
-  const copied = await dst.copyPages(src, src.getPageIndices())
+  const src = await loadInsertSource(otherBytes)
+  const valid = [...new Set(pages ?? src.getPageIndices())].filter(
+    (p) => p >= 0 && p < src.getPageCount(),
+  )
+  const copied = await dst.copyPages(src, valid)
   let at = Math.min(Math.max(afterPageIndex + 1, 0), dst.getPageCount())
   for (const p of copied) dst.insertPage(at++, p)
   return { merged: await dst.save({ useObjectStreams: false }), count: copied.length }
