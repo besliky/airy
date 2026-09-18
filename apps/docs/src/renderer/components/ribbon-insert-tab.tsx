@@ -379,6 +379,7 @@ export function CrossRefModal({
   onClose: () => void
 }) {
   const { t } = useI18n()
+  const dialog = useModalDialog(onClose)
   const [kind, setKind] = useState<CrossRefSourceKind>('heading')
   const [type, setType] = useState<CrossRefType>('text')
   const sources = collectCrossRefSources(editor, blocks).filter((s) => s.kind === kind)
@@ -414,9 +415,13 @@ export function CrossRefModal({
   }
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <h2>{t('ribbonCrossRef')}</h2>
+    <div
+      className="modal-backdrop"
+      {...dialog.backdropProps}
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="modal" {...dialog.dialogProps}>
+        <h2 {...dialog.titleProps}>{t('ribbonCrossRef')}</h2>
         <label>
           {t('ribbonCrossRefRefType')}
           <Dropdown
