@@ -872,8 +872,9 @@ export interface ChartSeries {
 /**
  * Display/edit model of an embedded chart, extracted from its chart part
  * (word/charts/chartN.xml). Edits patch only cached texts/numbers in that
- * part; the chart structure stays untouched. The embedded workbook is NOT
- * updated, so Word's "Edit Data" sheet will still show the pre-edit numbers.
+ * part; the chart structure stays untouched. The app save pipeline pairs the
+ * part patch with patchChartWorkbookXlsxBase64 so Word's "Edit Data" sheet
+ * shows the edited numbers too.
  */
 export interface ChartDisplay {
   /** zip path of the chart part this model was read from */
@@ -943,10 +944,17 @@ export interface DiagramDisplay {
 
 /** A new chart to embed at save time (becomes word/charts/chartN.xml + relationship). */
 export interface NewChart {
-  kind: 'bar' | 'line' | 'pie'
+  kind: 'bar' | 'line' | 'pie' | 'area' | 'scatter' | 'bubble' | 'doughnut'
   title?: string
   categories: string[]
-  series: Array<{ name: string; values: (number | null)[] }>
+  series: Array<{
+    name: string
+    values: (number | null)[]
+    /** scatter/bubble: numeric x of each point; absent = derived from `categories` */
+    xValues?: (number | null)[]
+    /** bubble: point sizes (c:bubbleSize); absent = uniform default */
+    sizes?: (number | null)[]
+  }>
 }
 
 /** SmartArt preset kinds the editor can insert as real Diagram quartets. */
