@@ -543,8 +543,9 @@ export function registerTools(server: McpServer): void {
         'saves keep untouched parts byte-identical and a zero-edit save writes the original bytes ' +
         'back verbatim; markdown and html sessions behave the same at line granularity ' +
         '(untouched lines keep their exact bytes, EOLs included, and a zero-edit save round-trips ' +
-        'the file verbatim; an edited save writes UTF-8 with the original BOM flag re-applied ' +
-        'and the format parameter is not accepted); xlsx saves keep untouched zip entries ' +
+        'the file verbatim; an edited save writes UTF-8 with the original BOM flag re-applied, ' +
+        'html additionally rewriting a legacy charset declaration to utf-8, and the format ' +
+        'parameter is not accepted); xlsx saves keep untouched zip entries ' +
         'byte-identical except ' +
         'xl/workbook.xml, which is rewritten when needed to force recalculation on open (the ' +
         'fullCalcOnLoad flag) — so even a zero-edit xlsx save may touch that one entry, and for ' +

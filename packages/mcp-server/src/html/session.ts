@@ -19,7 +19,8 @@
 // file-parse decodeHtmlText approach minus its silent generic fallback,
 // which would bless mojibake with a save). A leading BOM lives in a flag,
 // stays out of the editable text, and is re-applied on every save; edited
-// saves always write UTF-8.
+// saves always write UTF-8, and a legacy charset declaration is rewritten to
+// utf-8 so the re-encoded file renders correctly in browsers.
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -834,12 +835,38 @@ export class HtmlSession {
   // ---- saving ----
 
   /**
+   * Point the document's charset declaration at UTF-8 before an edited save
+   * writes UTF-8 bytes: browsers trust <meta charset>, so a stale legacy label
+   * would decode the re-encoded file as mojibake (the GUI editor follows the
+   * same decode-declared / save-UTF-8 policy). Returns the replaced label, or
+   * null when nothing needed rewriting. The charset token itself cannot span
+   * lines, so the joined-text offset maps onto exactly one line.
+   */
+  private pinCharsetDeclaration(): string | null {
+    const text = this.lines.map((l) => l.text).join('\n')
+    const match = META_CHARSET_RE.exec(text)
+    if (match === null || /^utf-?8$/i.test(match[1]!)) return null
+    const tokenStart = match.index + match[0].length - match[1]!.length
+    let offset = 0
+    for (const line of this.lines) {
+      if (tokenStart >= offset && tokenStart < offset + line.text.length) {
+        const at = tokenStart - offset
+        line.text = `${line.text.slice(0, at)}utf-8${line.text.slice(at + match[1]!.length)}`
+        return match[1]!
+      }
+      offset += line.text.length + 1
+    }
+    return null
+  }
+
+  /**
    * Save atomically (tmp + rename) with the docx session's fences: saving over
    * the opened file refuses when it changed on disk since open; a target that
    * exists is refused unless the session owns it or overwrite is true. With no
    * edits the original bytes round-trip verbatim (an untouched file never
    * changes on disk, whatever its encoding was); an edited save writes UTF-8
-   * with the original BOM flag re-applied.
+   * with the original BOM flag re-applied, and a legacy charset declaration is
+   * rewritten to utf-8 so the saved file decodes correctly in browsers.
    */
   async save(rawPath?: string, options: { overwrite?: boolean } = {}): Promise<HtmlSaveResult> {
     const target = resolveConfined(rawPath ?? this.path)
@@ -863,6 +890,15 @@ export class HtmlSession {
       bytes = this.originalBytes
       unchanged = true
     } else {
+      if (!decodedIsUtf8(this.encoding)) {
+        const replaced = this.pinCharsetDeclaration()
+        if (replaced !== null) {
+          warnings.push(
+            `Charset declaration rewritten from "${replaced}" to "utf-8" ` +
+              '(the edited copy is UTF-8; a stale legacy claim would render as mojibake).',
+          )
+        }
+      }
       bytes = new TextEncoder().encode(joinLines(this.lines, this.bom))
       if (!decodedIsUtf8(this.encoding)) {
         warnings.push(`Original encoding was ${this.encoding}; the edited copy is saved as UTF-8.`)

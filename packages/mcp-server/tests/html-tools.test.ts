@@ -285,10 +285,20 @@ describe('html tools over MCP', () => {
       await call(client, 'insert_content', { handle, html: '<p>More</p>' })
       const saved = await call(client, 'save_document', { handle })
       expect(saved.isError).toBeFalsy()
-      expect(String((saved.structuredContent?.warnings as string[] | undefined)?.[0])).toContain(
-        'UTF-8',
+      const warnings = (saved.structuredContent?.warnings as string[] | undefined) ?? []
+      expect(warnings.join(' ')).toContain('UTF-8')
+      expect(warnings.join(' ')).toContain('rewritten')
+      // the saved bytes are UTF-8 AND the declaration says so: a browser (or
+      // any declaration-trusting decoder) must not read the file as mojibake
+      const savedBytes = await readFile(join(root, 'legacy.html'))
+      const savedText = savedBytes.toString('utf8')
+      expect(savedText).toContain('<meta charset="utf-8">')
+      expect(savedText).not.toContain('windows-1252')
+      const declared = /<meta[^>]+charset\s*=\s*["']?\s*([a-z0-9_.:-]+)/i.exec(savedText)?.[1]
+      expect(declared?.toLowerCase()).toBe('utf-8')
+      expect(new TextDecoder(declared ?? 'utf-8', { fatal: true }).decode(savedBytes)).toContain(
+        'café',
       )
-      expect((await readFile(join(root, 'legacy.html'))).toString('utf8')).toContain('café')
     } finally {
       await close()
     }

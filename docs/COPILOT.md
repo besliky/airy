@@ -280,8 +280,11 @@ open only when the document declares a usable `<meta charset>` — undeclared
 non-UTF-8 is refused with a conversion hint. A leading BOM survives saves,
 untouched lines keep their exact bytes (EOLs included — a CRLF file stays
 CRLF, mixed line endings keep their own), and a zero-edit save writes the
-original bytes back verbatim. HTML files cap at 8 MiB; documents above 1M
-characters skip the structure scan (read shows the text only).
+original bytes back verbatim; an edited save of a legacy-charset original
+writes UTF-8 **and rewrites the charset declaration to `utf-8`** (with a
+warning) — browsers trust the declaration, so leaving a stale legacy claim
+would render the saved file as mojibake. HTML files cap at 8 MiB; documents
+above 1M characters skip the structure scan (read shows the text only).
 
 ## Live mode
 
@@ -327,21 +330,23 @@ deliberate choice) and its result says whose turn it was (`anotherClient`).
 
 ## Formats and limitations
 
-| Format              | Open                                                             | Save                                                                                                    |
-| ------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `.docx`             | native, fully editable                                           | byte-preserving `.docx`                                                                                 |
-| `.xlsx` / `.xlsm`   | native (Rust sidecar), formulas recalc                           | `.xlsx`                                                                                                 |
-| `.xls` / `.ods`     | converted import (calamine) — **styles are lost**, tools warn    | `.xlsx` sibling; `format: "origin"` best-effort `.ods` via soffice; true `.xls` output is not supported |
-| `.doc`              | via soffice → editable `.docx`; without soffice → read-only text | `.docx`; `format: "origin"` best-effort `.doc` via soffice                                              |
-| `.odt`              | via soffice → editable `.docx` (without soffice: clear error)    | `.docx`; `format: "origin"` best-effort `.odt` via soffice                                              |
-| `.md` / `.markdown` | native (UTF-8, BOM accepted; invalid UTF-8 refused)              | line-preserving UTF-8; zero-edit saves round-trip verbatim; UTF-16 originals convert to UTF-8 on save   |
-| `.html` / `.htm`    | native (UTF-8, BOM accepted; declared legacy charsets accepted)  | line-preserving UTF-8; zero-edit saves round-trip verbatim; legacy/UTF-16 originals convert to UTF-8    |
+| Format              | Open                                                             | Save                                                                                                                                                  |
+| ------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.docx`             | native, fully editable                                           | byte-preserving `.docx`                                                                                                                               |
+| `.xlsx` / `.xlsm`   | native (Rust sidecar), formulas recalc                           | `.xlsx`                                                                                                                                               |
+| `.xls` / `.ods`     | converted import (calamine) — **styles are lost**, tools warn    | `.xlsx` sibling; `format: "origin"` best-effort `.ods` via soffice; true `.xls` output is not supported                                               |
+| `.doc`              | via soffice → editable `.docx`; without soffice → read-only text | `.docx`; `format: "origin"` best-effort `.doc` via soffice                                                                                            |
+| `.odt`              | via soffice → editable `.docx` (without soffice: clear error)    | `.docx`; `format: "origin"` best-effort `.odt` via soffice                                                                                            |
+| `.md` / `.markdown` | native (UTF-8, BOM accepted; invalid UTF-8 refused)              | line-preserving UTF-8; zero-edit saves round-trip verbatim; UTF-16 originals convert to UTF-8 on save                                                 |
+| `.html` / `.htm`    | native (UTF-8, BOM accepted; declared legacy charsets accepted)  | line-preserving UTF-8; zero-edit saves round-trip verbatim; legacy/UTF-16 originals convert to UTF-8 (legacy charset declarations rewritten to utf-8) |
 
 Byte preservation differs by format. `docx` saves keep untouched parts
 byte-identical, and a zero-edit save writes the original bytes back verbatim.
 `markdown` and `html` sessions behave the same at line granularity: untouched lines keep
 their exact bytes (EOLs included) and a zero-edit save round-trips the file
-verbatim; an edited save writes UTF-8 with the original BOM re-applied.
+verbatim; an edited save writes UTF-8 with the original BOM re-applied (html
+sessions also rewrite a legacy charset declaration to `utf-8`, so the saved
+file renders correctly in browsers).
 `xlsx` saves keep untouched zip entries byte-identical **except
 `xl/workbook.xml`**: the save gateway always ensures the `fullCalcOnLoad`
 flag so edited formulas recalculate on open, so even a zero-edit workbook
