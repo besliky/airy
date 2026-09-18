@@ -280,7 +280,7 @@ export function Group({
 }) {
   if (collapse?.collapsed) {
     return (
-      <div className="ribbon-group" data-rbgroup={groupId}>
+      <div className="ribbon-group" data-rbgroup={groupId} role="group" aria-label={label}>
         <div className="ribbon-group-items">
           <div className="rb-drop-wrap">
             <button
@@ -307,7 +307,7 @@ export function Group({
     )
   }
   return (
-    <div className="ribbon-group" data-rbgroup={groupId}>
+    <div className="ribbon-group" data-rbgroup={groupId} role="group" aria-label={label}>
       <div className="ribbon-group-items">{children}</div>
       <div className="ribbon-group-label">{label}</div>
     </div>

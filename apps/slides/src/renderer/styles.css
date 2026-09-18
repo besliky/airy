@@ -457,6 +457,16 @@ button {
   display: contents;
 }
 
+/* Visible keyboard focus for every ribbon control (roving-tabindex tabs,
+   quick-access buttons, band inputs): the same theme-token ring the AI panel
+   uses. :focus-visible only, so pointer clicks stay clean. */
+.ribbon button:focus-visible,
+.ribbon input:focus-visible,
+.ribbon textarea:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--slides-focus-ring);
+}
+
 /* While a ribbon popup is open the row must deliver mousedown (drag regions
    swallow it), so outside-press dismissal can see presses on the blank band */
 .ribbon-tabs.ribbon-tabs-nodrag {
