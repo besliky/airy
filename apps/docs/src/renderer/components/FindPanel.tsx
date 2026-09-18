@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/core'
 import { useI18n } from '../i18n/locale'
 import { searchPluginKey } from '../editor/extensions'
-import { compileWildcards, foldDiacritics } from '../find-wildcards'
+import { compileWildcards, foldCase, foldDiacritics } from '../find-wildcards'
+
+// re-exported for existing importers (tests) — foldCase now lives with the
+// other length-preserving folds in find-wildcards.ts
+export { foldCase }
 
 interface Range {
   from: number
@@ -18,16 +22,6 @@ interface FindOptions {
 
 const isWordChar = (ch: string | undefined) => !!ch && /[\p{L}\p{N}_]/u.test(ch)
 
-/** length-preserving lowercase: chars whose lowercase grows ('İ' → 'i̇') stay as-is so match offsets never shift */
-export function foldCase(s: string): string {
-  let out = ''
-  for (const ch of s) {
-    const lower = ch.toLowerCase()
-    out += lower.length === ch.length ? lower : ch
-  }
-  return out
-}
-
 /** collect matches inside editable textblocks (protected blocks excluded) */
 export function findMatches(editor: Editor, query: string, opts: FindOptions): Range[] {
   const found: Range[] = []
@@ -38,7 +32,7 @@ export function findMatches(editor: Editor, query: string, opts: FindOptions): R
   // distinguished (Word behavior)
   const foldDia = opts.ignoreDiacritics && !opts.matchCase
   const plainQuery = foldDia ? foldDiacritics(query) : query
-  const re = opts.useWildcards ? compileWildcards(plainQuery, !opts.matchCase) : null
+  const wild = opts.useWildcards ? compileWildcards(plainQuery, !opts.matchCase) : null
   const needle = opts.matchCase ? query : foldCase(plainQuery)
   editor.state.doc.descendants((node, pos) => {
     if (!node.isTextblock) return true
@@ -56,18 +50,14 @@ export function findMatches(editor: Editor, query: string, opts: FindOptions): R
         text += '\u0000'
       }
     })
-    if (re) {
-      // wildcards match the (optionally folded) text directly: the regex's
-      // `i` flag handles case and both folds keep length, so offsets stay exact
+    if (wild) {
+      // wildcards match the (optionally folded) text directly: the matcher
+      // folds case itself and both diacritic folds keep length, so offsets
+      // stay exact. execAll is linear in the text, so a hostile pattern
+      // cannot freeze the renderer (BUG-742).
       const hayText = foldDia ? foldDiacritics(text) : text
-      re.lastIndex = 0
-      for (let m = re.exec(hayText); m; m = re.exec(hayText)) {
-        if (m[0].length > 0) {
-          found.push({ from: posAt[m.index], to: posAt[m.index + m[0].length - 1] + 1 })
-          re.lastIndex = m.index + m[0].length
-        } else {
-          re.lastIndex++ // a bare `*` can match empty — report nothing, move on
-        }
+      for (const m of wild.execAll(hayText)) {
+        found.push({ from: posAt[m.start], to: posAt[m.end - 1] + 1 })
       }
       return false
     }

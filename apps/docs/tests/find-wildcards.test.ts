@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { findMatches } from '../src/renderer/components/FindPanel'
-import { foldDiacritics } from '../src/renderer/find-wildcards'
+import { compileWildcards, foldDiacritics } from '../src/renderer/find-wildcards'
 
 function createEditor(text: string): Editor {
   return new Editor({
@@ -206,6 +206,53 @@ describe('leaf placeholders are invisible to wildcards (BUG-741)', () => {
     expect(matchTexts(editor, '[!a]')).toEqual(['b'])
     // a negated empty/reversed class is "any character" — but still not the placeholder
     expect(matchTexts(editor, '[!z-a]')).toEqual(['a', 'b'])
+    editor.destroy()
+  })
+})
+
+describe('compileWildcards.execAll', () => {
+  it('reports UTF-16 offsets, also across astral characters', () => {
+    // 🙂 a 🙃 spans 5 UTF-16 units; the next slot (b) cannot host the 3-code-point pattern
+    expect(compileWildcards('?a?', false)!.execAll('🙂a🙃b')).toEqual([{ start: 0, end: 5 }])
+    expect(compileWildcards('a?b', false)!.execAll('a🙂b')).toEqual([{ start: 0, end: 4 }])
+    // leftmost + non-overlapping, like the old gu-flag exec loop
+    expect(compileWildcards('aa', false)!.execAll('aaa')).toEqual([{ start: 0, end: 2 }])
+    expect(compileWildcards('', false)).toBeNull()
+  })
+})
+
+describe('wildcard pattern bombs stay linear (BUG-742)', () => {
+  // one ~50 KB paragraph — the shape on which chained lazy `*` quantifiers
+  // used to backtrack catastrophically and freeze the renderer
+  const BIG = 'the quick brown fox jumps over the lazy dog. '.repeat(1119)
+
+  it('completes star-chain bombs over 50 KB in under 100 ms each', () => {
+    const editor = createEditor(BIG)
+    expect(BIG.length).toBeGreaterThanOrEqual(50_000)
+    const bombs = [
+      '*a*a*a*a*z', // 'z' occurs ("lazy"): a match exists
+      '*a*a*a*a*a*a*a*a*z',
+      '*e*e*e*e*e*e*e*e*e*e*Z9', // no Z9 anywhere: full scan, no match
+      '*o*o*o*o*o*o*o*o*o*o*o*o*#',
+    ]
+    for (const bomb of bombs) {
+      const t0 = performance.now()
+      const found = findMatches(editor, bomb, OFF)
+      expect(performance.now() - t0).toBeLessThan(100)
+      if (bomb.endsWith('Z9') || bomb.endsWith('#')) expect(found).toEqual([])
+      else expect(found.length).toBeGreaterThan(0)
+    }
+    editor.destroy()
+  })
+
+  it('everyday patterns keep their results and speed on the same 50 KB', () => {
+    const editor = createEditor(BIG)
+    expect(matchTexts(editor, '*quick*')).toHaveLength(1119)
+    expect(matchTexts(editor, '?azy')).toHaveLength(1119)
+    const t0 = performance.now()
+    const spans = findMatches(editor, '*dog*own*', OFF)
+    expect(performance.now() - t0).toBeLessThan(100)
+    expect(spans.length).toBeGreaterThan(0)
     editor.destroy()
   })
 })
