@@ -1508,6 +1508,39 @@ button {
   color: var(--color-btn-primary-text);
 }
 
+/* Insert-pages busy state: the dialog stays open with its controls disabled
+ * while the file is rewritten and reloaded */
+.pdf-modal-busy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.pdf-modal-busy::before {
+  content: '';
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border-default);
+  border-top-color: var(--color-brand-secondary);
+  animation: pdf-modal-busy-spin 0.8s linear infinite;
+}
+
+@keyframes pdf-modal-busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdf-modal-busy::before {
+    animation: none;
+  }
+}
+
 /* ── Full-text search ── */
 
 .pdf-search-bar {
