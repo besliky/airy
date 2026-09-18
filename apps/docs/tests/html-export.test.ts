@@ -45,6 +45,38 @@ describe('buildStandaloneHtml', () => {
     expect(out).toMatch(/^<!DOCTYPE html>/)
   })
 
+  it('drops executable href schemes but keeps the link text and safe schemes', () => {
+    // user-side ingest (paste / Insert-Link / docx-load) stores raw hrefs; in
+    // the app they are inert, but once exported the file runs in any browser
+    const root = mount(
+      '<p><a href="javascript:alert(1)">bad</a>' +
+        '<a href=" jAvAsCrIpT:alert(2) ">mixed</a>' +
+        '<a href="file:///etc/passwd">local file</a>' +
+        '<a href="data:text/html,x">data</a></p>' +
+        '<p><a href="HTTPS://x.test/up">https</a>' +
+        '<a href="mailto:a@b.test">mailto</a>' +
+        '<a href="#sec">fragment</a>' +
+        '<a href="docs/page.html">relative</a>' +
+        '<a href="https://x.test" target="_blank">targeted</a></p>',
+    )
+    const out = buildStandaloneHtml(root, { title: 'T' })
+    // nothing executable leaves the app, and the anchors degrade to plain text
+    expect(out).not.toContain('javascript:')
+    expect(out).not.toContain('file:')
+    expect(out).not.toContain('data:text/html')
+    expect(out).not.toMatch(/<a [^>]*bad<\/a>/)
+    expect(out).toContain('>bad</a>')
+    expect(out).toContain('>mixed</a>')
+    expect(out).toContain('>local file</a>')
+    expect(out).toContain('>data</a>')
+    // whitelisted schemes survive verbatim, including the target attribute
+    expect(out).toMatch(/<a href="HTTPS:\/\/x\.test\/up"[^>]*>https<\/a>/)
+    expect(out).toMatch(/<a href="mailto:a@b\.test"[^>]*>mailto<\/a>/)
+    expect(out).toMatch(/<a href="#sec"[^>]*>fragment<\/a>/)
+    expect(out).toMatch(/<a href="docs\/page\.html"[^>]*>relative<\/a>/)
+    expect(out).toMatch(/<a href="https:\/\/x\.test" target="_blank"[^>]*>targeted<\/a>/)
+  })
+
   it('escapes text and restores lifted screen-only classes', () => {
     const wrap = document.createElement('div')
     wrap.className = 'workspace page-dark'
