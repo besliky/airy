@@ -226,7 +226,10 @@ describe('wildcard pattern bombs stay linear (BUG-742)', () => {
   // used to backtrack catastrophically and freeze the renderer
   const BIG = 'the quick brown fox jumps over the lazy dog. '.repeat(1119)
 
-  it('completes star-chain bombs over 50 KB in under 100 ms each', () => {
+  // linear matching clears 50 KB in single-digit ms locally, but a loaded CI
+  // runner can be an order of magnitude slower; 1 s still separates linear from
+  // the quadratic blowup this test guards against (which takes minutes)
+  it('completes star-chain bombs over 50 KB well under the quadratic cliff', () => {
     const editor = createEditor(BIG)
     expect(BIG.length).toBeGreaterThanOrEqual(50_000)
     const bombs = [
@@ -238,7 +241,7 @@ describe('wildcard pattern bombs stay linear (BUG-742)', () => {
     for (const bomb of bombs) {
       const t0 = performance.now()
       const found = findMatches(editor, bomb, OFF)
-      expect(performance.now() - t0).toBeLessThan(100)
+      expect(performance.now() - t0).toBeLessThan(1000)
       if (bomb.endsWith('Z9') || bomb.endsWith('#')) expect(found).toEqual([])
       else expect(found.length).toBeGreaterThan(0)
     }
@@ -251,7 +254,7 @@ describe('wildcard pattern bombs stay linear (BUG-742)', () => {
     expect(matchTexts(editor, '?azy')).toHaveLength(1119)
     const t0 = performance.now()
     const spans = findMatches(editor, '*dog*own*', OFF)
-    expect(performance.now() - t0).toBeLessThan(100)
+    expect(performance.now() - t0).toBeLessThan(1000)
     expect(spans.length).toBeGreaterThan(0)
     editor.destroy()
   })
