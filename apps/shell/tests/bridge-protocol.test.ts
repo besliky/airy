@@ -137,7 +137,7 @@ describe('NdjsonFramer', () => {
 
   it('counts the cap in bytes even for multibyte tails', () => {
     const framer = new NdjsonFramer(2)
-    // 中 is 3 bytes on the wire; a 2-byte cap must already trip
+    // U+4E2D is 3 bytes on the wire; a 2-byte cap must already trip
     expect(framer.push(Buffer.from('中', 'utf8'))).toEqual({ lines: [], overflow: true })
   })
 
@@ -169,7 +169,7 @@ describe('NdjsonFramer', () => {
     const bytes = Buffer.from(`${line}\n`, 'utf8')
     const lead = bytes.indexOf(0xe4)
     expect(lead).toBeGreaterThan(0)
-    // offsets 1 and 2 cut inside 中; 0 (right before the lead byte) is the
+    // offsets 1 and 2 cut inside U+4E2D; 0 (right before the lead byte) is the
     // character-aligned control case
     for (const offset of [0, 1, 2]) {
       const framer = new NdjsonFramer()
