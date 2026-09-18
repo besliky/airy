@@ -1113,15 +1113,20 @@ export function LinkInsertModal({ editor, onClose }: { editor: Editor; onClose: 
             placeholder={t('ribbonLinkTextPh')}
           />
         </label>
+        {/* Word's two link panes as toggle buttons: aria-pressed announces
+         * which pane is active (a full tablist would need roving tabindex +
+         * arrow keys for the same two-way switch) */}
         <div className="modal-row">
           <button
             className={tab === 'address' ? 'btn-primary' : ''}
+            aria-pressed={tab === 'address'}
             onClick={() => setTab('address')}
           >
             {t('ribbonLinkTabAddress')}
           </button>
           <button
             className={tab === 'document' ? 'btn-primary' : ''}
+            aria-pressed={tab === 'document'}
             onClick={() => setTab('document')}
           >
             {t('ribbonLinkTabDocument')}
