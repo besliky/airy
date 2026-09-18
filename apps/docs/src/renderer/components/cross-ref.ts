@@ -39,6 +39,22 @@ export function refTextPreview(text: string): string {
   return text.trim().slice(0, 80)
 }
 
+/** Word's field-update error for a REF whose target cannot be resolved (gone
+ * bookmark, emptied heading). Word writes the same line into the cached field
+ * result on update; it is document data, so it stays the canonical English
+ * string (like the fixed field formats) instead of UI i18n. */
+export const REF_TARGET_GONE = 'Error! Reference source not found.'
+
+/** a heading's outline number when its text carries a numbered-style prefix
+ * ("3.2 Details" → "3.2", "1. Introduction" → "1"). A single bare number
+ * followed by whitespace is prose — usually a year ("2026 Report") — so only
+ * multi-level numbers may end at whitespace; a single number needs a real
+ * list separator ("." or the CJK "、") right behind it. */
+function headingNumberOf(text: string): string | null {
+  const m = /^(\d+(?:\.\d+)+)[.、\s]|^(\d+)[.、]/.exec(text)
+  return m ? (m[1] ?? m[2]) : null
+}
+
 /** OOXML of a top-level PM node: editor-generated fragment or original slice */
 function xmlOfNode(node: { attrs: Record<string, unknown> }, blocks: Block[]): string {
   if (node.attrs.genXml) return String(node.attrs.genXml)
@@ -47,10 +63,17 @@ function xmlOfNode(node: { attrs: Record<string, unknown> }, blocks: Block[]): s
   return blocks.find((b) => b.docxIndex === idx)?.originalXml ?? ''
 }
 
-/** the SEQ label of a protected caption paragraph, if it is one */
+/** the SEQ label of a protected caption paragraph, if it is one. Word often
+ * splits one field instruction across several w:instrText runs (rsid seams),
+ * so ALL of the paragraph's instruction fragments are joined before the SEQ
+ * match — the same concatenation the docx reader does while parsing fields.
+ * Reading only the first fragment turned "SEQ Fig|ure" into label "Fig" (a
+ * wrong ordinal pool) or dropped the caption from the dialog entirely. */
 function seqLabelOf(xml: string): string | null {
-  const instr = /<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/.exec(xml)?.[1] ?? ''
-  const m = /^\s*SEQ\s+(\S+)/.exec(decodeEntities(instr))
+  const instr = (xml.match(/<w:instrText[^>]*>[\s\S]*?<\/w:instrText>/g) ?? [])
+    .map((frag) => decodeEntities(frag.replace(/<[^>]*>/g, '')))
+    .join('')
+  const m = /^\s*SEQ\s+(\S+)/.exec(instr)
   return m ? m[1] : null
 }
 
@@ -108,6 +131,27 @@ export function uniqueTocAnchor(taken: Set<string>): string {
  * is still returned — reading it mutates nothing).
  */
 export function ensureHeadingTocAnchor(editor: Editor, pos: number): string | null {
+  // the stamp folds into the caller's transaction when there is one (the
+  // cross-reference dialog shares it with the REF insert = one undo step);
+  // standalone callers dispatch it here
+  const tr = editor.state.tr
+  const name = stampHeadingTocAnchor(editor, pos, tr)
+  if (tr.steps.length > 0) editor.view.dispatch(tr)
+  return name
+}
+
+/**
+ * The plan half of ensureHeadingTocAnchor: computes the heading's anchor and
+ * appends the stamping step to `tr` WITHOUT dispatching, so the caller can
+ * land the anchor together with its own insert in one transaction (one undo
+ * step). Null when the node is gone or editing is locked; an existing anchor
+ * is returned with no step attached.
+ */
+export function stampHeadingTocAnchor(
+  editor: Editor,
+  pos: number,
+  tr: Editor['state']['tr'],
+): string | null {
   const node = editor.state.doc.nodeAt(pos)
   if (!node) return null
   const existing = headingTocAnchor(node)
@@ -115,12 +159,10 @@ export function ensureHeadingTocAnchor(editor: Editor, pos: number): string | nu
   if (!editor.isEditable) return null
   const name = uniqueTocAnchor(allBookmarkNames(editor.state.doc))
   const hidden = (node.attrs?.hiddenBookmarks as string[] | null) ?? []
-  editor.view.dispatch(
-    editor.state.tr.setNodeMarkup(pos, undefined, {
-      ...node.attrs,
-      hiddenBookmarks: [...hidden, name],
-    }),
-  )
+  tr.setNodeMarkup(pos, undefined, {
+    ...node.attrs,
+    hiddenBookmarks: [...hidden, name],
+  })
   return name
 }
 
@@ -208,6 +250,23 @@ export function ensureCaptionAnchor(
   blocks: Block[],
   source: CrossRefSource,
 ): string | null {
+  // same one-transaction pattern as ensureHeadingTocAnchor
+  const tr = editor.state.tr
+  const name = stampCaptionAnchor(editor, blocks, source, tr)
+  if (tr.steps.length > 0) editor.view.dispatch(tr)
+  return name
+}
+
+/** the plan half of ensureCaptionAnchor: computes the `_Ref…` anchor and
+ * appends the genXml stamping step to `tr` WITHOUT dispatching (see
+ * stampHeadingTocAnchor). Null when the caption is gone, has no XML to
+ * anchor, or editing is locked; an existing anchor adds no step. */
+export function stampCaptionAnchor(
+  editor: Editor,
+  blocks: Block[],
+  source: CrossRefSource,
+  tr: Editor['state']['tr'],
+): string | null {
   const node = editor.state.doc.nodeAt(source.pos)
   if (!node || node.type.name !== 'docProtected') return null
   const xml = xmlOfNode(node as never, blocks)
@@ -226,13 +285,11 @@ export function ensureCaptionAnchor(
   const anchored = withStart.endsWith('</w:p>')
     ? `${withStart.slice(0, -'</w:p>'.length)}${end}</w:p>`
     : withStart + end
-  editor.view.dispatch(
-    editor.state.tr.setNodeMarkup(source.pos, undefined, {
-      ...node.attrs,
-      docxIndex: null,
-      genXml: anchored,
-    }),
-  )
+  tr.setNodeMarkup(source.pos, undefined, {
+    ...node.attrs,
+    docxIndex: null,
+    genXml: anchored,
+  })
   return name
 }
 
@@ -257,10 +314,11 @@ export function crossRefCache(
     if (source.kind === 'caption') return String(source.seqNumber ?? 1)
     // heading: REF \r shows the outline number — only computable when the
     // heading text itself carries it (numbered style prefix)
-    const m = /^(\d+(?:\.\d+)*)[.、\s]/.exec(source.label)
-    return m ? m[1] : ' '
+    return headingNumberOf(source.label) ?? ' '
   }
-  return source.kind === 'bookmark' ? source.preview || source.label : source.label
+  // an emptied bookmark shows Word's reference error, never the anchor name
+  // as visible text
+  return source.kind === 'bookmark' ? source.preview || REF_TARGET_GONE : source.label
 }
 
 /** position of the node carrying `name` (node bookmark attrs or a protected-XML anchor) */
@@ -308,9 +366,11 @@ function seqNumberAt(
 }
 
 /**
- * F9 cache recompute for one REF instruction. Returns the new display text, or
- * null when the target is gone / the value is not computable locally (page
- * number before pagination): the existing cache stays untouched then.
+ * F9 cache recompute for one REF instruction. Returns the new display text —
+ * including REF_TARGET_GONE for an unresolvable target (Word writes the same
+ * error into the cache on field update) — or null when the value is not
+ * computable locally (page number before pagination): the existing cache
+ * stays untouched then.
  */
 export function refCacheOf(
   editor: Editor,
@@ -322,7 +382,9 @@ export function refCacheOf(
   if (!m) return null
   const name = m[1] ?? m[2]
   const pos = findAnchorPos(editor.state.doc, blocks, name)
-  if (pos === null) return null
+  // gone target: Word's F9 replaces the cached result with the reference
+  // error instead of silently keeping a stale number forever
+  if (pos === null) return REF_TARGET_GONE
   if (instr.includes('\\p')) {
     const page = pageOf?.(pos)
     return page !== undefined && page !== null ? String(page) : null
@@ -333,10 +395,10 @@ export function refCacheOf(
       const label = seqLabelOf(xmlOfNode(node as never, blocks))
       return label ? seqNumberAt(editor.state.doc, blocks, pos, label) : null
     }
-    const hm = /^(\d+(?:\.\d+)*)[.、\s]/.exec(node?.textContent.trim() ?? '')
-    return hm ? hm[1] : null
+    return headingNumberOf(node?.textContent.trim() ?? '')
   }
   const node = editor.state.doc.nodeAt(pos)
   const text = refTextPreview(node?.textContent ?? '')
-  return text || name
+  // emptied target: the error line, never the raw anchor name as visible text
+  return text || REF_TARGET_GONE
 }
