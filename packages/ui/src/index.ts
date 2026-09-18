@@ -36,6 +36,7 @@ export {
   type RibbonTablistController,
   type RibbonTabProps,
 } from './ribbon-tablist'
+export { useModalDialog, type ModalDialogController } from './modal-dialog'
 export {
   installPopoverDismiss,
   useDismissablePopover,
