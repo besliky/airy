@@ -921,7 +921,7 @@ function registerMarkdownIpc(): void {
           configuredDefaultSaveDir(app),
         )
         if (picked.canceled || !picked.filePath) return { ok: true, canceled: true }
-        await writeFile(picked.filePath, bytes)
+        await atomicWriteFile(picked.filePath, bytes)
         return { ok: true, path: picked.filePath }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -967,7 +967,7 @@ function registerMarkdownIpc(): void {
           printBackground: true,
           margins: { top: 0.6, bottom: 0.6, left: 0.6, right: 0.6 },
         })
-        await writeFile(picked.filePath, pdf)
+        await atomicWriteFile(picked.filePath, pdf)
         openExportedPdf(picked.filePath)
         return { ok: true, path: picked.filePath }
       } catch (err) {
