@@ -325,6 +325,76 @@ describe('bridge server over a live socket', () => {
     for (const release of stalls) release()
     client.end()
   })
+
+  it('does not dispatch lines written after the connection was closed', async () => {
+    // BUG-901: close() half-closes the socket (end()), so data events keep
+    // arriving while the error response flushes. Requests pipelined past a
+    // queue-cap rejection (or an overflow close) used to run anyway with
+    // their responses silently dropped — a retrying client would apply the
+    // mutation twice, breaking the dispatcher's FIFO contract.
+    const stalls: (() => void)[] = []
+    let pings = 0
+    server = await startBridgeServer({
+      userDataDir: dir,
+      maxQueuedRequests: 4,
+      methods: {
+        stall: () =>
+          new Promise((resolve) => {
+            stalls.push(resolve)
+          }),
+        ping: () => {
+          pings += 1
+          return 'pong'
+        },
+      },
+    })
+    const client = connectClient(server.info.socketPath)
+    await client.ready
+    await handshake(client, server.info.token)
+    const flood = `${Array.from({ length: 9 }, () => JSON.stringify({ protocol_version: 1, method: 'stall' })).join('\n')}\n`
+    client.writeRaw(flood)
+    const rejection = JSON.parse(await client.next())
+    expect(rejection).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_request', message: expect.stringContaining('pipelined') },
+    })
+    // post-close lines must not reach the dispatcher
+    client.writeRaw(`${JSON.stringify({ protocol_version: 1, method: 'ping' })}\n`)
+    client.writeRaw(`${JSON.stringify({ protocol_version: 1, method: 'ping' })}\n`)
+    await client.closed
+    for (const release of stalls) release()
+    client.end()
+    expect(pings).toBe(0)
+  })
+
+  it('does not dispatch lines written after a line-overflow close', async () => {
+    // BUG-901, overflow flavor: an oversized request closes the connection
+    // the same way — anything the peer keeps writing afterwards is dropped
+    // before dispatch, not executed into the void.
+    let pings = 0
+    server = await startBridgeServer({
+      userDataDir: dir,
+      methods: {
+        ping: () => {
+          pings += 1
+          return 'pong'
+        },
+      },
+    })
+    const client = connectClient(server.info.socketPath)
+    await client.ready
+    await handshake(client, server.info.token)
+    // one unterminated line past the default 8MB cap trips the overflow path
+    client.writeRaw('x'.repeat(9 * 1024 * 1024))
+    const rejection = JSON.parse(await client.next())
+    expect(rejection).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_request', message: expect.stringContaining('line limit') },
+    })
+    client.writeRaw(`${JSON.stringify({ protocol_version: 1, method: 'ping' })}\n`)
+    await client.closed
+    expect(pings).toBe(0)
+  })
 })
 
 describe('createBackpressureWriter', () => {

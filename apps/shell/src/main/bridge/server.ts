@@ -151,11 +151,20 @@ export async function startBridgeServer(options: {
     const close = () => {
       if (closed) return
       closed = true
-      // end (not destroy): the pending error response must still flush
-      socket.end()
+      // end (not destroy): the pending error response must still flush; the
+      // destroy in the end callback tears the read side down afterwards so a
+      // peer that keeps writing cannot hold the half-open socket (and its
+      // framer buffer) alive indefinitely
+      socket.end(() => socket.destroy())
       clients.delete(socket)
     }
     socket.on('data', (chunk: Buffer) => {
+      // post-close data must not dispatch: close() only half-closes the
+      // socket, so data events keep arriving while the error flushes — a
+      // request executed there would apply its mutation with the response
+      // silently dropped, and a retrying client would apply it twice
+      // (BUG-901: line overflow, queue cap, handshake reject all close)
+      if (closed) return
       const { lines, overflow } = framer.push(chunk)
       if (overflow) {
         write(
