@@ -1396,6 +1396,44 @@ button {
   flex: 1;
 }
 
+/* Insert-pages-from-PDF source preview: page-shaped tiles (count + size model) */
+.insert-source-pages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+}
+
+.insert-source-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.insert-source-tile.insert-source-more {
+  border-style: dashed;
+}
+
+/* Inline "after page N" input inside the insert-position radio label */
+.pdf-modal-input.insert-after-page {
+  width: 52px;
+  height: 22px;
+  flex: none;
+}
+
+.pdf-modal-input.insert-after-page:disabled {
+  opacity: 0.5;
+}
+
 .pdf-modal-input {
   height: 28px;
   border: 1px solid var(--border-strong);

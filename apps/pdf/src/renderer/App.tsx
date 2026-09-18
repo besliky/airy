@@ -112,6 +112,7 @@ import type {
   ImageEditFailure,
   ImageEditInput,
   ImageLayer,
+  InsertSourcePageShape,
   MarkupType,
   MetadataInput,
   NoteEditInput,
@@ -270,6 +271,12 @@ const RIBBON_TABS = [
   { id: 'view', labelKey: 'ribbonTabView' },
 ] as const
 type RibbonTab = (typeof RIBBON_TABS)[number]['id'] | 'fillForm'
+
+/** Insert-source preview tile size: the page shape scaled to fit a 44px box */
+const insertTileSize = (shape: InsertSourcePageShape): { width: number; height: number } => {
+  const k = 44 / Math.max(shape.width, shape.height, 1)
+  return { width: Math.max(10, shape.width * k), height: Math.max(10, shape.height * k) }
+}
 
 export default function App() {
   const { lang, t } = useI18n()
@@ -797,6 +804,17 @@ export default function App() {
   const [replaceDlg, setReplaceDlg] = useState(false)
   const [replaceInput, setReplaceInput] = useState('')
   const [replaceInvalid, setReplaceInvalid] = useState(false)
+  /** Insert-pages-from-PDF dialog: picked source preview + position/range inputs */
+  const [insertPdfDlg, setInsertPdfDlg] = useState(false)
+  const [insertSource, setInsertSource] = useState<{
+    name: string
+    pages: InsertSourcePageShape[]
+  } | null>(null)
+  const [insertPos, setInsertPos] = useState<'front' | 'end' | 'current' | 'after'>('current')
+  const [insertAfterPage, setInsertAfterPage] = useState('')
+  const [insertAfterInvalid, setInsertAfterInvalid] = useState(false)
+  const [insertRange, setInsertRange] = useState('')
+  const [insertRangeInvalid, setInsertRangeInvalid] = useState(false)
   const [pageSizeDlg, setPageSizeDlg] = useState(false)
   const [splitPagesDlg, setSplitPagesDlg] = useState(false)
   /** Page-crop dialog: rendered page bitmap + which page it shows */
@@ -4738,15 +4756,73 @@ export default function App() {
     void extractPagesToFile(pages.map((n) => n - 1))
   }
 
-  const insertPdf = (afterOrigIdx: number) =>
-    flushThen(async () => {
-      const result = await window.pdfApi.insertPdf({ path: filePath, afterPageIndex: afterOrigIdx })
+  /**
+   * Insert pages from another PDF, in three steps: flush pending edits, pick the
+   * source file (native dialog, main remembers the pick), then confirm position
+   * and page range in the preview dialog. anchorVisIdx preselects "after page N"
+   * (the clicked thumbnail's position); omit it to anchor on the current page.
+   * Like the neighboring file-level page operations, this rewrites the file on
+   * disk and reloads — there is no undo.
+   */
+  const openInsertPdfDlg = (anchorVisIdx?: number) => {
+    void flushThen(async () => {
+      const picked = await window.pdfApi.insertPdfPick({ path: filePath })
+      if (!picked.ok) {
+        opFailed(
+          picked.kind === 'encrypted'
+            ? t('insertSourceEncrypted')
+            : picked.kind === 'invalid'
+              ? t('insertSourceInvalid')
+              : picked.error,
+        )
+        return
+      }
+      if ('canceled' in picked) return
+      setInsertSource({ name: picked.name, pages: picked.pages })
+      setInsertPos(anchorVisIdx === undefined ? 'current' : 'after')
+      setInsertAfterPage(String((anchorVisIdx ?? currentPage - 1) + 1))
+      setInsertAfterInvalid(false)
+      setInsertRange(`1-${picked.pages.length}`)
+      setInsertRangeInvalid(false)
+      setInsertPdfDlg(true)
+    })
+  }
+
+  /** Insert-dialog confirm: range + position → one in-place insert, then reload */
+  const confirmInsertPdf = () => {
+    if (!insertSource) return
+    const nums = parsePageRanges(insertRange, insertSource.pages.length)
+    if (!nums) {
+      setInsertRangeInvalid(true)
+      return
+    }
+    // Position is a post-flush visible index (the pick flushed the on-screen order)
+    let afterVisIdx: number
+    if (insertPos === 'front') afterVisIdx = -1
+    else if (insertPos === 'end') afterVisIdx = pageCount - 1
+    else if (insertPos === 'current') afterVisIdx = currentPage - 1
+    else {
+      const n = Number(insertAfterPage.trim())
+      if (!Number.isInteger(n) || n < 1 || n > pageCount) {
+        setInsertAfterInvalid(true)
+        return
+      }
+      afterVisIdx = n - 1
+    }
+    setInsertPdfDlg(false)
+    void (async () => {
+      const result = await window.pdfApi.insertPdf({
+        path: filePath,
+        afterPageIndex: afterVisIdx,
+        pages: nums.map((n) => n - 1),
+      })
       if (!result.ok) {
         opFailed(result.error)
         return
       }
-      if (!('canceled' in result)) await loadDoc(filePath, doc)
-    })
+      await loadDoc(filePath, doc)
+    })()
+  }
 
   const insertBlankPage = (afterOrigIdx: number) => insertBlankPageAt(visList.indexOf(afterOrigIdx))
 
@@ -6336,11 +6412,7 @@ export default function App() {
                     </span>
                     {t('extractPage')}
                   </button>
-                  <button
-                    className="rb-big"
-                    disabled={readOnly}
-                    onClick={() => void insertPdf(curOrigIdx)}
-                  >
+                  <button className="rb-big" disabled={readOnly} onClick={() => openInsertPdfDlg()}>
                     <span className="rb-big-icon">
                       <IconInsertPdf />
                     </span>
@@ -8120,7 +8192,7 @@ export default function App() {
                 <button
                   onClick={() => {
                     setThumbMenu(null)
-                    void insertPdf(menuOrig)
+                    openInsertPdfDlg(visList.indexOf(menuOrig))
                   }}
                 >
                   {t('insertPdf')}
@@ -8434,6 +8506,121 @@ export default function App() {
                       {t('cancel')}
                     </button>
                     <button className="pdf-modal-btn primary" onClick={confirmReplace}>
+                      {t('ok')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {insertPdfDlg && insertSource && (
+              <div className="pdf-modal-mask" onClick={() => setInsertPdfDlg(false)}>
+                <div className="pdf-modal" onClick={(e) => e.stopPropagation()}>
+                  <div className="pdf-modal-title">{t('insertPdfPagesTitle')}</div>
+                  <div className="pdf-modal-hint">
+                    {t('insertPdfSourceInfo', {
+                      name: insertSource.name,
+                      total: insertSource.pages.length,
+                    })}
+                  </div>
+                  <div className="insert-source-pages">
+                    {insertSource.pages.slice(0, 12).map((shape, i) => {
+                      const tile = insertTileSize(shape)
+                      return (
+                        <div
+                          key={i}
+                          className="insert-source-tile"
+                          style={{ width: tile.width, height: tile.height }}
+                          title={`${shape.width}×${shape.height}`}
+                        >
+                          {i + 1}
+                        </div>
+                      )
+                    })}
+                    {insertSource.pages.length > 12 && (
+                      <div
+                        className="insert-source-tile insert-source-more"
+                        style={insertTileSize(insertSource.pages[0]!)}
+                      >
+                        +{insertSource.pages.length - 12}
+                      </div>
+                    )}
+                  </div>
+                  <div className="pdf-modal-row">
+                    <span>{t('insertPdfPosition')}</span>
+                    <label className="pdf-modal-check">
+                      <input
+                        type="radio"
+                        name="insert-pos"
+                        checked={insertPos === 'front'}
+                        onChange={() => setInsertPos('front')}
+                      />
+                      {t('insertPosFront')}
+                    </label>
+                    <label className="pdf-modal-check">
+                      <input
+                        type="radio"
+                        name="insert-pos"
+                        checked={insertPos === 'current'}
+                        onChange={() => setInsertPos('current')}
+                      />
+                      {t('insertPosCurrent', { page: currentPage })}
+                    </label>
+                  </div>
+                  <div className="pdf-modal-row">
+                    <span />
+                    <label className="pdf-modal-check">
+                      <input
+                        type="radio"
+                        name="insert-pos"
+                        checked={insertPos === 'after'}
+                        onChange={() => setInsertPos('after')}
+                      />
+                      {t('insertPosAfter')}
+                      <input
+                        className={`pdf-modal-input insert-after-page${
+                          insertAfterInvalid ? ' invalid' : ''
+                        }`}
+                        value={insertAfterPage}
+                        disabled={insertPos !== 'after'}
+                        onChange={(e) => {
+                          setInsertAfterPage(e.target.value)
+                          setInsertAfterInvalid(false)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') confirmInsertPdf()
+                          else if (e.key === 'Escape') setInsertPdfDlg(false)
+                        }}
+                      />
+                    </label>
+                    <label className="pdf-modal-check">
+                      <input
+                        type="radio"
+                        name="insert-pos"
+                        checked={insertPos === 'end'}
+                        onChange={() => setInsertPos('end')}
+                      />
+                      {t('insertPosEnd')}
+                    </label>
+                  </div>
+                  <input
+                    className={`pdf-modal-input${insertRangeInvalid ? ' invalid' : ''}`}
+                    value={insertRange}
+                    placeholder={t('insertPdfRangeHint', { total: insertSource.pages.length })}
+                    autoFocus
+                    onChange={(e) => {
+                      setInsertRange(e.target.value)
+                      setInsertRangeInvalid(false)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') confirmInsertPdf()
+                      else if (e.key === 'Escape') setInsertPdfDlg(false)
+                    }}
+                  />
+                  <div className="pdf-modal-actions">
+                    <button className="pdf-modal-btn" onClick={() => setInsertPdfDlg(false)}>
+                      {t('cancel')}
+                    </button>
+                    <button className="pdf-modal-btn primary" onClick={confirmInsertPdf}>
                       {t('ok')}
                     </button>
                   </div>
