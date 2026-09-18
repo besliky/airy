@@ -171,7 +171,7 @@ const dateAt = (y: number, m: number, d: number, hh = 0, mm = 0): number | null 
 }
 
 /** Word-style date reading for common formats (ISO, numeric, "12 Jan 2026",
- *  "Jan 12, 2026", CJK 年月日). Ambiguous d/m vs m/d: the side that cannot be
+ *  "Jan 12, 2026", CJK Y/M/D order). Ambiguous d/m vs m/d: the side that cannot be
  *  a month forces the reading, otherwise day-first; null = not a date. */
 export function parseSortDate(text: string): number | null {
   const s = text.trim()
