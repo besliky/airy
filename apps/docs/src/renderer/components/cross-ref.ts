@@ -47,10 +47,17 @@ function xmlOfNode(node: { attrs: Record<string, unknown> }, blocks: Block[]): s
   return blocks.find((b) => b.docxIndex === idx)?.originalXml ?? ''
 }
 
-/** the SEQ label of a protected caption paragraph, if it is one */
+/** the SEQ label of a protected caption paragraph, if it is one. Word often
+ * splits one field instruction across several w:instrText runs (rsid seams),
+ * so ALL of the paragraph's instruction fragments are joined before the SEQ
+ * match — the same concatenation the docx reader does while parsing fields.
+ * Reading only the first fragment turned "SEQ Fig|ure" into label "Fig" (a
+ * wrong ordinal pool) or dropped the caption from the dialog entirely. */
 function seqLabelOf(xml: string): string | null {
-  const instr = /<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/.exec(xml)?.[1] ?? ''
-  const m = /^\s*SEQ\s+(\S+)/.exec(decodeEntities(instr))
+  const instr = (xml.match(/<w:instrText[^>]*>[\s\S]*?<\/w:instrText>/g) ?? [])
+    .map((frag) => decodeEntities(frag.replace(/<[^>]*>/g, '')))
+    .join('')
+  const m = /^\s*SEQ\s+(\S+)/.exec(instr)
   return m ? m[1] : null
 }
 

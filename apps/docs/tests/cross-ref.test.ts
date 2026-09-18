@@ -38,6 +38,30 @@ const BOOKMARKED_XML =
 const CAPTION_XML = generateCaptionXml('Figure', 1, 'System architecture')
 const CAPTION2_XML = generateCaptionXml('Figure', 2, 'Inputs')
 const PLAIN_XML = '<w:p><w:r><w:t>Plain paragraph.</w:t></w:r></w:p>'
+// Word routinely splits one field instruction across several w:instrText runs
+// (rsid seams); the reader concatenates them while parsing, the renderer must
+// too when reading the raw caption XML (BUG-912)
+const TORN_CAPTION_XML =
+  '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>' +
+  '<w:r><w:fldChar w:fldCharType="begin" w:dirty="true"/></w:r>' +
+  '<w:r><w:instrText xml:space="preserve"> SEQ Fig</w:instrText></w:r>' +
+  '<w:r><w:instrText xml:space="preserve">ure \\* ARABIC </w:instrText></w:r>' +
+  '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+  '<w:r><w:t>1</w:t></w:r>' +
+  '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+  '<w:r><w:t xml:space="preserve">Torn caption</w:t></w:r>' +
+  '</w:p>'
+// the first fragment can also end mid-whitespace: a " SEQ " first run gave
+// the old first-fragment regex no \S+ to match at all
+const TORN_TABLE_XML =
+  '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>' +
+  '<w:r><w:fldChar w:fldCharType="begin" w:dirty="true"/></w:r>' +
+  '<w:r><w:instrText xml:space="preserve"> SEQ </w:instrText></w:r>' +
+  '<w:r><w:instrText xml:space="preserve">Table \\* ARABIC </w:instrText></w:r>' +
+  '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+  '<w:r><w:t>1</w:t></w:r>' +
+  '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+  '</w:p>'
 
 async function open(
   bodyXml = HEADING_XML + BOOKMARKED_XML + CAPTION_XML + CAPTION2_XML + PLAIN_XML,
@@ -100,6 +124,17 @@ describe('cross-reference sources', () => {
     ])
     expect(captions.every((s) => s.seqLabel === 'Figure' && s.anchor === null)).toBe(true)
     expect(bookmarks.map((s) => s.label)).toEqual(['Conclusion'])
+    editor.destroy()
+  })
+
+  it('reads SEQ labels from split-instruction captions (BUG-912)', async () => {
+    const { editor, parsed } = await open(HEADING_XML + TORN_CAPTION_XML + TORN_TABLE_XML + CAPTION_XML)
+    const captions = collectCrossRefSources(editor, parsed.blocks).filter((s) => s.kind === 'caption')
+    // "SEQ Fig|ure" and "SEQ |Table" must join into the real labels, sharing
+    // the "Figure" ordinal pool with the intact caption instead of forming
+    // phantom "Fig" pools or vanishing from the dialog
+    expect(captions.map((s) => s.seqLabel)).toEqual(['Figure', 'Table', 'Figure'])
+    expect(captions.map((s) => s.seqNumber)).toEqual([1, 1, 2])
     editor.destroy()
   })
 })
@@ -236,6 +271,22 @@ describe('F9 REF cache recompute', () => {
     const anchor = ensureCaptionAnchor(editor, parsed.blocks, caption)!
     const pos = findAnchorPos(editor.state.doc, parsed.blocks, anchor)
     expect(pos).toBe(caption.pos)
+    editor.destroy()
+  })
+
+  it('F9 \\r numbers a split-instruction caption from the joined label (BUG-912)', async () => {
+    const { editor, parsed } = await open(HEADING_XML + CAPTION_XML + TORN_CAPTION_XML + CAPTION2_XML)
+    const blocks = parsed.blocks
+    const torn = collectCrossRefSources(editor, blocks).find(
+      (s) => s.kind === 'caption' && s.label.includes('Torn caption'),
+    )!
+    // the torn "SEQ Fig|ure" caption is the SECOND Figure of three: only the
+    // joined label puts it in the shared ordinal pool
+    expect(torn.seqLabel).toBe('Figure')
+    expect(torn.seqNumber).toBe(2)
+    const anchor = ensureCaptionAnchor(editor, blocks, torn)
+    expect(anchor).toMatch(/^_Ref\d+$/)
+    expect(refCacheOf(editor, blocks, ` REF ${anchor} \\r \\h `)).toBe('2')
     editor.destroy()
   })
 })
