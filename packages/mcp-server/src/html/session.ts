@@ -22,6 +22,7 @@
 // saves always write UTF-8, and a legacy charset declaration is rewritten to
 // utf-8 so the re-encoded file renders correctly in browsers.
 import { randomUUID } from 'node:crypto'
+import type { Stats } from 'node:fs'
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
@@ -38,6 +39,13 @@ import { resolveConfined } from '../docx/paths.js'
 // ---- limits (mirror the docx/markdown sessions, scaled to the MCP 30k answer budget) ----
 
 const MAX_OPEN_BYTES = 8 * 1024 * 1024
+/**
+ * Largest line count an open materializes: the byte cap alone does not bound
+ * the model — a file of bare EOLs (8 MiB of `\r\n` is ~4M lines) would
+ * allocate millions of line objects and hundreds of MB per session. The count
+ * runs over the decoded text BEFORE splitLines allocates anything.
+ */
+const MAX_OPEN_LINES = 2_000_000
 const READ_MAX_CHARS = 30_000
 const INSERT_MAX_CHARS = 200_000
 const OPS_TEXT_MAX_CHARS = 200_000
@@ -167,6 +175,27 @@ export function splitLines(text: string): HtmlLine[] {
   }
   lines.push({ text: text.slice(start), eol: '' })
   return lines
+}
+
+/**
+ * The line count splitLines would produce, counted WITHOUT materializing the
+ * array (the same walk minus the pushes) so an oversize file can be refused
+ * before the model allocation.
+ */
+function countLines(text: string): number {
+  let count = 1
+  let i = 0
+  while (i < text.length) {
+    const ch = text[i]
+    if (ch === '\n' || ch === '\r') {
+      const eolLen = ch === '\r' && text[i + 1] === '\n' ? 2 : 1
+      count += 1
+      i += eolLen
+    } else {
+      i += 1
+    }
+  }
+  return count
 }
 
 /**
@@ -377,17 +406,32 @@ export class HtmlSession {
   /** Open a .html/.htm file inside the workspace root. */
   static async open(rawPath: string, root?: string): Promise<HtmlSession> {
     const path = resolveConfined(rawPath, root)
-    let bytes: Uint8Array
-    let stamp: FileStamp
+    // stat first: an oversize file is refused by its size BEFORE the whole
+    // content is read into memory (the post-read check stays as a backstop
+    // against the file growing between stat and read)
+    let info: Stats
     try {
-      bytes = new Uint8Array(await readFile(path))
-      const info = await stat(path)
-      stamp = { mtimeMs: info.mtimeMs, size: info.size }
+      info = await stat(path)
     } catch (e) {
       throw new Error(`Cannot read "${path}": ${e instanceof Error ? e.message : String(e)}`, {
         cause: e,
       })
     }
+    if (info.size > MAX_OPEN_BYTES) {
+      throw new Error(
+        `"${path}" is ${String(info.size)} bytes; html sessions cap at ` +
+          `${String(MAX_OPEN_BYTES)} bytes (8 MiB).`,
+      )
+    }
+    let bytes: Uint8Array
+    try {
+      bytes = new Uint8Array(await readFile(path))
+    } catch (e) {
+      throw new Error(`Cannot read "${path}": ${e instanceof Error ? e.message : String(e)}`, {
+        cause: e,
+      })
+    }
+    const stamp: FileStamp = { mtimeMs: info.mtimeMs, size: info.size }
     if (bytes.byteLength > MAX_OPEN_BYTES) {
       throw new Error(
         `"${path}" is ${String(bytes.byteLength)} bytes; html sessions cap at ` +
@@ -411,6 +455,18 @@ export class HtmlSession {
     // is re-applied on save, so it must not stay in the editable text
     const text =
       decoded.bom && decoded.text.startsWith(BOM_CHAR) ? decoded.text.slice(1) : decoded.text
+    // the line count is checked over the decoded text BEFORE splitLines
+    // allocates one object per line (the byte cap alone does not bound the
+    // model: 8 MiB of bare EOLs is ~4M line objects, hundreds of MB)
+    const lineCount = countLines(text)
+    if (lineCount > MAX_OPEN_LINES) {
+      throw new Error(
+        `"${path}" has ${String(lineCount)} lines; html sessions cap at ${String(
+          MAX_OPEN_LINES,
+        )} lines (a file of bare line breaks would otherwise materialize millions of ` +
+          'line objects). Split the file and retry.',
+      )
+    }
     return new HtmlSession(
       randomUUID(),
       path,

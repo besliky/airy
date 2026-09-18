@@ -424,6 +424,23 @@ describe('html tools over MCP', () => {
     }
   })
 
+  it('caps the line count at open: a file of bare EOLs is refused before the model is built', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // 2,000,001 lines in ~2 MB: under the byte cap, but the line model
+      // would be millions of objects. The refusal must come from the line
+      // cap (counted before splitLines), not from the byte cap.
+      await writeFile(join(root, 'eol-flood.html'), Buffer.from('\n'.repeat(2_000_000)))
+      const flooded = await call(client, 'open_document', { path: 'eol-flood.html' })
+      expect(flooded.isError).toBe(true)
+      expect(text(flooded)).toContain('2000001 lines')
+      expect(text(flooded)).toContain('cap at 2000000 lines')
+      expect(text(flooded)).not.toContain('8 MiB')
+    } finally {
+      await close()
+    }
+  })
+
   it('rejects an enormous read range fast, before allocating the index array', async () => {
     const { client, close } = await connectSession()
     try {
