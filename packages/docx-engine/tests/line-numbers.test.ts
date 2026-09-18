@@ -102,6 +102,36 @@ describe('w:lnNumType serialize (applySectionSettings)', () => {
     })
     expect(out).toContain('<w:lnNumType w:count="3"/><w:vAlign w:val="center"/>')
   })
+
+  it('falls back to after pgBorders when no later-schema element exists (BUG-914: pgBorders sits between pgMar and lnNumType)', () => {
+    const xml =
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>' +
+      '<w:pgBorders w:offsetFrom="page">' +
+      '<w:top w:val="single" w:sz="4" w:space="24" w:color="auto"/>' +
+      '<w:left w:val="single" w:sz="4" w:space="24" w:color="auto"/>' +
+      '<w:bottom w:val="single" w:sz="4" w:space="24" w:color="auto"/>' +
+      '<w:right w:val="single" w:sz="4" w:space="24" w:color="auto"/>' +
+      '</w:pgBorders></w:sectPr>'
+    const out = applySectionSettings(xml, {
+      ...sectionSettingsFromXml(xml),
+      lineNumbers: { restart: 'newPage' },
+    })
+    // pgMar < pgBorders < lnNumType per CT_SectPr (applySectionSettings rebuilds
+    // the visible border right after pgMar; lnNumType must land after it)
+    expect(out.indexOf('<w:pgMar')).toBeLessThan(out.indexOf('<w:pgBorders'))
+    expect(out).toContain('</w:pgBorders><w:lnNumType w:restart="newPage"/>')
+    expect(sectionSettingsFromXml(out).lineNumbers).toEqual({ restart: 'newPage' })
+  })
+
+  it('falls back to after paperSrc when pgBorders is absent (paperSrc sits between pgMar and lnNumType)', () => {
+    const xml =
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/><w:paperSrc w:first="1" w:other="2"/></w:sectPr>'
+    const out = applySectionSettings(xml, {
+      ...sectionSettingsFromXml(xml),
+      lineNumbers: { countBy: 2 },
+    })
+    expect(out).toContain('<w:paperSrc w:first="1" w:other="2"/><w:lnNumType w:count="2"/>')
+  })
 })
 
 describe('w:lnNumType round-trip through saveDocx', () => {
