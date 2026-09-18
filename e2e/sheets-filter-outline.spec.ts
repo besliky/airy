@@ -94,6 +94,23 @@ function rightEdge(page: Page, rect: CellRect): Promise<number> {
 }
 
 /**
+ * Absence probe hardened against frame-order races: the filter render was
+ * queued before the parked-cell activation, but "the parked border painted"
+ * is only a proxy for "the queued filter render flushed in the same frame"
+ * (audit R5). Sample at consecutive frame boundaries — an outline landing a
+ * frame or two late is still caught, while an instantaneous zero-reading
+ * could have raced it.
+ */
+async function expectAbsentAcrossFrames(page: Page, probe: () => Promise<number>): Promise<void> {
+  for (let frame = 0; frame < 3; frame++) {
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    )
+    expect(await probe()).toBeLessThan(40)
+  }
+}
+
+/**
  * Regression for "a mysterious outer border appeared" (alpha
  * feedback): Univer's filter render controller paints a selection-style border
  * around the whole filter range whenever a sheet has a filter. Excel draws
@@ -183,8 +200,8 @@ test.describe('sheets: no outline around a filtered range', () => {
         right: bottomRight.right,
         bottom: bottomRight.bottom,
       }
-      expect(await bottomEdge(sheets, range)).toBeLessThan(40)
-      expect(await rightEdge(sheets, range)).toBeLessThan(40)
+      await expectAbsentAcrossFrames(sheets, () => bottomEdge(sheets, range))
+      await expectAbsentAcrossFrames(sheets, () => rightEdge(sheets, range))
     } finally {
       await closeAndSaveVideo(launched, 'sheets-filter-outline')
     }

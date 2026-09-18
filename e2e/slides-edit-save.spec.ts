@@ -81,9 +81,16 @@ test.describe('slides: edit a text run and save the deck', () => {
       // gestures (Konva pairs a too-fast second click into the first one);
       // no DOM signal exists for a canvas selection commit
       await editor.waitForTimeout(300)
-      await editor.mouse.dblclick(headline.x, headline.y)
+      // Debounce-timer redraws (setTimeout-laid canvas work, not rAF) can
+      // queue behind fonts.ready+2rAF and move the text under the dblclick
+      // point (audit R6) — retry the whole gesture until the run-level
+      // overlay actually opens instead of betting the first hit lands on
+      // the final geometry. A stray dblclick is idempotent: it re-selects.
       const overlay = editor.locator('[contenteditable="true"]').first()
-      await overlay.waitFor({ timeout: 10_000 })
+      await expect(async () => {
+        await editor.mouse.dblclick(headline.x, headline.y)
+        await overlay.waitFor({ timeout: 3_000 })
+      }).toPass({ timeout: 15_000 })
 
       // Append to the run (keep the existing text so the assertion can also
       // check it survived), then Esc commits (TextEditOverlay semantics).

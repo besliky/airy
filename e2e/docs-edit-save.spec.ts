@@ -3,7 +3,13 @@ import { execSync } from 'node:child_process'
 import { copyFile, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl, screenshotPath } from './helpers'
+import {
+  launchShell,
+  closeAndSaveVideo,
+  waitForPageWithUrl,
+  screenshotPath,
+  waitForPaintSettled,
+} from './helpers'
 
 const FIXTURE = resolve(__dirname, '../fixtures/generated/kitchen-sink.docx')
 
@@ -27,7 +33,10 @@ test.describe('docs: edit and save a document', () => {
     try {
       const editor = await waitForPageWithUrl(launched.app, 'docs/out')
       await editor.locator('.doc-page').first().waitFor({ timeout: 30_000 })
-      await editor.evaluate(() => document.fonts.ready.then(() => undefined))
+      // fonts.ready alone leaves the caret click exposed to font-driven
+      // reflow repaints still queued behind it (audit R9) — settle two
+      // frames past the fonts so the click lands on final geometry
+      await waitForPaintSettled(editor)
 
       // Click into the first page and type; the caret lands at the nearest
       // text position, which is enough — the assertion only needs the marker
