@@ -129,8 +129,12 @@ describe('cross-reference sources', () => {
   })
 
   it('reads SEQ labels from split-instruction captions (BUG-912)', async () => {
-    const { editor, parsed } = await open(HEADING_XML + TORN_CAPTION_XML + TORN_TABLE_XML + CAPTION_XML)
-    const captions = collectCrossRefSources(editor, parsed.blocks).filter((s) => s.kind === 'caption')
+    const { editor, parsed } = await open(
+      HEADING_XML + TORN_CAPTION_XML + TORN_TABLE_XML + CAPTION_XML,
+    )
+    const captions = collectCrossRefSources(editor, parsed.blocks).filter(
+      (s) => s.kind === 'caption',
+    )
     // "SEQ Fig|ure" and "SEQ |Table" must join into the real labels, sharing
     // the "Figure" ordinal pool with the intact caption instead of forming
     // phantom "Fig" pools or vanishing from the dialog
@@ -185,7 +189,14 @@ describe('cross-reference instructions and caches', () => {
     // name as visible field text (BUG-916a)
     expect(
       crossRefCache(
-        { kind: 'bookmark', label: 'EmptyTarget', preview: '', level: 1, anchor: 'EmptyTarget', pos: 0 },
+        {
+          kind: 'bookmark',
+          label: 'EmptyTarget',
+          preview: '',
+          level: 1,
+          anchor: 'EmptyTarget',
+          pos: 0,
+        },
         'text',
       ),
     ).toBe(REF_TARGET_GONE)
@@ -308,7 +319,9 @@ describe('F9 REF cache recompute', () => {
   })
 
   it('F9 \\r numbers a split-instruction caption from the joined label (BUG-912)', async () => {
-    const { editor, parsed } = await open(HEADING_XML + CAPTION_XML + TORN_CAPTION_XML + CAPTION2_XML)
+    const { editor, parsed } = await open(
+      HEADING_XML + CAPTION_XML + TORN_CAPTION_XML + CAPTION2_XML,
+    )
     const blocks = parsed.blocks
     const torn = collectCrossRefSources(editor, blocks).find(
       (s) => s.kind === 'caption' && s.label.includes('Torn caption'),
