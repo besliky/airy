@@ -1196,7 +1196,19 @@ export const workbookStructuralOpSchema = z.union([
       index: z.number().int().nonnegative().max(1_048_575),
       count: z.number().int().positive().max(10_000),
     })
-    .strict(),
+    .strict()
+    /// The affected block must fit inside its axis: index and count are each
+    /// bounded, but without the sum check a hand-built op could insert rows
+    /// past the last row and renumber the sheet over the edge (the same
+    /// trust boundary BUG-783 closed for the move family).
+    .refine(
+      (op) =>
+        op.index + op.count <=
+        (op.kind === 'insert-cols' || op.kind === 'remove-cols' ? 16_384 : 1_048_576),
+      {
+        message: 'The inserted or removed rows must fit inside the sheet.',
+      },
+    ),
   z
     .object({
       sheetId: z.string().min(1),

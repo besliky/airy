@@ -2164,7 +2164,11 @@ function parseSaveRequest(input: WorkbookSaveRequest): WorkbookSaveRequest {
       !isNonnegativeInteger(index) ||
       !isNonnegativeInteger(count) ||
       count === 0 ||
-      count > 10_000
+      count > 10_000 ||
+      // the affected block must fit inside its axis, not just each bound
+      // alone — a hand-built op could otherwise renumber rows past the last
+      // row of the sheet (mirrors the zod refine, cf. the move-family bound)
+      index + count > (op.kind === 'insert-cols' || op.kind === 'remove-cols' ? 16_384 : 1_048_576)
     ) {
       throw new Error('Invalid workbook structural operation.')
     }
