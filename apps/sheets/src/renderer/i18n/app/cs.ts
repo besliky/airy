@@ -325,8 +325,6 @@ export const cs = {
     'Tento list obsahuje kontingenční tabulku — jeho duplikování zatím není podporováno.',
   appDuplicateScopedNames:
     'Tento list má definované názvy s oborem listu — jeho duplikování zatím není podporováno.',
-  appMoveRowsColsUnsaved:
-    'Přesouvání celých sloupců zatím nelze v importovaných sešitech uložit — přesouvání celých řádků je podporováno.',
   appNoWorkbookOpen: 'Není otevřen žádný sešit.',
   appDvListOptions: 'Seznam: {items}',
   appDvListFromRange: 'Seznam (z oblasti {range})',

@@ -315,8 +315,6 @@ export const en = {
     'This sheet contains a PivotTable — duplicating it is not supported yet.',
   appDuplicateScopedNames:
     'This sheet has sheet-scoped defined names — duplicating it is not supported yet.',
-  appMoveRowsColsUnsaved:
-    'Moving whole columns cannot be saved to imported workbooks yet — moving whole rows is supported.',
   appNoWorkbookOpen: 'No workbook is open.',
   appDvListOptions: 'List: {items}',
   appDvListFromRange: 'List (from range {range})',

@@ -175,7 +175,6 @@ import type { StructuralJournalOp } from './edit-journal'
 import {
   AUTO_FILL_COMMAND,
   AXIS_ATTR_MUTATIONS,
-  BLOCKED_COMMAND_PATTERN,
   CF_MUTATIONS,
   CF_RULE_COMMAND_PATTERN,
   CHAT_STORAGE_KEY,
@@ -190,6 +189,8 @@ import {
   initialSnapshot,
   MERGE_MUTATIONS,
   MOVE_RANGE_COMMAND,
+  MOVE_COLS_COMMAND,
+  MOVE_COLS_MUTATION,
   MOVE_ROWS_COMMAND,
   MOVE_ROWS_MUTATION,
   MOVE_RANGE_MUTATION,
@@ -1829,6 +1830,7 @@ export function App(): React.JSX.Element {
           !NOTE_MUTATIONS.has(event.id) &&
           event.id !== MOVE_RANGE_MUTATION &&
           event.id !== MOVE_ROWS_MUTATION &&
+          event.id !== MOVE_COLS_MUTATION &&
           event.id !== SET_FROZEN_MUTATION &&
           event.id !== TOGGLE_GRIDLINES_MUTATION &&
           event.id !== SET_ZOOM_OPERATION &&
@@ -2098,7 +2100,7 @@ export function App(): React.JSX.Element {
           }
           return
         }
-        if (rowColumn || event.id === MOVE_ROWS_MUTATION) {
+        if (rowColumn || event.id === MOVE_ROWS_MUTATION || event.id === MOVE_COLS_MUTATION) {
           let structuralOp: StructuralJournalOp
           if (rowColumn) {
             const range = params.range
@@ -2113,11 +2115,14 @@ export function App(): React.JSX.Element {
           } else {
             const move = event.params as { sourceRange?: IRange; targetRange?: IRange } | undefined
             if (!move?.sourceRange || !move.targetRange) return
-            const index = move.sourceRange.startRow
-            const count = move.sourceRange.endRow - move.sourceRange.startRow + 1
-            const before = move.targetRange.startRow
+            const rows = event.id === MOVE_ROWS_MUTATION
+            const index = rows ? move.sourceRange.startRow : move.sourceRange.startColumn
+            const count = rows
+              ? move.sourceRange.endRow - move.sourceRange.startRow + 1
+              : move.sourceRange.endColumn - move.sourceRange.startColumn + 1
+            const before = rows ? move.targetRange.startRow : move.targetRange.startColumn
             if (count <= 0 || (before >= index && before <= index + count)) return
-            structuralOp = { kind: 'move-rows', index, count, before }
+            structuralOp = { kind: rows ? 'move-rows' : 'move-cols', index, count, before }
           }
           const structuralSheetId = params.subUnitId
           // Refs are matched by live sheet name (they follow renames).
@@ -2162,7 +2167,7 @@ export function App(): React.JSX.Element {
           // through the updated coordinate mapping. Moves are exempt: they
           // are gated to fully loaded sheets, and the refetch would re-install
           // cells through undoable commands, burying the move's undo entry.
-          if (structuralOp.kind !== 'move-rows') {
+          if (structuralOp.kind !== 'move-rows' && structuralOp.kind !== 'move-cols') {
             state.loadedRanges.delete(params.subUnitId)
             state.frozenStripKeys.delete(params.subUnitId)
           }
@@ -2444,7 +2449,8 @@ export function App(): React.JSX.Element {
           FILTER_COMMAND_PATTERN.test(event.id) ||
           event.id === OPEN_FILTER_PANEL_OPERATION ||
           event.id === MOVE_RANGE_COMMAND ||
-          event.id === MOVE_ROWS_COMMAND
+          event.id === MOVE_ROWS_COMMAND ||
+          event.id === MOVE_COLS_COMMAND
         ) {
           const subUnitId =
             (event.params as { subUnitId?: string } | undefined)?.subUnitId ??
@@ -2486,7 +2492,9 @@ export function App(): React.JSX.Element {
             return
           }
           if (
-            (event.id === MOVE_RANGE_COMMAND || event.id === MOVE_ROWS_COMMAND) &&
+            (event.id === MOVE_RANGE_COMMAND ||
+              event.id === MOVE_ROWS_COMMAND ||
+              event.id === MOVE_COLS_COMMAND) &&
             state.file.sheets.find((candidate) => candidate.id === subUnitId)?.pivotRanges.length
           ) {
             event.cancel = true
@@ -2585,10 +2593,6 @@ export function App(): React.JSX.Element {
           }
           if (subUnitId !== undefined) pendingCopySource = subUnitId
           return
-        }
-        if (BLOCKED_COMMAND_PATTERN.test(event.id)) {
-          event.cancel = true
-          setMessage(t('appMoveRowsColsUnsaved'))
         }
       },
     )

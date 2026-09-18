@@ -340,8 +340,6 @@ export const pl = {
     'Ten arkusz zawiera tabelę przestawną — jego duplikowanie nie jest jeszcze obsługiwane.',
   appDuplicateScopedNames:
     'Ten arkusz zawiera nazwy zdefiniowane o zasięgu arkusza — jego duplikowanie nie jest jeszcze obsługiwane.',
-  appMoveRowsColsUnsaved:
-    'Przenoszenia całych kolumn nie można jeszcze zapisać w zaimportowanych skoroszytach — przenoszenie całych wierszy jest już obsługiwane.',
   appNoWorkbookOpen: 'Żaden skoroszyt nie jest otwarty.',
   appDvListOptions: 'Lista: {items}',
   appDvListFromRange: 'Lista (z zakresu {range})',

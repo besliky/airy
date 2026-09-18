@@ -1213,6 +1213,19 @@ export const workbookStructuralOpSchema = z.union([
   z
     .object({
       sheetId: z.string().min(1),
+      kind: z.literal('move-cols'),
+      index: z.number().int().nonnegative().max(16_383),
+      count: z.number().int().positive().max(10_000),
+      /// Pre-move insertion column; must lie outside the moved block.
+      before: z.number().int().nonnegative().max(16_384),
+    })
+    .strict()
+    .refine((op) => op.before < op.index || op.before > op.index + op.count, {
+      message: 'A column move target must lie outside the moved block.',
+    }),
+  z
+    .object({
+      sheetId: z.string().min(1),
       kind: z.enum(['merge-cells', 'unmerge-cells']),
       range: cellAreaSchema,
     })

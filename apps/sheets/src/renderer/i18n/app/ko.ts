@@ -323,8 +323,6 @@ export const ko = {
   appPivotSheetNoDuplicate: '이 시트에는 피벗 테이블이 있어 아직 시트 복제를 지원하지 않습니다.',
   appDuplicateScopedNames:
     '이 시트에는 시트 범위로 정의된 이름이 있어 아직 시트 복제를 지원하지 않습니다.',
-  appMoveRowsColsUnsaved:
-    '전체 열 이동은 가져온 통합 문서에 아직 저장할 수 없습니다 — 전체 행 이동은 지원됩니다.',
   // Preview / apply / undo
   appNoWorkbookOpen: '열려 있는 통합 문서가 없습니다.',
   appDvListOptions: '목록: {items}',

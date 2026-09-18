@@ -177,13 +177,16 @@ export const SHEET_LIFECYCLE_MUTATIONS = new Set([
   'sheet.mutation.set-worksheet-order',
   'sheet.mutation.set-worksheet-hidden',
 ])
-// Whole-row moves persist as a journaled move op (the save relocates the
-// <row> elements, so heights and hidden flags travel for free); column moves
-// are still blocked pending the symmetric <c>/<col> treatment.
-export const BLOCKED_COMMAND_PATTERN = /^sheet\.command\.move-cols/
+// Whole-row and whole-column moves persist as journaled move ops (the save
+// swaps the two adjacent axis blocks — relocating <row> elements or
+// re-addressing and re-sorting <c> cells — so heights, widths, hidden flags,
+// and formats travel for free).
 export const MOVE_ROWS_COMMAND = 'sheet.command.move-rows'
 // The mutation carries {sourceRange, targetRange} in pre-move coordinates.
 export const MOVE_ROWS_MUTATION = 'sheet.mutation.move-rows'
+export const MOVE_COLS_COMMAND = 'sheet.command.move-cols'
+// Univer names the column mutation 'move-columns', not 'move-cols'.
+export const MOVE_COLS_MUTATION = 'sheet.mutation.move-columns'
 // Sheet duplication clones the worksheet part file-side; the journal records
 // the source so the save seeds the new part from it.
 export const COPY_SHEET_COMMAND = 'sheet.command.copy-sheet'

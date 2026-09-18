@@ -345,8 +345,6 @@ export const pt = {
     'Esta planilha contém uma Tabela Dinâmica — duplicá-la ainda não é suportado.',
   appDuplicateScopedNames:
     'Esta planilha tem nomes definidos no escopo da planilha — duplicá-la ainda não é suportado.',
-  appMoveRowsColsUnsaved:
-    'Mover colunas inteiras ainda não pode ser salvo em pastas de trabalho importadas — mover linhas inteiras já é suportado.',
   appNoWorkbookOpen: 'Nenhuma pasta de trabalho aberta.',
   appDvListOptions: 'Lista: {items}',
   appDvListFromRange: 'Lista (do intervalo {range})',

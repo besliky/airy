@@ -323,8 +323,6 @@ export const hi = {
   appPivotSheetNoDuplicate: 'इस शीट में पिवट टेबल है — इसकी प्रतिलिपि बनाना अभी समर्थित नहीं है।',
   appDuplicateScopedNames:
     'इस शीट में शीट-स्तरीय परिभाषित नाम हैं — इसकी प्रतिलिपि बनाना अभी समर्थित नहीं है।',
-  appMoveRowsColsUnsaved:
-    'पूरे स्तंभ स्थानांतरित करना अभी आयातित कार्यपुस्तिकाओं में सहेजा नहीं जा सकता — पूरी पंक्तियाँ स्थानांतरित करना समर्थित है।',
   appNoWorkbookOpen: 'कोई कार्यपुस्तिका खुली नहीं है।',
   appDvListOptions: 'सूची: {items}',
   appDvListFromRange: 'सूची (श्रेणी {range} से)',

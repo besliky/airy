@@ -337,8 +337,6 @@ export const ja = {
     'このシートにはピボットテーブルが含まれています — このシートのコピーには未対応です。',
   appDuplicateScopedNames:
     'このシートにはシート スコープの定義済み名前があるため、複製はまだサポートされていません。',
-  appMoveRowsColsUnsaved:
-    '列全体の移動は、インポートしたブックには現時点では保存できません——行全体の移動には対応しています。',
   // Preview / apply / undo
   appNoWorkbookOpen: '開いているブックがありません。',
   appDvListOptions: 'リスト：{items}',
