@@ -52,7 +52,7 @@ const HTML_OPS_GUIDE = [
   '- insertLines after(-1 = start) text — splice HTML/markup source after a line',
   '- replaceLines from to text — replace an inclusive line range (empty text deletes the range)',
   '- deleteLines from to — remove an inclusive line range',
-  '- findReplace find replace matchCase?(default true) from? to? — line-scoped replace, optionally within an inclusive line window',
+  '- findReplace find replace matchCase?(default true) from? to? — line-scoped replace; find and replace must be single-line (multi-line edits go through insertLines/replaceLines), optionally within an inclusive line window',
 ].join('\n')
 
 /** line-op vocabulary markdown sessions accept in apply_ops */
@@ -61,7 +61,7 @@ const MARKDOWN_OPS_GUIDE = [
   '- insertLines after(-1 = start) text — splice markdown source after a line',
   '- replaceLines from to text — replace an inclusive line range (empty text deletes the range)',
   '- deleteLines from to — remove an inclusive line range',
-  '- findReplace find replace matchCase?(default true) from? to? — line-scoped replace, optionally within an inclusive line window',
+  '- findReplace find replace matchCase?(default true) from? to? — line-scoped replace; find and replace must be single-line (multi-line edits go through insertLines/replaceLines), optionally within an inclusive line window',
 ].join('\n')
 
 /** one agent-issued cell edit: sheet + A1 ref + value/formula/style patches */

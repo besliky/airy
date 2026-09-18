@@ -622,6 +622,36 @@ describe('markdown tools over MCP', () => {
     }
   })
 
+  it('rejects findReplace text containing line breaks (line-model invariant)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const handle = await openFixture(client)
+      const multilineFind = await call(client, 'apply_ops', {
+        handle,
+        ops: [{ op: 'findReplace', find: 'Revenue\nDetail', replace: 'x' }],
+      })
+      expect(multilineFind.isError).toBe(true)
+      expect(text(multilineFind)).toContain('find must not contain line breaks')
+      // a replace with an embedded EOL would leave a line break inside one
+      // line object; it must refuse and point at the multi-line ops instead
+      const multilineReplace = await call(client, 'apply_ops', {
+        handle,
+        ops: [{ op: 'findReplace', find: 'Revenue', replace: 'Sales\nGrowth' }],
+      })
+      expect(multilineReplace.isError).toBe(true)
+      expect(text(multilineReplace)).toContain('replace must not contain line breaks')
+      expect(text(multilineReplace)).toContain('insertLines or replaceLines')
+      // single-line replacements keep working
+      const ok = await call(client, 'apply_ops', {
+        handle,
+        ops: [{ op: 'findReplace', find: 'Revenue', replace: 'Sales' }],
+      })
+      expect(ok.isError).toBeFalsy()
+    } finally {
+      await close()
+    }
+  })
+
   it('supports dryRun ops and case-insensitive find/replace', async () => {
     const { client, close } = await connectSession()
     try {

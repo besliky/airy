@@ -780,6 +780,15 @@ export class MarkdownSession {
             typeof op.replace === 'string'
               ? op.replace
               : fail('op findReplace: replace must be a string')
+          // a replace with embedded line breaks would leave an EOL inside one
+          // line object, breaking the line-model invariant (every op and the
+          // dominant-EOL accounting assume one line = no inner EOL)
+          if (/[\r\n]/.test(replace)) {
+            fail(
+              'op findReplace: replace must not contain line breaks ' +
+                '(use insertLines or replaceLines for multi-line edits)',
+            )
+          }
           const matchCase = op.matchCase !== false
           const from = op.from === undefined ? 0 : op.from
           const to = op.to === undefined ? lineCount() - 1 : op.to

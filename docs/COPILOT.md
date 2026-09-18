@@ -254,7 +254,8 @@ shares the 30k budget (`blocks`/`range` select lines). `insert_content` takes ma
 or after line `at` (`-1` = start; default: end). `apply_ops` runs line ops
 instead of block ops: `insertLines after text`, `replaceLines from to text`
 (empty text deletes the range), `deleteLines from to`, and `findReplace find
-replace matchCase? from? to?` (line-scoped, optional inclusive line window).
+replace matchCase? from? to?` (line-scoped — find and replace must be
+single-line; optional inclusive line window).
 Line indexes are 0-based and shift after every splice — re-read between
 edits. Encoding: UTF-8 only (BOM-prefixed UTF-8/UTF-16 opens; files that are
 not valid UTF-8 are refused with a conversion hint), a leading BOM survives
@@ -279,7 +280,8 @@ html session is an explicit error (html has no heading addressing; position
 via `marker` or `at`). `apply_ops` runs line ops instead of block ops:
 `insertLines after text`, `replaceLines from to text` (empty text deletes
 the range), `deleteLines from to`, and `findReplace find replace matchCase?
-from? to?` (line-scoped, optional inclusive line window). Line indexes are
+from? to?` (line-scoped — find and replace must be single-line; optional
+inclusive line window). Line indexes are
 0-based and shift after every splice — re-read between edits. Encoding:
 UTF-8 (BOM-prefixed UTF-8/UTF-16 accepted); bytes that are not valid UTF-8
 open only when the document declares a usable `<meta charset>` — undeclared
