@@ -1,4 +1,4 @@
-import type { ParsedDoc, SectionInfo, SectionSettings, DocGrid } from './types'
+import type { LineNumberSettings, ParsedDoc, SectionInfo, SectionSettings, DocGrid } from './types'
 
 /** US Letter, portrait, 1-inch margins */
 export const DEFAULT_SECTION: SectionSettings = {
@@ -107,6 +107,7 @@ export function sectionSettingsFromXml(xml: string): SectionSettings {
     .filter((w) => w > 0)
 
   const pageBorderProps = pageBorderPropsOf(xml)
+  const lnNum = lineNumbersOf(xml)
 
   return {
     pageWidth: intAttr(pgSz, 'w:w', DEFAULT_SECTION.pageWidth),
@@ -127,12 +128,37 @@ export function sectionSettingsFromXml(xml: string): SectionSettings {
     ...(/<w:bidi\s*\/>/.test(xml) ? { bidi: true } : {}),
     ...(docGrid ? { docGrid } : {}),
     ...(textDirectionOf(xml) ? { textDirection: textDirectionOf(xml) } : {}),
+    ...(lnNum ? { lineNumbers: lnNum } : {}),
   }
 }
 
 function textDirectionOf(xml: string): string | undefined {
   const val = /<w:textDirection[^>]*w:val="([^"]+)"/.exec(xml)?.[1]
   return val && val !== 'lrTb' ? val : undefined
+}
+
+/**
+ * Line numbering (sectPr w:lnNumType): countBy/start/restart/distance, all
+ * attributes optional (Word defaults: count 1, start 1, restart newPage).
+ */
+function lineNumbersOf(xml: string): LineNumberSettings | undefined {
+  const tag = /<w:lnNumType[^>]*\/?>/.exec(xml)?.[0]
+  if (!tag) return undefined
+  const num = (name: string): number | undefined => {
+    const m = new RegExp(`${name}="(\\d+)"`).exec(tag)
+    return m ? parseInt(m[1], 10) : undefined
+  }
+  const restart = /w:restart="(newPage|newSection|continuous)"/.exec(tag)?.[1] as
+    'newPage' | 'newSection' | 'continuous' | undefined
+  const countBy = num('w:count')
+  const start = num('w:start')
+  const distance = num('w:distance')
+  return {
+    ...(countBy !== undefined ? { countBy } : {}),
+    ...(start !== undefined ? { start } : {}),
+    ...(restart ? { restart } : {}),
+    ...(distance !== undefined ? { distance } : {}),
+  }
 }
 
 /** Read page setup from the trailing (hidden) w:sectPr. */
@@ -279,6 +305,40 @@ export function applySectionSettings(sectPrXml: string, settings: SectionSetting
       `${side('top')}${side('left')}${side('bottom')}${side('right')}` +
       '</w:pgBorders>'
     xml = xml.replace(/(<w:pgMar[^>]*\/>)/, `$1${pgBorders}`)
+  }
+
+  // line numbering (w:lnNumType between pgBorders and pgNumType in CT_SectPr):
+  // undefined = numbering off, the tag is dropped; attrs are omitted when unset.
+  // Insert before the first present later-schema element, else after pgMar
+  // (applySectionSettings guarantees pgSz/pgMar exist by this point).
+  xml = xml.replace(/<w:lnNumType[^>]*\/>/, '')
+  if (settings.lineNumbers) {
+    const ln = settings.lineNumbers
+    const tag =
+      '<w:lnNumType' +
+      (ln.countBy !== undefined ? ` w:count="${ln.countBy}"` : '') +
+      (ln.start !== undefined ? ` w:start="${ln.start}"` : '') +
+      (ln.restart !== undefined ? ` w:restart="${ln.restart}"` : '') +
+      (ln.distance !== undefined ? ` w:distance="${ln.distance}"` : '') +
+      '/>'
+    const later = [
+      'pgNumType',
+      'cols',
+      'formProt',
+      'vAlign',
+      'noEndnote',
+      'titlePg',
+      'textDirection',
+      'bidi',
+      'rtlGutter',
+      'docGrid',
+      'printerSettings',
+    ].find((name) => new RegExp(`<w:${name}[\\s/>]`).test(xml))
+    if (later) {
+      xml = xml.replace(new RegExp(`(<w:${later}[\\s/>])`), `${tag}$1`)
+    } else {
+      xml = xml.replace(/(<w:pgMar[^>]*\/>)/, `$1${tag}`)
+    }
   }
 
   // columns (w:cols may be self-closing or carry explicit <w:col> children)
