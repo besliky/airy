@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { LineNumberSettings } from '@airy-office/docx-engine'
 import {
   collectBlockLines,
@@ -269,5 +271,56 @@ describe('syncLineNumberOverlays (canvas)', () => {
     expect(autoNum?.style.right).toBe(
       `${(lnTwipsToPx(11906 - 1440) + LN_AUTO_DISTANCE_PX).toFixed(1)}px`,
     )
+  })
+})
+
+describe('canvas numeral ink and font (UX-901: document data, not chrome)', () => {
+  const css = readFileSync(join(__dirname, '../src/renderer/styles.css'), 'utf8')
+
+  /** declarations of the first rule whose selector matches (styles.css contract) */
+  const ruleDecls = (selector: string): ReadonlyMap<string, string> => {
+    const m = new RegExp(`^${selector.replace(/[.]/g, '\\$&')} \\{([^}]*)\\}`, 'm').exec(css)
+    if (!m) throw new Error(`rule not found: ${selector}`)
+    const out = new Map<string, string>()
+    for (const d of m[1].matchAll(/([\w-]+):\s*([^;]+);/g)) out.set(d[1], d[2].trim())
+    return out
+  }
+
+  /** body of the first rule matching the selector prefix (brace-matched) */
+  const blockOf = (selector: string): string => {
+    const i = css.indexOf(selector)
+    if (i < 0) throw new Error(`selector not found: ${selector}`)
+    const open = css.indexOf('{', i)
+    let depth = 0
+    for (let j = open; j < css.length; j++) {
+      if (css[j] === '{') depth++
+      else if (css[j] === '}' && --depth === 0) return css.slice(open + 1, j)
+    }
+    throw new Error(`unbalanced block: ${selector}`)
+  }
+
+  it('paints numerals in paper ink, never the chrome --text token', () => {
+    const num = ruleDecls('.page-linenum')
+    // the overlay layer hangs off .page-wrap — a sibling of .doc-page — so the
+    // page's inherited ink never reaches the numerals; the rule must carry it
+    expect(num.get('color')).toBe('var(--docs-paper-ink)')
+    expect([...num.values()].join(' ')).not.toContain('var(--text')
+  })
+
+  it('uses the document font of the print copy (canvas == print)', () => {
+    const num = ruleDecls('.page-linenum')
+    const pv = ruleDecls('.pv-page')
+    for (const prop of ['font-family', 'font-size', 'line-height']) {
+      expect(num.get(prop), prop).toBe(pv.get(prop))
+    }
+  })
+
+  it('the ink follows the page, not the UI theme (all four theme/page combos)', () => {
+    // light paper: black numerals in BOTH UI themes…
+    expect(blockOf(':root,')).toContain('--docs-paper-ink: #000;')
+    const uiDark = blockOf("[data-theme='dark']")
+    expect(uiDark, 'dark UI theme must not restyle document ink').not.toContain('--docs-paper-ink')
+    // …dark page (View ▸ Dark Mode): white numerals in both UI themes
+    expect(blockOf('.page-dark {')).toContain('--docs-paper-ink: #ffffff;')
   })
 })

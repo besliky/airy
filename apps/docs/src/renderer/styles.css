@@ -2330,8 +2330,12 @@ th.cell-rev-del {
   position: absolute;
 }
 
-/* line numbers (w:lnNumType): canvas margin numerals (see syncLineNumberOverlays);
-   numerals are document data — the page's inherited doc font and paper ink */
+/* line numbers (w:lnNumType): canvas margin numerals (see syncLineNumberOverlays).
+   Numerals are document data (CLAUDE.md theming rule 4): the overlay layer hangs
+   off .page-wrap — a sibling of .doc-page — so the page's inherited document
+   font and paper ink never reach it. Spell both out here (the .pv-linenum print
+   copy inherits the same values from .pv-page): chrome --text would follow the
+   UI theme, leaving dark numerals on the dark page / light ones on white paper. */
 .page-linenum-overlays {
   position: absolute;
   inset: 0;
@@ -2343,6 +2347,10 @@ th.cell-rev-del {
   position: absolute;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  font-family: Calibri, 'DengXian', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 11pt;
+  line-height: 1.35;
+  color: var(--docs-paper-ink);
 }
 
 /* preview/print copy: same numerals on each .pv-page sheet (and per column) */
