@@ -1209,6 +1209,12 @@ export const workbookStructuralOpSchema = z.union([
     .strict()
     .refine((op) => op.before < op.index || op.before > op.index + op.count, {
       message: 'A row move target must lie outside the moved block.',
+    })
+    /// The moved block itself must fit inside the sheet: index and count are
+    /// each bounded, but without the sum check a hand-built op could swap
+    /// blocks past the last row.
+    .refine((op) => op.index + op.count <= 1_048_576, {
+      message: 'The moved rows must fit inside the sheet.',
     }),
   z
     .object({
@@ -1222,6 +1228,9 @@ export const workbookStructuralOpSchema = z.union([
     .strict()
     .refine((op) => op.before < op.index || op.before > op.index + op.count, {
       message: 'A column move target must lie outside the moved block.',
+    })
+    .refine((op) => op.index + op.count <= 16_384, {
+      message: 'The moved columns must fit inside the sheet.',
     }),
   z
     .object({

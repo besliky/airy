@@ -2149,6 +2149,8 @@ function parseSaveRequest(input: WorkbookSaveRequest): WorkbookSaveRequest {
         !isNonnegativeInteger(count) ||
         count === 0 ||
         count > 10_000 ||
+        // the moved block must fit inside the sheet, not just each bound alone
+        index + count > (columnMove ? 16_384 : 1_048_576) ||
         !isNonnegativeInteger(op.before) ||
         op.before > beforeMax ||
         (op.before >= index && op.before <= index + count)
