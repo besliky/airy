@@ -2330,6 +2330,30 @@ th.cell-rev-del {
   position: absolute;
 }
 
+/* line numbers (w:lnNumType): canvas margin numerals (see syncLineNumberOverlays);
+   numerals are document data — the page's inherited doc font and paper ink */
+.page-linenum-overlays {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.page-linenum {
+  position: absolute;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* preview/print copy: same numerals on each .pv-page sheet (and per column) */
+.pv-linenum {
+  position: absolute;
+  pointer-events: none;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  z-index: 3;
+}
+
 /* preview/print copy: same document-data border, one box per .pv-page sheet */
 .pv-page-border {
   position: absolute;
@@ -3964,6 +3988,8 @@ th.cell-rev-del {
 
 .pv-col {
   flex: none;
+  /* line-number numerals position against the column box (w:lnNumType) */
+  position: relative;
 }
 
 /* the clone is a gapless continuous flow (slices use virtual coordinates); canvas page gaps don't enter the clone */
@@ -5952,6 +5978,34 @@ body.docs-crop-active .doc-protected[data-doc-protected='image'] .doc-img-wrap {
 .margin-row label {
   flex: 1;
   margin-bottom: 4px;
+}
+
+/* Line numbers dialog: restart-mode radios stack, the auto-distance checkbox
+   lines up with its number field */
+.ln-modes {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ln-radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ln-radio input {
+  flex: none;
+}
+
+.ln-auto {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: end;
+}
+
+.ln-auto input {
+  flex: none;
 }
 
 .bookmark-list {

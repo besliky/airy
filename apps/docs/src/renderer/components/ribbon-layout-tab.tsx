@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react'
-import { type SectionSettings } from '@airy-office/docx-engine'
+import { type LineNumberSettings, type SectionSettings } from '@airy-office/docx-engine'
 import { WRAP_OPTIONS } from './ContextMenu'
 import { MarginDialog, cmFromTwips, marginsFitPage, type PageMargins } from './MarginDialog'
+import { LineNumbersDialog } from './LineNumbersDialog'
 import { useI18n, type StringKey } from '../i18n/locale'
 import {
   IconCaret,
   IconColumns,
+  IconLineNumbers,
   IconMargins,
   IconOrientation,
   IconPageBreak,
@@ -109,6 +111,7 @@ export function LayoutTab({
   const paraAttrs = activeParaAttrs(editor)
   const enabled = hasDoc && !!section
   const [marginDialog, setMarginDialog] = useState(false)
+  const [lnDialog, setLnDialog] = useState(false)
 
   const applyMargins = (m: PageMargins) => {
     if (!section || !marginsFitPage(m, section.pageWidth, section.pageHeight)) return
@@ -167,6 +170,16 @@ export function LayoutTab({
   }
 
   const applyInlinePosition = () => applyWrap(null)
+
+  /** Line numbers (sectPr w:lnNumType): undefined turns numbering off */
+  const applyLineNumbers = (ln: LineNumberSettings | undefined) => {
+    if (!section) return
+    const next = { ...section }
+    if (ln) next.lineNumbers = ln
+    else delete next.lineNumbers
+    onSection(next)
+    setDropdown(() => null)
+  }
 
   const setOrientation = (orientation: 'portrait' | 'landscape') => {
     if (!section || section.orientation === orientation) return
@@ -468,6 +481,62 @@ export function LayoutTab({
               </div>
             )}
           </div>
+          <div className="rb-split-wrap">
+            <button
+              className={`rb-big ${section?.lineNumbers ? 'active' : ''}`}
+              disabled={!enabled}
+              data-tip={t('ribbonLineNumbers')}
+              onClick={() => toggleDropdown(setDropdown, 'linenumbers')}
+            >
+              <span className="rb-big-icon">
+                <IconLineNumbers size={BIG} />
+                <IconCaret />
+              </span>
+              <span>{t('ribbonLineNumbers')}</span>
+            </button>
+            {dropdown === 'linenumbers' && section && (
+              <div data-rb-panel="" className="layout-menu">
+                <button
+                  className={!section.lineNumbers ? 'active' : ''}
+                  onClick={() => applyLineNumbers(undefined)}
+                >
+                  <b>{t('ribbonLineNumbersNone')}</b>
+                </button>
+                <button
+                  className={section.lineNumbers?.restart === 'continuous' ? 'active' : ''}
+                  onClick={() =>
+                    applyLineNumbers({ ...(section.lineNumbers ?? {}), restart: 'continuous' })
+                  }
+                >
+                  <b>{t('ribbonLineNumbersContinuous')}</b>
+                </button>
+                <button
+                  className={section.lineNumbers?.restart === 'newPage' ? 'active' : ''}
+                  onClick={() =>
+                    applyLineNumbers({ ...(section.lineNumbers ?? {}), restart: 'newPage' })
+                  }
+                >
+                  <b>{t('ribbonLineNumbersRestartPage')}</b>
+                </button>
+                <button
+                  className={section.lineNumbers?.restart === 'newSection' ? 'active' : ''}
+                  onClick={() =>
+                    applyLineNumbers({ ...(section.lineNumbers ?? {}), restart: 'newSection' })
+                  }
+                >
+                  <b>{t('ribbonLineNumbersRestartSection')}</b>
+                </button>
+                <button
+                  onClick={() => {
+                    setDropdown(() => null)
+                    setLnDialog(true)
+                  }}
+                >
+                  <b>{t('ribbonLineNumbersOptions')}</b>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         <div className="ribbon-group-label">
           {activeSection !== null
@@ -583,6 +652,14 @@ export function LayoutTab({
             localStorage.setItem(LAST_CUSTOM_MARGINS_KEY, JSON.stringify(m))
           }}
           onClose={() => setMarginDialog(false)}
+        />
+      )}
+
+      {lnDialog && section && (
+        <LineNumbersDialog
+          value={section.lineNumbers}
+          onApply={applyLineNumbers}
+          onClose={() => setLnDialog(false)}
         />
       )}
     </>

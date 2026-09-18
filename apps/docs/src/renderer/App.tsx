@@ -120,6 +120,7 @@ import {
   pageBorderStyleOf,
   type PageGapSpec,
 } from './editor/pagination-gaps'
+import { syncLineNumberOverlays } from './line-numbers'
 import { setColumnLayout } from './editor/column-layout'
 import {
   MARKUP_AREA_W,
@@ -3492,6 +3493,18 @@ export function App() {
           const borderStyle = pbSec ? pageBorderStyleOf(pbSec) : null
           syncPageBorders((pm.closest('.page-wrap') as HTMLElement) ?? pm, borderStyle, factor)
         }
+        // line numbers (w:lnNumType): margin numerals at each line's position;
+        // after setPageGaps so the sampled line rects are final (print view
+        // only — the web canvas is one continuous flow without page fields)
+        syncLineNumberOverlays(
+          (pm.closest('.page-wrap') as HTMLElement) ?? pm,
+          blocks,
+          slices,
+          viewMode === 'print' && !readMode
+            ? (secList ?? (section ? [{ settings: section }] : []))
+            : [],
+          factor,
+        )
         syncMarginAnnotations(
           (pm.closest('.page-wrap') as HTMLElement) ?? pm,
           pm,
@@ -5241,6 +5254,7 @@ export function App() {
             if (wrap) {
               syncCutOverlays(wrap as HTMLElement, [], 1)
               syncPageBorders(wrap as HTMLElement, null, 1)
+              syncLineNumberOverlays(wrap as HTMLElement, [], [], [], 1)
               clearMarginAnnotations(wrap as HTMLElement)
               clearFloatShifts(wrap as HTMLElement)
             }

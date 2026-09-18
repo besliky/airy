@@ -549,6 +549,25 @@ export function IconPageNumber(props: IconProps) {
   )
 }
 
+/** Word's Layout → Line Numbers: margin numerals beside body lines */
+export function IconLineNumbers(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="4.15" y="3" width="7.7" height="10.01" rx="0.62" />
+      <TextGlyph x={4.7} y={6.7} s={2.6}>
+        1
+      </TextGlyph>
+      <TextGlyph x={4.7} y={9.5} s={2.6}>
+        2
+      </TextGlyph>
+      <TextGlyph x={4.7} y={12.3} s={2.6}>
+        3
+      </TextGlyph>
+      <path d="M 6.9 6 h 3.9 M 6.9 8.8 h 3.9 M 6.9 11.6 h 3.9" strokeWidth="1" opacity="0.9" />
+    </Svg>
+  )
+}
+
 export function IconSymbol(props: IconProps) {
   return (
     <Svg {...props}>

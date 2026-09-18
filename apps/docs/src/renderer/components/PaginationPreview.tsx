@@ -30,6 +30,7 @@ import {
   sectionGeoms,
   sectionPageBox,
   sliceWithLineSplit,
+  createLineRectsCache,
   TABLE_SEAM_PX,
   type BlockBox,
   type BlockMetaOf,
@@ -39,6 +40,14 @@ import {
   type SectionHfHeights,
 } from '../pagination'
 import { cssFontFamily, hfHeaderGeom, FOOTNOTE_SEPARATOR_H } from '../line-metrics'
+import {
+  collectBlockLines,
+  computeLineNumberMarks,
+  lnTwipsToPx,
+  LN_AUTO_DISTANCE_PX,
+  type LnLine,
+  type LnMark,
+} from '../line-numbers'
 import type { EditorView } from '@tiptap/pm/view'
 import {
   anchorPointFor,
@@ -681,6 +690,8 @@ export function PaginationPreview({
   /** open comment threads' anchors (clone flow coordinates), in document order */
   const [commentSpots, setCommentSpots] = useState<CommentSpot[]>([])
   const [revSpots, setRevSpots] = useState<RevSpot[]>([])
+  /** line numbers (w:lnNumType) per page, in the virtual flow coordinates of `slices` */
+  const [lnMarks, setLnMarks] = useState<LnMark[]>([])
 
   const canvasContentW = twipsToPx(section.pageWidth - section.marginLeft - section.marginRight)
   /** Settings of the page's section (single-section documents fall back to the canvas geometry) */
@@ -993,6 +1004,20 @@ export function PaginationPreview({
       applyLiftTops(computed, blocks)
       setSlices(computed)
       setPageNotes(pageFootnotesOf ? pageFootnotesOf(blocks, computed) : [])
+      // line numbers (w:lnNumType): sampled per block in the same neutralized
+      // geometry the slices were measured in (virtual coordinates)
+      {
+        const lnSecs = live.length > 0 ? live : [{ settings: section }]
+        let marks: LnMark[] = []
+        if (lnSecs.some((sec) => sec.settings.lineNumbers)) {
+          const rectsOf = createLineRectsCache()
+          const lines: LnLine[] = []
+          for (const b of blocks)
+            for (const ln of collectBlockLines(b, rectsOf, factor)) lines.push(ln)
+          marks = computeLineNumberMarks(lines, computed, lnSecs)
+        }
+        setLnMarks(marks)
+      }
       // comment anchors, measured in the same neutralized geometry as the blocks;
       // content-relative X: the pm element is the padded .doc-page, but the
       // preview clones strip that padding and sit inside the sheet's own
@@ -1210,6 +1235,10 @@ export function PaginationPreview({
           )
           // page border (w:pgBorders): drawn per sheet; w:display counts pages within the section
           const pageBorder = pageBorderStyleOf(s)
+          // line numbers (sectPr w:lnNumType): numeral gap from the text edge
+          const lnOf = s.lineNumbers
+          const lnDist =
+            lnOf?.distance !== undefined ? lnTwipsToPx(lnOf.distance) : LN_AUTO_DISTANCE_PX
           const firstOfSection = i === 0 || slices[i - 1].section !== slice.section
           const drawPageBorder =
             pageBorder &&
@@ -1404,6 +1433,23 @@ export function PaginationPreview({
                                   : { marginRight: gapAfter(ci) }),
                               }}
                             >
+                              {rSec?.settings.lineNumbers &&
+                                lnMarks
+                                  .filter((m) => m.page === i && m.region === ri && m.col === ci)
+                                  .map((m, k) => (
+                                    // Word numbers each column, continuing the
+                                    // count from the previous column
+                                    <div
+                                      key={`ln${k}`}
+                                      className="pv-linenum pv-linenum-col"
+                                      style={{
+                                        top: m.y,
+                                        ...(rtl ? { left: lnDist } : { right: lnDist }),
+                                      }}
+                                    >
+                                      {m.label}
+                                    </div>
+                                  ))}
                               {col.repeatHeader && (
                                 <div
                                   className="pv-clip"
@@ -1519,6 +1565,27 @@ export function PaginationPreview({
                     </div>
                   </div>
                 )}
+                {lnOf &&
+                  !slice.regions &&
+                  lnMarks
+                    .filter((m) => m.page === i && m.region === undefined)
+                    .map((m, k) => (
+                      // line numbers (w:lnNumType): margin numerals like Word —
+                      // right-aligned to the text edge minus the distance; the
+                      // bidi mirror puts them at the right margin
+                      <div
+                        key={`ln${k}`}
+                        className="pv-linenum"
+                        style={{
+                          top: mTop + vOffset + m.y,
+                          ...(s.bidi
+                            ? { left: pageW - twipsToPx(s.marginRight) + lnDist }
+                            : { right: pageW - twipsToPx(s.marginLeft) + lnDist }),
+                        }}
+                      >
+                        {m.label}
+                      </div>
+                    ))}
                 {(pageNotes[i]?.length ?? 0) > 0 && (
                   // page-bottom footnotes (Word behavior: placed at the bottom of the page's content area, separator on top)
                   <div

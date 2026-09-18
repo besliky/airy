@@ -575,6 +575,30 @@ export function pageBorderStyleOf(section: PageBorderSection): PageBorderStyle |
 }
 
 /**
+ * Per-page paper bounds on the canvas (unzoomed wrap coordinates): flat pairs
+ * [top0, bottom0, top1, …] spanning between the gap decorations (gap = prev
+ * bottom margin + band + next top margin; zero-height cut markers are
+ * boundaries too). Page 0 starts at the wrap top; the last page runs to the
+ * wrap height.
+ */
+export function canvasPageBounds(wrap: HTMLElement, zoomFactor: number): number[] {
+  const wr = wrap.getBoundingClientRect()
+  const gaps = Array.from(wrap.querySelectorAll('.page-gap, .page-gap-cut'))
+    .map((g) => {
+      const r = g.getBoundingClientRect()
+      const cs = getComputedStyle(g)
+      const mb = parseFloat(cs.getPropertyValue('--gap-mb')) || 0
+      const mt = parseFloat(cs.getPropertyValue('--gap-mt')) || 0
+      return { top: (r.top - wr.top) / zoomFactor, height: r.height / zoomFactor, mb, mt }
+    })
+    .sort((a, b) => a.top - b.top)
+  const bounds = [0]
+  for (const g of gaps) bounds.push(g.top + g.mb, g.top + g.height - g.mt)
+  bounds.push(wr.height / zoomFactor)
+  return bounds
+}
+
+/**
  * Page borders (w:pgBorders) as absolute per-page overlays on the page wrap.
  * The continuous canvas can't carry a real border per page, and w:display
  * needs pages skipped; page rects come from the gap widgets, like the
@@ -596,21 +620,7 @@ export function syncPageBorders(
     wrap.appendChild(layer)
   }
   layer.textContent = ''
-  const wr = wrap.getBoundingClientRect()
-  // page bounds: spans between gap decorations (gap = prev bottom margin +
-  // band + next top margin; zero-height cut markers are boundaries too)
-  const gaps = Array.from(wrap.querySelectorAll('.page-gap, .page-gap-cut'))
-    .map((g) => {
-      const r = g.getBoundingClientRect()
-      const cs = getComputedStyle(g)
-      const mb = parseFloat(cs.getPropertyValue('--gap-mb')) || 0
-      const mt = parseFloat(cs.getPropertyValue('--gap-mt')) || 0
-      return { top: (r.top - wr.top) / zoomFactor, height: r.height / zoomFactor, mb, mt }
-    })
-    .sort((a, b) => a.top - b.top)
-  const bounds = [0]
-  for (const g of gaps) bounds.push(g.top + g.mb, g.top + g.height - g.mt)
-  bounds.push(wr.height / zoomFactor)
+  const bounds = canvasPageBounds(wrap, zoomFactor)
   const { sides } = style
   for (let i = 0, page = 0; i + 1 < bounds.length; i += 2) {
     const [top, bottom] = [bounds[i], bounds[i + 1]]
