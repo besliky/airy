@@ -272,7 +272,9 @@ text (`blocks`/`range` select lines). `insert_content` splices the fragment
 **verbatim** (no reparse or rewrite — exactly what you send lands on disk,
 modulo the file's EOL style) after the first line containing `marker` (e.g.
 `</body>` to append rendered content) or after line `at` (`-1` = start;
-default: end). `apply_ops` runs line ops instead of block ops:
+default: end). `afterHeading` is a markdown-session option — passing it to an
+html session is an explicit error (html has no heading addressing; position
+via `marker` or `at`). `apply_ops` runs line ops instead of block ops:
 `insertLines after text`, `replaceLines from to text` (empty text deletes
 the range), `deleteLines from to`, and `findReplace find replace matchCase?
 from? to?` (line-scoped, optional inclusive line window). Line indexes are

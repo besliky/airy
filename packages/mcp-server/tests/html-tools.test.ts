@@ -351,6 +351,15 @@ describe('html tools over MCP', () => {
       const badAt = await call(client, 'insert_content', { handle, html: '<p>x</p>', at: 99 })
       expect(badAt.isError).toBe(true)
       expect(text(badAt)).toContain('out of range')
+      // afterHeading is markdown-only: the html branch must reject it instead
+      // of silently ignoring the position
+      const mdOnly = await call(client, 'insert_content', {
+        handle,
+        html: '<p>x</p>',
+        afterHeading: 1,
+      })
+      expect(mdOnly.isError).toBe(true)
+      expect(text(mdOnly)).toContain('afterHeading is a markdown-session option')
     } finally {
       await close()
     }

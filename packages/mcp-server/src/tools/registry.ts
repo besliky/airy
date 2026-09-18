@@ -381,8 +381,9 @@ export function registerTools(server: McpServer): void {
         'sessions take the fragment VERBATIM (no reparse or rewrite — exactly these bytes land ' +
         "on disk, modulo the file's EOL style) at one of two positions: after the first line " +
         'containing `marker` (e.g. "</body>" to append rendered content), or after line `at` ' +
-        '(-1 = document start; default: end of document; marker > at). Insertion happens in ' +
-        'memory; persist with save_document.',
+        '(-1 = document start; default: end of document; marker > at). Passing afterHeading to ' +
+        'an html session is an explicit error — it is a markdown-session option. Insertion ' +
+        'happens in memory; persist with save_document.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
         html: z
@@ -450,6 +451,12 @@ export function registerTools(server: McpServer): void {
         )
       }
       if (session instanceof HtmlSession) {
+        if (afterHeading !== undefined) {
+          throw new Error(
+            'afterHeading is a markdown-session option; html sessions position inserts ' +
+              'via marker or at.',
+          )
+        }
         const result = session.insertContent(html ?? '', {
           ...(at !== undefined ? { at } : {}),
           ...(marker !== undefined ? { marker } : {}),
