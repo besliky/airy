@@ -97,4 +97,17 @@ describe('collectArrayFollowers', () => {
     )
     expect([...followers]).toEqual(['4:0'])
   })
+
+  it('keeps unrelated columns a column move shuffled between the survivors out', () => {
+    const followers = new Set<string>()
+    // The column move splits the extent: file columns 0-1 land on screen
+    // columns 0 and 4, with unrelated file columns 2-4 at screen 1-3. Only
+    // screen column 4 is a real follower; the master (screen 0) is excluded.
+    collectArrayFollowers(
+      followers,
+      [{ row: 0, column: 0, value: 7, formula: '=TRANSPOSE(A2:A3)', arrayRef: 'A1:B1' }],
+      [{ kind: 'move-cols', index: 2, count: 3, before: 1 }],
+    )
+    expect([...followers]).toEqual(['0:4'])
+  })
 })

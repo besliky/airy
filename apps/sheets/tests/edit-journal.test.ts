@@ -1180,6 +1180,71 @@ describe('recordStructuralOp move-rows', () => {
   })
 })
 
+describe('recordStructuralOp move-cols', () => {
+  it('remaps journaled cells through the column swap and cancels the inverse move', () => {
+    const journal = createEditJournal()
+    recordSetRangeValues(journal, 'sheet-1', { 0: { 1: { v: 'moved' }, 3: { v: 'displaced' } } })
+    recordStructuralOp(journal, 'sheet-1', { kind: 'move-cols', index: 1, count: 1, before: 5 })
+    const cells = journal.cells.get('sheet-1')
+    expect(cells?.get('0:4')?.value).toBe('moved')
+    expect(cells?.get('0:2')?.value).toBe('displaced')
+
+    // Undo arrives as the exact inverse move and cancels the pair.
+    recordStructuralOp(journal, 'sheet-1', { kind: 'move-cols', index: 4, count: 1, before: 1 })
+    expect(journal.structuralOps.get('sheet-1')).toBeUndefined()
+    const restored = journal.cells.get('sheet-1')
+    expect(restored?.get('0:1')?.value).toBe('moved')
+    expect(restored?.get('0:3')?.value).toBe('displaced')
+  })
+
+  it('shifts session-chart anchors and refs through a column swap', () => {
+    const journal = createEditJournal()
+    const anchor = {
+      fromRow: 10,
+      fromColumn: 3,
+      fromRowOffset: 5,
+      fromColumnOffset: 5,
+      toRow: 20,
+      toColumn: 4,
+      toRowOffset: 5,
+      toColumnOffset: 5,
+    }
+    recordVisualAdd(journal, {
+      id: 'added-1',
+      sheetId: 'sheet-1',
+      kind: 'chart',
+      anchor,
+      chart: {
+        chartTypes: ['barChart'],
+        title: 'T',
+        series: [
+          {
+            name: 'S',
+            categories: ['a', 'b'],
+            values: [1, 2],
+            valuesRef: "'Data'!$B$3:$B$4",
+            categoriesRef: "'Data'!$D$3:$D$4",
+          },
+        ],
+      },
+    })
+    // Columns 1-2 swap with 3-4: the anchor (cols 3-4) sits inside the second
+    // block and shifts left by two; the $B ref moves right, the $D ref left.
+    recordStructuralOp(
+      journal,
+      'sheet-1',
+      { kind: 'move-cols', index: 1, count: 2, before: 5 },
+      'Data',
+    )
+    const visual = journal.visualAdds[0]
+    expect(visual?.anchor.fromColumn).toBe(1)
+    expect(visual?.anchor.toColumn).toBe(2)
+    expect(visual?.anchor.fromRow).toBe(10)
+    expect(visual?.chart?.series[0]?.valuesRef).toBe("'Data'!$D$3:$D$4")
+    expect(visual?.chart?.series[0]?.categoriesRef).toBe("'Data'!$B$3:$B$4")
+  })
+})
+
 describe('workbook protection / theme / protected-range journaling', () => {
   it('workbook protection drops when toggled back to the original', () => {
     const journal = createEditJournal()
