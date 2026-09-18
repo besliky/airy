@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl } from './helpers'
+import { launchShell, closeAndSaveVideo, waitForPageWithUrl, waitForSheetsGrid } from './helpers'
 
 // the preload exposes window.__airyDebug only under this env var
 process.env.AIRY_DEBUG_HOOKS = '1'
@@ -53,10 +53,7 @@ test.describe('sheets: paste repeats into an anchor-shaped target', () => {
       await page.locator('.quick-card').nth(1).click()
 
       const sheets = await waitForPageWithUrl(app, 'sheets/out')
-      await sheets.waitForFunction(() => document.body.textContent?.includes('Sheet1'), null, {
-        timeout: 30_000,
-      })
-      await sheets.waitForTimeout(1_500)
+      await waitForSheetsGrid(sheets)
       await facade(sheets)
 
       const grid = await sheets.evaluate(() => {
@@ -77,6 +74,8 @@ test.describe('sheets: paste repeats into an anchor-shaped target', () => {
         sheet.getRange(0, 0, 1, 3).activate()
       })
       await sheets.keyboard.press('Control+c')
+      // the copy command writes the clipboard asynchronously and no DOM state
+      // mirrors it — a short settle is the cheapest reliable gap (≤300ms)
       await sheets.waitForTimeout(300)
 
       // paste into the 4×1 anchor selection A2:A5

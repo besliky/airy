@@ -51,6 +51,8 @@ async function settledPageCount(page: Page): Promise<number> {
     } else if (Date.now() - stableSince > 1_500) {
       return Number(cur.split(':')[0])
     }
+    // poll interval of the stability probe itself (not a settle sleep):
+    // resample until the layout has held still long enough
     await page.waitForTimeout(200)
   }
   throw new Error(`doc layout never settled (last: ${prev})`)

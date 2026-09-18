@@ -4,16 +4,19 @@ import { copyFile, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Page } from '@playwright/test'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl, screenshotPath } from './helpers'
+import {
+  launchShell,
+  closeAndSaveVideo,
+  waitForPageWithUrl,
+  screenshotPath,
+  waitForSheetsGrid,
+} from './helpers'
+
+// the preload exposes window.__airyDebug only under this env var; batch-2
+// polls the formula engine's computed error through Univer's Facade
+process.env.AIRY_DEBUG_HOOKS = '1'
 
 const FIXTURE = resolve(__dirname, '../apps/sheets/fixtures/generated/compatibility-basic.xlsx')
-
-async function waitForWorkbook(page: Page): Promise<void> {
-  await page.waitForFunction(() => document.body.textContent?.includes('Sheet1'), null, {
-    timeout: 30_000,
-  })
-  await page.waitForTimeout(1_500)
-}
 
 /** center of cell A1: right of the ~46px row header, below the ~24px column header */
 async function gridOrigin(page: Page): Promise<{ x: number; y: number }> {
@@ -45,7 +48,7 @@ test.describe('sheets: ribbon batch-1 features', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
       const status = sheets.locator('.workbook-status')
 
       // ── Formulas > Create from Selection: drag A1:B3, create names from top row ──
@@ -109,7 +112,7 @@ test.describe('sheets: ribbon batch-1 features', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(second.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
       await sheets.getByRole('tab', { name: 'View', exact: true }).click()
       const headingsBox = sheets
         .locator('button.check-item', { hasText: 'Headings' })
@@ -135,7 +138,7 @@ test.describe('sheets: ribbon batch-2 features', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
       const status = sheets.locator('.workbook-status')
       const origin = await gridOrigin(sheets)
       const cell = (column: number, row: number): { x: number; y: number } => ({
@@ -149,7 +152,27 @@ test.describe('sheets: ribbon batch-2 features', () => {
       await sheets.keyboard.press('Enter')
       await sheets.keyboard.type('=D3*2', { delay: 30 })
       await sheets.keyboard.press('Enter')
-      await sheets.waitForTimeout(500)
+      // Error Checking reads the formula result back from Univer — poll until
+      // the engine has actually computed the #DIV/0! error (the journal only
+      // stores the formula text with a null value)
+      await expect
+        .poll(() =>
+          sheets.evaluate(() => {
+            const debug = (window as unknown as Record<string, unknown>).__airyDebug as {
+              univerAPI: {
+                getActiveWorkbook(): {
+                  getActiveSheet(): {
+                    getRange(row: number, column: number): { getValue(): unknown }
+                  }
+                }
+              }
+            }
+            return JSON.stringify(
+              debug.univerAPI.getActiveWorkbook().getActiveSheet().getRange(0, 3).getValue(),
+            )
+          }),
+        )
+        .toContain('DIV/0')
 
       // ── Formulas > Error Checking finds and selects D1 ──
       await sheets.getByRole('tab', { name: 'Formulas' }).click()
@@ -215,7 +238,7 @@ test.describe('sheets: ribbon batch-3 features', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
       const status = sheets.locator('.workbook-status')
       const origin = await gridOrigin(sheets)
 

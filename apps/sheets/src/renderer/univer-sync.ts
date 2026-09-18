@@ -3885,6 +3885,10 @@ export function installWrapMeasureLifecycle(runtime: UniverRuntime): { dispose()
     const { stage } = params as { stage: LifecycleStages }
     if (stage < LifecycleStages.Rendered || wrapMeasureGate.ready) return
     wrapMeasureGate.ready = true
+    // Surface signal for e2e drivers: Rendered is the stage where the input
+    // handlers exist and the first paint is done, so the flag lets tests wait
+    // for real grid interactivity instead of a fixed post-launch sleep.
+    document.documentElement.setAttribute('data-univer-rendered', 'true')
     // Let the other lifecycle subscribers (the plugin hooks that create
     // AutoHeightController) run before the queued measures.
     setTimeout(() => {

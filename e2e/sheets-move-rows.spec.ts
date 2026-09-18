@@ -4,15 +4,50 @@ import { copyFile, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Page } from '@playwright/test'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl, screenshotPath } from './helpers'
+import {
+  launchShell,
+  closeAndSaveVideo,
+  waitForPageWithUrl,
+  screenshotPath,
+  waitForSheetsGrid,
+} from './helpers'
+
+// the preload exposes window.__airyDebug only under this env var; the spec
+// reads row order and workbook identity through Univer's Facade
+process.env.AIRY_DEBUG_HOOKS = '1'
 
 const FIXTURE = resolve(__dirname, '../apps/sheets/fixtures/generated/compatibility-basic.xlsx')
 
-async function waitForWorkbook(page: Page): Promise<void> {
-  await page.waitForFunction(() => document.body.textContent?.includes('Sheet1'), null, {
-    timeout: 30_000,
+/** column A values in order — the ground truth for move/undo verification */
+function columnA(sheets: Page): Promise<unknown[][]> {
+  return sheets.evaluate(() => {
+    const debug = (window as unknown as Record<string, unknown>).__airyDebug as {
+      univerAPI: {
+        getActiveWorkbook(): {
+          getActiveSheet(): {
+            getRange(
+              row: number,
+              column: number,
+              rows: number,
+              columns: number,
+            ): { getValues(): unknown[][] }
+          }
+        }
+      }
+    }
+    return debug.univerAPI.getActiveWorkbook().getActiveSheet().getRange(0, 0, 4, 1).getValues()
   })
-  await page.waitForTimeout(3_000)
+}
+
+/** Univer unit id — deterministic `file-<sha>`, so it changes when a save
+ * reopens the session over the newly written file */
+function workbookId(sheets: Page): Promise<string> {
+  return sheets.evaluate(() => {
+    const debug = (window as unknown as Record<string, unknown>).__airyDebug as {
+      univerAPI: { getActiveWorkbook(): { getId(): string } }
+    }
+    return debug.univerAPI.getActiveWorkbook().getId()
+  })
 }
 
 async function gridOrigin(page: Page): Promise<{ x: number; y: number }> {
@@ -48,7 +83,7 @@ test.describe('sheets: whole-row move', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
       const origin = await gridOrigin(sheets)
 
       for (const [rowIndex, value] of ['one', 'two', 'three', 'four'].entries()) {
@@ -61,6 +96,9 @@ test.describe('sheets: whole-row move', () => {
       const dragRowDown = async () => {
         const header2 = rowHeaderPoint(origin, 1)
         await sheets.mouse.click(header2.x, header2.y)
+        // let the header click commit its row selection before the drag
+        // starts (a too-fast drag pairs into the click); no DOM signal
+        // exists for a canvas selection commit — small settle ≤300ms
         await sheets.waitForTimeout(300)
         await sheets.mouse.move(header2.x, header2.y)
         await sheets.mouse.down()
@@ -68,7 +106,9 @@ test.describe('sheets: whole-row move', () => {
         await sheets.mouse.move(header2.x, header2.y + 12, { steps: 4 })
         await sheets.mouse.move(target.x, target.y + 8, { steps: 12 })
         await sheets.mouse.up()
-        await sheets.waitForTimeout(800)
+        // the move command lands asynchronously — poll the model until the
+        // rows actually changed before acting on the new order
+        await expect.poll(() => columnA(sheets)).toEqual([['one'], ['three'], ['four'], ['two']])
       }
       const savedOrder = async (expected: readonly string[]) => {
         await launched.app.evaluate(({ webContents }) => {
@@ -91,12 +131,18 @@ test.describe('sheets: whole-row move', () => {
       const cell = cellPoint(origin, 0, 2)
       await sheets.mouse.click(cell.x, cell.y)
       await sheets.keyboard.press('ControlOrMeta+z')
-      await sheets.waitForTimeout(800)
+      // undo applies asynchronously too — wait for the original order to be
+      // back before the save snapshots the journal
+      await expect.poll(() => columnA(sheets)).toEqual([['one'], ['two'], ['three'], ['four']])
       await sheets.screenshot({ path: screenshotPath('move-rows-after-undo') })
+      const idBeforeSave = await workbookId(sheets)
       await savedOrder(['one', 'two', 'three', 'four'])
 
-      // Saving reopens the session; move again and save the new order.
-      await waitForWorkbook(sheets)
+      // Saving reopens the session; move again and save the new order. The
+      // reopen swaps the Univer unit (`file-<sha>` of the new content) —
+      // poll for the id change so the second drag hits the reopened grid,
+      // not the teardown of the old one.
+      await expect.poll(() => workbookId(sheets), { timeout: 30_000 }).not.toBe(idBeforeSave)
       await dragRowDown()
       await savedOrder(['one', 'three', 'four', 'two'])
     } finally {

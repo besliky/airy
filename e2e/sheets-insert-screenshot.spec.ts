@@ -3,17 +3,15 @@ import { execSync } from 'node:child_process'
 import { copyFile, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import type { Page } from '@playwright/test'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl, screenshotPath } from './helpers'
+import {
+  launchShell,
+  closeAndSaveVideo,
+  waitForPageWithUrl,
+  screenshotPath,
+  waitForSheetsGrid,
+} from './helpers'
 
 const FIXTURE = resolve(__dirname, '../apps/sheets/fixtures/generated/compatibility-basic.xlsx')
-
-async function waitForWorkbook(page: Page): Promise<void> {
-  await page.waitForFunction(() => document.body.textContent?.includes('Sheet1'), null, {
-    timeout: 30_000,
-  })
-  await page.waitForTimeout(1_500)
-}
 
 test.describe('sheets: Insert → Screenshot', () => {
   test('captures a screen source and saves it into the workbook', async () => {
@@ -28,7 +26,7 @@ test.describe('sheets: Insert → Screenshot', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
 
       // Always stub the OS capturer in the main process: real capture is
       // host-dependent (macOS gates it behind the Screen Recording

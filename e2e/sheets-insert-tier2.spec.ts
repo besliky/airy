@@ -4,16 +4,19 @@ import { copyFile, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Page } from '@playwright/test'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl, screenshotPath } from './helpers'
+import {
+  launchShell,
+  closeAndSaveVideo,
+  waitForPageWithUrl,
+  screenshotPath,
+  waitForSheetsGrid,
+} from './helpers'
+
+// the preload exposes window.__airyDebug only under this env var; the spec
+// reads the pivot output cell through Univer's Facade
+process.env.AIRY_DEBUG_HOOKS = '1'
 
 const FIXTURE = resolve(__dirname, '../apps/sheets/fixtures/generated/compatibility-basic.xlsx')
-
-async function waitForWorkbook(page: Page): Promise<void> {
-  await page.waitForFunction(() => document.body.textContent?.includes('Sheet1'), null, {
-    timeout: 30_000,
-  })
-  await page.waitForTimeout(1_500)
-}
 
 function saveWorkbook(app: Awaited<ReturnType<typeof launchShell>>['app']): Promise<void> {
   return app.evaluate(({ webContents }) => {
@@ -53,7 +56,7 @@ test.describe('sheets: Insert → Equation and Checkbox', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
 
       await sheets.getByRole('tab', { name: 'Insert', exact: true }).click()
       await sheets.getByRole('button', { name: 'Equation' }).click()
@@ -95,7 +98,7 @@ test.describe('sheets: Insert → Equation and Checkbox', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
 
       await sheets.getByRole('tab', { name: 'Insert', exact: true }).click()
       // DV edits are gated until the sheet's own file rules are installed
@@ -127,7 +130,7 @@ test.describe('sheets: Insert → Timeline', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
       // Full-load mode arrives within a few seconds on this tiny fixture;
       // typing the source table below takes longer than that.
       const origin = await gridOrigin(sheets)
@@ -163,14 +166,31 @@ test.describe('sheets: Insert → Timeline', () => {
       await sheets.screenshot({ path: screenshotPath('timeline-pivot-dialog') })
       await pivotDialog.getByRole('button', { name: 'Create' }).click()
       await expect(pivotDialog).not.toBeVisible({ timeout: 15_000 })
-      await sheets.waitForTimeout(1_500)
+      // the pivot writes its output grid asynchronously — poll the model
+      // until the output's top-left header cell (E1) really holds a value
+      await expect
+        .poll(() =>
+          sheets.evaluate(() => {
+            const debug = (window as unknown as Record<string, unknown>).__airyDebug as {
+              univerAPI: {
+                getActiveWorkbook(): {
+                  getActiveSheet(): {
+                    getRange(row: number, column: number): { getValue(): unknown }
+                  }
+                }
+              }
+            }
+            return debug.univerAPI.getActiveWorkbook().getActiveSheet().getRange(0, 4).getValue()
+          }),
+        )
+        .toBeTruthy()
       await sheets.screenshot({ path: screenshotPath('timeline-pivot-created') })
 
       // A freshly created pivot lives only in the edit journal; slicers and
       // timelines bind to file-loaded pivots, and saving reopens the session
       // over the newly written definition.
       await saveWorkbook(launched.app)
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
 
       // Put the cursor inside the pivot output (top-left header cell at E1);
       // retry while the reopened session streams the pivot definition in.

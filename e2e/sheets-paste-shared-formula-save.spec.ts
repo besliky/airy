@@ -3,7 +3,7 @@ import { execSync } from 'node:child_process'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl } from './helpers'
+import { launchShell, closeAndSaveVideo, waitForPageWithUrl, waitForSheetsGrid } from './helpers'
 
 // the preload exposes window.__airyDebug only under this env var
 process.env.AIRY_DEBUG_HOOKS = '1'
@@ -32,10 +32,7 @@ test.describe('sheets: tiled paste of formulas survives save', () => {
       await page.locator('.quick-card').nth(1).click()
 
       const sheets = await waitForPageWithUrl(app, 'sheets/out')
-      await sheets.waitForFunction(() => document.body.textContent?.includes('Sheet1'), null, {
-        timeout: 30_000,
-      })
-      await sheets.waitForTimeout(1_500)
+      await waitForSheetsGrid(sheets)
 
       const grid = await sheets.evaluate(() => {
         for (const canvas of document.querySelectorAll('canvas')) {
@@ -68,6 +65,8 @@ test.describe('sheets: tiled paste of formulas survives save', () => {
         sheet.getRange(0, 0, 1, 3).activate()
       })
       await sheets.keyboard.press('Control+c')
+      // the copy command writes the clipboard asynchronously and no DOM state
+      // mirrors it — a short settle is the cheapest reliable gap (≤300ms)
       await sheets.waitForTimeout(300)
 
       // tile-paste into A2:C3 — row 3's formula cell becomes an si follower
@@ -89,7 +88,33 @@ test.describe('sheets: tiled paste of formulas survives save', () => {
         debug.univerAPI.getActiveWorkbook().getActiveSheet().getRange(1, 0, 2, 3).activate()
       })
       await sheets.keyboard.press('Control+v')
-      await sheets.waitForTimeout(800)
+      // the paste lands in the edit journal asynchronously: poll the model
+      // until both repetitions hold their values before saving
+      await expect
+        .poll(() =>
+          sheets.evaluate(() => {
+            const debug = (window as unknown as Record<string, unknown>).__airyDebug as {
+              univerAPI: {
+                getActiveWorkbook(): {
+                  getActiveSheet(): {
+                    getRange(
+                      row: number,
+                      column: number,
+                      rows: number,
+                      columns: number,
+                    ): { getValues(): unknown[][] }
+                  }
+                }
+              }
+            }
+            return debug.univerAPI
+              .getActiveWorkbook()
+              .getActiveSheet()
+              .getRange(1, 0, 2, 1)
+              .getValues()
+          }),
+        )
+        .toEqual([[10], [10]])
 
       // The quick-created workbook is untitled-staged (4eb93d5): its first
       // plain Save opens the Save dialog anchored in the default save dir —

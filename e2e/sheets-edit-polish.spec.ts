@@ -3,17 +3,15 @@ import { execSync } from 'node:child_process'
 import { copyFile, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import type { Page } from '@playwright/test'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl, screenshotPath } from './helpers'
+import {
+  launchShell,
+  closeAndSaveVideo,
+  waitForPageWithUrl,
+  screenshotPath,
+  waitForSheetsGrid,
+} from './helpers'
 
 const FIXTURE = resolve(__dirname, '../apps/sheets/fixtures/generated/compatibility-basic.xlsx')
-
-async function waitForWorkbook(page: Page): Promise<void> {
-  await page.waitForFunction(() => document.body.textContent?.includes('Sheet1'), null, {
-    timeout: 30_000,
-  })
-  await page.waitForTimeout(1_500)
-}
 
 test.describe('sheets: manual visual inserts are undoable', () => {
   test('undo removes an icon inserted from the ribbon', async () => {
@@ -28,7 +26,7 @@ test.describe('sheets: manual visual inserts are undoable', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
 
       await sheets.getByRole('tab', { name: 'Insert', exact: true }).click()
       await sheets.getByRole('button', { name: 'Icons' }).click()
@@ -73,12 +71,16 @@ test.describe('sheets: freeze journal follows undo', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
 
       await sheets.getByRole('tab', { name: 'View', exact: true }).click()
       await sheets.getByRole('button', { name: 'Freeze Panes' }).click()
       await sheets.getByRole('option', { name: 'Freeze Top Row' }).click()
-      await sheets.waitForTimeout(500)
+      // the QAT undo button greys out reactively with Univer's undo-stack
+      // occupancy (undoRedoStatus$ in App.tsx): enabled = the freeze command
+      // really landed, so the undo below cannot race past it
+      const qatUndo = sheets.locator('button.qa-btn[aria-label="Undo"]')
+      await expect(qatUndo).toBeEnabled()
       // Focus the grid so ⌘Z reaches Univer, then undo the freeze.
       const grid = await sheets.evaluate(() => {
         for (const canvas of document.querySelectorAll('canvas')) {
@@ -90,7 +92,9 @@ test.describe('sheets: freeze journal follows undo', () => {
       if (!grid) throw new Error('worksheet canvas not found')
       await sheets.mouse.click(grid.x + 46 + 43, grid.y + 24 + 11 + 46)
       await sheets.keyboard.press('ControlOrMeta+z')
-      await sheets.waitForTimeout(500)
+      // disabled = the undo drained the stack, so the marker edit below
+      // starts from the un-frozen state instead of racing the undo
+      await expect(qatUndo).toBeDisabled()
       // A cell edit keeps the workbook dirty so the save rewrites the sheet.
       await sheets.keyboard.type('marker', { delay: 30 })
       await sheets.keyboard.press('Enter')
@@ -125,7 +129,7 @@ test.describe('sheets: Data → From Text/CSV', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
 
       await sheets.getByRole('tab', { name: 'Data', exact: true }).click()
       const chooser = sheets.waitForEvent('filechooser')
@@ -161,7 +165,7 @@ test.describe('sheets: comment navigation', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(launched.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
 
       await sheets.getByRole('tab', { name: 'Review', exact: true }).click()
       await sheets.getByRole('button', { name: 'Previous' }).click()

@@ -4,21 +4,18 @@ import { copyFile, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Page } from '@playwright/test'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl, screenshotPath } from './helpers'
+import {
+  launchShell,
+  closeAndSaveVideo,
+  waitForPageWithUrl,
+  screenshotPath,
+  waitForSheetsGrid,
+} from './helpers'
 
 const FIXTURE = resolve(__dirname, '../apps/sheets/fixtures/generated/compatibility-basic.xlsx')
 
 /** cell values live on canvas, so reading them back goes through the system clipboard */
 const canReadClipboard = process.platform === 'darwin'
-
-async function waitForWorkbook(page: Page): Promise<void> {
-  // the sheet tab strip is DOM; the fixture's only sheet is "Sheet1"
-  await page.waitForFunction(() => document.body.textContent?.includes('Sheet1'), null, {
-    timeout: 30_000,
-  })
-  // let the first viewport range stream in before dispatching mouse events
-  await page.waitForTimeout(1_500)
-}
 
 /** center of cell A1: right of the ~46px row header, below the ~24px column header */
 async function cellA1(page: Page): Promise<{ x: number; y: number }> {
@@ -33,9 +30,14 @@ async function cellA1(page: Page): Promise<{ x: number; y: number }> {
   return { x: grid.x + 46 + 43, y: grid.y + 24 + 12 }
 }
 
-async function copyActiveCell(page: Page): Promise<string> {
+async function copyActiveCell(
+  app: import('@playwright/test').ElectronApplication,
+  page: Page,
+): Promise<string> {
   await page.keyboard.press('Meta+c')
-  await page.waitForTimeout(500)
+  // the copy command writes the clipboard asynchronously — poll it through
+  // the main process so pbpaste never reads a stale pasteboard
+  await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toContain('Hello')
   return execSync('pbpaste').toString()
 }
 
@@ -57,7 +59,7 @@ test.describe('sheets: edit and save an external workbook', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(first.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
 
       const a1 = await cellA1(sheets)
       await sheets.mouse.click(a1.x, a1.y)
@@ -68,7 +70,7 @@ test.describe('sheets: edit and save an external workbook', () => {
 
       if (canReadClipboard) {
         await sheets.mouse.click(a1.x, a1.y)
-        expect(await copyActiveCell(sheets)).toBe('Hello')
+        expect(await copyActiveCell(first.app, sheets)).toBe('Hello')
       }
       await sheets.screenshot({ path: screenshotPath('sheets-edited') })
 
@@ -94,13 +96,13 @@ test.describe('sheets: edit and save an external workbook', () => {
     })
     try {
       const sheets = await waitForPageWithUrl(second.app, 'sheets/out')
-      await waitForWorkbook(sheets)
+      await waitForSheetsGrid(sheets)
 
       const a1 = await cellA1(sheets)
       await sheets.mouse.click(a1.x, a1.y)
       await expect(sheets.locator('.name-box')).toHaveValue('A1')
       if (canReadClipboard) {
-        expect(await copyActiveCell(sheets)).toBe('Hello')
+        expect(await copyActiveCell(second.app, sheets)).toBe('Hello')
       }
       await sheets.screenshot({ path: screenshotPath('sheets-reopened') })
     } finally {

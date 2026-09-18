@@ -4,7 +4,13 @@ import { copyFile, mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { ElectronApplication, Page } from '@playwright/test'
-import { launchShell, closeAndSaveVideo, waitForPageWithUrl } from './helpers'
+import {
+  launchShell,
+  closeAndSaveVideo,
+  waitForPageWithUrl,
+  waitForPaintSettled,
+  waitForSheetsGrid,
+} from './helpers'
 
 /**
  * README showcase screenshots. Regenerate the committed PNGs with:
@@ -63,7 +69,7 @@ test.describe('README screenshots', () => {
     try {
       await fixViewport(home.app)
       await home.page.waitForSelector('.home', { timeout: 30_000 })
-      await home.page.waitForTimeout(1_000)
+      await waitForPaintSettled(home.page)
       await capture(home.page, 'home', outDir)
     } finally {
       await closeAndSaveVideo(home, 'shots-home')
@@ -81,8 +87,8 @@ test.describe('README screenshots', () => {
       await fixViewport(docs.app)
       const editor = await waitForPageWithUrl(docs.app, 'docs/out')
       await editor.locator('.doc-page').first().waitFor({ timeout: 30_000 })
-      await editor.evaluate(() => document.fonts.ready.then(() => undefined))
-      await editor.waitForTimeout(800)
+      // capture only after font-driven reflow/repaint has settled
+      await waitForPaintSettled(editor)
       await capture(editor, 'docs', outDir)
     } finally {
       await closeAndSaveVideo(docs, 'shots-docs')
@@ -102,15 +108,10 @@ test.describe('README screenshots', () => {
     try {
       await fixViewport(sheets.app)
       const editor = await waitForPageWithUrl(sheets.app, 'sheets/out')
-      // the fixture's first sheet is "Data": wait until its tab strip names it
-      await editor.waitForFunction(
-        () =>
-          document.querySelectorAll('canvas').length > 0 &&
-          (document.body.textContent ?? '').includes('Data'),
-        null,
-        { timeout: 30_000 },
-      )
-      await editor.waitForTimeout(1_500)
+      // the fixture's first sheet is "Data": wait until the grid is live and
+      // the first paint (with loaded fonts) has settled before capturing
+      await waitForSheetsGrid(editor, 'Data')
+      await waitForPaintSettled(editor)
       await capture(editor, 'sheets', outDir)
     } finally {
       await closeAndSaveVideo(sheets, 'shots-sheets')
@@ -130,7 +131,7 @@ test.describe('README screenshots', () => {
       await fixViewport(slides.app)
       const editor = await waitForPageWithUrl(slides.app, 'slides/out')
       await editor.waitForSelector('.stage-wrap canvas', { timeout: 30_000 })
-      await editor.waitForTimeout(1_500)
+      await waitForPaintSettled(editor)
       await capture(editor, 'slides', outDir)
     } finally {
       await closeAndSaveVideo(slides, 'shots-slides')

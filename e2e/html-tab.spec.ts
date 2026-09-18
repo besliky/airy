@@ -342,7 +342,9 @@ test.describe('html editor', () => {
       await frame.locator('p.lead').dispatchEvent('click')
       await expect(editorPage.locator('.crumb.current')).toHaveText('p.lead')
       await frame.locator('p.lead').dblclick()
-      await editorPage.waitForTimeout(150)
+      // beginEdit flips the element to contenteditable synchronously on
+      // dblclick — wait for the attribute instead of a settle sleep
+      await expect(frame.locator('p.lead')).toHaveAttribute('contenteditable', 'plaintext-only')
       await frame.locator('p.lead').press('ControlOrMeta+a')
       await frame.locator('p.lead').pressSequentially('Edited & saved')
       await frame.locator('p.lead').press('ControlOrMeta+Enter')
