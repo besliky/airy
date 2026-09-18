@@ -1522,6 +1522,58 @@ function transformRangedFeatures(xml: string, shift: Shift, axis: Axis): string 
       return count === 0 ? '' : `${prefix}${count}${mid}${inner}${close}`
     },
   )
+  // Allow-edit ranges ride the replay too: every sqref area remaps like a
+  // DV scope, entries whose every area died drop out, and an emptied
+  // <protectedRanges> section is removed (it carries no count attribute).
+  // Before this the file kept the pre-move sqref unless the user happened to
+  // open the allow-edit dialog, whose declarative snapshot rewrite masked
+  // the gap (BUG-781).
+  result = result.replace(
+    /<protectedRange\b[^>]*\/>|<protectedRange\b[^>]*>[\s\S]*?<\/protectedRange>/g,
+    (element) => {
+      const refMatch = /\bsqref="([^"]+)"/.exec(element)
+      if (!refMatch?.[1]) return element
+      const moved = refMatch[1]
+        .split(' ')
+        .map((ref) => moveRefRange(ref, shift, axis))
+        .filter((ref): ref is string => ref !== null)
+      if (moved.length === 0) return ''
+      return element.replace(/\bsqref="[^"]+"/, () => `sqref="${moved.join(' ')}"`)
+    },
+  )
+  result = result.replace(/<protectedRanges\b[^>]*>\s*<\/protectedRanges>/g, '')
+  // Worksheet-level sortState (the persisted last-sort rectangle): its own
+  // ref and every sortCondition ref follow the move, conditions whose range
+  // was deleted drop out, and a sortState left without conditions is removed
+  // — the same discipline the table-part pass applies (BUG-703).
+  result = result.replace(/<sortState\b[^>]*(?:\/>|>[\s\S]*?<\/sortState>)/g, (element) => {
+    const remapRef = (subject: string): string | null | undefined => {
+      const match = /\bref="([^"]+)"/.exec(subject)
+      if (!match?.[1]) return undefined
+      return moveRefRange(match[1], shift, axis)
+    }
+    if (element.endsWith('/>')) {
+      const moved = remapRef(element)
+      if (moved === undefined) return element
+      if (moved === null) return ''
+      return element.replace(/\bref="[^"]+"/, () => `ref="${moved}"`)
+    }
+    const movedRef = remapRef(element)
+    if (movedRef === null) return ''
+    const withRef =
+      movedRef === undefined
+        ? element
+        : element.replace(/\bref="[^"]+"/, () => `ref="${movedRef}"`)
+    const conditions = withRef.replace(/<sortCondition\b[^>]*?\/>/g, (condition) => {
+      const moved = remapRef(condition)
+      if (moved === undefined) return condition
+      if (moved === null) return ''
+      return condition.replace(/\bref="[^"]+"/, () => `ref="${moved}"`)
+    })
+    // No surviving condition: nothing meaningful is pinned — drop the state.
+    if (!/<sortCondition\b/.test(conditions)) return ''
+    return conditions
+  })
   return result
 }
 
@@ -1727,11 +1779,11 @@ function transformRangeMove(xml: string, sheetName: string, op: RangeMoveOp): st
 /// Fail-closed pre-flight over everything the move cannot represent
 /// faithfully. Shared/array anchors refuse ANY contact (v1: even a wholly
 /// inside move is refused — whitelisting wholesale group moves can come
-/// later); the sheet auto-filter, allow-edit (protected) ranges, and
-/// persisted sort conditions pin coordinates the move would invalidate.
-/// The protectedRanges gap is deliberate per BUG-781: the file-side replay
-/// cannot remap them without a dirty snapshot, so overlapping moves must
-/// refuse instead of silently leaving stale sqrefs behind.
+/// later); the sheet auto-filter and persisted sort conditions pin
+/// coordinates the move would invalidate. Allow-edit (protected) ranges are
+/// remapped by the axis-op replay (transformRangedFeatures) but not by the
+/// rectangle move, so an intersecting range move still refuses instead of
+/// leaving a stale sqref.
 function assertRangeMoveSafe(xml: string, move: RectangleMove): void {
   const overlapsMove = (ref: string): boolean => {
     const extent = parseRefExtent(ref)
