@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-18
+
+### Added
+
+- Docs: Find & Replace wildcards (Word `*?[]` syntax, lazy semantics) and an
+  ignore-diacritics option.
+- Docs: internal hyperlinks — Insert → Link gains a "Place in This Document" tab
+  (headings + bookmarks), ⌘/Ctrl+click jumps to the target.
+- Docs: Sort — tables and selected paragraphs (multi-level, text/number/date with
+  Word parsing conventions, header-row option).
+- Docs: Insert → SmartArt — four presets (block list, vertical bullet list, basic
+  process, organization chart) written as real OOXML diagram parts with live
+  previews and node editing.
+- Sheets: column moves on imported workbooks (drag a column header; references,
+  merges, CF/DV, names, chart series, anchors and tables remap on save; undoable).
+- Shell: live file search on the Home screen (⌘/Ctrl+F, localized empty state).
+- PDF: Insert Pages from Another PDF with a preview dialog, position and page-range
+  selection.
+- MCP: headless markdown and HTML sessions (open/read/insert/apply_ops/save with
+  EOL/BOM preservation and structure summaries; parse5 for HTML).
+- UI: reusable modal dialog semantics (role=dialog, focus trap, Escape, focus
+  return) adopted by the docs insert/sort/link and pdf insert-pages dialogs;
+  FindPanel toggles announce state via aria-pressed.
+
+### Fixed
+
+- Live bridge: NDJSON frames decode across UTF-8 chunk boundaries (large CJK
+  payloads no longer corrupt into U+FFFD).
+- Slides/pptx: .pptx saves are atomic (temp file + rename) — a crash or full disk
+  can no longer truncate the deck.
+- Sheets: CSV save-back is atomic; whole-column/row refs in CF/DV/allow-edit
+  ranges remap on moves; the column fast path no longer skips rows whose cell
+  text contains ` r="`.
+- Docs: wildcard search no longer matches inline-object placeholders (Replace can
+  no longer destroy hard breaks/images/math), no longer backtracks
+  catastrophically (linear matcher), and heading anchors are no longer stamped
+  into read-only documents.
+- MCP: read ranges are validated before allocation (huge `end` values fail fast);
+  legacy-charset HTML saves rewrite the declaration to UTF-8; heading lists are
+  capped and counted into the 30k budget; `afterHeading` is rejected on HTML
+  sessions.
+- Exports: html export filters link hrefs through the scheme policy (stored
+  `javascript:` hrefs can no longer execute from exported files); pdf/markdown/
+  html/docs export writes are atomic.
+
+### Changed
+
+- html2docx test suite runs browser domains in parallel (147s → 37s; full serial
+  `npm test` 260s → 138s).
+
 ## [0.10.0] - 2026-09-17
 
 ### Added
@@ -164,7 +214,8 @@ agent-driven document work.
 - The `gsk` CLI search backend and the `@genspark/cli` dependency.
 - The Genspark AI provider — AI in the app is bring-your-own-key only.
 
-[Unreleased]: https://github.com/besliky/airy/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/besliky/airy/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/besliky/airy/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/besliky/airy/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/besliky/airy/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/besliky/airy/compare/v0.9.1...v0.9.2
