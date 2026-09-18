@@ -38,6 +38,10 @@ async function copyActiveCell(
   app: import('@playwright/test').ElectronApplication,
   page: Page,
 ): Promise<string> {
+  // the system pasteboard survives close/relaunch — clear it first so the
+  // poll below can only be satisfied by THIS session's copy, not by the
+  // value copied in the previous session of the test
+  await app.evaluate(({ clipboard }) => clipboard.clear())
   await page.keyboard.press('Meta+c')
   // the copy command writes the clipboard asynchronously — poll it through
   // the main process so pbpaste never reads a stale pasteboard
