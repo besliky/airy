@@ -661,7 +661,8 @@ interface ReviewTabProps extends TabProps {
   /** any protection is configured (highlights the Protect Document button) */
   protectActive: boolean
   onProtectDoc: () => void
-  onCompare: () => void
+  /** Review → Compare: 'merge' records the differences as tracked changes, 'panel' opens the differences pane */
+  onCompare: (mode: 'merge' | 'panel') => void
 }
 
 export function ReviewTab({
@@ -1015,17 +1016,41 @@ export function ReviewTab({
 
       <div className="ribbon-group">
         <div className="ribbon-group-items">
-          <button
-            className="rb-big"
-            disabled={!hasDoc}
-            data-tip={t('ribbonCompareTip')}
-            onClick={onCompare}
-          >
-            <span className="rb-big-icon">
-              <IconCompare size={BIG} />
-            </span>
-            <span>{t('ribbonCompare')}</span>
-          </button>
+          {/* Word's Compare split button: legal blackline (tracked changes) or the plain differences pane */}
+          <div className="rb-split-wrap">
+            <button
+              className="rb-big"
+              disabled={!hasDoc}
+              data-tip={t('ribbonCompareTip')}
+              onClick={() => toggleDropdown(setDropdown, 'compare')}
+            >
+              <span className="rb-big-icon">
+                <IconCompare size={BIG} />
+                <IconCaret />
+              </span>
+              <span>{t('ribbonCompare')}</span>
+            </button>
+            {dropdown === 'compare' && (
+              <div data-rb-panel="" className="layout-menu">
+                <button
+                  onClick={() => {
+                    onCompare('merge')
+                    setDropdown(() => null)
+                  }}
+                >
+                  {t('reviewCompareMerge')}
+                </button>
+                <button
+                  onClick={() => {
+                    onCompare('panel')
+                    setDropdown(() => null)
+                  }}
+                >
+                  {t('reviewComparePanel')}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         <div className="ribbon-group-label">{t('ribbonCompare')}</div>
       </div>
