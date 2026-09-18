@@ -119,8 +119,10 @@ describe('docStyleCss — typed line grid', () => {
     const css = docStyleCss(
       parsedWithSectPr('<w:sectPr><w:docGrid w:type="lines" w:linePitch="360"/></w:sectPr>'),
     )
+    // PAR-109 phase A: the snap base is the raw em box (--doc-line-box), with
+    // the natural line factor as the fallback until emitters declare the box
     expect(css).toContain(
-      '--doc-line-grid:round(up, calc(var(--doc-line-factor,1.2) * 1em - var(--doc-grid-pitch,0.0001px) * 0.004), var(--doc-grid-pitch,0.0001px))',
+      '--doc-line-grid:round(up, calc(var(--doc-line-box, var(--doc-line-factor,1.2)) * 1em - var(--doc-grid-pitch,0.0001px) * 0.004), var(--doc-grid-pitch,0.0001px))',
     )
     // Word probe 2026-08-22: mult x pitch, floored at the snapped single
     expect(css).toContain(

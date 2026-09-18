@@ -441,15 +441,56 @@ const TWIPS_TO_PX = 96 / 1440
  * stays in the lower cell. Word derives suggested grid pitches from the body
  * font's own line height, so needed == pitch equality is common and our probed
  * factors can land a hair above it: Yu Mincho 10.5pt on a 302-twip grid takes
- * one cell in Word although 1.44em = 15.12pt exceeds the 15.1pt pitch
- * (probe 2026-08-22); known legitimate two-cell cases sit ≥3% past the pitch.
+ * one cell in Word although its 1.44em raw box = 15.12pt exceeds the 15.1pt
+ * pitch (probe 2026-08-22); known legitimate two-cell cases sit ≥3% past the
+ * pitch.
  */
 const GRID_SNAP_EPS = 0.004
+
+/**
+ * Word's East Asian single-spacing multiplier: the SimSun/Batang-class line
+ * height is the font's raw em box (≈1.0em) times 1.3, and the hhea×1.3
+ * products (NanumGothic 1.495 = 1.15×1.3, NanumMyeongjo 1.5 = 1.154×1.3,
+ * the bare CJK fallback 1.3) follow the same packing. Faces whose probed
+ * factor IS their own raw box (Yu Mincho/Yu Gothic 1.44, DengXian 1.36,
+ * Malgun 1.7371, Latin hhea factors) are not multiplied.
+ */
+const EA_LINE_MULT = 1.3
+const EA_MULT_LINE_FACTORS = new Set([1.3029, 1.3, 1.495, 1.5])
+
+/**
+ * Grid occupancy factor of a line-height factor: Word's typed docGrid snaps a
+ * line by the tallest run's RAW box (the font's win metrics around the em
+ * square), not by the single-spacing line height (PAR-109 phase A). Word
+ * probes: SimSun-class 13pt/14pt lines take one 312-twip cell although the
+ * 1.3029em line overshoots the 15.6pt pitch by 8-17%, and 16pt takes two;
+ * DengXian 12pt (raw 1.36) and Yu Mincho 13pt (raw 1.44) keep snapping by
+ * their raw boxes (two cells on a 15.6pt/18pt grid). So only the EA-multiplied
+ * classes shrink to their pre-multiplier box, plus the Calibri class whose
+ * 1.22 factor is hhea+lineGap around a 1.0em win box (keeps 13pt/14pt digits
+ * of CJK headings in one cell alongside the SimSun-substituted glyphs).
+ */
+const WIN_BOX_LINE_FACTORS = new Map<number, number>([
+  [1.22, 1.0], // Calibri/Carlito/Aptos: 1.22 = hhea+gap, win box exactly 1.0em
+])
+
+export function gridBoxFactor(lineFactor: number): number {
+  if (EA_MULT_LINE_FACTORS.has(lineFactor)) return lineFactor / EA_LINE_MULT
+  return WIN_BOX_LINE_FACTORS.get(lineFactor) ?? lineFactor
+}
+
+/** Raw em-box height of a line-height value: the grid snap base (word profile). */
+function gridBoxOf(heightPx: number, fontSizePx: number, lineFactor: number): number {
+  return Math.min(heightPx, fontSizePx * gridBoxFactor(lineFactor))
+}
 
 /**
  * Ceil a line height UP to whole grid cells. Single source for docGrid line
  * snapping: the pagination model calls it directly and cssGridLineExpr emits
  * the same formula (ε included) as a CSS round(up) — keep them in lockstep.
+ * The height to snap is the run's raw em box (see gridBoxFactor), passed in as
+ * emBoxPx; callers without a box (footnote line heights) fall back to the
+ * natural line height.
  */
 export function snapLineToPitch(heightPx: number, pitchPx: number): number {
   return pitchPx > 0 ? Math.ceil(heightPx / pitchPx - GRID_SNAP_EPS) * pitchPx : heightPx
@@ -462,12 +503,14 @@ export function snapLineToPitch(heightPx: number, pitchPx: number): number {
  * @param lineRule      'auto'|'atLeast'|'exact'
  * @param lineRawTwips  raw w:spacing w:line twips (auto = multiple of 240; atLeast/exact = absolute)
  * @param docGrid       the section docGrid (optional; when present, round to linePitch)
+ * @param opts          emBoxPx: the line's raw em-box height (grid snap base)
  */
 export function computeLineHeight(
   naturalLineH: number,
   lineRule: 'auto' | 'atLeast' | 'exact' | undefined,
   lineRawTwips: number | undefined,
   docGrid: DocGrid | undefined,
+  opts?: { emBoxPx?: number },
 ): number {
   // typed line grid (Word probe 2026-08-22, 15 cases): an auto multiple scales
   // the PITCH (the product does not re-snap: 1.5 x 15.6pt grid = 23.4pt), and
@@ -478,7 +521,13 @@ export function computeLineHeight(
     docGrid && (docGrid.type === 'lines' || docGrid.type === 'linesAndChars') && docGrid.linePitch
       ? docGrid.linePitch * TWIPS_TO_PX
       : 0
-  const snapped = snapLineToPitch(naturalLineH, pitchPx)
+  // word profile: under a typed grid the single-height floor snaps the raw em
+  // box (PAR-109 phase A); without a grid (and for box-less callers) the
+  // natural line height stays the height and the snap base
+  const snapped =
+    pitchPx > 0
+      ? snapLineToPitch(opts?.emBoxPx ?? naturalLineH, pitchPx)
+      : naturalLineH
 
   if (lineRule === 'exact' && lineRawTwips !== undefined) {
     // fixed line height: use the specified value regardless of font size
@@ -1235,9 +1284,12 @@ const GRID_PITCH = 'var(--doc-grid-pitch,0.0001px)'
 
 /** grid-snapped single-line height; docStyleCss assigns it to --doc-line-grid in typed-grid docs.
  *  CSS mirror of snapLineToPitch (same ε); 1em is the paragraph's own font size —
- *  Word snaps by the tallest run per line, one line-height per paragraph is our simplification. */
+ *  Word snaps by the tallest run per line, one line-height per paragraph is our simplification.
+ *  --doc-line-box carries the paragraph's raw em-box factor (gridBoxFactor,
+ *  PAR-109 phase A); until the --doc-line-factor emitters (doc-style-css,
+ *  editor extensions) also declare it, the natural factor stays the fallback. */
 export function cssGridLineExpr(): string {
-  return `round(up, calc(var(--doc-line-factor,1.2) * 1em - ${GRID_PITCH} * ${GRID_SNAP_EPS}), ${GRID_PITCH})`
+  return `round(up, calc(var(--doc-line-box, var(--doc-line-factor,1.2)) * 1em - ${GRID_PITCH} * ${GRID_SNAP_EPS}), ${GRID_PITCH})`
 }
 
 /** grid line height with the auto multiple applied (Word probe 2026-08-22):
@@ -1519,18 +1571,25 @@ export function simulateLines(
   defaultFontSize: number,
   defaultFontFamily: string,
   cjkFactor = CJK_LINE_HEIGHT_FACTOR,
-): Array<{ naturalLineH: number; text: string }> {
+): Array<{ naturalLineH: number; emBoxH: number; text: string }> {
   if (availWidthPx <= 0)
-    return [{ naturalLineH: defaultFontSize * 1.2, text: runs.map((r) => r.text).join('') }]
+    return [
+      {
+        naturalLineH: defaultFontSize * 1.2,
+        emBoxH: defaultFontSize * 1.2,
+        text: runs.map((r) => r.text).join(''),
+      },
+    ]
 
   // Word breaks Korean at spaces (keep-all), including Han inside Korean
   // paragraphs; the renderer applies the matching word-break:keep-all CSS
   const keepAll = runs.some((r) => textHasHangul(r.text))
 
   // resulting line list (records each line's natural height and text)
-  const lines: Array<{ naturalLineH: number; text: string }> = []
+  const lines: Array<{ naturalLineH: number; emBoxH: number; text: string }> = []
   let curLineW = 0
   let curLineH = 0 // max natural line height of the current line
+  let curBoxH = 0 // max raw em-box height of the current line (grid snap base)
   let curText = ''
   // Word never breaks a line at a space: spaces past the right edge hang, and a
   // run of several spaces is squeezed when that lets the next word end at the
@@ -1538,10 +1597,11 @@ export function simulateLines(
   let squeezableW = 0
   let lastWasSpace = false
 
-  const pushLine = (h: number) => {
-    lines.push({ naturalLineH: h, text: curText })
+  const pushLine = (h: number, box: number) => {
+    lines.push({ naturalLineH: h, emBoxH: box, text: curText })
     curLineW = 0
     curLineH = 0
+    curBoxH = 0
     curText = ''
     squeezableW = 0
     lastWasSpace = false
@@ -1563,21 +1623,33 @@ export function simulateLines(
     const lineH = isNaN(cjkFactor)
       ? m.lineHeight
       : Math.min(m.lineHeight, style.fontSizePx * Math.max(cjkFactor, 1.0))
+    // raw em box of this run (PAR-109 phase A grid snap base): the EA
+    // multiplied factors snap by their pre-multiplier box, raw-box faces (Yu
+    // 1.44, DengXian 1.36, Latin hhea) keep the full height
+    const lineBoxH = gridBoxOf(
+      lineH,
+      style.fontSizePx,
+      isNaN(cjkFactor) ? lineHeightFactor(style.fontFamily) : Math.max(cjkFactor, 1.0),
+    )
 
     let buf = ''
     let bufCjkH = 0 // CJK line-height floor of buffered chars (keep-all mode)
+    let bufCjkBox = 0 // CJK em-box floor of buffered chars (keep-all mode)
     const flushWord = () => {
       if (!buf) return
       const wordH = Math.max(lineH, bufCjkH)
+      const wordBoxH = Math.max(lineBoxH, bufCjkBox)
       bufCjkH = 0
+      bufCjkBox = 0
       const w = metrics.measure(buf, style)
       if (curLineW + w > availWidthPx && curLineW > 0) {
         if (curLineW - squeezableW + w <= availWidthPx) {
           curLineW -= squeezableW
           squeezableW = 0
         } else {
-          pushLine(Math.max(curLineH, lineH))
+          pushLine(Math.max(curLineH, lineH), Math.max(curBoxH, lineBoxH))
           curLineH = lineH
+          curBoxH = lineBoxH
         }
       }
       lastWasSpace = false
@@ -1588,8 +1660,9 @@ export function simulateLines(
           const cw = metrics.measure(fragment + ch, style)
           if (fragment && cw > availWidthPx) {
             curText = fragment
-            pushLine(wordH)
+            pushLine(wordH, wordBoxH)
             curLineH = wordH
+            curBoxH = wordBoxH
             fragment = ch
           } else {
             fragment += ch
@@ -1598,11 +1671,13 @@ export function simulateLines(
         if (fragment) {
           curLineW += metrics.measure(fragment, style)
           curLineH = Math.max(curLineH, wordH)
+          curBoxH = Math.max(curBoxH, wordBoxH)
           curText = fragment
         }
       } else {
         curLineW += w
         curLineH = Math.max(curLineH, wordH)
+        curBoxH = Math.max(curBoxH, wordBoxH)
         curText += buf
       }
       buf = ''
@@ -1612,14 +1687,16 @@ export function simulateLines(
       const cp = ch.codePointAt(0) ?? 0
       if (ch === '\n') {
         flushWord()
-        pushLine(Math.max(curLineH, lineH))
+        pushLine(Math.max(curLineH, lineH), Math.max(curBoxH, lineBoxH))
         curLineH = lineH
+        curBoxH = lineBoxH
         continue
       }
       if (ch === ' ') {
         flushWord()
         const spW = metrics.measure(ch, style)
         curLineH = Math.max(curLineH, lineH)
+        curBoxH = Math.max(curBoxH, lineBoxH)
         curText += ch
         if (curLineW + spW <= availWidthPx || curLineW === 0) {
           curLineW += spW
@@ -1632,12 +1709,14 @@ export function simulateLines(
         flushWord()
         const spW = metrics.measure(ch, style)
         if (curLineW + spW > availWidthPx && curLineW > 0) {
-          pushLine(Math.max(curLineH, lineH))
+          pushLine(Math.max(curLineH, lineH), Math.max(curBoxH, lineBoxH))
           curLineH = lineH
+          curBoxH = lineBoxH
           // swallow the tab at line start
         } else {
           curLineW += spW
           curLineH = Math.max(curLineH, lineH)
+          curBoxH = Math.max(curBoxH, lineBoxH)
           curText += ch
         }
         continue
@@ -1650,20 +1729,24 @@ export function simulateLines(
           runCjkFactor = Math.max(runCjkFactor, simsunGapLineFactor(style.fontFamily) ?? 0)
         }
         const cjkH = style.fontSizePx * runCjkFactor
+        const cjkBox = gridBoxOf(cjkH, style.fontSizePx, runCjkFactor)
         if (keepAll) {
           buf += ch
           bufCjkH = Math.max(bufCjkH, cjkH)
+          bufCjkBox = Math.max(bufCjkBox, cjkBox)
           continue
         }
         flushWord()
         const cw = metrics.measure(ch, style)
         if (curLineW + cw > availWidthPx && curLineW > 0) {
-          pushLine(Math.max(curLineH, lineH))
+          pushLine(Math.max(curLineH, lineH), Math.max(curBoxH, lineBoxH))
           curLineH = lineH
+          curBoxH = lineBoxH
         }
         curLineW += cw
         curText += ch
         curLineH = Math.max(curLineH, cjkH)
+        curBoxH = Math.max(curBoxH, cjkBox)
         lastWasSpace = false
         continue
       }
@@ -1677,10 +1760,14 @@ export function simulateLines(
     // last-line minimum:
     //   body path (cjkFactor=NaN): use the font-level line-height factor (lineHeightFactor)
     //   table-cell path (cjkFactor=1.0): match CJK chars, using cjkFactor as the factor
-    const lastLineMin = isNaN(cjkFactor)
-      ? defaultFontSize * (96 / 72) * lineHeightFactor(defaultFontFamily)
-      : defaultFontSize * (96 / 72) * Math.max(cjkFactor, 1.0)
-    pushLine(Math.max(curLineH, lastLineMin))
+    const lastFactor = isNaN(cjkFactor)
+      ? lineHeightFactor(defaultFontFamily)
+      : Math.max(cjkFactor, 1.0)
+    const lastLineMin = defaultFontSize * (96 / 72) * lastFactor
+    pushLine(
+      Math.max(curLineH, lastLineMin),
+      Math.max(curBoxH, gridBoxOf(lastLineMin, defaultFontSize * (96 / 72), lastFactor)),
+    )
   }
 
   return lines
@@ -1874,27 +1961,32 @@ export function computeLineMetrics(input: LineMetricsInput): LineMetricsResultEx
   // font/size (Word rule); whitespace-only runs carry that style, defaults
   // apply only when no run declares one
   const markRuns = isEmpty ? runs.filter((r) => r.sizeHalfPoints || r.fontFamily) : []
+  const markSizes = markRuns.map((r) => ({
+    sizePx: (r.sizeHalfPoints ? r.sizeHalfPoints / 2 : defaultFontSizePt) * (96 / 72),
+    factor: lineHeightFactor(r.fontFamily ?? defaultFontFamily),
+  }))
   const emptyNaturalH =
-    markRuns.length > 0
-      ? Math.max(
-          ...markRuns.map(
-            (r) =>
-              (r.sizeHalfPoints ? r.sizeHalfPoints / 2 : defaultFontSizePt) *
-              (96 / 72) *
-              lineHeightFactor(r.fontFamily ?? defaultFontFamily),
-          ),
-        )
+    markSizes.length > 0
+      ? Math.max(...markSizes.map((m) => m.sizePx * m.factor))
       : defaultFontSizePx * lineHeightFactor(defaultFontFamily)
+  const emptyEmBoxH =
+    markSizes.length > 0
+      ? Math.max(...markSizes.map((m) => gridBoxOf(m.sizePx * m.factor, m.sizePx, m.factor)))
+      : gridBoxOf(
+          emptyNaturalH,
+          defaultFontSizePx,
+          lineHeightFactor(defaultFontFamily),
+        )
 
   // simulate line breaking
   const lines =
     isEmpty || runs.length === 0
-      ? [{ naturalLineH: emptyNaturalH, text: '' }]
+      ? [{ naturalLineH: emptyNaturalH, emBoxH: emptyEmBoxH, text: '' }]
       : simulateLines(runs, availWidthPx, metrics, defaultFontSizePt, defaultFontFamily, cjkFactor)
 
-  // apply the line-height rule per line
+  // apply the line-height rule per line (emBoxH: the word-profile grid snap base)
   const lineHeights = lines.map((ln) =>
-    computeLineHeight(ln.naturalLineH, lineRule, lineRawTwips, docGrid),
+    computeLineHeight(ln.naturalLineH, lineRule, lineRawTwips, docGrid, { emBoxPx: ln.emBoxH }),
   )
 
   // space before/after
@@ -2203,8 +2295,12 @@ export function estimateFootnoteHeight(
  */
 export function noteLineHeightPx(docGrid: DocGrid | undefined, style?: NoteStyleOpts): number {
   const sizePt = style?.sizeHalfPoints ? style.sizeHalfPoints / 2 : 10
-  const naturalH = sizePt * (96 / 72) * lineHeightFactor(style?.fontFamily ?? DEFAULT_FONT_FAMILY)
-  return computeLineHeight(naturalH, style?.lineRule, style?.lineRawTwips, docGrid)
+  const factor = lineHeightFactor(style?.fontFamily ?? DEFAULT_FONT_FAMILY)
+  const sizePx = sizePt * (96 / 72)
+  const naturalH = sizePx * factor
+  return computeLineHeight(naturalH, style?.lineRule, style?.lineRawTwips, docGrid, {
+    emBoxPx: gridBoxOf(naturalH, sizePx, factor),
+  })
 }
 
 /** noteLineHeightPx of the default (styleless, 10pt) note model */

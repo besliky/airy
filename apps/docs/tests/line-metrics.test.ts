@@ -20,6 +20,7 @@ import {
   setDocFontTable,
   computeLineHeight,
   cssGridLineExpr,
+  gridBoxFactor,
   snapLineToPitch,
   estimateFootnoteHeight,
   footnoteLineHeightPx,
@@ -239,10 +240,87 @@ describe('snapLineToPitch', () => {
     expect(snapLineToPitch(24.1, 24)).toBe(48)
   })
 
-  it('cssGridLineExpr mirrors the same formula and ε', () => {
+  it('cssGridLineExpr mirrors the same formula and ε (em-box base via --doc-line-box)', () => {
     expect(cssGridLineExpr()).toBe(
-      'round(up, calc(var(--doc-line-factor,1.2) * 1em - var(--doc-grid-pitch,0.0001px) * 0.004), var(--doc-grid-pitch,0.0001px))',
+      'round(up, calc(var(--doc-line-box, var(--doc-line-factor,1.2)) * 1em - var(--doc-grid-pitch,0.0001px) * 0.004), var(--doc-grid-pitch,0.0001px))',
     )
+  })
+})
+
+// ─── Grid snap base: raw em box (PAR-109 phase A) ──────────────────────────
+
+describe('grid snap base (raw em box, word profile)', () => {
+  const docGrid = { type: 'lines' as const, linePitch: 312 } // 15.6pt = 20.8px cells
+  const pt = (v: number) => (v * 96) / 72
+
+  it('gridBoxFactor un-multiplies only the EA-packed classes', () => {
+    // SimSun/Batang class and the CJK fallback pack the raw box x 1.3
+    expect(gridBoxFactor(1.3029)).toBeCloseTo(1.3029 / 1.3, 6)
+    expect(gridBoxFactor(1.3)).toBeCloseTo(1.0, 6)
+    expect(gridBoxFactor(1.495)).toBeCloseTo(1.15, 6)
+    expect(gridBoxFactor(1.5)).toBeCloseTo(1.5 / 1.3, 6)
+    // raw-box faces keep their full factor; the Calibri class packs a 1.0em win box
+    for (const f of [1.44, 1.36, 1.7371, 1.9429, 1.15, 1.7143, 1.0]) {
+      expect(gridBoxFactor(f)).toBe(f)
+    }
+    expect(gridBoxFactor(1.22)).toBe(1.0)
+  })
+
+  it('SimSun-class 13pt/14pt lines take one 312-twip cell, 16pt takes two (Word)', () => {
+    // 13pt/14pt CJK paragraphs: natural 1.3em overshoots the 15.6pt pitch by
+    // 8-17%, but Word snaps by the ~1.0em raw box -> one cell; 16pt -> two
+    const line13 = computeLineMetrics({
+      runs: [{ text: '第十三号标题文字', sizeHalfPoints: 26 }], // 13pt CJK in the default Calibri run
+      availWidthPx: 1000,
+      docGrid,
+      defaultFontSizePt: 13,
+    })
+    const line14 = computeLineMetrics({
+      runs: [{ text: '第十四号标题文字', sizeHalfPoints: 28 }],
+      availWidthPx: 1000,
+      docGrid,
+      defaultFontSizePt: 14,
+    })
+    const line16 = computeLineMetrics({
+      runs: [{ text: '第十六号标题文字', sizeHalfPoints: 32 }],
+      availWidthPx: 1000,
+      docGrid,
+      defaultFontSizePt: 16,
+    })
+    for (const h of [...line13.lineHeights, ...line14.lineHeights]) {
+      expect(h).toBeCloseTo(pt(15.6), 2)
+    }
+    for (const h of line16.lineHeights) {
+      expect(h).toBeCloseTo(pt(31.2), 2)
+    }
+  })
+
+  it('raw-box faces keep snapping by their full factor (DengXian 1.36, Yu Mincho 1.44)', () => {
+    // DengXian 12pt on a 15.6pt grid: 1.36em = 16.32pt overshoots -> two cells
+    // (probe 2026-08-25); the em-box rule must not collapse it to one
+    const dengxian = computeLineMetrics({
+      runs: [{ text: '等线字体标题测试', fontFamily: 'DengXian', sizeHalfPoints: 24 }],
+      availWidthPx: 1000,
+      docGrid,
+      defaultFontSizePt: 12,
+      defaultFontFamily: 'DengXian',
+    })
+    for (const h of dengxian.lineHeights) expect(h).toBeCloseTo(pt(31.2), 2)
+    // Yu Mincho 13pt on an 18pt grid: 1.44em = 18.72pt -> two cells (probe)
+    const yumin = computeLineMetrics({
+      runs: [{ text: '遊明朝の見出しテスト', fontFamily: 'Yu Mincho', sizeHalfPoints: 26 }],
+      availWidthPx: 1000,
+      docGrid: { type: 'lines', linePitch: 360 },
+      defaultFontSizePt: 13,
+      defaultFontFamily: 'Yu Mincho',
+    })
+    for (const h of yumin.lineHeights) expect(h).toBeCloseTo(pt(36), 2)
+  })
+
+  it('computeLineHeight without an emBox keeps the natural-height snap (Yu Mincho probes)', () => {
+    // box-less callers (footnote line heights) fall back to the natural height
+    expect(computeLineHeight(1.44 * pt(10.5), undefined, undefined, docGrid)).toBeCloseTo(pt(15.6), 2)
+    expect(computeLineHeight(1.44 * pt(13), undefined, undefined, docGrid)).toBeCloseTo(pt(31.2), 2)
   })
 })
 
