@@ -283,6 +283,31 @@ describe('diagram round-trip', () => {
     const contentTypes = await zip2.file('[Content_Types].xml')!.async('string')
     expect(contentTypes).not.toContain('diagrams/')
   })
+
+  it('starts diagram docPr ids above every docPr id already in the document (BUG-714)', async () => {
+    // a source drawing already carrying an id inside the fixed 8600 base
+    // range must not end up duplicated by the inserted diagram
+    const bodyXml =
+      '<w:p><w:r><w:t>src</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:drawing><wp:inline><wp:extent cx="914400" cy="914400"/>' +
+      '<wp:docPr id="8605" name="Picture 8605"/>' +
+      '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+      '<pic:pic><pic:blipFill><a:blip r:embed="rId10"/></pic:blipFill></pic:pic>' +
+      '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>'
+    const parsed = await parseDocx(await buildDocx({ bodyXml, withImage: true }))
+    const blocks: Array<
+      { kind: 'original'; docxIndex: number } | { kind: 'diagram'; diagram: NewDiagram }
+    > = parsed.blocks
+      .filter((b) => !b.hidden)
+      .map((b) => ({ kind: 'original' as const, docxIndex: b.docxIndex! }))
+    blocks.push({ kind: 'diagram', diagram: PRESETS[0]! })
+    const zip = await JSZip.loadAsync(await saveDocx(parsed, blocks))
+    const docXml = await zip.file('word/document.xml')!.async('string')
+    const ids = [...docXml.matchAll(/<wp:docPr id="(\d+)" name="[^"]*"/g)].map((m) => Number(m[1]))
+    expect(ids).toContain(8605) // the source drawing keeps its own id
+    expect(ids.filter((n) => n !== 8605)).toEqual([8606]) // the diagram starts right above it
+    expect(new Set(ids).size).toBe(ids.length) // no duplicate docPr ids anywhere
+  })
 })
 
 describe('buildDiagramDisplay (insert-time preview)', () => {
