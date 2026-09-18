@@ -1957,6 +1957,8 @@ export interface ParsedDoc {
   compatibilityMode?: number
   /** settings.xml <w:autoHyphenation/> — Word breaks words at line ends automatically */
   autoHyphenation?: boolean
+  /** settings.xml w:hyphenationZone (twips; absent = Word's 360) — distance from the margin where hyphenation still kicks in */
+  hyphenationZoneTwips?: number
   /** settings.xml <w:balanceSingleByteDoubleByteWidth/> — rPr w:spacing counts double on double-byte characters */
   balanceDbcsSpacing?: boolean
   /** settings.xml w:characterSpacingControl compressPunctuation* — justified CJK lines compress trailing-blank punctuation */

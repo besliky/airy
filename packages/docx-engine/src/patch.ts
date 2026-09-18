@@ -198,6 +198,12 @@ export interface SaveOptions {
    */
   noteNumbering?: { footnotes?: NoteNumbering | null; endnotes?: NoteNumbering | null }
   /**
+   * settings.xml hyphenation: auto sets/removes <w:autoHyphenation/>;
+   * zoneTwips rewrites w:hyphenationZone (null removes it); both undefined
+   * (or the whole object absent) keeps the current values.
+   */
+  hyphenation?: { auto?: boolean; zoneTwips?: number | null }
+  /**
    * Text watermark in the default page header: a string sets it, null removes
    * it, undefined keeps whatever the header already has.
    */
@@ -451,6 +457,7 @@ export async function saveDocx(
     options.footnotes === undefined &&
     options.endnotes === undefined &&
     options.noteNumbering === undefined &&
+    options.hyphenation === undefined &&
     options.watermark === undefined &&
     options.inks === undefined &&
     options.sources === undefined &&
@@ -1181,7 +1188,8 @@ export async function saveDocx(
     options.writeProtection !== undefined ||
     options.removePersonalInfo !== undefined ||
     options.evenAndOddHeaders !== undefined ||
-    options.noteNumbering !== undefined
+    options.noteNumbering !== undefined ||
+    options.hyphenation !== undefined
   ) {
     const file = zip.file(settingsPath)
     let xml: string
@@ -1227,6 +1235,10 @@ export async function saveDocx(
     }
     if (options.noteNumbering !== undefined) {
       xml = applyNoteNumbering(xml, options.noteNumbering)
+      touched = true
+    }
+    if (options.hyphenation !== undefined) {
+      xml = applyHyphenationSettings(xml, options.hyphenation)
       touched = true
     }
     if (touched) settingsXml = xml
@@ -2001,6 +2013,32 @@ function applyNoteNumbering(
     out = /<w:compat[\s/>]/.test(out)
       ? out.replace(/(<w:compat[\s/>])/, `${tag}$1`)
       : out.replace(/(<w:settings[^>]*>)/, `$1${tag}`)
+  }
+  return out
+}
+
+/**
+ * Hyphenation switches (settings.xml): <w:autoHyphenation/> on/off and the
+ * <w:hyphenationZone> (twips; null removes). The zone follows autoHyphenation
+ * in CT_Settings, so it is inserted right after it (or after the root).
+ */
+function applyHyphenationSettings(
+  xml: string,
+  opts: { auto?: boolean; zoneTwips?: number | null },
+): string {
+  let out = xml
+  if (opts.auto !== undefined) {
+    out = out.replace(/<w:autoHyphenation[^>]*\/>/, '')
+    if (opts.auto) out = out.replace(/(<w:settings[^>]*>)/, '$1<w:autoHyphenation/>')
+  }
+  if (opts.zoneTwips !== undefined) {
+    out = out.replace(/<w:hyphenationZone[^>]*\/>/, '')
+    if (opts.zoneTwips !== null) {
+      const tag = `<w:hyphenationZone w:val="${opts.zoneTwips}"/>`
+      out = /<w:autoHyphenation[^>]*\/>/.test(out)
+        ? out.replace(/(<w:autoHyphenation[^>]*\/>)/, `$1${tag}`)
+        : out.replace(/(<w:settings[^>]*>)/, `$1${tag}`)
+    }
   }
   return out
 }

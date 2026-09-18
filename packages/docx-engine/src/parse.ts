@@ -4633,9 +4633,10 @@ async function parseCompatibilityMode(zip: JSZip): Promise<number> {
   return m ? parseInt(m[1], 10) : 0
 }
 
-/** settings.xml w:autoHyphenation + w:defaultTabStop (absent = Word's 720 twips) */
+/** settings.xml w:autoHyphenation + w:hyphenationZone + w:defaultTabStop (absent = Word's 720 twips) */
 async function parseLayoutSettings(zip: JSZip): Promise<{
   autoHyphenation?: boolean
+  hyphenationZoneTwips?: number
   defaultTabStopTwips?: number
   balanceDbcsSpacing?: boolean
   compressPunctuation?: boolean
@@ -4645,9 +4646,11 @@ async function parseLayoutSettings(zip: JSZip): Promise<{
   if (!file) return {}
   const xml = await file.async('string')
   const tab = /<w:defaultTabStop[^>]*w:val="(-?\d+)"/.exec(xml)
+  const zone = /<w:hyphenationZone[^>]*w:val="(\d+)"/.exec(xml)
   const csc = /<w:characterSpacingControl[^>]*w:val="(\w+)"/.exec(xml)
   return {
     ...(xmlFlagOn(xml, 'w:autoHyphenation') ? { autoHyphenation: true } : {}),
+    ...(zone ? { hyphenationZoneTwips: parseInt(zone[1], 10) } : {}),
     ...(tab ? { defaultTabStopTwips: parseInt(tab[1], 10) } : {}),
     ...(xmlFlagOn(xml, 'w:balanceSingleByteDoubleByteWidth') ? { balanceDbcsSpacing: true } : {}),
     ...(csc && csc[1].startsWith('compressPunctuation') ? { compressPunctuation: true } : {}),
