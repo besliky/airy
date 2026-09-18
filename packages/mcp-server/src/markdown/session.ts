@@ -1,10 +1,9 @@
 // Headless Markdown editing session (PAR-003): one open .md/.markdown file
-// -> line-oriented in-memory model -> byte-preserving save. Markdown is plain
-// text, so the session model is simpler than the docx twin: the file is split
-// into lines that each keep their OWN terminator, edits splice that array, and
-// untouched lines (terminators included) round-trip byte-identically on save.
-// A zero-edit save writes the original bytes back verbatim, so a file the
-// agent only read never changes on disk.
+// -> line-oriented in-memory model -> byte-preserving save. The line machinery
+// (BOM/EOL policy, open caps, line ops, atomic save) lives in the shared
+// sessions/line-core.ts (REFR-001, extracted from the PAR-003/PAR-004 twins);
+// this file is the markdown half of the contract: the UTF-8-only charset
+// policy, the ATX heading structure model, and the read/meta rendering.
 //
 // Encoding policy (see CHANGELOG 0.9.3 - BOM/U+FEFF semantics): markdown is
 // UTF-8 by spec. The session accepts UTF-8 with or without a BOM (also UTF-16
@@ -17,53 +16,29 @@
 // fenced code blocks and YAML front matter, reported with their line index;
 // setext headings (===/--- underlines) are deliberately not parsed and are
 // documented as such - agents address them as plain lines.
-import { randomUUID } from 'node:crypto'
-import type { Stats } from 'node:fs'
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
-import { basename, dirname, join } from 'node:path'
+import { basename } from 'node:path'
 
+import { countWords } from '../docx/session.js'
 import {
-  assertSaveTargetFree,
-  countWords,
-  FencingError,
-  promoteNewFileExclusively,
-} from '../docx/session.js'
-import { resolveConfined, workspaceRoot } from '../docx/paths.js'
+  decodeStrict,
+  dominantEol,
+  HEADING_LIST_MAX,
+  INSERT_MAX_CHARS,
+  LineDocument,
+  type Line,
+  type LineInsertResult,
+  type LineOpResult,
+  type LineReadOptions,
+  type LineSaveResult,
+  type LineSessionHooks,
+  renderRead,
+  sniffBom,
+} from '../sessions/line-core.js'
 
-// ---- limits (mirror the docx session, scaled to the MCP 30k answer budget) ----
-
-const MAX_OPEN_BYTES = 8 * 1024 * 1024
-/**
- * Largest line count an open materializes: the byte cap alone does not bound
- * the model — a file of bare EOLs (8 MiB of `\r\n` is ~4M lines) would
- * allocate millions of line objects and hundreds of MB per session. The count
- * runs over the decoded text BEFORE splitLines allocates anything.
- */
-const MAX_OPEN_LINES = 2_000_000
-const READ_MAX_CHARS = 30_000
-const INSERT_MAX_CHARS = 200_000
-const OPS_TEXT_MAX_CHARS = 200_000
-/**
- * Largest range span a read materializes: the request schema does not bound
- * `end`, so the session must reject a huge span BEFORE building the index
- * array (a range like 0..2^53 would otherwise hang/OOM the server).
- */
-const RANGE_MAX_SPAN = 10_000
-/** how many headings the read summary lists before eliding */
-const HEADING_LIST_MAX = 200
 /** per-heading text width in the read summary (megabyte heading lines stay bounded) */
 const HEADING_TEXT_MAX_CHARS = 80
 
-/** U+FEFF as pure-ASCII source (a literal BOM char in source trips tooling) */
-const BOM_CHAR = String.fromCharCode(0xfeff)
-const NUL_CHAR = String.fromCharCode(0)
-
-/** one addressable line: its text (no terminator) and the terminator it had */
-export interface MarkdownLine {
-  text: string
-  /** '\n' | '\r\n' | '\r' for terminated lines, '' for the final unterminated one */
-  eol: string
-}
+export type MarkdownLine = Line
 
 export interface MarkdownHeading {
   /** 1-based ordinal agents address via insert_content afterHeading */
@@ -94,118 +69,13 @@ export interface MarkdownSessionMeta {
   dirty: boolean
 }
 
-export interface MarkdownReadOptions {
-  /** line indexes to return in full; must exist (read_document blocks) */
-  lines?: number[]
-  /** inclusive line range to return in full */
-  range?: { start: number; end: number }
-}
+export type MarkdownReadOptions = LineReadOptions
 
-export interface MarkdownSaveResult {
-  path: string
-  bytes: number
-  unchanged: boolean
-  warnings: string[]
-}
+export type MarkdownSaveResult = LineSaveResult
 
-export interface InsertResult {
-  /** lines inserted */
-  inserted: number
-  /** line index the block landed after (-1 = document start) */
-  at: number
-  lineCount: number
-  dirty: boolean
-  /** human-readable position summary */
-  detail: string
-}
+export type InsertResult = LineInsertResult
 
-export interface MarkdownOpResult {
-  op: string
-  matched: number
-  changed: number
-  detail?: string
-}
-
-interface FileStamp {
-  mtimeMs: number
-  size: number
-}
-
-// ---- text <-> line model ----
-
-/** Split text into lines, each remembering its own terminator. */
-export function splitLines(text: string): MarkdownLine[] {
-  const lines: MarkdownLine[] = []
-  let start = 0
-  let i = 0
-  while (i < text.length) {
-    const ch = text[i]
-    if (ch === '\n' || ch === '\r') {
-      const eol = ch === '\r' && text[i + 1] === '\n' ? '\r\n' : ch
-      lines.push({ text: text.slice(start, i), eol })
-      i += eol.length
-      start = i
-    } else {
-      i += 1
-    }
-  }
-  lines.push({ text: text.slice(start), eol: '' })
-  return lines
-}
-
-/**
- * The line count splitLines would produce, counted WITHOUT materializing the
- * array (the same walk minus the pushes) so an oversize file can be refused
- * before the model allocation.
- */
-function countLines(text: string): number {
-  let count = 1
-  let i = 0
-  while (i < text.length) {
-    const ch = text[i]
-    if (ch === '\n' || ch === '\r') {
-      const eolLen = ch === '\r' && text[i + 1] === '\n' ? 2 : 1
-      count += 1
-      i += eolLen
-    } else {
-      i += 1
-    }
-  }
-  return count
-}
-
-/**
- * The terminator inserted/edited lines get: CRLF when the file uses any,
- * else CR when the file has bare carriage returns, else LF (also for a fresh
- * empty file).
- */
-function dominantEol(lines: readonly MarkdownLine[]): '\n' | '\r\n' | '\r' {
-  let crlf = false
-  let bareCr = false
-  for (const { eol } of lines) {
-    if (eol === '\r\n') crlf = true
-    else if (eol === '\r') bareCr = true
-  }
-  if (crlf) return '\r\n'
-  if (bareCr) return '\r'
-  return '\n'
-}
-
-/** Join the line model back into text; `bom` re-prepends the leading BOM char. */
-function joinLines(lines: readonly MarkdownLine[], bom: boolean): string {
-  return (bom ? BOM_CHAR : '') + lines.map((l) => l.text + l.eol).join('')
-}
-
-/**
- * Agent text -> session lines. `lastEol` is what the final line of the block
- * carries: the dominant EOL for a spliced-in block (following content stays on
- * its own line), or '' when the block replaces lines at a file end that had no
- * trailing newline (preserving the file's no-final-newline shape).
- */
-function toLines(text: string, eol: string, lastEol: string): MarkdownLine[] {
-  const parts = text.split(/\r\n|\r|\n/)
-  return parts.map((t, i) => ({ text: t, eol: i === parts.length - 1 ? lastEol : eol }))
-}
+export type MarkdownOpResult = LineOpResult
 
 // ---- structure scan ----
 
@@ -263,14 +133,6 @@ export function scanHeadings(lines: readonly MarkdownLine[]): MarkdownHeading[] 
 
 // ---- decode (BOM-aware strict UTF-8/UTF-16, no mojibake fallback) ----
 
-function decodeStrict(bytes: Uint8Array, charset: string): string | null {
-  try {
-    return new TextDecoder(charset, { fatal: true, ignoreBOM: true }).decode(bytes)
-  } catch {
-    return null
-  }
-}
-
 /**
  * Decode markdown bytes: a BOM picks its charset and survives as a returned
  * flag; BOM-less files must be valid UTF-8. Returns null (not an exception)
@@ -279,20 +141,30 @@ function decodeStrict(bytes: Uint8Array, charset: string): string | null {
 function decodeMarkdown(
   bytes: Uint8Array,
 ): { text: string; bom: boolean; encoding: 'utf-8' | 'utf-16le' | 'utf-16be' } | null {
-  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+  const sniff = sniffBom(bytes)
+  if (sniff.status === 'decoded') {
+    return { text: sniff.text, bom: true, encoding: sniff.encoding }
+  }
+  if (sniff.status === 'none') {
     const text = decodeStrict(bytes, 'utf-8')
-    return text === null ? null : { text, bom: true, encoding: 'utf-8' }
+    if (text !== null) return { text, bom: false, encoding: 'utf-8' }
   }
-  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
-    const text = decodeStrict(bytes, 'utf-16le')
-    return text === null ? null : { text, bom: true, encoding: 'utf-16le' }
-  }
-  if (bytes[0] === 0xfe && bytes[1] === 0xff) {
-    const text = decodeStrict(bytes, 'utf-16be')
-    return text === null ? null : { text, bom: true, encoding: 'utf-16be' }
-  }
-  const text = decodeStrict(bytes, 'utf-8')
-  return text === null ? null : { text, bom: false, encoding: 'utf-8' }
+  return null
+}
+
+/** the markdown divergence points of the shared line-session core */
+const markdownHooks: LineSessionHooks = {
+  kind: 'markdown',
+  decode: decodeMarkdown,
+  refusalMessage: (path) =>
+    `Cannot open "${path}": the bytes are not valid UTF-8 (markdown is a UTF-8 format; ` +
+    'BOM-prefixed UTF-8/UTF-16 is accepted). Convert the file and retry.',
+  insertOpText: (value: unknown, fail: (message: string) => never): string => {
+    if (value === undefined || value === null) fail('op insertLines: text is required')
+    if (typeof value !== 'string') fail('op insertLines: text must be a string')
+    if (value.length === 0) fail('op insertLines: text must be non-empty')
+    return value
+  },
 }
 
 // ---- insert position params ----
@@ -312,115 +184,24 @@ export class MarkdownSession {
   readonly handle: string
   readonly path: string
 
-  /** confinement root captured at open (save must not follow a later drift) */
-  private readonly root: string
-  private readonly originalBytes: Uint8Array
-  private lines: MarkdownLine[]
-  private readonly bom: boolean
-  private readonly encoding: 'utf-8' | 'utf-16le' | 'utf-16be'
-  private baseline: FileStamp | null
-  private readonly savedTargets = new Set<string>()
-  private dirty = false
+  private readonly doc: LineDocument
 
-  private constructor(
-    handle: string,
-    path: string,
-    root: string,
-    originalBytes: Uint8Array,
-    lines: MarkdownLine[],
-    bom: boolean,
-    encoding: 'utf-8' | 'utf-16le' | 'utf-16be',
-    stamp: FileStamp | null,
-  ) {
+  private constructor(handle: string, doc: LineDocument) {
     this.handle = handle
-    this.path = path
-    this.root = root
-    this.originalBytes = originalBytes
-    this.lines = lines
-    this.bom = bom
-    this.encoding = encoding
-    this.baseline = stamp
+    this.path = doc.path
+    this.doc = doc
   }
 
   /** Open a .md/.markdown file inside the workspace root. */
   static async open(rawPath: string, root?: string): Promise<MarkdownSession> {
-    const path = resolveConfined(rawPath, root)
-    // stat first: an oversize file is refused by its size BEFORE the whole
-    // content is read into memory (the post-read check stays as a backstop
-    // against the file growing between stat and read)
-    let info: Stats
-    try {
-      info = await stat(path)
-    } catch (e) {
-      throw new Error(`Cannot read "${path}": ${e instanceof Error ? e.message : String(e)}`, {
-        cause: e,
-      })
-    }
-    if (info.size > MAX_OPEN_BYTES) {
-      throw new Error(
-        `"${path}" is ${String(info.size)} bytes; markdown sessions cap at ` +
-          `${String(MAX_OPEN_BYTES)} bytes (8 MiB).`,
-      )
-    }
-    let bytes: Uint8Array
-    try {
-      bytes = new Uint8Array(await readFile(path))
-    } catch (e) {
-      throw new Error(`Cannot read "${path}": ${e instanceof Error ? e.message : String(e)}`, {
-        cause: e,
-      })
-    }
-    const stamp: FileStamp = { mtimeMs: info.mtimeMs, size: info.size }
-    if (bytes.byteLength > MAX_OPEN_BYTES) {
-      throw new Error(
-        `"${path}" is ${String(bytes.byteLength)} bytes; markdown sessions cap at ` +
-          `${String(MAX_OPEN_BYTES)} bytes (8 MiB).`,
-      )
-    }
-    const decoded = decodeMarkdown(bytes)
-    if (decoded === null) {
-      throw new Error(
-        `Cannot open "${path}": the bytes are not valid UTF-8 (markdown is a UTF-8 format; ` +
-          'BOM-prefixed UTF-8/UTF-16 is accepted). Convert the file and retry.',
-      )
-    }
-    // the decoder keeps the BOM as a leading U+FEFF; it lives in the flag and
-    // is re-applied on save, so it must not stay in the editable text
-    const text =
-      decoded.bom && decoded.text.startsWith(BOM_CHAR) ? decoded.text.slice(1) : decoded.text
-    if (decoded.text.includes(NUL_CHAR)) {
-      throw new Error(
-        `Cannot open "${path}": the file contains NUL bytes - it does not look like a text document.`,
-      )
-    }
-    // the line count is checked over the decoded text BEFORE splitLines
-    // allocates one object per line (the byte cap alone does not bound the
-    // model: 8 MiB of bare EOLs is ~4M line objects, hundreds of MB)
-    const lineCount = countLines(text)
-    if (lineCount > MAX_OPEN_LINES) {
-      throw new Error(
-        `"${path}" has ${String(lineCount)} lines; markdown sessions cap at ${String(
-          MAX_OPEN_LINES,
-        )} lines (a file of bare line breaks would otherwise materialize millions of ` +
-          'line objects). Split the file and retry.',
-      )
-    }
-    return new MarkdownSession(
-      randomUUID(),
-      path,
-      root ?? workspaceRoot(),
-      bytes,
-      splitLines(text),
-      decoded.bom,
-      decoded.encoding,
-      stamp,
-    )
+    const { handle, doc } = await LineDocument.open(rawPath, root, markdownHooks)
+    return new MarkdownSession(handle, doc)
   }
 
   // ---- reading ----
 
   meta(): MarkdownSessionMeta {
-    const text = joinLines(this.lines, false)
+    const text = this.doc.text
     return {
       handle: this.handle,
       kind: 'markdown',
@@ -432,29 +213,27 @@ export class MarkdownSession {
       converted: false,
       editable: true,
       warnings:
-        this.encoding === 'utf-8'
+        this.doc.encoding === 'utf-8'
           ? []
-          : [`Original encoding is UTF-16 (${this.encoding}); saving an edit writes UTF-8.`],
-      lineCount: this.lines.length,
-      headingCount: scanHeadings(this.lines).length,
+          : [`Original encoding is UTF-16 (${this.doc.encoding}); saving an edit writes UTF-8.`],
+      lineCount: this.doc.lineCount,
+      headingCount: scanHeadings(this.doc.lines).length,
       wordCount: countWords(text),
       charCount: text.length,
-      eol: dominantEol(this.lines),
-      bom: this.bom,
-      dirty: this.dirty,
+      eol: dominantEol(this.doc.lines),
+      bom: this.doc.bom,
+      dirty: this.doc.isDirty,
     }
   }
 
   private headings(): MarkdownHeading[] {
-    return scanHeadings(this.lines)
+    return scanHeadings(this.doc.lines)
   }
 
   /**
    * Agent-facing read: file header (stats + EOL/BOM), the heading list with
-   * line positions, then the full text. The whole assembly shares the 30k
-   * budget (the heading list is capped per-heading and per-list first), with
-   * a hint to request line ranges instead. With lines/range selected, the full
-   * text section is replaced by exactly those lines.
+   * line positions, then the full text (the shared read tail applies the 30k
+   * budget and the lines/range selection).
    */
   readDocument(options: MarkdownReadOptions = {}): string {
     const meta = this.meta()
@@ -475,96 +254,26 @@ export class MarkdownSession {
       }`,
       ...headingLines.slice(0, HEADING_LIST_MAX),
     ].join('\n')
-
-    const selected = this.selectedIndexes(options)
-    if (selected === null) {
-      const fullText = this.lines.map((l) => l.text).join('\n')
-      return clip(
-        [header, headingsBlock, '', 'Full text (EOLs normalized to LF):', fullText].join('\n'),
-        READ_MAX_CHARS,
-        'request a line range to read the rest',
-      )
-    }
-    const body = selected.map((i) => this.lines[i]!.text).join('\n')
-    return clip(
-      [
-        header,
-        headingsBlock,
-        '',
-        `Selected ${String(selected.length)} line(s) (EOLs normalized to LF):`,
-        body,
-      ].join('\n'),
-      READ_MAX_CHARS,
-      'request a narrower selection',
-    )
-  }
-
-  /** Resolve blocks/range-style selections to validated, sorted line indexes. */
-  private selectedIndexes(options: MarkdownReadOptions): number[] | null {
-    const count = this.lines.length
-    if (options.lines !== undefined) {
-      const valid = options.lines.filter((i) => Number.isInteger(i) && i >= 0 && i < count)
-      const invalid = options.lines.length - valid.length
-      if (invalid > 0) {
-        throw new Error(
-          `${String(invalid)} of the requested line indexes are out of range (file has ${String(count)} lines)`,
-        )
-      }
-      if (valid.length === 0) throw new Error('No lines selected (empty lines/range)')
-      return [...new Set(valid)].sort((a, b) => a - b)
-    }
-    if (options.range !== undefined) {
-      // validate arithmetically and only then materialize: a huge `end` must
-      // fail fast instead of allocating the index array first
-      const { start, end } = options.range
-      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start) {
-        throw new Error(
-          `range start/end must be integers with 0 <= start <= end (got start=${start}, end=${end})`,
-        )
-      }
-      const span = end - start + 1
-      if (span > RANGE_MAX_SPAN) {
-        throw new Error(
-          `range ${String(start)}..${String(end)} spans ${String(span)} lines; the cap is ${String(
-            RANGE_MAX_SPAN,
-          )} per read (split large ranges into smaller reads)`,
-        )
-      }
-      const validEnd = Math.min(end, count - 1)
-      const validCount = Math.max(0, validEnd - start + 1)
-      const invalid = span - validCount
-      if (invalid > 0) {
-        throw new Error(
-          `${String(invalid)} of the requested line indexes are out of range (file has ${String(count)} lines)`,
-        )
-      }
-      if (validCount === 0) throw new Error('No lines selected (empty lines/range)')
-      const indexes: number[] = []
-      for (let i = start; i <= validEnd; i++) indexes.push(i)
-      return indexes
-    }
-    return null
+    return renderRead(header, headingsBlock, this.doc.lines, options)
   }
 
   // ---- editing ----
 
   /**
-   * Give the line at `after` a terminator when it is the file's unterminated
-   * last line and content is being spliced in below it (otherwise the first
-   * inserted line would merge into it on disk). Returns a note when that
-   * changed the file's shape.
+   * Resolve an afterHeading ordinal (markdown's extra insert anchor) to its
+   * line, with the re-read hint on a stale ordinal.
    */
-  private static ensureTerminatedBefore(
-    lines: MarkdownLine[],
-    after: number,
-    eol: string,
-  ): string | null {
-    const target = lines[after]
-    if (target && target.eol === '' && after === lines.length - 1) {
-      target.eol = eol
-      return 'the previous last line had no line break and gained one'
+  private headingInsertLine(afterHeading: number): { ordinal: number; line: number } {
+    const headings = this.headings()
+    const ordinal = Math.trunc(afterHeading)
+    if (ordinal < 1 || ordinal > headings.length) {
+      throw new Error(
+        `afterHeading ${String(ordinal)} is out of range (the document has ${String(
+          headings.length,
+        )} heading(s)) - re-read the document for the current ordinals`,
+      )
     }
-    return null
+    return { ordinal, line: headings[ordinal - 1]!.line }
   }
 
   /**
@@ -582,63 +291,13 @@ export class MarkdownSession {
         `insert text is ${String(text.length)} characters; the cap is ${String(INSERT_MAX_CHARS)}.`,
       )
     }
-    const count = this.lines.length
-    const eol = dominantEol(this.lines)
-    let after: number
-    let where: string
-    if (position.marker !== undefined) {
-      if (position.marker.length === 0) throw new Error('marker must be a non-empty string')
-      const found = this.lines.findIndex((l) => l.text.includes(position.marker!))
-      if (found === -1) {
-        throw new Error(
-          `marker "${position.marker}" does not match any line - re-read the document and retry`,
-        )
-      }
-      after = found
-      where = `after marker line ${String(found)}`
-    } else if (position.afterHeading !== undefined) {
-      const headings = this.headings()
-      const ordinal = Math.trunc(position.afterHeading)
-      if (ordinal < 1 || ordinal > headings.length) {
-        throw new Error(
-          `afterHeading ${String(ordinal)} is out of range (the document has ${String(
-            headings.length,
-          )} heading(s)) - re-read the document for the current ordinals`,
-        )
-      }
-      after = headings[ordinal - 1]!.line
-      where = `after heading ${String(ordinal)} (line ${String(after)})`
-    } else if (position.at !== undefined) {
-      const index = Math.trunc(position.at)
-      if (index < -1 || index > count - 1) {
-        throw new Error(
-          `at ${String(index)} is out of range (line indexes are 0..${String(count - 1)}; ` +
-            'use -1 for the document start) - re-read the document after edits, indexes shift',
-        )
-      }
-      after = index
-      where = after === -1 ? 'at the document start' : `after line ${String(after)}`
-    } else {
-      after = count - 1
-      where = 'at the end of the document'
-    }
-    const shapeNote = MarkdownSession.ensureTerminatedBefore(this.lines, after, eol)
-    // appending at the end preserves the file's trailing-newline shape: a
-    // file that ended without a newline keeps ending without one (shapeNote
-    // firing means exactly that case)
-    const newLines = toLines(text, eol, shapeNote !== null ? '' : eol)
-    this.lines.splice(after + 1, 0, ...newLines)
-    this.dirty = true
-    const detail = `inserted ${String(newLines.length)} line(s) ${where}${
-      shapeNote ? ` (${shapeNote})` : ''
-    }`
-    return {
-      inserted: newLines.length,
-      at: after,
-      lineCount: this.lines.length,
-      dirty: true,
-      detail,
-    }
+    // the heading anchor only resolves when marker does not take precedence,
+    // matching the original marker > afterHeading > at order
+    const afterHeading =
+      position.marker === undefined && position.afterHeading !== undefined
+        ? this.headingInsertLine(position.afterHeading)
+        : undefined
+    return this.doc.insert(text, position, afterHeading !== undefined ? { afterHeading } : {})
   }
 
   /** Apply a batch of line ops atomically (validated/applied on a copy). */
@@ -646,286 +305,24 @@ export class MarkdownSession {
     ops: Array<Record<string, unknown>>,
     dryRun = false,
   ): { results: MarkdownOpResult[]; summary: string; dryRun: boolean } {
-    const work = this.lines.map((l) => ({ ...l }))
-    const results: MarkdownOpResult[] = []
-    const fail = (message: string): never => {
-      throw new Error(`${message} - nothing was applied (atomic); fix and resend the whole batch`)
-    }
-    const lineCount = () => work.length
-    const checkRange = (name: string, from: unknown, to: unknown) => {
-      if (
-        !Number.isInteger(from) ||
-        !Number.isInteger(to) ||
-        (from as number) < 0 ||
-        (to as number) < (from as number) ||
-        (to as number) >= lineCount()
-      ) {
-        fail(
-          `op ${name}: from/to must satisfy 0 <= from <= to < ${String(lineCount())} ` +
-            `(got from=${String(from)}, to=${String(to)}) - re-read the document after edits, ` +
-            'line indexes shift',
-        )
-      }
-    }
-    const takeText = (name: string, value: unknown, required: boolean): string => {
-      if (value === undefined || value === null) {
-        if (required) fail(`op ${name}: text is required`)
-        return ''
-      }
-      if (typeof value !== 'string') fail(`op ${name}: text must be a string`)
-      if ((value as string).length > OPS_TEXT_MAX_CHARS) {
-        fail(
-          `op ${name}: text is ${String((value as string).length)} characters; the cap is ${String(
-            OPS_TEXT_MAX_CHARS,
-          )}`,
-        )
-      }
-      return value as string
-    }
-    const allowed = (op: Record<string, unknown>, name: string, keys: readonly string[]) => {
-      for (const key of Object.keys(op)) {
-        if (key !== 'op' && !keys.includes(key)) fail(`op ${name}: unknown field "${key}"`)
-      }
-    }
-    for (const op of ops) {
-      const name = typeof op.op === 'string' ? op.op : '(missing op name)'
-      switch (name) {
-        case 'insertLines': {
-          allowed(op, name, ['after', 'text'])
-          const after = op.after
-          if (
-            !Number.isInteger(after) ||
-            (after as number) < -1 ||
-            (after as number) > lineCount() - 1
-          ) {
-            fail(
-              `op insertLines: after must be an integer -1..${String(lineCount() - 1)} ` +
-                `(got ${String(after)})`,
-            )
-          }
-          const text = takeText(name, op.text, true)
-          if (text.length === 0) fail('op insertLines: text must be non-empty')
-          const eol = dominantEol(work)
-          const shapeNote = MarkdownSession.ensureTerminatedBefore(work, after as number, eol)
-          // same trailing-newline preservation as insert_content
-          const inserted = toLines(text, eol, shapeNote !== null ? '' : eol)
-          work.splice((after as number) + 1, 0, ...inserted)
-          results.push({
-            op: name,
-            matched: 1,
-            changed: inserted.length,
-            detail: `inserted ${String(inserted.length)} line(s) after line ${String(after)}${
-              shapeNote ? ` (${shapeNote})` : ''
-            }`,
-          })
-          break
-        }
-        case 'replaceLines': {
-          allowed(op, name, ['from', 'to', 'text'])
-          checkRange(name, op.from, op.to)
-          const text =
-            op.text === undefined || op.text === null
-              ? undefined
-              : typeof op.text === 'string'
-                ? op.text
-                : fail('op replaceLines: text must be a string')
-          if (text !== undefined && text.length > OPS_TEXT_MAX_CHARS) {
-            fail(
-              `op replaceLines: text is ${String(text.length)} characters; the cap is ${String(
-                OPS_TEXT_MAX_CHARS,
-              )}`,
-            )
-          }
-          const from = op.from as number
-          const to = op.to as number
-          const eol = dominantEol(work)
-          // replacing the file's unterminated last line keeps that shape
-          const lastEol = to === lineCount() - 1 && work[to]!.eol === '' ? '' : eol
-          const replacement = text === undefined || text === '' ? [] : toLines(text, eol, lastEol)
-          work.splice(from, to - from + 1, ...replacement)
-          results.push({
-            op: name,
-            matched: 1,
-            changed: replacement.length,
-            detail: `replaced lines ${String(from)}-${String(to)} with ${String(
-              replacement.length,
-            )} line(s)`,
-          })
-          break
-        }
-        case 'deleteLines': {
-          allowed(op, name, ['from', 'to'])
-          checkRange(name, op.from, op.to)
-          const from = op.from as number
-          const to = op.to as number
-          work.splice(from, to - from + 1)
-          results.push({
-            op: name,
-            matched: 1,
-            changed: to - from + 1,
-            detail: `deleted lines ${String(from)}-${String(to)}`,
-          })
-          break
-        }
-        case 'findReplace': {
-          allowed(op, name, ['find', 'replace', 'matchCase', 'from', 'to'])
-          const find =
-            typeof op.find === 'string' && op.find.length > 0
-              ? op.find
-              : fail('op findReplace: find must be a non-empty string')
-          if (/[\r\n]/.test(find)) {
-            fail('op findReplace: find must not contain line breaks (replace is line-scoped)')
-          }
-          const replace =
-            typeof op.replace === 'string'
-              ? op.replace
-              : fail('op findReplace: replace must be a string')
-          // a replace with embedded line breaks would leave an EOL inside one
-          // line object, breaking the line-model invariant (every op and the
-          // dominant-EOL accounting assume one line = no inner EOL)
-          if (/[\r\n]/.test(replace)) {
-            fail(
-              'op findReplace: replace must not contain line breaks ' +
-                '(use insertLines or replaceLines for multi-line edits)',
-            )
-          }
-          const matchCase = op.matchCase !== false
-          const from = op.from === undefined ? 0 : op.from
-          const to = op.to === undefined ? lineCount() - 1 : op.to
-          checkRange(name, from, to)
-          const needle = matchCase ? find : find.toLowerCase()
-          let occurrences = 0
-          let changedLines = 0
-          for (let i = from as number; i <= (to as number); i++) {
-            const hay = work[i]!
-            const subject = matchCase ? hay.text : hay.text.toLowerCase()
-            if (!subject.includes(needle)) continue
-            let replaced: string
-            if (matchCase) {
-              occurrences += hay.text.split(find).length - 1
-              replaced = hay.text.split(find).join(replace)
-            } else {
-              // rebuild case-insensitively: walk the lowered subject
-              let out = ''
-              let rest = hay.text
-              let restLower = subject
-              for (;;) {
-                const at = restLower.indexOf(needle)
-                if (at === -1) break
-                out += rest.slice(0, at) + replace
-                rest = rest.slice(at + needle.length)
-                restLower = restLower.slice(at + needle.length)
-                occurrences += 1
-              }
-              replaced = out + rest
-            }
-            work[i] = { ...hay, text: replaced }
-            changedLines += 1
-          }
-          results.push({
-            op: name,
-            matched: occurrences,
-            changed: changedLines,
-            ...(occurrences === 0 ? { detail: 'no matches (nothing changed)' } : {}),
-          })
-          break
-        }
-        default:
-          fail(
-            `unknown op "${name}" - markdown sessions accept insertLines, replaceLines, ` +
-              'deleteLines, findReplace',
-          )
-      }
-    }
-    if (!dryRun) {
-      this.lines = work
-      this.dirty = true
-    }
-    return {
-      results,
-      summary: results
-        .map(
-          (r) =>
-            `${r.op}: matched ${r.matched}, changed ${r.changed}${r.detail ? ` (${r.detail})` : ''}`,
-        )
-        .join('; '),
-      dryRun,
-    }
+    return this.doc.applyOps(ops, dryRun)
   }
 
   // ---- saving ----
 
   /**
-   * Save atomically (tmp + rename) with the docx session's fences: saving over
-   * the opened file refuses when it changed on disk since open; a target that
-   * exists is refused unless the session owns it or overwrite is true. With no
-   * edits the original bytes round-trip verbatim (an untouched file never
-   * changes on disk, whatever its encoding was); an edited save writes UTF-8
-   * with the original BOM flag re-applied.
+   * Save atomically via the shared core (tmp + rename, drift refusal, target
+   * ownership): with no edits the original bytes round-trip verbatim; an
+   * edited save writes UTF-8 with the original BOM flag re-applied.
    */
   async save(rawPath?: string, options: { overwrite?: boolean } = {}): Promise<MarkdownSaveResult> {
-    // the root captured at open, not the live one: a drifted
-    // AIRY_WORKSPACE_ROOT/cwd between open and save must not re-confine the
-    // session (the docx session has the same pinned-root semantics)
-    const target = resolveConfined(rawPath ?? this.path, this.root)
-    await assertSaveTargetFree(target, [this.path, ...this.savedTargets], options.overwrite)
-    if (target === this.path && this.baseline) {
-      let current: FileStamp
-      try {
-        const info = await stat(this.path)
-        current = { mtimeMs: info.mtimeMs, size: info.size }
-      } catch {
-        current = { mtimeMs: -1, size: -1 }
-      }
-      if (current.mtimeMs !== this.baseline.mtimeMs || current.size !== this.baseline.size) {
-        throw new FencingError(this.path)
-      }
-    }
-    const warnings: string[] = []
-    let bytes: Uint8Array
-    let unchanged = false
-    if (!this.dirty) {
-      bytes = this.originalBytes
-      unchanged = true
-    } else {
-      bytes = new TextEncoder().encode(joinLines(this.lines, this.bom))
-      if (this.encoding !== 'utf-8') {
-        warnings.push(`Original encoding was ${this.encoding}; the edited copy is saved as UTF-8.`)
-      }
-    }
-    await mkdir(dirname(target), { recursive: true })
-    // basename, not a '/'-split: on Windows the split leaves the whole path
-    // in the temp name and writeFile fails on the colons/backslashes
-    const tmp = join(dirname(target), `.${basename(target) || 'markdown'}.airy-${randomUUID()}`)
-    await writeFile(tmp, bytes)
-    if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
-      await rename(tmp, target)
-    } else {
-      await promoteNewFileExclusively(tmp, target)
-    }
-    if (target === this.path) {
-      try {
-        const info = await stat(this.path)
-        this.baseline = { mtimeMs: info.mtimeMs, size: info.size }
-      } catch {
-        this.baseline = null
-      }
-    }
-    this.savedTargets.add(target)
-    return { path: target, bytes: bytes.byteLength, unchanged, warnings }
+    return this.doc.save(rawPath, options)
   }
 
   /** Markdown sessions hold no external resources. */
   close(): Promise<string[]> {
     return Promise.resolve([])
   }
-}
-
-/** clip long read output at the MCP answer budget, with an actionable note */
-function clip(text: string, max: number, hint: string): string {
-  return text.length <= max
-    ? text
-    : `${text.slice(0, max)}\n...(output truncated at ${String(max)} characters; ${hint})`
 }
 
 /** cap one heading's text in the read summary (heading lines can be megabytes) */
