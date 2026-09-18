@@ -57,6 +57,39 @@ describe('mapProtectedRanges', () => {
     expect(mapped).toEqual([range('Data', 'A1:B3 E1:E3')])
   })
 
+  it('maps whole-column and whole-row areas through moves on their own axis', () => {
+    // Column A moves right past B-C: file columns B-C land on screen A-B;
+    // the whole-row sibling carries no column coordinate and stays put.
+    const mapped = mapProtectedRanges(
+      [range('Cols', 'B:C'), range('Rows', '2:3')],
+      [{ kind: 'move-cols', index: 0, count: 1, before: 3 }],
+    )
+    expect(mapped).toEqual([range('Cols', 'A:B'), range('Rows', '2:3')])
+    // Rows 2-3 move right past row 4: file rows 2-3 land on screen 3-4; the
+    // whole-column sibling is row-op invariant.
+    const rowsMoved = mapProtectedRanges(
+      [range('Cols', 'B:C'), range('Rows', '2:3')],
+      [{ kind: 'move-rows', index: 1, count: 2, before: 4 }],
+    )
+    expect(rowsMoved).toEqual([range('Cols', 'B:C'), range('Rows', '3:4')])
+  })
+
+  it('splits a torn whole-column area into exact runs and shrinks it on deletes', () => {
+    // Column A moves right past B: file A lands on screen C while B stays —
+    // the whole-column area A:B has no single-span image, so it splits into
+    // exact runs instead of staying stale on the old columns.
+    const torn = mapProtectedRanges(
+      [range('Torn', 'A:B')],
+      [{ kind: 'move-cols', index: 0, count: 1, before: 3 }],
+    )
+    expect(torn).toEqual([range('Torn', 'A:A C:C')])
+    const shrunk = mapProtectedRanges(
+      [range('Cols', 'B:C'), range('Rows', '1:4')],
+      [{ kind: 'remove-cols', index: 1, count: 1 }],
+    )
+    expect(shrunk).toEqual([range('Cols', 'B:B'), range('Rows', '1:4')])
+  })
+
   it('returns the input unchanged without ops and keeps unparseable parts', () => {
     const untouched = [range('Data', 'B3:D6')]
     expect(mapProtectedRanges(untouched, [])).toEqual(untouched)
