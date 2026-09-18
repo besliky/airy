@@ -212,8 +212,10 @@ function compareByType(a: string, b: string, type: SortFieldType): number {
   if (type === 'number') {
     const x = parseSortNumber(a)
     const y = parseSortNumber(b)
-    // unparseable entries sort after numeric ones in both directions (Word keeps
-    // non-numeric text at the bottom of a numeric column)
+    // unparseable entries sort after numeric ones ascending; `descending`
+    // negates the comparison wholesale (compareLevels), so they land BEFORE
+    // numbers then — Word/Excel comparators order text above numbers in a
+    // descending numeric column too (BUG-744: this is the intended behavior)
     if (x === null && y === null) return 0
     if (x === null) return 1
     if (y === null) return -1
