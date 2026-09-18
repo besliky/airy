@@ -784,10 +784,14 @@ export function SmartArtInsertModal({ editor, onClose }: { editor: Editor; onClo
     >
       <div className="modal modal-smartart" {...dialog.dialogProps}>
         <h2 {...dialog.titleProps}>{t('ribbonSmartArtInsertTitle')}</h2>
-        <div className="smartart-gallery">
+        {/* Layout gallery is a functional radio group: one of four mutually
+         * exclusive layouts, selection matters for the insert */}
+        <div className="smartart-gallery" role="radiogroup" aria-label={t('ribbonSmartArt')}>
           {SMARTART_GALLERY.map((preset) => (
             <button
               key={preset.kind}
+              role="radio"
+              aria-checked={kind === preset.kind}
               className={`smartart-cell${kind === preset.kind ? ' selected' : ''}`}
               onClick={() => {
                 setKind(preset.kind)
@@ -843,6 +847,7 @@ export function SmartArtInsertModal({ editor, onClose }: { editor: Editor; onClo
               <input
                 value={node.text}
                 placeholder={t('ribbonSmartNodeText')}
+                aria-label={t('ribbonSmartItemN', { n: i + 1 })}
                 onChange={(e) => setNode(i, { text: e.target.value })}
                 onKeyDown={(e) => e.key === 'Enter' && insert()}
               />
