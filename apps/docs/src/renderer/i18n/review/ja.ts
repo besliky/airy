@@ -12,4 +12,6 @@ export const ja = {
     'ドキュメントが大きすぎて段落を正確に照合できません：差分は位置でペアリングされました',
   reviewComparePendingRevisions:
     'ドキュメントに未処理の変更履歴があります。再度比較する前に、これらを承認または却下してください',
+  reviewCompareReadonly:
+    '比較（変更履歴へのマージ）には編集可能なドキュメントが必要です。このドキュメントは読み取り専用です',
 } satisfies Record<keyof typeof zh, string>

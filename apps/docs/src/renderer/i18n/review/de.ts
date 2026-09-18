@@ -12,4 +12,6 @@ export const de = {
     'Die Dokumente sind für einen exakten Absatzabgleich zu groß: Unterschiede wurden positionell gepaart',
   reviewComparePendingRevisions:
     'Das Dokument enthält offene Änderungen. Nehmen Sie sie an oder lehnen Sie sie ab, bevor Sie erneut vergleichen',
+  reviewCompareReadonly:
+    'Vergleichen (als Änderungen zusammenführen) erfordert ein bearbeitbares Dokument; dieses Dokument ist schreibgeschützt',
 } satisfies Record<keyof typeof zh, string>

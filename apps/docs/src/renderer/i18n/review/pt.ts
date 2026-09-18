@@ -12,4 +12,6 @@ export const pt = {
     'Os documentos são grandes demais para correspondência exata de parágrafos: as diferenças foram pareadas por posição',
   reviewComparePendingRevisions:
     'O documento tem alterações controladas pendentes. Aceite-as ou rejeite-as antes de comparar novamente',
+  reviewCompareReadonly:
+    'Comparar (mesclar como alterações) requer um documento editável; este documento é somente leitura',
 } satisfies Record<keyof typeof zh, string>

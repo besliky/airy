@@ -18,11 +18,12 @@ const para = (text: string, marks?: PmNode['marks']): PmNode => ({
   ...(text ? { content: [{ type: 'text', text, ...(marks ? { marks } : {}) }] } : {}),
 })
 
-function createEditor(content: PmNode[]): Editor {
+function createEditor(content: PmNode[], editable = true): Editor {
   return new Editor({
     element: document.createElement('div'),
     extensions: editorExtensions,
     content: { type: 'doc', content },
+    editable,
   })
 }
 
@@ -40,7 +41,7 @@ function makeCtx(editor: Editor | null, parsedBlocks: unknown[] = []) {
   return { ctx, status }
 }
 
-describe('compareWithFile guards (BUG-913 budget, BUG-915 pending revisions)', () => {
+describe('compareWithFile guards (BUG-915 pending revisions, UX-903 read-only editor)', () => {
   beforeAll(async () => {
     const bytes = await buildDocx({ bodyXml: '<w:p><w:r><w:t>New text</w:t></w:r></w:p>' })
     openDocx.mockResolvedValue({ name: 'other.docx', data: bytes })
@@ -50,7 +51,7 @@ describe('compareWithFile guards (BUG-913 budget, BUG-915 pending revisions)', (
     openDocx.mockClear()
   })
 
-  it('merges into an editable document (positive control)', async () => {
+  it('merges into an editable document without pending revisions (positive control)', async () => {
     const editor = createEditor([para('Original text')])
     const dispatch = vi.spyOn(editor.view, 'dispatch')
     const { ctx, status } = makeCtx(editor)
@@ -61,6 +62,19 @@ describe('compareWithFile guards (BUG-913 budget, BUG-915 pending revisions)', (
     expect(status.at(-1)).toBe(
       t('reviewCompareMerged', { name: 'other.docx', added: 0, removed: 0, changed: 1 }),
     )
+    editor.destroy()
+  })
+
+  it('refuses the merge on a read-only editor: zero transactions, no picker (UX-903)', async () => {
+    const editor = createEditor([para('Original text')], false)
+    expect(editor.isEditable).toBe(false)
+    const dispatch = vi.spyOn(editor.view, 'dispatch')
+    const { ctx, status } = makeCtx(editor)
+    await compareWithFile(ctx, 'merge')
+    expect(openDocx).not.toHaveBeenCalled()
+    expect(dispatch).not.toHaveBeenCalled()
+    expect(ctx.dirtyRef.current).toBe(false)
+    expect(status.at(-1)).toBe(t('reviewCompareReadonly'))
     editor.destroy()
   })
 
@@ -80,7 +94,18 @@ describe('compareWithFile guards (BUG-913 budget, BUG-915 pending revisions)', (
     editor.destroy()
   })
 
-  it('warns when the compared documents exceed the paragraph budget', async () => {
+  it('keeps the read-only-safe differences pane available in a read-only document (UX-903)', async () => {
+    const editor = createEditor([para('Original text')], false)
+    const dispatch = vi.spyOn(editor.view, 'dispatch')
+    const { ctx } = makeCtx(editor, [{ runs: [{ text: 'Original text' }] }])
+    await compareWithFile(ctx, 'panel')
+    expect(openDocx).toHaveBeenCalledTimes(1)
+    expect(dispatch).not.toHaveBeenCalled()
+    expect(ctx.setCompareResult).toHaveBeenCalledTimes(1)
+    editor.destroy()
+  })
+
+  it('warns when the compared documents exceed the paragraph budget (BUG-913 panel path)', async () => {
     // (2200+1)^2 = 4.84M cells > the 4M paragraph budget
     const paras = Array.from({ length: 2200 }, (_, i) => `<w:p><w:r><w:t>p ${i}</w:t></w:r></w:p>`)
     const bytes = await buildDocx({ bodyXml: paras.join('') })

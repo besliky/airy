@@ -668,6 +668,12 @@ interface ReviewTabProps extends TabProps {
   onProtectDoc: () => void
   /** Review → Compare: 'merge' records the differences as tracked changes, 'panel' opens the differences pane */
   onCompare: (mode: 'merge' | 'panel') => void
+  /**
+   * editing is possible (document open, not protected / Read Mode). Only the
+   * document-mutating Compare merge is gated on it (UX-903); the differences
+   * pane is read-only and stays available.
+   */
+  canEdit: boolean
 }
 
 export function ReviewTab({
@@ -697,6 +703,7 @@ export function ReviewTab({
   protectActive,
   onProtectDoc,
   onCompare,
+  canEdit,
 }: ReviewTabProps) {
   const { t } = useI18n()
   // One-time acknowledgement before whole-document AI rewrites:
@@ -1037,7 +1044,11 @@ export function ReviewTab({
             </button>
             {dropdown === 'compare' && (
               <div data-rb-panel="" className="layout-menu">
+                {/* UX-903: the merge rebuilds the document, so it needs an editable
+                    one — read-only docs and enforced tracking (whose revisions can
+                    never be accepted/rejected here) only get the plain pane */}
                 <button
+                  disabled={!canEdit || trackChangesForced}
                   onClick={() => {
                     onCompare('merge')
                     setDropdown(() => null)

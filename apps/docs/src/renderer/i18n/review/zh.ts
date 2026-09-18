@@ -9,4 +9,5 @@ export const zh = {
   reviewCompareIdentical: '与 {name} 无差异：两份文档内容相同',
   reviewCompareDegraded: '文档过大，无法精确对齐段落：差异按位置配对',
   reviewComparePendingRevisions: '文档中还有未处理的修订。请先接受或拒绝这些修订，再进行比较',
+  reviewCompareReadonly: '比较（修订合并）需要可编辑的文档；当前文档为只读',
 }

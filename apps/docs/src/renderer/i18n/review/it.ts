@@ -12,4 +12,6 @@ export const it = {
     'I documenti sono troppo grandi per un allineamento esatto dei paragrafi: le differenze sono state abbinate per posizione',
   reviewComparePendingRevisions:
     'Il documento contiene revisioni in sospeso. Accettale o rifiutale prima di confrontare di nuovo',
+  reviewCompareReadonly:
+    'Confronta (unisci come revisioni) richiede un documento modificabile; questo documento è in sola lettura',
 } satisfies Record<keyof typeof zh, string>

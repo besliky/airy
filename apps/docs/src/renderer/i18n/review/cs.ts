@@ -12,4 +12,6 @@ export const cs = {
     'Dokumenty jsou příliš velké pro přesné párování odstavců: rozdíly byly spárovány podle pozice',
   reviewComparePendingRevisions:
     'Dokument obsahuje nevyřízené sledované změny. Před novým porovnáním je přijměte nebo odmítněte',
+  reviewCompareReadonly:
+    'Porovnání (sloučit jako sledované změny) vyžaduje upravitelný dokument; tento dokument je jen pro čtení',
 } satisfies Record<keyof typeof zh, string>

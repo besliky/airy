@@ -12,4 +12,6 @@ export const es = {
     'Los documentos son demasiado grandes para una coincidencia exacta de párrafos: las diferencias se emparejaron por posición',
   reviewComparePendingRevisions:
     'El documento tiene cambios controlados pendientes. Acéptelos o rechácelos antes de volver a comparar',
+  reviewCompareReadonly:
+    'Comparar (fusionar como cambios) necesita un documento editable; este documento es de solo lectura',
 } satisfies Record<keyof typeof zh, string>

@@ -11,4 +11,6 @@ export const he = {
   reviewCompareDegraded: 'המסמכים גדולים מדי להתאמת פסקאות מדויקת: ההבדלים נוצוו לפי מיקום',
   reviewComparePendingRevisions:
     'במסמך יש שינויים מסומנים ממתינים. קבל או דחה אותם לפני השוואה נוספת',
+  reviewCompareReadonly:
+    'השוואה (מזג כשינויים מסומנים) דורשת מסמך הניתן לעריכה; מסמך זה הוא לקריאה בלבד',
 } satisfies Record<keyof typeof zh, string>

@@ -12,4 +12,6 @@ export const id = {
     'Dokumen terlalu besar untuk pencocokan paragraf yang tepat: perbedaan dipasangkan berdasarkan posisi',
   reviewComparePendingRevisions:
     'Dokumen memiliki perubahan terlacak yang tertunda. Terima atau tolak sebelum membandingkan lagi',
+  reviewCompareReadonly:
+    'Bandingkan (gabungkan sebagai perubahan terlacak) membutuhkan dokumen yang dapat diedit; dokumen ini hanya-baca',
 } satisfies Record<keyof typeof zh, string>

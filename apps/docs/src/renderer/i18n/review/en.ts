@@ -12,4 +12,6 @@ export const en = {
     'The documents are too large for exact paragraph matching: differences were paired by position',
   reviewComparePendingRevisions:
     'The document has pending tracked changes. Accept or reject them before comparing again',
+  reviewCompareReadonly:
+    'Compare (Legal Blackline) needs an editable document; this document is read-only',
 } satisfies Record<keyof typeof zh, string>

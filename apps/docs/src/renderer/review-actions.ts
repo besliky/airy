@@ -293,7 +293,15 @@ export function clearInks(ctx: ReviewContext): void {
 export async function compareWithFile(ctx: ReviewContext, mode: 'panel' | 'merge'): Promise<void> {
   if (!ctx.doc) return
   const editor = ctx.editor
-  if (mode === 'merge' && editor) {
+  if (mode === 'merge') {
+    if (!editor) return
+    // UX-903: the merge rebuilds the whole document via a programmatic
+    // dispatch, which setEditable(false) alone does not fence — a read-only
+    // editor (Restrict Editing / write lock / Read Mode) must refuse here
+    if (!editor.isEditable) {
+      ctx.setStatus(t('reviewCompareReadonly'))
+      return
+    }
     // BUG-915: refuse to stack a second blackline over pending revisions —
     // the paragraph keys would count struck/underlined text as plain text,
     // the pairing slides and spans get re-stamped, mixing authors/dates from
@@ -323,7 +331,7 @@ export async function compareWithFile(ctx: ReviewContext, mode: 'panel' | 'merge
       if (degraded) ctx.setStatus(t('reviewCompareDegraded'))
       return
     }
-    // panel mode returned above; only the merge path continues (guarded above)
+    // panel mode returned above; only the merge path continues (editor guarded above)
     if (!editor) return
     const { content, summary, degraded } = mergeCompareDocs(
       editor.getJSON().content ?? [],

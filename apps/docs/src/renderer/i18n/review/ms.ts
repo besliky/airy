@@ -12,4 +12,6 @@ export const ms = {
     'Dokumen terlalu besar untuk padanan perenggan tepat: perbezaan dipasangkan mengikut kedudukan',
   reviewComparePendingRevisions:
     'Dokumen mengandungi perubahan dijejak yang tertunda. Terima atau tolak dahulu sebelum membanding semula',
+  reviewCompareReadonly:
+    'Bandingkan (gabung sebagai perubahan dijejak) memerlukan dokumen yang boleh diedit; dokumen ini baca sahaja',
 } satisfies Record<keyof typeof zh, string>
