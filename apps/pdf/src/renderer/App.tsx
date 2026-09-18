@@ -104,6 +104,7 @@ import {
   useRibbonCollapse,
 } from '@airy-office/ui'
 import { useI18n } from './i18n/locale'
+import { InsertPagesDialog } from './InsertPagesDialog'
 import { useAutosave } from './useAutosave'
 import type {
   AnnotDeleteInput,
@@ -271,12 +272,6 @@ const RIBBON_TABS = [
   { id: 'view', labelKey: 'ribbonTabView' },
 ] as const
 type RibbonTab = (typeof RIBBON_TABS)[number]['id'] | 'fillForm'
-
-/** Insert-source preview tile size: the page shape scaled to fit a 44px box */
-const insertTileSize = (shape: InsertSourcePageShape): { width: number; height: number } => {
-  const k = 44 / Math.max(shape.width, shape.height, 1)
-  return { width: Math.max(10, shape.width * k), height: Math.max(10, shape.height * k) }
-}
 
 export default function App() {
   const { lang, t } = useI18n()
@@ -8513,119 +8508,26 @@ export default function App() {
               </div>
             )}
             {insertPdfDlg && insertSource && (
-              <div className="pdf-modal-mask" onClick={() => setInsertPdfDlg(false)}>
-                <div className="pdf-modal" onClick={(e) => e.stopPropagation()}>
-                  <div className="pdf-modal-title">{t('insertPdfPagesTitle')}</div>
-                  <div className="pdf-modal-hint">
-                    {t('insertPdfSourceInfo', {
-                      name: insertSource.name,
-                      total: insertSource.pages.length,
-                    })}
-                  </div>
-                  <div className="insert-source-pages">
-                    {insertSource.pages.slice(0, 12).map((shape, i) => {
-                      const tile = insertTileSize(shape)
-                      return (
-                        <div
-                          key={i}
-                          className="insert-source-tile"
-                          style={{ width: tile.width, height: tile.height }}
-                          title={`${shape.width}×${shape.height}`}
-                        >
-                          {i + 1}
-                        </div>
-                      )
-                    })}
-                    {insertSource.pages.length > 12 && (
-                      <div
-                        className="insert-source-tile insert-source-more"
-                        style={insertTileSize(insertSource.pages[0]!)}
-                      >
-                        +{insertSource.pages.length - 12}
-                      </div>
-                    )}
-                  </div>
-                  <div className="pdf-modal-row">
-                    <span>{t('insertPdfPosition')}</span>
-                    <label className="pdf-modal-check">
-                      <input
-                        type="radio"
-                        name="insert-pos"
-                        checked={insertPos === 'front'}
-                        onChange={() => setInsertPos('front')}
-                      />
-                      {t('insertPosFront')}
-                    </label>
-                    <label className="pdf-modal-check">
-                      <input
-                        type="radio"
-                        name="insert-pos"
-                        checked={insertPos === 'current'}
-                        onChange={() => setInsertPos('current')}
-                      />
-                      {t('insertPosCurrent', { page: currentPage })}
-                    </label>
-                  </div>
-                  <div className="pdf-modal-row">
-                    <span />
-                    <label className="pdf-modal-check">
-                      <input
-                        type="radio"
-                        name="insert-pos"
-                        checked={insertPos === 'after'}
-                        onChange={() => setInsertPos('after')}
-                      />
-                      {t('insertPosAfter')}
-                      <input
-                        className={`pdf-modal-input insert-after-page${
-                          insertAfterInvalid ? ' invalid' : ''
-                        }`}
-                        value={insertAfterPage}
-                        disabled={insertPos !== 'after'}
-                        onChange={(e) => {
-                          setInsertAfterPage(e.target.value)
-                          setInsertAfterInvalid(false)
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') confirmInsertPdf()
-                          else if (e.key === 'Escape') setInsertPdfDlg(false)
-                        }}
-                      />
-                    </label>
-                    <label className="pdf-modal-check">
-                      <input
-                        type="radio"
-                        name="insert-pos"
-                        checked={insertPos === 'end'}
-                        onChange={() => setInsertPos('end')}
-                      />
-                      {t('insertPosEnd')}
-                    </label>
-                  </div>
-                  <input
-                    className={`pdf-modal-input${insertRangeInvalid ? ' invalid' : ''}`}
-                    value={insertRange}
-                    placeholder={t('insertPdfRangeHint', { total: insertSource.pages.length })}
-                    autoFocus
-                    onChange={(e) => {
-                      setInsertRange(e.target.value)
-                      setInsertRangeInvalid(false)
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') confirmInsertPdf()
-                      else if (e.key === 'Escape') setInsertPdfDlg(false)
-                    }}
-                  />
-                  <div className="pdf-modal-actions">
-                    <button className="pdf-modal-btn" onClick={() => setInsertPdfDlg(false)}>
-                      {t('cancel')}
-                    </button>
-                    <button className="pdf-modal-btn primary" onClick={confirmInsertPdf}>
-                      {t('ok')}
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <InsertPagesDialog
+                source={insertSource}
+                currentPage={currentPage}
+                pos={insertPos}
+                onPos={setInsertPos}
+                afterPage={insertAfterPage}
+                onAfterPage={(value) => {
+                  setInsertAfterPage(value)
+                  setInsertAfterInvalid(false)
+                }}
+                afterInvalid={insertAfterInvalid}
+                range={insertRange}
+                onRange={(value) => {
+                  setInsertRange(value)
+                  setInsertRangeInvalid(false)
+                }}
+                rangeInvalid={insertRangeInvalid}
+                onConfirm={confirmInsertPdf}
+                onClose={() => setInsertPdfDlg(false)}
+              />
             )}
             {pageSizeDlg && (
               <div className="pdf-modal-mask" onClick={() => setPageSizeDlg(false)}>
