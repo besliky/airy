@@ -14,7 +14,7 @@ import '@univerjs/preset-sheets-core/lib/index.css'
 
 import { App } from './App'
 import { installCanvasFontFallback, registerCellFontAliases } from './cell-font-fallback'
-import { LocaleProvider, setModuleLang } from './i18n/locale'
+import { LocaleProvider, loadLocale, setModuleLang } from './i18n/locale'
 import type { UiTheme } from '../shared/desktop-api'
 import './styles.css'
 
@@ -66,11 +66,15 @@ async function bootstrap(): Promise<void> {
   } catch {
     /* dev renderer without the preload bridge */
   }
+  // PERF-901: the UI-language dictionary is a lazy chunk fetched for this one
+  // locale (the other 18 stay unloaded); it rides next to the font preload so
+  // it adds no serial wait before the first frame.
+  const stringsReady = loadLocale(lang)
   setModuleLang(lang)
   document.documentElement.lang = htmlLang(lang)
   document.documentElement.dir = htmlDir(lang)
   applyTheme(theme)
-  await loadCellFonts()
+  await Promise.all([stringsReady, loadCellFonts()])
   window.desktopApi?.onThemeChanged(applyTheme)
   void window.desktopApi
     ?.getAiPanelPrefs?.()
