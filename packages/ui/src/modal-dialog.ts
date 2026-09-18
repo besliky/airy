@@ -105,9 +105,9 @@ export function useModalDialog(onClose: () => void): ModalDialogController {
       // jsdom has no layout: there everything counts as rendered
       (el) => typeof el.checkVisibility !== 'function' || el.checkVisibility(),
     )
-    if (focusables.length === 0) return
     const first = focusables[0]
     const last = focusables[focusables.length - 1]
+    if (!first || !last) return
     const active = document.activeElement
     const inside = root.contains(active)
     // wrap at the ends, and pull focus back in if it escaped the dialog
