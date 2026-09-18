@@ -216,9 +216,10 @@ export function parseSortDate(text: string): number | null {
   return null
 }
 
-/** two-digit years: 00-39 -> 2000s, 40-99 -> 1900s (the Excel pivot) */
+/** two-digit years: 00-29 -> 2000s, 30-99 -> 1900s (Office's 2029 pivot —
+ *  current Word/Excel; the 00-39 split was Excel 97's default) */
 function year2k(two: number): boolean {
-  return two <= 39
+  return two <= 29
 }
 
 function compareByType(a: string, b: string, type: SortFieldType): number {

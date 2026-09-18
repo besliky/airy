@@ -65,6 +65,15 @@ describe('sort key parsing', () => {
     expect(new Date(parseSortDate('0066-05-05')!).getUTCFullYear()).toBe(66)
     expect(parseSortDate('0066-05-05')!).toBeLessThan(parseSortDate('1000-01-01')!)
   })
+
+  it('applies the Office 2029 pivot to two-digit years (BUG-706)', () => {
+    // 00-29 -> 2000s, 30-99 -> 1900s (the split Excel 97 used, 00-39, is
+    // not what current Word/Excel apply)
+    expect(new Date(parseSortDate('01/01/29')!).getUTCFullYear()).toBe(2029)
+    expect(new Date(parseSortDate('31/12/30')!).getUTCFullYear()).toBe(1930)
+    expect(new Date(parseSortDate('15/06/45')!).getUTCFullYear()).toBe(1945)
+    expect(parseSortDate('31/12/30')!).toBeLessThan(parseSortDate('01/01/29')!)
+  })
 })
 
 /* ================= table sorting ================= */
