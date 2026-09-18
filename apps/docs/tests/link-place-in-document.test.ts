@@ -16,7 +16,11 @@ import { parseDocx, saveDocx } from '@airy-office/docx-engine'
 import JSZip from 'jszip'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from '../src/renderer/editor/convert'
-import { editorExtensions, resolveInternalLinkTarget } from '../src/renderer/editor/extensions'
+import {
+  editorExtensions,
+  isInternalLinkNavClick,
+  resolveInternalLinkTarget,
+} from '../src/renderer/editor/extensions'
 import {
   collectLinkTargets,
   ensureHeadingTocAnchor,
@@ -271,6 +275,18 @@ describe('internal hyperlink save round-trip (w:anchor)', () => {
 })
 
 describe('internal link jump (mod+click)', () => {
+  it('the jump modifier excludes Ctrl on macOS: that click is the context menu (BUG-711)', () => {
+    // mac: Cmd+click jumps; Ctrl+click (right-click) and Cmd+Ctrl must not
+    expect(isInternalLinkNavClick({ metaKey: true, ctrlKey: false }, true)).toBe(true)
+    expect(isInternalLinkNavClick({ metaKey: false, ctrlKey: true }, true)).toBe(false)
+    expect(isInternalLinkNavClick({ metaKey: true, ctrlKey: true }, true)).toBe(false)
+    expect(isInternalLinkNavClick({ metaKey: false, ctrlKey: false }, true)).toBe(false)
+    // elsewhere both Ctrl+click and Cmd+click jump (unchanged behavior)
+    expect(isInternalLinkNavClick({ metaKey: false, ctrlKey: true }, false)).toBe(true)
+    expect(isInternalLinkNavClick({ metaKey: true, ctrlKey: false }, false)).toBe(true)
+    expect(isInternalLinkNavClick({ metaKey: false, ctrlKey: false }, false)).toBe(false)
+  })
+
   it('resolves bookmark and hidden-bookmark targets to their node positions', () => {
     const editor = makeEditor()
     const doc = editor.state.doc
