@@ -154,26 +154,35 @@ export interface FramerResult {
 /**
  * Accumulates socket chunks into complete NDJSON lines. Carriage returns are
  * tolerated so a CRLF-flavored client (or terminal echo) still frames cleanly.
+ *
+ * Input is accumulated as raw bytes and only complete lines are decoded: a
+ * socket chunk may split a multi-byte UTF-8 sequence mid-character, and
+ * decoding each chunk separately would turn the halves into U+FFFD.
  */
 export class NdjsonFramer {
-  private buffer = ''
+  private buffer: Buffer = Buffer.alloc(0)
   constructor(
     /** caps a single message so a rogue client cannot grow memory without bound */
     readonly maxLineBytes = 8 * 1024 * 1024,
   ) {}
 
   push(chunk: string | Buffer): FramerResult {
-    this.buffer += typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+    const incoming = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk
+    this.buffer = this.buffer.length === 0 ? incoming : Buffer.concat([this.buffer, incoming])
     const lines: string[] = []
-    let newline = this.buffer.indexOf('\n')
+    // 0x0A never appears inside a multi-byte UTF-8 sequence (continuation
+    // bytes are >= 0x80), so line boundaries are safe to find on raw bytes.
+    let newline = this.buffer.indexOf(0x0a)
     while (newline !== -1) {
-      const line = this.buffer.slice(0, newline).replace(/\r$/, '')
-      this.buffer = this.buffer.slice(newline + 1)
-      lines.push(line)
-      newline = this.buffer.indexOf('\n')
+      // a 0x0D directly before the LF is CRLF noise, never a sequence byte
+      const end = newline > 0 && this.buffer[newline - 1] === 0x0d ? newline - 1 : newline
+      lines.push(this.buffer.toString('utf8', 0, end))
+      this.buffer = this.buffer.subarray(newline + 1)
+      newline = this.buffer.indexOf(0x0a)
     }
-    // Buffer.toString splits a multi-byte character at the chunk edge; the
-    // length check is a byte-ish approximation, good enough as a bound.
+    // the tail without a newline stays as bytes until more chunks arrive (a
+    // peer that never terminates it simply never gets the line); the cap
+    // counts bytes of that pending tail
     const overflow = this.buffer.length > this.maxLineBytes
     return { lines, overflow }
   }
