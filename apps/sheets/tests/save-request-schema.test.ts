@@ -118,4 +118,33 @@ describe('workbookSaveRequestSchema', () => {
       ),
     ).not.toThrow()
   })
+
+  it('rejects inserts/removes whose block runs past the sheet edge (index+count)', () => {
+    // BUG-905: BUG-783 bounded only the move family; insert/remove checked
+    // index and count separately, so a hand-built op (a compromised renderer
+    // is the threat model — the UI gates its own ops) could insert rows
+    // starting at the last row and renumber the sheet past its edge,
+    // producing an XLSX Excel has to repair.
+    const request = (op: Record<string, unknown>) => ({
+      ...emptyRequest('save'),
+      structuralOps: [{ sheetId: 'sh1', ...op }],
+    })
+    for (const kind of ['insert-rows', 'remove-rows'] as const) {
+      expect(() =>
+        workbookSaveRequestSchema.parse(request({ kind, index: 1_048_575, count: 2 })),
+      ).toThrow(/fit inside the sheet/)
+    }
+    for (const kind of ['insert-cols', 'remove-cols'] as const) {
+      expect(() =>
+        workbookSaveRequestSchema.parse(request({ kind, index: 16_383, count: 2 })),
+      ).toThrow(/fit inside the sheet/)
+    }
+    // The largest block that exactly reaches the edge stays valid.
+    expect(() =>
+      workbookSaveRequestSchema.parse(request({ kind: 'insert-rows', index: 1_048_575, count: 1 })),
+    ).not.toThrow()
+    expect(() =>
+      workbookSaveRequestSchema.parse(request({ kind: 'remove-cols', index: 16_383, count: 1 })),
+    ).not.toThrow()
+  })
 })

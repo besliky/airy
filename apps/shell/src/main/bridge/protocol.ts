@@ -152,6 +152,25 @@ export interface FramerResult {
 }
 
 /**
+ * Arrivals below this size coalesce into the framer's tail scratch (see
+ * NdjsonFramer.append): a dribbled line arrives as many tiny chunks, and each
+ * Buffer object costs ~an order of magnitude more than the byte it carries.
+ */
+const COALESCE_LIMIT_BYTES = 64 * 1024
+/** initial capacity of a fresh tail scratch — doubling keeps appends amortized */
+const SCRATCH_MIN_BYTES = 4 * 1024
+
+/**
+ * Size contract (both directions): one NDJSON message — request or response —
+ * must fit inside maxLineBytes (8MB by default). A request over the cap is
+ * answered invalid_request and the connection is closed; a response over the
+ * cap is replaced by the server with a typed invalid_request error so the
+ * client sees the failure instead of its framer silently dropping the
+ * connection (BUG-904). Tools that can return unbounded payloads must
+ * paginate or truncate before the wire, not after.
+ */
+
+/**
  * Accumulates socket chunks into complete NDJSON lines. Carriage returns are
  * tolerated so a CRLF-flavored client (or terminal echo) still frames cleanly.
  *
@@ -161,7 +180,10 @@ export interface FramerResult {
  *
  * The pending tail is kept as the list of chunks it arrived in: rebuilding a
  * single buffer per push made a dribbled unterminated line O(n²) in copied
- * bytes, and only the extracted lines are ever concatenated.
+ * bytes, and only the extracted lines are ever concatenated. Dribbled small
+ * arrivals are additionally coalesced into that last chunk (a scratch buffer
+ * with doubling headroom), so a slow-dripped line also costs one live Buffer
+ * instead of one per socket chunk (BUG-903).
  */
 export class NdjsonFramer {
   private chunks: Buffer[] = []
@@ -169,6 +191,9 @@ export class NdjsonFramer {
   /** resume point of the LF scan, right after the last extracted line */
   private scanChunk = 0
   private scanOffset = 0
+  /** backing store of the coalescing tail; chunks[chunks.length-1] is its used-prefix view */
+  private scratch: Buffer | null = null
+  private scratchCap = 0
   constructor(
     /** caps a single message so a rogue client cannot grow memory without bound */
     readonly maxLineBytes = 8 * 1024 * 1024,
@@ -177,7 +202,7 @@ export class NdjsonFramer {
   push(chunk: string | Buffer): FramerResult {
     const incoming = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk
     if (incoming.length > 0) {
-      this.chunks.push(incoming)
+      this.append(incoming)
       this.pending += incoming.length
     }
     const lines: string[] = []
@@ -238,6 +263,9 @@ export class NdjsonFramer {
       else this.chunks[0] = rest
       this.scanChunk = 0
       this.scanOffset = 0
+      // extraction may have consumed into the tail scratch — its live prefix
+      // moved, so freeze it; the next small arrival starts a fresh scratch
+      this.scratch = null
     }
     if (this.chunks.length === 0) {
       this.scanChunk = 0
@@ -251,6 +279,52 @@ export class NdjsonFramer {
     // counts bytes of that pending tail
     const overflow = this.pending > this.maxLineBytes
     return { lines, overflow }
+  }
+
+  /**
+   * Store one arrival. Dribbled small chunks (below COALESCE_LIMIT_BYTES, no
+   * newline of their own) are memcpy'd into a tail scratch buffer with
+   * doubling headroom — one live Buffer for the whole dribble, each byte
+   * copied O(1) times amortized. Concat-per-push would reintroduce the O(n²)
+   * tail, and keeping every tiny chunk as its own object amplifies memory
+   * ~100x: an 8MB line dribbled one byte at a time is millions of Buffer
+   * objects while its bytes stay within the cap (BUG-903). Chunks that carry
+   * their own newline never accumulate for long, so they bypass the scratch
+   * and stay stored by reference like everything larger.
+   */
+  private append(incoming: Buffer): void {
+    const view = this.chunks[this.chunks.length - 1]
+    const scratchable = incoming.length < COALESCE_LIMIT_BYTES && !incoming.includes(0x0a)
+    if (this.scratch !== null && view !== undefined && scratchable) {
+      const used = view.length
+      if (used + incoming.length <= this.scratchCap) {
+        incoming.copy(this.scratch, used)
+        this.chunks[this.chunks.length - 1] = this.scratch.subarray(0, used + incoming.length)
+        return
+      }
+      let cap = this.scratchCap * 2
+      while (cap < used + incoming.length) cap *= 2
+      const grown = Buffer.allocUnsafe(cap)
+      this.scratch.copy(grown, 0, 0, used)
+      incoming.copy(grown, used)
+      this.scratch = grown
+      this.scratchCap = cap
+      this.chunks[this.chunks.length - 1] = grown.subarray(0, used + incoming.length)
+      return
+    }
+    if (scratchable) {
+      let cap = SCRATCH_MIN_BYTES
+      while (cap < incoming.length) cap *= 2
+      const started = Buffer.allocUnsafe(cap)
+      incoming.copy(started, 0)
+      this.scratch = started
+      this.scratchCap = cap
+      this.chunks.push(started.subarray(0, incoming.length))
+      return
+    }
+    // a large or self-terminated arrival: store by reference, freeze any scratch
+    this.scratch = null
+    this.chunks.push(incoming)
   }
 }
 

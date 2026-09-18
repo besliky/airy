@@ -146,16 +146,42 @@ export async function startBridgeServer(options: {
     const wire = createBackpressureWriter(socket)
     const write = (response: BridgeResponse) => {
       if (closed || socket.destroyed) return
-      wire.write(`${encodeResponse(response)}\n`)
+      const payload = encodeResponse(response)
+      // BUG-904: an oversized result would trip the client framer's line cap
+      // and kill the connection with no protocol-level error (get_context of
+      // a huge document). Replace it with a typed invalid_request — the FIFO
+      // stream stays in sync (the call itself already ran) and the client
+      // learns to narrow the request instead of reconnecting blind.
+      if (Buffer.byteLength(payload) > framer.maxLineBytes) {
+        wire.write(
+          `${encodeResponse(
+            bridgeError(
+              'invalid_request',
+              `response exceeds the ${framer.maxLineBytes}-byte line limit (result too large for the bridge)`,
+            ),
+          )}\n`,
+        )
+        return
+      }
+      wire.write(`${payload}\n`)
     }
     const close = () => {
       if (closed) return
       closed = true
-      // end (not destroy): the pending error response must still flush
-      socket.end()
+      // end (not destroy): the pending error response must still flush; the
+      // destroy in the end callback tears the read side down afterwards so a
+      // peer that keeps writing cannot hold the half-open socket (and its
+      // framer buffer) alive indefinitely
+      socket.end(() => socket.destroy())
       clients.delete(socket)
     }
     socket.on('data', (chunk: Buffer) => {
+      // post-close data must not dispatch: close() only half-closes the
+      // socket, so data events keep arriving while the error flushes — a
+      // request executed there would apply its mutation with the response
+      // silently dropped, and a retrying client would apply it twice
+      // (BUG-901: line overflow, queue cap, handshake reject all close)
+      if (closed) return
       const { lines, overflow } = framer.push(chunk)
       if (overflow) {
         write(

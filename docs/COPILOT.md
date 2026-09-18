@@ -304,7 +304,12 @@ redirected, e.g. `AIRY_USER_DATA` in dev).
 
 The client sends the token with every call and rereads the info file on
 each connect, so an app restart (new token) never authorizes a stale
-connection. Per-call timeout is 30 s. Live edits are visible immediately;
+connection. Per-call timeout is 30 s. Bridge messages cap at 8 MiB per NDJSON
+line in both directions: a request over the cap is rejected and the connection
+closed, while a result that would exceed it (for example a `live_get_context`
+of a very large document) comes back as an `invalid_request` saying the
+response is too large — the connection stays usable, so narrow the request
+(fewer blocks, smaller ranges) and retry. Live edits are visible immediately;
 with track changes on they are authored as "Airy Copilot", and each bridge
 call is one undo step (`live_undo` after a combined `html` + `ops` call
 needs two undos). A combined `live_apply_ops` whose ops batch fails after
