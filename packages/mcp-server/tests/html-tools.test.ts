@@ -439,6 +439,34 @@ describe('html tools over MCP', () => {
     }
   })
 
+  it('caps the heading list and counts the structure summary toward the 30k budget', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // 300 headings plus a 31k text line: without the caps the heading list
+      // was uncapped (a heading-heavy file could flood the answer) and the
+      // text got its own full 30k on top of the structure block
+      const flood = [
+        '<html><body>',
+        ...Array.from({ length: 300 }, (_, i) => `<h2>heading ${String(i)}</h2>`),
+        `<p>${'x'.repeat(31_000)}</p>`,
+        '</body></html>',
+      ].join('\n')
+      const handle = await openFixture(client, 'flood.html', new TextEncoder().encode(flood))
+      const read = await call(client, 'read_document', { handle })
+      expect(read.isError).toBeFalsy()
+      const body = text(read)
+      expect(body).toContain('(first 200 of 300 - use range reads for the rest)')
+      expect(body).toContain('|h2|heading 0')
+      expect(body).not.toContain('|h2|heading 250')
+      // the structure block counts toward the budget: the 31k text no longer
+      // gets its own full 30k slice on top of the summary
+      expect(body).toContain('output truncated at 30000 characters')
+      expect(body.length).toBeLessThan(31_500)
+    } finally {
+      await close()
+    }
+  })
+
   it('guards saves: refuses existing targets without overwrite, fences external writers', async () => {
     const { client, close } = await connectSession()
     try {

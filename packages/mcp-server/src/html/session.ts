@@ -45,6 +45,8 @@ const OPS_TEXT_MAX_CHARS = 200_000
 const STRUCTURE_SCAN_MAX_CHARS = 1_000_000
 /** how many links the read summary lists before eliding */
 const LINK_LIST_MAX = 200
+/** how many headings the read summary lists before eliding (links' twin) */
+const HEADING_LIST_MAX = 200
 /**
  * Largest range span a read materializes: the request schema does not bound
  * `end`, so the session must reject a huge span BEFORE building the index
@@ -458,10 +460,10 @@ export class HtmlSession {
 
   /**
    * Agent-facing read: file header (title, stats, EOL/BOM), the structural
-   * summary (headings and links with line positions), then the full text -
-   * truncated at the 30k budget with a hint to request line ranges instead.
-   * With lines/range selected, the full text section is replaced by exactly
-   * those lines.
+   * summary (headings and links with line positions - both lists capped), then
+   * the full text. The whole assembly shares the 30k budget, with a hint to
+   * request line ranges instead. With lines/range selected, the full text
+   * section is replaced by exactly those lines.
    */
   readDocument(options: HtmlReadOptions = {}): string {
     const meta = this.meta()
@@ -473,16 +475,22 @@ export class HtmlSession {
       `${meta.bom ? ' Starts with a BOM.' : ''}`
     const structure = this.structure()
     const oversize = joinLines(this.lines, false).length > STRUCTURE_SCAN_MAX_CHARS
-    const headingLines = structure.headings.map(
-      (h) => `${h.ordinal}|${h.line}|h${h.level}|${h.text}`,
-    )
+    const headingLines = structure.headings
+      .slice(0, HEADING_LIST_MAX)
+      .map((h) => `${h.ordinal}|${h.line}|h${h.level}|${h.text}`)
     const linkLines = structure.links
       .slice(0, LINK_LIST_MAX)
       .map((l) => `${l.ordinal}|${l.line}|${l.text || '(no text)'} -> ${l.href}`)
     const structureBlock = oversize
       ? 'Structure (ordinal|line|tag|text): skipped - the document exceeds the 1M-character scan budget; address lines directly.'
       : [
-          `Headings (ordinal|line|level|text):${headingLines.length === 0 ? ' none' : ''}`,
+          `Headings (ordinal|line|level|text):${structure.headings.length === 0 ? ' none' : ''}${
+            structure.headings.length > HEADING_LIST_MAX
+              ? ` (first ${String(HEADING_LIST_MAX)} of ${String(
+                  structure.headings.length,
+                )} - use range reads for the rest)`
+              : ''
+          }`,
           ...headingLines,
           `Links (ordinal|line|text -> href):${
             structure.links.length === 0 ? ' none' : ''
@@ -493,18 +501,24 @@ export class HtmlSession {
     const selected = this.selectedIndexes(options)
     if (selected === null) {
       const fullText = this.lines.map((l) => l.text).join('\n')
-      const clipped = clip(fullText, READ_MAX_CHARS, 'request a line range to read the rest')
-      return [header, structureBlock, '', 'Full text (EOLs normalized to LF):', clipped].join('\n')
+      return clip(
+        [header, structureBlock, '', 'Full text (EOLs normalized to LF):', fullText].join('\n'),
+        READ_MAX_CHARS,
+        'request a line range to read the rest',
+      )
     }
     const body = selected.map((i) => this.lines[i]!.text).join('\n')
-    const clipped = clip(body, READ_MAX_CHARS, 'request a narrower selection')
-    return [
-      header,
-      structureBlock,
-      '',
-      `Selected ${String(selected.length)} line(s) (EOLs normalized to LF):`,
-      clipped,
-    ].join('\n')
+    return clip(
+      [
+        header,
+        structureBlock,
+        '',
+        `Selected ${String(selected.length)} line(s) (EOLs normalized to LF):`,
+        body,
+      ].join('\n'),
+      READ_MAX_CHARS,
+      'request a narrower selection',
+    )
   }
 
   /** Resolve blocks/range-style selections to validated, sorted line indexes. */

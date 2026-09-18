@@ -205,9 +205,11 @@ export function registerTools(server: McpServer): void {
         'h1-h6, ul/ol/li, strong/em/u/s, a, br, table). Block indexes are the addressing scheme ' +
         'for insert_content (at) and apply_ops targets; re-read after edits — indexes shift. ' +
         'Markdown sessions: the default read shows stats (EOL/BOM included), the heading list ' +
-        '"ordinal|line|level|text" and the full text (truncated at 30k characters — narrow with ' +
-        'blocks/range, which address LINES). HTML sessions: the default read adds the title and ' +
-        'a parse5 structure summary — links "ordinal|line|text -> href" with line positions. ' +
+        '"ordinal|line|level|text" (capped at 200 entries) and the full text; the whole read is ' +
+        'truncated at 30k characters — narrow with blocks/range, which address LINES. HTML ' +
+        'sessions: the default read adds the title and a parse5 structure summary — headings ' +
+        '"ordinal|line|level|text" and links "ordinal|line|text -> href" with line positions ' +
+        '(both capped at 200 entries, counted toward the 30k budget). ' +
         'For workbook (.xlsx) sessions use ' +
         'read_workbook instead.',
       inputSchema: {
