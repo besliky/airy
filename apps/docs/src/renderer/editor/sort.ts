@@ -116,15 +116,18 @@ function cellText(cell: PmNode | null): string {
 
 /* ================= key parsing ================= */
 
-/** Word-style number reading: currency signs, percent, spaces, thousands
+/** Word-style number reading: currency signs, percent, thousands
  *  separators and parenthesized negatives are tolerated; null = not a number
  *  (sorts after numeric entries). */
 export function parseSortNumber(text: string): number | null {
-  let s = text.replace(/[\s\u00a0\u202f\u2009]/g, '')
+  // internal whitespace only counts as thousands grouping ("1 300"); digits
+  // glued around a bare space ("1 2") stay text, like in Word
+  let s = text.replace(/[\u00a0\u202f\u2009]/g, ' ').trim()
+  s = s.replace(/(\d) (?=\d{3}(?!\d))/g, '$1')
   if (!s) return null
   const negative = /^\((.*)\)$/.exec(s)
   if (negative) s = negative[1]
-  s = s.replace(/[$€£¥₹₽%°]/g, '')
+  s = s.replace(/[$€£¥₹₽%°]/g, '').trim()
   if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s))
     s = s.replace(/,/g, '') // thousands
   else if (/^\d+,\d+$/.test(s))
@@ -133,6 +136,9 @@ export function parseSortNumber(text: string): number | null {
     // 1.234,56: dot thousands + comma decimal
     s = s.replace(/\./g, '').replace(',', '.')
   }
+  // plain decimal digits only — spellings Number() would happily take but
+  // Word reads as text ("0x10", "1e3", "Infinity") sort last
+  if (!/^[-+]?\d*\.?\d+$/.test(s)) return null
   const value = Number(s)
   if (!Number.isFinite(value)) return null
   return negative ? -value : value

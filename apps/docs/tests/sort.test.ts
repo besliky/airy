@@ -31,6 +31,18 @@ describe('sort key parsing', () => {
     expect(parseSortNumber('')).toBeNull()
   })
 
+  it('treats non-Word numerals as text, not numbers (BUG-707)', () => {
+    // Number() alone accepts these; Word reads them as text -> sort last
+    expect(parseSortNumber('0x10')).toBeNull() // hex literal
+    expect(parseSortNumber('1e3')).toBeNull() // scientific
+    expect(parseSortNumber('Infinity')).toBeNull()
+    expect(parseSortNumber('1 2')).toBeNull() // digits glued around a bare space
+    // grouped spacing is still a thousands separator, not gluing
+    expect(parseSortNumber('1 300')).toBe(1300)
+    expect(parseSortNumber('1 300 000')).toBe(1300000)
+    expect(parseSortNumber('50 %')).toBe(50)
+  })
+
   it('reads common date formats', () => {
     expect(parseSortDate('2026-03-14')).not.toBeNull()
     expect(parseSortDate('25/12/2026')).not.toBeNull() // day forced by >12
