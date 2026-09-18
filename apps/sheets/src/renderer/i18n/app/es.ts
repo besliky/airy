@@ -328,6 +328,8 @@ export const es = {
     'Este libro es demasiado grande para cargarlo por completo en memoria; el filtrado no está disponible para este archivo.',
   appDialogCancel: 'Cancelar',
   appPivotSheetNoMove: 'Esta hoja contiene una tabla dinámica — mover rangos aún no se admite.',
+  appMoveRangeReplaceOnly:
+    'Solo se pueden guardar desplazamientos de rango dentro de la misma hoja a un área del mismo tamaño — este desplazamiento se canceló.',
   appMergeOverTable:
     'La selección se superpone con una tabla de Excel — combinar celdas dentro de una tabla aún no es compatible.',
   appTableFilterNoEdit:

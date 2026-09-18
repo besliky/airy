@@ -330,6 +330,8 @@ export const de = {
   appDialogCancel: 'Abbrechen',
   appPivotSheetNoMove:
     'Dieses Blatt enthält eine PivotTable — das Verschieben von Bereichen wird noch nicht unterstützt.',
+  appMoveRangeReplaceOnly:
+    'Nur Verschiebungen eines Bereichs auf demselben Blatt auf eine gleich große Fläche können gespeichert werden — diese Verschiebung wurde abgebrochen.',
   appMergeOverTable:
     'Die Auswahl überschneidet sich mit einer Excel-Tabelle — das Verbinden von Zellen in einer Tabelle wird noch nicht unterstützt.',
   appTableFilterNoEdit:

@@ -22,6 +22,13 @@ export type StructuralOp =
       readonly count: number
       readonly before: number
     }
+  /// Same-sheet rectangle move with Excel's plain-drag replace semantics:
+  /// every cell inside `from` relocates to the equal-size rectangle `to`,
+  /// and every cell previously inside `to` is destroyed. A 2D partial
+  /// permutation (cells may cross row boundaries) — deliberately not
+  /// decomposed into whole-line block swaps, which would drag cells outside
+  /// the rectangle along.
+  | { readonly kind: 'move-range'; readonly from: CellArea; readonly to: CellArea }
   | { readonly kind: 'merge-cells' | 'unmerge-cells'; readonly range: CellArea }
   /// size: points for rows, character width for columns; null = sheet default.
   | {
@@ -58,9 +65,12 @@ export type AxisAttributeOp = Extract<StructuralOp, { start: number }>
 
 /// True for operations that shift coordinates or reshape merges — the ones
 /// whose sibling parts (drawing anchors, table ranges, calcChain) must move
-/// with the sheet. Sizing and visibility changes don't move anything.
+/// with the sheet. Sizing and visibility changes don't move anything. A
+/// range move leaves anchors untouched but shifts cell coordinates, so the
+/// anchored-part pass still must visit table parts (any intersection fails
+/// closed there).
 export function isShiftingOp(op: StructuralOp): boolean {
-  return 'index' in op || 'range' in op
+  return 'index' in op || 'range' in op || op.kind === 'move-range'
 }
 
 export interface CellArea {
@@ -97,6 +107,10 @@ export function applyStructuralOps(
       continue
     }
     if (!('index' in op)) {
+      if (op.kind === 'move-range') {
+        xml = transformRangeMove(xml, sheetName, op)
+        continue
+      }
       xml = applyMergeOp(xml, op)
       continue
     }
@@ -461,7 +475,27 @@ export function shiftCrossSheetFormulas(
   ops: readonly StructuralOp[],
 ): string {
   let xml = otherWorksheetXml
-  for (const op of rowColumnOps(ops)) {
+  for (const op of ops) {
+    if (op.kind === 'move-range') {
+      // Qualified references pointing into the moved rectangle follow it;
+      // ones onto the overwritten target become a bare #REF!.
+      xml = xml.replace(
+        /<f\b([^>]*[^/>])?>([\s\S]*?)<\/f>/g,
+        (_full, attributes: string | undefined, body: string) =>
+          `<f${attributes ?? ''}>${escapeXmlText(
+            moveRangeFormulaText(decodeEntities(body), editedSheetName, op, true),
+          )}</f>`,
+      )
+      xml = xml.replace(
+        /<(formula[12]?)>([\s\S]*?)<\/\1>/g,
+        (_full, tag: string, body: string) =>
+          `<${tag}>${escapeXmlText(
+            moveRangeFormulaText(decodeEntities(body), editedSheetName, op, true),
+          )}</${tag}>`,
+      )
+      continue
+    }
+    if (!('index' in op)) continue
     const axis: Axis = axisOf(op)
     const shift = toShift(op)
     // The attribute part must not end with '/': a self-closing shared
@@ -496,7 +530,18 @@ export function shiftDefinedNames(
   ops: readonly StructuralOp[],
 ): string {
   let xml = workbookXml
-  for (const op of rowColumnOps(ops)) {
+  for (const op of ops) {
+    if (op.kind === 'move-range') {
+      xml = xml.replace(
+        /(<definedName\b[^>]*>)([\s\S]*?)(<\/definedName>)/g,
+        (_full, open: string, body: string, close: string) =>
+          `${open}${escapeXmlText(
+            moveRangeFormulaText(decodeEntities(body), editedSheetName, op, true),
+          )}${close}`,
+      )
+      continue
+    }
+    if (!('index' in op)) continue
     const axis: Axis = axisOf(op)
     const shift = toShift(op)
     xml = xml.replace(
@@ -511,13 +556,26 @@ export function shiftDefinedNames(
 }
 
 /// Rewrites chart series references (`<c:f>` elements) to the edited sheet.
+/// A series pointing at the overwritten target becomes #REF! (Excel
+/// semantics), matching what formula bodies do on a range move.
 export function shiftChartReferences(
   chartXml: string,
   editedSheetName: string,
   ops: readonly StructuralOp[],
 ): string {
   let xml = chartXml
-  for (const op of rowColumnOps(ops)) {
+  for (const op of ops) {
+    if (op.kind === 'move-range') {
+      xml = xml.replace(
+        /(<c:f>)([\s\S]*?)(<\/c:f>)/g,
+        (_full, open: string, body: string, close: string) =>
+          `${open}${escapeXmlText(
+            moveRangeFormulaText(decodeEntities(body), editedSheetName, op, true),
+          )}${close}`,
+      )
+      continue
+    }
+    if (!('index' in op)) continue
     const axis: Axis = axisOf(op)
     const shift = toShift(op)
     xml = xml.replace(
@@ -661,6 +719,17 @@ export function shiftTablePart(
     if ('range' in op) {
       if (op.kind === 'merge-cells' && areasOverlap(op.range, table)) {
         throw new StructuralShiftError(`Merging cells over table "${table.name}" is not supported.`)
+      }
+      continue
+    }
+    if (op.kind === 'move-range') {
+      // A replace move cannot reshape a table's tableColumns list, and its
+      // ref would have to survive cells landing on/inside it — refuse any
+      // contact with either rectangle (v1 fail-closed family).
+      if (areasOverlap(op.from, table) || areasOverlap(op.to, table)) {
+        throw new StructuralShiftError(
+          `A range move overlaps table "${table.name}" — the move cannot be saved.`,
+        )
       }
       continue
     }
@@ -1468,6 +1537,440 @@ function assertSwapKeepsAnchorIntact(ref: string, swap: BlockSwap['swap'], axis:
   )
 }
 
+// ---------------------------------------------------------------------------
+// Rectangle moves (2D). Excel's plain-drag move of a selection: the cells of
+// `from` land on the equal-size rectangle `to`, destroying what sat there.
+// Reference tokens follow the three-way rule (fully inside `from` translates,
+// fully inside `to` dies as #REF!, partial overlap stays put — Excel and
+// Univer agree on this); range-scoped FEATURES use the strict variant
+// (partial overlap fails the save) because XML has no faithful image of a
+// torn merge or rule scope.
+// ---------------------------------------------------------------------------
+
+export type RangeMoveOp = Extract<StructuralOp, { kind: 'move-range' }>
+
+export interface RectangleMove {
+  readonly from: CellArea
+  readonly to: CellArea
+}
+
+function rectangleDelta(move: RectangleMove): { row: number; column: number } {
+  return {
+    row: move.to.startRow - move.from.startRow,
+    column: move.to.startColumn - move.from.startColumn,
+  }
+}
+
+function areaContains(outer: CellArea, inner: CellArea): boolean {
+  return (
+    inner.startRow >= outer.startRow &&
+    inner.endRow <= outer.endRow &&
+    inner.startColumn >= outer.startColumn &&
+    inner.endColumn <= outer.endColumn
+  )
+}
+
+/// Parses a feature/token reference into a rectangle. Whole-column (`A:B`)
+/// and whole-row (`1:4`) forms carry no coordinate on their other axis, so
+/// that axis spans the whole sheet. null when unparseable.
+function parseRefExtent(ref: string): {
+  area: CellArea
+  wholeLine: 'row' | 'column' | null
+} | null {
+  const bare = ref.replaceAll('$', '')
+  const wholeColumn = /^([A-Z]{1,3}):([A-Z]{1,3})$/.exec(bare)
+  if (wholeColumn?.[1] && wholeColumn[2]) {
+    const first = lettersToColumn(wholeColumn[1])
+    const second = lettersToColumn(wholeColumn[2])
+    return {
+      area: {
+        startRow: 0,
+        endRow: SHARED_MAX_ROW,
+        startColumn: Math.min(first, second),
+        endColumn: Math.max(first, second),
+      },
+      wholeLine: 'column',
+    }
+  }
+  const wholeRow = /^([0-9]+):([0-9]+)$/.exec(bare)
+  if (wholeRow?.[1] && wholeRow[2]) {
+    const first = Number(wholeRow[1]) - 1
+    const second = Number(wholeRow[2]) - 1
+    return {
+      area: {
+        startRow: Math.min(first, second),
+        endRow: Math.max(first, second),
+        startColumn: 0,
+        endColumn: SHARED_MAX_COLUMN,
+      },
+      wholeLine: 'row',
+    }
+  }
+  const parts = bare.split(':')
+  const start = parseA1(parts[0] ?? '')
+  if (!start) return null
+  if (parts.length === 1) {
+    return {
+      area: {
+        startRow: start.row,
+        endRow: start.row,
+        startColumn: start.column,
+        endColumn: start.column,
+      },
+      wholeLine: null,
+    }
+  }
+  const end = parseA1(parts[1] ?? '')
+  if (!end) return null
+  return {
+    area: {
+      startRow: Math.min(start.row, end.row),
+      endRow: Math.max(start.row, end.row),
+      startColumn: Math.min(start.column, end.column),
+      endColumn: Math.max(start.column, end.column),
+    },
+    wholeLine: null,
+  }
+}
+
+/// Three-way remap for one reference token through a rectangle move.
+/// Returns null when the token pointed wholly at the overwritten target
+/// (the caller emits a bare #REF!); partial overlaps and whole-line
+/// references come back unchanged — Excel semantics, mirrored from Univer's
+/// own move-range rewrite so the file matches the screen.
+function moveReferenceToken(token: string, move: RectangleMove): string | null {
+  const extent = parseRefExtent(token)
+  if (extent === null) return token
+  // A whole-line reference cannot be fully contained in either bounded
+  // rectangle, so a bounded range move leaves it alone (only whole-row and
+  // whole-column moves rewrite them — the axis family).
+  if (extent.wholeLine !== null) return token
+  if (areaContains(move.from, extent.area))
+    return translateTokenPreservingMarkers(token, rectangleDelta(move))
+  if (areaContains(move.to, extent.area)) return null
+  return token
+}
+
+/// Re-addresses each A1 corner of a reference, keeping its `$` markers (they
+/// are irrelevant to following on a move — Excel rewrites absolute and
+/// relative references alike).
+function translateTokenPreservingMarkers(
+  token: string,
+  delta: { row: number; column: number },
+): string {
+  return token.replace(
+    /(\$?)([A-Z]{1,3})(\$?)([0-9]+)/g,
+    (_match, colDollar: string, letters: string, rowDollar: string, digits: string) =>
+      `${colDollar}${columnToLetters(lettersToColumn(letters) + delta.column)}` +
+      `${rowDollar}${Number(digits) + delta.row}`,
+  )
+}
+
+/// Three-way remap for a range-scoped feature ref (merge, hyperlink, DV/CF
+/// sqref area). null means every covered cell died — drop the element.
+/// Unlike formula tokens, a partial overlap fails the save: XML has no
+/// faithful single-range image of a torn feature scope.
+function moveFeatureRef(ref: string, move: RectangleMove, noun: string): string | null {
+  const extent = parseRefExtent(ref)
+  if (extent === null) return ref
+  const overlapsFrom = areasOverlap(extent.area, move.from)
+  const overlapsTo = areasOverlap(extent.area, move.to)
+  if (overlapsFrom) {
+    if (extent.wholeLine === null && areaContains(move.from, extent.area)) {
+      return translateTokenPreservingMarkers(ref, rectangleDelta(move))
+    }
+    throw new StructuralShiftError(
+      `The ${noun} "${ref}" is torn by the moved cells — the move cannot be saved.`,
+    )
+  }
+  if (overlapsTo) {
+    if (extent.wholeLine === null && areaContains(move.to, extent.area)) return null
+    throw new StructuralShiftError(
+      `The ${noun} "${ref}" is torn by the overwritten cells — the move cannot be saved.`,
+    )
+  }
+  return ref
+}
+
+function transformRangeMove(xml: string, sheetName: string, op: RangeMoveOp): string {
+  const { from, to } = op
+  if (
+    from.endRow < from.startRow ||
+    from.endColumn < from.startColumn ||
+    to.endRow < to.startRow ||
+    to.endColumn < to.startColumn
+  ) {
+    throw new StructuralShiftError('A range move carries a degenerate rectangle — aborted.')
+  }
+  if (
+    from.endRow - from.startRow !== to.endRow - to.startRow ||
+    from.endColumn - from.startColumn !== to.endColumn - to.startColumn
+  ) {
+    throw new StructuralShiftError(
+      'A range move must land on an equally sized area ' +
+        '(insert-style range moves are not supported) — aborted.',
+    )
+  }
+  const move: RectangleMove = { from, to }
+  const delta = rectangleDelta(move)
+  if (delta.row === 0 && delta.column === 0) return xml
+  assertRangeMoveSafe(xml, move)
+  let result = relocateRangeMoveCells(xml, move)
+  result = transformRangeMoveFormulas(result, sheetName, move)
+  return transformRangeMoveFeatures(result, move)
+}
+
+/// Fail-closed pre-flight over everything the move cannot represent
+/// faithfully. Shared/array anchors refuse ANY contact (v1: even a wholly
+/// inside move is refused — whitelisting wholesale group moves can come
+/// later); the sheet auto-filter, allow-edit (protected) ranges, and
+/// persisted sort conditions pin coordinates the move would invalidate.
+/// The protectedRanges gap is deliberate per BUG-781: the file-side replay
+/// cannot remap them without a dirty snapshot, so overlapping moves must
+/// refuse instead of silently leaving stale sqrefs behind.
+function assertRangeMoveSafe(xml: string, move: RectangleMove): void {
+  const overlapsMove = (ref: string): boolean => {
+    const extent = parseRefExtent(ref)
+    if (extent === null) return false
+    return areasOverlap(extent.area, move.from) || areasOverlap(extent.area, move.to)
+  }
+  const refuse = (pattern: RegExp, message: string): void => {
+    let match: RegExpExecArray | null
+    while ((match = pattern.exec(xml)) !== null) {
+      if (overlapsMove(match[1] ?? '')) throw new StructuralShiftError(message)
+    }
+  }
+  refuse(
+    /<f\b[^>]*?\bref="([^"]+)"/g,
+    'A shared/array formula anchor overlaps the moved or overwritten cells — the move cannot be saved.',
+  )
+  refuse(
+    /<autoFilter\b[^>]*?\bref="([^"]+)"/g,
+    "A range move overlaps the sheet's auto-filter — the move cannot be saved.",
+  )
+  refuse(
+    /<protectedRange\b[^>]*?\bsqref="([^"]+)"/g,
+    'A range move overlaps a protected (allow-edit) range — the move cannot be saved.',
+  )
+  refuse(
+    /<sortCondition\b[^>]*?\bref="([^"]+)"/g,
+    'A range move overlaps a persisted sort condition — the move cannot be saved.',
+  )
+}
+
+/// sheetData surgery: harvests the cells of `from`, destroys the cells of
+/// `to`, and re-injects the harvested cells at their translated coordinates
+/// (cells may cross row boundaries, landing in rows that never existed).
+/// Row attributes (heights, hidden, outline) and `<cols>` definitions stay
+/// put — they belong to the grid, not to the moved content. Cells stay
+/// ascending inside every row and rows stay ascending overall.
+function relocateRangeMoveCells(xml: string, move: RectangleMove): string {
+  const open = /<sheetData\b[^>]*>/.exec(xml)
+  const closeIndex = xml.lastIndexOf('</sheetData>')
+  if (!open || closeIndex < open.index) return xml
+  const bodyStart = open.index + open[0].length
+  const body = xml.slice(bodyStart, closeIndex)
+  const envelope = {
+    start: Math.min(move.from.startRow, move.to.startRow),
+    end: Math.max(move.from.endRow, move.to.endRow),
+  }
+  const delta = rectangleDelta(move)
+
+  interface RowDraft {
+    attrs: string
+    cells: Map<number, string>
+  }
+  const drafts = new Map<number, RowDraft>()
+  const harvested: { row: number; column: number; cell: string }[] = []
+
+  const rowOpenPattern = /<row\b[^>]*>/g
+  let prefixEnd = -1
+  let suffixStart = -1
+  let openMatch: RegExpExecArray | null
+  while ((openMatch = rowOpenPattern.exec(body)) !== null) {
+    const openTag = openMatch[0]
+    const rowStart = openMatch.index
+    let rowEnd: number
+    if (openTag.endsWith('/>')) {
+      rowEnd = rowStart + openTag.length
+    } else {
+      const closePosition = body.indexOf('</row>', rowStart + openTag.length)
+      if (closePosition === -1) {
+        throw new StructuralShiftError(
+          'sheetData holds an unterminated row — the range move cannot be saved.',
+        )
+      }
+      rowEnd = closePosition + '</row>'.length
+      rowOpenPattern.lastIndex = rowEnd
+    }
+    const rowNumber = /(?:^|\s)r="([0-9]+)"/.exec(openTag)?.[1]
+    if (rowNumber === undefined) {
+      throw new StructuralShiftError(
+        'A row has no readable number — the range move cannot be saved.',
+      )
+    }
+    const rowIndex = Number(rowNumber) - 1
+    if (rowIndex < envelope.start || rowIndex > envelope.end) continue
+    if (prefixEnd === -1) prefixEnd = rowStart
+    suffixStart = rowEnd
+    // `<row` + attribute text + (`>` or `/>`): keep the attributes, drop the
+    // now-stale spans hint (the row's cell extent just changed).
+    const attrs = openTag
+      .slice(4, openTag.length - (openTag.endsWith('/>') ? 2 : 1))
+      .replace(/\s+spans="[^"]*"/, '')
+    const inner = openTag.endsWith('/>')
+      ? ''
+      : body.slice(rowStart + openTag.length, rowEnd - '</row>'.length)
+    const kept = new Map<number, string>()
+    const leftover = inner.replace(
+      /<c\b[^>]*?\br="([A-Z]{1,3})[0-9]+"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g,
+      (full, letters: string) => {
+        const column = lettersToColumn(letters)
+        const inFrom =
+          rowIndex >= move.from.startRow &&
+          rowIndex <= move.from.endRow &&
+          column >= move.from.startColumn &&
+          column <= move.from.endColumn
+        if (inFrom) {
+          const targetRow = rowIndex + delta.row
+          const targetColumn = column + delta.column
+          harvested.push({
+            row: targetRow,
+            column: targetColumn,
+            cell: full.replace(
+              /(<c\b[^>]*?\br=")[A-Z]{1,3}[0-9]+(")/,
+              (_m, lead: string, tail: string) =>
+                `${lead}${columnToLetters(targetColumn)}${targetRow + 1}${tail}`,
+            ),
+          })
+          return ''
+        }
+        const inTo =
+          rowIndex >= move.to.startRow &&
+          rowIndex <= move.to.endRow &&
+          column >= move.to.startColumn &&
+          column <= move.to.endColumn
+        if (inTo) return '' // destroyed by the landing rectangle
+        kept.set(column, full)
+        return ''
+      },
+    )
+    if (leftover.trim() !== '') {
+      throw new StructuralShiftError(
+        'A row holds content other than addressable cells — the range move cannot be saved.',
+      )
+    }
+    drafts.set(rowIndex, { attrs, cells: kept })
+  }
+  if (prefixEnd === -1) return xml
+  // Re-inject the harvest; target rows always sit inside the envelope (they
+  // are the `to` rows), but may have no <row> element of their own yet.
+  for (const item of harvested) {
+    let draft = drafts.get(item.row)
+    if (draft === undefined) {
+      draft = { attrs: ` r="${item.row + 1}"`, cells: new Map<number, string>() }
+      drafts.set(item.row, draft)
+    }
+    draft.cells.set(item.column, item.cell)
+  }
+  const rows = [...drafts.entries()]
+    .sort((left, right) => left[0] - right[0])
+    .map(([, draft]) => {
+      const cells = [...draft.cells.entries()]
+        .sort((left, right) => left[0] - right[0])
+        .map(([, text]) => text)
+        .join('')
+      if (cells !== '') return `<row${draft.attrs}>${cells}</row>`
+      // A row emptied by the move keeps its element only while it still
+      // carries information (heights, flags) — its number alone is not.
+      const meaningful = draft.attrs.replace(/\s*r="[0-9]+"/, '').trim()
+      return meaningful === '' ? '' : `<row${draft.attrs}/>`
+    })
+    .join('')
+  const newBody = `${body.slice(0, prefixEnd)}${rows}${body.slice(suffixStart)}`
+  if (newBody === body) return xml
+  return xml.slice(0, bodyStart) + newBody + xml.slice(closeIndex)
+}
+
+/// Rewrites same-sheet formula bodies and CF/DV rule bodies through the
+/// three-way token rule. Shared/array `ref` anchors were vetted by the
+/// pre-flight (any contact fails closed), so they are left untouched here.
+function transformRangeMoveFormulas(xml: string, sheetName: string, move: RectangleMove): string {
+  let result = xml.replace(
+    /<f\b([^>]*[^/>])?>([\s\S]*?)<\/f>/g,
+    (_full, rawAttributes: string | undefined, body: string) =>
+      `<f${rawAttributes ?? ''}>${escapeXmlText(
+        moveRangeFormulaText(decodeEntities(body), sheetName, move),
+      )}</f>`,
+  )
+  result = result.replace(
+    /<(formula[12]?)>([\s\S]*?)<\/\1>/g,
+    (_full, tag: string, body: string) =>
+      `<${tag}>${escapeXmlText(
+        moveRangeFormulaText(decodeEntities(body), sheetName, move),
+      )}</${tag}>`,
+  )
+  return result
+}
+
+/// Rewrites range-scoped features through the strict three-way rule and
+/// widens the dimension to the envelope union.
+function transformRangeMoveFeatures(xml: string, move: RectangleMove): string {
+  let result = xml.replace(/<mergeCell\b[^>]*\bref="([^"]+)"[^>]*\/>/g, (full, ref: string) => {
+    const moved = moveFeatureRef(ref, move, 'merged range')
+    return moved === null ? '' : full.replace(/ref="[^"]+"/, () => `ref="${moved}"`)
+  })
+  result = refreshMergeCount(result)
+  result = result.replace(
+    /(<dimension\b[^>]*?\bref=")([^"]+)(")/,
+    (full: string, prefix: string, ref: string, suffix: string) => {
+      const extent = parseRefExtent(ref)
+      if (extent === null || extent.wholeLine !== null) return full
+      const corners = [extent.area, move.from, move.to]
+      const area = {
+        startRow: Math.min(...corners.map((corner) => corner.startRow)),
+        endRow: Math.max(...corners.map((corner) => corner.endRow)),
+        startColumn: Math.min(...corners.map((corner) => corner.startColumn)),
+        endColumn: Math.max(...corners.map((corner) => corner.endColumn)),
+      }
+      return `${prefix}${toRef(area)}${suffix}`
+    },
+  )
+  const nouns: Record<string, string> = {
+    hyperlink: 'hyperlink',
+    dataValidation: 'data-validation rule',
+    conditionalFormatting: 'conditional-formatting rule',
+  }
+  for (const tag of ['hyperlink', 'dataValidation', 'conditionalFormatting']) {
+    const attribute = tag === 'hyperlink' ? 'ref' : 'sqref'
+    result = result.replace(
+      new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?</${tag}>|<${tag}\\b[^>]*/>`, 'g'),
+      (element) => {
+        const refMatch = new RegExp(`\\b${attribute}="([^"]+)"`).exec(element)
+        if (!refMatch?.[1]) return element
+        const moved = refMatch[1]
+          .split(' ')
+          .filter((part) => part !== '')
+          .map((ref) => moveFeatureRef(ref, move, nouns[tag] ?? tag))
+          .filter((ref): ref is string => ref !== null)
+        if (moved.length === 0) return ''
+        return element.replace(
+          new RegExp(`\\b${attribute}="[^"]+"`),
+          () => `${attribute}="${moved.join(' ')}"`,
+        )
+      },
+    )
+  }
+  result = result.replace(
+    /(<dataValidations\b[^>]*\bcount=")[0-9]+("[^>]*>)([\s\S]*?)(<\/dataValidations>)/g,
+    (_full, prefix: string, mid: string, inner: string, close: string) => {
+      const count = (inner.match(/<dataValidation\b/g) ?? []).length
+      return count === 0 ? '' : `${prefix}${count}${mid}${inner}${close}`
+    },
+  )
+  return result
+}
+
 /// Whole-column (`A:B`) and whole-row (`1:4`) refs carry no coordinate on
 /// their other axis, so only their own axis maps — the same axis discipline
 /// shiftReferenceToken applies to whole-line tokens inside formulas. Without
@@ -1581,41 +2084,63 @@ export function shiftFormulaText(
   qualifiedOnly = false,
   deletedRef: DeletedReferenceMode = 'throw',
 ): string {
-  // Formula string literals use "" escaping, so splitting on `"` leaves
-  // literal content in the odd-indexed segments.
+  return remapReferenceTokens(formula, sheetName, qualifiedOnly, (token) => {
+    const shifted = shiftReferenceToken(token, shift, axis)
+    if (shifted === null) {
+      if (deletedRef === 'ref-error') return null
+      throw new StructuralShiftError(
+        `A formula references the deleted range (${token}) — deletion aborted.`,
+      )
+    }
+    return shifted
+  })
+}
+
+/// The rectangle-move counterpart of shiftFormulaText, with Excel's move
+/// rules: a reference fully inside the moved rectangle follows it ($ markers
+/// are irrelevant on a move); a reference onto the overwritten target
+/// becomes a bare `#REF!` token (the sheet qualifier is dropped, matching
+/// the deletion convention); partial overlaps and whole-line references are
+/// left untouched — exactly what Univer's own move-range rewrite does, so
+/// screen and file agree.
+export function moveRangeFormulaText(
+  formula: string,
+  sheetName: string,
+  move: RectangleMove,
+  qualifiedOnly = false,
+): string {
+  return remapReferenceTokens(formula, sheetName, qualifiedOnly, (token) =>
+    moveReferenceToken(token, move),
+  )
+}
+
+/// Shared token walk behind the axis and rectangle remaps. Formula string
+/// literals use "" escaping, so splitting on `"` leaves literal content in
+/// the odd-indexed segments. A null from remapToken means the reference was
+/// destroyed — it becomes a bare #REF! with the qualifier dropped.
+function remapReferenceTokens(
+  formula: string,
+  sheetName: string,
+  qualifiedOnly: boolean,
+  remapToken: (token: string) => string | null,
+): string {
   return formula
     .split('"')
     .map((segment, index) =>
       index % 2 === 1
         ? segment
-        : shiftFormulaSegment(segment, sheetName, shift, axis, qualifiedOnly, deletedRef),
+        : segment.replace(
+            FORMULA_REFERENCE_PATTERN,
+            (full, lead: string, qualifier: string | undefined, token: string) => {
+              if (qualifier === undefined && qualifiedOnly) return full
+              if (qualifier !== undefined && !qualifierMatches(qualifier, sheetName)) return full
+              const shifted = remapToken(token)
+              if (shifted === null) return `${lead}#REF!`
+              return `${lead}${qualifier === undefined ? '' : `${qualifier}!`}${shifted}`
+            },
+          ),
     )
     .join('"')
-}
-
-function shiftFormulaSegment(
-  segment: string,
-  sheetName: string,
-  shift: Shift,
-  axis: Axis,
-  qualifiedOnly: boolean,
-  deletedRef: DeletedReferenceMode,
-): string {
-  return segment.replace(
-    FORMULA_REFERENCE_PATTERN,
-    (full, lead: string, qualifier: string | undefined, token: string) => {
-      if (qualifier === undefined && qualifiedOnly) return full
-      if (qualifier !== undefined && !qualifierMatches(qualifier, sheetName)) return full
-      const shifted = shiftReferenceToken(token, shift, axis)
-      if (shifted === null) {
-        if (deletedRef === 'ref-error') return `${lead}#REF!`
-        throw new StructuralShiftError(
-          `A formula references the deleted range (${token}) — deletion aborted.`,
-        )
-      }
-      return `${lead}${qualifier === undefined ? '' : `${qualifier}!`}${shifted}`
-    },
-  )
 }
 
 function shiftReferenceToken(token: string, shift: Shift, axis: Axis): string | null {

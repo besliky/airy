@@ -1226,6 +1226,31 @@ export const workbookStructuralOpSchema = z.union([
   z
     .object({
       sheetId: z.string().min(1),
+      kind: z.literal('move-range'),
+      /// Source rectangle of the replace-style move (0-based, inclusive).
+      from: cellAreaSchema,
+      /// Equal-size landing rectangle; its previous cells are destroyed.
+      to: cellAreaSchema,
+    })
+    .strict()
+    .refine(
+      (op) =>
+        op.from.endRow - op.from.startRow === op.to.endRow - op.to.startRow &&
+        op.from.endColumn - op.from.startColumn === op.to.endColumn - op.to.startColumn &&
+        op.to.endRow - op.to.startRow < 10_000 &&
+        op.to.endColumn - op.to.startColumn < 10_000 &&
+        op.from.endRow <= 1_048_575 &&
+        op.to.endRow <= 1_048_575 &&
+        op.from.endColumn <= 16_383 &&
+        op.to.endColumn <= 16_383,
+      {
+        message:
+          'A range move must land on an equally sized in-sheet area no larger than 10,000 lines per side.',
+      },
+    ),
+  z
+    .object({
+      sheetId: z.string().min(1),
       kind: z.enum(['merge-cells', 'unmerge-cells']),
       range: cellAreaSchema,
     })

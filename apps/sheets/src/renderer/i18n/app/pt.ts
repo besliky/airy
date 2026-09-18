@@ -331,6 +331,8 @@ export const pt = {
   appDialogCancel: 'Cancelar',
   appPivotSheetNoMove:
     'Esta planilha contém uma Tabela Dinâmica — mover intervalos ainda não é suportado.',
+  appMoveRangeReplaceOnly:
+    'Somente movimentos de intervalo na mesma planilha para uma área de igual tamanho podem ser salvos — este movimento foi cancelado.',
   appMergeOverTable:
     'A seleção sobrepõe uma tabela do Excel — mesclar células dentro de uma tabela ainda não é suportado.',
   appTableFilterNoEdit:

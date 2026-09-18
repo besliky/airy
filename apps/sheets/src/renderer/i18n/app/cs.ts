@@ -312,6 +312,8 @@ export const cs = {
   appDialogCancel: 'Zrušit',
   appPivotSheetNoMove:
     'Tento list obsahuje kontingenční tabulku — přesouvání oblastí zatím není podporováno.',
+  appMoveRangeReplaceOnly:
+    'Uložit lze jen přesuny oblasti ve stejném listu na stejně velkou oblast — tento přesun byl zrušen.',
   appMergeOverTable:
     'Výběr se překrývá s tabulkou Excelu — slučování buněk v tabulce zatím není podporováno.',
   appTableFilterNoEdit: 'Filtr tohoto listu patří tabulce Excelu — jeho úpravu zatím nelze uložit.',
