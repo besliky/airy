@@ -256,6 +256,18 @@ describe('captions', () => {
       runs: [{ text: '图 1 测试', color: '44546A', sizeHalfPoints: 18 }],
     })
   })
+
+  it('generateCaptionXml wraps the SEQ field in the hidden _Ref anchor when given', async () => {
+    const xml = generateCaptionXml('Figure', 2, 'System architecture', '_Ref123456789')
+    const start = xml.indexOf('w:name="_Ref123456789"')
+    expect(start).toBeGreaterThan(-1)
+    // the anchor wraps the SEQ field: start before begin, end after the field end
+    expect(start).toBeLessThan(xml.indexOf('w:fldCharType="begin"'))
+    expect(xml.indexOf('<w:bookmarkEnd')).toBeGreaterThan(xml.indexOf('w:fldCharType="end"'))
+    // visible display is unchanged by the bookmark
+    const doc = await parseDocx(await buildDocx({ bodyXml: xml }))
+    expect(doc.blocks[0].fieldDisplay).toMatchObject({ kind: 'text', left: 'Figure 2 System architecture' })
+  })
 })
 
 describe('rich-text footnote display runs', () => {

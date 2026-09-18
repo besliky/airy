@@ -2171,14 +2171,29 @@ export function generateTocFieldXml(entries: TocEntry[]): string[] {
 /**
  * Caption paragraph: `<label> <SEQ label> <text>`, e.g. "Figure 1 System architecture".
  * The SEQ field is marked dirty so Word renumbers all captions on open; the
- * static number is the visible result until then.
+ * static number is the visible result until then. An optional hidden anchor
+ * (`_Ref…`, Word's cross-reference target for captions) wraps the SEQ field so
+ * REF \r / \p fields can resolve this caption.
  */
-export function generateCaptionXml(label: string, number: number, text: string): string {
+export function generateCaptionXml(
+  label: string,
+  number: number,
+  text: string,
+  anchor?: string,
+): string {
   const rPr = '<w:rPr><w:color w:val="44546A"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>'
   const run = (inner: string) => `<w:r>${rPr}${inner}</w:r>`
+  // bookmark ids must stay unique within the story: anchor names carry random
+  // 9 digits, offset above every producer id seen so far (Word ids are small)
+  const bmId = anchor ? 1000000000 + parseInt(anchor.replace(/\D/g, '').slice(-9) || '0', 10) : 0
+  const bmStart = anchor
+    ? `<w:bookmarkStart w:id="${bmId}" w:name="${escapeXmlAttr(anchor)}"/>`
+    : ''
+  const bmEnd = anchor ? `<w:bookmarkEnd w:id="${bmId}"/>` : ''
   return (
     '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="80" w:after="200"/></w:pPr>' +
     run(`<w:t xml:space="preserve">${escapeXmlText(label)} </w:t>`) +
+    bmStart +
     run('<w:fldChar w:fldCharType="begin" w:dirty="true"/>') +
     run(
       `<w:instrText xml:space="preserve"> SEQ ${escapeXmlText(label)} \\* ARABIC </w:instrText>`,
@@ -2186,6 +2201,7 @@ export function generateCaptionXml(label: string, number: number, text: string):
     run('<w:fldChar w:fldCharType="separate"/>') +
     run(`<w:t>${number}</w:t>`) +
     run('<w:fldChar w:fldCharType="end"/>') +
+    bmEnd +
     (text ? run(`<w:t xml:space="preserve"> ${escapeXmlText(text)}</w:t>`) : '') +
     '</w:p>'
   )
