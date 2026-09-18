@@ -254,13 +254,16 @@ shares the 30k budget (`blocks`/`range` select lines). `insert_content` takes ma
 or after line `at` (`-1` = start; default: end). `apply_ops` runs line ops
 instead of block ops: `insertLines after text`, `replaceLines from to text`
 (empty text deletes the range), `deleteLines from to`, and `findReplace find
-replace matchCase? from? to?` (line-scoped, optional inclusive line window).
+replace matchCase? from? to?` (line-scoped — find and replace must be
+single-line; optional inclusive line window).
 Line indexes are 0-based and shift after every splice — re-read between
 edits. Encoding: UTF-8 only (BOM-prefixed UTF-8/UTF-16 opens; files that are
 not valid UTF-8 are refused with a conversion hint), a leading BOM survives
 saves, untouched lines keep their exact bytes (EOLs included — a CRLF file
 stays CRLF, mixed line endings keep their own), and a zero-edit save writes
-the original bytes back verbatim. Markdown files cap at 8 MiB.
+the original bytes back verbatim. Markdown files cap at 8 MiB and
+2,000,000 lines (the size is checked via stat before the file is read, the
+line count before the line model is built).
 
 HTML editing (`.html` / `.htm`) is line-based, like a source editor.
 `read_document` shows the title, stats (including the file's EOL style and
@@ -277,7 +280,8 @@ html session is an explicit error (html has no heading addressing; position
 via `marker` or `at`). `apply_ops` runs line ops instead of block ops:
 `insertLines after text`, `replaceLines from to text` (empty text deletes
 the range), `deleteLines from to`, and `findReplace find replace matchCase?
-from? to?` (line-scoped, optional inclusive line window). Line indexes are
+from? to?` (line-scoped — find and replace must be single-line; optional
+inclusive line window). Line indexes are
 0-based and shift after every splice — re-read between edits. Encoding:
 UTF-8 (BOM-prefixed UTF-8/UTF-16 accepted); bytes that are not valid UTF-8
 open only when the document declares a usable `<meta charset>` — undeclared
@@ -287,8 +291,10 @@ CRLF, mixed line endings keep their own), and a zero-edit save writes the
 original bytes back verbatim; an edited save of a legacy-charset original
 writes UTF-8 **and rewrites the charset declaration to `utf-8`** (with a
 warning) — browsers trust the declaration, so leaving a stale legacy claim
-would render the saved file as mojibake. HTML files cap at 8 MiB; documents
-above 1M characters skip the structure scan (read shows the text only).
+would render the saved file as mojibake. HTML files cap at 8 MiB and
+2,000,000 lines (checked via stat / a counting pass before anything is
+materialized); documents above 1M characters skip the structure scan (read
+shows the text only).
 
 ## Live mode
 
@@ -373,14 +379,18 @@ range), `read_document`'s `blocks` parameter accepts at most 200 indexes per
 call, a `range` may span at most 10,000 blocks/lines (a larger span is
 rejected up front — split it into several reads), and `read_workbook` ranges
 cap at 20,000 cells (split larger ranges into smaller reads). Markdown and
-HTML sessions add an 8 MiB open cap (larger files are refused with a clear
-error); HTML documents above 1M characters skip the parse5 structure scan.
+HTML sessions add an 8 MiB / 2,000,000-line open cap (larger files are
+refused with a clear error, by stat before the content is read); HTML
+documents above 1M characters skip the parse5 structure scan.
 
 ## Security model
 
 - **Path confinement.** Every input and output path must resolve inside the
   workspace root (`AIRY_WORKSPACE_ROOT`, default the server's cwd); traversal
-  that escapes the root is rejected with a clear error. Symlinks are resolved
+  that escapes the root is rejected with a clear error. Each session pins the
+  root at open time and keeps confining its saves against that root, so a
+  later `AIRY_WORKSPACE_ROOT`/cwd change never re-confines a live session.
+  Symlinks are resolved
   for both the root and the candidate before the check, so a link that lives
   inside the root but points outside cannot smuggle paths out (links that
   resolve back inside the root stay usable). On Windows the comparison folds

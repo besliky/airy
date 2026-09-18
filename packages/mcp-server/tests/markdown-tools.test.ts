@@ -3,7 +3,8 @@
 // -> insert -> apply_ops -> save -> reopen cycle, byte-level round-trips
 // (BOM, EOLs, untouched lines), the failure paths (missing file, outside the
 // workspace root, invalid UTF-8, binary, size caps) and the save fences.
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -278,6 +279,9 @@ describe('markdown tools over MCP', () => {
       expect(String((opened.structuredContent?.warnings as string[] | undefined)?.[0])).toContain(
         'UTF-16',
       )
+      // the open summary keeps a space between the warning sentence and the
+      // Handle pointer (they used to glue: "…writes UTF-8.Handle: …")
+      expect(text(opened)).toContain('writes UTF-8. Handle:')
       await call(client, 'insert_content', { handle, text: 'Tail' })
       const saved = await call(client, 'save_document', { handle })
       expect(saved.isError).toBeFalsy()
@@ -443,6 +447,23 @@ describe('markdown tools over MCP', () => {
     }
   })
 
+  it('caps the line count at open: a file of bare EOLs is refused before the model is built', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // 2,000,001 lines in ~2 MB: under the byte cap, but the line model
+      // would be millions of objects. The refusal must come from the line
+      // cap (counted before splitLines), not from the byte cap.
+      await writeFile(join(root, 'eol-flood.md'), Buffer.from('\n'.repeat(2_000_000)))
+      const flooded = await call(client, 'open_document', { path: 'eol-flood.md' })
+      expect(flooded.isError).toBe(true)
+      expect(text(flooded)).toContain('2000001 lines')
+      expect(text(flooded)).toContain('cap at 2000000 lines')
+      expect(text(flooded)).not.toContain('8 MiB')
+    } finally {
+      await close()
+    }
+  })
+
   it('rejects an enormous read range fast, before allocating the index array', async () => {
     const { client, close } = await connectSession()
     try {
@@ -542,6 +563,93 @@ describe('markdown tools over MCP', () => {
       const after = await call(client, 'read_document', { handle })
       expect(after.isError).toBe(true)
       expect(text(after)).toContain('Unknown document handle')
+    } finally {
+      await close()
+    }
+  })
+
+  it('labels sessions and builds temp names from the file basename, not the whole path', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // basename (node:path) rather than a '/'-split: on Windows a
+      // `\`-separated path never splits, which used to leak the whole path
+      // into meta.fileName and into the atomic-save temp file name
+      await mkdir(join(root, 'nested/deep'), { recursive: true })
+      await writeFile(join(root, 'nested/deep/notes.md'), LF_FIXTURE, 'utf8')
+      const opened = await call(client, 'open_document', { path: 'nested/deep/notes.md' })
+      expect(opened.isError).toBeFalsy()
+      expect(opened.structuredContent?.fileName).toBe('notes.md')
+      expect(text(opened)).toContain('Opened notes.md as an editable markdown session')
+      // a save into the nested dir exercises the same basename-derived temp
+      // name inside the target directory
+      const handle = String(opened.structuredContent?.handle)
+      const saved = await call(client, 'save_document', { handle, path: 'nested/deep/copy.md' })
+      expect(saved.isError).toBeFalsy()
+      const onDisk = await readFile(join(root, 'nested/deep/copy.md'), 'utf8')
+      expect(onDisk).toContain('# Quarterly Report')
+      // no leftover temp files in the target directory
+      const entries = await readdir(join(root, 'nested/deep'))
+      expect(entries.sort()).toEqual(['copy.md', 'notes.md'])
+    } finally {
+      await close()
+    }
+  })
+
+  it('confines saves to the workspace root captured at open, not a later one', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const handle = await openFixture(client, 'pinned.md')
+      await call(client, 'insert_content', { handle, text: 'Edit.' })
+      // drift AIRY_WORKSPACE_ROOT after open: before the fix the default
+      // save re-confined the absolute opened path against the NEW root and
+      // failed with PathOutsideWorkspaceError; a relative save-as resolved
+      // into the wrong directory
+      const driftRoot = await mkdtemp(join(tmpdir(), 'airy-mcp-md-drift-'))
+      process.env[WORKSPACE_ROOT_ENV] = driftRoot
+      try {
+        const inPlace = await call(client, 'save_document', { handle })
+        expect(inPlace.isError).toBeFalsy()
+        expect(String(inPlace.structuredContent?.path)).toBe(join(root, 'pinned.md'))
+        const saveAs = await call(client, 'save_document', { handle, path: 'pinned-out.md' })
+        expect(saveAs.isError).toBeFalsy()
+        // the relative target resolved against the OPEN-time root
+        expect(existsSync(join(root, 'pinned-out.md'))).toBe(true)
+        expect(existsSync(join(driftRoot, 'pinned-out.md'))).toBe(false)
+        expect((await readFile(join(root, 'pinned-out.md'), 'utf8')).endsWith('Edit.')).toBe(true)
+      } finally {
+        process.env[WORKSPACE_ROOT_ENV] = root
+        await rm(driftRoot, { recursive: true, force: true })
+      }
+    } finally {
+      await close()
+    }
+  })
+
+  it('rejects findReplace text containing line breaks (line-model invariant)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const handle = await openFixture(client)
+      const multilineFind = await call(client, 'apply_ops', {
+        handle,
+        ops: [{ op: 'findReplace', find: 'Revenue\nDetail', replace: 'x' }],
+      })
+      expect(multilineFind.isError).toBe(true)
+      expect(text(multilineFind)).toContain('find must not contain line breaks')
+      // a replace with an embedded EOL would leave a line break inside one
+      // line object; it must refuse and point at the multi-line ops instead
+      const multilineReplace = await call(client, 'apply_ops', {
+        handle,
+        ops: [{ op: 'findReplace', find: 'Revenue', replace: 'Sales\nGrowth' }],
+      })
+      expect(multilineReplace.isError).toBe(true)
+      expect(text(multilineReplace)).toContain('replace must not contain line breaks')
+      expect(text(multilineReplace)).toContain('insertLines or replaceLines')
+      // single-line replacements keep working
+      const ok = await call(client, 'apply_ops', {
+        handle,
+        ops: [{ op: 'findReplace', find: 'Revenue', replace: 'Sales' }],
+      })
+      expect(ok.isError).toBeFalsy()
     } finally {
       await close()
     }

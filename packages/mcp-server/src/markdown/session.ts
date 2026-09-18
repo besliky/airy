@@ -18,8 +18,9 @@
 // setext headings (===/--- underlines) are deliberately not parsed and are
 // documented as such - agents address them as plain lines.
 import { randomUUID } from 'node:crypto'
+import type { Stats } from 'node:fs'
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 
 import {
   assertSaveTargetFree,
@@ -27,11 +28,18 @@ import {
   FencingError,
   promoteNewFileExclusively,
 } from '../docx/session.js'
-import { resolveConfined } from '../docx/paths.js'
+import { resolveConfined, workspaceRoot } from '../docx/paths.js'
 
 // ---- limits (mirror the docx session, scaled to the MCP 30k answer budget) ----
 
 const MAX_OPEN_BYTES = 8 * 1024 * 1024
+/**
+ * Largest line count an open materializes: the byte cap alone does not bound
+ * the model — a file of bare EOLs (8 MiB of `\r\n` is ~4M lines) would
+ * allocate millions of line objects and hundreds of MB per session. The count
+ * runs over the decoded text BEFORE splitLines allocates anything.
+ */
+const MAX_OPEN_LINES = 2_000_000
 const READ_MAX_CHARS = 30_000
 const INSERT_MAX_CHARS = 200_000
 const OPS_TEXT_MAX_CHARS = 200_000
@@ -143,6 +151,27 @@ export function splitLines(text: string): MarkdownLine[] {
   }
   lines.push({ text: text.slice(start), eol: '' })
   return lines
+}
+
+/**
+ * The line count splitLines would produce, counted WITHOUT materializing the
+ * array (the same walk minus the pushes) so an oversize file can be refused
+ * before the model allocation.
+ */
+function countLines(text: string): number {
+  let count = 1
+  let i = 0
+  while (i < text.length) {
+    const ch = text[i]
+    if (ch === '\n' || ch === '\r') {
+      const eolLen = ch === '\r' && text[i + 1] === '\n' ? 2 : 1
+      count += 1
+      i += eolLen
+    } else {
+      i += 1
+    }
+  }
+  return count
 }
 
 /**
@@ -283,6 +312,8 @@ export class MarkdownSession {
   readonly handle: string
   readonly path: string
 
+  /** confinement root captured at open (save must not follow a later drift) */
+  private readonly root: string
   private readonly originalBytes: Uint8Array
   private lines: MarkdownLine[]
   private readonly bom: boolean
@@ -294,6 +325,7 @@ export class MarkdownSession {
   private constructor(
     handle: string,
     path: string,
+    root: string,
     originalBytes: Uint8Array,
     lines: MarkdownLine[],
     bom: boolean,
@@ -302,6 +334,7 @@ export class MarkdownSession {
   ) {
     this.handle = handle
     this.path = path
+    this.root = root
     this.originalBytes = originalBytes
     this.lines = lines
     this.bom = bom
@@ -312,17 +345,32 @@ export class MarkdownSession {
   /** Open a .md/.markdown file inside the workspace root. */
   static async open(rawPath: string, root?: string): Promise<MarkdownSession> {
     const path = resolveConfined(rawPath, root)
-    let bytes: Uint8Array
-    let stamp: FileStamp
+    // stat first: an oversize file is refused by its size BEFORE the whole
+    // content is read into memory (the post-read check stays as a backstop
+    // against the file growing between stat and read)
+    let info: Stats
     try {
-      bytes = new Uint8Array(await readFile(path))
-      const info = await stat(path)
-      stamp = { mtimeMs: info.mtimeMs, size: info.size }
+      info = await stat(path)
     } catch (e) {
       throw new Error(`Cannot read "${path}": ${e instanceof Error ? e.message : String(e)}`, {
         cause: e,
       })
     }
+    if (info.size > MAX_OPEN_BYTES) {
+      throw new Error(
+        `"${path}" is ${String(info.size)} bytes; markdown sessions cap at ` +
+          `${String(MAX_OPEN_BYTES)} bytes (8 MiB).`,
+      )
+    }
+    let bytes: Uint8Array
+    try {
+      bytes = new Uint8Array(await readFile(path))
+    } catch (e) {
+      throw new Error(`Cannot read "${path}": ${e instanceof Error ? e.message : String(e)}`, {
+        cause: e,
+      })
+    }
+    const stamp: FileStamp = { mtimeMs: info.mtimeMs, size: info.size }
     if (bytes.byteLength > MAX_OPEN_BYTES) {
       throw new Error(
         `"${path}" is ${String(bytes.byteLength)} bytes; markdown sessions cap at ` +
@@ -345,9 +393,22 @@ export class MarkdownSession {
         `Cannot open "${path}": the file contains NUL bytes - it does not look like a text document.`,
       )
     }
+    // the line count is checked over the decoded text BEFORE splitLines
+    // allocates one object per line (the byte cap alone does not bound the
+    // model: 8 MiB of bare EOLs is ~4M line objects, hundreds of MB)
+    const lineCount = countLines(text)
+    if (lineCount > MAX_OPEN_LINES) {
+      throw new Error(
+        `"${path}" has ${String(lineCount)} lines; markdown sessions cap at ${String(
+          MAX_OPEN_LINES,
+        )} lines (a file of bare line breaks would otherwise materialize millions of ` +
+          'line objects). Split the file and retry.',
+      )
+    }
     return new MarkdownSession(
       randomUUID(),
       path,
+      root ?? workspaceRoot(),
       bytes,
       splitLines(text),
       decoded.bom,
@@ -364,7 +425,9 @@ export class MarkdownSession {
       handle: this.handle,
       kind: 'markdown',
       path: this.path,
-      fileName: this.path.split('/').pop() ?? this.path,
+      // path.basename is platform-aware: on Windows a `\`-separated path
+      // never split on '/', which made the label the whole path (BUG-706)
+      fileName: basename(this.path) || this.path,
       format: 'md',
       converted: false,
       editable: true,
@@ -717,6 +780,15 @@ export class MarkdownSession {
             typeof op.replace === 'string'
               ? op.replace
               : fail('op findReplace: replace must be a string')
+          // a replace with embedded line breaks would leave an EOL inside one
+          // line object, breaking the line-model invariant (every op and the
+          // dominant-EOL accounting assume one line = no inner EOL)
+          if (/[\r\n]/.test(replace)) {
+            fail(
+              'op findReplace: replace must not contain line breaks ' +
+                '(use insertLines or replaceLines for multi-line edits)',
+            )
+          }
           const matchCase = op.matchCase !== false
           const from = op.from === undefined ? 0 : op.from
           const to = op.to === undefined ? lineCount() - 1 : op.to
@@ -792,7 +864,10 @@ export class MarkdownSession {
    * with the original BOM flag re-applied.
    */
   async save(rawPath?: string, options: { overwrite?: boolean } = {}): Promise<MarkdownSaveResult> {
-    const target = resolveConfined(rawPath ?? this.path)
+    // the root captured at open, not the live one: a drifted
+    // AIRY_WORKSPACE_ROOT/cwd between open and save must not re-confine the
+    // session (the docx session has the same pinned-root semantics)
+    const target = resolveConfined(rawPath ?? this.path, this.root)
     await assertSaveTargetFree(target, [this.path, ...this.savedTargets], options.overwrite)
     if (target === this.path && this.baseline) {
       let current: FileStamp
@@ -819,10 +894,9 @@ export class MarkdownSession {
       }
     }
     await mkdir(dirname(target), { recursive: true })
-    const tmp = join(
-      dirname(target),
-      `.${target.split('/').pop() ?? 'markdown'}.airy-${randomUUID()}`,
-    )
+    // basename, not a '/'-split: on Windows the split leaves the whole path
+    // in the temp name and writeFile fails on the colons/backslashes
+    const tmp = join(dirname(target), `.${basename(target) || 'markdown'}.airy-${randomUUID()}`)
     await writeFile(tmp, bytes)
     if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
       await rename(tmp, target)
