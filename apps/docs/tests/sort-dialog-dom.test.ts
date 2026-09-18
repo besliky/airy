@@ -4,11 +4,14 @@ import { createRoot, type Root } from 'react-dom/client'
 import { Editor } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import { editorExtensions } from '../src/renderer/editor/extensions'
-import { LocaleProvider, setModuleLang } from '../src/renderer/i18n/locale'
+import { LocaleProvider, loadLocale, setModuleLang } from '../src/renderer/i18n/locale'
 import { SortDialog } from '../src/renderer/components/SortDialog'
 
 beforeAll(() => {
   ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
+  // PERF-904: dictionaries load per locale; the en dictionary this suite
+  // asserts against must be loaded first, mirroring the bootstrap-time load.
+  return loadLocale('en')
 })
 
 /**

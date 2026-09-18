@@ -12,7 +12,8 @@ import {
   shortcutKeys,
   type ShortcutDef,
 } from '../src/renderer/shortcuts'
-import { strings } from '../src/renderer/i18n/strings'
+import { loadStrings } from '../src/renderer/i18n/strings'
+import { LANGS } from '@airy-office/i18n'
 
 // alternates are listed as "A / B"; the separator has to keep ⌘/ itself intact
 const chords = (def: ShortcutDef, isMac: boolean) => shortcutKeys(def, isMac).split(' / ')
@@ -40,10 +41,13 @@ describe('shortcut registry', () => {
     }
   })
 
-  it('labels every row in every language', () => {
-    for (const [lang, dict] of Object.entries(strings)) {
+  // PERF-904: dictionaries load per locale on demand, so the full 20-language
+  // sweep fetches each lazy dictionary through the same loader bootstrap uses.
+  it('labels every row in every language', async () => {
+    for (const lang of LANGS) {
+      const dict = await loadStrings(lang)
       for (const entry of [...SHORTCUTS, ...SHORTCUT_GROUPS]) {
-        const value = (dict as Record<string, string>)[entry.labelKey]
+        const value = dict[entry.labelKey as keyof typeof dict]
         expect(value, `${entry.labelKey} missing in ${lang}`).toBeTruthy()
       }
     }

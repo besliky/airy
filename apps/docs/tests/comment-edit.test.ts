@@ -1,12 +1,16 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { Editor } from '@tiptap/core'
 import type { CommentInfo } from '@airy-office/docx-engine'
 import { editorExtensions } from '../src/renderer/editor/extensions'
-import { LocaleProvider, setModuleLang } from '../src/renderer/i18n/locale'
+import { LocaleProvider, loadLocale, setModuleLang } from '../src/renderer/i18n/locale'
 import { CommentsPanel } from '../src/renderer/components/CommentsPanel'
 import { editComment, type ReviewContext } from '../src/renderer/review-actions'
+
+// PERF-904: dictionaries load per locale; the en dictionary this suite
+// asserts against must be loaded first, mirroring the bootstrap-time load.
+beforeAll(() => loadLocale('en'))
 
 // ---- editComment (review action) ----
 
