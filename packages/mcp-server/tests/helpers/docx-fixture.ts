@@ -42,10 +42,37 @@ const BODY_XML = [
   '<w:p><w:r><w:t>End of report.</w:t></w:r></w:p>',
 ].join('')
 
+// jszip stamps every entry with the CURRENT date when no date option is given
+// (DOS timestamp, 2-second granularity), so two builds that straddle a
+// 2-second boundary produce different header bytes. Tests byte-compare a
+// freshly built fixture against bytes written at setup time ("original on
+// disk unchanged"), which made that assertion time-dependent and flaky on CI
+// (TEST-721). The date option only pins entries added EXPLICITLY: jszip also
+// auto-creates a directory entry for every parent of a nested path
+// (fileAdd -> folderAdd) and that internal call takes no date, so implicit
+// dirs (here: _rels/, word/ AND word/_rels/) would silently keep the build
+// time. addPinned() creates every ancestor explicitly with the fixed date,
+// which makes the whole builder byte-deterministic however it grows.
+const FIXED_ZIP_DATE = { date: new Date(Date.UTC(2024, 1, 2, 3, 4, 6)) }
+
+function addPinned(zip: JSZip, name: string, content: string): void {
+  const segments = name.split('/')
+  segments.pop()
+  let prefix = ''
+  for (const segment of segments) {
+    prefix += `${segment}/`
+    if (zip.files[prefix] === undefined) {
+      zip.file(prefix, null, { dir: true, ...FIXED_ZIP_DATE })
+    }
+  }
+  zip.file(name, content, FIXED_ZIP_DATE)
+}
+
 /** the representative test document: heading, styled paragraph, lists, table, tail */
 export async function buildFixtureDocx(): Promise<Uint8Array> {
   const zip = new JSZip()
-  zip.file(
+  addPinned(
+    zip,
     '[Content_Types].xml',
     `${XML_DECL}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
@@ -55,22 +82,25 @@ export async function buildFixtureDocx(): Promise<Uint8Array> {
       '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>' +
       '</Types>',
   )
-  zip.file(
+  addPinned(
+    zip,
     '_rels/.rels',
     `${XML_DECL}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
       '</Relationships>',
   )
-  zip.file(
+  addPinned(
+    zip,
     'word/_rels/document.xml.rels',
     `${XML_DECL}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
       '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>' +
       '</Relationships>',
   )
-  zip.file('word/styles.xml', STYLES_XML)
-  zip.file('word/numbering.xml', NUMBERING_XML)
-  zip.file(
+  addPinned(zip, 'word/styles.xml', STYLES_XML)
+  addPinned(zip, 'word/numbering.xml', NUMBERING_XML)
+  addPinned(
+    zip,
     'word/document.xml',
     `${XML_DECL}<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${BODY_XML}` +
       '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +

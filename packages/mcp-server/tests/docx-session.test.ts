@@ -430,7 +430,12 @@ describe('save: byte preservation and fencing', () => {
     const reparsed = await reparseSaved(target)
     const texts = reparsed.blocks.map((b) => (b.runs ?? []).map((r) => r.text).join(''))
     expect(texts).toContain('added')
-    // original on disk unchanged
+    // original on disk unchanged — byte-compare against a REBUILT fixture is
+    // only deterministic because the builder pins every zip entry date (files
+    // AND auto-created parent dirs; see helpers/docx-fixture.ts). Unpinned
+    // dates flaked here on CI as TEST-721: jszip stamps entries with the
+    // current time (2-second DOS granularity), so builds straddling a
+    // 2-second boundary produced different bytes.
     expect(Buffer.compare(await readFile(docPath), await buildFixtureDocx())).toBe(0)
   })
 

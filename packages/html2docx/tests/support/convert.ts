@@ -15,10 +15,26 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll } from 'vitest'
 import JSZip from 'jszip'
+import { chromium } from 'playwright-core'
 import type { Browser } from 'playwright-core'
 
 import { convertHtmlToDocx } from '../../src'
-import { launchChrome, PlaywrightDriver } from '../../src/drivers/playwright'
+import { findChrome, PlaywrightDriver } from '../../src/drivers/playwright'
+
+// Local launch instead of src/drivers' launchChrome(): that one still passes
+// --force-device-scale-factor=2 (a leftover from the DSF=2 era), which is dead
+// weight here — every context below is created with an explicit
+// deviceScaleFactor (1, see VIEWPORT) that overrides the browser flag. The
+// flag only misleads (and would double PNG encode cost for any context ever
+// created without its own DSF), so the suite launches without it (PERF-702;
+// src is left untouched for its CLI consumers).
+async function launchChrome(): Promise<Browser> {
+  return chromium.launch({
+    executablePath: findChrome(),
+    headless: true,
+    args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  })
+}
 
 /**
  * A4 at 96dpi so layout (line wraps, column gaps) matches print.
