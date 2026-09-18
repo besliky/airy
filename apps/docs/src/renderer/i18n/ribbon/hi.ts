@@ -64,7 +64,6 @@ export const hi = {
   ribbonAuto: 'स्वतः',
   ribbonAutomatic: 'स्वचालित',
   ribbonCm: 'सेमी',
-  ribbonNotSupportedSuffix: '{label} (अभी समर्थित नहीं)',
   ribbonOpen: 'खोलें…',
   ribbonSave: 'सहेजें',
   ribbonSaveAs: 'इस रूप में सहेजें…',

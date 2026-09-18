@@ -82,6 +82,7 @@ import {
 } from './ribbon-tabs'
 import { WRAP_OPTIONS } from './ContextMenu'
 import { CropDialog, CutoutDialog } from './PictureDialogs'
+import { SortDialog } from './SortDialog'
 import {
   AiryMark,
   IconAlignCenter,
@@ -740,6 +741,7 @@ function RibbonInner({
   /** Picture Format → remove background / crop dialogs */
   const [pictureDialog, setPictureDialog] = useState<'cutout' | 'crop' | null>(null)
   const [listDialog, setListDialog] = useState(false)
+  const [sortDialog, setSortDialog] = useState(false)
   const [tablePropertiesOpen, setTablePropertiesOpen] = useState(false)
 
   useEffect(() => {
@@ -3534,9 +3536,10 @@ function RibbonInner({
                   <span className="rb-mini-sep" />
                   <button
                     className="rb-icon"
-                    disabled
-                    data-tip={t('ribbonNotSupportedSuffix', { label: t('ribbonSort') })}
-                    aria-label={t('ribbonNotSupportedSuffix', { label: t('ribbonSort') })}
+                    disabled={!canEdit || !!sub}
+                    data-tip={t('ribbonSort')}
+                    aria-label={t('ribbonSort')}
+                    onClick={() => setSortDialog(true)}
                   >
                     <IconSort />
                   </button>
@@ -3922,6 +3925,7 @@ function RibbonInner({
           onClose={() => setListDialog(false)}
         />
       )}
+      {sortDialog && <SortDialog editor={editor} onClose={() => setSortDialog(false)} />}
       {tablePropertiesOpen && (
         <TablePropertiesDialog
           initial={tablePropertiesFromAttrs(tableAttrs)}

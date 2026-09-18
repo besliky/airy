@@ -9641,6 +9641,18 @@ ruby.doc-ruby rt {
 
 /* ---- Font / Paragraph dialogs ---- */
 
+.sort-scope {
+  margin: -6px 0 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.sort-warn {
+  margin: -6px 0 14px;
+  font-size: 12px;
+  color: var(--danger);
+}
+
 .font-dialog-row {
   display: flex;
   gap: 12px;

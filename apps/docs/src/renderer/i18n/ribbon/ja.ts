@@ -65,7 +65,6 @@ export const ja = {
   ribbonAuto: '自動',
   ribbonAutomatic: '自動',
   ribbonCm: 'cm',
-  ribbonNotSupportedSuffix: '{label}(未対応)',
   // File menu
   ribbonOpen: '開く…',
   ribbonSave: '保存',

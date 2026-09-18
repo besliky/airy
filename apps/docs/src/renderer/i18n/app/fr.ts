@@ -370,4 +370,22 @@ export const fr = {
     'Mettre à jour ce style à partir de la sélection actuelle (réécrit dans styles.xml)',
   appNewStyleFromSelection: 'Nouveau style à partir de la sélection actuelle',
   appStyleNamePlaceholder: 'Nom du style',
+  // Sort dialog (Home > Sort)
+  appSortDialogTitle: 'Tri',
+  appSortScopeTable: 'Tableau : {rows} lignes × {cols} colonnes',
+  appSortScopeParagraphs: 'Paragraphes sélectionnés : {n}',
+  appSortNoScope: 'Sélectionnez un tableau ou des paragraphes à trier',
+  appSortBy: 'Trier par',
+  appSortThenBy: 'Puis par',
+  appSortColumn: 'Colonne {n}',
+  appSortType: 'Type',
+  appSortTypeText: 'Texte',
+  appSortTypeNumber: 'Nombre',
+  appSortTypeDate: 'Date',
+  appSortAscending: 'Croissant',
+  appSortDescending: 'Décroissant',
+  appSortHeaderRow: 'Ligne d\u2019en-tête (ne pas trier la première ligne)',
+  appSortMergedUnsupported:
+    'Tri impossible : les tableaux avec cellules fusionnées ne sont pas encore pris en charge',
+  appSortNone: '(aucun)',
 } satisfies Record<keyof typeof zh, string>

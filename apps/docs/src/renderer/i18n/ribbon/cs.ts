@@ -63,7 +63,6 @@ export const cs = {
   ribbonAuto: 'Auto',
   ribbonAutomatic: 'Automaticky',
   ribbonCm: 'cm',
-  ribbonNotSupportedSuffix: '{label} (zatím není podporováno)',
   ribbonOpen: 'Otevřít…',
   ribbonSave: 'Uložit',
   ribbonSaveAs: 'Uložit jako…',

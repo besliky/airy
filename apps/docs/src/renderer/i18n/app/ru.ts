@@ -363,4 +363,22 @@ export const ru = {
     'Обновить этот стиль по формату текущего выделения (записывается обратно в styles.xml)',
   appNewStyleFromSelection: 'Создать стиль из текущего выделения',
   appStyleNamePlaceholder: 'Имя стиля',
+  // Sort dialog (Home > Sort)
+  appSortDialogTitle: 'Сортировка',
+  appSortScopeTable: 'Таблица: {rows} строк × {cols} столбцов',
+  appSortScopeParagraphs: 'Выбранные абзацы: {n}',
+  appSortNoScope: 'Выделите таблицу или абзацы для сортировки',
+  appSortBy: 'Сортировать по',
+  appSortThenBy: 'Затем по',
+  appSortColumn: 'Столбец {n}',
+  appSortType: 'Тип',
+  appSortTypeText: 'Текст',
+  appSortTypeNumber: 'Число',
+  appSortTypeDate: 'Дата',
+  appSortAscending: 'По возрастанию',
+  appSortDescending: 'По убыванию',
+  appSortHeaderRow: 'Строка заголовков (первая строка не сортируется)',
+  appSortMergedUnsupported:
+    'Сортировка невозможна: таблицы с объединёнными ячейками пока не поддерживаются',
+  appSortNone: '(нет)',
 } satisfies Record<keyof typeof zh, string>

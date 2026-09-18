@@ -366,4 +366,22 @@ export const es = {
     'Actualizar este estilo con el formato de la selección actual (se escribe en styles.xml)',
   appNewStyleFromSelection: 'Nuevo estilo a partir de la selección actual',
   appStyleNamePlaceholder: 'Nombre del estilo',
+  // Sort dialog (Home > Sort)
+  appSortDialogTitle: 'Ordenar',
+  appSortScopeTable: 'Tabla: {rows} filas × {cols} columnas',
+  appSortScopeParagraphs: 'Párrafos seleccionados: {n}',
+  appSortNoScope: 'Selecciona una tabla o párrafos para ordenar',
+  appSortBy: 'Ordenar por',
+  appSortThenBy: 'Luego por',
+  appSortColumn: 'Columna {n}',
+  appSortType: 'Tipo',
+  appSortTypeText: 'Texto',
+  appSortTypeNumber: 'Número',
+  appSortTypeDate: 'Fecha',
+  appSortAscending: 'Ascendente',
+  appSortDescending: 'Descendente',
+  appSortHeaderRow: 'Fila de encabezado (no ordenar la primera fila)',
+  appSortMergedUnsupported:
+    'No se puede ordenar: las tablas con celdas combinadas aún no son compatibles',
+  appSortNone: '(ninguna)',
 } satisfies Record<keyof typeof zh, string>

@@ -363,4 +363,22 @@ export const ms = {
   appUpdateStyleTip: 'Kemas kini gaya ini dengan pilihan semasa (ditulis semula ke styles.xml)',
   appNewStyleFromSelection: 'Gaya baharu daripada pilihan semasa',
   appStyleNamePlaceholder: 'Nama gaya',
+  // Sort dialog (Home > Sort)
+  appSortDialogTitle: 'Isih',
+  appSortScopeTable: 'Jadual: {rows} baris × {cols} lajur',
+  appSortScopeParagraphs: 'Perenggan dipilih: {n}',
+  appSortNoScope: 'Pilih jadual atau perenggan untuk diisih',
+  appSortBy: 'Isih mengikut',
+  appSortThenBy: 'Kemudian mengikut',
+  appSortColumn: 'Lajur {n}',
+  appSortType: 'Jenis',
+  appSortTypeText: 'Teks',
+  appSortTypeNumber: 'Nombor',
+  appSortTypeDate: 'Tarikh',
+  appSortAscending: 'Menaik',
+  appSortDescending: 'Menurun',
+  appSortHeaderRow: 'Baris pengepala (jangan isih baris pertama)',
+  appSortMergedUnsupported:
+    'Tidak dapat mengisih: jadual dengan sel yang digabungkan belum disokong',
+  appSortNone: '(tiada)',
 } satisfies Record<keyof typeof zh, string>

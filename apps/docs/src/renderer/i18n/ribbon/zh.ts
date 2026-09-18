@@ -64,7 +64,6 @@ export const zh = {
   ribbonAuto: '自动',
   ribbonAutomatic: '自动',
   ribbonCm: '厘米',
-  ribbonNotSupportedSuffix: '{label}(暂不支持)',
   // File menu
   ribbonOpen: '打开…',
   ribbonSave: '保存',
