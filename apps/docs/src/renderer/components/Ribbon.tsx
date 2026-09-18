@@ -3845,6 +3845,7 @@ function RibbonInner({
           <ReviewTab
             editor={editor}
             hasDoc={hasDoc}
+            canEdit={canEdit}
             dropdown={dropdown}
             setDropdown={setDropdown}
             onAiPreset={onAiPreset}

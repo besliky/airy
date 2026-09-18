@@ -6,4 +6,12 @@ export const ar = {
   reviewCompareMerged:
     'تمت المقارنة مع {name}: تم دمج {added} إدراجًا و{removed} حذفًا و{changed} تغييرًا كتغييرات متتبعة',
   reviewCompareIdentical: 'لا توجد فروقات مع {name}: المستندان متطابقان',
+  reviewCompareMergedApprox:
+    'تمت المقارنة مع {name}: تم دمج {added} إدراجًا و{removed} حذفًا و{changed} تغييرًا كتغييرات متتبعة (المستندات كبيرة جدًا لمطابقة الفقرات بدقة)',
+  reviewCompareDegraded:
+    'المستندات كبيرة جدًا لمطابقة الفقرات بدقة: تم إقران الاختلافات حسب الموضع',
+  reviewComparePendingRevisions:
+    'يحتوي المستند على تغييرات متتبعة معلقة. اقبلها أو ارفضها قبل المقارنة مرة أخرى',
+  reviewCompareReadonly:
+    'المقارنة (الدمج كتغييرات متتبعة) تتطلب مستندًا قابلًا للتحرير؛ هذا المستند للقراءة فقط',
 } satisfies Record<keyof typeof zh, string>

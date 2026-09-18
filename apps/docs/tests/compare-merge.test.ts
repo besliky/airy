@@ -121,6 +121,23 @@ describe('mergeCompareDocs (legal blackline merge)', () => {
     expect(collectRevisions(editor.state.doc)).toHaveLength(0)
     editor.destroy()
   })
+
+  it('degrades to index-paired blocks above the paragraph budget instead of freezing (BUG-913)', () => {
+    // (2500+1)^2 = 6.25M cells > PARA_DIFF_BUDGET (4M): books used to build a
+    // 25-100M-cell LCS matrix here and freeze the renderer
+    const n = 2500
+    const left = Array.from({ length: n }, (_, i) => para(`L${i}`))
+    const right = Array.from({ length: n }, (_, i) => para(`R${i}`))
+    const start = Date.now()
+    const { content, summary, degraded } = mergeCompareDocs(left, right, stamp)
+    expect(Date.now() - start).toBeLessThan(2000)
+    expect(degraded).toBe(true)
+    expect(summary.changed).toBe(n)
+    // each changed pair is still run-level merged: old prefix struck, new underlined
+    expect(content).toHaveLength(n)
+    expect(markOf(content[0].content![0], 'del')).toBeTruthy()
+    expect(markOf(content[0].content![1], 'ins')).toBeTruthy()
+  })
 })
 
 describe('compare merge: accept / reject round-trip on real fixtures', () => {

@@ -12,6 +12,11 @@
  * First-version scope: the diff keys on TEXT content only. Formatting
  * differences (bold/size/style/paragraph-format changes) are not marked;
  * for unchanged text the current document's formatting wins.
+ *
+ * Both the panel diff and the merge are bounded: the paragraph-level LCS
+ * matrix and the run-level LCS matrix each have a cell budget, and above it
+ * the diff degrades (index-paired paragraphs / whole-block swap) instead of
+ * freezing the renderer on book-sized documents.
  */
 import type { Block } from '@airy-office/docx-engine'
 import type { PmMark, PmNode } from './convert'
@@ -34,10 +39,47 @@ export function blockTexts(blocks: Block[]): string[] {
     })
 }
 
-/** LCS-based paragraph diff; a removal directly followed by an addition merges into 'changed' */
-export function compareParagraphs(left: string[], right: string[]): CompareEntry[] {
+/**
+ * Cell budget for the paragraph-level LCS matrix ((n+1) x (m+1) numbers).
+ * Books of 5-10k paragraphs would otherwise allocate 25-100M matrix cells
+ * (~0.2-0.8 GB) and freeze the renderer (BUG-913); above the budget the diff
+ * degrades to an index-paired walk (see pairParagraphsByIndex) and callers
+ * get `degraded: true` so the UI can say the pairing is positional. Mirrors
+ * the run-level RUN_DIFF_BUDGET below.
+ */
+const PARA_DIFF_BUDGET = 4_000_000
+
+export interface ParagraphDiff {
+  entries: CompareEntry[]
+  /** true when the cell budget forced the index-paired fallback (no LCS alignment) */
+  degraded: boolean
+}
+
+/**
+ * Pair paragraphs by position instead of an LCS alignment: equal positions
+ * are 'same', mismatching ones 'changed', leftovers removed/added. O(n+m) and
+ * no matrix, but a paragraph inserted at the top marks every later pair
+ * changed — honest only with the degraded flag surfaced to the user.
+ */
+function pairParagraphsByIndex(left: string[], right: string[]): CompareEntry[] {
+  const out: CompareEntry[] = []
+  const common = Math.min(left.length, right.length)
+  for (let i = 0; i < common; i++) {
+    if (left[i] === right[i]) out.push({ kind: 'same', left: left[i], right: right[i] })
+    else out.push({ kind: 'changed', left: left[i], right: right[i] })
+  }
+  for (let i = common; i < left.length; i++) out.push({ kind: 'removed', left: left[i] })
+  for (let j = common; j < right.length; j++) out.push({ kind: 'added', right: right[j] })
+  return out
+}
+
+/** Paragraph diff with a degradation flag; compareParagraphs is the flag-less wrapper. */
+export function diffParagraphs(left: string[], right: string[]): ParagraphDiff {
   const n = left.length
   const m = right.length
+  if ((n + 1) * (m + 1) > PARA_DIFF_BUDGET) {
+    return { entries: pairParagraphsByIndex(left, right), degraded: true }
+  }
   // lcs[i][j] = LCS length of left[i:], right[j:]
   const lcs: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0))
   for (let i = n - 1; i >= 0; i--) {
@@ -75,7 +117,12 @@ export function compareParagraphs(left: string[], right: string[]): CompareEntry
     }
     out.push(entry)
   }
-  return out
+  return { entries: out, degraded: false }
+}
+
+/** LCS-based paragraph diff; a removal directly followed by an addition merges into 'changed' */
+export function compareParagraphs(left: string[], right: string[]): CompareEntry[] {
+  return diffParagraphs(left, right).entries
 }
 
 export interface CompareSummary {
@@ -133,6 +180,8 @@ export interface CompareMergeResult {
   content: PmNode[]
   /** difference counts (paragraph granularity, like the diff panel) */
   summary: CompareSummary
+  /** true when the paragraph LCS exceeded PARA_DIFF_BUDGET and blocks were paired by position (BUG-913) */
+  degraded: boolean
 }
 
 /** flattened comparable text of one top-level editor node */
@@ -383,7 +432,7 @@ export function mergeCompareDocs(
   stamp: CompareStamp,
 ): CompareMergeResult {
   const foreign = right.map(sanitizeForeignNode)
-  const entries = compareParagraphs(pmBlockTexts(left), pmBlockTexts(foreign))
+  const { entries, degraded } = diffParagraphs(pmBlockTexts(left), pmBlockTexts(foreign))
   const content: PmNode[] = []
   let i = 0
   let j = 0
@@ -399,5 +448,5 @@ export function mergeCompareDocs(
       content.push(...mergeChangedBlocks(left[i++], foreign[j++], stamp))
     }
   }
-  return { content, summary: summarize(entries) }
+  return { content, summary: summarize(entries), degraded }
 }

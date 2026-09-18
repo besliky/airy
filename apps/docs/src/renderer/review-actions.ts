@@ -21,18 +21,14 @@ import {
   removeCommentFromDoc,
   wordRangeAtCaret,
 } from './editor/comments'
-import {
-  blockTexts,
-  compareParagraphs,
-  mergeCompareDocs,
-  type CompareEntry,
-} from './editor/compare'
+import { blockTexts, diffParagraphs, mergeCompareDocs, type CompareEntry } from './editor/compare'
 import { blocksToPmDoc } from './editor/convert'
 import { pendingCommentPluginKey } from './editor/extensions'
 import type { InkAnnotation } from './editor/ink'
 import {
   acceptAllRevisions,
   acceptCurrentRevision,
+  collectRevisions,
   rejectAllRevisions,
   rejectCurrentRevision,
   TRACK_IGNORE,
@@ -284,13 +280,38 @@ export function clearInks(ctx: ReviewContext): void {
 
 /**
  * Compare: pick a second .docx and diff it against the open document.
- * - 'panel' shows the paragraph-level differences pane (unchanged behavior)
+ * - 'panel' shows the paragraph-level differences pane (unchanged behavior;
+ *   read-only safe — it diffs the SAVED document `doc.parsed.blocks`)
  * - 'merge' builds the Word legal blackline: the current document's content is
  *   rebuilt with the differences recorded as tracked changes, ready for the
  *   regular accept/reject machinery (Review tab)
+ *
+ * Known mode divergence: panel diffs the saved state while merge diffs the
+ * live editor (`editor.getJSON()`), so unsaved edits make the two modes
+ * disagree until the document is saved (documented, BUG-915 audit note).
  */
 export async function compareWithFile(ctx: ReviewContext, mode: 'panel' | 'merge'): Promise<void> {
   if (!ctx.doc) return
+  const editor = ctx.editor
+  if (mode === 'merge') {
+    if (!editor) return
+    // UX-903: the merge rebuilds the whole document via a programmatic
+    // dispatch, which setEditable(false) alone does not fence — a read-only
+    // editor (Restrict Editing / write lock / Read Mode) must refuse here
+    if (!editor.isEditable) {
+      ctx.setStatus(t('reviewCompareReadonly'))
+      return
+    }
+    // BUG-915: refuse to stack a second blackline over pending revisions —
+    // the paragraph keys would count struck/underlined text as plain text,
+    // the pairing slides and spans get re-stamped, mixing authors/dates from
+    // two sessions (Word instead offers to discard pending changes; an
+    // honest refusal is the cheap correct option)
+    if (collectRevisions(editor.state.doc).length > 0) {
+      ctx.setStatus(t('reviewComparePendingRevisions'))
+      return
+    }
+  }
   const other = await window.desktop.openDocx()
   if (!other) return
   // password-protected comparison target: not wired through the decrypt prompt (yet)
@@ -301,16 +322,18 @@ export async function compareWithFile(ctx: ReviewContext, mode: 'panel' | 'merge
   try {
     const otherParsed = await parseDocx(new Uint8Array(other.data))
     if (mode === 'panel') {
-      const entries = compareParagraphs(
+      const { entries, degraded } = diffParagraphs(
         blockTexts(ctx.doc.parsed.blocks),
         blockTexts(otherParsed.blocks),
       )
       ctx.setCompareResult({ otherName: other.name, entries })
+      // BUG-913: above the paragraph-LCS cell budget the pairing is positional
+      if (degraded) ctx.setStatus(t('reviewCompareDegraded'))
       return
     }
-    const editor = ctx.editor
+    // panel mode returned above; only the merge path continues (editor guarded above)
     if (!editor) return
-    const { content, summary } = mergeCompareDocs(
+    const { content, summary, degraded } = mergeCompareDocs(
       editor.getJSON().content ?? [],
       blocksToPmDoc(otherParsed.blocks, readSections(otherParsed)).content ?? [],
       {
@@ -335,12 +358,19 @@ export async function compareWithFile(ctx: ReviewContext, mode: 'panel' | 'merge
     ctx.setRevisionDisplay('all')
     ctx.dirtyRef.current = true
     ctx.setStatus(
-      t('reviewCompareMerged', {
-        name: other.name,
-        added: summary.added,
-        removed: summary.removed,
-        changed: summary.changed,
-      }),
+      degraded
+        ? t('reviewCompareMergedApprox', {
+            name: other.name,
+            added: summary.added,
+            removed: summary.removed,
+            changed: summary.changed,
+          })
+        : t('reviewCompareMerged', {
+            name: other.name,
+            added: summary.added,
+            removed: summary.removed,
+            changed: summary.changed,
+          }),
     )
   } catch (err) {
     ctx.setStatus(t('appCompareFailed', { error: String(err) }))
