@@ -338,6 +338,7 @@ export const cs = {
   appMatchCase: 'Rozlišovat velikost písmen',
   appWholeWord: 'Pouze celá slova',
   appUseWildcards: 'Použít zástupné znaky',
+  appIgnoreDiacritics: 'Ignorovat diakritiku',
   appNoResults: 'Žádné výsledky',
   appPrevMatch: 'Předchozí (Shift+Enter)',
   appNextMatch: 'Další (Enter)',

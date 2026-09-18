@@ -335,6 +335,7 @@ export const ar = {
   appMatchCase: 'مطابقة حالة الأحرف',
   appWholeWord: 'الكلمة بأكملها فقط',
   appUseWildcards: 'استخدام أحرف البدل',
+  appIgnoreDiacritics: 'تجاهل علامات التشكيل',
   appNoResults: 'لا توجد نتائج',
   appPrevMatch: 'السابق (Shift+Enter)',
   appNextMatch: 'التالي (Enter)',

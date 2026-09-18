@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/core'
 import { useI18n } from '../i18n/locale'
 import { searchPluginKey } from '../editor/extensions'
-import { compileWildcards } from '../find-wildcards'
+import { compileWildcards, foldDiacritics } from '../find-wildcards'
 
 interface Range {
   from: number
@@ -13,6 +13,7 @@ interface FindOptions {
   matchCase: boolean
   wholeWord: boolean
   useWildcards: boolean
+  ignoreDiacritics: boolean
 }
 
 const isWordChar = (ch: string | undefined) => !!ch && /[\p{L}\p{N}_]/u.test(ch)
@@ -31,9 +32,14 @@ export function foldCase(s: string): string {
 export function findMatches(editor: Editor, query: string, opts: FindOptions): Range[] {
   const found: Range[] = []
   if (!query) return found
-  // in wildcards mode wholeWord is ignored (like Word, which disables it there)
-  const re = opts.useWildcards ? compileWildcards(query, !opts.matchCase) : null
-  const needle = opts.matchCase ? query : foldCase(query)
+  // in wildcards mode wholeWord is ignored (like Word, which disables it there);
+  // diacritic folding applies to pattern and text alike, but only to
+  // case-insensitive search — with matchCase on, accents are always
+  // distinguished (Word behavior)
+  const foldDia = opts.ignoreDiacritics && !opts.matchCase
+  const plainQuery = foldDia ? foldDiacritics(query) : query
+  const re = opts.useWildcards ? compileWildcards(plainQuery, !opts.matchCase) : null
+  const needle = opts.matchCase ? query : foldCase(plainQuery)
   editor.state.doc.descendants((node, pos) => {
     if (!node.isTextblock) return true
     // flatten the block's inline content so matches spanning marks are found
@@ -49,10 +55,11 @@ export function findMatches(editor: Editor, query: string, opts: FindOptions): R
       }
     })
     if (re) {
-      // wildcards match the original text: the regex's `i` flag handles case,
-      // so no length-changing folding is needed and offsets stay exact
+      // wildcards match the (optionally folded) text directly: the regex's
+      // `i` flag handles case and both folds keep length, so offsets stay exact
+      const hayText = foldDia ? foldDiacritics(text) : text
       re.lastIndex = 0
-      for (let m = re.exec(text); m; m = re.exec(text)) {
+      for (let m = re.exec(hayText); m; m = re.exec(hayText)) {
         if (m[0].length > 0) {
           found.push({ from: posAt[m.index], to: posAt[m.index + m[0].length - 1] + 1 })
           re.lastIndex = m.index + m[0].length
@@ -62,14 +69,16 @@ export function findMatches(editor: Editor, query: string, opts: FindOptions): R
       }
       return false
     }
-    const haystack = opts.matchCase ? text : foldCase(text)
+    const haystack = opts.matchCase ? text : foldCase(foldDia ? foldDiacritics(text) : text)
     let i = 0
     while ((i = haystack.indexOf(needle, i)) !== -1) {
+      // foldCase and foldDiacritics never change length, so needle.length
+      // indexes the original text too
       const isWhole =
-        !opts.wholeWord || (!isWordChar(text[i - 1]) && !isWordChar(text[i + query.length]))
+        !opts.wholeWord || (!isWordChar(text[i - 1]) && !isWordChar(text[i + needle.length]))
       if (isWhole) {
-        found.push({ from: posAt[i], to: posAt[i + query.length - 1] + 1 })
-        i += query.length
+        found.push({ from: posAt[i], to: posAt[i + needle.length - 1] + 1 })
+        i += needle.length
       } else {
         i += 1
       }
@@ -97,6 +106,7 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
   const [matchCase, setMatchCase] = useState(false)
   const [wholeWord, setWholeWord] = useState(false)
   const [useWildcards, setUseWildcards] = useState(false)
+  const [ignoreDiacritics, setIgnoreDiacritics] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const replaceInputRef = useRef<HTMLInputElement>(null)
   const indexRef = useRef(0)
@@ -125,6 +135,7 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
         matchCase,
         wholeWord,
         useWildcards,
+        ignoreDiacritics,
         ...opts,
       })
       const active = ranges.length === 0 ? 0 : Math.min(keepIndex, ranges.length - 1)
@@ -134,7 +145,7 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
       highlight(ranges, active)
       return ranges
     },
-    [editor, highlight, matchCase, wholeWord, useWildcards],
+    [editor, highlight, matchCase, wholeWord, useWildcards, ignoreDiacritics],
   )
 
   const refreshRef = useRef(refresh)
@@ -300,6 +311,18 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
           }}
         >
           *?
+        </button>
+        <button
+          className={`find-opt ${ignoreDiacritics && !matchCase ? 'on' : ''}`}
+          data-tip={t('appIgnoreDiacritics')}
+          aria-label={t('appIgnoreDiacritics')}
+          onClick={() => {
+            setIgnoreDiacritics(!ignoreDiacritics)
+            refresh(query, index, { ignoreDiacritics: !ignoreDiacritics })
+          }}
+          disabled={matchCase}
+        >
+          é
         </button>
         <span className="find-count">
           {query

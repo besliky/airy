@@ -344,6 +344,7 @@ export const es = {
   appMatchCase: 'Coincidir mayúsculas y minúsculas',
   appWholeWord: 'Solo palabras completas',
   appUseWildcards: 'Usar caracteres comodín',
+  appIgnoreDiacritics: 'Omitir los signos diacríticos',
   appNoResults: 'Sin resultados',
   appPrevMatch: 'Anterior (Mayús+Entrar)',
   appNextMatch: 'Siguiente (Entrar)',

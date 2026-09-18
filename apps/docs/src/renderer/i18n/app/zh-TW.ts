@@ -328,6 +328,7 @@ export const zhTW = {
   appMatchCase: '大小寫須相符',
   appWholeWord: '全字拼寫須相符',
   appUseWildcards: '使用萬用字元',
+  appIgnoreDiacritics: '忽略變音符號',
   appNoResults: '沒有結果',
   appPrevMatch: '上一個 (Shift+Enter)',
   appNextMatch: '下一個 (Enter)',

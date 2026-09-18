@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { findMatches } from '../src/renderer/components/FindPanel'
+import { foldDiacritics } from '../src/renderer/find-wildcards'
 
 function createEditor(text: string): Editor {
   return new Editor({
@@ -20,7 +21,7 @@ function createEditor(text: string): Editor {
   })
 }
 
-const OFF = { matchCase: false, wholeWord: false, useWildcards: true }
+const OFF = { matchCase: false, wholeWord: false, useWildcards: true, ignoreDiacritics: false }
 
 /** matched substrings of the document, in order */
 function matchTexts(editor: Editor, query: string, opts = OFF): string[] {
@@ -116,9 +117,14 @@ describe('wildcards findMatches', () => {
     const editor = createEditor('scat cat')
     // the first match sits inside a word, so whole-word plain search skips it
     expect(
-      findMatches(editor, 'cat', { matchCase: false, wholeWord: true, useWildcards: false }),
+      findMatches(editor, 'cat', {
+        matchCase: false,
+        wholeWord: true,
+        useWildcards: false,
+        ignoreDiacritics: false,
+      }),
     ).toHaveLength(1)
-    const wild = { matchCase: false, wholeWord: true, useWildcards: true }
+    const wild = { ...OFF, wholeWord: true }
     expect(matchTexts(editor, '?cat', wild)).toEqual(['scat', ' cat'])
     expect(matchTexts(editor, '?cat', { ...wild, wholeWord: false })).toEqual(['scat', ' cat'])
     editor.destroy()
@@ -146,6 +152,65 @@ describe('wildcards findMatches', () => {
     })
     expect(matchTexts(editor, 't?st')).toEqual(['test'])
     expect(matchTexts(editor, 't??st')).toEqual(['toast'])
+    editor.destroy()
+  })
+})
+
+describe('foldDiacritics', () => {
+  it('strips accents without changing length', () => {
+    expect(foldDiacritics('café')).toBe('cafe')
+    expect(foldDiacritics('Müller')).toBe('Muller')
+    expect(foldDiacritics('naïve')).toBe('naive')
+    expect(foldDiacritics('café')).toHaveLength(4)
+  })
+
+  it('keeps length for chars it cannot fold, so offsets never shift', () => {
+    expect(foldDiacritics('日本語')).toBe('日本語')
+    expect(foldDiacritics('가나')).toHaveLength(2) // precomposed Hangul stays
+    expect(foldDiacritics('e\u0301')).toHaveLength(2) // lone combining mark stays
+    expect(foldDiacritics('🙂é')).toBe('🙂e') // astral chars stay astral
+  })
+})
+
+describe('ignore-diacritics findMatches', () => {
+  const DIA = { matchCase: false, wholeWord: false, useWildcards: false, ignoreDiacritics: true }
+
+  it('cafe matches café and càfe (French corpus)', () => {
+    const editor = createEditor('café cafe càfe')
+    expect(matchTexts(editor, 'cafe', DIA)).toEqual(['café', 'cafe', 'càfe'])
+    editor.destroy()
+  })
+
+  it('Muller matches Müller with exact offsets (German corpus)', () => {
+    const editor = createEditor('Herr Müller')
+    const [m] = findMatches(editor, 'Muller', DIA)
+    expect(m).toBeDefined()
+    expect(editor.state.doc.textBetween(m.from, m.to)).toBe('Müller')
+    editor.destroy()
+  })
+
+  it('naive matches naïve and stays case-insensitive', () => {
+    const editor = createEditor('CAFÉ naïve café')
+    expect(matchTexts(editor, 'cafe', DIA)).toEqual(['CAFÉ', 'café'])
+    expect(matchTexts(editor, 'naive', DIA)).toEqual(['naïve'])
+    editor.destroy()
+  })
+
+  it('accents are distinguished when the option is off or matchCase is on', () => {
+    const editor = createEditor('café cafe')
+    expect(matchTexts(editor, 'cafe', { ...DIA, ignoreDiacritics: false })).toEqual(['cafe'])
+    // case-sensitive search keeps Word behavior: diacritics always differ
+    expect(matchTexts(editor, 'cafe', { ...DIA, matchCase: true })).toEqual(['cafe'])
+    editor.destroy()
+  })
+
+  it('combines with wildcards', () => {
+    const editor = createEditor('Müller Muller Mülle')
+    const opts = { ...DIA, useWildcards: true }
+    expect(matchTexts(editor, 'M?ller', opts)).toEqual(['Müller', 'Muller'])
+    expect(matchTexts(editor, 'M?ll*r', opts)).toEqual(['Müller', 'Muller'])
+    // the lazy * keeps each match at the M?lle prefix, folded accents and all
+    expect(matchTexts(editor, 'M?lle*', opts)).toEqual(['Mülle', 'Mulle', 'Mülle'])
     editor.destroy()
   })
 })

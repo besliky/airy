@@ -342,6 +342,7 @@ export const it = {
   appMatchCase: 'Maiuscole/minuscole',
   appWholeWord: 'Solo parole intere',
   appUseWildcards: 'Usa caratteri jolly',
+  appIgnoreDiacritics: 'Ignora i segni diacritici',
   appNoResults: 'Nessun risultato',
   appPrevMatch: 'Precedente (Maiusc+Invio)',
   appNextMatch: 'Successivo (Invio)',

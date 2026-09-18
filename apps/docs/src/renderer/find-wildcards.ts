@@ -1,5 +1,6 @@
 /**
- * Word-style "Use wildcards" find patterns, compiled to native RegExp.
+ * Word-style "Use wildcards" find patterns, compiled to native RegExp, plus
+ * the length-preserving diacritic folding behind "Ignore diacritics".
  *
  * Supported syntax (mirrors Word's Find and Replace wildcard mode):
  *   `?`          any single character (one Unicode code point)
@@ -115,4 +116,41 @@ export function compileWildcards(pattern: string, ignoreCase: boolean): RegExp |
   } catch {
     return null
   }
+}
+
+const diacriticFoldCache = new Map<string, string>()
+
+/**
+ * Fold accented characters to their base form (NFD, combining marks
+ * stripped). Strictly length-preserving per code point — every source code
+ * point maps to exactly one code point of the same UTF-16 length — so match
+ * offsets computed on folded text address the original text directly. A lone
+ * combining mark (no base within the same code point) and decompositions
+ * that do not leave exactly one base character (e.g. precomposed Hangul)
+ * are kept as-is. Case is untouched; pair with case folding / the regex `i`
+ * flag for case-insensitive search.
+ */
+export function foldDiacritics(s: string): string {
+  let out = ''
+  for (const ch of s) {
+    let fold = diacriticFoldCache.get(ch)
+    if (fold === undefined) {
+      fold = ch
+      const nfd = ch.normalize('NFD')
+      if (nfd !== ch) {
+        let base = ''
+        let count = 0
+        for (const p of nfd) {
+          if (!/\p{M}/u.test(p)) {
+            base += p
+            count++
+          }
+        }
+        if (count === 1 && base.length === ch.length) fold = base
+      }
+      diacriticFoldCache.set(ch, fold)
+    }
+    out += fold
+  }
+  return out
 }

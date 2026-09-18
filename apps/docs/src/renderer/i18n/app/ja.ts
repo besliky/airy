@@ -363,6 +363,7 @@ export const ja = {
   appMatchCase: '大文字と小文字を区別する',
   appWholeWord: '完全に一致する単語だけを検索する',
   appUseWildcards: 'ワイルドカードを使用する',
+  appIgnoreDiacritics: '発音区別符号を無視する',
   appNoResults: '一致なし',
   appPrevMatch: '前へ (Shift+Enter)',
   appNextMatch: '次へ (Enter)',

@@ -334,6 +334,7 @@ export const en = {
   appMatchCase: 'Match case',
   appWholeWord: 'Whole words only',
   appUseWildcards: 'Use wildcards',
+  appIgnoreDiacritics: 'Ignore diacritics',
   appNoResults: 'No results',
   appPrevMatch: 'Previous (Shift+Enter)',
   appNextMatch: 'Next (Enter)',

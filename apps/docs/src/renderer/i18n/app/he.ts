@@ -333,6 +333,7 @@ export const he = {
   appMatchCase: 'התאמת אותיות רישיות/קטנות',
   appWholeWord: 'מילים שלמות בלבד',
   appUseWildcards: 'שימוש בתווים כלליים',
+  appIgnoreDiacritics: 'התעלם מסימנים דיאקריטיים',
   appNoResults: 'אין תוצאות',
   appPrevMatch: 'הקודם (Shift+Enter)',
   appNextMatch: 'הבא (Enter)',
