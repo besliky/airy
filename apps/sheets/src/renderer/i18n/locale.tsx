@@ -1,11 +1,29 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { createI18n, htmlDir, htmlLang, type Lang, type Params } from '@airy-office/i18n'
-import { strings } from './strings'
+import {
+  format,
+  htmlDir,
+  htmlLang,
+  platformShortcuts,
+  type Lang,
+  type Params,
+} from '@airy-office/i18n'
+import { loadStrings, type LocaleDict } from './strings'
 
-const translate = createI18n(strings)
+/// PERF-901: dictionaries load per locale on demand (see ./strings.ts). This
+/// module keeps a small cache; a locale must be loaded via loadLocale() before
+/// its translations are used — bootstrap awaits it next to the font preload
+/// and every language switch loads the next dictionary before re-rendering,
+/// so translators never see an unloaded locale (worst case on a broken
+/// bundle: the raw key is shown instead of a translated string).
+const dicts = new Map<Lang, LocaleDict>()
 
-export type StringKey = keyof typeof strings.zh
+const translate = (lang: Lang, key: keyof LocaleDict, params?: Params): string => {
+  const template = dicts.get(lang)?.[key] ?? key
+  return platformShortcuts(format(template, params))
+}
+
+export type StringKey = keyof LocaleDict
 export type TFunc = (key: StringKey, params?: Params) => string
 
 // mirror for non-React modules (edit-journal, lazy-plan, AI tools …);
@@ -17,6 +35,18 @@ export const setModuleLang = (lang: Lang): void => {
 }
 /** module-level translator — components should prefer useI18n().t so they re-render on switch */
 export const t: TFunc = (key, params) => translate(moduleLang, key, params)
+
+/** fetch the dictionary of `lang` (memoized; safe to call repeatedly) */
+export async function loadLocale(lang: Lang): Promise<void> {
+  if (dicts.has(lang)) return
+  try {
+    dicts.set(lang, await loadStrings(lang))
+  } catch (error) {
+    // local chunks only fail on a broken bundle; keep the app usable with
+    // raw keys rather than blanking the grid
+    console.error(`failed to load ${lang} strings`, error)
+  }
+}
 
 const AI_LANG_DIRECTIVES: Record<Lang, string> = {
   zh: '\n\n用与用户消息相同的语言回复；无法判断用户消息的语言时，用简体中文回复。',
@@ -37,7 +67,7 @@ const AI_LANG_DIRECTIVES: Record<Lang, string> = {
   nl: '\n\nAntwoord in dezelfde taal als het bericht van de gebruiker; als die niet te bepalen is, antwoord dan in het Nederlands.',
   ms: '\n\nBalas dalam bahasa yang sama dengan mesej pengguna; jika tidak dapat ditentukan, balas dalam bahasa Melayu.',
   he: '\n\nהשב באותה שפה של הודעת המשתמש; אם לא ניתן לקבוע אותה, השב בעברית.',
-  hi: '\n\nउपयोगकर्ता के संदेश की भाषा में ही उत्तर दें; यदि भाषा निर्धारित न हो सके, तो हिंदी में उत्तर दें।',
+  hi: '\n\nउपोजक्ता के संदेश की भाषा में ही उत्तर दें। यदि भाषा निर्धारित न हो सके, तो हिंदी में उत्तर दें।',
   'zh-TW': '\n\n用與使用者訊息相同的語言回覆；無法判斷使用者訊息的語言時，用繁體中文回覆。',
 }
 
@@ -72,15 +102,25 @@ export const DATE_LOCALES: Record<Lang, string> = {
 
 const LocaleContext = createContext<Lang>('zh')
 
+/** monotonic ticket for in-flight language switches (see LocaleProvider) */
+let switchTicket = 0
+
 export function LocaleProvider({ initial, children }: { initial: Lang; children: ReactNode }) {
   const [lang, setLang] = useState<Lang>(initial)
   useEffect(
     () =>
       window.desktopApi.onLanguageChanged((next) => {
-        setModuleLang(next)
-        document.documentElement.lang = htmlLang(next)
-        document.documentElement.dir = htmlDir(next)
-        setLang(next)
+        // PERF-901: the next locale's dictionary is fetched before any
+        // component re-renders, so a switch never flashes raw keys. The
+        // ticket drops a switch that a newer one has superseded mid-flight.
+        const ticket = ++switchTicket
+        void loadLocale(next).then(() => {
+          if (ticket !== switchTicket) return
+          setModuleLang(next)
+          document.documentElement.lang = htmlLang(next)
+          document.documentElement.dir = htmlDir(next)
+          setLang(next)
+        })
       }),
     [],
   )

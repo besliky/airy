@@ -55,9 +55,9 @@ const UNIVER_GROUPS: ReadonlyArray<readonly [name: string, match: RegExp]> = [
 function rendererChunkOf(rawId: string): string | undefined {
   const id = rawId.replace(/\\/g, '/')
   if (LOCALE_DATA_RE.test(id) || ENGINE_RENDER_COLLATION_RE.test(id)) return undefined
-  // The 19-locale app dictionary is data, not logic: its own chunk keeps the
-  // entry (App/ExcelShell/sync code) comfortably below 5 MB.
-  if (/\/apps\/sheets\/src\/renderer\/i18n\//.test(id)) return 'app-i18n'
+  // PERF-901: the 19-locale app dictionary is not grouped here — i18n/strings.ts
+  // dynamically imports i18n/locales/<lang>.ts, and leaving them ungrouped lets
+  // Rollup emit one lazy chunk per locale (only the active one is fetched).
   if (!id.includes('/node_modules/')) return undefined
   // Preset wrappers sit at the very top of the graph (App.tsx imports them
   // and they reference every feature/sheets package): only the entry chunk

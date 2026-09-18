@@ -1,26 +1,56 @@
-import { aiStrings } from './strings-ai'
-import { appStrings } from './strings-app'
-import { dialogStrings } from './strings-dialogs'
+import type { Lang } from '@airy-office/i18n'
+import type { aiStrings } from './strings-ai'
+import type { appStrings } from './strings-app'
+import type { dialogStrings } from './strings-dialogs'
 
-export const strings = {
-  zh: { ...appStrings.zh, ...dialogStrings.zh, ...aiStrings.zh },
-  en: { ...appStrings.en, ...dialogStrings.en, ...aiStrings.en },
-  ja: { ...appStrings.ja, ...dialogStrings.ja, ...aiStrings.ja },
-  ko: { ...appStrings.ko, ...dialogStrings.ko, ...aiStrings.ko },
-  fr: { ...appStrings.fr, ...dialogStrings.fr, ...aiStrings.fr },
-  de: { ...appStrings.de, ...dialogStrings.de, ...aiStrings.de },
-  es: { ...appStrings.es, ...dialogStrings.es, ...aiStrings.es },
-  th: { ...appStrings.th, ...dialogStrings.th, ...aiStrings.th },
-  id: { ...appStrings.id, ...dialogStrings.id, ...aiStrings.id },
-  ru: { ...appStrings.ru, ...dialogStrings.ru, ...aiStrings.ru },
-  ar: { ...appStrings.ar, ...dialogStrings.ar, ...aiStrings.ar },
-  pt: { ...appStrings.pt, ...dialogStrings.pt, ...aiStrings.pt },
-  it: { ...appStrings.it, ...dialogStrings.it, ...aiStrings.it },
-  pl: { ...appStrings.pl, ...dialogStrings.pl, ...aiStrings.pl },
-  cs: { ...appStrings.cs, ...dialogStrings.cs, ...aiStrings.cs },
-  nl: { ...appStrings.nl, ...dialogStrings.nl, ...aiStrings.nl },
-  ms: { ...appStrings.ms, ...dialogStrings.ms, ...aiStrings.ms },
-  he: { ...appStrings.he, ...dialogStrings.he, ...aiStrings.he },
-  hi: { ...appStrings.hi, ...dialogStrings.hi, ...aiStrings.hi },
-  'zh-TW': { ...appStrings['zh-TW'], ...dialogStrings['zh-TW'], ...aiStrings['zh-TW'] },
+/// PERF-901: the 19-locale dictionary used to be one eager `app-i18n` chunk
+/// (~2.1 MB) because `locale.tsx` statically imported the merged object. It is
+/// data, not logic, so it now loads per locale on demand: `locales/<lang>.ts`
+/// merges the three domain shards for one language and each becomes its own
+/// lazy chunk, fetched by `loadStrings` before the first render (in parallel
+/// with the cell-font preload in main.tsx) and before a language switch
+/// commits. The aggregators below stay in the type graph only — `import type`
+/// is erased at runtime, so no dictionary ships with the entry chunk and the
+/// sharding contract (zh defines the key set) keeps compile-time enforcement.
+
+/** merged dictionary for a single locale; the zh shards define the key set */
+export type LocaleDict = (typeof appStrings)['zh'] &
+  (typeof dialogStrings)['zh'] &
+  (typeof aiStrings)['zh']
+
+/** one dynamic-import entry per locale — Rollup turns each into a lazy chunk */
+const LOADERS: Record<Lang, () => Promise<{ default: LocaleDict }>> = {
+  zh: () => import('./locales/zh'),
+  en: () => import('./locales/en'),
+  ja: () => import('./locales/ja'),
+  ko: () => import('./locales/ko'),
+  fr: () => import('./locales/fr'),
+  de: () => import('./locales/de'),
+  es: () => import('./locales/es'),
+  th: () => import('./locales/th'),
+  id: () => import('./locales/id'),
+  ru: () => import('./locales/ru'),
+  ar: () => import('./locales/ar'),
+  pt: () => import('./locales/pt'),
+  it: () => import('./locales/it'),
+  pl: () => import('./locales/pl'),
+  cs: () => import('./locales/cs'),
+  nl: () => import('./locales/nl'),
+  ms: () => import('./locales/ms'),
+  he: () => import('./locales/he'),
+  hi: () => import('./locales/hi'),
+  'zh-TW': () => import('./locales/zh-TW'),
+}
+
+const cache = new Map<Lang, LocaleDict>()
+
+/** fetch (and memoize) the dictionary of one locale */
+export function loadStrings(lang: Lang): Promise<LocaleDict> {
+  const cached = cache.get(lang)
+  if (cached) return Promise.resolve(cached)
+  return LOADERS[lang]().then((module) => {
+    const dict = module.default
+    cache.set(lang, dict)
+    return dict
+  })
 }
