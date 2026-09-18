@@ -258,7 +258,8 @@ interface RibbonProps {
   /** any protection is configured (highlights the Protect Document button) */
   protectActive: boolean
   onProtectDoc: () => void
-  onCompare: () => void
+  /** Review → Compare: 'merge' records the differences as tracked changes, 'panel' opens the differences pane */
+  onCompare: (mode: 'merge' | 'panel') => void
   /** current document path (View → New Window opens it in another window) */
   filePath: string | null
   viewMode: ViewMode

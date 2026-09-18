@@ -5,7 +5,13 @@
  * ReviewContext built fresh per call so state never goes stale.
  */
 import type { Editor } from '@tiptap/core'
-import { nextNoteId, parseDocx, type CommentInfo, type NoteInfo } from '@airy-office/docx-engine'
+import {
+  nextNoteId,
+  parseDocx,
+  readSections,
+  type CommentInfo,
+  type NoteInfo,
+} from '@airy-office/docx-engine'
 import type { Dispatch, SetStateAction } from 'react'
 import type { DocState } from './doc-state'
 import {
@@ -15,7 +21,13 @@ import {
   removeCommentFromDoc,
   wordRangeAtCaret,
 } from './editor/comments'
-import { blockTexts, compareParagraphs, type CompareEntry } from './editor/compare'
+import {
+  blockTexts,
+  compareParagraphs,
+  mergeCompareDocs,
+  type CompareEntry,
+} from './editor/compare'
+import { blocksToPmDoc } from './editor/convert'
 import { pendingCommentPluginKey } from './editor/extensions'
 import type { InkAnnotation } from './editor/ink'
 import {
@@ -23,6 +35,7 @@ import {
   acceptCurrentRevision,
   rejectAllRevisions,
   rejectCurrentRevision,
+  TRACK_IGNORE,
 } from './editor/revisions'
 import { t } from './i18n/locale'
 
@@ -65,6 +78,8 @@ export interface ReviewContext {
   setInkAnnotations: Dispatch<SetStateAction<InkAnnotation[]>>
   setInksDirty: (dirty: boolean) => void
   setCompareResult: (value: { otherName: string; entries: CompareEntry[] } | null) => void
+  /** revision display mode (Review → Show for review); compare forces markup on */
+  setRevisionDisplay: (mode: 'all' | 'none' | 'original') => void
 }
 
 // ---- References: footnotes / endnotes ----
@@ -267,8 +282,14 @@ export function clearInks(ctx: ReviewContext): void {
   ctx.setStatus(t('appInksCleared'))
 }
 
-/** Compare: pick a second .docx and diff it against the open document */
-export async function compareWithFile(ctx: ReviewContext): Promise<void> {
+/**
+ * Compare: pick a second .docx and diff it against the open document.
+ * - 'panel' shows the paragraph-level differences pane (unchanged behavior)
+ * - 'merge' builds the Word legal blackline: the current document's content is
+ *   rebuilt with the differences recorded as tracked changes, ready for the
+ *   regular accept/reject machinery (Review tab)
+ */
+export async function compareWithFile(ctx: ReviewContext, mode: 'panel' | 'merge'): Promise<void> {
   if (!ctx.doc) return
   const other = await window.desktop.openDocx()
   if (!other) return
@@ -279,11 +300,48 @@ export async function compareWithFile(ctx: ReviewContext): Promise<void> {
   }
   try {
     const otherParsed = await parseDocx(new Uint8Array(other.data))
-    const entries = compareParagraphs(
-      blockTexts(ctx.doc.parsed.blocks),
-      blockTexts(otherParsed.blocks),
+    if (mode === 'panel') {
+      const entries = compareParagraphs(
+        blockTexts(ctx.doc.parsed.blocks),
+        blockTexts(otherParsed.blocks),
+      )
+      ctx.setCompareResult({ otherName: other.name, entries })
+      return
+    }
+    const editor = ctx.editor
+    if (!editor) return
+    const { content, summary } = mergeCompareDocs(
+      editor.getJSON().content ?? [],
+      blocksToPmDoc(otherParsed.blocks, readSections(otherParsed)).content ?? [],
+      {
+        author: effectiveAuthorName(ctx.authorName ?? '', t('editorDefaultAuthor')),
+        date: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      },
     )
-    ctx.setCompareResult({ otherName: other.name, entries })
+    if (summary.added + summary.removed + summary.changed === 0) {
+      ctx.setStatus(t('reviewCompareIdentical', { name: other.name }))
+      return
+    }
+    editor.view.dispatch(
+      editor.state.tr
+        .replaceWith(
+          0,
+          editor.state.doc.content.size,
+          content.map((node) => editor.schema.nodeFromJSON(node)),
+        )
+        // the recorder would re-record the whole rebuilt document as one edit
+        .setMeta(TRACK_IGNORE, true),
+    )
+    ctx.setRevisionDisplay('all')
+    ctx.dirtyRef.current = true
+    ctx.setStatus(
+      t('reviewCompareMerged', {
+        name: other.name,
+        added: summary.added,
+        removed: summary.removed,
+        changed: summary.changed,
+      }),
+    )
   } catch (err) {
     ctx.setStatus(t('appCompareFailed', { error: String(err) }))
   }

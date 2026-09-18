@@ -1973,6 +1973,7 @@ export function App() {
     setInkAnnotations,
     setInksDirty,
     setCompareResult,
+    setRevisionDisplay,
   }
 
   const insertNote = useCallback((kind: 'footnote' | 'endnote') => {
@@ -2027,7 +2028,10 @@ export function App() {
   )
   const removeInks = useCallback((ids: string[]) => removeInksImpl(reviewCtxRef.current, ids), [])
   const clearInks = useCallback(() => clearInksImpl(reviewCtxRef.current), [])
-  const compareWithFile = useCallback(() => compareWithFileImpl(reviewCtxRef.current), [])
+  const compareWithFile = useCallback(
+    (mode: 'merge' | 'panel') => compareWithFileImpl(reviewCtxRef.current, mode),
+    [],
+  )
 
   const revisionCount = editor && doc ? revisionCountOfDoc(editor.state.doc) : 0
 
@@ -4520,7 +4524,7 @@ export function App() {
       if (editor) gotoRevision(editor, dir)
     },
     onProtectDoc: () => setShowProtectDialog(true),
-    onCompare: () => void compareWithFile(),
+    onCompare: (mode: 'merge' | 'panel') => void compareWithFile(mode),
     onViewMode: setViewMode,
     onReadMode: setReadMode,
     onShowGrid: setShowGrid,
