@@ -1561,9 +1561,7 @@ function transformRangedFeatures(xml: string, shift: Shift, axis: Axis): string 
     const movedRef = remapRef(element)
     if (movedRef === null) return ''
     const withRef =
-      movedRef === undefined
-        ? element
-        : element.replace(/\bref="[^"]+"/, () => `ref="${movedRef}"`)
+      movedRef === undefined ? element : element.replace(/\bref="[^"]+"/, () => `ref="${movedRef}"`)
     const conditions = withRef.replace(/<sortCondition\b[^>]*?\/>/g, (condition) => {
       const moved = remapRef(condition)
       if (moved === undefined) return condition

@@ -1392,9 +1392,9 @@ describe('applyStructuralOps row moves', () => {
       '<worksheet><sheetData><row r="1"/></sheetData>' +
       '<protectedRanges><protectedRange sqref="A5:B6" name="dies"/></protectedRanges>' +
       '</worksheet>'
-    expect(applyStructuralOps(allDead, [{ kind: 'remove-rows', index: 4, count: 2 }], SHEET)).not.toContain(
-      'protectedRanges',
-    )
+    expect(
+      applyStructuralOps(allDead, [{ kind: 'remove-rows', index: 4, count: 2 }], SHEET),
+    ).not.toContain('protectedRanges')
   })
 
   it('fails closed when an allow-edit range is torn by the move', () => {
@@ -1415,7 +1415,9 @@ describe('applyStructuralOps row moves', () => {
     // Row 2 trades places with row 3: the spanning sortState ref keeps
     // covering both blocks, its condition follows the moved row.
     const moved = applyStructuralOps(xml, [move(1, 1, 3)], SHEET)
-    expect(moved).toContain('<sortState ref="A1:A4"><sortCondition ref="A3" descending="1"/></sortState>')
+    expect(moved).toContain(
+      '<sortState ref="A1:A4"><sortCondition ref="A3" descending="1"/></sortState>',
+    )
     // Conditions over deleted rows drop out; a sortState left without
     // conditions is removed, like the table-part pass does.
     const dead =

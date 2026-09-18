@@ -102,7 +102,9 @@ describe('workbookSaveRequestSchema', () => {
       ),
     ).toThrow(/fit inside the sheet/)
     expect(() =>
-      workbookSaveRequestSchema.parse(request({ kind: 'move-cols', index: 16_383, count: 2, before: 0 })),
+      workbookSaveRequestSchema.parse(
+        request({ kind: 'move-cols', index: 16_383, count: 2, before: 0 }),
+      ),
     ).toThrow(/fit inside the sheet/)
     // The largest block that exactly reaches the edge stays valid.
     expect(() =>
