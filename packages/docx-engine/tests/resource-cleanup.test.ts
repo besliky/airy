@@ -180,6 +180,84 @@ describe('DOCX-owned resource cleanup', () => {
     expect(await documentRels(zip)).not.toContain('media/image1.png')
   })
 
+  it('keeps the drawing-cache rel for a foreign-prefixed single-quoted dataModelExt (BUG-713)', async () => {
+    // a non-Word producer may declare the Microsoft diagram namespace with a
+    // prefix other than dsp: and single-quote its attributes — the retention
+    // pass must still see the drawing-cache pointer, or the diagramDrawing
+    // rel + drawing part get pruned while data1.xml still references them
+    const bodyXml =
+      '<w:p><w:r><w:drawing><wp:inline><wp:extent cx="100" cy="100"/>' +
+      '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram">' +
+      '<dgm:relIds r:dm="rId40" r:lo="rId41" r:qs="rId42" r:cs="rId43"/>' +
+      '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>'
+    const dataXml =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<dgm:dataModel xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" ' +
+      'xmlns:zz="http://schemas.microsoft.com/office/drawing/2008/diagram">' +
+      '<dgm:ptLst><dgm:pt modelId="{1}" type="doc"/></dgm:ptLst>' +
+      "<dgm:extLst><zz:dataModelExt relId='rId45' minVer='14.0'/></dgm:extLst>" +
+      '</dgm:dataModel>'
+    const drawingXml =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram">' +
+      '<dsp:spTree><dsp:nvGrpSpPr/><dsp:sp modelId="{1}"/></dsp:spTree></dsp:drawing>'
+    const parsed = await parseDocx(
+      await buildDocx({
+        bodyXml,
+        extraRels:
+          '<Relationship Id="rId40" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData" Target="diagrams/data1.xml"/>' +
+          '<Relationship Id="rId41" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout" Target="diagrams/layout1.xml"/>' +
+          '<Relationship Id="rId42" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle" Target="diagrams/quickStyle1.xml"/>' +
+          '<Relationship Id="rId43" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors" Target="diagrams/colors1.xml"/>' +
+          '<Relationship Id="rId45" Type="http://schemas.microsoft.com/office/2007/relationships/diagramDrawing" Target="diagrams/drawing1.xml"/>',
+        extraParts: [
+          {
+            path: 'word/diagrams/data1.xml',
+            xml: dataXml,
+            contentType: 'application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml',
+          },
+          {
+            path: 'word/diagrams/layout1.xml',
+            xml: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><dgm:layoutDef/>',
+            contentType:
+              'application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml',
+          },
+          {
+            path: 'word/diagrams/quickStyle1.xml',
+            xml: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><dgm:styleDef/>',
+            contentType: 'application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml',
+          },
+          {
+            path: 'word/diagrams/colors1.xml',
+            xml: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><dgm:colorsDef/>',
+            contentType:
+              'application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml',
+          },
+          {
+            path: 'word/diagrams/drawing1.xml',
+            xml: drawingXml,
+            contentType: 'application/vnd.ms-office.drawingml.diagramDrawing+xml',
+          },
+        ],
+      }),
+    )
+    // one edited paragraph, so the save runs the patch + cleanup pass (a
+    // fully unchanged plan returns the original bytes and never cleans)
+    const plan = originalBlocksWithout(parsed, () => false)
+    plan.push({
+      kind: 'generated',
+      block: { type: 'paragraph', runs: [{ text: 'edited' }] },
+    })
+    const zip = await JSZip.loadAsync(await saveDocx(parsed, plan))
+    // the diagram survives the save: data part, drawing part and every rel
+    expect(zip.file('word/diagrams/data1.xml')).not.toBeNull()
+    expect(zip.file('word/diagrams/drawing1.xml')).not.toBeNull()
+    const rels = await documentRels(zip)
+    expect(rels).toContain('Id="rId40"')
+    expect(rels).toContain('Id="rId45"')
+    expect(rels).toContain('relationships/diagramDrawing" Target="diagrams/drawing1.xml"')
+  })
+
   it('cleans explicit OLE and diagram resources but preserves unknown custom parts', async () => {
     const bodyXml =
       '<w:p><w:r><w:object><v:shape><v:imagedata r:id="rId10"/></v:shape>' +
