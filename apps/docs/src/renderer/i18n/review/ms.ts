@@ -18,4 +18,5 @@ export const ms = {
     'Dokumen mengandungi perubahan dijejak yang tertunda. Terima atau tolak dahulu sebelum membanding semula',
   reviewCompareReadonly:
     'Bandingkan (gabung sebagai perubahan dijejak) memerlukan dokumen yang boleh diedit; dokumen ini baca sahaja',
+  reviewComparing: 'Membanding…',
 } satisfies Record<keyof typeof zh, string>

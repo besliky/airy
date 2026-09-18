@@ -18,4 +18,5 @@ export const nl = {
     'Het document bevat openstaande wijzigingen. Accepteer of wijs ze af voordat u opnieuw vergelijkt',
   reviewCompareReadonly:
     'Vergelijken (samenvoegen als wijzigingen) vereist een bewerkbaar document; dit document is alleen-lezen',
+  reviewComparing: 'Vergelijken…',
 } satisfies Record<keyof typeof zh, string>

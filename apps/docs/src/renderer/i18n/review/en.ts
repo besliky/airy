@@ -17,4 +17,5 @@ export const en = {
     'The document has pending tracked changes. Accept or reject them before comparing again',
   reviewCompareReadonly:
     'Compare (Legal Blackline) needs an editable document; this document is read-only',
+  reviewComparing: 'Comparing…',
 } satisfies Record<keyof typeof zh, string>

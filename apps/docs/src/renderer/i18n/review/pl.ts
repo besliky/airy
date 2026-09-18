@@ -18,4 +18,5 @@ export const pl = {
     'Dokument zawiera oczekujące śledzone zmiany. Zaakceptuj lub odrzuć je przed ponownym porównaniem',
   reviewCompareReadonly:
     'Porównanie (scalenie jako śledzone zmiany) wymaga edytowalnego dokumentu; ten dokument jest tylko do odczytu',
+  reviewComparing: 'Porównywanie…',
 } satisfies Record<keyof typeof zh, string>

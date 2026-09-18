@@ -15,4 +15,5 @@ export const he = {
     'במסמך יש שינויים מסומנים ממתינים. קבל או דחה אותם לפני השוואה נוספת',
   reviewCompareReadonly:
     'השוואה (מזג כשינויים מסומנים) דורשת מסמך הניתן לעריכה; מסמך זה הוא לקריאה בלבד',
+  reviewComparing: 'משווה…',
 } satisfies Record<keyof typeof zh, string>

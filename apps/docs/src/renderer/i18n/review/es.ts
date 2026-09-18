@@ -18,4 +18,5 @@ export const es = {
     'El documento tiene cambios controlados pendientes. Acéptelos o rechácelos antes de volver a comparar',
   reviewCompareReadonly:
     'Comparar (fusionar como cambios) necesita un documento editable; este documento es de solo lectura',
+  reviewComparing: 'Comparando…',
 } satisfies Record<keyof typeof zh, string>

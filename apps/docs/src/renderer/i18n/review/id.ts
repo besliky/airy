@@ -17,4 +17,5 @@ export const id = {
     'Dokumen memiliki perubahan terlacak yang tertunda. Terima atau tolak sebelum membandingkan lagi',
   reviewCompareReadonly:
     'Bandingkan (gabungkan sebagai perubahan terlacak) membutuhkan dokumen yang dapat diedit; dokumen ini hanya-baca',
+  reviewComparing: 'Membandingkan…',
 } satisfies Record<keyof typeof zh, string>

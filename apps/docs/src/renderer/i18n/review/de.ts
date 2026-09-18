@@ -18,4 +18,5 @@ export const de = {
     'Das Dokument enthält offene Änderungen. Nehmen Sie sie an oder lehnen Sie sie ab, bevor Sie erneut vergleichen',
   reviewCompareReadonly:
     'Vergleichen (als Änderungen zusammenführen) erfordert ein bearbeitbares Dokument; dieses Dokument ist schreibgeschützt',
+  reviewComparing: 'Vergleichen…',
 } satisfies Record<keyof typeof zh, string>

@@ -16,4 +16,5 @@ export const ar = {
     'يحتوي المستند على تغييرات متتبعة معلقة. اقبلها أو ارفضها قبل المقارنة مرة أخرى',
   reviewCompareReadonly:
     'المقارنة (الدمج كتغييرات متتبعة) تتطلب مستندًا قابلًا للتحرير؛ هذا المستند للقراءة فقط',
+  reviewComparing: 'جارٍ المقارنة…',
 } satisfies Record<keyof typeof zh, string>

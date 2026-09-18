@@ -17,4 +17,5 @@ export const cs = {
     'Dokument obsahuje nevyřízené sledované změny. Před novým porovnáním je přijměte nebo odmítněte',
   reviewCompareReadonly:
     'Porovnání (sloučit jako sledované změny) vyžaduje upravitelný dokument; tento dokument je jen pro čtení',
+  reviewComparing: 'Porovnávání…',
 } satisfies Record<keyof typeof zh, string>

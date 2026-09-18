@@ -105,6 +105,33 @@ describe('compareWithFile guards (BUG-915 pending revisions, UX-903 read-only ed
     editor.destroy()
   })
 
+  it('announces the compare while it runs, then clears or overwrites the line (UX-906)', async () => {
+    // panel mode: the pane is the result, so the busy line is cleared after it
+    const editor = createEditor([para('Original text')])
+    const { ctx, status } = makeCtx(editor, [{ runs: [{ text: 'Original text' }] }])
+    await compareWithFile(ctx, 'panel')
+    expect(status).toEqual([t('reviewComparing'), ''])
+    editor.destroy()
+    // merge mode: the final summary replaces the busy line
+    const editor2 = createEditor([para('Original text')])
+    const { ctx: ctx2, status: status2 } = makeCtx(editor2)
+    await compareWithFile(ctx2, 'merge')
+    expect(status2[0]).toBe(t('reviewComparing'))
+    expect(status2.at(-1)).toBe(
+      t('reviewCompareMerged', { name: 'other.docx', added: 0, removed: 0, changed: 1 }),
+    )
+    editor2.destroy()
+  })
+
+  it('leaves the status bar untouched when the file pick is cancelled', async () => {
+    openDocx.mockResolvedValueOnce(null)
+    const editor = createEditor([para('Original text')])
+    const { ctx, status } = makeCtx(editor, [{ runs: [{ text: 'Original text' }] }])
+    await compareWithFile(ctx, 'panel')
+    expect(status).toEqual([])
+    editor.destroy()
+  })
+
   it('warns when the compared documents exceed the paragraph budget (BUG-913 panel path)', async () => {
     // (2200+1)^2 = 4.84M cells > the 4M paragraph budget
     const paras = Array.from({ length: 2200 }, (_, i) => `<w:p><w:r><w:t>p ${i}</w:t></w:r></w:p>`)

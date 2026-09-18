@@ -17,4 +17,5 @@ export const it = {
     'Il documento contiene revisioni in sospeso. Accettale o rifiutale prima di confrontare di nuovo',
   reviewCompareReadonly:
     'Confronta (unisci come revisioni) richiede un documento modificabile; questo documento è in sola lettura',
+  reviewComparing: 'Confronto in corso…',
 } satisfies Record<keyof typeof zh, string>

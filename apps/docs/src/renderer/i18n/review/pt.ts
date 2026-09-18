@@ -17,4 +17,5 @@ export const pt = {
     'O documento tem alterações controladas pendentes. Aceite-as ou rejeite-as antes de comparar novamente',
   reviewCompareReadonly:
     'Comparar (mesclar como alterações) requer um documento editável; este documento é somente leitura',
+  reviewComparing: 'A comparar…',
 } satisfies Record<keyof typeof zh, string>

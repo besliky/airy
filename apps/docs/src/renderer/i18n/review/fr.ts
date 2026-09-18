@@ -18,4 +18,5 @@ export const fr = {
     'Le document contient des révisions en attente. Acceptez-les ou rejetez-les avant de comparer à nouveau',
   reviewCompareReadonly:
     'Comparer (fusionner en révisions) nécessite un document modifiable ; ce document est en lecture seule',
+  reviewComparing: 'Comparaison…',
 } satisfies Record<keyof typeof zh, string>
