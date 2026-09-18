@@ -54,7 +54,9 @@ export function InsertPagesDialog(props: {
         <div className="pdf-modal-hint">
           {t('insertPdfSourceInfo', { name: source.name, total: source.pages.length })}
         </div>
-        <div className="insert-source-pages">
+        {/* Preview tiles are decorative: the source line above already names
+         * the file and page count, so the 12 numbers + "+N" are SR noise */}
+        <div className="insert-source-pages" aria-hidden="true">
           {source.pages.slice(0, 12).map((shape, i) => {
             const tile = insertTileSize(shape)
             return (
