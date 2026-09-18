@@ -435,3 +435,31 @@ describe('lastSurvivingScreenLine (Ctrl+End used-range target)', () => {
     expect(lastSurvivingScreenLine(ops, 'row', 10)).toBeNull()
   })
 })
+
+describe('move-range ops in the streaming coordinate maps', () => {
+  // Invariant: rectangle moves are gated to fully-loaded sheets, so the
+  // per-axis streaming maps treat them as identity — exact for every cell
+  // outside the moved/overwritten rectangles (a replace move shifts no axis
+  // line) and never consulted inside them (nothing streams on a fully-loaded
+  // sheet). They also never change either axis's size.
+  const area = (startRow: number, startColumn: number, endRow: number, endColumn: number) => ({
+    startRow,
+    startColumn,
+    endRow,
+    endColumn,
+  })
+  const ops: StructuralOp[] = [
+    { kind: 'insert-rows', index: 2, count: 1 },
+    { kind: 'move-range', from: area(0, 0, 1, 1), to: area(5, 4, 6, 5) },
+  ]
+
+  it('is identity on both axes and contributes no axis delta', () => {
+    expect(fileToScreen(ops, 'row', 0)).toBe(0)
+    expect(fileToScreen(ops, 'row', 3)).toBe(4)
+    expect(fileToScreen(ops, 'column', 5)).toBe(5)
+    expect(screenToFile(ops, 'row', 4)).toBe(3)
+    expect(screenToFile(ops, 'column', 5)).toBe(5)
+    expect(netAxisDelta(ops, 'row')).toBe(1)
+    expect(netAxisDelta(ops, 'column')).toBe(0)
+  })
+})
