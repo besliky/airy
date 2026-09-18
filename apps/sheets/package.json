@@ -20,6 +20,7 @@
     "compat": "tsx scripts/verify-compatibility.ts",
     "benchmark": "tsx scripts/benchmark-xlsx.ts",
     "benchmark:large": "npm run native:build && tsx scripts/benchmark-large-xlsx.ts",
+    "bundle-report": "tsx scripts/bundle-report.ts",
     "gate": "npm run typecheck && npm run fixtures && npm test && npm run compat"
   },
   "dependencies": {

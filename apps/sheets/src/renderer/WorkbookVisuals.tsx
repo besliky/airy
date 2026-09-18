@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { BooleanNumber, numfmt } from '@univerjs/core'
-import { isMetafileMime, metafileToDataUrl } from '@airy-office/docx-engine/metafile'
 import { Dropdown, shapePreviewPath, useDismissablePopover } from '@airy-office/ui'
 
 import type { createUniver } from './create-univer'
@@ -1481,6 +1480,11 @@ function useWorkbookMediaUrl(
     void window.desktopApi
       .readWorkbookMedia({ sessionId, visualId })
       .then(async (media) => {
+        // EMF/WMF decoding (legacy metafile rasterizer + font fallbacks) is
+        // pulled in on demand: only workbooks that actually embed metafile
+        // pictures ever pay for the decoder chunk.
+        const { isMetafileMime, metafileToDataUrl } =
+          await import('@airy-office/docx-engine/metafile')
         const next = isMetafileMime(media.mediaType)
           ? await metafileToDataUrl(base64ToBytes(media.base64), media.mediaType)
           : `data:${media.mediaType};base64,${media.base64}`

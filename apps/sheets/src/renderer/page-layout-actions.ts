@@ -5,7 +5,6 @@
  * per-sheet print settings; nothing renders in the grid (Univer has no
  * page-layout view), everything lands in the saved file.
  */
-import { isMetafileMime, metafileToDataUrl } from '@airy-office/docx-engine/metafile'
 import type { WorkbookExportPdfRequest } from '../shared/desktop-api'
 import type { WorkbookOperation } from '../domain/workbook-dsl'
 import type { ApplyOutcome } from '../domain/workbook.types'
@@ -441,6 +440,11 @@ async function loadHeaderFooterPictures(
     slots.map(async (slot) => {
       try {
         const media = await window.desktopApi.readWorkbookMedia({ sessionId, visualId: slot.id })
+        // Loaded on demand together with the WorkbookVisuals twin: the
+        // metafile rasterizer chunk only loads when header/footer media
+        // actually needs it.
+        const { isMetafileMime, metafileToDataUrl } =
+          await import('@airy-office/docx-engine/metafile')
         const dataUrl = isMetafileMime(media.mediaType)
           ? await metafileToDataUrl(base64ToBytes(media.base64), media.mediaType)
           : `data:${media.mediaType};base64,${media.base64}`
