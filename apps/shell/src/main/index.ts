@@ -56,6 +56,7 @@ import {
   COPILOT_GUIDE_URL,
   DOCS_README_URL,
   GITHUB_REPO_URL,
+  atomicWriteFile,
   openHelpUrl,
   OPEN_EXTENSION_GROUPS,
   readAuthorNameSetting,
@@ -2625,7 +2626,7 @@ async function exportPdfAsDocxLocal(): Promise<void> {
       },
     )
     if (result === null) return
-    writeFileSync(picked.filePath, result.docx)
+    await atomicWriteFile(picked.filePath, result.docx)
 
     // degrade transparency (plan §7.6 dual-track split): whole scan → say so
     // once; individual image-fallback pages → name them;
@@ -2769,7 +2770,7 @@ async function exportPdfAsPptxLocal(): Promise<void> {
       },
     )
     if (result === null) return
-    writeFileSync(picked.filePath, result.pptx)
+    await atomicWriteFile(picked.filePath, result.pptx)
 
     // degrade transparency (same split as the Word export): whole scan vs
     // individual image-fallback pages
@@ -2885,7 +2886,7 @@ async function exportPdfAsXlsxLocal(): Promise<void> {
       },
     )
     if (result === null) return
-    writeFileSync(picked.filePath, result.xlsx)
+    await atomicWriteFile(picked.filePath, result.xlsx)
 
     // degrade transparency: pages that could not become cells got a notice
     // row on their worksheet instead of an image (a spreadsheet has none)
