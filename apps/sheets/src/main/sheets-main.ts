@@ -139,6 +139,7 @@ import { IPC_CHANNELS } from '../shared/ipc-channels'
 import { atomicWriteFile } from '@airy-office/electron-utils'
 import { CaptureConsentTracker } from './capture-consent'
 import { closeGuardDecision } from './close-guard'
+import { writeCsvBackAtomic } from './csv-save-back'
 import { checkMergeSourcePaths } from './merge-source-policy'
 import { SaveEditsTransferStore } from './save-edits-transfer'
 import { exportPdf, previewPrint, printWorkbook } from './pdf-export'
@@ -3222,11 +3223,9 @@ export function registerSheetsIpc(): void {
       if (savedSha !== undefined && entry.sessions.has(request.sessionId)) {
         entry.sessions.set(request.sessionId, { ...session, sha256: savedSha })
       }
-      // UTF-8 BOM so Excel decodes the reopened file correctly.
-      await writeFile(
-        session.csvSourcePath,
-        Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(request.csvContent, 'utf8')]),
-      )
+      // UTF-8 BOM so Excel decodes the reopened file correctly. Staged and
+      // renamed into place so a crash mid-write can't destroy the user's csv.
+      await writeCsvBackAtomic(session.csvSourcePath, request.csvContent)
     }
 
     // The sidecar session still streams the pre-save bytes; swap it for a
