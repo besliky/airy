@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { getMarkRange } from '@tiptap/core'
 import type { Editor } from '@tiptap/core'
-import { ShapePreview, WORDART_PRESETS, wordArtStrokePx } from '@airy-office/ui'
+import { ShapePreview, useModalDialog, WORDART_PRESETS, wordArtStrokePx } from '@airy-office/ui'
 import type {
   ChartDisplay,
   DiagramDisplay,
@@ -676,7 +676,7 @@ function SmartArtThumb({ display, w, h }: { display: DiagramDisplay; w: number; 
 /** Word's Insert SmartArt: pick a layout from the gallery, edit node texts, insert */
 export function SmartArtInsertModal({ editor, onClose }: { editor: Editor; onClose: () => void }) {
   const { t } = useI18n()
-  const modalKeys = useModalKeys(onClose)
+  const dialog = useModalDialog(onClose)
   const [kind, setKind] = useState<NewDiagramPreset>('blockList')
   const [nodes, setNodes] = useState<SmartArtNode[]>(() => smartArtDefaults('blockList', t))
 
@@ -729,12 +729,11 @@ export function SmartArtInsertModal({ editor, onClose }: { editor: Editor; onClo
   return (
     <div
       className="modal-backdrop"
-      ref={modalKeys.ref}
-      onKeyDown={modalKeys.onKeyDown}
+      {...dialog.backdropProps}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="modal modal-smartart">
-        <h2>{t('ribbonSmartArtInsertTitle')}</h2>
+      <div className="modal modal-smartart" {...dialog.dialogProps}>
+        <h2 {...dialog.titleProps}>{t('ribbonSmartArtInsertTitle')}</h2>
         <div className="smartart-gallery">
           {SMARTART_GALLERY.map((preset) => (
             <button
@@ -883,7 +882,7 @@ export function TableInsertModal({ editor, onClose }: { editor: Editor; onClose:
 /** Insert Hyperlink dialog, shared by the ribbon and the native application menu */
 export function LinkInsertModal({ editor, onClose }: { editor: Editor; onClose: () => void }) {
   const { t } = useI18n()
-  const modalKeys = useModalKeys(onClose)
+  const dialog = useModalDialog(onClose)
   // Word parity: with the caret on an existing hyperlink the dialog EDITS it
   // — text and address pre-filled, plus Remove Link. Imported links carry the
   // same mark as in-app ones, but there was no way to view, change, or
@@ -1049,12 +1048,13 @@ export function LinkInsertModal({ editor, onClose }: { editor: Editor; onClose: 
   return (
     <div
       className="modal-backdrop"
-      ref={modalKeys.ref}
-      onKeyDown={modalKeys.onKeyDown}
+      {...dialog.backdropProps}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="modal">
-        <h2>{t(linkAtOpen ? 'ribbonLinkEditTitle' : 'ribbonLinkInsertTitle')}</h2>
+      <div className="modal" {...dialog.dialogProps}>
+        <h2 {...dialog.titleProps}>
+          {t(linkAtOpen ? 'ribbonLinkEditTitle' : 'ribbonLinkInsertTitle')}
+        </h2>
         <label>
           {t('ribbonLinkText')}
           <input
