@@ -1,6 +1,7 @@
 /**
- * Word-style "Use wildcards" find patterns, compiled to native RegExp, plus
- * the length-preserving diacritic folding behind "Ignore diacritics".
+ * Word-style "Use wildcards" find patterns, compiled to a small token program
+ * and executed by a linear matcher, plus the length-preserving folding behind
+ * "Ignore diacritics" and case-insensitive search.
  *
  * Supported syntax (mirrors Word's Find and Replace wildcard mode):
  *   `?`          any single character (one Unicode code point)
@@ -20,33 +21,51 @@
  * `?`/`*` and classes match by code point, so CJK and emoji work; reversed
  * ranges like `[z-a]` simply match nothing (a negated reversed range matches
  * any character), matching Word's behavior.
+ *
+ * The block text fed to the matcher represents non-text inline nodes (hard
+ * breaks, inline images/math/ruby/note refs) as a U+0000 placeholder. Word
+ * never treats those objects as characters, so `?`, `*` and negated classes
+ * all refuse to match the placeholder: only real text can be matched (and
+ * thus only real text is ever inside a Replace range).
+ *
+ * Execution is a right-to-left dynamic program over the code points of the
+ * searched text (O(tokens x text)), not a backtracking regexp: patterns made
+ * of several `*` runs used to compile to chained lazy `[\s\S]*?` quantifiers
+ * whose overlapping backtracking froze the renderer on large documents
+ * (`*a*a*a*a*z` over 50 KB never finished — BUG-742). The program reproduces
+ * the regexp engine's preference order exactly: leftmost match, and each `*`
+ * stops at the first position where the rest of the pattern matches.
  */
 
-/** regex-special characters that must be escaped when literal (u-flag safe) */
-const RE_SPECIALS = /[.*+?^${}()|[\]\\]/g
-/** inside a character class `-` is special too; `\-` is illegal outside one under the u flag */
-const RE_CLASS_SPECIALS = /[.*+?^${}()|[\]\\-]/g
-const esc = (ch: string) => ch.replace(RE_SPECIALS, '\\$&')
-const escClass = (ch: string) => ch.replace(RE_CLASS_SPECIALS, '\\$&')
+/**
+ * The U+0000 stand-in for a non-text inline node in the flattened block
+ * text (see the header comment): no wildcard construct ever matches it.
+ */
+const PLACEHOLDER = 0
 
-/** class that never matches (an empty `[]` is illegal under the u flag) */
-const NEVER = '[^\\s\\S]'
-/** class that matches any single code point */
-const ANY = '[\\s\\S]'
+/** one `[a-m]` / `[!abc]` member set: inclusive code-point ranges */
+type ClassRange = [number, number]
 
-interface ClassFragment {
-  fragment: string | null
+type WildToken =
+  | { kind: 'lit'; cps: number[] } // literal run (pre-folded when ignoreCase)
+  | { kind: 'any' } // `?`
+  | { kind: 'star' } // `*`
+  | { kind: 'class'; negated: boolean; ranges: ClassRange[] }
+
+interface ClassProgram {
+  /** null when the class is unterminated (the `[` stays a literal) */
+  ranges: ClassRange[] | null
+  negate: boolean
   /** pattern index just past the closing `]`; -1 when the class is unterminated */
   next: number
 }
 
 /** parse a `[...]` / `[!...]` class starting at `pcs[start] === '['` */
-function compileClass(pcs: string[], start: number): ClassFragment {
+function parseClass(pcs: string[], start: number): ClassProgram {
   let k = start + 1
   const negate = pcs[k] === '!'
   if (negate) k++
-  let inner = ''
-  let atoms = 0
+  const ranges: ClassRange[] = []
   while (k < pcs.length && pcs[k] !== ']') {
     let lo = pcs[k]
     if (lo === '\\' && k + 1 < pcs.length) {
@@ -62,60 +81,210 @@ function compileClass(pcs: string[], start: number): ClassFragment {
         hi = pcs[k + 1]
       }
       k += 2
-      if (lo.codePointAt(0)! <= hi.codePointAt(0)!) {
-        inner += `${escClass(lo)}-${escClass(hi)}`
-        atoms++
-      } // a reversed range contributes nothing, like Word
+      const loCp = lo.codePointAt(0)!
+      const hiCp = hi.codePointAt(0)!
+      // a reversed range contributes nothing, like Word
+      if (loCp <= hiCp) ranges.push([loCp, hiCp])
       continue
     }
-    inner += escClass(lo)
-    atoms++
+    const cp = lo.codePointAt(0)!
+    ranges.push([cp, cp])
   }
-  if (k >= pcs.length) return { fragment: null, next: -1 }
-  if (atoms === 0) return { fragment: negate ? ANY : NEVER, next: k + 1 }
-  return { fragment: negate ? `[^${inner}]` : `[${inner}]`, next: k + 1 }
+  if (k >= pcs.length) return { ranges: null, negate, next: -1 }
+  return { ranges, negate, next: k + 1 }
 }
 
-/**
- * Compile a wildcard pattern to a RegExp with the `gu` flags (plus `i` when
- * `ignoreCase`). Returns null for an empty pattern. Zero-length matches
- * (e.g. a bare `*`) are the caller's concern: skip them and advance.
- */
-export function compileWildcards(pattern: string, ignoreCase: boolean): RegExp | null {
+/** does a class token match one (already folded) code point? */
+function classMatches(token: { negated: boolean; ranges: ClassRange[] }, cp: number): boolean {
+  if (cp === PLACEHOLDER) return false
+  let inSet = false
+  for (const [lo, hi] of token.ranges) {
+    if (cp >= lo && cp <= hi) {
+      inSet = true
+      break
+    }
+  }
+  return token.negated ? !inSet : inSet
+}
+
+function parseTokens(pattern: string, ignoreCase: boolean): WildToken[] {
   const pcs = Array.from(pattern)
-  if (pcs.length === 0) return null
-  let out = ''
+  const tokens: WildToken[] = []
+  const fold = (cp: number) => (ignoreCase ? foldCaseCp(cp) : cp)
+  let lit: number[] | null = null
+  const flush = () => {
+    if (lit) {
+      tokens.push({ kind: 'lit', cps: lit })
+      lit = null
+    }
+  }
   let i = 0
   while (i < pcs.length) {
     const c = pcs[i]
     if (c === '*') {
-      out += `${ANY}*?`
+      flush()
+      tokens.push({ kind: 'star' })
       i++
     } else if (c === '?') {
-      out += ANY
+      flush()
+      tokens.push({ kind: 'any' })
       i++
     } else if (c === '\\' && i + 1 < pcs.length) {
-      out += esc(pcs[i + 1])
+      ;(lit ??= []).push(fold(pcs[i + 1].codePointAt(0)!))
       i += 2
     } else if (c === '[') {
-      const { fragment, next } = compileClass(pcs, i)
-      if (fragment === null) {
-        out += esc(c) // unterminated class: treat `[` as a literal
+      const { ranges, negate, next } = parseClass(pcs, i)
+      if (ranges === null) {
+        ;(lit ??= []).push(fold(c.codePointAt(0)!)) // unterminated class: literal `[`
         i++
       } else {
-        out += fragment
+        flush()
+        tokens.push({ kind: 'class', negated: negate, ranges })
         i = next
       }
     } else {
-      out += esc(c)
+      ;(lit ??= []).push(fold(c.codePointAt(0)!))
       i++
     }
   }
-  try {
-    return new RegExp(out, ignoreCase ? 'gui' : 'gu')
-  } catch {
-    return null
+  flush()
+  return tokens
+}
+
+/** one non-overlapping match, in UTF-16 offsets (`end` exclusive) */
+export interface WildcardMatch {
+  start: number
+  end: number
+}
+
+export interface WildcardProgram {
+  /**
+   * All non-empty, non-overlapping matches in `hay`, leftmost first, with
+   * each lazy `*` stopping at the first position where the rest matches —
+   * the same order a `gu` regexp used to produce. Zero-length matches
+   * (e.g. a bare `*`) are skipped, like the old exec loop did.
+   */
+  execAll(hay: string): WildcardMatch[]
+}
+
+/**
+ * Compile a wildcard pattern to a match program. Returns null for an empty
+ * pattern. `ignoreCase` folds the pattern up front and the haystack per code
+ * point with the same length-preserving case fold, so offsets stay exact.
+ */
+export function compileWildcards(pattern: string, ignoreCase: boolean): WildcardProgram | null {
+  const tokens = parseTokens(pattern, ignoreCase)
+  if (tokens.length === 0) return null
+  return {
+    execAll: (hay: string) => execTokens(tokens, hay, ignoreCase),
   }
+}
+
+/**
+ * The linear matcher. For every token position `ti` (right to left) it
+ * computes `f[s]` = end slot of the match of `tokens[ti..]` starting at
+ * code-point slot `s` (or -1), from the already computed layer of `ti + 1`:
+ * one pass per token, O(tokens x text) overall — no backtracking search, so
+ * hostile patterns cannot blow up (BUG-742).
+ */
+function execTokens(tokens: WildToken[], hay: string, ignoreCase: boolean): WildcardMatch[] {
+  const n = hay.length
+  const matches: WildcardMatch[] = []
+  if (n === 0) return matches
+  // code-point slots with their UTF-16 start offsets, folded for comparison
+  const cps: number[] = []
+  const starts: number[] = []
+  for (let i = 0; i < n;) {
+    const cp = hay.codePointAt(i)!
+    cps.push(ignoreCase ? foldCaseCp(cp) : cp)
+    starts.push(i)
+    i += cp > 0xffff ? 2 : 1
+  }
+  const m = cps.length
+  // g holds the computed layer of token index ti + 1; f is the scratch buffer
+  // the current pass writes into (they swap at the end of each pass)
+  let f = new Int32Array(m + 1)
+  let g = new Int32Array(m + 1)
+  for (let s = 0; s <= m; s++) g[s] = s // empty suffix matches empty everywhere
+  for (let ti = tokens.length - 1; ti >= 0; ti--) {
+    const token = tokens[ti]
+    f.fill(-1)
+    if (token.kind === 'star') {
+      // lazy: the run stops at the first slot >= s where the rest matches;
+      // it may not cross a placeholder (and never consumes one)
+      let nextGood = -1 // first slot >= s with g != -1
+      let firstNul = m // first placeholder slot >= s (m = none)
+      for (let s = m; s >= 0; s--) {
+        if (cps[s] === PLACEHOLDER) firstNul = s
+        if (g[s] !== -1) nextGood = s
+        f[s] = nextGood !== -1 && nextGood <= firstNul ? g[nextGood] : -1
+      }
+    } else if (token.kind === 'any') {
+      for (let s = 0; s < m; s++) {
+        if (cps[s] !== PLACEHOLDER) f[s] = g[s + 1]
+      }
+    } else if (token.kind === 'class') {
+      for (let s = 0; s < m; s++) {
+        if (classMatches(token, cps[s])) f[s] = g[s + 1]
+      }
+    } else {
+      const run = token.cps
+      const k = run.length
+      for (let s = 0; s + k <= m; s++) {
+        let ok = true
+        for (let j = 0; j < k; j++) {
+          const cp = cps[s + j]
+          if (cp !== run[j] || cp === PLACEHOLDER) {
+            ok = false
+            break
+          }
+        }
+        if (ok) f[s] = g[s + k]
+      }
+    }
+    const swap = f
+    f = g
+    g = swap // g is now the freshly computed layer of token index ti
+  }
+  // collect: from each slot the first position with a non-empty match wins,
+  // then the scan continues past its end (the old exec-loop's lastIndex rule)
+  for (let s = 0; s < m;) {
+    const end = g[s]
+    if (end > s) {
+      matches.push({ start: starts[s], end: end < m ? starts[end] : n })
+      s = end
+    } else {
+      s++ // no match at s (or only a zero-length one, e.g. a bare `*`)
+    }
+  }
+  return matches
+}
+
+const caseFoldCache = new Map<number, number>()
+
+/**
+ * Length-preserving lowercase for one code point: chars whose lowercase grows
+ * (`İ` → `i̇`) stay as-is so UTF-16 offsets never shift.
+ */
+function foldCaseCp(cp: number): number {
+  let fold = caseFoldCache.get(cp)
+  if (fold === undefined) {
+    const ch = String.fromCodePoint(cp)
+    const lower = ch.toLowerCase()
+    fold = lower.length === ch.length ? lower.codePointAt(0)! : cp
+    caseFoldCache.set(cp, fold)
+  }
+  return fold
+}
+
+/** length-preserving lowercase: chars whose lowercase grows ('İ' → 'i̇') stay as-is so match offsets never shift */
+export function foldCase(s: string): string {
+  let out = ''
+  for (const ch of s) {
+    const lower = ch.toLowerCase()
+    out += lower.length === ch.length ? lower : ch
+  }
+  return out
 }
 
 const diacriticFoldCache = new Map<string, string>()
@@ -127,8 +296,8 @@ const diacriticFoldCache = new Map<string, string>()
  * offsets computed on folded text address the original text directly. A lone
  * combining mark (no base within the same code point) and decompositions
  * that do not leave exactly one base character (e.g. precomposed Hangul)
- * are kept as-is. Case is untouched; pair with case folding / the regex `i`
- * flag for case-insensitive search.
+ * are kept as-is. Case is untouched; pair with case folding / the matcher's
+ * `ignoreCase` for case-insensitive search.
  */
 export function foldDiacritics(s: string): string {
   let out = ''

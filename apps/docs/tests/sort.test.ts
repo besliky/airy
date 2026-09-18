@@ -161,6 +161,32 @@ describe('table sorting', () => {
     editor.destroy()
   })
 
+  it('puts unparseable keys last ascending and first descending (BUG-744)', async () => {
+    // BUG-744 decision: `descending` negates the whole comparison, including
+    // the unparseable-vs-number part — Word/Excel order text above numbers in
+    // a descending numeric column. The comment in sort.ts used to claim "in
+    // both directions" and the PAR-102 report claimed the same; the code (and
+    // this pin) is the specification.
+    const grid = '<w:tblGrid>' + '<w:gridCol w:w="4000"/>'.repeat(1) + '</w:tblGrid>'
+    const rows = ['5', 'n/a', '1300'].map((v) => tr([v]))
+    const xml = `<w:tbl><w:tblPr/>${grid}${tr(['Num'], true)}${rows.join('')}</w:tbl>`
+    const asc = await openTable(xml)
+    expect(
+      sortTableRows(options([level(0, 'number')]))(asc.editor.state, asc.editor.view.dispatch),
+    ).toBe(true)
+    expect(rowNames(asc.editor)).toEqual(['Num', '5', '1300', 'n/a'])
+    asc.editor.destroy()
+    const desc = await openTable(xml)
+    expect(
+      sortTableRows(options([level(0, 'number', true)]))(
+        desc.editor.state,
+        desc.editor.view.dispatch,
+      ),
+    ).toBe(true)
+    expect(rowNames(desc.editor)).toEqual(['Num', 'n/a', '1300', '5'])
+    desc.editor.destroy()
+  })
+
   it('sorts by date descending', async () => {
     const { editor, parsed } = await openTable(TABLE5)
     expect(

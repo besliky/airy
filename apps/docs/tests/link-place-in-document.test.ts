@@ -124,6 +124,26 @@ describe('link target list (headings + bookmarks)', () => {
     const heading = editor.state.doc.nodeAt(target.pos)!
     expect((heading.attrs.hiddenBookmarks as string[]).includes(first!)).toBe(true)
   })
+
+  it('never stamps an anchor on a read-only document (BUG-743)', () => {
+    const editor = makeEditor()
+    const target = collectLinkTargets(editor).find((tg) => tg.label === 'Chapter One')!
+    editor.setEditable(false)
+    const docBefore = editor.state.doc
+    // the app menu / context menu can open the link dialog while editing is
+    // locked — stamping would mark the document dirty and save a stray
+    // w:bookmarkStart into the file
+    expect(ensureHeadingTocAnchor(editor, target.pos)).toBeNull()
+    expect(editor.state.doc.nodeAt(target.pos)!.attrs.hiddenBookmarks).toBeNull()
+    expect(editor.state.doc).toBe(docBefore) // no transaction landed at all
+    // once editable again, stamping works
+    editor.setEditable(true)
+    const name = ensureHeadingTocAnchor(editor, target.pos)
+    expect(name).toMatch(/^_Toc\d{9}$/)
+    // an already-stamped anchor stays readable in read-only mode
+    editor.setEditable(false)
+    expect(ensureHeadingTocAnchor(editor, target.pos)).toBe(name)
+  })
 })
 
 describe('internal hyperlink save round-trip (w:anchor)', () => {
