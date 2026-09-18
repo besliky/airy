@@ -298,7 +298,16 @@ export const ja = {
   ribbonBookmarkEmpty: 'ドキュメントにはまだブックマークがありません',
   ribbonBookmarkDeleteTip: 'ブックマークを削除',
   ribbonCrossRefEmpty:
-    'ブックマークがまだありません。「挿入 → ブックマーク」で参照したい位置に印を付けてください。',
+    '参照できる項目がありません。見出し・ブックマーク・キャプションを追加してください。',
+  ribbonCrossRefRefType: '参照先の種類',
+  ribbonCrossRefKindHeading: '見出し',
+  ribbonCrossRefKindCaption: '図表のキャプション',
+  ribbonCrossRefKindBookmark: 'ブックマーク',
+  ribbonCrossRefInsertAs: '参照内容',
+  ribbonCrossRefTypeText: '参照テキスト',
+  ribbonCrossRefTypePage: 'ページ番号',
+  ribbonCrossRefTypeNumber: '番号',
+  ribbonCrossRefNoAnchor: '読み取り専用のドキュメントには非表示のアンカーを追加できません',
   // Chart dialog
   ribbonChartInsertTitle: 'グラフの挿入',
   ribbonChartTitlePh: 'グラフ タイトル',

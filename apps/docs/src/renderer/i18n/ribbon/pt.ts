@@ -288,7 +288,17 @@ export const pt = {
   ribbonBookmarkEmpty: 'Ainda não há indicadores neste documento',
   ribbonBookmarkDeleteTip: 'Excluir indicador',
   ribbonCrossRefEmpty:
-    'Ainda não há indicadores. Use "Inserir → Indicador" para marcar o ponto que deseja referenciar.',
+    'Ainda não há destinos de referência: adicione um título, um indicador ou uma legenda.',
+  ribbonCrossRefRefType: 'Tipo de referência',
+  ribbonCrossRefKindHeading: 'Títulos',
+  ribbonCrossRefKindCaption: 'Legendas (figuras e tabelas)',
+  ribbonCrossRefKindBookmark: 'Indicadores',
+  ribbonCrossRefInsertAs: 'Inserir referência a',
+  ribbonCrossRefTypeText: 'Texto da referência',
+  ribbonCrossRefTypePage: 'Número da página',
+  ribbonCrossRefTypeNumber: 'Número',
+  ribbonCrossRefNoAnchor:
+    'Não é possível adicionar uma âncora oculta num documento somente leitura',
   ribbonChartInsertTitle: 'Inserir Gráfico',
   ribbonChartTitlePh: 'Título do Gráfico',
   ribbonChartBar: 'Colunas',

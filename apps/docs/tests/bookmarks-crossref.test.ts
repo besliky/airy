@@ -65,7 +65,7 @@ describe('bookmarks & cross-references in the editor', () => {
   })
 
   it('inserting a cross-reference saves a REF field pointing at the bookmark', async () => {
-    const { editor, parsed, source } = await open()
+    const { editor, parsed } = await open()
     editor.view.dispatch(
       editor.state.tr.setSelection(
         TextSelection.near(editor.state.doc.resolve(editor.state.doc.content.size - 1)),
