@@ -214,6 +214,9 @@ function loadSnapshotIntoUniverInner(
   if (activeWorkbook) {
     clearUnitUndoHistory(runtime, activeWorkbook.getId())
     runtime.univerAPI.disposeUnit(activeWorkbook.getId())
+    // the swap retires the old session's rendered signal; rearmUniver…
+    // restores it once the replacement unit has mounted
+    rearmUniverRenderedSignal(runtime, workbookId)
   }
   // Rebuilds reuse the same unitId ('new-workbook'): drop the previous grid's
   // undo steps so ⌘Z falls through to the adapter's revision history instead
@@ -395,6 +398,9 @@ export function loadWorkbookSkeleton(runtime: UniverRuntime | null, file: Workbo
   if (activeWorkbook) {
     clearUnitUndoHistory(runtime, activeWorkbook.getId())
     runtime.univerAPI.disposeUnit(activeWorkbook.getId())
+    // the swap retires the old session's rendered signal; rearmUniver…
+    // restores it once the replacement unit has mounted
+    rearmUniverRenderedSignal(runtime, `file-${file.sha256}`)
   }
   // A load starts from a clean history even when the unitId was used before
   // (reopening the same unchanged file reuses `file-<sha>`).
@@ -3876,6 +3882,47 @@ export const wrapMeasureGate: {
   ready: boolean
   pending: Array<{ worksheet: UniverWorksheet; rows: readonly number[] }>
 } = { ready: false, pending: [] }
+
+/// Guards overlapping session swaps: only the latest re-arm may restore the
+/// rendered signal (an earlier swap's poll must not resurrect the attribute
+/// for a unit that was superseded right after it).
+let univerRenderedSignalEpoch = 0
+
+/// `data-univer-rendered` means "the CURRENT session is rendered", not "some
+/// session once rendered": Univer's lifecycle reaches Rendered once per
+/// runtime, so a session swap (disposeUnit + createWorkbook — save-reopen,
+/// demo rebuild) must drop the flag and re-arm it from the new unit's
+/// mounted canvas (the same connected-canvas condition queueVisualInstall
+/// polls). e2e drivers then truly wait for the new session's grid.
+function rearmUniverRenderedSignal(runtime: UniverRuntime, unitId: string): void {
+  const epoch = ++univerRenderedSignalEpoch
+  document.documentElement.removeAttribute('data-univer-rendered')
+  const restore = () => {
+    if (epoch !== univerRenderedSignalEpoch) return
+    const mounted = (() => {
+      try {
+        const render = runtime.univer
+          .__getInjector()
+          .get(IRenderManagerService)
+          .getRenderById(unitId)
+        return Boolean(render?.mainComponent && render.engine.getCanvasElement().isConnected)
+      } catch {
+        return false
+      }
+    })()
+    if (!mounted) {
+      setTimeout(restore, 100)
+      return
+    }
+    // canvas connected — the first paint of the new session lands next frame
+    requestAnimationFrame(() => {
+      if (epoch === univerRenderedSignalEpoch) {
+        document.documentElement.setAttribute('data-univer-rendered', 'true')
+      }
+    })
+  }
+  setTimeout(restore, 100)
+}
 
 export function installWrapMeasureLifecycle(runtime: UniverRuntime): { dispose(): void } {
   wrapMeasureGate.ready = false
