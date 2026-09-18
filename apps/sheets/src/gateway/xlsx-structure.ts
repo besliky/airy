@@ -168,11 +168,12 @@ function shiftVmlAnchorValues(values: readonly number[], ops: readonly RowColumn
   const next = [...values]
   for (const op of ops) {
     const shift = toShift(op)
+    const axis = axisOf(op)
     // [col, colOff, row, rowOff, col2, colOff2, row2, rowOff2]
-    const from = axisOf(op) === 'row' ? 2 : 0
+    const from = axis === 'row' ? 2 : 0
     const to = from + 4
     if (shift.swap) {
-      const moved = moveRange(next[from]!, next[to]!, shift)
+      const moved = moveRange(next[from]!, next[to]!, shift, axis)
       if (moved) {
         next[from] = moved.start
         next[to] = moved.end
@@ -604,7 +605,7 @@ export function shiftDrawingAnchors(drawingXml: string, ops: readonly Structural
     const shift = toShift(op)
     const tag = axis === 'row' ? 'row' : 'col'
     if (shift.swap) {
-      xml = swapDrawingAnchors(xml, shift, tag)
+      xml = swapDrawingAnchors(xml, shift, tag, axis)
       continue
     }
     xml = xml.replace(
@@ -638,14 +639,14 @@ export function shiftDrawingAnchors(drawingXml: string, ops: readonly Structural
 /// spanning the swapped blocks stay put, anchors inside one block move with
 /// it, partial contact fails closed. A worksheet `oleObjects` `<anchor>` is
 /// the same from/to pair under another name.
-function swapDrawingAnchors(xml: string, shift: BlockSwap, tag: string): string {
+function swapDrawingAnchors(xml: string, shift: BlockSwap, tag: string, axis: Axis): string {
   const markPattern = (kind: string): RegExp =>
     new RegExp(`(<(?:\\w+:)?${kind}>[\\s\\S]*?<(?:\\w+:)?${tag}>)([0-9]+)(</(?:\\w+:)?${tag}>)`)
   const result = xml.replace(/<((?:\w+:)?)(twoCellAnchor|anchor)\b[\s\S]*?<\/\1\2>/g, (block) => {
     const from = markPattern('from').exec(block)
     const to = markPattern('to').exec(block)
     if (!from?.[2] || !to?.[2]) return block
-    const moved = moveRange(Number(from[2]), Number(to[2]), shift)
+    const moved = moveRange(Number(from[2]), Number(to[2]), shift, axis)
     if (!moved || (moved.start === Number(from[2]) && moved.end === Number(to[2]))) return block
     return block
       .replace(
@@ -979,7 +980,7 @@ function assertTableRowShiftSupported(table: TablePartArea, shift: Shift): void 
       `Deleting the totals row of table "${table.name}" is not supported.`,
     )
   }
-  const moved = moveRange(table.startRow, table.endRow, shift)
+  const moved = moveRange(table.startRow, table.endRow, shift, 'row')
   const dataRows =
     moved === null ? 0 : moved.end - moved.start + 1 - table.headerRows - table.totalsRows
   if (dataRows < 1) {
@@ -1125,6 +1126,7 @@ function moveRange(
   start: number,
   end: number,
   shift: Shift,
+  axis: Axis,
 ): { start: number; end: number } | null {
   if (shift.swap) {
     const { first, second } = shift.swap
@@ -1139,7 +1141,9 @@ function moveRange(
       return { start: start - delta, end: end - delta }
     }
     throw new StructuralShiftError(
-      'A range partially overlaps the moved rows — the move cannot be saved.',
+      axis === 'row'
+        ? 'A range partially overlaps the moved rows — the move cannot be saved.'
+        : 'A range partially overlaps the moved columns — the move cannot be saved.',
     )
   }
   if (shift.deleted) {
@@ -1404,7 +1408,7 @@ function transformColDefinitions(xml: string, shift: Shift): string {
   const rewritten = xml.replace(
     /<col\b([^>]*?)\bmin="([0-9]+)"([^>]*?)\bmax="([0-9]+)"([^>]*?)\/>/g,
     (_full, b1: string, min: string, b2: string, max: string, b3: string) => {
-      const moved = moveRange(Number(min) - 1, Number(max) - 1, shift)
+      const moved = moveRange(Number(min) - 1, Number(max) - 1, shift, 'column')
       if (moved === null) return ''
       return `<col${b1}min="${moved.start + 1}"${b2}max="${moved.end + 1}"${b3}/>`
     },
@@ -1985,6 +1989,7 @@ function moveWholeLineRange(ref: string, shift: Shift, axis: Axis): string | nul
       lettersToColumn(wholeColumn[2] ?? 'A'),
       lettersToColumn(wholeColumn[4] ?? 'A'),
       shift,
+      axis,
     )
     if (moved === null) return null
     return `${wholeColumn[1]}${columnToLetters(moved.start)}:${wholeColumn[3]}${columnToLetters(moved.end)}`
@@ -1992,7 +1997,7 @@ function moveWholeLineRange(ref: string, shift: Shift, axis: Axis): string | nul
   const wholeRow = /^(\$?)([0-9]+):(\$?)([0-9]+)$/.exec(ref)
   if (wholeRow) {
     if (axis === 'column') return ref
-    const moved = moveRange(Number(wholeRow[2]) - 1, Number(wholeRow[4]) - 1, shift)
+    const moved = moveRange(Number(wholeRow[2]) - 1, Number(wholeRow[4]) - 1, shift, axis)
     if (moved === null) return null
     return `${wholeRow[1]}${moved.start + 1}:${wholeRow[3]}${moved.end + 1}`
   }
@@ -2026,8 +2031,8 @@ function moveRefRange(ref: string, shift: Shift, axis: Axis): string | null {
 function moveArea(area: CellArea, shift: Shift, axis: Axis): CellArea | null {
   const moved =
     axis === 'row'
-      ? moveRange(area.startRow, area.endRow, shift)
-      : moveRange(area.startColumn, area.endColumn, shift)
+      ? moveRange(area.startRow, area.endRow, shift, axis)
+      : moveRange(area.startColumn, area.endColumn, shift, axis)
   if (moved === null) return null
   return axis === 'row'
     ? { ...area, startRow: moved.start, endRow: moved.end }
@@ -2151,6 +2156,7 @@ function shiftReferenceToken(token: string, shift: Shift, axis: Axis): string | 
       lettersToColumn(wholeColumn[2] ?? 'A'),
       lettersToColumn(wholeColumn[4] ?? 'A'),
       shift,
+      axis,
     )
     if (moved === null) return null
     return `${wholeColumn[1]}${columnToLetters(moved.start)}:${wholeColumn[3]}${columnToLetters(moved.end)}`
@@ -2158,7 +2164,7 @@ function shiftReferenceToken(token: string, shift: Shift, axis: Axis): string | 
   const wholeRow = /^(\$?)([0-9]+):(\$?)([0-9]+)$/.exec(token)
   if (wholeRow) {
     if (axis === 'column') return token
-    const moved = moveRange(Number(wholeRow[2]) - 1, Number(wholeRow[4]) - 1, shift)
+    const moved = moveRange(Number(wholeRow[2]) - 1, Number(wholeRow[4]) - 1, shift, axis)
     if (moved === null) return null
     return `${wholeRow[1]}${moved.start + 1}:${wholeRow[3]}${moved.end + 1}`
   }
@@ -2184,8 +2190,8 @@ function shiftReferenceToken(token: string, shift: Shift, axis: Axis): string | 
   if (!second) return token
   const moved =
     axis === 'row'
-      ? moveRange(first.row, second.row, shift)
-      : moveRange(first.column, second.column, shift)
+      ? moveRange(first.row, second.row, shift, axis)
+      : moveRange(first.column, second.column, shift, axis)
   if (moved === null) return null
   const startRow = axis === 'row' ? moved.start : first.row
   const endRow = axis === 'row' ? moved.end : second.row

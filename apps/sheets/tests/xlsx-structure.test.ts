@@ -1433,6 +1433,41 @@ describe('applyStructuralOps column moves', () => {
     expect(() => applyStructuralOps(xml, [move(0, 1, 3)], SHEET)).toThrow(StructuralShiftError)
   })
 
+  it('remaps protectedRanges and sortState on the column axis', () => {
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1"><v>3</v></c></row>' +
+      '</sheetData>' +
+      '<protectedRanges><protectedRange sqref="B2:B4" name="follows"/></protectedRanges>' +
+      '<sortState ref="A1:C1"><sortCondition ref="B2"/></sortState>' +
+      '</worksheet>'
+    // Column B trades places with C: the allow-edit range and the sort
+    // condition both follow their column.
+    const moved = applyStructuralOps(xml, [move(1, 1, 3)], SHEET)
+    expect(moved).toContain('<protectedRange sqref="C2:C4" name="follows"/>')
+    expect(moved).toContain('<sortState ref="A1:C1"><sortCondition ref="C2"/></sortState>')
+  })
+
+  it('names the axis in the torn-range save error', () => {
+    // A column move tearing a merge must blame the columns, not "moved rows"
+    // — the message lands verbatim in the save error the user reads.
+    const tornByColumns =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1"><v>3</v></c></row>' +
+      '</sheetData>' +
+      '<mergeCells count="1"><mergeCell ref="A1:B2"/></mergeCells>' +
+      '</worksheet>'
+    expect(() => applyStructuralOps(tornByColumns, [move(0, 1, 3)], SHEET)).toThrow(
+      /partially overlaps the moved columns/,
+    )
+    const tornByRows =
+      '<worksheet><sheetData><row r="1"/><row r="2"/></sheetData>' +
+      '<mergeCells count="1"><mergeCell ref="A1:B2"/></mergeCells></worksheet>'
+    expect(() =>
+      applyStructuralOps(tornByRows, [{ kind: 'move-rows', index: 0, count: 1, before: 3 }], SHEET),
+    ).toThrow(/partially overlaps the moved rows/)
+  })
+
   it('expands and shrinks whole-column sqrefs through column inserts and deletes', () => {
     const base =
       '<worksheet><sheetData>' +
