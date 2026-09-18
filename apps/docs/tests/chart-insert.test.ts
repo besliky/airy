@@ -5,12 +5,12 @@ import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-doc
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from '../src/renderer/editor/convert'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 
-const SPEC: NewChart = {
+const SPEC = {
   kind: 'bar',
   title: 'Sales',
   categories: ['January', 'February'],
   series: [{ name: 'East', values: [10, 20] }],
-}
+} satisfies NewChart
 
 describe('chart insertion from the editor', () => {
   it('genChart node saves as a real chart part and survives reparse', async () => {

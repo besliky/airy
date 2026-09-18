@@ -82,6 +82,186 @@ describe('saveDocx kind:chart', () => {
   })
 })
 
+// ---- new kinds: area / scatter / bubble / doughnut ----
+
+const AREA_SPEC = {
+  kind: 'area' as const,
+  title: '份额',
+  categories: ['Q1', 'Q2', 'Q3'],
+  series: [
+    { name: '华东', values: [30, 42, 38] },
+    { name: '华南', values: [12, 18, 25] },
+  ],
+}
+const SCATTER_SPEC = {
+  kind: 'scatter' as const,
+  title: '相关',
+  categories: ['1', '2', '3'], // numeric x values live in the category column
+  series: [{ name: '样本', values: [1.5, 2.5, 3.5] }],
+}
+const BUBBLE_SPEC = {
+  kind: 'bubble' as const,
+  title: '投入产出',
+  categories: ['10', '20', '30'],
+  series: [{ name: '项目', values: [40, 50, 60], sizes: [20, 30, 40] }],
+}
+const DOUGHNUT_SPEC = {
+  kind: 'doughnut' as const,
+  title: '占比环',
+  categories: ['A', 'B', 'C'],
+  series: [{ name: '占比', values: [45, 35, 20] }],
+}
+
+describe('buildChartPartXml: new kinds', () => {
+  it('area emits c:areaChart with cat/val caches and reads back', () => {
+    const xml = buildChartPartXml(AREA_SPEC)
+    expect(xml).toContain('<c:areaChart>')
+    expect(xml).toContain('<c:catAx>')
+    const display = parseChartPartXml(xml, 'word/charts/chart1.xml')!
+    expect(display.kind).toBe('area')
+    expect(display.categories).toEqual(['Q1', 'Q2', 'Q3'])
+    expect(display.series[0].values).toEqual([30, 42, 38])
+  })
+
+  it('doughnut emits c:doughnutChart with a 50% hole; parses as pie + holePct', () => {
+    const xml = buildChartPartXml(DOUGHNUT_SPEC)
+    expect(xml).toContain('<c:doughnutChart>')
+    expect(xml).toContain('<c:holeSize val="50"/>')
+    expect(xml).not.toContain('<c:catAx>')
+    const display = parseChartPartXml(xml, 'word/charts/chart1.xml')!
+    expect(display.kind).toBe('pie')
+    expect(display.holePct).toBe(50)
+    expect(display.series[0].values).toEqual([45, 35, 20])
+  })
+
+  it('scatter derives numeric x caches from the categories', () => {
+    const xml = buildChartPartXml(SCATTER_SPEC)
+    expect(xml).toContain('<c:scatterChart>')
+    expect(xml).toContain('<c:xVal>')
+    expect(xml).toContain('<c:yVal>')
+    expect(xml).not.toContain('<c:catAx>')
+    // scatter plots against two value axes
+    expect(xml.match(/<c:valAx>/g)).toHaveLength(2)
+    const display = parseChartPartXml(xml, 'word/charts/chart1.xml')!
+    expect(display.kind).toBe('scatter')
+    expect(display.series[0].xValues).toEqual([1, 2, 3])
+    expect(display.series[0].values).toEqual([1.5, 2.5, 3.5])
+  })
+
+  it('bubble writes explicit x caches, sizes and two value axes', () => {
+    const xml = buildChartPartXml({
+      ...BUBBLE_SPEC,
+      series: [{ ...BUBBLE_SPEC.series[0], xValues: [5, 8, 13] }],
+    })
+    expect(xml).toContain('<c:bubbleChart>')
+    expect(xml).toContain('<c:bubbleSize>')
+    const display = parseChartPartXml(xml, 'word/charts/chart1.xml')!
+    expect(display.kind).toBe('bubble')
+    expect(display.series[0].xValues).toEqual([5, 8, 13])
+    expect(display.series[0].sizes).toEqual([20, 30, 40])
+  })
+
+  it('bubble without explicit sizes falls back to a uniform default', () => {
+    const display = parseChartPartXml(
+      buildChartPartXml({
+        ...BUBBLE_SPEC,
+        series: [{ name: '项目', values: [40, 50, 60] }],
+      }),
+      'word/charts/chart1.xml',
+    )!
+    expect(display.series[0].sizes).toEqual([100, 100, 100])
+  })
+})
+
+describe('saveDocx kind:chart — new kinds round-trip', () => {
+  const SPECS = [AREA_SPEC, SCATTER_SPEC, BUBBLE_SPEC, DOUGHNUT_SPEC]
+
+  it.each(SPECS.map((spec) => [spec.kind, spec] as const))(
+    '%s embeds chart part + workbook and survives reparse',
+    async (_kind, spec) => {
+      const source = await buildDocx({ bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>' })
+      const parsed = await parseDocx(source)
+      const saved = await saveDocx(parsed, [
+        { kind: 'original', docxIndex: 0 },
+        { kind: 'chart', chart: spec },
+      ])
+      const zip = await JSZip.loadAsync(saved)
+      expect(zip.file('word/charts/chart1.xml')).toBeTruthy()
+      expect(zip.file('word/charts/embeddings/workbook1.xlsx')).toBeTruthy()
+      const chartXml = await zip.file('word/charts/chart1.xml')!.async('string')
+      expect(chartXml).toContain('c:externalData')
+
+      const reparsed = await parseDocx(saved)
+      const chart = reparsed.blocks.find((b) => b.chartDisplay)
+      expect(chart?.chartDisplay?.title).toBe(spec.title)
+      expect(chart?.chartDisplay?.categories).toEqual(spec.categories)
+      expect(chart?.chartDisplay?.series[0].values).toEqual(spec.series[0].values)
+      if (spec.kind === 'doughnut') {
+        expect(chart?.chartDisplay?.kind).toBe('pie')
+        expect(chart?.chartDisplay?.holePct).toBe(50)
+      } else {
+        expect(chart?.chartDisplay?.kind).toBe(spec.kind)
+      }
+      if (spec.kind === 'scatter' || spec.kind === 'bubble') {
+        expect(chart?.chartDisplay?.series[0].xValues).toEqual(spec.categories.map(Number))
+      }
+    },
+  )
+
+  it.each(SPECS.map((spec) => [spec.kind, spec] as const))(
+    '%s reopened and re-saved keeps chart part and workbook byte-identical',
+    async (_kind, spec) => {
+      const source = await buildDocx({ bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>' })
+      const parsed = await parseDocx(source)
+      const saved = await saveDocx(parsed, [
+        { kind: 'original', docxIndex: 0 },
+        { kind: 'chart', chart: spec },
+      ])
+      const reparsed = await parseDocx(saved)
+      const visible = reparsed.blocks.filter((b) => !b.hidden)
+      const resaved = await saveDocx(
+        reparsed,
+        visible.map((b) => ({ kind: 'original' as const, docxIndex: b.docxIndex! })),
+      )
+      const [zipA, zipB] = await Promise.all([JSZip.loadAsync(saved), JSZip.loadAsync(resaved)])
+      expect(await zipB.file('word/charts/chart1.xml')!.async('string')).toBe(
+        await zipA.file('word/charts/chart1.xml')!.async('string'),
+      )
+      expect(await zipB.file('word/charts/embeddings/workbook1.xlsx')!.async('uint8array')).toEqual(
+        await zipA.file('word/charts/embeddings/workbook1.xlsx')!.async('uint8array'),
+      )
+    },
+  )
+
+  it('scatter workbooks write the x column as numbers, not text', async () => {
+    const source = await buildDocx({ bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>' })
+    const parsed = await parseDocx(source)
+    const saved = await saveDocx(parsed, [
+      { kind: 'original', docxIndex: 0 },
+      { kind: 'chart', chart: SCATTER_SPEC },
+    ])
+    const zip = await JSZip.loadAsync(saved)
+    const wb = await zip.file('word/charts/embeddings/workbook1.xlsx')!.async('uint8array')
+    const xlsx = await JSZip.loadAsync(wb)
+    const sheet = await xlsx.file('xl/worksheets/sheet1.xml')!.async('string')
+    expect(sheet).toContain('<c r="A2"><v>1</v></c>')
+    expect(sheet).toContain('<c r="A3"><v>2</v></c>')
+    // the patched workbook (the "Edit Data" sync path) keeps them numeric too
+    const patched = await patchChartWorkbookXlsxBase64(
+      await buildChartWorkbookXlsxBase64(['1', '2'], [{ name: '样本', values: [9, 8] }]),
+      ['1', '2'],
+      [{ name: '样本', values: [7, 6] }],
+    )
+    const patchedSheet = await (
+      await JSZip.loadAsync(Buffer.from(patched!, 'base64'))
+    )
+      .file('xl/worksheets/sheet1.xml')!
+      .async('string')
+    expect(patchedSheet).toContain('<c r="A2"><v>1</v></c>')
+    expect(patchedSheet).toContain('<c r="B2"><v>7</v></c>')
+  })
+})
+
 describe('chart embedded workbook', () => {
   it('buildChartWorkbookXlsxBase64 produces a valid xlsx with correct sheet data', async () => {
     const base64 = await buildChartWorkbookXlsxBase64(

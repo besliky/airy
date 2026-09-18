@@ -1,6 +1,12 @@
 import JSZip from 'jszip'
 import { describe, expect, it } from 'vitest'
-import { parseChartPartXml, parseDocx, patchChartPartXml, saveDocx } from '../src/index'
+import {
+  buildChartPartXml,
+  parseChartPartXml,
+  parseDocx,
+  patchChartPartXml,
+  saveDocx,
+} from '../src/index'
 import { CHART_PART_XML, buildChartDocx } from './helpers/build-docx'
 
 describe('chart part parsing', () => {
@@ -73,6 +79,22 @@ describe('patchChartPartXml', () => {
     const noTitle = CHART_PART_XML.replace(/<c:title>[\s\S]*?<\/c:title>/, '')
     expect(patchChartPartXml(noTitle, { title: '新标题' })).toBe(noTitle)
     expect(patchChartPartXml(CHART_PART_XML, {})).toBe(CHART_PART_XML)
+  })
+
+  it('patches scatter values through c:yVal and x values through c:xVal', () => {
+    // a generated scatter part: values live in c:yVal, x in c:xVal (no c:cat/c:val)
+    const scatter = buildChartPartXml({
+      kind: 'scatter',
+      categories: ['1', '2', '3'],
+      series: [{ name: '样本', values: [10, 20, 30] }],
+    })
+    const patched = patchChartPartXml(scatter, {
+      series: [{ values: [11, 22, 33] }],
+      categories: ['1', '5', '3'],
+    })
+    const display = parseChartPartXml(patched, 'word/charts/chart1.xml')!
+    expect(display.series[0].values).toEqual([11, 22, 33])
+    expect(display.series[0].xValues).toEqual([1, 5, 3])
   })
 })
 
