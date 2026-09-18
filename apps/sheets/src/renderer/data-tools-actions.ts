@@ -9,7 +9,6 @@ import { ILayoutService } from '@univerjs/preset-sheets-core'
 import { legacyCharsetForLang } from '@airy-office/file-parse/text'
 
 import { columnLabel } from '../domain/cell-address'
-import { decodeCsvBuffer, isNumericCell, parseCsv } from '../gateway/csv-import'
 import type { AdvancedFilterColumn, AdvancedFilterCriteria } from './AdvancedFilterDialog'
 import {
   buildLabelMatrix,
@@ -51,6 +50,12 @@ export interface DataToolsContext {
 /// undoable; larger files should open as their own workbook instead.
 const CSV_IMPORT_MAX_CELLS = 50_000
 
+/// PERF-902: the CSV pipeline drags jszip in for its xlsx-conversion output
+/// (~144 kB, the only eager jszip importer). It is needed solely on an
+/// explicit Data → From Text/CSV action, so it loads on demand instead of
+/// riding the eager vendor-misc chunk.
+type CsvImport = typeof import('../gateway/csv-import')
+
 /// Data → From Text/CSV: reads a delimited file (encoding and delimiter
 /// sniffed by the shared CSV pipeline) into the active sheet at the selection.
 export function handleImportCsv(ctx: DataToolsContext): void {
@@ -64,14 +69,19 @@ export function handleImportCsv(ctx: DataToolsContext): void {
       ctx.setMessage(t('appCsvTooLarge'))
       return
     }
-    void file.arrayBuffer().then((buffer) => {
-      importCsvText(ctx, decodeCsvBuffer(new Uint8Array(buffer), legacyCharsetForLang(getLang())))
+    void file.arrayBuffer().then(async (buffer) => {
+      const csv = await import('../gateway/csv-import')
+      importCsvText(
+        ctx,
+        csv.decodeCsvBuffer(new Uint8Array(buffer), legacyCharsetForLang(getLang())),
+        csv,
+      )
     })
   }
   input.click()
 }
 
-function importCsvText(ctx: DataToolsContext, text: string): void {
+function importCsvText(ctx: DataToolsContext, text: string, csv: CsvImport): void {
   const runtime = ctx.univerRef.current
   const workbook = runtime?.univerAPI.getActiveWorkbook()
   const worksheet = workbook?.getActiveSheet()
@@ -80,7 +90,7 @@ function importCsvText(ctx: DataToolsContext, text: string): void {
     ctx.setMessage(t('appSelectCellFirst'))
     return
   }
-  const rows = parseCsv(text)
+  const rows = csv.parseCsv(text)
   const columns = rows.reduce((width, row) => Math.max(width, row.length), 0)
   if (rows.length === 0 || columns === 0) {
     ctx.setMessage(t('appCsvEmpty'))
@@ -93,7 +103,7 @@ function importCsvText(ctx: DataToolsContext, text: string): void {
   const values = rows.map((row) =>
     Array.from({ length: columns }, (_, index) => {
       const cell = row[index] ?? ''
-      return isNumericCell(cell) ? { v: Number(cell) } : { v: cell }
+      return csv.isNumericCell(cell) ? { v: Number(cell) } : { v: cell }
     }),
   )
   const row = range.getRow()

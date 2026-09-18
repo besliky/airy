@@ -63,6 +63,11 @@ function rendererChunkOf(rawId: string): string | undefined {
   // and they reference every feature/sheets package): only the entry chunk
   // may import them, so they must not be pulled into a vendor group.
   if (/\/@univerjs\/preset-sheets-core\//.test(id)) return undefined
+  // jszip's only renderer importer is the CSV pipeline, which loads on
+  // demand (PERF-902). The catch-all below would merge it into vendor-misc —
+  // an eager chunk through its other modules — so leave it ungrouped to let
+  // it ride the lazy csv-import chunk.
+  if (/\/node_modules\/jszip\//.test(id)) return undefined
   if (/\/node_modules\/(?:react|react-dom|scheduler|react-is|use-sync-external-store)\//.test(id))
     return 'vendor-react'
   if (/\/node_modules\/rxjs\//.test(id)) return 'vendor-rxjs'
