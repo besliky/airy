@@ -49,6 +49,23 @@ describe('airy mcp server', () => {
     }
   })
 
+  it('describes apply_ops with one shared line-ops guide, not per-format duplicates', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const { tools } = await client.listTools()
+      const applyOps = tools.find((tool) => tool.name === 'apply_ops')
+      expect(applyOps?.description).toContain(
+        'Markdown and html sessions accept a line-op vocabulary',
+      )
+      // the near-verbatim markdown/html guide pair used to double the text
+      // in every tools/list answer
+      expect(applyOps?.description).not.toContain('Markdown sessions accept')
+      expect(applyOps?.description).not.toContain('HTML sessions accept')
+    } finally {
+      await close()
+    }
+  })
+
   it('returns structured content from ping', async () => {
     const { client, close } = await connectSession()
     try {

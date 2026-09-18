@@ -46,19 +46,14 @@ const OPS_GUIDE = [
   ...opSignatures().map((s) => `- ${s}`),
 ].join('\n')
 
-/** line-op vocabulary html sessions accept in apply_ops */
-const HTML_OPS_GUIDE = [
-  'HTML sessions accept a line-op vocabulary instead (no target; line indexes are 0-based and shift after every splice, so re-read between batches):',
-  '- insertLines after(-1 = start) text — splice HTML/markup source after a line',
-  '- replaceLines from to text — replace an inclusive line range (empty text deletes the range)',
-  '- deleteLines from to — remove an inclusive line range',
-  '- findReplace find replace matchCase?(default true) from? to? — line-scoped replace; find and replace must be single-line (multi-line edits go through insertLines/replaceLines), optionally within an inclusive line window',
-].join('\n')
-
-/** line-op vocabulary markdown sessions accept in apply_ops */
-const MARKDOWN_OPS_GUIDE = [
-  'Markdown sessions accept a line-op vocabulary instead (no target; line indexes are 0-based and shift after every splice, so re-read between batches):',
-  '- insertLines after(-1 = start) text — splice markdown source after a line',
+/**
+ * Line-op vocabulary markdown and html sessions accept in apply_ops (one
+ * guide for both text formats — the vocabulary is identical, only the source
+ * kind differs; keeping two near-verbatim copies bloated every tools/list).
+ */
+const LINE_OPS_GUIDE = [
+  'Markdown and html sessions accept a line-op vocabulary instead (no target; line indexes are 0-based and shift after every splice, so re-read between batches):',
+  '- insertLines after(-1 = start) text — splice markdown/HTML source after a line',
   '- replaceLines from to text — replace an inclusive line range (empty text deletes the range)',
   '- deleteLines from to — remove an inclusive line range',
   '- findReplace find replace matchCase?(default true) from? to? — line-scoped replace; find and replace must be single-line (multi-line edits go through insertLines/replaceLines), optionally within an inclusive line window',
@@ -169,10 +164,11 @@ export function registerTools(server: McpServer): void {
         'back); without LibreOffice a .doc still opens read-only as extracted text (editable: ' +
         'false). .md/.markdown open as line-based text sessions (read_document shows heading ' +
         'structure plus text; insert_content inserts markdown source; apply_ops runs line ops; ' +
-        'UTF-8 with BOM/EOL preservation — files that are not valid UTF-8 are refused), and ' +
+        'UTF-8 with BOM/EOL preservation — BOM-prefixed UTF-8/UTF-16 is accepted, other ' +
+        'non-UTF-8 bytes are refused), and ' +
         '.html/.htm likewise (read_document shows a parse5 structure summary — ' +
-        'headings/links/title; insert_content splices an HTML fragment verbatim; declared legacy ' +
-        'charsets accepted, undeclared non-UTF-8 refused). The path ' +
+        'headings/links/title; insert_content splices an HTML fragment verbatim; BOM-prefixed ' +
+        'UTF-8/UTF-16 and declared legacy charsets accepted, undeclared non-UTF-8 refused). The path ' +
         'must be absolute or workspace-relative and stay inside the server ' +
         'workspace root (AIRY_WORKSPACE_ROOT env var, default: the process working directory). ' +
         'Read-only: nothing is written until save_document. Close sessions with close_document.',
@@ -452,6 +448,11 @@ export function registerTools(server: McpServer): void {
         )
       }
       if (session instanceof HtmlSession) {
+        if (text !== undefined) {
+          throw new Error(
+            'This handle is an html session: pass the fragment in `html`, not `text`.',
+          )
+        }
         if (afterHeading !== undefined) {
           throw new Error(
             'afterHeading is a markdown-session option; html sessions position inserts ' +
@@ -500,7 +501,7 @@ export function registerTools(server: McpServer): void {
         'Apply a batch of canonical edit operations to an open .docx, markdown, or html document. ' +
         'The batch is validated up front and applied atomically: any invalid op rejects the whole ' +
         'batch with an error and nothing is applied. ' +
-        `Operations:\n${OPS_GUIDE}\n${MARKDOWN_OPS_GUIDE}\n${HTML_OPS_GUIDE}\nEdits happen in memory; persist with save_document.`,
+        `Operations:\n${OPS_GUIDE}\n${LINE_OPS_GUIDE}\nEdits happen in memory; persist with save_document.`,
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
         ops: z
@@ -950,17 +951,23 @@ function summarizeOpenMeta(meta: AnyOpenMeta): string {
       `${String(meta.sheets.length)} sheet(s) — ${names}. Handle: ${meta.handle}. Path: ${meta.path}`
     )
   }
+  // the warning sentence needs its own trailing space, or it glues onto the
+  // "Handle:" that follows ("…writes UTF-8.Handle: …")
+  const warningNote = (warnings: readonly string[]): string => {
+    const first = warnings[0]
+    return first === undefined ? '' : `${first} `
+  }
   if (meta.kind === 'text') {
     return (
       `Opened ${meta.fileName} read-only (.${meta.format}, text extraction): ${String(meta.wordCount)} words, ` +
-      `${String(meta.charCount)} characters. ${meta.warnings[0] ?? ''} Handle: ${meta.handle}. Path: ${meta.path}`
+      `${String(meta.charCount)} characters. ${warningNote(meta.warnings)}Handle: ${meta.handle}. Path: ${meta.path}`
     )
   }
   if (meta.kind === 'markdown') {
     return (
       `Opened ${meta.fileName} as an editable markdown session: ${String(meta.lineCount)} lines, ` +
       `${String(meta.headingCount)} heading(s), ${String(meta.wordCount)} words. ` +
-      `${meta.warnings[0] ?? ''}Handle: ${meta.handle}. Path: ${meta.path}`
+      `${warningNote(meta.warnings)}Handle: ${meta.handle}. Path: ${meta.path}`
     )
   }
   if (meta.kind === 'html') {
@@ -968,7 +975,7 @@ function summarizeOpenMeta(meta: AnyOpenMeta): string {
       `Opened ${meta.fileName} as an editable html session: ${String(meta.lineCount)} lines, ` +
       `${String(meta.headingCount)} heading(s), ${String(meta.linkCount)} link(s)` +
       `${meta.title ? `, title "${meta.title}"` : ''}. ` +
-      `${meta.warnings[0] ?? ''}Handle: ${meta.handle}. Path: ${meta.path}`
+      `${warningNote(meta.warnings)}Handle: ${meta.handle}. Path: ${meta.path}`
     )
   }
   return (

@@ -279,6 +279,9 @@ describe('markdown tools over MCP', () => {
       expect(String((opened.structuredContent?.warnings as string[] | undefined)?.[0])).toContain(
         'UTF-16',
       )
+      // the open summary keeps a space between the warning sentence and the
+      // Handle pointer (they used to glue: "…writes UTF-8.Handle: …")
+      expect(text(opened)).toContain('writes UTF-8. Handle:')
       await call(client, 'insert_content', { handle, text: 'Tail' })
       const saved = await call(client, 'save_document', { handle })
       expect(saved.isError).toBeFalsy()

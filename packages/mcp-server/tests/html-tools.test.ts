@@ -281,6 +281,9 @@ describe('html tools over MCP', () => {
       expect(String((opened.structuredContent?.warnings as string[] | undefined)?.[0])).toContain(
         'windows-1252',
       )
+      // the open summary keeps a space between the warning sentence and the
+      // Handle pointer (they used to glue: "…original bytes).Handle: …")
+      expect(text(opened)).toContain('original bytes). Handle:')
       const read = await call(client, 'read_document', { handle })
       expect(text(read)).toContain('café')
       await call(client, 'insert_content', { handle, html: '<p>More</p>' })
@@ -361,6 +364,14 @@ describe('html tools over MCP', () => {
       })
       expect(mdOnly.isError).toBe(true)
       expect(text(mdOnly)).toContain('afterHeading is a markdown-session option')
+      // `text` is markdown-only too: the html branch must reject it instead of
+      // silently discarding it (the markdown branch rejects `html` the same way)
+      const wrongPayload = await call(client, 'insert_content', {
+        handle,
+        text: '<p>x</p>',
+      })
+      expect(wrongPayload.isError).toBe(true)
+      expect(text(wrongPayload)).toContain('pass the fragment in `html`, not `text`')
     } finally {
       await close()
     }
