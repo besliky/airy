@@ -315,6 +315,11 @@ export const ja = {
   ribbonLinkText: '表示文字列',
   ribbonLinkTextPh: 'リンクの文字列(空欄の場合はアドレスを表示)',
   ribbonLinkAddress: 'アドレス',
+  ribbonLinkTabAddress: 'ファイルまたはWebページ',
+  ribbonLinkTabDocument: 'このドキュメント内の場所',
+  ribbonLinkTargetHeadings: '見出し',
+  ribbonLinkTargetBookmarks: 'ブックマーク',
+  ribbonLinkTargetEmpty: 'ドキュメントに見出しやブックマークがありません',
   // Shapes
   ribbonShapeRect: '正方形/長方形',
   ribbonShapeRoundRect: '角丸四角形',

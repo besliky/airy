@@ -313,6 +313,11 @@ export const ko = {
   ribbonLinkText: '표시할 텍스트',
   ribbonLinkTextPh: '링크 텍스트(비워 두면 주소 표시)',
   ribbonLinkAddress: '주소',
+  ribbonLinkTabAddress: '파일 또는 웹 페이지',
+  ribbonLinkTabDocument: '이 문서 내 위치',
+  ribbonLinkTargetHeadings: '제목',
+  ribbonLinkTargetBookmarks: '책갈피',
+  ribbonLinkTargetEmpty: '문서에 제목이나 책갈피가 없습니다',
   // Shapes
   ribbonShapeRect: '직사각형',
   ribbonShapeRoundRect: '모서리가 둥근 직사각형',
