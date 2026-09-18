@@ -772,12 +772,7 @@ export interface NoteInfo {
 }
 
 /** ST_NumberFormat subset Word's note-options dialog offers */
-export type NoteNumberFmt =
-  | 'decimal'
-  | 'lowerLetter'
-  | 'upperLetter'
-  | 'lowerRoman'
-  | 'upperRoman'
+export type NoteNumberFmt = 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman'
 
 /**
  * Document-wide note numbering (settings.xml w:footnotePr / w:endnotePr):

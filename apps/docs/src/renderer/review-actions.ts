@@ -14,6 +14,7 @@ import {
 } from '@airy-office/docx-engine'
 import type { Dispatch, SetStateAction } from 'react'
 import type { DocState } from './doc-state'
+import { docNoteCustomMark, docNoteMark } from './note-format'
 import {
   addCommentToSelection,
   addReplyToCommentRange,
@@ -90,13 +91,21 @@ export function submitNote(ctx: ReviewContext, text: string): void {
     setList(list.map((n) => (n.id === id ? { ...n, text } : n)))
   } else {
     const newId = nextNoteId(list)
-    setList([...list, { id: newId, text }])
+    const num = list.length + 1
+    const customMark = docNoteCustomMark(kind)
+    setList([...list, { id: newId, text, ...(customMark ? { customMark } : {}) }])
     ctx.editor
       .chain()
       .focus()
       .insertContent({
         type: 'docNoteRef',
-        attrs: { kind, id: newId, num: list.length + 1 },
+        attrs: {
+          kind,
+          id: newId,
+          num,
+          customMark,
+          mark: customMark ?? docNoteMark(kind, num),
+        },
       } as never)
       .run()
   }
@@ -120,7 +129,156 @@ export function deleteNote(ctx: ReviewContext, kind: 'footnote' | 'endnote', id:
     } else {
       const num = next.findIndex((n) => n.id === String(node.attrs.id)) + 1
       if (num > 0 && num !== node.attrs.num) {
-        tr.setNodeMarkup(pos, undefined, { ...node.attrs, num })
+        tr.setNodeMarkup(pos, undefined, {
+          ...node.attrs,
+          num,
+          mark: node.attrs.customMark ?? docNoteMark(kind, num),
+        })
+/**
+ * Recompute every reference marker under the current note options (numbering
+ * format / start / custom mark). Attrs change so the atom node views re-render.
+ */
+export function refreshNoteMarks(editor: Editor): void {
+  const tr = editor.state.tr
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'docNoteRef') return
+    const kind = (node.attrs.kind as 'footnote' | 'endnote') ?? 'footnote'
+    const num = Number(node.attrs.num) || 1
+    const next = node.attrs.customMark ?? docNoteMark(kind, num)
+    if (String(node.attrs.mark ?? '') !== next) {
+      tr.setNodeMarkup(pos, undefined, { ...node.attrs, mark: next })
+    }
+  })
+  if (tr.docChanged) editor.view.dispatch(tr)
+}
+
+/** the docNoteRef at the caret (selected atom or the one the selection sits inside) */
+export function noteRefAtSelection(
+  editor: Editor,
+): { kind: 'footnote' | 'endnote'; id: string } | null {
+  const sel = editor.state.selection
+  const selNode = (sel as { node?: { type: { name: string }; attrs: Record<string, unknown> } })
+    .node
+  if (selNode?.type.name === 'docNoteRef') {
+    return { kind: selNode.attrs.kind as 'footnote' | 'endnote', id: String(selNode.attrs.id) }
+  }
+  let found: { kind: 'footnote' | 'endnote'; id: string } | null = null
+  editor.state.doc.nodesBetween(sel.from, sel.to, (node) => {
+    if (found || node.type.name !== 'docNoteRef') return
+    found = { kind: node.attrs.kind, id: String(node.attrs.id) }
+    return false
+  })
+  return found
+}
+
+/**
+ * Convert footnotes to endnotes or back: 'all' or one id. The reference nodes
+ * switch kind in place, both lists rebuild in document order (Word merges
+ * converted notes into the target numbering at their reference positions) and
+ * every marker renumbers with the current options.
+ */
+export function convertNotes(
+  ctx: ReviewContext,
+  from: 'footnote' | 'endnote',
+  which: 'all' | string,
+): void {
+  const editor = ctx.editor
+  if (!editor) return
+  const to = from === 'footnote' ? 'endnote' : 'footnote'
+  const fromList = from === 'footnote' ? ctx.footnotes : ctx.endnotes
+  const moving = fromList.filter((n) => which === 'all' || n.id === which)
+  if (moving.length === 0) return
+  const movedIds = new Set(moving.map((n) => n.id))
+
+  // references in document order with their target kind after the conversion
+  const order: Array<{ pos: number; id: string; target: 'footnote' | 'endnote' }> = []
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'docNoteRef') return
+    const kind = node.attrs.kind as 'footnote' | 'endnote'
+    order.push({
+      pos,
+      id: String(node.attrs.id),
+      target: kind === from && movedIds.has(String(node.attrs.id)) ? to : kind,
+    })
+  })
+
+  // renumber + re-mark every reference (attrs-only edits: positions stay valid)
+  const counts: Record<'footnote' | 'endnote', number> = { footnote: 0, endnote: 0 }
+  const tr = editor.state.tr
+  for (const { pos, target } of order) {
+    counts[target] += 1
+    const node = editor.state.doc.nodeAt(pos)
+    if (!node) continue
+    tr.setNodeMarkup(pos, undefined, {
+      ...node.attrs,
+      kind: target,
+      num: counts[target],
+      mark: node.attrs.customMark ?? docNoteMark(target, counts[target]),
+    })
+  }
+  if (tr.docChanged) editor.view.dispatch(tr)
+
+  // rebuild both lists in reference order; unreferenced entries trail (rare: a
+  // note whose reference paragraph is inside an unscanned protected block)
+  const findNote = (id: string): NoteInfo | undefined =>
+    ctx.footnotes.find((n) => n.id === id) ?? ctx.endnotes.find((n) => n.id === id)
+  const footAfter: NoteInfo[] = []
+  const endAfter: NoteInfo[] = []
+  const seen = new Set<string>()
+  for (const { id, target } of order) {
+    if (seen.has(id)) continue
+    const note = findNote(id)
+    if (!note) continue
+    seen.add(id)
+    ;(target === 'footnote' ? footAfter : endAfter).push(note)
+  }
+  for (const note of [...ctx.footnotes, ...ctx.endnotes]) {
+    if (!seen.has(note.id)) (ctx.footnotes.includes(note) ? footAfter : endAfter).push(note)
+  }
+  ctx.setFootnotes(footAfter)
+  ctx.setEndnotes(endAfter)
+  ctx.setNotesDirty(true)
+  ctx.dirtyRef.current = true
+  ctx.setStatus(
+    which === 'all'
+      ? t('refsConvertedAll', {
+          n: moving.length,
+          to: t(to === 'endnote' ? 'refsEndnotes' : 'refsFootnotes'),
+        })
+      : t('refsConvertedOne', { to: t(to === 'endnote' ? 'refsEndnote' : 'refsFootnote') }),
+  )
+}
+
+/** Word's Next Footnote / Previous Footnote: select the next/prev reference marker (wraps) */
+export function navigateNote(ctx: ReviewContext, dir: 1 | -1): void {
+  const editor = ctx.editor
+  if (!editor) return
+  const positions: number[] = []
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name === 'docNoteRef') positions.push(pos)
+  })
+  if (positions.length === 0) {
+    ctx.setStatus(t('refsNoNotes'))
+    return
+  }
+  const sel = editor.state.selection
+  let target: number
+  if (dir === 1) {
+    // >= the selection end: a selected marker advances, a caret lands on the
+    // next marker at/after it
+    target = positions.find((p) => p >= sel.to) ?? positions[0]!
+  } else {
+    const before = positions.filter((p) => p < sel.from)
+    target = before.length > 0 ? before[before.length - 1]! : positions[positions.length - 1]!
+  }
+  editor
+    .chain()
+    .focus()
+    .setTextSelection({ from: target, to: target + 1 })
+    .scrollIntoView()
+    .run()
+}
+
       }
     }
   })

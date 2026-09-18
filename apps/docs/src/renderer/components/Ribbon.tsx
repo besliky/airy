@@ -204,6 +204,10 @@ interface RibbonProps {
   sources: SourceInfo[]
   onAddSource: (source: SourceInfo) => void
   /** TOC page-number backfill: docHeadings in document order → real page numbers (null when not computable) */
+  /** References → note options dialog (numbering, conversion) */
+  onNoteOptions?: () => void
+  /** References → Next/Previous note marker navigation */
+  onNavigateNote?: (dir: 1 | -1) => void
   headingPages?: () => number[] | null
   /** displayed page of a node position from live pagination (REF \p cross-references); null = unavailable */
   anchorPage?: (pos: number) => number | null
@@ -664,6 +668,8 @@ function RibbonInner({
   headingPages,
   anchorPage,
   zoom,
+  onNoteOptions,
+  onNavigateNote,
   onZoom,
   onZoomFit,
   darkPage,
@@ -3844,6 +3850,8 @@ function RibbonInner({
         ) : tab === 'review' ? (
           <ReviewTab
             editor={editor}
+            onNoteOptions={onNoteOptions}
+            onNavigateNote={onNavigateNote}
             hasDoc={hasDoc}
             canEdit={canEdit}
             dropdown={dropdown}

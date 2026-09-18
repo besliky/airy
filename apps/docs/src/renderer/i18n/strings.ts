@@ -1,4 +1,5 @@
 import { aiStrings } from './strings-ai'
+import { referencesStrings } from './strings-references'
 import { appStrings } from './strings-app'
 import { editorStrings } from './strings-editor'
 import { reviewStrings } from './strings-review'
@@ -14,6 +15,7 @@ export const strings = {
     ...reviewStrings.zh,
     ...aiStrings.zh,
   },
+    ...referencesStrings.zh,
   en: {
     ...appStrings.en,
     ...ribbonStrings.en,
@@ -23,6 +25,7 @@ export const strings = {
     ...aiStrings.en,
   },
   ja: {
+    ...referencesStrings.en,
     ...appStrings.ja,
     ...ribbonStrings.ja,
     ...tableStrings.ja,
@@ -32,6 +35,7 @@ export const strings = {
   },
   ko: {
     ...appStrings.ko,
+    ...referencesStrings.ja,
     ...ribbonStrings.ko,
     ...tableStrings.ko,
     ...editorStrings.ko,
@@ -41,6 +45,7 @@ export const strings = {
   fr: {
     ...appStrings.fr,
     ...ribbonStrings.fr,
+    ...referencesStrings.ko,
     ...tableStrings.fr,
     ...editorStrings.fr,
     ...reviewStrings.fr,
@@ -50,6 +55,7 @@ export const strings = {
     ...appStrings.de,
     ...ribbonStrings.de,
     ...tableStrings.de,
+    ...referencesStrings.fr,
     ...editorStrings.de,
     ...reviewStrings.de,
     ...aiStrings.de,
@@ -59,6 +65,7 @@ export const strings = {
     ...ribbonStrings.es,
     ...tableStrings.es,
     ...editorStrings.es,
+    ...referencesStrings.de,
     ...reviewStrings.es,
     ...aiStrings.es,
   },
@@ -68,6 +75,7 @@ export const strings = {
     ...tableStrings.th,
     ...editorStrings.th,
     ...reviewStrings.th,
+    ...referencesStrings.es,
     ...aiStrings.th,
   },
   id: {
@@ -77,6 +85,7 @@ export const strings = {
     ...editorStrings.id,
     ...reviewStrings.id,
     ...aiStrings.id,
+    ...referencesStrings.th,
   },
   ru: {
     ...appStrings.ru,
@@ -86,6 +95,7 @@ export const strings = {
     ...reviewStrings.ru,
     ...aiStrings.ru,
   },
+    ...referencesStrings.id,
   ar: {
     ...appStrings.ar,
     ...ribbonStrings.ar,
@@ -95,6 +105,7 @@ export const strings = {
     ...aiStrings.ar,
   },
   pt: {
+    ...referencesStrings.ru,
     ...appStrings.pt,
     ...ribbonStrings.pt,
     ...tableStrings.pt,
@@ -104,6 +115,7 @@ export const strings = {
   },
   it: {
     ...appStrings.it,
+    ...referencesStrings.ar,
     ...ribbonStrings.it,
     ...tableStrings.it,
     ...editorStrings.it,
@@ -113,6 +125,7 @@ export const strings = {
   pl: {
     ...appStrings.pl,
     ...ribbonStrings.pl,
+    ...referencesStrings.pt,
     ...tableStrings.pl,
     ...editorStrings.pl,
     ...reviewStrings.pl,
@@ -122,6 +135,7 @@ export const strings = {
     ...appStrings.cs,
     ...ribbonStrings.cs,
     ...tableStrings.cs,
+    ...referencesStrings.it,
     ...editorStrings.cs,
     ...reviewStrings.cs,
     ...aiStrings.cs,
@@ -131,6 +145,7 @@ export const strings = {
     ...ribbonStrings.nl,
     ...tableStrings.nl,
     ...editorStrings.nl,
+    ...referencesStrings.pl,
     ...reviewStrings.nl,
     ...aiStrings.nl,
   },
@@ -140,6 +155,7 @@ export const strings = {
     ...tableStrings.ms,
     ...editorStrings.ms,
     ...reviewStrings.ms,
+    ...referencesStrings.cs,
     ...aiStrings.ms,
   },
   he: {
@@ -149,6 +165,7 @@ export const strings = {
     ...editorStrings.he,
     ...reviewStrings.he,
     ...aiStrings.he,
+    ...referencesStrings.nl,
   },
   hi: {
     ...appStrings.hi,
@@ -158,6 +175,7 @@ export const strings = {
     ...reviewStrings.hi,
     ...aiStrings.hi,
   },
+    ...referencesStrings.ms,
   'zh-TW': {
     ...appStrings['zh-TW'],
     ...ribbonStrings['zh-TW'],
@@ -167,3 +185,6 @@ export const strings = {
     ...aiStrings['zh-TW'],
   },
 }
+    ...referencesStrings.he,
+    ...referencesStrings.hi,
+    ...referencesStrings['zh-TW'],

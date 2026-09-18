@@ -55,8 +55,11 @@ describe('settings.xml w:footnotePr / w:endnotePr parse', () => {
     expect((await parseDocx(await settingsDocx(''))).noteNumbering).toBeUndefined()
     // w:pos is not modeled: the tag pair must not surface as empty defaults
     expect(
-      (await parseDocx(await settingsDocx('<w:footnotePr><w:pos w:val="pageBottom"/></w:footnotePr>')))
-        .noteNumbering,
+      (
+        await parseDocx(
+          await settingsDocx('<w:footnotePr><w:pos w:val="pageBottom"/></w:footnotePr>'),
+        )
+      ).noteNumbering,
     ).toBeUndefined()
   })
 })
@@ -70,7 +73,11 @@ describe('SaveOptions.noteNumbering (Word note-options dialog)', () => {
         endnotes: { numFmt: 'upperLetter' },
       },
     })
-    const settingsXml = await (await JSZip.loadAsync(out)).file('word/settings.xml')!.async('string')
+    const settingsXml = await (
+      await JSZip.loadAsync(out)
+    )
+      .file('word/settings.xml')!
+      .async('string')
     expect(settingsXml).toContain(
       '<w:footnotePr><w:numFmt w:val="lowerRoman"/><w:numStart w:val="3"/>' +
         '<w:numRestart w:val="eachSect"/></w:footnotePr>',
@@ -116,7 +123,11 @@ describe('SaveOptions.noteNumbering (Word note-options dialog)', () => {
     const out = await saveDocx(doc, originalOrder(doc), {
       noteNumbering: { footnotes: null, endnotes: undefined },
     })
-    const settingsXml = await (await JSZip.loadAsync(out)).file('word/settings.xml')!.async('string')
+    const settingsXml = await (
+      await JSZip.loadAsync(out)
+    )
+      .file('word/settings.xml')!
+      .async('string')
     expect(settingsXml).not.toContain('footnotePr')
     expect(settingsXml).toContain('<w:endnotePr><w:numFmt w:val="upperRoman"/></w:endnotePr>')
     // no option at all: bytes stay identical
@@ -173,9 +184,7 @@ describe('custom note marks (w:customMarkFollows)', () => {
         },
       },
     ])
-    const bodyXml = await (
-      await JSZip.loadAsync(out2)
-    ).file('word/document.xml')!.async('string')
+    const bodyXml = await (await JSZip.loadAsync(out2)).file('word/document.xml')!.async('string')
     expect(bodyXml).toContain(
       '<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr>' +
         '<w:footnoteReference w:id="2" w:customMarkFollows="1"/><w:t xml:space="preserve">†</w:t></w:r>',
@@ -199,7 +208,9 @@ describe('custom note marks (w:customMarkFollows)', () => {
     )
     const fnXml = await (await JSZip.loadAsync(out)).file('word/footnotes.xml')!.async('string')
     expect(fnXml).not.toContain('w:footnoteRef')
-    expect(fnXml).toContain('<w:vertAlign w:val="superscript"/></w:rPr><w:t xml:space="preserve">*</w:t>')
+    expect(fnXml).toContain(
+      '<w:vertAlign w:val="superscript"/></w:rPr><w:t xml:space="preserve">*</w:t>',
+    )
     // re-parse: the entry has no self-reference mark → noRefMark, text keeps the mark like Word
     const reparsed = await parseDocx(out)
     expect(reparsed.footnotes).toEqual([{ id: '2', text: '* custom note', noRefMark: true }])

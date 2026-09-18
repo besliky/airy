@@ -22,7 +22,11 @@ describe('footnote / endnote reference conversion', () => {
     const inline = runsToInline(runs)
     expect(inline).toEqual([
       { type: 'text', text: 'body' },
-      { type: 'docNoteRef', attrs: { kind: 'footnote', id: '3', num: 2 } },
+      // mark = the displayed marker under the current note options
+      {
+        type: 'docNoteRef',
+        attrs: { kind: 'footnote', id: '3', num: 2, customMark: null, mark: '2' },
+      },
       { type: 'text', text: 'continued' },
     ])
     expect(inlineToRuns(inline)).toEqual(runs)

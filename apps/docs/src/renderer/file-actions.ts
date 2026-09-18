@@ -29,6 +29,7 @@ import {
   type DocProtection,
   type HeaderFooter,
   type NoteInfo,
+  type NoteNumbering,
   type ParsedDocFull,
   type SectionInfo,
   type SectionSettings,
@@ -50,6 +51,7 @@ import {
   type PendingNumbering,
 } from './doc-state'
 import { docStyleCss } from './doc-style-css'
+import { setDocNoteNumbering } from './note-format'
 import type { CompareEntry } from './editor/compare'
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from './editor/convert'
 import { TABLE_TRAILING_SKIP } from './editor/extensions'
@@ -173,6 +175,10 @@ export interface FileActionContext {
   setFootnotes: (value: NoteInfo[]) => void
   setEndnotes: (value: NoteInfo[]) => void
   setNotesDirty: (dirty: boolean) => void
+  noteNumbering: { footnotes?: NoteNumbering; endnotes?: NoteNumbering }
+  noteNumberingDirty: boolean
+  setNoteNumbering: (value: { footnotes?: NoteNumbering; endnotes?: NoteNumbering }) => void
+  setNoteNumberingDirty: (dirty: boolean) => void
   sources: SourceInfo[]
   sourcesDirty: boolean
   setSources: (value: SourceInfo[]) => void
@@ -265,6 +271,9 @@ function applyDocLayoutSettings(editor: Editor, parsed: ParsedDocFull): void {
 /**
  * 'ok' loaded; 'canceled' dialog dismissed / no editor; 'password' the password
  * prompt took over (App resumes via loadFile once decrypted); 'failed' parse or
+  // reference markers format under the document's note options (read again by
+  // runsToInline below in the same load pass)
+  setDocNoteNumbering(parsed.noteNumbering)
  * load error — the boot path falls back to a blank document instead of leaving
  * the tab on "Opening…" forever.
  */
@@ -399,6 +408,8 @@ export async function loadFile(
     ctx.setThemeFonts(parsed.themeFonts ?? null)
     ctx.setThemeFontsDirty(false)
     ctx.setThemeColors(parsed.themeColors ?? null)
+    ctx.setNoteNumbering(parsed.noteNumbering ?? {})
+    ctx.setNoteNumberingDirty(false)
     ctx.setThemeColorsDirty(false)
     ctx.setCommentComposing(false)
     ctx.setTrackChanges(false)
@@ -491,6 +502,8 @@ export async function newFile(ctx: FileActionContext): Promise<boolean | undefin
     ctx.setThemeColors(parsed.themeColors ?? null)
     ctx.setThemeColorsDirty(false)
     ctx.setCommentComposing(false)
+    ctx.setNoteNumbering(parsed.noteNumbering ?? {})
+    ctx.setNoteNumberingDirty(false)
     ctx.setTrackChanges(false)
     ctx.setProtection(null)
     ctx.setProtectionDirty(false)
@@ -673,6 +686,10 @@ export async function buildDocBytes(ctx: FileActionContext): Promise<Uint8Array 
 
 /**
  * Crash-recovery copy: serialize the dirty document and hand the
+    noteNumbering:
+      ctx.noteNumberingDirty && (ctx.noteNumbering.footnotes || ctx.noteNumbering.endnotes)
+        ? ctx.noteNumbering
+        : undefined,
  * bytes to the main process, which stores them under userData. Best-effort —
  * a failure only means this tick's copy is skipped.
  *
@@ -1013,6 +1030,8 @@ async function saveOnce(
     return true
   } catch (err) {
     ctx.setStatus(t('appSaveFailed', { error: String(err) }))
+    ctx.setNoteNumbering(reparsed.noteNumbering ?? {})
+    ctx.setNoteNumberingDirty(false)
     if (!auto) showToast(t('appSaveFailed', { error: String(err) }), 'error')
     return false
   } finally {

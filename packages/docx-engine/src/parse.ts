@@ -4659,13 +4659,7 @@ async function parseLayoutSettings(zip: JSZip): Promise<{
 }
 
 /** ST_NumberFormat values the note-options model round-trips */
-const NOTE_NUM_FMTS = new Set([
-  'decimal',
-  'lowerLetter',
-  'upperLetter',
-  'lowerRoman',
-  'upperRoman',
-])
+const NOTE_NUM_FMTS = new Set(['decimal', 'lowerLetter', 'upperLetter', 'lowerRoman', 'upperRoman'])
 
 /**
  * Document-wide note numbering (settings.xml w:footnotePr / w:endnotePr):
@@ -4673,10 +4667,7 @@ const NOTE_NUM_FMTS = new Set([
  * whole-document custom text marks) are ignored; the tag pair is only
  * reported when at least one modeled option is present.
  */
-function noteNumberingOf(
-  xml: string,
-  root: 'footnotePr' | 'endnotePr',
-): NoteNumbering | undefined {
+function noteNumberingOf(xml: string, root: 'footnotePr' | 'endnotePr'): NoteNumbering | undefined {
   const el = new RegExp(`<w:${root}[^>]*>([\\s\\S]*?)</w:${root}>`).exec(xml)
   if (!el) return undefined
   const fmt = /<w:numFmt[^>]*w:val="([^"]+)"/.exec(el[1])?.[1]
