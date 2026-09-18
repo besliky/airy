@@ -155,7 +155,8 @@ support and limits, and the security model — is in
 | De-Genspark (provider, login, gsk CLI, updater, analytics)                        | done            |
 | Branding: build configs, README, docs                                             | done            |
 | i18n brand strings, UI marks, packaged distribution                               | done (phase 4b) |
-| Slides / PDF / Markdown / HTML headless tools                                     | backlog         |
+| Markdown / HTML headless tools (line-based open / read / edit / save)             | done            |
+| Slides / PDF headless tools                                                       | backlog         |
 
 ## Development
 
