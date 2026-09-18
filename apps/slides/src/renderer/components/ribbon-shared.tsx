@@ -3,6 +3,7 @@
  * small layout components, and the RibbonTabCtx bundle handed to the
  * extracted tab components.
  */
+import { useId } from 'react'
 import type { Dispatch, MouseEvent as ReactMouseEvent, ReactNode, SetStateAction } from 'react'
 import type {
   AnimEffectKind,
@@ -278,9 +279,12 @@ export function Group({
   /** present on collapsible groups; `collapsed` switches to the dropdown form */
   collapse?: { collapsed: boolean; open: boolean; onToggle: () => void; icon: ReactNode }
 }) {
+  // Name the group by its visible label element instead of duplicating the
+  // text into aria-label — the two could drift apart on a future edit.
+  const labelId = `ribbon-group-label-${useId().replace(/[^A-Za-z0-9]/g, '')}`
   if (collapse?.collapsed) {
     return (
-      <div className="ribbon-group" data-rbgroup={groupId} role="group" aria-label={label}>
+      <div className="ribbon-group" data-rbgroup={groupId} role="group" aria-labelledby={labelId}>
         <div className="ribbon-group-items">
           <div className="rb-drop-wrap">
             <button
@@ -302,14 +306,18 @@ export function Group({
             )}
           </div>
         </div>
-        <div className="ribbon-group-label">{label}</div>
+        <div className="ribbon-group-label" id={labelId}>
+          {label}
+        </div>
       </div>
     )
   }
   return (
-    <div className="ribbon-group" data-rbgroup={groupId} role="group" aria-label={label}>
+    <div className="ribbon-group" data-rbgroup={groupId} role="group" aria-labelledby={labelId}>
       <div className="ribbon-group-items">{children}</div>
-      <div className="ribbon-group-label">{label}</div>
+      <div className="ribbon-group-label" id={labelId}>
+        {label}
+      </div>
     </div>
   )
 }
