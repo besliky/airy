@@ -4,7 +4,7 @@
 /// dialog and the save read them without further translation (the save's
 /// protectedRanges rewrite runs after structural replay).
 
-import { columnLabel, parseRange } from '../domain/cell-address'
+import { columnIndex, columnLabel, parseRange } from '../domain/cell-address'
 import type { StructuralJournalOp } from './edit-journal'
 import { fileRangeToScreenRange, fileSpanToScreenEnvelope, fileToScreen } from './view-transform'
 
@@ -113,6 +113,22 @@ function envelopeRuns(
   return envelope === null ? [] : [envelope]
 }
 
+/// Whole-line areas (`A:C`, `1:4` — Excel writes them when a range was
+/// picked on row/column headers): only their own axis maps, the other axis
+/// is "every line" and stays that through any op, and the image keeps the
+/// whole-line form split into contiguous runs.
+function mapWholeLineArea(
+  ops: readonly StructuralJournalOp[],
+  axis: 'row' | 'column',
+  start: number,
+  end: number,
+): LineSpan[] {
+  const exact =
+    ops.some((op) => op.kind === (axis === 'row' ? 'move-rows' : 'move-cols')) &&
+    end - start <= EXACT_MOVE_LINE_CAP
+  return exact ? survivorRuns(ops, axis, start, end) : envelopeRuns(ops, axis, start, end)
+}
+
 /// Maps a sqref (one or more space-separated A1 areas) through structural
 /// ops; fully deleted areas drop out, an unparseable area stays verbatim.
 /// null when nothing survives.
@@ -121,9 +137,26 @@ function mapSqref(sqref: string, ops: readonly StructuralJournalOp[]): string | 
     .split(/\s+/)
     .filter((part) => part !== '')
     .flatMap((part) => {
+      const bare = part.replaceAll('$', '')
+      const wholeColumn = /^([A-Z]{1,3}):([A-Z]{1,3})$/.exec(bare)
+      if (wholeColumn?.[1] && wholeColumn[2]) {
+        const from = columnIndex(wholeColumn[1])
+        const to = columnIndex(wholeColumn[2])
+        return mapWholeLineArea(ops, 'column', Math.min(from, to), Math.max(from, to)).map(
+          (run) => `${columnLabel(run.start)}:${columnLabel(run.end)}`,
+        )
+      }
+      const wholeRow = /^([0-9]+):([0-9]+)$/.exec(bare)
+      if (wholeRow?.[1] && wholeRow[2]) {
+        const from = Number(wholeRow[1]) - 1
+        const to = Number(wholeRow[2]) - 1
+        return mapWholeLineArea(ops, 'row', Math.min(from, to), Math.max(from, to)).map(
+          (run) => `${run.start + 1}:${run.end + 1}`,
+        )
+      }
       let area
       try {
-        area = parseRange(part.replaceAll('$', ''))
+        area = parseRange(bare)
       } catch {
         return [part]
       }

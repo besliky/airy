@@ -1199,9 +1199,16 @@ function transformColumnOperation(xml: string, sheetName: string, shift: Shift):
   // Rolling occurrence pointers: every '<f' and ' r="' position in the body
   // is visited once across all rows, keeping the per-row skip test O(1)
   // amortized (a bounded indexOf per row would rescan to the end of a 300MB
-  // body on every formula-free row).
+  // body on every formula-free row). A quote is legal unescaped inside
+  // element text, so an ' r="' inside a cell's string body is a false
+  // coordinate: the scan tracks the last raw '<' and '>' (a raw '<' cannot
+  // appear in text — it must be escaped) and counts only occurrences that
+  // sit inside an opening tag, i.e. after a '<' with no '>' in between.
   let formulaAt = body.indexOf('<f')
   let referenceAt = body.indexOf(' r="')
+  let markupCursor = 0
+  let lastOpenTag = -1
+  let lastCloseTag = -1
   let openMatch: RegExpExecArray | null
   while ((openMatch = rowOpenPattern.exec(body)) !== null) {
     const openTag = openMatch[0]
@@ -1218,11 +1225,21 @@ function transformColumnOperation(xml: string, sheetName: string, shift: Shift):
     while (formulaAt !== -1 && formulaAt < rowStart) formulaAt = body.indexOf('<f', formulaAt + 2)
     let lastReference = -1
     while (referenceAt !== -1 && referenceAt < rowEnd) {
-      if (referenceAt >= rowStart) lastReference = referenceAt
+      while (markupCursor < referenceAt) {
+        const code = body.charCodeAt(markupCursor)
+        if (code === 60) lastOpenTag = markupCursor
+        else if (code === 62) lastCloseTag = markupCursor
+        markupCursor += 1
+      }
+      if (referenceAt >= rowStart && lastOpenTag > lastCloseTag) lastReference = referenceAt
       referenceAt = body.indexOf(' r="', referenceAt + 4)
     }
     const hasFormula = formulaAt !== -1 && formulaAt < rowEnd
-    if (!hasFormula && columnShiftSkipsRow(body, lastReference, rowEnd, affectsFrom)) continue
+    if (
+      !hasFormula &&
+      columnShiftSkipsRow(body, lastReference, rowStart + openTag.length, rowEnd, affectsFrom)
+    )
+      continue
     const full = body.slice(rowStart, rowEnd)
     let row = full.replace(/(<row\b[^>]*?)\s+spans="[^"]*"/, (_match, start: string) => start)
     row = row.replace(
@@ -1252,30 +1269,45 @@ function transformColumnOperation(xml: string, sheetName: string, shift: Shift):
 }
 
 /// True when a column shift provably cannot alter the formula-free row whose
-/// rightmost ' r="' occurrence starts at lastReference: that reference is
-/// left of every shifted column. Works on the parent string with index
-/// arithmetic so a skipped row allocates nothing. Conservative — any doubt
-/// returns false and the row takes the full transform.
+/// rightmost in-tag ' r="' occurrence starts at lastReference: that reference
+/// is left of every shifted column. Works on the parent string with index
+/// arithmetic so a skipped row allocates nothing. The value must also read as
+/// a coordinate attribute — letters, then digits, closed by a quote before
+/// the row ends; anything else means the occurrence was not a real `r`
+/// attribute after all, and the row conservatively takes the full transform.
 function columnShiftSkipsRow(
   body: string,
   lastReference: number,
+  openTagEnd: number,
   end: number,
   affectsFrom: number,
 ): boolean {
-  // No reference at all: a row with no addressed cells.
+  // No reference at all: a row with no cells.
   if (lastReference === -1) return true
   let index = lastReference + 4
   let column = 0
   let sawLetter = false
+  let sawDigit = false
   while (index < end) {
     const code = body.charCodeAt(index)
-    if (code < 65 || code > 90) break
-    column = column * 26 + (code - 64)
-    sawLetter = true
+    if (code === 34) break
+    if (code >= 65 && code <= 90) {
+      // A letter after the row digits started cannot be a coordinate value.
+      if (sawDigit) return false
+      column = column * 26 + (code - 64)
+      sawLetter = true
+    } else if (code >= 48 && code <= 57) {
+      sawDigit = true
+    } else {
+      return false
+    }
     index += 1
   }
-  // Letterless r= is the row's own number attribute: a row with no cells.
-  if (!sawLetter) return true
+  // The attribute value never closed: not a coordinate — full transform.
+  if (index >= end) return false
+  // Letterless r= inside the row's own opening tag: the row's number
+  // attribute with no addressed cell after it — a row with no cells.
+  if (!sawLetter) return lastReference < openTagEnd
   return column - 1 < affectsFrom
 }
 
@@ -1436,7 +1468,37 @@ function assertSwapKeepsAnchorIntact(ref: string, swap: BlockSwap['swap'], axis:
   )
 }
 
+/// Whole-column (`A:B`) and whole-row (`1:4`) refs carry no coordinate on
+/// their other axis, so only their own axis maps — the same axis discipline
+/// shiftReferenceToken applies to whole-line tokens inside formulas. Without
+/// these branches parseA1 rejects the form and the ref would slip through
+/// untouched while its rule bodies move (CF/DV sqref is the canonical case),
+/// silently leaving the rule on the vacated columns.
+function moveWholeLineRange(ref: string, shift: Shift, axis: Axis): string | null | undefined {
+  const wholeColumn = /^(\$?)([A-Z]{1,3}):(\$?)([A-Z]{1,3})$/.exec(ref)
+  if (wholeColumn) {
+    if (axis === 'row') return ref
+    const moved = moveRange(
+      lettersToColumn(wholeColumn[2] ?? 'A'),
+      lettersToColumn(wholeColumn[4] ?? 'A'),
+      shift,
+    )
+    if (moved === null) return null
+    return `${wholeColumn[1]}${columnToLetters(moved.start)}:${wholeColumn[3]}${columnToLetters(moved.end)}`
+  }
+  const wholeRow = /^(\$?)([0-9]+):(\$?)([0-9]+)$/.exec(ref)
+  if (wholeRow) {
+    if (axis === 'column') return ref
+    const moved = moveRange(Number(wholeRow[2]) - 1, Number(wholeRow[4]) - 1, shift)
+    if (moved === null) return null
+    return `${wholeRow[1]}${moved.start + 1}:${wholeRow[3]}${moved.end + 1}`
+  }
+  return undefined
+}
+
 function moveRefRange(ref: string, shift: Shift, axis: Axis): string | null {
+  const wholeLine = moveWholeLineRange(ref, shift, axis)
+  if (wholeLine !== undefined) return wholeLine
   const parts = ref.split(':')
   const start = parseA1(parts[0] ?? '')
   if (!start) return ref

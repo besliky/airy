@@ -1332,6 +1332,30 @@ describe('applyStructuralOps row moves', () => {
     expect(relocated).toContain('ref="A4:B6"')
     expect(() => shiftTablePart(table, [move(1, 2, 5)])).toThrow(/header row/)
   })
+
+  it('remaps whole-row sqrefs through the swap and keeps whole-column ones', () => {
+    const xml =
+      '<worksheet><sheetData><row r="1"/><row r="2"/><row r="3"/><row r="4"/></sheetData>' +
+      '<conditionalFormatting sqref="2:2"><formula1>A1&gt;0</formula1></conditionalFormatting>' +
+      '<conditionalFormatting sqref="A:B"><formula1>A1&gt;0</formula1></conditionalFormatting>' +
+      '<dataValidations count="1"><dataValidation type="whole" sqref="$3:$3" allowBlank="1">' +
+      '<formula1>1</formula1></dataValidation></dataValidations>' +
+      '</worksheet>'
+    // Row 2 trades places with row 3: 2:2 follows the block right to 3:3,
+    // $3:$3 slides left to $2:$2 with its anchors, and the whole-column A:B
+    // is row-op invariant.
+    const moved = applyStructuralOps(xml, [move(1, 1, 3)], SHEET)
+    expect(moved).toContain('<conditionalFormatting sqref="3:3">')
+    expect(moved).toContain('<conditionalFormatting sqref="A:B">')
+    expect(moved).toContain('sqref="$2:$2"')
+    // A whole-row sqref straddling the block edge has no single-range image
+    // (row 3 follows the move, row 4 stays) — refuse the save.
+    const torn =
+      '<worksheet><sheetData><row r="1"/><row r="2"/><row r="3"/><row r="4"/></sheetData>' +
+      '<conditionalFormatting sqref="3:4"><formula1>A1&gt;0</formula1></conditionalFormatting>' +
+      '</worksheet>'
+    expect(() => applyStructuralOps(torn, [move(1, 1, 3)], SHEET)).toThrow(StructuralShiftError)
+  })
 })
 
 describe('applyStructuralOps column moves', () => {
@@ -1376,6 +1400,85 @@ describe('applyStructuralOps column moves', () => {
     // B1 follows the block; A1:C1 spans both swapped blocks and stays;
     // B:B re-letters; the whole-row ref 2:2 is column-op invariant.
     expect(moved).toContain('<f>C1+SUM(A1:C1)+SUM(C:C)+SUM(2:2)</f>')
+  })
+
+  it('re-letters whole-column CF/DV sqrefs that follow the moved block', () => {
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1"><v>3</v></c><c r="D1"><v>4</v></c></row>' +
+      '</sheetData>' +
+      '<conditionalFormatting sqref="B:C"><cfRule type="expression" priority="1"><formula>B1&gt;D1</formula></cfRule></conditionalFormatting>' +
+      '<dataValidations count="1"><dataValidation type="whole" sqref="$B:$C" allowBlank="1"><formula1>2</formula1></dataValidation></dataValidations>' +
+      '</worksheet>'
+    // Column A trades places with the B-C block: B:C (and $B:$C) sits fully
+    // inside the displaced block and follows it left to A:B, so the rules
+    // keep covering the content they were authored over — the sqref and the
+    // rule bodies move together.
+    const moved = applyStructuralOps(xml, [move(0, 1, 3)], SHEET)
+    expect(moved).toContain('<conditionalFormatting sqref="A:B">')
+    expect(moved).toContain('<formula>A1&gt;D1</formula>')
+    expect(moved).toContain('sqref="$A:$B"')
+  })
+
+  it('fails closed when a whole-column sqref is torn by the move', () => {
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1"><v>3</v></c><c r="D1"><v>4</v></c></row>' +
+      '</sheetData>' +
+      '<dataValidations count="1"><dataValidation type="list" sqref="A:B" allowBlank="1"><formula1>D1:D9</formula1></dataValidation></dataValidations>' +
+      '</worksheet>'
+    // Column A moves right past C: A:B has no single-range image (A follows
+    // the move, B stays behind) — the save must refuse instead of leaving a
+    // stale sqref over the vacated columns while the rule body moves on.
+    expect(() => applyStructuralOps(xml, [move(0, 1, 3)], SHEET)).toThrow(StructuralShiftError)
+  })
+
+  it('expands and shrinks whole-column sqrefs through column inserts and deletes', () => {
+    const base =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1"><v>3</v></c></row>' +
+      '</sheetData>' +
+      '<conditionalFormatting sqref="B:C"><formula1>A1&gt;0</formula1></conditionalFormatting>' +
+      '</worksheet>'
+    const inserted = applyStructuralOps(base, [{ kind: 'insert-cols', index: 1, count: 1 }], SHEET)
+    expect(inserted).toContain('sqref="C:D"')
+    const removed = applyStructuralOps(base, [{ kind: 'remove-cols', index: 1, count: 1 }], SHEET)
+    expect(removed).toContain('sqref="B:B"')
+  })
+
+  it('re-addresses rows whose cell text holds a quoted r= shape', () => {
+    // A quote is legal unescaped inside element text, so an ' r="' inside an
+    // inline string or a cached string value used to masquerade as the row's
+    // rightmost coordinate and skip the row wholesale — its cells stayed on
+    // the old columns while the rest of the sheet moved.
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1">' +
+      '<c r="A1"><v>1</v></c>' +
+      '<c r="B1"><v>2</v></c>' +
+      '<c r="C1" t="inlineStr"><is><t>attr r="A1" here</t></is></c>' +
+      '</row>' +
+      '<row r="2">' +
+      '<c r="A2"><v>1</v></c>' +
+      '<c r="B2"><v>2</v></c>' +
+      '<c r="C2" t="str"><v>trailing r="A9"</v></c>' +
+      '</row>' +
+      '<row r="3"><c r="A3"><v>9</v></c></row>' +
+      '</sheetData></worksheet>'
+    const moved = applyStructuralOps(xml, [move(1, 1, 3)], SHEET)
+    // B trades places with C in both text-bearing rows; the third row sits
+    // left of the swap and keeps its zero-copy skip.
+    expect(moved).toContain(
+      '<row r="1"><c r="A1"><v>1</v></c>' +
+        '<c r="B1" t="inlineStr"><is><t>attr r="A1" here</t></is></c>' +
+        '<c r="C1"><v>2</v></c></row>',
+    )
+    expect(moved).toContain(
+      '<row r="2"><c r="A2"><v>1</v></c>' +
+        '<c r="B2" t="str"><v>trailing r="A9"</v></c>' +
+        '<c r="C2"><v>2</v></c></row>',
+    )
+    expect(moved).toContain('<row r="3"><c r="A3"><v>9</v></c></row>')
   })
 
   it('fails closed when a formula range is torn by the move', () => {
@@ -1508,6 +1611,7 @@ describe('column move save integration', () => {
     '<mergeCells count="1"><mergeCell ref="B3:B4"/></mergeCells>' +
     '<hyperlinks><hyperlink ref="A1" location="https://example.com"/></hyperlinks>' +
     '<conditionalFormatting sqref="B1:B9"><cfRule type="expression" priority="1"><formula>$A2&gt;5</formula></cfRule></conditionalFormatting>' +
+    '<conditionalFormatting sqref="A:B"><cfRule type="expression" priority="2"><formula>$F1&gt;5</formula></cfRule></conditionalFormatting>' +
     '<dataValidations count="1"><dataValidation type="list" sqref="B5:B6" allowBlank="1"><formula1>"a,b"</formula1></dataValidation></dataValidations>' +
     '</worksheet>'
 
@@ -1539,6 +1643,10 @@ describe('column move save integration', () => {
     expect(sheet).toContain('<hyperlink ref="C1"')
     expect(sheet).toContain('sqref="D1:D9"')
     expect(sheet).toContain('<formula>$C2&gt;5</formula>')
+    // The whole-column section follows the moved A-B block to C:D; its rule
+    // body references a column outside the swap and stays put.
+    expect(sheet).toContain('<conditionalFormatting sqref="C:D">')
+    expect(sheet).toContain('<formula>$F1&gt;5</formula>')
     expect(sheet).toContain('sqref="D5:D6"')
     // The workbook flags a recalc (calcChain was dropped).
     const workbook = await zip.file('xl/workbook.xml')?.async('text')
