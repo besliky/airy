@@ -262,13 +262,17 @@ export function collectLinkTargets(editor: Editor): LinkTarget[] {
 /**
  * The heading's link anchor: its existing hidden `_Toc…` bookmark, or a fresh
  * one stamped onto the node (hidden bookmarks re-emit as w:bookmarkStart on
- * save, so Word can resolve the w:anchor we write on the hyperlink).
+ * save, so Word can resolve the w:anchor we write on the hyperlink). Stamping
+ * is a document mutation, so it never happens on a read-only editor: callers
+ * that reach here from the app/context menu while editing is locked get null
+ * (an existing anchor is still returned — reading it mutates nothing).
  */
 export function ensureHeadingTocAnchor(editor: Editor, pos: number): string | null {
   const node = editor.state.doc.nodeAt(pos)
   if (!node) return null
   const existing = headingTocAnchor(node)
   if (existing) return existing
+  if (!editor.isEditable) return null
   const name = uniqueTocAnchor(allBookmarkNames(editor.state.doc))
   const hidden = (node.attrs?.hiddenBookmarks as string[] | null) ?? []
   editor.view.dispatch(
