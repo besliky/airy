@@ -495,6 +495,11 @@ export interface SectionSettings {
    */
   colWidths?: number[]
   /**
+   * vertical separator line between columns (w:cols > w:sep): Word draws a
+   * hairline centered in each column gap. undefined/false = no line.
+   */
+  columnSep?: boolean
+  /**
    * section base direction (sectPr w:bidi): Word fills columns right-to-left.
    * undefined = leave the document's tag untouched (round-trip safe).
    */
