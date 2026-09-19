@@ -40,15 +40,29 @@ function leadingRunFont(rPr: string, text: string): string | undefined {
  * regenerate the field with the author's chosen switches instead of the
  * defaults (`\o` level range, `\n` hidden page numbers, `\h` off, `\t`
  * source styles, `\c` table-of-figures SEQ label).
+ *
+ * Word emits ` TOC \c "Figure" ` (space + double quotes), but packages from
+ * other producers carry `\c"Figure"`, single quotes, or a bare word; the
+ * switch readers accept every spelling (BUG-1010) while regeneration keeps
+ * writing Word's canonical form.
  */
 export function parseTocInstruction(instr: string): TocFieldOptions {
   const options: TocFieldOptions = {}
-  const seq = /\\c\s+"([^"]*)"/.exec(instr)
-  if (seq) options.seqIdentifier = decodeEntities(seq[1])
-  const styles = /\\t\s+"([^"]*)"/.exec(instr)
-  if (styles) options.styles = decodeEntities(styles[1])
-  const range = /\\o\s+"(\d+)-(\d+)"/.exec(instr)
-  if (range) options.levels = Math.min(Math.max(parseInt(range[2], 10) || 1, 1), 9)
+  // a quoted value (double or single) keeps embedded spaces; a bare word
+  // stops at the first whitespace or backslash
+  const quoted = (sw: string) =>
+    new RegExp(`\\\\${sw}\\s*(?:"([^"]*)"|'([^']*)'|(\\S+))`).exec(instr)
+  const seq = quoted('c')
+  const seqValue = seq ? (seq[1] ?? seq[2] ?? seq[3]) : null
+  if (seqValue) options.seqIdentifier = decodeEntities(seqValue)
+  const styles = quoted('t')
+  const stylesValue = styles ? (styles[1] ?? styles[2] ?? styles[3]) : null
+  if (stylesValue) options.styles = decodeEntities(stylesValue)
+  const range = /\\o\s*(?:"(\d+)-(\d+)"|'(\d+)-(\d+)'|(\d+)-(\d+))/.exec(instr)
+  if (range) {
+    const upper = parseInt(range[2] ?? range[4] ?? range[6]!, 10)
+    options.levels = Math.min(Math.max(upper || 1, 1), 9)
+  }
   if (/\\n(?:\s|$)/.test(instr)) options.hidePageNumbers = true
   options.hyperlinks = /\\h(?:\s|$)/.test(instr)
   return options

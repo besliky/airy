@@ -142,3 +142,40 @@ describe('parseTocInstruction', () => {
     }
   })
 })
+
+describe('parseTocInstruction alternative spellings (BUG-1010)', () => {
+  // Word writes ` TOC \c "Figure" ` (space + double quotes); other producers
+  // emit \c without a space, single-quoted, or bare — the reader takes them
+  // all so an update keeps the field a table of figures instead of silently
+  // regenerating it as a heading TOC.
+  it('reads \\c without a space, single-quoted, and bare', () => {
+    expect(parseTocInstruction('TOC \\c"Figure" \\h')).toEqual({
+      seqIdentifier: 'Figure',
+      hyperlinks: true,
+    })
+    expect(parseTocInstruction("TOC \\c 'Figure' \\h")).toEqual({
+      seqIdentifier: 'Figure',
+      hyperlinks: true,
+    })
+    expect(parseTocInstruction('TOC \\c Figure \\h')).toEqual({
+      seqIdentifier: 'Figure',
+      hyperlinks: true,
+    })
+  })
+
+  it('keeps embedded spaces inside quotes', () => {
+    expect(parseTocInstruction('TOC \\c "My Figure" \\h')).toEqual({
+      seqIdentifier: 'My Figure',
+      hyperlinks: true,
+    })
+  })
+
+  it('reads \\t and \\o without quotes or padding spaces', () => {
+    expect(parseTocInstruction('TOC \\t"Chapter 1,1" \\h')).toEqual({
+      styles: 'Chapter 1,1',
+      hyperlinks: true,
+    })
+    expect(parseTocInstruction('TOC \\o 1-2')).toEqual({ levels: 2, hyperlinks: false })
+    expect(parseTocInstruction("TOC \\o'1-3' \\h")).toEqual({ levels: 3, hyperlinks: true })
+  })
+})
