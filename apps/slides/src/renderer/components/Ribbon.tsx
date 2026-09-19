@@ -2239,6 +2239,7 @@ export function Ribbon({
                         <Dropdown
                           value={splitVariantOf(transition)}
                           tip={t('ribbonEffectOptionsDirection')}
+                          ariaLabel={t('ribbonEffectOptionsDirection')}
                           options={SPLIT_VARIANTS.map((v) => ({
                             value: v,
                             label: t(DIR_LABEL[v]),
@@ -2258,6 +2259,7 @@ export function Ribbon({
                             'fromBottom'
                           }
                           tip={t('ribbonEffectOptionsDirection')}
+                          ariaLabel={t('ribbonEffectOptionsDirection')}
                           options={TRANSITION_DIRS[transition.kind].map((d) => ({
                             value: d,
                             label: t(DIR_LABEL[d]),
@@ -2499,6 +2501,7 @@ export function Ribbon({
                     <Dropdown
                       value={timingAnim.direction ?? ANIM_DEFAULT_DIRECTION[timingAnim.effect]!}
                       tip={t('ribbonAnimDirectionTip')}
+                      ariaLabel={t('ribbonEffectOptionsDirection')}
                       options={ANIM_EFFECT_DIRS[timingAnim.effect].map((d) => ({
                         value: d,
                         label: t(DIR_LABEL[d]),

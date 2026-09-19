@@ -65,3 +65,30 @@ describe.each(FILES)('ribbon dropdown trigger semantics (UX-1103): %s', (file, m
     },
   )
 })
+
+describe('direction dropdowns name themselves by field, not value (UX-1104)', () => {
+  const src = readFileSync(join(SRC_DIR, 'Ribbon.tsx'), 'utf8')
+
+  /** every self-closing <Dropdown … /> element in the source */
+  const dropdowns = [...src.matchAll(/<Dropdown\b[\s\S]*?\/>/g)].map(
+    (m) => [m[0], m.index] as const,
+  )
+  // the direction pickers are the ones whose options map over DIR_LABEL
+  // (split variant, transition direction, animation direction)
+  const directionDds = dropdowns.filter(([el]) => /DIR_LABEL/.test(el))
+
+  it('finds the direction dropdowns (scanner sanity)', () => {
+    expect(directionDds.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it.each(directionDds.map(([, at], i) => [i, at] as const))(
+    'direction dropdown #%d passes ariaLabel',
+    (i) => {
+      // the shared Dropdown falls back to aria-label={current label ?? value},
+      // which overrides the visible <label> text: without an explicit
+      // ariaLabel the control is announced as its current value («From
+      // Bottom») instead of its field («Direction»)
+      expect(directionDds[i as number]![0]).toContain('ariaLabel=')
+    },
+  )
+})
