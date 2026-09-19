@@ -27,6 +27,11 @@ const EMU_PER_PT = 12700
 /** a:effectLst XML for one shadow (outer or inner); empty string = no effects */
 export function shadowEffectLstXml(shadow: ShadowEffect | null | undefined): string {
   if (!shadow) return ''
+  return `<a:effectLst>${shadowEffectXml(shadow)}</a:effectLst>`
+}
+
+/** the shadow child element alone (goes inside a:effectLst) */
+function shadowEffectXml(shadow: ShadowEffect): string {
   const alpha =
     shadow.alphaPct !== undefined && shadow.alphaPct < 100
       ? `<a:alpha val="${Math.round(shadow.alphaPct * 1000)}"/>`
@@ -36,10 +41,9 @@ export function shadowEffectLstXml(shadow: ShadowEffect | null | undefined): str
     ` blurRad="${Math.max(0, Math.round(shadow.blurRadEmu))}"` +
     ` dist="${Math.max(0, Math.round(shadow.distEmu))}"` +
     ` dir="${Math.round(shadow.dirEmu)}"`
-  const shdw = shadow.inner
+  return shadow.inner
     ? `<a:innerShdw${attrs}>${color}</a:innerShdw>`
     : `<a:outerShdw${attrs} rotWithShape="0">${color}</a:outerShdw>`
-  return `<a:effectLst>${shdw}</a:effectLst>`
 }
 
 /** border-box padding (EMU) a shadow spills past the drawing extent */
@@ -54,17 +58,36 @@ function shadowExtentPad(shadow: ShadowEffect): { l: number; t: number; r: numbe
   return { l: ceil(blur - dx), t: ceil(blur - dy), r: ceil(blur + dx), b: ceil(blur + dy) }
 }
 
+/** paired or self-closing shadow children of a:effectLst (outerShdw/innerShdw/prstShdw) */
+const SHADOW_CHILD_RE =
+  /<a:(?:outerShdw|innerShdw|prstShdw)\b[^>]*>[\s\S]*?<\/a:(?:outerShdw|innerShdw|prstShdw)>|<a:(?:outerShdw|innerShdw|prstShdw)\b[^>]*\/>/g
+
 /**
- * Replace the a:effectLst inside one shape-properties slice (pic:spPr /
- * wps:spPr). The insertion point respects the CT_ShapeProperties order:
- * effectLst sits after a:ln and before a:effectDag/a:scene3d/a:sp3d/a:extLst.
+ * Replace (or create) the shadow inside one shape-properties slice (pic:spPr /
+ * wps:spPr) while MERGING with the existing a:effectLst: authored non-shadow
+ * effects (glow / reflection / softEdge / blur) survive both authoring and
+ * clearing a shadow (BUG-1007). The insertion point respects the
+ * CT_ShapeProperties order: effectLst sits after a:ln and before
+ * a:effectDag/a:scene3d/a:sp3d/a:extLst.
  */
-function replaceEffectLst(spPr: string, effectLst: string): string {
-  const out = spPr.replace(/<a:effectLst\s*\/>|<a:effectLst\b[^>]*>[\s\S]*?<\/a:effectLst>/, '')
-  if (!effectLst) return out
-  const anchor =
-    /<a:(?:effectDag|scene3d|sp3d|extLst)[\s>]/.exec(out)?.index ?? out.lastIndexOf('</')
-  return out.slice(0, anchor) + effectLst + out.slice(anchor)
+function replaceEffectLst(spPr: string, shadow: ShadowEffect | null): string {
+  const existing = /<a:effectLst\s*\/>|<a:effectLst\b[^>]*>[\s\S]*?<\/a:effectLst>/.exec(spPr)
+  const shadowXml = shadow ? shadowEffectXml(shadow) : ''
+  if (!existing) {
+    if (!shadowXml) return spPr
+    const effectLst = `<a:effectLst>${shadowXml}</a:effectLst>`
+    const anchor =
+      /<a:(?:effectDag|scene3d|sp3d|extLst)[\s>]/.exec(spPr)?.index ?? spPr.lastIndexOf('</')
+    return spPr.slice(0, anchor) + effectLst + spPr.slice(anchor)
+  }
+  // self-closing effectLst has no children to keep
+  const inner = existing[0].endsWith('/>')
+    ? ''
+    : existing[0].replace(/^<a:effectLst\b[^>]*>/, '').replace(/<\/a:effectLst>$/, '')
+  const kept = inner.replace(SHADOW_CHILD_RE, '')
+  const merged = kept + shadowXml
+  const effectLst = merged ? `<a:effectLst>${merged}</a:effectLst>` : ''
+  return spPr.slice(0, existing.index) + effectLst + spPr.slice(existing.index + existing[0].length)
 }
 
 /**
@@ -213,8 +236,7 @@ export function patchImageParagraphXml(xml: string, patch: ImagePatch): string {
     out = out.replace(/<pic:spPr\b[^>]*>[\s\S]*?<\/pic:spPr>/, (spPr) => {
       let next = spPr
       if (patch.border !== undefined) next = replaceOutline(next, patch.border ?? null)
-      if (patch.shadow !== undefined)
-        next = replaceEffectLst(next, shadowEffectLstXml(patch.shadow ?? null))
+      if (patch.shadow !== undefined) next = replaceEffectLst(next, patch.shadow ?? null)
       return next
     })
   }
@@ -1087,8 +1109,7 @@ export function patchShapeStyles(
           )
         }
       }
-      if (style.shadow !== undefined)
-        spPr = replaceEffectLst(spPr, shadowEffectLstXml(style.shadow ?? null))
+      if (style.shadow !== undefined) spPr = replaceEffectLst(spPr, style.shadow ?? null)
       drawingXml = drawingXml.replace(spPrMatch[0], spPr)
     }
     out += paragraphXml.slice(cursor, drawing.start) + drawingXml
