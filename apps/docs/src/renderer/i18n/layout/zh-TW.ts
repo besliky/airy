@@ -17,8 +17,8 @@ export const zhTW = {
   layoutColThree: '三',
   layoutColLeft: '左',
   layoutColRight: '右',
-  layoutColSpacing: '間距',
-  layoutColWidth: '欄寬',
-  layoutColWidth1: '第 1 欄寬度',
+  layoutColSpacing: '間距（公分）',
+  layoutColWidth: '欄寬（公分）',
+  layoutColWidth1: '第 1 欄寬度（公分）',
   layoutLineBetween: '欄間分隔線',
 } satisfies Record<keyof typeof zh, string>

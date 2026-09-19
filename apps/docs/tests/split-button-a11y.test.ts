@@ -29,6 +29,10 @@ describe('split-button dropdown semantics (UX-909)', () => {
   it.each([
     ['ribbon-tabs.tsx', 'compare'],
     ['ribbon-layout-tab.tsx', 'linenumbers'],
+    // UX-1003: the Effects/border gallery triggers follow the same contract
+    ['Ribbon.tsx', 'shapeEffects'],
+    ['Ribbon.tsx', 'picBorder'],
+    ['Ribbon.tsx', 'picEffects'],
   ] as const)('%s exposes the %s menu state', (file, key) => {
     const tag = triggerTag(file, key)
     expect(tag).toContain('aria-haspopup="menu"')

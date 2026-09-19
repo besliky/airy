@@ -83,6 +83,7 @@ import {
   applyParagraphStyle,
   builtinHeadingStyleId,
   setParaAttrs,
+  toggleDropdown,
 } from './ribbon-tabs'
 import { WRAP_OPTIONS } from './ContextMenu'
 import { CompressPicturesDialog, CropDialog, CutoutDialog } from './PictureDialogs'
@@ -2355,9 +2356,9 @@ function RibbonInner({
                     className="rb-big"
                     disabled={!canEdit}
                     data-tip={t('ribbonShapeEffectsTip')}
-                    onClick={() =>
-                      setDropdown((v) => (v === 'shapeEffects' ? null : 'shapeEffects'))
-                    }
+                    aria-haspopup="menu"
+                    aria-expanded={dropdown === 'shapeEffects'}
+                    onClick={() => toggleDropdown(setDropdown, 'shapeEffects')}
                   >
                     <span className="rb-big-icon">
                       <IconShadow size={28} />
@@ -2558,7 +2559,9 @@ function RibbonInner({
                     className="rb-big"
                     disabled={!canEdit}
                     data-tip={t('ribbonPictureBorderTip')}
-                    onClick={() => setDropdown((v) => (v === 'picBorder' ? null : 'picBorder'))}
+                    aria-haspopup="menu"
+                    aria-expanded={dropdown === 'picBorder'}
+                    onClick={() => toggleDropdown(setDropdown, 'picBorder')}
                   >
                     <span className="rb-big-icon">
                       <IconBorderAll />
@@ -2599,7 +2602,9 @@ function RibbonInner({
                     className="rb-big"
                     disabled={!canEdit}
                     data-tip={t('ribbonPictureEffectsTip')}
-                    onClick={() => setDropdown((v) => (v === 'picEffects' ? null : 'picEffects'))}
+                    aria-haspopup="menu"
+                    aria-expanded={dropdown === 'picEffects'}
+                    onClick={() => toggleDropdown(setDropdown, 'picEffects')}
                   >
                     <span className="rb-big-icon">
                       <IconShadow size={28} />

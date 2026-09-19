@@ -18,8 +18,8 @@ export const nl = {
   layoutColThree: 'Drie',
   layoutColLeft: 'Links',
   layoutColRight: 'Rechts',
-  layoutColSpacing: 'Tussenruimte',
-  layoutColWidth: 'Breedte',
-  layoutColWidth1: 'Breedte kolom 1',
+  layoutColSpacing: 'Tussenruimte (cm)',
+  layoutColWidth: 'Breedte (cm)',
+  layoutColWidth1: 'Breedte kolom 1 (cm)',
   layoutLineBetween: 'Lijn tussen kolommen',
 } satisfies Record<keyof typeof zh, string>

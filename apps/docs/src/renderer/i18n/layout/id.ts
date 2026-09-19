@@ -17,8 +17,8 @@ export const id = {
   layoutColThree: 'Tiga',
   layoutColLeft: 'Kiri',
   layoutColRight: 'Kanan',
-  layoutColSpacing: 'Jarak',
-  layoutColWidth: 'Lebar',
-  layoutColWidth1: 'Lebar kolom 1',
+  layoutColSpacing: 'Jarak (cm)',
+  layoutColWidth: 'Lebar (cm)',
+  layoutColWidth1: 'Lebar kolom 1 (cm)',
   layoutLineBetween: 'Garis pemisah kolom',
 } satisfies Record<keyof typeof zh, string>

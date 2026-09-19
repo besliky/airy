@@ -17,8 +17,8 @@ export const ja = {
   layoutColThree: '3 段',
   layoutColLeft: '左',
   layoutColRight: '右',
-  layoutColSpacing: '間隔',
-  layoutColWidth: '幅',
-  layoutColWidth1: '段 1 の幅',
+  layoutColSpacing: '間隔（cm）',
+  layoutColWidth: '幅（cm）',
+  layoutColWidth1: '段 1 の幅（cm）',
   layoutLineBetween: '段間罫線',
 } satisfies Record<keyof typeof zh, string>

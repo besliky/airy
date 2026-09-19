@@ -17,8 +17,8 @@ export const pt = {
   layoutColThree: 'Três',
   layoutColLeft: 'Esquerda',
   layoutColRight: 'Direita',
-  layoutColSpacing: 'Espaçamento',
-  layoutColWidth: 'Largura',
-  layoutColWidth1: 'Largura da coluna 1',
+  layoutColSpacing: 'Espaçamento (cm)',
+  layoutColWidth: 'Largura (cm)',
+  layoutColWidth1: 'Largura da coluna 1 (cm)',
   layoutLineBetween: 'Linha entre colunas',
 } satisfies Record<keyof typeof zh, string>

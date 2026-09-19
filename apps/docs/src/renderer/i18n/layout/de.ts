@@ -17,8 +17,8 @@ export const de = {
   layoutColThree: 'Drei',
   layoutColLeft: 'Links',
   layoutColRight: 'Rechts',
-  layoutColSpacing: 'Abstand',
-  layoutColWidth: 'Breite',
-  layoutColWidth1: 'Breite Spalte 1',
+  layoutColSpacing: 'Abstand (cm)',
+  layoutColWidth: 'Breite (cm)',
+  layoutColWidth1: 'Breite Spalte 1 (cm)',
   layoutLineBetween: 'Trennlinie',
 } satisfies Record<keyof typeof zh, string>

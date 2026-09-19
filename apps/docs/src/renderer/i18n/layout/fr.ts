@@ -18,8 +18,8 @@ export const fr = {
   layoutColThree: 'Trois',
   layoutColLeft: 'Gauche',
   layoutColRight: 'Droite',
-  layoutColSpacing: 'Espacement',
-  layoutColWidth: 'Largeur',
-  layoutColWidth1: 'Largeur colonne 1',
+  layoutColSpacing: 'Espacement (cm)',
+  layoutColWidth: 'Largeur (cm)',
+  layoutColWidth1: 'Largeur colonne 1 (cm)',
   layoutLineBetween: 'Ligne entre les colonnes',
 } satisfies Record<keyof typeof zh, string>

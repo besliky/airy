@@ -16,8 +16,8 @@ export const zh = {
   layoutColThree: '三',
   layoutColLeft: '左',
   layoutColRight: '右',
-  layoutColSpacing: '间距',
-  layoutColWidth: '列宽',
-  layoutColWidth1: '第 1 列宽度',
+  layoutColSpacing: '间距（厘米）',
+  layoutColWidth: '列宽（厘米）',
+  layoutColWidth1: '第 1 列宽度（厘米）',
   layoutLineBetween: '栏间分隔线',
 }

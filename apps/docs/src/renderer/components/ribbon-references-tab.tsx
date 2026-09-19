@@ -13,7 +13,7 @@ import {
   type TocEntry,
   type TocFieldOptions,
 } from '@airy-office/docx-engine'
-import { Dropdown } from '@airy-office/ui'
+import { Dropdown, useModalDialog } from '@airy-office/ui'
 import { PromptModal } from './PromptModal'
 import { allRefAnchorNames, collectCrossRefSources, uniqueAnchor } from './cross-ref'
 import { collectHeadings } from '../editor/headings'
@@ -225,6 +225,7 @@ function TocOptionsModal({
   const [showPages, setShowPages] = useState(true)
   const [hyperlinks, setHyperlinks] = useState(true)
   const [styles, setStyles] = useState('')
+  const dialog = useModalDialog(onClose)
 
   const levelCount = Math.min(Math.max(parseInt(levels, 10) || 3, 1), 9)
   const insert = () => {
@@ -250,9 +251,13 @@ function TocOptionsModal({
   }
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <h2>{t('refsTocOptionsTitle')}</h2>
+    <div
+      className="modal-backdrop"
+      {...dialog.backdropProps}
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="modal" {...dialog.dialogProps}>
+        <h2 {...dialog.titleProps}>{t('refsTocOptionsTitle')}</h2>
         <label>
           {t('refsTocLevels')}
           <Dropdown
@@ -316,6 +321,7 @@ function TofModal({
 }) {
   const { t } = useI18n()
   const [label, setLabel] = useState<string>(() => t(CAPTION_LABEL_KEYS[0]))
+  const dialog = useModalDialog(onClose)
 
   const insert = () => {
     const entries = collectTofEntries(editor, blocks, label, anchorPage)
@@ -334,9 +340,13 @@ function TofModal({
   }
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <h2>{t('refsTofTitle')}</h2>
+    <div
+      className="modal-backdrop"
+      {...dialog.backdropProps}
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="modal" {...dialog.dialogProps}>
+        <h2 {...dialog.titleProps}>{t('refsTofTitle')}</h2>
         <label>
           {t('refsTofLabel')}
           <Dropdown

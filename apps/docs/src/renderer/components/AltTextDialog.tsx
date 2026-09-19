@@ -4,7 +4,8 @@
  * writes its own storage (wp:docPr title/descr for pictures and shapes,
  * w:tblCaption/w:tblDescription for tables) through the caller's onApply.
  */
-import React, { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
+import { useModalDialog } from '@airy-office/ui'
 import { useI18n } from '../i18n/locale'
 
 export interface AltTextValue {
@@ -23,21 +24,24 @@ export function AltTextDialog({
 }) {
   const { t } = useI18n()
   const [value, setValue] = useState<AltTextValue>(initial)
-  const titleRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    titleRef.current?.focus()
-  }, [])
+  const dialog = useModalDialog(onCancel)
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
-      <div className="modal alt-text-modal" style={{ width: 360, maxWidth: 'calc(100vw - 32px)' }}>
-        <h2>{t('ribbonAltText')}</h2>
+    <div
+      className="modal-backdrop"
+      {...dialog.backdropProps}
+      onMouseDown={(e) => e.target === e.currentTarget && onCancel()}
+    >
+      <div
+        className="modal alt-text-modal"
+        style={{ width: 360, maxWidth: 'calc(100vw - 32px)' }}
+        {...dialog.dialogProps}
+      >
+        <h2 {...dialog.titleProps}>{t('ribbonAltText')}</h2>
         <p className="modal-desc">{t('ribbonAltTextHint')}</p>
         <label className="alt-text-field">
           <span>{t('ribbonAltTitle')}</span>
           <input
-            ref={titleRef}
             value={value.title}
             maxLength={255}
             onChange={(e) => setValue((v) => ({ ...v, title: e.target.value }))}
