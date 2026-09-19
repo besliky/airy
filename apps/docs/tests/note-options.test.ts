@@ -226,4 +226,52 @@ describe('note options: conversion + navigation (review-actions)', () => {
     expect(noteRefAtSelection(editor)).toBeNull()
     editor.destroy()
   })
+
+  /** ids of references whose body is missing from their kind's list (would
+   *  save as dangling w:footnoteReference / w:endnoteReference) */
+  const danglingIds = (editor: Editor, footnotes: NoteInfo[], endnotes: NoteInfo[]): string[] => {
+    const out: string[] = []
+    editor.state.doc.descendants((node) => {
+      if (node.type.name !== 'docNoteRef') return
+      const list = node.attrs.kind === 'footnote' ? footnotes : endnotes
+      if (!list.some((n) => n.id === String(node.attrs.id))) out.push(String(node.attrs.id))
+    })
+    return out
+  }
+
+  it('undo after convertNotes leaves no dangling reference (BUG-1004)', () => {
+    const editor = createEditor(DOC())
+    const footnotes: NoteInfo[] = [
+      { id: '1', text: 'one' },
+      { id: '3', text: 'three' },
+    ]
+    const endnotes: NoteInfo[] = [{ id: '2', text: 'two' }]
+    // an undoable edit BEFORE the conversion: undo must revert it, not the conversion
+    editor.commands.insertContentAt(0, { type: 'docParagraph', content: [{ type: 'text', text: 'pre' }] } as never)
+    convertNotes(reviewCtx(editor, footnotes, endnotes), 'footnote', 'all')
+    editor.commands.undo()
+    // the pre-edit paragraph is gone…
+    expect(editor.state.doc.textContent).not.toContain('pre')
+    // …but every reference still resolves in its kind's list
+    expect(danglingIds(editor, footnotes, endnotes)).toEqual([])
+    expect(refAttrs(editor)).toEqual([
+      { kind: 'endnote', text: 'i' },
+      { kind: 'endnote', text: 'ii' },
+      { kind: 'endnote', text: 'iii' },
+    ])
+    editor.destroy()
+  })
+
+  it('undo immediately after convertNotes is a no-op on the conversion itself', () => {
+    const editor = createEditor(DOC())
+    const footnotes: NoteInfo[] = [
+      { id: '1', text: 'one' },
+      { id: '3', text: 'three' },
+    ]
+    const endnotes: NoteInfo[] = [{ id: '2', text: 'two' }]
+    convertNotes(reviewCtx(editor, footnotes, endnotes), 'footnote', 'all')
+    expect(editor.can().undo()).toBe(false)
+    expect(danglingIds(editor, footnotes, endnotes)).toEqual([])
+    editor.destroy()
+  })
 })
