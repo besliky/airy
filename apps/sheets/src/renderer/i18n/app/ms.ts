@@ -1362,4 +1362,13 @@ export const ms = {
   scUnhideRows: 'Tunjuk baris',
   scHideColumns: 'Sembunyi lajur',
   scUnhideColumns: 'Tunjuk lajur',
+  appPrintSelectionMissing: 'Tiada pemilihan untuk dicetak.',
+  appTextToColsEmpty: 'Lajur yang dipilih tiada kandungan untuk dipecahkan.',
+  appTextToColsNeedDelimiter: 'Pilih sekurang-kurangnya satu pemisah.',
+  appTextToColsBadDestination: '“{ref}” bukan rujukan sel pada helaian ini.',
+  appOutlineSettings: 'Tetapan',
+  appOutlineSettingsTitle: 'Penempatan ringkasan rangka',
+  appOutlineSettingsSaved: 'Tetapan rangka direkodkan — dilaksanakan semasa menyimpan.',
+  appOutlineNoSummaryLine: 'Baris ringkasan akan berada di luar helaian.',
+  appTextToColsDone: '{rows} baris dipecahkan kepada {columns} lajur di {cell}.',
 } satisfies Record<keyof typeof zh, string>

@@ -57,6 +57,9 @@ import type { GoalSeekResult } from './goal-seek'
 import { GoalSeekDialog } from './GoalSeekDialog'
 import { InsertFunctionDialog } from './InsertFunctionDialog'
 import { PrintDialog } from './PrintDialog'
+import { TextToColumnsDialog, type TextToColumnsSource } from './TextToColumnsDialog'
+import type { TextToColumnsConfig } from './text-to-columns'
+import { OutlineSettingsDialog, type OutlineSettingsValue } from './OutlineSettingsDialog'
 import type { PrintSetupOverrides } from './page-layout-actions'
 import type { WorkbookExportPdfRequest } from '../shared/desktop-api'
 import type { CatalogFunction } from './function-catalog'
@@ -311,6 +314,15 @@ interface ExcelShellProps {
   readonly onCreateConsolidate: (config: ConsolidateConfig) => string | null
   /// Prefill for the Consolidate reference input (current multi-cell selection).
   readonly onGetConsolidateDefault: () => string
+  /// Text to Columns: reads the single selected column for the wizard's
+  /// preview (null when the selection is not one column).
+  readonly onGetT2cSource: () => TextToColumnsSource | null
+  /// Text to Columns Finish; returns an error message, or null on success.
+  readonly onApplyTextToColumns: (config: TextToColumnsConfig) => string | null
+  /// The active sheet's outline summary placement (Outline Settings seed).
+  readonly onGetOutlineSettings: () => OutlineSettingsValue
+  /// Outline Settings OK; returns an error message, or null on success.
+  readonly onApplyOutlineSettings: (value: OutlineSettingsValue) => string | null
   /// Header & Footer dialog OK; returns an error message, or null on success.
   readonly onApplyHeaderFooter: (result: HeaderFooterResult) => string | null
   /// Session page-layout settings of the active sheet, echoed by the Page
@@ -389,6 +401,10 @@ export function ExcelShell({
   onCreateSubtotal,
   onCreateConsolidate,
   onGetConsolidateDefault,
+  onGetT2cSource,
+  onApplyTextToColumns,
+  onGetOutlineSettings,
+  onApplyOutlineSettings,
   onApplyHeaderFooter,
   onPromptChange,
   onSend,
@@ -465,6 +481,9 @@ export function ExcelShell({
   const [showGoTo, setShowGoTo] = useState(false)
   const [showHeaderFooter, setShowHeaderFooter] = useState(false)
   const [showAllowEditRanges, setShowAllowEditRanges] = useState(false)
+  /// The Text to Columns wizard's source snapshot (open while non-null).
+  const [t2cSource, setT2cSource] = useState<TextToColumnsSource | null>(null)
+  const [showOutlineSettings, setShowOutlineSettings] = useState(false)
   /// Non-null while the Chart Design → Add Chart Element text prompt is open.
   const [chartTextTarget, setChartTextTarget] = useState<ChartTextTarget | null>(null)
   const onCommandRef = useRef(onCommand)
@@ -770,6 +789,11 @@ export function ExcelShell({
             else if (command === 'goal-seek-open') setShowGoalSeek(true)
             else if (command === 'subtotal-open') setShowSubtotalDialog(true)
             else if (command === 'consolidate-open') setShowConsolidateDialog(true)
+            else if (command === 'text-to-columns-open') {
+              const source = onGetT2cSource()
+              if (source) setT2cSource(source)
+              else onSetStatusMessage(t('appTextToColsSelectOne'))
+            } else if (command === 'outline-settings-open') setShowOutlineSettings(true)
             else if (command === 'goto-open') setShowGoTo(true)
             else if (command === 'header-footer-open') setShowHeaderFooter(true)
             else if (command === 'allow-edit-ranges-open') setShowAllowEditRanges(true)
@@ -989,6 +1013,20 @@ export function ExcelShell({
           fields={onGetPivotFields()}
           onCreate={onCreateSubtotal}
           onClose={() => setShowSubtotalDialog(false)}
+        />
+      )}
+      {t2cSource && (
+        <TextToColumnsDialog
+          source={t2cSource}
+          onApply={onApplyTextToColumns}
+          onClose={() => setT2cSource(null)}
+        />
+      )}
+      {showOutlineSettings && (
+        <OutlineSettingsDialog
+          initial={onGetOutlineSettings()}
+          onApply={onApplyOutlineSettings}
+          onClose={() => setShowOutlineSettings(false)}
         />
       )}
       {showConsolidateDialog && (
@@ -2417,12 +2455,13 @@ function Ribbon({
           </div>
         </RibbonGroup>
         <RibbonGroup label={t('appGroupDataTools')}>
-          {largeMenu(t('appTextToColumns'), '⇶', t('appTextToColumnsTitle'), [
-            { value: 'text-to-columns:2', label: t('appSplitByComma') },
-            { value: 'text-to-columns:4', label: t('appSplitBySemicolon') },
-            { value: 'text-to-columns:8', label: t('appSplitBySpace') },
-            { value: 'text-to-columns:1', label: t('appSplitByTab') },
-          ])}
+          <RibbonButton
+            large
+            label={t('appTextToColumns')}
+            detail={t('appTextToColumnsTitle')}
+            symbol="⇶"
+            onClick={() => onCommand('text-to-columns-open')}
+          />
           <RibbonButton
             large
             label={t('appFlashFill')}
@@ -2471,6 +2510,13 @@ function Ribbon({
             { value: 'outline-show-detail:rows', label: t('appShowDetailRows') },
             { value: 'outline-show-detail:cols', label: t('appShowDetailCols') },
           ])}
+          <RibbonButton
+            large
+            label={t('appOutlineSettings')}
+            detail={t('appOutlineSettingsTitle')}
+            symbol="⚙"
+            onClick={() => onCommand('outline-settings-open')}
+          />
           <RibbonButton
             large
             label={t('appSubtotal')}

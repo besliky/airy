@@ -254,6 +254,9 @@ export interface PageSetupJournalState {
   /// Presence replaces the sheet's break set; [] clears all manual breaks.
   rowBreaks?: number[]
   colBreaks?: number[]
+  /// sheetPr/outlinePr summary placement (Outline Settings dialog).
+  outlineSummaryBelow?: boolean
+  outlineSummaryRight?: boolean
 }
 
 interface CellRange {

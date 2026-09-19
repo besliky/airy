@@ -243,6 +243,7 @@ export async function printWorkbook(
               right: request.margins.right,
             },
             scaleFactor: Math.round(request.scale * 100),
+            ...(request.collate === undefined ? {} : { collate: request.collate }),
           },
           (success, failureReason) => {
             resolve({

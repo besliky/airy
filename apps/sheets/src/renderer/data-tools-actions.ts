@@ -19,10 +19,19 @@ import {
   type ConsolidateConfig,
   type OutputCell,
 } from './consolidate'
-import { isSheetRemoved, journalSize, recordStructuralOp } from './edit-journal'
+import { isSheetRemoved, journalSize, recordPageSetup, recordStructuralOp } from './edit-journal'
 import { resolveGoToRef, type GoToNameEntry } from './goto'
 import { getLang, t } from './i18n/locale'
 import { appendSymbol } from './SymbolDialog'
+import {
+  coerceFieldValue,
+  DATE_COLUMN_TYPES,
+  parseDestinationCell,
+  splitDelimited,
+  splitFixedWidth,
+  activeDelimiterChars,
+  type TextToColumnsConfig,
+} from './text-to-columns'
 import {
   a1RangeRef,
   a1RowRangeRef,
@@ -34,16 +43,21 @@ import {
   univerDefinedNames,
   revealCellBelowFreeze,
 } from './univer-sync'
+import { pushVisualUndo } from './univer-sync'
+import { outlineUndoGate } from './univer-state'
+import { MAX_OUTLINE_LEVEL, placementForAxis, type OutlinePlacement } from './outline'
 import type { LazyWorkbookState, UniverRuntime, UniverWorksheet } from './univer-state'
 import { applyAiTableAdd } from './workbook-ops'
 
 /** The App refs/state the data-tool actions need; built fresh per call. */
 export interface DataToolsContext {
   univerRef: { readonly current: UniverRuntime | null }
-  lazyWorkbookRef: { readonly current: LazyWorkbookState | null }
+  lazyWorkbookRef: { current: LazyWorkbookState | null }
   setMessage: (message: string) => void
   setPendingEdits: (count: number) => void
   setAdvancedFilterColumns: (columns: readonly AdvancedFilterColumn[] | null) => void
+  /// Outline edits notify the gutter so it re-renders its +/- buttons.
+  onOutlineChanged?: (() => void) | undefined
 }
 
 /// Matches the paste ceiling in spirit: one setValues command, journaled and
@@ -524,9 +538,136 @@ export function handleCreateConsolidate(
   return null
 }
 
-/// Outline groups: level edits journal directly (Univer has no outline
-/// model, so there is no command to undo); Hide/Show Detail rides the
-/// normal hidden-rows pipeline plus a collapsed flag on the summary line.
+/// The sheet's outline summary placement: the session journal over the
+/// file's outlinePr (unknown file values fall back to Excel's defaults).
+export function outlinePlacement(state: LazyWorkbookState, sheetId: string): OutlinePlacement {
+  const journal = state.editJournal.pageSetup.get(sheetId)
+  const file = state.sheetFilePageSetups.get(sheetId)
+  return {
+    summaryBelow: journal?.outlineSummaryBelow ?? file?.outlineSummaryBelow ?? true,
+    summaryRight: journal?.outlineSummaryRight ?? file?.outlineSummaryRight ?? true,
+  }
+}
+
+/// Outline Settings: journals summary-below/right into the sheet's page
+/// setup (the save writes `<sheetPr><outlinePr …/>`); returns null on
+/// success or an error message.
+export function handleOutlineSettings(
+  ctx: DataToolsContext,
+  placement: OutlinePlacement,
+): string | null {
+  const state = ctx.lazyWorkbookRef.current
+  if (!state) return t('appOutlineNeedsFile')
+  const sheetId = ctx.univerRef.current?.univerAPI
+    .getActiveWorkbook()
+    ?.getActiveSheet()
+    ?.getSheetId()
+  if (!sheetId || isSheetRemoved(state.editJournal, sheetId)) {
+    return t('appActiveSheetUnavailable')
+  }
+  const previous = outlinePlacement(state, sheetId)
+  recordPageSetup(state.editJournal, sheetId, {
+    outlineSummaryBelow: placement.summaryBelow,
+    outlineSummaryRight: placement.summaryRight,
+  })
+  const undoPlacement = previous
+  const redoPlacement = placement
+  const sheetIdForUndo = sheetId
+  const journal = state.editJournal
+  const runtime = ctx.univerRef.current
+  if (runtime) {
+    pushVisualUndo(runtime, {
+      undo: () => {
+        recordPageSetup(journal, sheetIdForUndo, {
+          outlineSummaryBelow: undoPlacement.summaryBelow,
+          outlineSummaryRight: undoPlacement.summaryRight,
+        })
+        ctx.setPendingEdits(journalSize(journal))
+        ctx.onOutlineChanged?.()
+      },
+      redo: () => {
+        recordPageSetup(journal, sheetIdForUndo, {
+          outlineSummaryBelow: redoPlacement.summaryBelow,
+          outlineSummaryRight: redoPlacement.summaryRight,
+        })
+        ctx.setPendingEdits(journalSize(journal))
+        ctx.onOutlineChanged?.()
+      },
+    })
+  }
+  ctx.setPendingEdits(journalSize(state.editJournal))
+  ctx.onOutlineChanged?.()
+  ctx.setMessage(t('appOutlineSettingsSaved'))
+  return null
+}
+
+/// Hides or shows one outline group's detail span (the gutter's +/- click):
+/// the span goes through the normal hidden pipeline (journaled by the
+/// mutation listener, undoable through the combined visual-undo step below)
+/// and the summary line's collapsed flag journals declaratively.
+export function toggleOutlineGroup(
+  ctx: DataToolsContext,
+  axis: 'rows' | 'cols',
+  detail: { start: number; end: number },
+  summary: number,
+  collapse: boolean,
+): void {
+  const runtime = ctx.univerRef.current
+  const state = ctx.lazyWorkbookRef.current
+  const worksheet = runtime?.univerAPI.getActiveWorkbook()?.getActiveSheet()
+  if (!runtime || !state || !worksheet) return
+  const sheetId = worksheet.getSheetId()
+  if (isSheetRemoved(state.editJournal, sheetId)) return
+  const outline = sheetOutline(state, sheetId)
+  const entries = axis === 'rows' ? outline.rows : outline.cols
+  const kind = axis === 'rows' ? ('set-rows-outline' as const) : ('set-cols-outline' as const)
+  const count = detail.end - detail.start + 1
+  const summaryLevel = entries.get(summary)?.level ?? 0
+  const wasCollapsed = entries.get(summary)?.collapsed ?? false
+
+  const run = (hide: boolean): void => {
+    // The hide/show commands journal through the App's mutation listener;
+    // their native undo entries are dropped (outlineUndoGate) so the whole
+    // collapse reverts as one visual-undo step.
+    outlineUndoGate.active = true
+    try {
+      if (axis === 'rows') {
+        if (hide) worksheet.hideRows(detail.start, count)
+        else worksheet.showRows(detail.start, count)
+      } else if (hide) {
+        worksheet.hideColumns(detail.start, count)
+      } else {
+        worksheet.showColumns(detail.start, count)
+      }
+    } finally {
+      outlineUndoGate.active = false
+    }
+    entries.set(summary, { level: summaryLevel, collapsed: hide })
+    recordStructuralOp(state.editJournal, sheetId, {
+      kind,
+      start: summary,
+      end: summary,
+      level: summaryLevel,
+      collapsed: hide,
+    })
+    ctx.setPendingEdits(journalSize(state.editJournal))
+    ctx.onOutlineChanged?.()
+  }
+
+  run(collapse)
+  pushVisualUndo(runtime, {
+    // Undo restores the group's previous collapsed state in full — the
+    // hidden span and the summary flag together.
+    undo: () => run(wasCollapsed),
+    redo: () => run(collapse),
+  })
+  ctx.setMessage(collapse ? t('appDetailHidden') : t('appDetailShown'))
+}
+
+/// Outline groups: level edits journal declaratively (Univer has no outline
+/// model) and land on the visual undo stack; Hide/Show Detail rides the
+/// hidden pipeline plus a collapsed flag on the summary line (above or
+/// below per the sheet's outlinePr).
 export function handleOutline(
   ctx: DataToolsContext,
   action: 'group' | 'ungroup' | 'hide-detail' | 'show-detail',
@@ -555,42 +696,30 @@ export function handleOutline(
   const kind = axis === 'rows' ? ('set-rows-outline' as const) : ('set-cols-outline' as const)
 
   if (action === 'hide-detail' || action === 'show-detail') {
-    // The selection is the group's detail span; the summary row/column is
-    // the next one after it (Excel's summaryBelow/summaryRight default).
-    const count = end - start + 1
-    if (action === 'hide-detail') {
-      if (axis === 'rows') worksheet.hideRows(start, count)
-      else worksheet.hideColumns(start, count)
-    } else if (axis === 'rows') {
-      worksheet.showRows(start, count)
-    } else {
-      worksheet.showColumns(start, count)
+    // The selection is the group's detail span; the summary line sits after
+    // it (summary below/right) or before it, per the sheet's outlinePr.
+    const summaryAfter = placementForAxis(outlinePlacement(state, sheetId), axis)
+    const summary = summaryAfter ? end + 1 : start - 1
+    if (summary < 0) {
+      ctx.setMessage(t('appOutlineNoSummaryLine'))
+      return
     }
-    const summary = end + 1
-    const collapsed = action === 'hide-detail'
-    const summaryLevel = entries.get(summary)?.level ?? 0
-    entries.set(summary, { level: summaryLevel, collapsed })
-    recordStructuralOp(state.editJournal, sheetId, {
-      kind,
-      start: summary,
-      end: summary,
-      level: summaryLevel,
-      collapsed,
-    })
-    ctx.setPendingEdits(journalSize(state.editJournal))
-    ctx.setMessage(collapsed ? t('appDetailHidden') : t('appDetailShown'))
+    toggleOutlineGroup(ctx, axis, { start, end }, summary, action === 'hide-detail')
     return
   }
 
   // Group/Ungroup shifts each contiguous run of equal levels by ±1
   // (levels clamp to 0-7). Runs already at the boundary are skipped.
   const delta = action === 'group' ? 1 : -1
-  const ops: { start: number; end: number; level: number }[] = []
+  const ops: { start: number; end: number; level: number; previous: number; collapsed: boolean }[] =
+    []
   let runStart = start
   let runLevel = entries.get(start)?.level ?? 0
+  let runCollapsed = entries.get(start)?.collapsed ?? false
   const closeRun = (runEnd: number): void => {
-    const level = Math.min(7, Math.max(0, runLevel + delta))
-    if (level !== runLevel) ops.push({ start: runStart, end: runEnd, level })
+    const level = Math.min(MAX_OUTLINE_LEVEL, Math.max(0, runLevel + delta))
+    if (level !== runLevel)
+      ops.push({ start: runStart, end: runEnd, level, previous: runLevel, collapsed: runCollapsed })
   }
   for (let index = start + 1; index <= end; index += 1) {
     const level = entries.get(index)?.level ?? 0
@@ -598,6 +727,7 @@ export function handleOutline(
       closeRun(index - 1)
       runStart = index
       runLevel = level
+      runCollapsed = entries.get(index)?.collapsed ?? false
     }
   }
   closeRun(end)
@@ -605,21 +735,30 @@ export function handleOutline(
     ctx.setMessage(action === 'group' ? t('appOutlineMaxLevel') : t('appNothingToUngroup'))
     return
   }
-  for (const op of ops) {
-    for (let index = op.start; index <= op.end; index += 1) {
-      entries.set(index, {
-        level: op.level,
-        collapsed: entries.get(index)?.collapsed ?? false,
+  const applyLevels = (direction: 1 | -1): void => {
+    for (const op of ops) {
+      const level = direction === 1 ? op.level : op.previous
+      for (let index = op.start; index <= op.end; index += 1) {
+        entries.set(index, {
+          level,
+          collapsed: entries.get(index)?.collapsed ?? false,
+        })
+      }
+      recordStructuralOp(state.editJournal, sheetId, {
+        kind,
+        start: op.start,
+        end: op.end,
+        level,
       })
     }
-    recordStructuralOp(state.editJournal, sheetId, {
-      kind,
-      start: op.start,
-      end: op.end,
-      level: op.level,
-    })
+    ctx.setPendingEdits(journalSize(state.editJournal))
+    ctx.onOutlineChanged?.()
   }
-  ctx.setPendingEdits(journalSize(state.editJournal))
+  applyLevels(1)
+  pushVisualUndo(runtime, {
+    undo: () => applyLevels(-1),
+    redo: () => applyLevels(1),
+  })
   ctx.setMessage(
     action === 'group'
       ? axis === 'rows'
@@ -629,6 +768,97 @@ export function handleOutline(
         ? t('appRowsUngrouped')
         : t('appColsUngrouped'),
   )
+}
+
+/// Text to Columns: the raw material for the wizard's preview — the single
+/// selected column's text, plus where it sits. null when the selection is
+/// not exactly one column (the caller explains instead of opening).
+export function readTextToColumnsSource(ctx: DataToolsContext): {
+  rows: readonly string[]
+  startRow: number
+  startColumn: number
+  destinationLabel: string
+} | null {
+  const workbook = ctx.univerRef.current?.univerAPI.getActiveWorkbook()
+  const worksheet = workbook?.getActiveSheet()
+  const range = workbook?.getActiveRange()
+  if (!worksheet || !range || range.getWidth() !== 1) return null
+  const startRow = range.getRow()
+  const startColumn = range.getColumn()
+  const text = worksheet
+    .getRange(startRow, startColumn, range.getHeight(), 1)
+    .getDisplayValues()
+    .map((row) => String(row[0] ?? ''))
+  return {
+    rows: text,
+    startRow,
+    startColumn,
+    destinationLabel: `${columnLetter(startColumn)}${startRow + 1}`,
+  }
+}
+
+/// The wizard's Finish: splits the selected column per the parsed config
+/// and lands the fields at the destination through the normal journaled
+/// write channel. Date-typed columns additionally carry a date number
+/// format. Returns null on success or a user-facing error message.
+export function handleTextToColumns(
+  ctx: DataToolsContext,
+  config: TextToColumnsConfig,
+): string | null {
+  const runtime = ctx.univerRef.current
+  if (!runtime) return t('appWorkbookNotReady')
+  const workbook = runtime.univerAPI.getActiveWorkbook()
+  const worksheet = workbook?.getActiveSheet()
+  const range = workbook?.getActiveRange()
+  if (!workbook || !worksheet || !range) return t('appSelectCellFirst')
+  if (range.getWidth() !== 1) return t('appTextToColsSelectOne')
+  const source = readTextToColumnsSource(ctx)
+  if (!source) return t('appTextToColsSelectOne')
+  if (source.rows.length === 0) return t('appTextToColsEmpty')
+
+  const delimiters = activeDelimiterChars(config.delimiters)
+  if (config.mode === 'delimited' && delimiters.length === 0) {
+    return t('appTextToColsNeedDelimiter')
+  }
+  const split = (text: string): string[] =>
+    config.mode === 'fixed-width'
+      ? splitFixedWidth(text, config.breaks)
+      : splitDelimited(text, delimiters, config.delimiters.consecutiveAsOne)
+
+  const fields = source.rows.map(split)
+  const width = fields.reduce((max, row) => Math.max(max, row.length), 0)
+  if (width === 0) return t('appTextToColsEmpty')
+  const destination = config.destination
+    ? parseDestinationCell(config.destination)
+    : { row: source.startRow, column: source.startColumn }
+  if (!destination) return t('appTextToColsBadDestination', { ref: config.destination ?? '' })
+
+  const values = fields.map((row) =>
+    Array.from({ length: width }, (_, column) => {
+      const type = config.columnTypes[column] ?? 'general'
+      return coerceFieldValue(row[column] ?? '', type)
+    }),
+  )
+  try {
+    worksheet.getRange(destination.row, destination.column, fields.length, width).setValues(values)
+    for (let column = 0; column < width; column += 1) {
+      if (DATE_COLUMN_TYPES.includes(config.columnTypes[column] ?? 'general')) {
+        worksheet
+          .getRange(destination.row, destination.column + column, fields.length, 1)
+          .setNumberFormat('yyyy-mm-dd')
+      }
+    }
+  } catch (error: unknown) {
+    return error instanceof Error ? error.message : t('appCommandFailed')
+  }
+  ctx.setMessage(
+    t('appTextToColsDone', {
+      rows: fields.length,
+      columns: width,
+      cell: `${columnLetter(destination.column)}${destination.row + 1}`,
+    }),
+  )
+  return null
 }
 
 /// Home → Format as Table: the manual entry over the same engine as the

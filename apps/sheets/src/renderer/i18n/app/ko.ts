@@ -1383,4 +1383,13 @@ export const ko = {
   scUnhideRows: '행 표시',
   scHideColumns: '열 숨기기',
   scUnhideColumns: '열 표시',
+  appPrintSelectionMissing: '인쇄할 선택 영역이 없습니다.',
+  appTextToColsEmpty: '선택한 열에 나눌 내용이 없습니다.',
+  appTextToColsNeedDelimiter: '구분 기호를 하나 이상 선택하세요.',
+  appTextToColsBadDestination: '“{ref}”은(는) 이 시트의 셀 참조가 아닙니다.',
+  appOutlineSettings: '설정',
+  appOutlineSettingsTitle: '윤곽 요약 위치 설정',
+  appOutlineSettingsSaved: '윤곽 설정이 기록되었습니다. 저장 시 적용됩니다.',
+  appOutlineNoSummaryLine: '요약 행이 시트 밖에 배치됩니다.',
+  appTextToColsDone: '{rows}행을 {columns}열로 분리했습니다({cell}).',
 } satisfies Record<keyof typeof zh, string>

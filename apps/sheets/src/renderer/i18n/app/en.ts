@@ -1341,4 +1341,13 @@ export const en = {
   scUnhideRows: 'Unhide rows',
   scHideColumns: 'Hide columns',
   scUnhideColumns: 'Unhide columns',
+  appPrintSelectionMissing: 'There is nothing selected to print.',
+  appTextToColsEmpty: 'The selected column has no content to split.',
+  appTextToColsNeedDelimiter: 'Pick at least one delimiter.',
+  appTextToColsBadDestination: '“{ref}” is not a cell reference on this sheet.',
+  appOutlineSettings: 'Settings',
+  appOutlineSettingsTitle: 'Outline summary placement and symbols',
+  appOutlineSettingsSaved: 'Outline settings recorded — they apply on save.',
+  appOutlineNoSummaryLine: 'The summary line would fall outside the sheet.',
+  appTextToColsDone: 'Split {rows} rows into {columns} columns at {cell}.',
 } satisfies Record<keyof typeof zh, string>

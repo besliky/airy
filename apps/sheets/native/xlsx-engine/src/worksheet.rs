@@ -476,6 +476,24 @@ pub(crate) fn index_worksheet(
                     .is_some_and(|value| value == "1" || value == "true");
             }
             Event::Start(element) | Event::Empty(element)
+                if element.local_name().as_ref() == b"outlinePr" && !in_custom_sheet_views =>
+            {
+                // Only a present attribute decides; absent means Excel's
+                // default (true), which stays None on the wire.
+                page_print.outline_summary_below = attribute_value(
+                    &reader,
+                    &element,
+                    b"summaryBelow",
+                )?
+                .map(|value| value != "0" && value != "false");
+                page_print.outline_summary_right = attribute_value(
+                    &reader,
+                    &element,
+                    b"summaryRight",
+                )?
+                .map(|value| value != "0" && value != "false");
+            }
+            Event::Start(element) | Event::Empty(element)
                 if element.local_name().as_ref() == b"pageMargins" && !in_custom_sheet_views =>
             {
                 if let (

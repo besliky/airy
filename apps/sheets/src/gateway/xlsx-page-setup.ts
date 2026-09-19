@@ -43,6 +43,10 @@ export interface SheetPageSetupState {
   /// Presence replaces the sheet's break set; [] clears all manual breaks.
   readonly rowBreaks?: readonly number[] | undefined
   readonly colBreaks?: readonly number[] | undefined
+  /// sheetPr/outlinePr: summary lines below the detail (rows) / right of it
+  /// (columns). Excel's defaults when absent.
+  readonly outlineSummaryBelow?: boolean | undefined
+  readonly outlineSummaryRight?: boolean | undefined
 }
 
 /// Inches, using the standard margin presets.
@@ -325,6 +329,44 @@ function setPageBreaks(
   return insertWorksheetElement(result, element, anchor)
 }
 
+/// Maintains `<sheetPr><outlinePr>` (the outline summary placement). Only
+/// the two summary attributes are touched — applyStyles and
+/// showOutlineSymbols ride along verbatim — and non-default (false) values
+/// are written while true drops the attribute (Excel's default).
+function setOutlinePlacement(xml: string, summaryBelow: boolean, summaryRight: boolean): string {
+  const attrs = `${summaryBelow ? '' : ' summaryBelow="0"'}${summaryRight ? '' : ' summaryRight="0"'}`
+  const existing = /<outlinePr\b([^>]*?)(\/?)>/.exec(xml)
+  if (existing) {
+    const kept = (existing[1] ?? '')
+      .replace(/\s+summaryBelow="[^"]*"/g, '')
+      .replace(/\s+summaryRight="[^"]*"/g, '')
+      .trim()
+    if (kept === '' && attrs === '') return xml.replace(existing[0], '')
+    return xml.replace(
+      existing[0],
+      `<outlinePr${kept === '' ? '' : ` ${kept}`}${attrs}${existing[2] ?? '/'}>`,
+    )
+  }
+  if (attrs === '') return xml
+  const element = `<outlinePr${attrs}/>`
+  const sheetPr = /<sheetPr\b([^>]*?)(\/?)>/.exec(xml)
+  if (sheetPr) {
+    if (sheetPr[2] === '/') {
+      return xml.replace(sheetPr[0], `<sheetPr${sheetPr[1] ?? ''}>${element}</sheetPr>`)
+    }
+    const inner = xml.slice(sheetPr.index + sheetPr[0].length)
+    const tabColor = /<tabColor\b[^>]*?(?:\/>|>[\s\S]*?<\/tabColor>)/.exec(inner)
+    const at = tabColor
+      ? sheetPr.index + sheetPr[0].length + tabColor.index + tabColor[0].length
+      : sheetPr.index + sheetPr[0].length
+    return `${xml.slice(0, at)}${element}${xml.slice(at)}`
+  }
+  const worksheetOpen = /<worksheet\b[^>]*>/.exec(xml)
+  if (!worksheetOpen) throw new PageSetupError('Worksheet has no root element.')
+  const at = worksheetOpen.index + worksheetOpen[0].length
+  return `${xml.slice(0, at)}<sheetPr>${element}</sheetPr>${xml.slice(at)}`
+}
+
 export function applyPageSetupState(worksheetXml: string, state: SheetPageSetupState): string {
   let xml = worksheetXml
 
@@ -414,6 +456,13 @@ export function applyPageSetupState(worksheetXml: string, state: SheetPageSetupS
   }
   if (state.colBreaks !== undefined) {
     xml = setPageBreaks(xml, 'colBreaks', state.colBreaks, AFTER_COL_BREAKS)
+  }
+  if (state.outlineSummaryBelow !== undefined || state.outlineSummaryRight !== undefined) {
+    xml = setOutlinePlacement(
+      xml,
+      state.outlineSummaryBelow ?? true,
+      state.outlineSummaryRight ?? true,
+    )
   }
   return xml
 }

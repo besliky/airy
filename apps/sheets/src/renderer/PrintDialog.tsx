@@ -46,6 +46,10 @@ interface EffectiveSetup {
   fitToPage: boolean
 }
 
+/// What the job prints (Excel's Print Selection / Active Sheets / Entire
+/// Workbook).
+export type PrintDialogScope = 'selection' | 'active-sheet' | 'workbook'
+
 /// Initial dialog control values for a sheet's effective saved page setup:
 /// fit-to-page takes over the scale control at 100%.
 export function controlsFromEffective(effective: EffectiveSetup): {
@@ -87,6 +91,9 @@ export function PrintDialog({
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait')
   const [scale, setScale] = useState(100)
   const [fitToPage, setFitToPage] = useState(false)
+  const [scope, setScope] = useState<PrintDialogScope>('active-sheet')
+  const [pageOrder, setPageOrder] = useState<'down-then-over' | 'over-then-down'>('down-then-over')
+  const [collate, setCollate] = useState(false)
   const [printing, setPrinting] = useState(false)
   const frameRef = useRef<HTMLIFrameElement | null>(null)
   const paneRef = useRef<HTMLDivElement | null>(null)
@@ -101,8 +108,11 @@ export function PrintDialog({
       orientation,
       scale: fitToPage ? undefined : scale,
       fitToPage,
+      scope,
+      pageOrder,
+      collate,
     }),
-    [paperSize, orientation, scale, fitToPage],
+    [paperSize, orientation, scale, fitToPage, scope, pageOrder, collate],
   )
 
   useEffect(() => {
@@ -241,6 +251,36 @@ export function PrintDialog({
           </div>
           <div className="print-options">
             <fieldset>
+              <legend>{t('dlgPrintScope')}</legend>
+              <label className="print-radio">
+                <input
+                  type="radio"
+                  name="print-scope"
+                  checked={scope === 'selection'}
+                  onChange={() => setScope('selection')}
+                />
+                {t('dlgPrintScopeSelection')}
+              </label>
+              <label className="print-radio">
+                <input
+                  type="radio"
+                  name="print-scope"
+                  checked={scope === 'active-sheet'}
+                  onChange={() => setScope('active-sheet')}
+                />
+                {t('dlgPrintScopeActiveSheets')}
+              </label>
+              <label className="print-radio">
+                <input
+                  type="radio"
+                  name="print-scope"
+                  checked={scope === 'workbook'}
+                  onChange={() => setScope('workbook')}
+                />
+                {t('dlgPrintScopeWorkbook')}
+              </label>
+            </fieldset>
+            <fieldset>
               <legend>{t('dlgPrintPaper')}</legend>
               <select
                 className="print-select"
@@ -311,6 +351,29 @@ export function PrintDialog({
                   onChange={() => setFitToPage(true)}
                 />
                 {t('dlgPrintFitSheet')}
+              </label>
+            </fieldset>
+            <fieldset>
+              <legend>{t('dlgPrintPageOrder')}</legend>
+              <select
+                className="print-select"
+                value={pageOrder}
+                onChange={(event) =>
+                  setPageOrder(
+                    event.target.value === 'over-then-down' ? 'over-then-down' : 'down-then-over',
+                  )
+                }
+              >
+                <option value="down-then-over">{t('dlgPrintOrderDownThenOver')}</option>
+                <option value="over-then-down">{t('dlgPrintOrderOverThenDown')}</option>
+              </select>
+              <label className="print-radio">
+                <input
+                  type="checkbox"
+                  checked={collate}
+                  onChange={(event) => setCollate(event.target.checked)}
+                />
+                {t('dlgPrintCollate')}
               </label>
             </fieldset>
             <div className="print-page-count" title={errorDetail ?? undefined}>

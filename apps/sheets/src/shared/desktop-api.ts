@@ -973,6 +973,10 @@ export const workbookRangeResultSchema = z
           )
           .max(18)
           .optional(),
+        /// sheetPr/outlinePr summary placement (absent = Excel's defaults:
+        /// summary below / right).
+        outlineSummaryBelow: z.boolean().optional(),
+        outlineSummaryRight: z.boolean().optional(),
       })
       .strict()
       .nullish()
@@ -1417,6 +1421,10 @@ export const workbookPageSetupStateSchema = z
     /// Presence replaces the sheet's break set; [] clears all manual breaks.
     rowBreaks: z.array(z.number().int().min(1).max(1_048_575)).max(1_023).optional(),
     colBreaks: z.array(z.number().int().min(1).max(16_383)).max(1_023).optional(),
+    /// sheetPr/outlinePr: summary lines below the detail (rows) / to the
+    /// right of it (columns); Excel's defaults when absent.
+    outlineSummaryBelow: z.boolean().optional(),
+    outlineSummaryRight: z.boolean().optional(),
   })
   .strict()
   .refine((state) => Object.keys(state).length > 1, {
@@ -2632,6 +2640,9 @@ export const workbookExportPdfRequestSchema = z
       })
       .strict(),
     scale: z.number().min(0.1).max(2),
+    /// Print-job preset handed to the system print dialog (collated page
+    /// order when printing several copies); ignored by the PDF export.
+    collate: z.boolean().optional(),
     /// Chromium print header/footer templates (rendered in the margin
     /// boxes; `pageNumber`/`totalPages` spans resolve per page). These are
     /// the odd-page (default) templates.

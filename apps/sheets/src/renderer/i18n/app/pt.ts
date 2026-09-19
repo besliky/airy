@@ -1401,4 +1401,13 @@ export const pt = {
   scUnhideRows: 'Mostrar linhas',
   scHideColumns: 'Ocultar colunas',
   scUnhideColumns: 'Mostrar colunas',
+  appPrintSelectionMissing: 'Não há nada selecionado para imprimir.',
+  appTextToColsEmpty: 'A coluna selecionada não tem conteúdo para dividir.',
+  appTextToColsNeedDelimiter: 'Escolha pelo menos um delimitador.',
+  appTextToColsBadDestination: '“{ref}” não é uma referência de célula desta planilha.',
+  appOutlineSettings: 'Configurações',
+  appOutlineSettingsTitle: 'Posição dos totais da estrutura de tópicos',
+  appOutlineSettingsSaved: 'Configurações da estrutura registradas — aplicadas ao salvar.',
+  appOutlineNoSummaryLine: 'A linha de totais ficaria fora da planilha.',
+  appTextToColsDone: '{rows} linhas divididas em {columns} colunas em {cell}.',
 } satisfies Record<keyof typeof zh, string>

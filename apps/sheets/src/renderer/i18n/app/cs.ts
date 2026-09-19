@@ -1365,4 +1365,13 @@ export const cs = {
   scUnhideRows: 'Zobrazit řádky',
   scHideColumns: 'Skrýt sloupce',
   scUnhideColumns: 'Zobrazit sloupce',
+  appPrintSelectionMissing: 'Není vybráno nic k tisku.',
+  appTextToColsEmpty: 'Vybraný sloupec nemá obsah k rozdělení.',
+  appTextToColsNeedDelimiter: 'Vyberte alespoň jeden oddělovač.',
+  appTextToColsBadDestination: '„{ref}“ není odkaz na buňku tohoto listu.',
+  appOutlineSettings: 'Nastavení',
+  appOutlineSettingsTitle: 'Umístění souhrnů osnovy',
+  appOutlineSettingsSaved: 'Nastavení osnovy zaznamenáno — použije se při uložení.',
+  appOutlineNoSummaryLine: 'Řádek souhrnu by spadl mimo list.',
+  appTextToColsDone: 'Rozděleno {rows} řádků do {columns} sloupců od {cell}.',
 } satisfies Record<keyof typeof zh, string>

@@ -1400,4 +1400,13 @@ export const it = {
   scUnhideRows: 'Mostra righe',
   scHideColumns: 'Nascondi colonne',
   scUnhideColumns: 'Mostra colonne',
+  appPrintSelectionMissing: 'Non c’è nulla di selezionato da stampare.',
+  appTextToColsEmpty: 'La colonna selezionata non ha contenuti da dividere.',
+  appTextToColsNeedDelimiter: 'Scegli almeno un delimitatore.',
+  appTextToColsBadDestination: '«{ref}» non è un riferimento di cella di questo foglio.',
+  appOutlineSettings: 'Impostazioni',
+  appOutlineSettingsTitle: 'Posizione dei totali della struttura',
+  appOutlineSettingsSaved: 'Impostazioni struttura registrate — applicate al salvataggio.',
+  appOutlineNoSummaryLine: 'La riga dei totali cadrebbe fuori dal foglio.',
+  appTextToColsDone: '{rows} righe divise in {columns} colonne a {cell}.',
 } satisfies Record<keyof typeof zh, string>

@@ -566,6 +566,13 @@ pub struct PagePrintInfo {
     /// LF/CF/RF, with an EVEN/FIRST suffix for the page variants).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub header_footer_pictures: Vec<HeaderFooterPictureInfo>,
+    /// sheetPr/outlinePr: summary lines below the detail (rows) / to the
+    /// right of it (columns). None = the attribute is absent (Excel's
+    /// default is true).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outline_summary_below: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outline_summary_right: Option<bool>,
 }
 
 /// One header/footer picture slot; the bytes are fetched on demand through

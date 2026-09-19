@@ -1768,26 +1768,6 @@ export function handleRibbonCommand(ctx: RibbonCommandContext, command: string):
         ctx.setMessage(t('appSparklinesInserted', { count: cells.length }))
         return
       }
-      case 'text-to-columns': {
-        if (!worksheet) return
-        if (range.getWidth() > 1) {
-          ctx.setMessage(t('appTextToColsSelectOne'))
-          return
-        }
-        const delimiter = Number(argument)
-        if (!Number.isInteger(delimiter) || delimiter <= 0) return
-        ctx.setMessage(t('appSplitIntoColumns'))
-        void runtime.univerAPI.executeCommand('sheet.command.split-text-to-columns', {
-          range: {
-            startRow: range.getRow(),
-            endRow: range.getRow() + range.getHeight() - 1,
-            startColumn: range.getColumn(),
-            endColumn: range.getColumn(),
-          },
-          delimiter,
-        })
-        return
-      }
       case 'border': {
         const type = BORDER_COMMAND_TYPES[argument]
         if (!type) return

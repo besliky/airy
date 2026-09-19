@@ -66,6 +66,12 @@ function printCjkFonts(lang: Lang): string {
 
 const MAX_PRINT_CELLS = 50_000
 
+/// Excel's page-order choice for a sheet tiled across several pages:
+/// down-then-over walks every row page of the first column stripe before
+/// moving right; over-then-down walks every column stripe of a row band
+/// before moving down.
+export type PrintPageOrder = 'down-then-over' | 'over-then-down'
+
 /// The slice of the Univer facade the layout needs (structural, so the
 /// caller passes the FWorksheet through a cast).
 export interface PrintWorksheet {
@@ -153,112 +159,108 @@ export function buildSheetPrintPayload(
   fileName: string,
   sheetName: string,
   pictures: HeaderFooterPictures = new Map(),
+  pageOrder: PrintPageOrder = 'down-then-over',
 ): WorkbookExportPdfRequest {
-  const areas =
-    setup.printAreas.length > 0 ? setup.printAreas.map(parseArea) : [usedArea(worksheet)]
-  const titles = setup.printTitles ? parseTitleRows(setup.printTitles) : null
+  return buildSheetsPrintPayload(
+    [{ worksheet, printAreas: setup.printAreas, printTitles: setup.printTitles }],
+    setup,
+    fileName,
+    sheetName,
+    pictures,
+    pageOrder,
+  )
+}
+
+/// One sheet of a print job: the worksheet plus the plain-A1 areas and
+/// repeated title rows to lay out (already resolved into screen space —
+/// journal print areas, file print names, or the selection override).
+export interface PrintSheetJob {
+  readonly worksheet: PrintWorksheet
+  /// Plain A1 areas to print ([] = the used range).
+  readonly printAreas: readonly string[]
+  /// Rows repeated at the top of every page ("1:2"), or null.
+  readonly printTitles: string | null
+  /// Entire-workbook jobs skip a sheet whose used range is empty (Excel
+  /// prints nothing for a blank sheet); explicit areas always print.
+  readonly skipWhenEmpty?: boolean
+}
+
+/// Lays one or more sheets out as print HTML under one shared page setup
+/// (the active sheet's effective setup — Excel's print dialog applies its
+/// settings to the whole job). Each sheet keeps its own print areas and
+/// title rows; the sheets print in tab order, each starting a new page.
+export function buildSheetsPrintPayload(
+  jobs: readonly PrintSheetJob[],
+  setup: EffectivePageSetup,
+  fileName: string,
+  sheetName: string,
+  pictures: HeaderFooterPictures = new Map(),
+  pageOrder: PrintPageOrder = 'down-then-over',
+): WorkbookExportPdfRequest {
   const headings = setup.printHeadings
   const gridlines = setup.printGridlines
   const rowHeaderPt = headings ? 24 : 0
 
+  // Resolve every job's areas first: [] means the used range, a blank sheet
+  // under skipWhenEmpty drops out of an entire-workbook job entirely.
+  const resolved: { job: PrintSheetJob; areas: AreaBounds[] }[] = []
   let totalCells = 0
-  for (const area of areas) {
-    const rows = area.endRow - area.startRow + 1
-    const columns = area.endColumn - area.startColumn + 1
-    if (rows < 1 || columns < 1) throw new PrintError(t('appPrintNothing'))
-    totalCells += rows * columns
+  for (const job of jobs) {
+    const areas =
+      job.printAreas.length > 0
+        ? job.printAreas.map(parseArea)
+        : job.skipWhenEmpty && job.worksheet.getLastRow() < 0 && job.worksheet.getLastColumn() < 0
+          ? []
+          : [usedArea(job.worksheet)]
+    let jobCells = 0
+    for (const area of areas) {
+      const rows = area.endRow - area.startRow + 1
+      const columns = area.endColumn - area.startColumn + 1
+      if (rows < 1 || columns < 1) throw new PrintError(t('appPrintNothing'))
+      jobCells += rows * columns
+    }
+    if (jobCells > MAX_PRINT_CELLS) throw new PrintError(t('appPrintTooLarge'))
+    totalCells += jobCells
+    if (areas.length > 0) resolved.push({ job, areas })
   }
-  if (totalCells > MAX_PRINT_CELLS) throw new PrintError(t('appPrintTooLarge'))
+  if (resolved.length === 0) throw new PrintError(t('appPrintNothing'))
+  // The wire caps the HTML at 20 MB; a job beyond this many cells would
+  // build a payload the main process rejects anyway.
+  if (totalCells > 2 * MAX_PRINT_CELLS) throw new PrintError(t('appPrintTooLarge'))
 
   let maxContentWidthPt = 0
-  const tables: string[] = []
+  const layouts: LayoutArea[][] = []
   const areaHeights: PrintAreaHeights[] = []
-  for (const area of areas) {
-    const rows = area.endRow - area.startRow + 1
-    const columns = area.endColumn - area.startColumn + 1
-    const grid = worksheet.getRange(area.startRow, area.startColumn, rows, columns)
-    const display = grid.getDisplayValues()
-    const raw = grid.getValues()
-    const merges = mergeMaps(worksheet, area)
-    const columnWidthsPt = Array.from(
-      { length: columns },
-      (_, offset) => worksheet.getColumnWidth(area.startColumn + offset) * 0.75,
-    )
-    maxContentWidthPt = Math.max(
-      maxContentWidthPt,
-      rowHeaderPt + columnWidthsPt.reduce((total, width) => total + width, 0),
-    )
-
-    // Printed height of the row just laid out by bodyRow (saved height, or
-    // taller when a cell's text line does not fit it).
-    let printedRowHeightPt = 0
-    const bodyRow = (row: number): string => {
-      const cells: string[] = []
-      let textHeightPt = 0
-      if (headings) {
-        cells.push(`<th class="hd">${row + 1}</th>`)
-      }
-      for (let column = area.startColumn; column <= area.endColumn; column += 1) {
-        const key = `${row}:${column}`
-        if (merges.covered.has(key)) continue
-        const anchor = merges.anchors.get(key)
-        const span = anchor
-          ? ` rowspan="${Math.min(anchor.rows, area.endRow - row + 1)}"` +
-            ` colspan="${Math.min(anchor.columns, area.endColumn - column + 1)}"`
-          : ''
-        const inArea = row >= area.startRow && row <= area.endRow
-        const text = inArea
-          ? (display[row - area.startRow]?.[column - area.startColumn] ?? '')
-          : cellDisplay(worksheet, row, column)
-        const rawValue = inArea ? raw[row - area.startRow]?.[column - area.startColumn] : undefined
-        const style = worksheet.getRange(row, column).getCellStyleData()
-        if (text !== '' && !anchor) {
-          textHeightPt = Math.max(
-            textHeightPt,
-            (style?.fs ?? DEFAULT_FONT_SIZE_PT) * LINE_HEIGHT_FACTOR + CELL_VERTICAL_PADDING_PT,
-          )
-        }
-        cells.push(
-          `<td${span} style="${cellCss(style, rawValue, gridlines)}">${escapeHtml(text)}</td>`,
-        )
-      }
-      const heightPt = Math.max(worksheet.getRowHeight(row) * 0.75, 10)
-      printedRowHeightPt = Math.max(heightPt, textHeightPt)
-      return `<tr style="height:${round(heightPt)}pt">${cells.join('')}</tr>`
-    }
-
-    const headParts: string[] = []
-    let repeatedHeightPt = headings ? HEADING_ROW_HEIGHT_PT : 0
-    if (headings) {
-      const letters = Array.from(
-        { length: columns },
-        (_, offset) => `<th class="hd">${columnLabel(area.startColumn + offset)}</th>`,
+  for (const { job, areas } of resolved) {
+    const sheetTitles = job.printTitles ? parseTitleRows(job.printTitles) : null
+    const sheetLayouts: LayoutArea[] = []
+    for (const area of areas) {
+      const layout = layoutPrintArea(job.worksheet, area, sheetTitles, headings, gridlines)
+      maxContentWidthPt = Math.max(
+        maxContentWidthPt,
+        rowHeaderPt + layout.columnWidthsPt.reduce((total, width) => total + width, 0),
       )
-      headParts.push(`<tr><th class="hd"></th>${letters.join('')}</tr>`)
+      sheetLayouts.push(layout)
+      areaHeights.push({
+        repeatedHeightPt: layout.repeatedHeightPt,
+        rowHeightsPt: layout.bodyRows.map((row) => row.printedHeightPt),
+      })
     }
-    if (titles) {
-      for (let row = titles.start; row <= titles.end; row += 1) {
-        headParts.push(bodyRow(row))
-        repeatedHeightPt += printedRowHeightPt
-      }
-    }
+    layouts.push(sheetLayouts)
+  }
 
-    const bodyParts: string[] = []
-    const rowHeightsPt: number[] = []
-    for (let row = area.startRow; row <= area.endRow; row += 1) {
-      // Title rows already repeat via the table header.
-      if (titles && row >= titles.start && row <= titles.end) continue
-      bodyParts.push(bodyRow(row))
-      rowHeightsPt.push(printedRowHeightPt)
+  const margins = setup.margins
+  const pageSize = PAPER_SIZES[setup.paperSize] ?? 'A4'
+  const landscape = setup.orientation === 'landscape'
+  const now = new Date()
+  const baseName = fileName.replace(/\.pdf$/, '')
+  const scale = computeScale(setup, pageSize, landscape, margins, maxContentWidthPt, areaHeights)
+  const printable = printableSizePt(pageSize, landscape, margins)
+  const tables: string[] = []
+  for (const sheetLayouts of layouts) {
+    for (const area of sheetLayouts) {
+      tables.push(...emitAreaTables(area, printable, scale, rowHeaderPt, headings, pageOrder))
     }
-    areaHeights.push({ repeatedHeightPt, rowHeightsPt })
-
-    const colgroup = `<colgroup>${headings ? `<col style="width:${rowHeaderPt}pt">` : ''}${columnWidthsPt
-      .map((width) => `<col style="width:${round(width)}pt">`)
-      .join('')}</colgroup>`
-    tables.push(
-      `<table>${colgroup}<thead>${headParts.join('')}</thead><tbody>${bodyParts.join('')}</tbody></table>`,
-    )
   }
 
   const html =
@@ -275,12 +277,6 @@ th.hd { background: #f1f1f1; border: 0.5pt solid #b7b7b7; color: #444;
     tables.join('') +
     `</body></html>`
 
-  const margins = setup.margins
-  const pageSize = PAPER_SIZES[setup.paperSize] ?? 'A4'
-  const landscape = setup.orientation === 'landscape'
-  const now = new Date()
-  const baseName = fileName.replace(/\.pdf$/, '')
-  const scale = computeScale(setup, pageSize, landscape, margins, maxContentWidthPt, areaHeights)
   // Excel's "scale with document" (the default) shrinks the header/footer
   // text and pictures by the same factor as the sheet.
   const templateScale = setup.headerFooterScaleWithDoc ? scale : 1
@@ -325,6 +321,306 @@ th.hd { background: #f1f1f1; border: 0.5pt solid #b7b7b7; color: #444;
     ...(setup.firstPage === null ? {} : { firstPage: templates(setup.firstPage, 'first') }),
     ...(setup.evenPages === null ? {} : { evenPages: templates(setup.evenPages, 'even') }),
   }
+}
+
+/// A laid-out print area: rows with their cells built once, then tiled into
+/// page-sized tables at emit time (see emitAreaTables).
+interface LayoutCell {
+  /// Absolute sheet column of the cell.
+  readonly column: number
+  /// Raw merge span (clamped to the area and the page tile at emit time).
+  readonly rowspan: number
+  readonly colspan: number
+  readonly text: string
+  readonly css: string
+}
+
+interface LayoutRow {
+  readonly row: number
+  /// Saved row height in print points (the forced <tr> height).
+  readonly heightPt: number
+  /// Height the printed row needs: the saved height, or taller when a
+  /// cell's text line does not fit it.
+  readonly printedHeightPt: number
+  /// The row's cells (merge anchors included), ascending by column.
+  readonly cells: readonly LayoutCell[]
+}
+
+interface AreaBounds {
+  readonly startRow: number
+  readonly endRow: number
+  readonly startColumn: number
+  readonly endColumn: number
+}
+
+interface LayoutArea extends AreaBounds {
+  readonly columnWidthsPt: readonly number[]
+  /// Height repeated at the top of every page (heading strip + titles).
+  readonly repeatedHeightPt: number
+  /// Title rows (repeated in every page's thead), then the body rows.
+  readonly titleRows: readonly LayoutRow[]
+  readonly bodyRows: readonly LayoutRow[]
+  /// Merge-shadowed cell 'row:column' → its anchor cell.
+  readonly covered: ReadonlyMap<string, AreaPoint>
+}
+
+interface AreaPoint {
+  readonly row: number
+  readonly column: number
+}
+
+/// Builds one area's rows: display text, styles, and merge anchors. The
+/// stored spans are raw merge dimensions; emitTable clamps them to the area
+/// and the page tile being written.
+function layoutPrintArea(
+  worksheet: PrintWorksheet,
+  area: AreaBounds,
+  titles: { start: number; end: number } | null,
+  headings: boolean,
+  gridlines: boolean,
+): LayoutArea {
+  const rows = area.endRow - area.startRow + 1
+  const columns = area.endColumn - area.startColumn + 1
+  const grid = worksheet.getRange(area.startRow, area.startColumn, rows, columns)
+  const display = grid.getDisplayValues()
+  const raw = grid.getValues()
+  const merges = mergeMaps(worksheet, area)
+  const columnWidthsPt = Array.from(
+    { length: columns },
+    (_, offset) => worksheet.getColumnWidth(area.startColumn + offset) * 0.75,
+  )
+
+  const buildRow = (row: number): LayoutRow => {
+    const cells: LayoutCell[] = []
+    let textHeightPt = 0
+    for (let column = area.startColumn; column <= area.endColumn; column += 1) {
+      const key = `${row}:${column}`
+      const anchor = merges.anchors.get(key)
+      if (merges.covered.has(key) && !anchor) continue
+      const inArea = row >= area.startRow && row <= area.endRow
+      const text = inArea
+        ? (display[row - area.startRow]?.[column - area.startColumn] ?? '')
+        : cellDisplay(worksheet, row, column)
+      const rawValue = inArea ? raw[row - area.startRow]?.[column - area.startColumn] : undefined
+      const style = worksheet.getRange(row, column).getCellStyleData()
+      if (text !== '' && !anchor) {
+        textHeightPt = Math.max(
+          textHeightPt,
+          (style?.fs ?? DEFAULT_FONT_SIZE_PT) * LINE_HEIGHT_FACTOR + CELL_VERTICAL_PADDING_PT,
+        )
+      }
+      cells.push({
+        column,
+        rowspan: anchor ? anchor.rows : 1,
+        colspan: anchor ? anchor.columns : 1,
+        text,
+        css: cellCss(style, rawValue, gridlines),
+      })
+    }
+    const heightPt = Math.max(worksheet.getRowHeight(row) * 0.75, 10)
+    return {
+      row,
+      heightPt,
+      printedHeightPt: Math.max(heightPt, textHeightPt),
+      cells,
+    }
+  }
+
+  const titleRows: LayoutRow[] = []
+  if (titles) {
+    for (let row = titles.start; row <= titles.end; row += 1) titleRows.push(buildRow(row))
+  }
+  const bodyRows: LayoutRow[] = []
+  for (let row = area.startRow; row <= area.endRow; row += 1) {
+    // Title rows already repeat via the table header.
+    if (titles && row >= titles.start && row <= titles.end) continue
+    bodyRows.push(buildRow(row))
+  }
+  return {
+    ...area,
+    columnWidthsPt,
+    repeatedHeightPt:
+      (headings ? HEADING_ROW_HEIGHT_PT : 0) +
+      titleRows.reduce((total, row) => total + row.printedHeightPt, 0),
+    titleRows,
+    bodyRows,
+    covered: merges.covered,
+  }
+}
+
+/// One page tile of an area: a row band × a column stripe.
+interface AreaTile {
+  readonly rowStart: number
+  readonly rowEnd: number
+  readonly colStart: number
+  readonly colEnd: number
+}
+
+/// Emits one area as page-sized tables in the requested page order. A sheet
+/// no wider than one page tiles into a single table (Chromium paginates its
+/// rows); anything wider is sliced into column stripes that each fit the
+/// printable width, and over-then-down additionally slices the rows so the
+/// tiles can be ordered across first.
+function emitAreaTables(
+  area: LayoutArea,
+  printable: { widthPt: number; heightPt: number },
+  scale: number,
+  rowHeaderPt: number,
+  headings: boolean,
+  pageOrder: PrintPageOrder,
+): string[] {
+  const columnStripes = columnStripesOf(area, printable.widthPt / scale, rowHeaderPt)
+  const rowBands =
+    pageOrder === 'over-then-down' && columnStripes.length > 1
+      ? rowBandsOf(area, printable.heightPt / scale)
+      : [{ rowStart: area.startRow, rowEnd: area.endRow }]
+  const tables: string[] = []
+  for (const band of rowBands) {
+    for (const stripe of columnStripes) {
+      tables.push(emitTable(area, { ...band, ...stripe }, headings))
+    }
+  }
+  return tables
+}
+
+/// Column stripes of an area at the effective scale: each stripe's columns
+/// (plus the row-heading strip, which prints on every page) fit one page
+/// across. A single over-wide column always gets its own stripe.
+function columnStripesOf(area: LayoutArea, capacityPt: number, rowHeaderPt: number): AreaTile[] {
+  if (capacityPt <= 0)
+    return [
+      {
+        rowStart: area.startRow,
+        rowEnd: area.endRow,
+        colStart: area.startColumn,
+        colEnd: area.endColumn,
+      },
+    ]
+  const stripes: AreaTile[] = []
+  let start = area.startColumn
+  let used = rowHeaderPt
+  for (let column = area.startColumn; column <= area.endColumn; column += 1) {
+    const width = area.columnWidthsPt[column - area.startColumn] ?? 0
+    if (used > rowHeaderPt && used + width > capacityPt) {
+      stripes.push({
+        rowStart: area.startRow,
+        rowEnd: area.endRow,
+        colStart: start,
+        colEnd: column - 1,
+      })
+      start = column
+      used = rowHeaderPt
+    }
+    used += width
+  }
+  stripes.push({
+    rowStart: area.startRow,
+    rowEnd: area.endRow,
+    colStart: start,
+    colEnd: area.endColumn,
+  })
+  return stripes
+}
+
+/// Row bands of an area at the effective scale, mirroring Chromium's own
+/// pagination (rows never split, the repeated header takes its share of
+/// every page). Used for over-then-down ordering only.
+function rowBandsOf(area: LayoutArea, capacityPt: number): AreaTile[] {
+  const bands: AreaTile[] = []
+  let start = area.startRow
+  let used = area.repeatedHeightPt
+  for (const row of area.bodyRows) {
+    if (used + row.printedHeightPt > capacityPt && used > area.repeatedHeightPt) {
+      bands.push({
+        rowStart: start,
+        rowEnd: row.row - 1,
+        colStart: area.startColumn,
+        colEnd: area.endColumn,
+      })
+      start = row.row
+      used = area.repeatedHeightPt
+    }
+    used += row.printedHeightPt
+  }
+  bands.push({
+    rowStart: start,
+    rowEnd: area.endRow,
+    colStart: area.startColumn,
+    colEnd: area.endColumn,
+  })
+  return bands
+}
+
+/// One page tile as a complete <table>: colgroup, the repeated heading strip
+/// and title rows in thead, and the tile's body rows. Cells outside the tile
+/// are dropped; a merge crossing a tile edge clamps its span, and the rows
+/// or columns it covers past the edge render as empty cells so nothing
+/// shifts left into the wrong column slot.
+function emitTable(area: LayoutArea, tile: AreaTile, headings: boolean): string {
+  const emitRow = (layoutRow: LayoutRow): string => {
+    const cells: string[] = []
+    if (headings) cells.push(`<th class="hd">${layoutRow.row + 1}</th>`)
+    let pointer = 0
+    let column = tile.colStart
+    while (column <= tile.colEnd) {
+      const cell = layoutRow.cells[pointer]
+      if (cell && cell.column < column) {
+        pointer += 1
+        continue
+      }
+      if (cell && cell.column === column) {
+        pointer += 1
+        const rowspan = Math.max(1, Math.min(cell.rowspan, tile.rowEnd - layoutRow.row + 1))
+        const colspan = Math.max(1, Math.min(cell.colspan, tile.colEnd - column + 1))
+        const span =
+          (rowspan > 1 ? ` rowspan="${rowspan}"` : '') +
+          (colspan > 1 ? ` colspan="${colspan}"` : '')
+        cells.push(`<td${span} style="${cell.css}">${escapeHtml(cell.text)}</td>`)
+        column += colspan
+        continue
+      }
+      const anchor = area.covered.get(`${layoutRow.row}:${column}`)
+      if (
+        anchor &&
+        anchor.row >= tile.rowStart &&
+        anchor.row <= tile.rowEnd &&
+        anchor.column >= tile.colStart &&
+        anchor.column <= tile.colEnd
+      ) {
+        // Consumed by an anchor inside this tile's span.
+        column += 1
+        continue
+      }
+      cells.push('<td></td>')
+      column += 1
+    }
+    return `<tr style="height:${round(layoutRow.heightPt)}pt">${cells.join('')}</tr>`
+  }
+
+  const headParts: string[] = []
+  if (headings) {
+    const letters: string[] = []
+    for (let column = tile.colStart; column <= tile.colEnd; column += 1) {
+      letters.push(`<th class="hd">${columnLabel(column)}</th>`)
+    }
+    headParts.push(`<tr><th class="hd"></th>${letters.join('')}</tr>`)
+  }
+  for (const row of area.titleRows) headParts.push(emitRow(row))
+
+  const bodyParts: string[] = []
+  for (const row of area.bodyRows) {
+    if (row.row >= tile.rowStart && row.row <= tile.rowEnd) bodyParts.push(emitRow(row))
+  }
+
+  const columnCount = tile.colEnd - tile.colStart + 1
+  const widths = Array.from(
+    { length: columnCount },
+    (_, offset) => area.columnWidthsPt[tile.colStart - area.startColumn + offset] ?? 0,
+  )
+  const colgroup = `<colgroup>${headings ? `<col style="width:${24}pt">` : ''}${widths
+    .map((width) => `<col style="width:${round(width)}pt">`)
+    .join('')}</colgroup>`
+  return `<table>${colgroup}<thead>${headParts.join('')}</thead><tbody>${bodyParts.join('')}</tbody></table>`
 }
 
 /// The `&G` pictures of one header or footer's three sections, for one page
@@ -472,6 +768,25 @@ function pictureHtml(picture: HeaderFooterPictureImage, scale: number): string {
   )
 }
 
+/// Paper minus the margins, in print points (width across, height down).
+function printableSizePt(
+  pageSize: WorkbookExportPdfRequest['pageSize'],
+  landscape: boolean,
+  margins: { left: number; right: number; top: number; bottom: number },
+): { widthPt: number; heightPt: number } {
+  const [paperWidthIn, paperHeightIn] =
+    typeof pageSize === 'string'
+      ? [PAPER_WIDTH_INCHES[pageSize] ?? 8.27, paperHeightInches(pageSize)]
+      : [pageSize.width, pageSize.height]
+  const [acrossIn, downIn] = landscape
+    ? [paperHeightIn, paperWidthIn]
+    : [paperWidthIn, paperHeightIn]
+  return {
+    widthPt: Math.max((acrossIn - margins.left - margins.right) * 72, 1),
+    heightPt: Math.max((downIn - margins.top - margins.bottom) * 72, 1),
+  }
+}
+
 /// Excel's fit-to-page only shrinks; an explicit scale applies as-is.
 function computeScale(
   setup: EffectivePageSetup,
@@ -484,16 +799,10 @@ function computeScale(
   if (!setup.fitToPage) {
     return clamp(setup.scale / 100, MIN_PRINT_SCALE, MAX_PRINT_SCALE)
   }
-  const [paperWidthIn, paperHeightIn] =
-    typeof pageSize === 'string'
-      ? [PAPER_WIDTH_INCHES[pageSize] ?? 8.27, paperHeightInches(pageSize)]
-      : [pageSize.width, pageSize.height]
-  const [acrossIn, downIn] = landscape
-    ? [paperHeightIn, paperWidthIn]
-    : [paperWidthIn, paperHeightIn]
+  const printable = printableSizePt(pageSize, landscape, margins)
   return fitToPageScale({
-    printableWidthPt: (acrossIn - margins.left - margins.right) * 72,
-    printableHeightPt: (downIn - margins.top - margins.bottom) * 72,
+    printableWidthPt: printable.widthPt,
+    printableHeightPt: printable.heightPt,
     fitToWidth: setup.fitToWidth,
     fitToHeight: setup.fitToHeight,
     contentWidthPt,
@@ -542,12 +851,15 @@ function parseTitleRows(titles: string): { start: number; end: number } {
   return { start, end }
 }
 
+/// Merge anchors and shadowed cells of the merges intersecting an area.
+/// `covered` maps every shadowed cell to its anchor so a page tile can tell
+/// where a merge continues from.
 function mergeMaps(
   worksheet: PrintWorksheet,
   area: { startRow: number; endRow: number; startColumn: number; endColumn: number },
 ) {
   const anchors = new Map<string, { rows: number; columns: number }>()
-  const covered = new Set<string>()
+  const covered = new Map<string, AreaPoint>()
   for (const merge of worksheet.getMergedRanges()) {
     const row = merge.getRow()
     const column = merge.getColumn()
@@ -557,7 +869,7 @@ function mergeMaps(
     anchors.set(`${row}:${column}`, { rows: merge.getHeight(), columns: merge.getWidth() })
     for (let r = row; r < row + merge.getHeight(); r += 1) {
       for (let c = column; c < column + merge.getWidth(); c += 1) {
-        if (r !== row || c !== column) covered.add(`${r}:${c}`)
+        if (r !== row || c !== column) covered.set(`${r}:${c}`, { row, column })
       }
     }
   }

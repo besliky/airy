@@ -1424,4 +1424,13 @@ export const fr = {
   scUnhideRows: 'Afficher les lignes',
   scHideColumns: 'Masquer les colonnes',
   scUnhideColumns: 'Afficher les colonnes',
+  appPrintSelectionMissing: 'Aucune sélection à imprimer.',
+  appTextToColsEmpty: 'La colonne sélectionnée n’a aucun contenu à fractionner.',
+  appTextToColsNeedDelimiter: 'Choisissez au moins un délimiteur.',
+  appTextToColsBadDestination: '« {ref} » n’est pas une référence de cellule de cette feuille.',
+  appOutlineSettings: 'Paramètres',
+  appOutlineSettingsTitle: 'Placement des totaux du plan',
+  appOutlineSettingsSaved: 'Paramètres du plan enregistrés — appliqués à l’enregistrement.',
+  appOutlineNoSummaryLine: 'La ligne de total serait hors de la feuille.',
+  appTextToColsDone: '{rows} lignes fractionnées en {columns} colonnes à {cell}.',
 } satisfies Record<keyof typeof zh, string>

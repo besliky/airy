@@ -24,12 +24,20 @@ import { effectivePageBreaks } from './page-break-preview'
 import { COLOR_SCHEMES, FONT_SCHEMES, rethemeStyles, THEME_PRESETS } from './themes'
 import { loadVisibleRange } from './univer-sync'
 import {
-  buildSheetPrintPayload,
+  buildSheetsPrintPayload,
   PrintError,
   type HeaderFooterPictureImage,
+  type PrintSheetJob,
   type PrintWorksheet,
 } from './print-html'
-import { resolveEffectivePageSetup, type HeaderFooterPictureSlot } from './print-settings'
+import {
+  mapAreasToScreen,
+  mapTitleRowsToScreen,
+  printAreasFromFormula,
+  printTitleRowsFromFormula,
+  resolveEffectivePageSetup,
+  type HeaderFooterPictureSlot,
+} from './print-settings'
 import type { LazyWorkbookState, UniverRuntime } from './univer-state'
 
 const PAPER_NAMES: Record<string, string> = {
@@ -348,6 +356,146 @@ export interface PrintSetupOverrides {
   /// Percent; applies when fitToPage is off.
   readonly scale?: number | undefined
   readonly fitToPage?: boolean | undefined
+  /// What to print: the selection, the active sheet (default), or every
+  /// visible sheet of the workbook.
+  readonly scope?: 'selection' | 'active-sheet' | 'workbook' | undefined
+  /// Page order for a sheet tiled over several pages.
+  readonly pageOrder?: 'down-then-over' | 'over-then-down' | undefined
+  /// Handed to the system print dialog as a preset (print jobs only).
+  readonly collate?: boolean | undefined
+}
+
+/// The per-sheet print geometry of one job candidate: the sheet's own areas
+/// and title rows resolved into screen space (journal print areas win over
+/// the file's print names, like the active-sheet flow).
+function sheetPrintGeometry(
+  state: LazyWorkbookState,
+  sheetId: string,
+): { printAreas: string[]; printTitles: string | null } {
+  const journal = state.editJournal.pageSetup.get(sheetId) ?? {}
+  const fileSheet = state.file.sheets.find((sheet) => sheet.id === sheetId)
+  const ops = state.editJournal.structuralOps.get(sheetId) ?? []
+  return {
+    printAreas:
+      journal.printArea !== undefined
+        ? journal.printArea === null
+          ? []
+          : [journal.printArea]
+        : mapAreasToScreen(printAreasFromFormula(fileSheet?.printArea), ops),
+    printTitles:
+      journal.printTitles !== undefined
+        ? journal.printTitles
+        : mapTitleRowsToScreen(printTitleRowsFromFormula(fileSheet?.printTitles), ops),
+  }
+}
+
+/// Lays the print job out with the effective Page Layout settings of the
+/// active sheet — the shared base of the PDF export and the Print dialog
+/// (which layers the user's per-job overrides on top). The scope selects
+/// what prints: the selection (the active range as the print area), the
+/// active sheet, or every visible sheet of the workbook (each with its own
+/// print areas and title rows, all under the active sheet's page setup).
+/// Throws PrintError with a localized message when there is nothing
+/// printable.
+export async function buildPrintRequest(
+  ctx: PageLayoutContext,
+  overrides: PrintSetupOverrides = {},
+): Promise<{
+  request: WorkbookExportPdfRequest
+  effective: {
+    paperSize: number
+    orientation: 'portrait' | 'landscape'
+    scale: number
+    fitToPage: boolean
+  }
+}> {
+  const runtime = ctx.univerRef.current
+  const workbook = runtime?.univerAPI.getActiveWorkbook()
+  const worksheet = workbook?.getActiveSheet()
+  if (!runtime || !workbook || !worksheet) throw new PrintError(t('appActiveSheetUnavailable'))
+  const state = ctx.lazyWorkbookRef.current
+  if (state && !state.flags.preloadComplete) throw new PrintError(t('appPdfNeedsFullLoad'))
+  const sheetId = worksheet.getSheetId()
+  const setup = resolveEffectivePageSetup(
+    state?.editJournal.pageSetup.get(sheetId) ?? {},
+    state?.sheetFilePageSetups.get(sheetId) ?? null,
+    (() => {
+      const fileSheet = state?.file.sheets.find((sheet) => sheet.id === sheetId)
+      return {
+        ...(fileSheet?.printArea === undefined ? {} : { printArea: fileSheet.printArea }),
+        ...(fileSheet?.printTitles === undefined ? {} : { printTitles: fileSheet.printTitles }),
+      }
+    })(),
+    state?.editJournal.structuralOps.get(sheetId) ?? [],
+  )
+  const effective = {
+    ...setup,
+    ...(overrides.paperSize === undefined ? {} : { paperSize: overrides.paperSize }),
+    ...(overrides.orientation === undefined ? {} : { orientation: overrides.orientation }),
+    ...(overrides.scale === undefined ? {} : { scale: overrides.scale }),
+    ...(overrides.fitToPage === undefined ? {} : { fitToPage: overrides.fitToPage }),
+  }
+  const baseName = (state?.file.name ?? 'Book1').replace(/\.[^.]+$/, '')
+  const pictures = state
+    ? await loadHeaderFooterPictures(state.file.sessionId, effective.headerFooterPictures)
+    : new Map<string, HeaderFooterPictureImage>()
+
+  const scope = overrides.scope ?? 'active-sheet'
+  const jobs: PrintSheetJob[] = []
+  if (scope === 'workbook') {
+    for (const sheet of workbook.getSheets()) {
+      // Hidden sheets never print (Excel's Entire Workbook skips them).
+      if ((sheet as unknown as { getConfig(): { hidden?: number } }).getConfig().hidden === 1)
+        continue
+      if (state !== null && isSheetRemoved(state.editJournal, sheet.getSheetId())) continue
+      jobs.push({
+        worksheet: sheet as unknown as PrintWorksheet,
+        ...(state
+          ? sheetPrintGeometry(state, sheet.getSheetId())
+          : { printAreas: [], printTitles: null }),
+        skipWhenEmpty: sheet.getSheetId() !== sheetId,
+      })
+    }
+    if (jobs.length === 0) throw new PrintError(t('appActiveSheetUnavailable'))
+  } else if (scope === 'selection') {
+    const range = workbook.getActiveRange()
+    if (!range) throw new PrintError(t('appPrintSelectionMissing'))
+    const startColumn = range.getColumn()
+    const startRow = range.getRow()
+    jobs.push({
+      worksheet: worksheet as unknown as PrintWorksheet,
+      printAreas: [
+        `${columnLabel(startColumn)}${startRow + 1}` +
+          `:${columnLabel(startColumn + range.getWidth() - 1)}${startRow + range.getHeight()}`,
+      ],
+      printTitles: setup.printTitles,
+    })
+  } else {
+    jobs.push({
+      worksheet: worksheet as unknown as PrintWorksheet,
+      printAreas: effective.printAreas,
+      printTitles: setup.printTitles,
+    })
+  }
+  return {
+    request: {
+      ...buildSheetsPrintPayload(
+        jobs,
+        effective,
+        `${baseName}.pdf`,
+        worksheet.getSheetName(),
+        pictures,
+        overrides.pageOrder ?? 'down-then-over',
+      ),
+      ...(overrides.collate === undefined ? {} : { collate: overrides.collate }),
+    },
+    effective: {
+      paperSize: effective.paperSize,
+      orientation: effective.orientation,
+      scale: effective.scale,
+      fitToPage: effective.fitToPage,
+    },
+  }
 }
 
 /// Lays the active sheet out with its effective Page Layout settings — the
@@ -366,50 +514,7 @@ export async function buildActiveSheetPrintRequest(
     fitToPage: boolean
   }
 }> {
-  const runtime = ctx.univerRef.current
-  const worksheet = runtime?.univerAPI.getActiveWorkbook()?.getActiveSheet()
-  if (!runtime || !worksheet) throw new PrintError(t('appActiveSheetUnavailable'))
-  const state = ctx.lazyWorkbookRef.current
-  if (state && !state.flags.preloadComplete) throw new PrintError(t('appPdfNeedsFullLoad'))
-  const sheetId = worksheet.getSheetId()
-  const journal = state?.editJournal.pageSetup.get(sheetId) ?? {}
-  const fileSetup = state?.sheetFilePageSetups.get(sheetId) ?? null
-  const fileSheet = state?.file.sheets.find((sheet) => sheet.id === sheetId)
-  const setup = resolveEffectivePageSetup(
-    journal,
-    fileSetup,
-    {
-      ...(fileSheet?.printArea === undefined ? {} : { printArea: fileSheet.printArea }),
-      ...(fileSheet?.printTitles === undefined ? {} : { printTitles: fileSheet.printTitles }),
-    },
-    state?.editJournal.structuralOps.get(sheetId) ?? [],
-  )
-  const effective = {
-    ...setup,
-    ...(overrides.paperSize === undefined ? {} : { paperSize: overrides.paperSize }),
-    ...(overrides.orientation === undefined ? {} : { orientation: overrides.orientation }),
-    ...(overrides.scale === undefined ? {} : { scale: overrides.scale }),
-    ...(overrides.fitToPage === undefined ? {} : { fitToPage: overrides.fitToPage }),
-  }
-  const baseName = (state?.file.name ?? 'Book1').replace(/\.[^.]+$/, '')
-  const pictures = state
-    ? await loadHeaderFooterPictures(state.file.sessionId, effective.headerFooterPictures)
-    : new Map<string, HeaderFooterPictureImage>()
-  return {
-    request: buildSheetPrintPayload(
-      worksheet as unknown as PrintWorksheet,
-      effective,
-      `${baseName}.pdf`,
-      worksheet.getSheetName(),
-      pictures,
-    ),
-    effective: {
-      paperSize: effective.paperSize,
-      orientation: effective.orientation,
-      scale: effective.scale,
-      fitToPage: effective.fitToPage,
-    },
-  }
+  return buildPrintRequest(ctx, overrides)
 }
 
 /// Lays the active sheet out as HTML with its Page Layout settings and asks
