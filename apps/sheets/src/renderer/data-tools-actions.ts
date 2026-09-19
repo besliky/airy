@@ -69,16 +69,26 @@ export function handleImportCsv(ctx: DataToolsContext): void {
       ctx.setMessage(t('appCsvTooLarge'))
       return
     }
-    void file.arrayBuffer().then(async (buffer) => {
-      const csv = await import('../gateway/csv-import')
-      importCsvText(
-        ctx,
-        csv.decodeCsvBuffer(new Uint8Array(buffer), legacyCharsetForLang(getLang())),
-        csv,
-      )
-    })
+    void importCsvFile(ctx, file)
   }
   input.click()
+}
+
+/// BUG-1201: the lazy csv-import chunk and the legacy-charset decode run
+/// before importCsvText (whose try/catch only covers setValues), so after
+/// PERF-902 a broken chunk or a decoding failure died as an unhandled
+/// rejection while the user's picked file silently did nothing. One boundary
+/// here reports it through the message bar instead — the same string the
+/// setValues path fails with.
+export async function importCsvFile(ctx: DataToolsContext, file: File): Promise<void> {
+  try {
+    const buffer = new Uint8Array(await file.arrayBuffer())
+    const csv = await import('../gateway/csv-import')
+    importCsvText(ctx, csv.decodeCsvBuffer(buffer, legacyCharsetForLang(getLang())), csv)
+  } catch {
+    // Chunk-load and decode internals are never user-actionable detail.
+    ctx.setMessage(t('appCsvImportFailed'))
+  }
 }
 
 function importCsvText(ctx: DataToolsContext, text: string, csv: CsvImport): void {
