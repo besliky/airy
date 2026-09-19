@@ -1019,8 +1019,10 @@ function parseSheetCells(cellsXml: string): SheetCell[] {
  * only the cells of A1:last (header + category column + series columns) and
  * leave every other cell of the sheet untouched, so Excel-authored helpers,
  * notes and formulas outside the chart range survive (BUG-1008). Inside the
- * rectangle a cell that carried a <f> formula keeps it — only its cached <v>
- * updates, the way Word refreshes a workbook on data edits.
+ * rectangle a cell that carried a <f> formula is left byte-identical (BUG-1105):
+ * the formula owns the cell and its cached <v> is the workbook's own recalc
+ * result — rewriting the cache from the chart's display value would be rolled
+ * back by the first Edit-Data recalc.
  * Returns the updated base64, or null on failure.
  */
 export async function patchChartWorkbookXlsxBase64(
@@ -1082,22 +1084,18 @@ export async function patchChartWorkbookXlsxBase64(
     ): { col: number; xml: string } | null => {
       const existing = existingRows.get(row)?.cells.find((c) => c.col === col)
       if (value === null) return null // point removed: the old cell goes too
+      if (existing && /<f\b[^>]*(?:\/>|>[\s\S]*?<\/f>)/.test(existing.xml)) {
+        // BUG-1105: an authored formula owns this cell — its cached <v> is the
+        // workbook's own recalc result, not the chart's display value. Rewriting
+        // the cache would be rolled back by the first Edit-Data recalc (and a
+        // literal the user typed would be dropped), so the cell stays
+        // byte-identical, formula and cache alike; the chart part's numCache
+        // carries the edited point value.
+        return { col, xml: existing.xml }
+      }
       const style =
         existing && /\bs="\d+"/.test(existing.xml) ? ` ${/\bs="\d+"/.exec(existing.xml)![0]}` : ''
       const ref = `${xlsxColLetters(col)}${row}`
-      const formula = existing
-        ? /<f\b[^>]*>[\s\S]*?<\/f>|<f\b[^>]*\/>/.exec(existing.xml)?.[0]
-        : undefined
-      if (formula !== undefined) {
-        // keep the authored formula, refresh only its cached value
-        return {
-          col,
-          xml:
-            typeof value === 'number'
-              ? `<c r="${ref}"${style}>${formula}<v>${value}</v></c>`
-              : `<c r="${ref}"${style} t="str">${formula}<v>${esc(value)}</v></c>`,
-        }
-      }
       return {
         col,
         xml:
