@@ -253,14 +253,19 @@ export interface StyleUpsert {
   /** built-in style (Heading1…/Normal…): omit w:customStyle, Word marks it the built-in */
   builtin?: boolean
   rPr?: {
-    /** true = set <w:b/>, null = remove it, false/undefined = keep the existing element */
+    /** true = set <w:b/>, null = remove it, undefined = keep the existing
+     *  element, false = explicit off (<w:b w:val="0"/> — cancels a facet
+     *  inherited through basedOn/docDefaults, Word semantics; BUG-1101) */
     bold?: boolean | null
     italic?: boolean | null
     /** true = insert <w:u w:val="single"/> only when absent (an existing richer
-     *  val like "double" is preserved), null = remove, undefined = keep */
+     *  val like "double" is preserved), false = <w:u w:val="none"/> (explicit
+     *  off), null = remove, undefined = keep */
     underline?: boolean | null
     strike?: boolean | null
-    /** hex without '#'; null = remove the w:color element */
+    /** hex without '#', or 'auto' for an explicit automatic color (cancels an
+     *  inherited one the way w:val="0" cancels an inherited flag); null =
+     *  remove the w:color element */
     color?: string | null
     /** half-points; null = remove w:sz/w:szCs */
     sizeHalfPoints?: number | null
@@ -280,8 +285,10 @@ export interface StyleUpsert {
     /** non-auto line rule with its raw twips (w:lineRule + w:line); used when lineSpacing is unset */
     lineRule?: 'atLeast' | 'exact'
     lineRawTwips?: number | null
-    /** outline level 1-9 (w:outlineLvl = value - 1); null = remove it (body text) */
-    outlineLevel?: number | null
+    /** outline level 1-9 (w:outlineLvl = value - 1); false = explicit body
+     *  text (w:outlineLvl 9 — cancels a level inherited via basedOn, BUG-1101);
+     *  null = remove it */
+    outlineLevel?: number | false | null
     indentLeftTwips?: number | null
     indentRightTwips?: number | null
     indentFirstLineTwips?: number | null
@@ -301,7 +308,10 @@ function buildStyleXml(up: StyleUpsert): string {
   if (up.rPr?.bold) rPr.push('<w:b/>')
   if (up.rPr?.italic) rPr.push('<w:i/>')
   if (up.rPr?.strike) rPr.push('<w:strike/>')
-  if (up.rPr?.color) rPr.push(`<w:color w:val="${escapeXmlAttr(up.rPr.color)}"/>`)
+  // the create path omits explicit-off facets (false / 'auto'): a freshly
+  // built style has no basedOn chain to cancel yet
+  if (up.rPr?.color && up.rPr.color.toLowerCase() !== 'auto')
+    rPr.push(`<w:color w:val="${escapeXmlAttr(up.rPr.color)}"/>`)
   if (up.rPr?.sizeHalfPoints) {
     rPr.push(`<w:sz w:val="${up.rPr.sizeHalfPoints}"/><w:szCs w:val="${up.rPr.sizeHalfPoints}"/>`)
   }
@@ -583,13 +593,14 @@ function stylePPrOps(up: StyleUpsert): StyleChildOp[] {
   const ops: StyleChildOp[] = []
   const spacingSets: Array<[string, string | null]> = []
   if (sp.spaceBeforeTwips !== undefined) {
-    // w:beforeLines would win over the twips value in Word — clear it when setting
+    // w:beforeLines would win over the twips value in Word — clear it on both
+    // set and null-clear (BUG-1103: a lone null left the winning twin behind)
     spacingSets.push(['w:before', isSet(sp.spaceBeforeTwips) ? String(sp.spaceBeforeTwips) : null])
-    if (isSet(sp.spaceBeforeTwips)) spacingSets.push(['w:beforeLines', null])
+    spacingSets.push(['w:beforeLines', null])
   }
   if (sp.spaceAfterTwips !== undefined) {
     spacingSets.push(['w:after', isSet(sp.spaceAfterTwips) ? String(sp.spaceAfterTwips) : null])
-    if (isSet(sp.spaceAfterTwips)) spacingSets.push(['w:afterLines', null])
+    spacingSets.push(['w:afterLines', null])
   }
   if (isSet(sp.lineSpacing))
     spacingSets.push(['w:line', String(Math.round(sp.lineSpacing * 240))], ['w:lineRule', 'auto'])
@@ -600,19 +611,20 @@ function stylePPrOps(up: StyleUpsert): StyleChildOp[] {
   const indSets: Array<[string, string | null]> = []
   if (sp.indentLeftTwips !== undefined) {
     indSets.push(['w:left', isSet(sp.indentLeftTwips) ? String(sp.indentLeftTwips) : null])
-    if (isSet(sp.indentLeftTwips))
-      indSets.push(['w:leftChars', null], ['w:start', null], ['w:startChars', null])
+    indSets.push(['w:leftChars', null], ['w:start', null], ['w:startChars', null])
   }
   if (sp.indentRightTwips !== undefined) {
     indSets.push(['w:right', isSet(sp.indentRightTwips) ? String(sp.indentRightTwips) : null])
-    if (isSet(sp.indentRightTwips))
-      indSets.push(['w:rightChars', null], ['w:end', null], ['w:endChars', null])
+    indSets.push(['w:rightChars', null], ['w:end', null], ['w:endChars', null])
   }
-  if (isSet(sp.indentFirstLineTwips)) {
+  if (sp.indentFirstLineTwips !== undefined) {
+    // BUG-1103: null clears the whole first-line family instead of a no-op;
     // a negative first line is a hanging indent (w:hanging, positive twips)
-    if (sp.indentFirstLineTwips < 0)
+    if (sp.indentFirstLineTwips !== null && sp.indentFirstLineTwips < 0)
       indSets.push(['w:hanging', String(-sp.indentFirstLineTwips)], ['w:firstLine', null])
-    else indSets.push(['w:firstLine', String(sp.indentFirstLineTwips)], ['w:hanging', null])
+    else if (sp.indentFirstLineTwips !== null)
+      indSets.push(['w:firstLine', String(sp.indentFirstLineTwips)], ['w:hanging', null])
+    else indSets.push(['w:firstLine', null], ['w:hanging', null])
     indSets.push(['w:firstLineChars', null], ['w:hangingChars', null])
   }
   if (indSets.length > 0) ops.push({ kind: 'attrs', tag: 'w:ind', sets: indSets })
@@ -625,12 +637,15 @@ function stylePPrOps(up: StyleUpsert): StyleChildOp[] {
         sp.align === null ? null : `<w:jc w:val="${sp.align === 'justify' ? 'both' : sp.align}"/>`,
     })
   if (sp.outlineLevel !== undefined) {
-    const lvl = sp.outlineLevel === null ? 0 : Math.min(Math.max(Math.round(sp.outlineLevel), 1), 9)
-    ops.push({
-      kind: 'element',
-      tag: 'w:outlineLvl',
-      xml: sp.outlineLevel === null ? null : `<w:outlineLvl w:val="${lvl - 1}"/>`,
-    })
+    // false = explicit body text: w:outlineLvl 9 cancels a level inherited via
+    // basedOn (BUG-1101); the parser honors it (outlineOffIds)
+    const xml =
+      sp.outlineLevel === null
+        ? null
+        : sp.outlineLevel === false
+          ? '<w:outlineLvl w:val="9"/>'
+          : `<w:outlineLvl w:val="${Math.min(Math.max(Math.round(sp.outlineLevel), 1), 9) - 1}"/>`
+    ops.push({ kind: 'element', tag: 'w:outlineLvl', xml })
   }
   return ops
 }
@@ -661,9 +676,14 @@ function styleRPrOps(up: StyleUpsert): StyleChildOp[] {
     [r.strike, 'w:strike'],
   ] as Array<[boolean | null | undefined, string]>) {
     if (flag === true) ops.push({ kind: 'element', tag, xml: `<${tag}/>` })
+    // BUG-1101: false is an explicit off — a plain removal would silently
+    // re-inherit the facet from the basedOn chain after reopen
+    else if (flag === false) ops.push({ kind: 'element', tag, xml: `<${tag} w:val="0"/>` })
     else if (flag === null) ops.push({ kind: 'element', tag, xml: null })
   }
   if (r.underline === true) ops.push({ kind: 'ensure', tag: 'w:u', xml: '<w:u w:val="single"/>' })
+  else if (r.underline === false)
+    ops.push({ kind: 'element', tag: 'w:u', xml: '<w:u w:val="none"/>' })
   else if (r.underline === null) ops.push({ kind: 'element', tag: 'w:u', xml: null })
 
   if (r.color !== undefined) {
@@ -672,13 +692,13 @@ function styleRPrOps(up: StyleUpsert): StyleChildOp[] {
       ['w:themeTint', null],
       ['w:themeShade', null],
     ]
+    // 'auto' is the explicit-off spelling for color (overrides an inherited one)
+    const val =
+      r.color === null ? null : r.color.toLowerCase() === 'auto' ? 'auto' : escapeXmlAttr(r.color)
     ops.push({
       kind: 'attrs',
       tag: 'w:color',
-      sets:
-        r.color === null
-          ? [['w:val', null], ...themeClear]
-          : [['w:val', escapeXmlAttr(r.color)], ...themeClear],
+      sets: val === null ? [['w:val', null], ...themeClear] : [['w:val', val], ...themeClear],
     })
   }
   if (r.sizeHalfPoints !== undefined) {

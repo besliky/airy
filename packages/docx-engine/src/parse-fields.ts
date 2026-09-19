@@ -44,14 +44,16 @@ function leadingRunFont(rPr: string, text: string): string | undefined {
  * Word emits ` TOC \c "Figure" ` (space + double quotes), but packages from
  * other producers carry `\c"Figure"`, single quotes, or a bare word; the
  * switch readers accept every spelling (BUG-1010) while regeneration keeps
- * writing Word's canonical form.
+ * writing Word's canonical form, and a bare word never swallows the following
+ * switch (BUG-1109).
  */
 export function parseTocInstruction(instr: string): TocFieldOptions {
   const options: TocFieldOptions = {}
   // a quoted value (double or single) keeps embedded spaces; a bare word
-  // stops at the first whitespace or backslash
+  // stops at the first whitespace, quote, or backslash — \S+ used to swallow
+  // the next switch (BUG-1109: `TOC \c \h` parsed the identifier as "\h")
   const quoted = (sw: string) =>
-    new RegExp(`\\\\${sw}\\s*(?:"([^"]*)"|'([^']*)'|(\\S+))`).exec(instr)
+    new RegExp(`\\\\${sw}\\s*(?:"([^"]*)"|'([^']*)'|([^\\s\\\\"]+))`).exec(instr)
   const seq = quoted('c')
   const seqValue = seq ? (seq[1] ?? seq[2] ?? seq[3]) : null
   if (seqValue) options.seqIdentifier = decodeEntities(seqValue)
@@ -63,8 +65,9 @@ export function parseTocInstruction(instr: string): TocFieldOptions {
     const upper = parseInt(range[2] ?? range[4] ?? range[6]!, 10)
     options.levels = Math.min(Math.max(upper || 1, 1), 9)
   }
-  if (/\\n(?:\s|$)/.test(instr)) options.hidePageNumbers = true
-  options.hyperlinks = /\\h(?:\s|$)/.test(instr)
+  // a digit can follow \n without a space (`\n2-4`): still "hide page numbers"
+  if (/\\n(?=[\s\d]|$)/.test(instr)) options.hidePageNumbers = true
+  options.hyperlinks = /\\h(?=[\s\\]|$)/.test(instr)
   return options
 }
 

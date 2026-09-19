@@ -179,3 +179,37 @@ describe('parseTocInstruction alternative spellings (BUG-1010)', () => {
     expect(parseTocInstruction("TOC \\o'1-3' \\h")).toEqual({ levels: 3, hyperlinks: true })
   })
 })
+
+describe('parseTocInstruction does not swallow the next switch (BUG-1109)', () => {
+  it('reads \\c followed by another switch as an empty identifier', () => {
+    // \S+ used to match the backslash too: `TOC \c \h` parsed "\h" as the SEQ
+    // label and regeneration wrote a garbage `TOC \h \z \c "\h"`
+    expect(parseTocInstruction('TOC \\c \\h \\z')).toEqual({ hyperlinks: true })
+    expect(parseTocInstruction('TOC \\c\\h')).toEqual({ hyperlinks: true })
+    expect(parseTocInstruction('TOC \\h \\z \\c')).toEqual({ hyperlinks: true })
+    expect(parseTocInstruction('TOC \\c \\h \\z')).not.toHaveProperty('seqIdentifier')
+  })
+
+  it('bare words still work but stop at a backslash (BUG-1010 spellings intact)', () => {
+    expect(parseTocInstruction('TOC \\c Figure \\h')).toEqual({
+      seqIdentifier: 'Figure',
+      hyperlinks: true,
+    })
+    expect(parseTocInstruction('TOC \\cFigure \\h')).toEqual({
+      seqIdentifier: 'Figure',
+      hyperlinks: true,
+    })
+  })
+
+  it('a no-space ranged \\n still hides page numbers, and \\h survives a packed switch', () => {
+    // `TOC \n2-4` used to read as "show page numbers" — the inverse of the
+    // spaced spelling; \h directly followed by another switch works too
+    expect(parseTocInstruction('TOC \\o "1-3" \\n2-4 \\h')).toEqual({
+      levels: 3,
+      hidePageNumbers: true,
+      hyperlinks: true,
+    })
+    expect(parseTocInstruction('TOC \\n')).toEqual({ hidePageNumbers: true, hyperlinks: false })
+    expect(parseTocInstruction('TOC \\h\\z')).toEqual({ hyperlinks: true })
+  })
+})

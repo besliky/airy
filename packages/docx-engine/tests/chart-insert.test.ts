@@ -290,8 +290,10 @@ describe('saveDocx kind:chart — new kinds round-trip', () => {
     )
       .file('xl/worksheets/sheet1.xml')!
       .async('string')
-    // in-rectangle formula kept, cached value refreshed, style kept
-    expect(out).toContain('<c r="B2" s="3"><f>Sheet2!A1*2</f><v>10</v></c>')
+    // in-rectangle formula kept byte-identical with its own cache (BUG-1105:
+    // rewriting the cache from the chart's display value would be rolled back
+    // by the first Edit-Data recalc), style kept
+    expect(out).toContain('<c r="B2" s="3"><f>Sheet2!A1*2</f><v>1</v></c>')
     expect(out).toContain('<c r="B3"><v>20</v></c>')
     // row attributes survive the merge
     expect(out).toContain('<row r="2" ht="18" customHeight="1">')
@@ -302,6 +304,34 @@ describe('saveDocx kind:chart — new kinds round-trip', () => {
     )
     // dimension covers the union of the old extent and the data rectangle
     expect(out).toContain('<dimension ref="A1:E5"/>')
+  })
+
+  it('a formula cell keeps its own cached value through a data edit (BUG-1105)', async () => {
+    // an Excel-authored helper formula inside the chart range (series column B):
+    // editing the chart data must not pretend the workbook recalculated it
+    const base64 = await buildChartWorkbookXlsxBase64(['Q1', 'Q2'], [{ name: 'S', values: [1, 2] }])
+    const xlsx = await JSZip.loadAsync(Buffer.from(base64, 'base64'))
+    const sheet = (await xlsx.file('xl/worksheets/sheet1.xml')!.async('string')).replace(
+      '<c r="B3"><v>2</v></c>',
+      '<c r="B3"><f>A3*2</f><v>4</v></c>',
+    )
+    xlsx.file('xl/worksheets/sheet1.xml', sheet)
+    const enriched = await xlsx.generateAsync({ type: 'base64' })
+
+    const patched = await patchChartWorkbookXlsxBase64(
+      enriched,
+      ['Q1', 'Q2'],
+      [{ name: 'S', values: [9, 8] }],
+    )
+    expect(patched).toBeTruthy()
+    const out = await (
+      await JSZip.loadAsync(Buffer.from(patched!, 'base64'))
+    )
+      .file('xl/worksheets/sheet1.xml')!
+      .async('string')
+    // the plain cell takes the edited value; the formula cell stays as authored
+    expect(out).toContain('<c r="B2"><v>9</v></c>')
+    expect(out).toContain('<c r="B3"><f>A3*2</f><v>4</v></c>')
   })
 })
 

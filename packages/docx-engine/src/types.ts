@@ -1786,6 +1786,12 @@ export interface StyleInfo {
   linkedCharShell?: boolean
   /** rendering hints from the style definition, basedOn chain resolved; never written back on save */
   display?: StyleDisplay
+  /** BUG-1101: the style's own display before the basedOn merge (undefined =
+   *  the style defines nothing itself); set only when a basedOn parent exists */
+  ownDisplay?: StyleDisplay
+  /** BUG-1101: the basedOn parent's resolved display — what the style inherits
+   *  once its own facet is removed; set only when a basedOn parent exists */
+  chainDisplay?: StyleDisplay
   /** table-style rendering hints (type === 'table') */
   tableDisplay?: TableStyleDisplay
   /** w:pPr/w:numPr on the style — list numbering referenced via pStyle (ListBullet/ListNumber);

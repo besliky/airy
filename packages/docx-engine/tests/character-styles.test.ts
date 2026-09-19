@@ -524,6 +524,185 @@ describe('styleUpserts surgical modify (BUG-1001)', () => {
   })
 })
 
+describe('styleUpserts explicit off (BUG-1101): clearing an inherited facet', () => {
+  // a bold parent with a bold child is the flagship case: removing the child's
+  // own element would silently re-inherit the parent's facet after reopen
+  const INHERIT_STYLES =
+    '<w:style w:type="paragraph" w:styleId="InhBase"><w:name w:val="Inh Base"/>' +
+    '<w:pPr><w:outlineLvl w:val="0"/></w:pPr>' +
+    '<w:rPr><w:b/><w:i/><w:color w:val="2E74B5"/></w:rPr></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="InhChild"><w:name w:val="Inh Child"/>' +
+    '<w:basedOn w:val="InhBase"/><w:rPr><w:b/><w:sz w:val="26"/></w:rPr></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="InhBare"><w:name w:val="Inh Bare"/>' +
+    '<w:basedOn w:val="InhBase"/></w:style>'
+
+  async function openInheritDoc() {
+    return parseDocx(
+      await buildDocx({
+        bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+        extraStylesXml: INHERIT_STYLES,
+      }),
+    )
+  }
+
+  it('false writes w:val="0", color "auto", underline "none" — not a removal', async () => {
+    const parsed = await openInheritDoc()
+    const saved = await saveWithUpsert(parsed, [
+      {
+        styleId: 'InhChild',
+        type: 'paragraph',
+        name: 'Inh Child',
+        rPr: { bold: false, italic: false, color: 'auto', underline: false },
+      },
+    ])
+    const child = /<w:style [^>]*w:styleId="InhChild"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(child).toContain('<w:b w:val="0"/>')
+    // no own w:i existed: the off spelling is inserted at its schema position
+    expect(child).toContain('<w:i w:val="0"/>')
+    expect(child).toContain('<w:color w:val="auto"/>')
+    expect(child).toContain('<w:u w:val="none"/>')
+    expect(child).toContain('<w:sz w:val="26"/>')
+    // and the explicit offs win over the chain after a reopen
+    const reparsed = await parseDocx(saved)
+    expect(reparsed.styles.get('InhChild')!.display).toMatchObject({
+      bold: false,
+      italic: false,
+      color: 'auto',
+      underline: false,
+    })
+  })
+
+  it('outlineLevel false writes w:outlineLvl 9 and blocks the inherited level', async () => {
+    const parsed = await openInheritDoc()
+    expect(parsed.styles.get('InhBare')!.headingLevel).toBe(1) // inherited from InhBase
+    const saved = await saveWithUpsert(parsed, [
+      { styleId: 'InhBare', type: 'paragraph', name: 'Inh Bare', pPr: { outlineLevel: false } },
+    ])
+    const bare = /<w:style [^>]*w:styleId="InhBare"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(bare).toContain('<w:outlineLvl w:val="9"/>')
+    // before BUG-1101 the level re-materialized from InhBase after reopen
+    const reparsed = await parseDocx(saved)
+    expect(reparsed.styles.get('InhBare')!.headingLevel).toBeUndefined()
+  })
+
+  it('the create path omits explicit-off facets', async () => {
+    const parsed = await openInheritDoc()
+    const saved = await saveWithUpsert(parsed, [
+      {
+        styleId: 'Fresh',
+        type: 'paragraph',
+        name: 'Fresh',
+        rPr: { bold: false, color: 'auto', underline: false },
+        pPr: { outlineLevel: false },
+      },
+    ])
+    const fresh = /<w:style [^>]*w:styleId="Fresh"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(fresh).not.toContain('<w:b')
+    expect(fresh).not.toContain('<w:color')
+    expect(fresh).not.toContain('<w:u')
+    expect(fresh).not.toContain('<w:outlineLvl')
+  })
+
+  it('parse exposes own vs chain display for the modify dialog', async () => {
+    const parsed = await openInheritDoc()
+    const child = parsed.styles.get('InhChild')!
+    expect(child.display?.bold).toBe(true) // resolved through the chain
+    expect(child.ownDisplay?.bold).toBe(true) // its own w:b
+    expect(child.chainDisplay?.bold).toBe(true) // InhBase still supplies one
+    expect(child.ownDisplay?.color).toBeUndefined() // color comes from the chain
+    expect(child.chainDisplay?.color).toBe('2E74B5')
+    // a style without a basedOn parent keeps a single (unsplit) display
+    expect(parsed.styles.get('InhBase')!.ownDisplay).toBeUndefined()
+    expect(parsed.styles.get('InhBase')!.chainDisplay).toBeUndefined()
+  })
+})
+
+describe('null clears win the Word twins (BUG-1103)', () => {
+  // LibreOffice-authored CJK documents carry the *Lines/*Chars spellings,
+  // which take precedence over twips in Word — a null clear that leaves the
+  // twin behind is a silent no-op there
+  const TWIN_STYLE =
+    '<w:style w:type="paragraph" w:styleId="Twins"><w:name w:val="Twins"/>' +
+    '<w:pPr><w:spacing w:before="120" w:beforeLines="100" w:after="160" w:afterLines="50"/>' +
+    '<w:ind w:left="720" w:leftChars="300" w:start="720" w:firstLine="360" w:firstLineChars="150"/></w:pPr></w:style>'
+
+  async function openTwinDoc() {
+    return parseDocx(
+      await buildDocx({
+        bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+        extraStylesXml: TWIN_STYLE,
+      }),
+    )
+  }
+
+  it('clearing spacing removes the *Lines twins that would win over nothing', async () => {
+    const parsed = await openTwinDoc()
+    const saved = await saveWithUpsert(parsed, [
+      {
+        styleId: 'Twins',
+        type: 'paragraph',
+        name: 'Twins',
+        pPr: { spaceBeforeTwips: null, spaceAfterTwips: null },
+      },
+    ])
+    const twins = /<w:style [^>]*w:styleId="Twins"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(twins).not.toContain('<w:spacing')
+    expect(twins).not.toContain('w:before')
+    expect(twins).not.toContain('w:after')
+    // the ind element is untouched by a spacing clear
+    expect(twins).toContain('<w:ind w:left="720" w:leftChars="300" w:start="720"')
+  })
+
+  it('clearing indents removes *Chars/* twins; firstLine null clears the whole family', async () => {
+    const parsed = await openTwinDoc()
+    const saved = await saveWithUpsert(parsed, [
+      {
+        styleId: 'Twins',
+        type: 'paragraph',
+        name: 'Twins',
+        pPr: { indentLeftTwips: null, indentFirstLineTwips: null },
+      },
+    ])
+    const twins = /<w:style [^>]*w:styleId="Twins"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(twins).not.toContain('<w:ind')
+    expect(twins).not.toContain('w:left')
+    expect(twins).not.toContain('w:start')
+    expect(twins).not.toContain('w:firstLine')
+    expect(twins).not.toContain('w:hanging')
+    // the spacing element survives untouched
+    expect(twins).toContain('w:beforeLines="100"')
+  })
+
+  it('setting a value still clears the twins (symmetric with the null clear)', async () => {
+    const parsed = await openTwinDoc()
+    const saved = await saveWithUpsert(parsed, [
+      {
+        styleId: 'Twins',
+        type: 'paragraph',
+        name: 'Twins',
+        pPr: { spaceBeforeTwips: 200, indentFirstLineTwips: -240 },
+      },
+    ])
+    const twins = /<w:style [^>]*w:styleId="Twins"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(twins).toContain('w:before="200"')
+    expect(twins).not.toContain('w:beforeLines')
+    expect(twins).toContain('w:hanging="240"')
+    expect(twins).not.toContain('w:firstLineChars')
+  })
+})
+
 describe('toggle-off (w:val="0") overrides inherited formatting', () => {
   const TOGGLE_STYLES =
     '<w:style w:type="paragraph" w:styleId="BoldBase"><w:name w:val="Bold Base"/>' +
