@@ -2,9 +2,19 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'n
 import { rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, afterAll, describe, expect, it, vi } from 'vitest'
 
-import { atomicWriteFile, looksLikeZip, renameDurably } from '../src/atomic-write'
+import {
+  _setRenameRetryDelayForTests,
+  atomicWriteFile,
+  looksLikeZip,
+  renameDurably,
+} from '../src/atomic-write'
+
+// PERF-1101: the retry ladder is pinned by call counts below; its real
+// 50..800 ms pacing would add ~3 s of sleeps to this suite, so collapse it.
+beforeAll(() => _setRenameRetryDelayForTests(0))
+afterAll(() => _setRenameRetryDelayForTests(null))
 
 // fsync order is the durability contract: temp-file sync must precede the
 // rename, and the directory sync (POSIX only) must follow it.
