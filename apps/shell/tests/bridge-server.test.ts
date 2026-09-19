@@ -10,14 +10,17 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   bridgeInfoPath,
   bridgeSocketPath,
+  BRIDGE_CLOSE_DRAIN_TIMEOUT_MS,
   BRIDGE_INFO_NAME,
   BRIDGE_SOCKET_NAME,
+  closeWithDrainTimeout,
   createBackpressureWriter,
   startBridgeServer,
   writeBridgeInfoFile,
   type BackpressureSocket,
   type BridgeEndpointInfo,
   type BridgeServerHandle,
+  type DrainableSocket,
 } from '../src/main/bridge/server'
 
 /**
@@ -424,6 +427,65 @@ describe('bridge server over a live socket', () => {
     client.writeRaw(`${JSON.stringify({ protocol_version: 1, method: 'ping' })}\n`)
     await client.closed
     expect(pings).toBe(0)
+  })
+})
+
+describe('closeWithDrainTimeout', () => {
+  /// Records the armed timeout and holds the end callback back, the shape of
+  /// a peer that stopped reading before its error response drained.
+  function fakeDrainableSocket(): DrainableSocket & {
+    armedTimeout: number | null
+    fireTimeout(): void
+    finishEnd(): void
+    destroyed: boolean
+  } {
+    let timeoutCallback: (() => void) | undefined
+    let endCallback: (() => void) | undefined
+    const socket = {
+      armedTimeout: null as number | null,
+      destroyed: false,
+      setTimeout(timeout: number, callback?: () => void) {
+        socket.armedTimeout = timeout
+        timeoutCallback = callback
+        return socket
+      },
+      end(callback?: () => void) {
+        endCallback = callback
+      },
+      destroy() {
+        socket.destroyed = true
+      },
+      fireTimeout() {
+        timeoutCallback?.()
+      },
+      finishEnd() {
+        endCallback?.()
+      },
+    }
+    return socket
+  }
+
+  it('arms the idle drain budget next to end()', () => {
+    const socket = fakeDrainableSocket()
+    closeWithDrainTimeout(socket)
+    expect(socket.armedTimeout).toBe(BRIDGE_CLOSE_DRAIN_TIMEOUT_MS)
+    expect(socket.destroyed).toBe(false) // end() alone does not destroy
+  })
+
+  it('destroys the socket when the drain budget elapses before the buffer drains', () => {
+    // BUG-1204: a non-reading peer never lets end()'s callback fire; the
+    // timeout must tear the half-open socket down anyway.
+    const socket = fakeDrainableSocket()
+    closeWithDrainTimeout(socket)
+    socket.fireTimeout()
+    expect(socket.destroyed).toBe(true)
+  })
+
+  it('destroys the socket through the end callback when the buffer drains', () => {
+    const socket = fakeDrainableSocket()
+    closeWithDrainTimeout(socket)
+    socket.finishEnd()
+    expect(socket.destroyed).toBe(true)
   })
 })
 

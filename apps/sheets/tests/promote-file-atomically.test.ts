@@ -22,9 +22,23 @@ import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { promoteFileAtomically, promoteFileExclusively } from '../src/gateway/xlsx-package-io'
 
+// Directory handles opened for reading are the shared helper's POSIX
+// dir-fsync after the rename (BUG-1203) — nothing else in this suite opens
+// directories through fs/promises.
+const { directoryOpens } = vi.hoisted(() => ({ directoryOpens: [] as string[] }))
+
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
-  return { ...actual, copyFile: vi.fn(actual.copyFile), link: vi.fn(actual.link) }
+  return {
+    ...actual,
+    copyFile: vi.fn(actual.copyFile),
+    link: vi.fn(actual.link),
+    open: vi.fn(async (...args: Parameters<typeof actual.open>) => {
+      const [path, flags] = args
+      if (flags === 'r') directoryOpens.push(String(path))
+      return actual.open(...args)
+    }),
+  }
 })
 const copyFileMock = vi.mocked(copyFile)
 const linkMock = vi.mocked(link)
@@ -45,6 +59,7 @@ afterEach(async () => {
   copyFileMock.mockImplementation(actualCopyFile)
   linkMock.mockReset()
   linkMock.mockImplementation(actualLink)
+  directoryOpens.length = 0
   for (const dir of scratches.splice(0)) {
     await chmod(dir, 0o755).catch(() => {})
     for (const sub of ['locked']) await chmod(join(dir, sub), 0o755).catch(() => {})
@@ -62,6 +77,23 @@ describe('promoteFileAtomically', () => {
     await promoteFileAtomically(temporary, target)
     expect(await readFile(target, 'utf8')).toBe('new-bytes')
     await expect(stat(temporary)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  // BUG-1203: the workbook save promote rides the shared durability helper —
+  // on POSIX the parent directory is fsynced after the rename so the new
+  // dirent survives power loss (Windows skips it: dir fsync is EPERM there).
+  it('fsyncs the parent directory after the rename lands (POSIX)', async () => {
+    if (process.platform === 'win32') return
+    const dir = await scratchDir()
+    const temporary = join(dir, '.new.tmp.xlsx')
+    const target = join(dir, 'book.xlsx')
+    await writeFile(temporary, 'new-bytes')
+    await writeFile(target, 'old-bytes')
+
+    await promoteFileAtomically(temporary, target)
+
+    expect(await readFile(target, 'utf8')).toBe('new-bytes')
+    expect(directoryOpens).toEqual([dir])
   })
 
   it('falls back to an in-place copy when only the rename is blocked', async () => {

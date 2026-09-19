@@ -83,6 +83,35 @@ export function createBackpressureWriter(socket: BackpressureSocket): {
   }
 }
 
+/// The socket surface close() needs beyond writes (net.Socket in production,
+/// faked in tests).
+export interface DrainableSocket {
+  end(callback?: () => void): void
+  destroy(): void
+  setTimeout(timeout: number, callback?: () => void): unknown
+}
+
+/// Idle budget for flushing the pending error response after close.
+export const BRIDGE_CLOSE_DRAIN_TIMEOUT_MS = 5_000
+
+/**
+ * BUG-1204: socket.end() only invokes its callback once the write buffer
+ * drained — a peer that triggered the close (overflow, queue cap, handshake
+ * reject) and then stopped reading, the same profile that trips the
+ * backpressure writer, keeps that callback pending forever, holding the
+ * half-open socket, its framer state, and the fd. Arm an idle timeout next
+ * to end(): whichever of the two fires first destroys the socket (destroy
+ * also disarms the timer), so the connection cannot outlive its close by
+ * more than the drain budget.
+ */
+export function closeWithDrainTimeout(
+  socket: DrainableSocket,
+  timeoutMs: number = BRIDGE_CLOSE_DRAIN_TIMEOUT_MS,
+): void {
+  socket.setTimeout(timeoutMs, () => socket.destroy())
+  socket.end(() => socket.destroy())
+}
+
 /**
  * Write the info file and tighten it to 0600 — Node creates files 0775 &
   umask, and the token grants full document-edit access, so owner-only is the
@@ -171,8 +200,10 @@ export async function startBridgeServer(options: {
       // end (not destroy): the pending error response must still flush; the
       // destroy in the end callback tears the read side down afterwards so a
       // peer that keeps writing cannot hold the half-open socket (and its
-      // framer buffer) alive indefinitely
-      socket.end(() => socket.destroy())
+      // framer buffer) alive indefinitely — and the drain timeout guarantees
+      // that teardown even when a non-reading peer never lets the end
+      // callback fire (BUG-1204)
+      closeWithDrainTimeout(socket)
       clients.delete(socket)
     }
     socket.on('data', (chunk: Buffer) => {

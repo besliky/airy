@@ -16,5 +16,5 @@
       "@airy-office/ui": ["../../packages/ui/src/index.ts"]
     }
   },
-  "include": ["src", "tests", "electron.vite.config.ts", "vitest.config.ts"]
+  "include": ["src", "tests", "scripts", "electron.vite.config.ts", "vitest.config.ts"]
 }

@@ -2,7 +2,8 @@
 // gateway, reused as-is.
 //
 // Decision (S6): apps/sheets/src/gateway is verified Electron-free — its only
-// non-local runtime dependencies are node builtins, jszip and zod (SA4
+// non-local runtime dependencies are node builtins, jszip, zod, and the
+// node-only @airy-office/electron-utils/atomic-write subpath (SA4
 // section 5; the @airy-office/ai-provider / @airy-office/ui imports in
 // shared/desktop-api are type-only and stripped at build time). Importing the
 // app modules directly from this package therefore bundles cleanly (esbuild

@@ -1,14 +1,29 @@
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { rename, writeFile } from 'node:fs/promises'
+import { rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { atomicWriteFile, looksLikeZip } from '../src/atomic-write'
+import { atomicWriteFile, looksLikeZip, renameDurably } from '../src/atomic-write'
 
 // fsync order is the durability contract: temp-file sync must precede the
 // rename, and the directory sync (POSIX only) must follow it.
-const { order } = vi.hoisted(() => ({ order: [] as string[] }))
+const { order, setInPlaceWriteError, takeInPlaceWriteError } = vi.hoisted(() => {
+  let inPlaceError: Error | null = null
+  return {
+    order: [] as string[],
+    setInPlaceWriteError: (error: Error | null) => {
+      inPlaceError = error
+    },
+    // the non-atomic in-place fallback rides a file handle (not the
+    // module-level writeFile) — tests inject its failure there
+    takeInPlaceWriteError: () => {
+      const error = inPlaceError
+      inPlaceError = null
+      return error
+    },
+  }
+})
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
@@ -18,15 +33,23 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       order.push('rename')
       return actual.rename(...args)
     }),
-    writeFile: vi.fn(actual.writeFile),
     open: vi.fn(async (...args: Parameters<typeof actual.open>) => {
       const handle = await actual.open(...args)
       const path = args[0]
-      const isDirectory = typeof path === 'string' && !path.includes('.tmp')
+      const isTemp = typeof path === 'string' && path.includes('.tmp')
+      // syncDirectory is the only reader: it opens directories with 'r',
+      // while every file write (temp and in-place fallback) opens with 'w'
+      const isDirectory = args[1] === 'r'
       const realSync = handle.sync.bind(handle)
       handle.sync = async () => {
         order.push(isDirectory ? 'dir-sync' : 'file-sync')
         await realSync()
+      }
+      const realWriteFile = handle.writeFile.bind(handle)
+      handle.writeFile = async (...writeArgs: Parameters<typeof handle.writeFile>) => {
+        const error = isTemp ? null : takeInPlaceWriteError()
+        if (error) throw error
+        return realWriteFile(...writeArgs)
       }
       return handle
     }),
@@ -39,7 +62,7 @@ afterEach(() => {
   if (dir) rmSync(dir, { recursive: true, force: true })
   dir = ''
   vi.mocked(rename).mockClear()
-  vi.mocked(writeFile).mockClear()
+  setInPlaceWriteError(null)
   order.length = 0
 })
 
@@ -103,10 +126,9 @@ describe('atomicWriteFile', () => {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       vi.mocked(rename).mockRejectedValueOnce(epermError())
     }
-    const fallbackError = Object.assign(new Error('EIO: fallback write failed'), { code: 'EIO' })
-    // the temp write rides a file handle now, so the first module-level
-    // writeFile call is the non-atomic fallback itself
-    vi.mocked(writeFile).mockRejectedValueOnce(fallbackError)
+    // the temp write rides a file handle first; the next non-temp handle
+    // write is the non-atomic fallback itself
+    setInPlaceWriteError(Object.assign(new Error('EIO: fallback write failed'), { code: 'EIO' }))
 
     await expect(atomicWriteFile(target, Buffer.from('new'))).rejects.toThrow(
       'fallback write failed',
@@ -117,6 +139,26 @@ describe('atomicWriteFile', () => {
     const temp = files.find((file) => file !== 'a.docx')
     expect(temp).toBeDefined()
     expect(readFileSync(join(dir, temp!), 'utf-8')).toBe('new')
+  })
+
+  // BUG-1203: the fallback writes through a file handle and fsyncs it —
+  // in-place writes change no dirent, but the bytes must still be durable.
+  it('fsyncs the in-place fallback write instead of a bare writeFile', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'aw-'))
+    const target = join(dir, 'a.docx')
+    writeFileSync(target, 'old')
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      vi.mocked(rename).mockRejectedValueOnce(epermError())
+    }
+
+    await atomicWriteFile(target, Buffer.from('new'))
+
+    expect(readFileSync(target, 'utf-8')).toBe('new')
+    expect(vi.mocked(rename)).toHaveBeenCalledTimes(5)
+    // the temp sync and the flushed in-place write; no directory sync — an
+    // in-place write changes no directory entry (mockRejectedValueOnce
+    // replaces the mock body, so refused renames don't reach `order`)
+    expect(order).toEqual(['file-sync', 'file-sync'])
   })
 
   it('uses distinct temp files for concurrent writes to one target', async () => {
@@ -148,6 +190,41 @@ describe('atomicWriteFile', () => {
     } else {
       expect(order).toEqual(['file-sync', 'rename', 'dir-sync'])
     }
+  })
+})
+
+describe('renameDurably', () => {
+  // BUG-1203: the sheets xlsx promote/write paths share this helper, so its
+  // protocol (retry + POSIX dir-fsync after the rename) is pinned here once.
+  it('renames and fsyncs the parent directory afterwards (POSIX)', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'aw-'))
+    const temporary = join(dir, '.new.tmp.xlsx')
+    const target = join(dir, 'book.xlsx')
+    writeFileSync(temporary, 'new')
+
+    await renameDurably(temporary, target)
+
+    expect(readFileSync(target, 'utf-8')).toBe('new')
+    expect(readdirSync(dir)).toEqual(['book.xlsx'])
+    if (process.platform === 'win32') {
+      expect(order).toEqual(['rename'])
+    } else {
+      expect(order).toEqual(['rename', 'dir-sync'])
+    }
+  })
+
+  it('rethrows the original retryable code after exhausting the retries', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'aw-'))
+    const temporary = join(dir, '.new.tmp.xlsx')
+    const target = join(dir, 'book.xlsx')
+    writeFileSync(temporary, 'new')
+    vi.mocked(rename).mockRejectedValue(epermError())
+
+    await expect(renameDurably(temporary, target)).rejects.toMatchObject({ code: 'EPERM' })
+    // initial attempt + RENAME_RETRIES retries
+    expect(vi.mocked(rename)).toHaveBeenCalledTimes(5)
+    // the surviving temp is the caller's fallback input, not ours to delete
+    expect(readFileSync(temporary, 'utf-8')).toBe('new')
   })
 })
 
