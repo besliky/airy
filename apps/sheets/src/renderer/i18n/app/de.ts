@@ -446,6 +446,10 @@ export const de = {
   appOutlineNeedsFile:
     'Öffnen Sie zuerst eine XLSX-Datei — Gliederungsgruppen werden in die Datei geschrieben.',
   appOutlineSelectFirst: 'Wählen Sie zuerst die zu gruppierenden Zeilen oder Spalten aus.',
+  appOutlineGutterCollapseRows: 'Zeilengruppe reduzieren, Ebene {n}.',
+  appOutlineGutterExpandRows: 'Zeilengruppe erweitern, Ebene {n}.',
+  appOutlineGutterCollapseCols: 'Spaltengruppe reduzieren, Ebene {n}.',
+  appOutlineGutterExpandCols: 'Spaltengruppe erweitern, Ebene {n}.',
   appDetailHidden: 'Detail ausgeblendet — mit ⌘S speichern.',
   appDetailShown: 'Detail eingeblendet — mit ⌘S speichern.',
   appOutlineMaxLevel: 'Bereits auf der tiefsten Gliederungsebene (7).',

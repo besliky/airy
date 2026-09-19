@@ -421,6 +421,10 @@ export const ko = {
   // Outline (grouping)
   appOutlineNeedsFile: '먼저 XLSX 파일을 여십시오. 개요는 파일에 기록됩니다.',
   appOutlineSelectFirst: '먼저 그룹화할 행이나 열을 선택하십시오.',
+  appOutlineGutterCollapseRows: '행 그룹 접기(수준 {n}).',
+  appOutlineGutterExpandRows: '행 그룹 펼치기(수준 {n}).',
+  appOutlineGutterCollapseCols: '열 그룹 접기(수준 {n}).',
+  appOutlineGutterExpandCols: '열 그룹 펼치기(수준 {n}).',
   appDetailHidden: '하위 수준을 숨겼습니다 — ⌘S로 저장합니다.',
   appDetailShown: '하위 수준을 표시했습니다 — ⌘S로 저장합니다.',
   appOutlineMaxLevel: '이미 가장 깊은 개요 수준(7)입니다.',

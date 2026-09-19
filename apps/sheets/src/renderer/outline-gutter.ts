@@ -9,6 +9,7 @@
 import { ICommandService } from '@univerjs/core'
 import { IRenderManagerService, SHEET_VIEWPORT_KEY } from '@univerjs/engine-render'
 
+import { t } from './i18n/locale'
 import { computeOutlineGroups, maxOutlineLevel } from './outline'
 import { lazySheetScreenExtent, type LazyWorkbookState, type UniverRuntime } from './univer-state'
 import { sheetOutline } from './univer-sync'
@@ -53,6 +54,30 @@ export function installOutlineGutter(
   const buttons = new Map<string, HTMLButtonElement>()
   let disposed = false
   let raf = 0
+
+  /// Focus rescue: when a focused gutter button is about to be removed (its
+  /// group scrolled off-screen), the closest still-wanted button of the same
+  /// layer takes over so keyboard focus never falls out of the gutter.
+  const nearestSurvivor = (
+    doomed: HTMLButtonElement,
+    wanted: ReadonlySet<string>,
+  ): HTMLElement | null => {
+    const siblings = Array.from(doomed.parentElement?.children ?? [])
+    const from = siblings.indexOf(doomed)
+    let best: HTMLElement | null = null
+    let bestDistance = Infinity
+    for (const [key, button] of buttons) {
+      if (!wanted.has(key)) continue
+      const at = siblings.indexOf(button)
+      if (at < 0) continue
+      const distance = Math.abs(at - from)
+      if (distance < bestDistance) {
+        bestDistance = distance
+        best = button
+      }
+    }
+    return best
+  }
 
   const schedule = (): void => {
     if (disposed || raf !== 0) return
@@ -173,6 +198,23 @@ export function installOutlineGutter(
         const collapsed = entries.get(group.summary)?.collapsed ?? false
         button.textContent = collapsed ? '+' : '−'
         button.className = 'outline-gutter-button'
+        // name the control beyond its +/− glyph and announce the group state
+        // (the label also says which axis and level the button acts on): the
+        // + button of a collapsed group expands it, the − button collapses
+        button.setAttribute(
+          'aria-label',
+          t(
+            collapsed
+              ? axis === 'rows'
+                ? 'appOutlineGutterExpandRows'
+                : 'appOutlineGutterExpandCols'
+              : axis === 'rows'
+                ? 'appOutlineGutterCollapseRows'
+                : 'appOutlineGutterCollapseCols',
+            { n: group.level },
+          ),
+        )
+        button.setAttribute('aria-expanded', String(!collapsed))
         if (axis === 'rows') {
           button.style.left = `${surface.x - 3 - group.level * LANE_PX}px`
           button.style.top = `${leading + Math.max((size - BUTTON_PX) / 2, 0)}px`
@@ -205,6 +247,11 @@ export function installOutlineGutter(
 
     for (const [key, button] of buttons) {
       if (wanted.has(key)) continue
+      if (document.activeElement === button) {
+        // the focused group scrolled off-screen: hand focus to the nearest
+        // surviving button of the same layer instead of dropping it to body
+        nearestSurvivor(button, wanted)?.focus()
+      }
       button.remove()
       buttons.delete(key)
     }

@@ -458,6 +458,10 @@ export const fr = {
   appOutlineNeedsFile:
     "Ouvrez d'abord un fichier XLSX — les groupes de plan sont écrits dans le fichier.",
   appOutlineSelectFirst: "Sélectionnez d'abord les lignes ou colonnes à grouper.",
+  appOutlineGutterCollapseRows: 'Réduire le groupe de lignes, niveau {n}.',
+  appOutlineGutterExpandRows: 'Développer le groupe de lignes, niveau {n}.',
+  appOutlineGutterCollapseCols: 'Réduire le groupe de colonnes, niveau {n}.',
+  appOutlineGutterExpandCols: 'Développer le groupe de colonnes, niveau {n}.',
   appDetailHidden: 'Détail masqué — enregistrez avec ⌘S.',
   appDetailShown: 'Détail affiché — enregistrez avec ⌘S.',
   appOutlineMaxLevel: 'Niveau de plan le plus profond déjà atteint (7).',

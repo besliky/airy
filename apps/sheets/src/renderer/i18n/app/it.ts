@@ -444,6 +444,10 @@ export const it = {
   appOutlineNeedsFile:
     'Apri prima un file XLSX — i gruppi della struttura vengono scritti nel file.',
   appOutlineSelectFirst: 'Seleziona prima le righe o le colonne da raggruppare.',
+  appOutlineGutterCollapseRows: 'Comprimi gruppo di righe, livello {n}.',
+  appOutlineGutterExpandRows: 'Espandi gruppo di righe, livello {n}.',
+  appOutlineGutterCollapseCols: 'Comprimi gruppo di colonne, livello {n}.',
+  appOutlineGutterExpandCols: 'Espandi gruppo di colonne, livello {n}.',
   appDetailHidden: 'Dettaglio nascosto — salva con ⌘S.',
   appDetailShown: 'Dettaglio visualizzato — salva con ⌘S.',
   appOutlineMaxLevel: 'Sei già al livello più profondo della struttura (7).',

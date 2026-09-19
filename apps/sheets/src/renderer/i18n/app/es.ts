@@ -443,6 +443,10 @@ export const es = {
   appOutlineNeedsFile:
     'Abra primero un archivo XLSX — los grupos de esquema se escriben en el archivo.',
   appOutlineSelectFirst: 'Seleccione primero las filas o columnas que desea agrupar.',
+  appOutlineGutterCollapseRows: 'Contraer grupo de filas, nivel {n}.',
+  appOutlineGutterExpandRows: 'Expandir grupo de filas, nivel {n}.',
+  appOutlineGutterCollapseCols: 'Contraer grupo de columnas, nivel {n}.',
+  appOutlineGutterExpandCols: 'Expandir grupo de columnas, nivel {n}.',
   appDetailHidden: 'Detalle oculto — guarde con ⌘S.',
   appDetailShown: 'Detalle mostrado — guarde con ⌘S.',
   appOutlineMaxLevel: 'Ya está en el nivel de esquema más profundo (7).',

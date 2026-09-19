@@ -4,9 +4,9 @@
  * exact page assembly, so the exported file matches what Print produces.
  */
 import React, { useState } from 'react'
+import { useModalDialog } from '@airy-office/ui'
 import { useI18n } from '../i18n/locale'
 import type { PdfExportLayout } from '../file-actions'
-import { useModalKeys } from './modal-keys'
 
 export function PdfExportDialog({
   slideCount,
@@ -20,7 +20,7 @@ export function PdfExportDialog({
 }): React.JSX.Element {
   const { t } = useI18n()
   const [layout, setLayout] = useState<PdfExportLayout>('full')
-  const { ref, onKeyDown } = useModalKeys(onClose)
+  const dialog = useModalDialog(onClose)
   const perPage = layout === 'handout2' ? 2 : layout === 'handout3' ? 3 : 1
   const pageCount = Math.ceil(slideCount / perPage)
   const options: Array<[PdfExportLayout, Parameters<typeof t>[0]]> = [
@@ -30,9 +30,9 @@ export function PdfExportDialog({
     ['handout3', 'appPrintLayoutHandout3'],
   ]
   return (
-    <div className="modal-backdrop" onClick={onClose} onKeyDown={onKeyDown} ref={ref}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>{t('ribbonFileExportPdf')}</h2>
+    <div className="modal-backdrop" {...dialog.backdropProps} onClick={onClose}>
+      <div className="modal" {...dialog.dialogProps} onClick={(e) => e.stopPropagation()}>
+        <h2 {...dialog.titleProps}>{t('ribbonFileExportPdf')}</h2>
         <fieldset>
           <legend>{t('appPrintLayoutGroup')}</legend>
           {options.map(([k, key]) => (

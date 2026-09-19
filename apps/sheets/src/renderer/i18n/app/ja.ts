@@ -440,6 +440,10 @@ export const ja = {
   appOutlineNeedsFile:
     '先に XLSX ファイルを開いてください。アウトラインはファイルに書き込まれます。',
   appOutlineSelectFirst: '先にグループ化する行または列を選択してください。',
+  appOutlineGutterCollapseRows: '行グループを折りたたみます（レベル {n}）。',
+  appOutlineGutterExpandRows: '行グループを展開します（レベル {n}）。',
+  appOutlineGutterCollapseCols: '列グループを折りたたみます（レベル {n}）。',
+  appOutlineGutterExpandCols: '列グループを展開します（レベル {n}）。',
   appDetailHidden: '詳細を非表示にしました — ⌘S で保存します。',
   appDetailShown: '詳細を表示しました — ⌘S で保存します。',
   appOutlineMaxLevel: '既に最も深いアウトラインレベル（7）です。',

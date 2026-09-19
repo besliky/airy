@@ -370,6 +370,10 @@ export const zh = {
   // Outline (grouping)
   appOutlineNeedsFile: '请先打开 XLSX 文件——分级显示会写入文件。',
   appOutlineSelectFirst: '请先选中要组合的行或列。',
+  appOutlineGutterCollapseRows: '折叠行组合，第 {n} 级。',
+  appOutlineGutterExpandRows: '展开行组合，第 {n} 级。',
+  appOutlineGutterCollapseCols: '折叠列组合，第 {n} 级。',
+  appOutlineGutterExpandCols: '展开列组合，第 {n} 级。',
   appDetailHidden: '明细已隐藏——⌘S 保存。',
   appDetailShown: '明细已显示——⌘S 保存。',
   appOutlineMaxLevel: '已是最深的分级层级（7）。',
