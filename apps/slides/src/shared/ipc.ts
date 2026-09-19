@@ -1113,6 +1113,13 @@ export interface ExportPdfOp {
   /** Rendered pixel width/height of the slide page (used to compute the PDF page aspect ratio) */
   widthPx: number
   heightPx: number
+  /**
+   * Page layout: 'full' = one slide per page (default); 'notes' = notes pages,
+   * 'handout2'/'handout3' = handouts — assembled exactly like the print sheet (A4)
+   */
+  layout?: 'full' | 'notes' | 'handout2' | 'handout3'
+  /** Per-slide speaker notes for the 'notes' layout (same order as pages) */
+  notes?: string[]
 }
 
 export interface ExportPdfResult {

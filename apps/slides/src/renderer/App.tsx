@@ -57,6 +57,7 @@ import { SlideShowView } from './components/SlideShowView'
 import { IconNotes, IconPlayBoxed } from './components/icons'
 import { PresenterView } from './components/PresenterView'
 import { CustomShowDialog } from './components/CustomShowDialog'
+import { PdfExportDialog } from './components/PdfExportDialog'
 import { PrintDialog } from './components/PrintDialog'
 import { FindReplaceDialog } from './components/FindReplaceDialog'
 import { formatClock, type CustomShow } from './slideshow-utils'
@@ -945,8 +946,13 @@ export function App() {
 
   const saveAs = useCallback(() => fileActions.saveAs(() => ctxRef.current), [])
   const exportImages = useCallback(() => fileActions.exportImages(ctxRef.current), [])
-  const exportPdf = useCallback(() => fileActions.exportPdf(ctxRef.current), [])
-
+  const exportPdf = useCallback(
+    (layout?: Parameters<typeof fileActions.exportPdf>[1]) =>
+      fileActions.exportPdf(ctxRef.current, layout),
+    [],
+  )
+  /// File > Export as PDF: layout chooser (full pages / notes / handouts)
+  const [pdfDlgOpen, setPdfDlgOpen] = useState(false)
   const [printDlgOpen, setPrintDlgOpen] = useState(false)
   /// Help > Keyboard Shortcuts reference dialog.
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -2119,7 +2125,7 @@ export function App() {
       else if (cmd === 'save') void save()
       else if (cmd === 'save-as') void saveAs()
       // macOS has no File ribbon tab, so these only exist in the menu
-      else if (cmd === 'export-pdf') void exportPdf()
+      else if (cmd === 'export-pdf') setPdfDlgOpen(true)
       else if (cmd === 'export-images') void exportImages()
       else if (cmd === 'print') setPrintDlgOpen(true)
       else if (cmd === 'shortcuts') setShortcutsOpen(true)
@@ -2878,7 +2884,7 @@ export function App() {
         onUndo={() => void undo()}
         onRedo={() => void redo()}
         onSaveAs={() => void saveAs()}
-        onExportPdf={() => void exportPdf()}
+        onExportPdf={() => setPdfDlgOpen(true)}
         onPrint={() => setPrintDlgOpen(true)}
         onExportImages={() => void exportImages()}
         onFormat={onFormat}
@@ -4145,6 +4151,17 @@ export function App() {
           current={current}
           onClose={() => setPrintDlgOpen(false)}
           setStatus={setStatus}
+        />
+      )}
+
+      {pdfDlgOpen && (
+        <PdfExportDialog
+          slideCount={slides.filter((s) => !s.hidden).length}
+          onExport={(layout) => {
+            setPdfDlgOpen(false)
+            void exportPdf(layout)
+          }}
+          onClose={() => setPdfDlgOpen(false)}
         />
       )}
 

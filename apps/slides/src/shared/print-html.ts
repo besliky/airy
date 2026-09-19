@@ -10,6 +10,11 @@ export type PrintOrientation = 'portrait' | 'landscape'
 export interface PrintDocOptions {
   /** One image URL per slide, in print order (data: or blob: URLs) */
   srcs: string[]
+  /**
+   * Inline vector slide markup per slide (PDF export's selectable-text pages);
+   * an entry replaces that slide's <img> while keeping the exact same layout.
+   */
+  svgs?: Array<string | undefined>
   /** Slide aspect ratio (width / height); sets the page size of the 'full' layout */
   ratio: number
   layout: PrintLayout
@@ -61,16 +66,18 @@ export function buildPrintDocumentHtml(o: PrintDocOptions): string {
     layout === 'handout2' ? 2 : layout === 'handout3' ? 3 : layout === 'handout6' ? 6 : 1
   const esc = (x: string) =>
     x.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)
+  /** One slide as markup: the inline vector page when provided, else the bitmap <img> */
+  const slideTag = (i: number): string => o.svgs?.[i] ?? `<img src="${o.srcs[i] ?? ''}">`
 
   let body: string
   if (isFull) {
-    body = o.srcs.map((src) => `<div class="page"><img src="${src}"></div>`).join('')
+    body = o.srcs.map((_src, i) => `<div class="page">${slideTag(i)}</div>`).join('')
   } else if (layout === 'notes') {
     // Notes page: slide on top + notes text below
     body = o.srcs
       .map(
-        (src, i) =>
-          `<div class="page notes"><img src="${src}">` +
+        (_src, i) =>
+          `<div class="page notes">${slideTag(i)}` +
           `<div class="note">${esc(o.notes?.[i] ?? '').replace(/\n/g, '<br>')}</div></div>`,
       )
       .join('')
@@ -81,8 +88,8 @@ export function buildPrintDocumentHtml(o: PrintDocOptions): string {
       const cells = o.srcs
         .slice(i, i + perPage)
         .map(
-          (src) =>
-            `<div class="cell"><img src="${src}">` +
+          (_src, j) =>
+            `<div class="cell">${slideTag(i + j)}` +
             (perPage === 3 ? '<div class="rules"></div>' : '') +
             '</div>',
         )
@@ -116,12 +123,15 @@ body { counter-reset: pg; background: transparent; padding: 18px 0 6px; }
 html, body { margin: 0; padding: 0; font-family: -apple-system, 'Segoe UI', sans-serif; }
 .page { width: ${pageW}in; height: ${pageH}in; overflow: hidden; page-break-after: always; box-sizing: border-box; }
 .page:last-of-type { page-break-after: auto; }
-.page > img { display: block; width: 100%; height: 100%; }
+.page > img, .page > svg { display: block; width: 100%; height: 100%; }
 .page.handout { padding: 0.4in; display: flex; flex-direction: ${landscape && perPage === 2 ? 'row' : 'column'}; gap: 0.24in; }
 .page.handout .cell { display: flex; gap: 0.2in; align-items: center; flex: 1; min-width: 0; min-height: 0; }
-.page.handout .cell img { border: 1px solid #bbb; object-fit: contain; max-height: 100%; }
+.page.handout .cell img, .page.handout .cell svg { border: 1px solid #bbb; object-fit: contain; max-height: 100%; }
+.page.handout .cell svg { object-fit: fill; }
 .page.handout.h2 .cell img, .page.handout.h6 .cell img { width: 100%; height: auto; max-height: 100%; }
+.page.handout.h2 .cell svg, .page.handout.h6 .cell svg { width: 100%; height: 100%; }
 .page.handout.h3 .cell img { width: 55%; height: auto; }
+.page.handout.h3 .cell svg { width: 55%; height: auto; }
 .page.handout.h3 .rules {
   flex: 1; align-self: stretch;
   background: repeating-linear-gradient(#fff 0 0.28in, #ccc 0.28in calc(0.28in + 1px));
@@ -129,6 +139,7 @@ html, body { margin: 0; padding: 0; font-family: -apple-system, 'Segoe UI', sans
 .page.handout.h6 { display: grid; grid-template-columns: ${h6Cols}; grid-auto-rows: 1fr; }
 .page.notes { padding: 0.5in; display: flex; flex-direction: column; }
 .page.notes img { width: ${landscape ? 'auto' : '100%'}; ${landscape ? 'max-height: 55%; align-self: center;' : 'height: auto;'} border: 1px solid #bbb; }
+.page.notes svg { width: ${landscape ? 'auto' : '100%'}; ${landscape ? 'max-height: 55%; align-self: center;' : 'height: auto;'} border: 1px solid #bbb; }
 .page.notes .note { margin-top: 0.3in; font-size: 11pt; line-height: 1.5; white-space: pre-wrap; }
 ${frameCss}
 ${previewCss}

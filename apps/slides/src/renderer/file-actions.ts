@@ -159,14 +159,20 @@ export async function exportImages(ctx: ActionCtx): Promise<void> {
   }
 }
 
+/** Export PDF page layouts (the print sheet's subset that makes sense as a file) */
+export type PdfExportLayout = 'full' | 'notes' | 'handout2' | 'handout3'
+
 /**
  * Export as PDF: each page painted as an inline SVG through the same
  * printToPDF-over-DOM pipeline the print sheet uses — the PDF carries real,
  * selectable text. A slide whose SVG assembly fails falls back to the raster
- * page (2x PNG) individually; the rest of the deck stays vector.
+ * page (2x PNG) individually; the rest of the deck stays vector. Non-'full'
+ * layouts reuse the print sheet's page assembly (notes pages / handouts).
  */
-export async function exportPdf(ctx: ActionCtx): Promise<void> {
-  const visible = ctx.slides.filter((s) => !s.hidden)
+export async function exportPdf(ctx: ActionCtx, layout: PdfExportLayout = 'full'): Promise<void> {
+  const visible = ctx.slides
+    .map((slide, deckIndex) => ({ slide, deckIndex }))
+    .filter((v) => !v.slide.hidden)
   if (visible.length === 0) {
     ctx.setStatus(t('appExportNoSlides'))
     return
@@ -176,7 +182,7 @@ export async function exportPdf(ctx: ActionCtx): Promise<void> {
   ctx.setStatus(t('appExportPdfProgress'))
   try {
     const pages: Array<{ svg?: string; pngBase64?: string }> = []
-    for (const slide of visible) {
+    for (const { slide } of visible) {
       try {
         pages.push({ svg: renderSlideSvg(slide, ctx.images) })
       } catch {
@@ -186,11 +192,18 @@ export async function exportPdf(ctx: ActionCtx): Promise<void> {
         pages.push({ pngBase64: png })
       }
     }
+    // notes ride along only for the notes layout (fetched by deck position)
+    const notes =
+      layout === 'notes'
+        ? await Promise.all(visible.map((v) => window.slidesApi.getNotes(v.deckIndex)))
+        : undefined
     const r = await window.slidesApi.exportPdf({
       filePath: target,
       pages,
-      widthPx: visible[0].widthPx,
-      heightPx: visible[0].heightPx,
+      widthPx: visible[0].slide.widthPx,
+      heightPx: visible[0].slide.heightPx,
+      layout,
+      ...(notes ? { notes } : {}),
     })
     ctx.setStatus(
       r.ok
