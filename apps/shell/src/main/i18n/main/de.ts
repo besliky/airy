@@ -100,6 +100,7 @@ export const de = {
   tabCloseOthers: 'Andere schließen',
   tabCloseAll: 'Alle schließen',
   tabDuplicate: 'Duplizieren',
+  moveTabToNewWindow: 'In neues Fenster verschieben',
   menuSelectTab: 'Tab auswählen',
   menuQuit: 'Beenden',
   menuSelectTabN: 'Tab {n}',

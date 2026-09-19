@@ -100,6 +100,7 @@ export const pt = {
   tabCloseOthers: 'Fechar as Outras',
   tabCloseAll: 'Fechar Todas',
   tabDuplicate: 'Duplicar',
+  moveTabToNewWindow: 'Mover para uma nova janela',
   menuSelectTab: 'Selecionar Aba',
   menuQuit: 'Sair',
   menuSelectTabN: 'Aba {n}',

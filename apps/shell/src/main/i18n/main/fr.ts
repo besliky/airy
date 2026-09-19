@@ -100,6 +100,7 @@ export const fr = {
   tabCloseOthers: 'Fermer les autres',
   tabCloseAll: 'Tout fermer',
   tabDuplicate: 'Dupliquer',
+  moveTabToNewWindow: 'Déplacer vers une nouvelle fenêtre',
   menuSelectTab: "Sélectionner l'onglet",
   menuQuit: 'Quitter',
   menuSelectTabN: 'Onglet {n}',

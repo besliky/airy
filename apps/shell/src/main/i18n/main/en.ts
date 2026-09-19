@@ -98,6 +98,7 @@ export const en = {
   tabCloseOthers: 'Close Others',
   tabCloseAll: 'Close All',
   tabDuplicate: 'Duplicate',
+  moveTabToNewWindow: 'Move to New Window',
   menuSelectTab: 'Select Tab',
   menuQuit: 'Quit',
   menuSelectTabN: 'Tab {n}',

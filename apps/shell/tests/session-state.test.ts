@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 /**
  * Session persistence (src/main/session-state.ts): serialize the open-tab
- * set, parse/validate persisted JSON, prune entries whose files vanished,
- * and round-trip the session file atomically.
+ * set window by window (window-ordered, so a tab moved to a second window
+ * restores both), parse/validate persisted JSON (including the legacy
+ * single-window shape), prune entries whose files vanished, and round-trip
+ * the session file atomically.
  */
 
 let S: typeof import('../src/main/session-state')
@@ -21,9 +23,9 @@ afterEach(() => {
   rmSync(scratch, { recursive: true, force: true })
 })
 
-describe('serializeSession', () => {
+describe('serializeSessionWindow', () => {
   it('keeps file-backed editor tabs in strip order and skips untitled/home/present tabs', () => {
-    const state = S.serializeSession(
+    const state = S.serializeSessionWindow(
       [
         { id: 'home', kind: 'home' as const },
         { id: 't1', kind: 'docs' as const, filePath: '/docs/a.docx' },
@@ -43,12 +45,12 @@ describe('serializeSession', () => {
   })
 
   it('drops the activePath when the active tab has no file', () => {
-    const state = S.serializeSession([{ id: 't1', kind: 'markdown' as const }], 't1')
+    const state = S.serializeSessionWindow([{ id: 't1', kind: 'markdown' as const }], 't1')
     expect(state.activePath).toBeNull()
   })
 
   it('records no activePath when no tab matches the active id', () => {
-    const state = S.serializeSession(
+    const state = S.serializeSessionWindow(
       [{ id: 't1', kind: 'docs' as const, filePath: '/a.docx' }],
       't9',
     )
@@ -56,8 +58,67 @@ describe('serializeSession', () => {
   })
 })
 
+describe('serializeSession (window-ordered)', () => {
+  it('serializes two windows in order with their own active tabs', () => {
+    const state = S.serializeSession(
+      [
+        {
+          tabs: [
+            { id: 'home', kind: 'home' as const },
+            { id: 't1', kind: 'docs' as const, filePath: '/a.docx' },
+            { id: 't2', kind: 'pdf' as const, filePath: '/b.pdf' },
+          ],
+          activeId: 't1',
+        },
+        {
+          tabs: [{ id: 't1', kind: 'sheets' as const, filePath: '/c.xlsx' }],
+          activeId: 't1',
+        },
+      ],
+      1,
+    )
+    expect(state).toEqual({
+      windows: [
+        {
+          tabs: [
+            { kind: 'docs', path: '/a.docx' },
+            { kind: 'pdf', path: '/b.pdf' },
+          ],
+          activePath: '/a.docx',
+        },
+        { tabs: [{ kind: 'sheets', path: '/c.xlsx' }], activePath: '/c.xlsx' },
+      ],
+      focusedWindow: 1,
+    })
+  })
+
+  it('clamps an out-of-range focused window index to a valid one', () => {
+    expect(S.serializeSession([{ tabs: [], activeId: null }], 3).focusedWindow).toBe(0)
+    expect(S.serializeSession([{ tabs: [], activeId: null }], -1).focusedWindow).toBe(0)
+  })
+})
+
 describe('parseSession', () => {
-  it('parses a saved session', () => {
+  it('parses a saved multi-window session', () => {
+    const state = S.parseSession({
+      windows: [
+        {
+          tabs: [
+            { kind: 'docs', path: '/a.docx' },
+            { kind: 'markdown', path: '/b.md' },
+          ],
+          activePath: '/b.md',
+        },
+        { tabs: [{ kind: 'pdf', path: '/c.pdf' }], activePath: null },
+      ],
+      focusedWindow: 1,
+    })
+    expect(state.windows).toHaveLength(2)
+    expect(state.windows[0]!.activePath).toBe('/b.md')
+    expect(state.focusedWindow).toBe(1)
+  })
+
+  it('migrates the legacy single-window shape into one focused window', () => {
     const state = S.parseSession({
       tabs: [
         { kind: 'docs', path: '/a.docx' },
@@ -65,90 +126,155 @@ describe('parseSession', () => {
       ],
       activePath: '/b.md',
     })
-    expect(state.tabs).toHaveLength(2)
-    expect(state.activePath).toBe('/b.md')
+    expect(state).toEqual({
+      windows: [
+        {
+          tabs: [
+            { kind: 'docs', path: '/a.docx' },
+            { kind: 'markdown', path: '/b.md' },
+          ],
+          activePath: '/b.md',
+        },
+      ],
+      focusedWindow: 0,
+    })
   })
 
   it('yields an empty state for malformed payloads', () => {
-    for (const bad of [null, undefined, 'x', 42, [], {}, { tabs: 'nope' }, { tabs: [1, 2] }]) {
-      expect(S.parseSession(bad)).toEqual({ tabs: [], activePath: null })
+    for (const bad of [
+      null,
+      undefined,
+      'x',
+      42,
+      [],
+      {},
+      { windows: 'nope' },
+      { windows: [1, 2] },
+    ]) {
+      expect(S.parseSession(bad)).toEqual({ windows: [], focusedWindow: 0 })
     }
   })
 
   it('skips invalid entries without aborting the rest', () => {
     const state = S.parseSession({
-      tabs: [
-        null,
-        { kind: 'home', path: '/x' }, // home is not restorable
-        { kind: 'docs' }, // missing path
-        { kind: 'unknown-kind', path: '/y' },
-        { kind: 'pdf', path: '' },
-        { kind: 'sheets', path: '/ok.xlsx' },
+      windows: [
+        {
+          tabs: [
+            null,
+            { kind: 'home', path: '/x' }, // home is not restorable
+            { kind: 'docs' }, // missing path
+            { kind: 'unknown-kind', path: '/y' },
+            { kind: 'pdf', path: '' },
+            { kind: 'sheets', path: '/ok.xlsx' },
+          ],
+        },
       ],
     })
-    expect(state.tabs).toEqual([{ kind: 'sheets', path: '/ok.xlsx' }])
+    expect(state.windows).toEqual([
+      { tabs: [{ kind: 'sheets', path: '/ok.xlsx' }], activePath: null },
+    ])
   })
 
-  it('drops duplicate paths', () => {
+  it('drops windows left without a single valid tab', () => {
     const state = S.parseSession({
-      tabs: [
-        { kind: 'docs', path: '/a.docx' },
-        { kind: 'docs', path: '/a.docx' },
+      windows: [
+        { tabs: [{ kind: 'docs', path: '/a.docx' }] },
+        { tabs: [{ kind: 'home', path: '/x' }] }, // nothing restorable
+        'garbage',
+        { tabs: [{ kind: 'pdf', path: '/c.pdf' }] },
       ],
-      activePath: '/a.docx',
+      focusedWindow: 2,
     })
-    expect(state.tabs).toHaveLength(1)
+    expect(state.windows.map((w: { tabs: unknown[] }) => w.tabs)).toHaveLength(2)
+    // focus slid onto a surviving window
+    expect(state.focusedWindow).toBe(1)
+  })
+
+  it('drops duplicate paths across windows (the shell dedupes opens anyway)', () => {
+    const state = S.parseSession({
+      windows: [
+        { tabs: [{ kind: 'docs', path: '/a.docx' }] },
+        {
+          tabs: [
+            { kind: 'docs', path: '/a.docx' }, // already in window 1
+            { kind: 'pdf', path: '/c.pdf' },
+          ],
+        },
+      ],
+    })
+    expect(state.windows[1]!.tabs).toEqual([{ kind: 'pdf', path: '/c.pdf' }])
   })
 
   it('ignores an activePath that no listed tab owns', () => {
     const state = S.parseSession({
-      tabs: [{ kind: 'docs', path: '/a.docx' }],
-      activePath: '/gone.docx',
+      windows: [{ tabs: [{ kind: 'docs', path: '/a.docx' }], activePath: '/gone.docx' }],
     })
-    expect(state.activePath).toBeNull()
+    expect(state.windows[0]!.activePath).toBeNull()
   })
 
-  it('caps runaway tab lists', () => {
+  it('caps runaway tab lists across all windows', () => {
     const tabs = Array.from({ length: 200 }, (_, i) => ({ kind: 'docs', path: `/f${i}.docx` }))
-    expect(S.parseSession({ tabs }).tabs).toHaveLength(64)
+    const twoWindows = S.parseSession({ windows: [{ tabs }, { tabs }] })
+    expect(twoWindows.windows[0]!.tabs).toHaveLength(64)
+    expect(twoWindows.windows).toHaveLength(1) // the second window hit the shared cap
   })
 })
 
 describe('pruneSession', () => {
-  it('drops entries whose file no longer exists', () => {
+  it('drops entries whose file no longer exists, window by window', () => {
     const state = {
-      tabs: [
-        { kind: 'docs' as const, path: '/keep.docx' },
-        { kind: 'pdf' as const, path: '/gone.pdf' },
+      windows: [
+        {
+          tabs: [
+            { kind: 'docs' as const, path: '/keep.docx' },
+            { kind: 'pdf' as const, path: '/gone.pdf' },
+          ],
+          activePath: '/keep.docx',
+        },
+        { tabs: [{ kind: 'pdf' as const, path: '/gone2.pdf' }], activePath: '/gone2.pdf' },
       ],
-      activePath: '/keep.docx',
+      focusedWindow: 1,
     }
-    expect(S.pruneSession(state, (p) => p === '/keep.docx').tabs).toEqual([
-      { kind: 'docs', path: '/keep.docx' },
+    const pruned = S.pruneSession(state, (p) => p === '/keep.docx')
+    expect(pruned.windows).toEqual([
+      { tabs: [{ kind: 'docs', path: '/keep.docx' }], activePath: '/keep.docx' },
     ])
+    // the focused window vanished → focus falls to the last survivor
+    expect(pruned.focusedWindow).toBe(0)
   })
 
-  it('clears the activePath when the active file vanished', () => {
+  it('clears a window activePath whose file vanished but keeps the window', () => {
     const state = {
-      tabs: [
-        { kind: 'docs' as const, path: '/keep.docx' },
-        { kind: 'pdf' as const, path: '/gone.pdf' },
+      windows: [
+        {
+          tabs: [
+            { kind: 'docs' as const, path: '/keep.docx' },
+            { kind: 'pdf' as const, path: '/gone.pdf' },
+          ],
+          activePath: '/gone.pdf',
+        },
       ],
-      activePath: '/gone.pdf',
+      focusedWindow: 0,
     }
-    expect(S.pruneSession(state, (p) => p === '/keep.docx').activePath).toBeNull()
+    expect(S.pruneSession(state, (p) => p === '/keep.docx').windows[0]!.activePath).toBeNull()
   })
 })
 
 describe('session file round-trip', () => {
-  it('writes atomically and reads back the same state', () => {
+  it('writes atomically and reads back the same multi-window state', () => {
     const path = join(scratch, 'session.json')
     const state = {
-      tabs: [
-        { kind: 'docs', path: '/a.docx' },
-        { kind: 'html', path: '/b.html' },
+      windows: [
+        {
+          tabs: [
+            { kind: 'docs', path: '/a.docx' },
+            { kind: 'html', path: '/b.html' },
+          ],
+          activePath: '/a.docx',
+        },
+        { tabs: [{ kind: 'pdf', path: '/c.pdf' }], activePath: '/c.pdf' },
       ],
-      activePath: '/a.docx',
+      focusedWindow: 1,
     }
     S.writeSessionState(path, state)
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(state)

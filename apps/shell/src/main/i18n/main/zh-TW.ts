@@ -90,6 +90,7 @@ export const zhTW = {
   tabCloseOthers: '關閉其他分頁',
   tabCloseAll: '關閉全部分頁',
   tabDuplicate: '複製分頁',
+  moveTabToNewWindow: '移到新視窗',
   menuSelectTab: '選擇分頁',
   menuQuit: '結束',
   menuSelectTabN: '分頁 {n}',

@@ -101,6 +101,7 @@ export const it = {
   tabCloseOthers: 'Chiudi le altre',
   tabCloseAll: 'Chiudi tutte',
   tabDuplicate: 'Duplica',
+  moveTabToNewWindow: 'Sposta in una nuova finestra',
   menuSelectTab: 'Seleziona scheda',
   menuQuit: 'Esci',
   menuSelectTabN: 'Scheda {n}',

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
  */
 import {
   RESERVED_TAB_DIGITS,
+  isMoveTabToNewWindowInput,
   switchableDigitsForKind,
   switchDigitFromInput,
   tabIndexForDigit,
@@ -115,5 +116,31 @@ describe('tabSwitchTargetForInput', () => {
     expect(tabSwitchTargetForInput(key('KeyA'), tabs)).toBeNull()
     expect(tabSwitchTargetForInput(key('Digit2', { shift: true }), tabs)).toBeNull()
     expect(tabSwitchTargetForInput(key('Digit1'), [])).toBeNull()
+  })
+})
+
+describe('isMoveTabToNewWindowInput', () => {
+  const key = (over: Record<string, unknown> = {}) =>
+    ({
+      type: 'keyDown',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: true,
+      code: 'KeyK',
+      ...over,
+    }) as Parameters<typeof isMoveTabToNewWindowInput>[0]
+
+  it('matches Ctrl/Cmd+Shift+K on both platforms', () => {
+    expect(isMoveTabToNewWindowInput(key())).toBe(true)
+    expect(isMoveTabToNewWindowInput(key({ control: false, meta: true }))).toBe(true)
+  })
+
+  it('rejects missing modifiers, Alt combos, other keys, and key-ups', () => {
+    expect(isMoveTabToNewWindowInput(key({ shift: false }))).toBe(false)
+    expect(isMoveTabToNewWindowInput(key({ control: false, meta: false }))).toBe(false)
+    expect(isMoveTabToNewWindowInput(key({ alt: true }))).toBe(false)
+    expect(isMoveTabToNewWindowInput(key({ code: 'KeyM' }))).toBe(false)
+    expect(isMoveTabToNewWindowInput(key({ type: 'keyUp' }))).toBe(false)
   })
 })

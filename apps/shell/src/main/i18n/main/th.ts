@@ -95,6 +95,7 @@ export const th = {
   tabCloseOthers: 'ปิดแท็บอื่นๆ',
   tabCloseAll: 'ปิดแท็บทั้งหมด',
   tabDuplicate: 'ทำสำเนาแท็บ',
+  moveTabToNewWindow: 'ย้ายไปหน้าต่างใหม่',
   menuSelectTab: 'เลือกแท็บ',
   menuQuit: 'ออก',
   menuSelectTabN: 'แท็บ {n}',

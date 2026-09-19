@@ -98,6 +98,7 @@ export const ko = {
   tabCloseOthers: '다른 탭 닫기',
   tabCloseAll: '모든 탭 닫기',
   tabDuplicate: '탭 복제',
+  moveTabToNewWindow: '새 창으로 이동',
   menuSelectTab: '탭 선택',
   menuQuit: '끝내기',
   menuSelectTabN: '탭 {n}',

@@ -24,9 +24,13 @@ export const RELEASES_LATEST_URL = `https://github.com/${GITHUB_OWNER}/${GITHUB_
  *  - 'notify-only' Linux deb installs: electron-updater cannot self-update a
  *                  deb package, so an available update only raises a
  *                  notification linking to the releases page.
- *  - 'off'         macOS (out of scope for the fork) and dev runs: inactive.
+ *  - 'manual'      macOS: unsigned builds cannot auto-update (Squirrel/
+ *                  electron-updater would need signed dmg + latest-mac.yml
+ *                  trust); the menu item shows a dialog linking to the
+ *                  releases page, and no feed check ever runs automatically.
+ *  - 'off'         dev runs and unknown platforms: inactive.
  */
-export type UpdatePolicy = 'in-app' | 'notify-only' | 'off'
+export type UpdatePolicy = 'in-app' | 'notify-only' | 'manual' | 'off'
 
 /**
  * Platform detection, injected so tests stay deterministic. On Linux the
@@ -40,6 +44,7 @@ export function detectUpdatePolicy(
 ): UpdatePolicy {
   if (platform === 'win32') return 'in-app'
   if (platform === 'linux') return env.APPIMAGE ? 'in-app' : 'notify-only'
+  if (platform === 'darwin') return 'manual'
   return 'off'
 }
 
@@ -77,6 +82,9 @@ export interface UpdaterUi {
   offerInstall(info: { version: string }): Promise<'now' | 'on-quit'>
   /** notify-only policy: click-through notice pointing at the releases page */
   notifyAboutRelease(info: { version: string; releasesUrl: string }): void
+  /** manual policy (macOS): dialog pointing at the releases page — no version
+   *  is known because the feed is never queried */
+  notifyManualUpdate(info: { releasesUrl: string }): void
 }
 
 export interface UpdaterControllerOptions {
@@ -141,10 +149,12 @@ export class UpdaterController {
   /**
    * Schedule the deferred startup check: a few seconds after whenReady, so
    * the update check never competes with app boot. No-op for the 'off'
-   * policy (macOS) — call start() unconditionally from the glue.
+   * policy (dev) and 'manual' (macOS: no automatic feed contact — the check
+   * only ever happens from the menu) — call start() unconditionally from
+   * the glue.
    */
   start(startDelayMs: number = DEFAULT_START_DELAY_MS): void {
-    if (this.started || !this.active) return
+    if (this.started || !this.active || this.policy === 'manual') return
     this.started = true
     setTimeout(() => {
       this.checkNow()
@@ -154,6 +164,12 @@ export class UpdaterController {
   /** manual check from the menu; also the auto-check entry point */
   checkNow(): void {
     if (!this.active || this.busy) return
+    // macOS: the menu item is a documented stub — show the manual-download
+    // dialog instead of contacting the feed
+    if (this.policy === 'manual') {
+      this.ui.notifyManualUpdate({ releasesUrl: RELEASES_LATEST_URL })
+      return
+    }
     this.setStatus({ phase: 'checking' })
     this.client
       .checkForUpdates()

@@ -81,9 +81,10 @@ launch and via **Help → Check for Updates**. Behavior per install type:
   downloads `airy_<v>_amd64.deb` and installs it (`apt install ./…` upgrades
   the `airy` package).
 
-macOS keeps the in-app updater off (unsigned builds make auto-update
-trust-reduced); a new version arrives by downloading the new
-`Airy-<v>-arm64.dmg` from the releases page.
+macOS has no in-app update path (unsigned builds make auto-update
+trust-reduced, so no feed check runs there): Help → Check for Updates shows
+a dialog linking to the releases page, and a new version arrives by
+downloading the new `Airy-<v>-arm64.dmg` from there.
 
 ## Manually verifying the update flow
 

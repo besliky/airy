@@ -98,6 +98,7 @@ export const ja = {
   tabCloseOthers: '他のタブを閉じる',
   tabCloseAll: 'すべてのタブを閉じる',
   tabDuplicate: 'タブを複製',
+  moveTabToNewWindow: '新しいウィンドウへ移動',
   menuSelectTab: 'タブを選択',
   menuQuit: '終了',
   menuSelectTabN: 'タブ {n}',

@@ -44,11 +44,14 @@ All application windows run with the full Electron renderer lockdown:
 ## Updater Posture
 
 The in-app updater (Windows NSIS and Linux AppImage; deb installs notify
-only, macOS is off) polls the fork's GitHub Releases feed
-(`github.com/besliky/airy`) and never acts silently: the deferred startup
-check only raises an availability dialog, the download starts only from its
-"Download" button, and the staged update is installed only through the
-explicit "Install and Restart" choice — or, at the user's picking, on quit.
+only) polls the fork's GitHub Releases feed (`github.com/besliky/airy`) and
+never acts silently: the deferred startup check only raises an availability
+dialog, the download starts only from its "Download" button, and the staged
+update is installed only through the explicit "Install and Restart" choice —
+or, at the user's picking, on quit. macOS has no in-app update path at all
+(unsigned builds cannot self-update): the updater never contacts the feed
+there, and Help → Check for Updates only shows a dialog linking to the
+releases page — the user downloads and installs the new dmg manually.
 Release artifacts are unsigned (no code-signing certificate), so update
 integrity rests on GitHub TLS plus electron-updater's `latest.yml` sha512
 verification rather than OS signature checks; `publisherName` /

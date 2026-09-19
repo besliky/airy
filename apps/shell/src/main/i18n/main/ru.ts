@@ -100,6 +100,7 @@ export const ru = {
   tabCloseOthers: 'Закрыть остальные',
   tabCloseAll: 'Закрыть все',
   tabDuplicate: 'Дублировать',
+  moveTabToNewWindow: 'Переместить в новое окно',
   menuSelectTab: 'Выбрать вкладку',
   menuQuit: 'Выход',
   menuSelectTabN: 'Вкладка {n}',

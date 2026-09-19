@@ -62,6 +62,22 @@ export interface TabSwitchTabLike {
 }
 
 /**
+ * Whether a keydown is the "move the active tab to a new window" chord:
+ * Ctrl/Cmd+Shift+K, no Alt. The chord was picked against every editor's
+ * keydown map (docs reserves Ctrl+M±Shift, ⌘/Ctrl+T±Shift, ⇧⌘E/G;
+ * sheets Ctrl+Y) so the shell never eats an editor shortcut.
+ */
+export function isMoveTabToNewWindowInput(input: InputLike): boolean {
+  return (
+    input.type === 'keyDown' &&
+    (input.control || input.meta) &&
+    input.shift &&
+    !input.alt &&
+    input.code === 'KeyK'
+  )
+}
+
+/**
  * The tab id a before-input-event keydown should switch to, or null when the
  * input is not a switch chord, the active tab's kind reserves the digit for an
  * editor shortcut, or the digit points beyond the strip. The single decision

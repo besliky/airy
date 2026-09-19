@@ -49,9 +49,11 @@ let labelsProvider: (() => UpdaterMenuLabels) | null = null
 
 /**
  * Configure the updater. Inactive (no menu item, no checks) when the app is
- * unpacked or the platform policy is 'off' (macOS). Called once from
- * app.whenReady; never blocks startup — the first check is deferred by the
- * controller (core.ts DEFAULT_START_DELAY_MS).
+ * unpacked or the platform policy is 'off' (unknown platforms). macOS uses
+ * the 'manual' policy: the menu item shows a dialog linking to the releases
+ * page and no feed is ever contacted. Called once from app.whenReady; never
+ * blocks startup — the first check is deferred by the controller (core.ts
+ * DEFAULT_START_DELAY_MS).
  */
 export function initUpdater(options: UpdaterGlueOptions): void {
   if (controller) return
@@ -64,6 +66,16 @@ export function initUpdater(options: UpdaterGlueOptions): void {
       client: neverClient(),
       ui: neverUi(),
       log,
+    })
+    return
+  }
+  if (policy === 'manual') {
+    controller = new UpdaterController({
+      policy,
+      client: neverClient(),
+      ui: manualUi(options.getWindow),
+      log,
+      onStatusChange: options.onStatusChange,
     })
     return
   }
@@ -160,6 +172,46 @@ function dialogUi(getWindow: () => BrowserWindow | null): UpdaterUi {
       notification.on('click', () => void openHelpUrl(releasesUrl))
       notification.show()
     },
+    // the dialog UI serves the in-app/notify-only policies; 'manual' gets its
+    // own UI below, so this entry is never reached
+    notifyManualUpdate: () => {},
+  }
+}
+
+/** macOS 'manual' policy UI: a dialog linking to the releases page (the feed
+ *  is never queried, so there is no version to report — just the way out) */
+function manualUi(getWindow: () => BrowserWindow | null): UpdaterUi {
+  return {
+    async offerUpdate() {
+      return 'later'
+    },
+    async offerInstall() {
+      return 'on-quit'
+    },
+    notifyAboutRelease: () => {},
+    notifyManualUpdate({ releasesUrl }) {
+      const options: Electron.MessageBoxOptions = {
+        type: 'info',
+        title: updaterText('updManualTitle'),
+        message: updaterText('updManualBody'),
+        // native dialogs cannot hyperlink: the dedicated button opens the
+        // releases page, and the URL stays visible as detail text
+        detail: releasesUrl,
+        buttons: [updaterText('updManualButton'), updaterText('updLaterButton')],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      }
+      const win = getWindow()
+      const shown =
+        win && !win.isDestroyed()
+          ? dialog.showMessageBox(win, options)
+          : dialog.showMessageBox(options)
+      void shown.then(({ response }) => {
+        // single gate for every shell.openExternal (see github-menu's openHelpUrl)
+        if (response === 0) void openHelpUrl(releasesUrl)
+      })
+    },
   }
 }
 
@@ -187,6 +239,7 @@ function neverUi(): UpdaterUi {
       return 'on-quit'
     },
     notifyAboutRelease: () => {},
+    notifyManualUpdate: () => {},
   }
 }
 
