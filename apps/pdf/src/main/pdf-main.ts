@@ -454,8 +454,13 @@ interface RuntimePaths {
   rendererFile?: string
   /** Shell router used to open generated PDFs in a new Airy tab. */
   openGeneratedPath?: (path: string) => boolean
-  /** Host-owned cross-app document creator (the shell routes DOCX into Docs). */
-  createDocument?: (request: CreateDocumentRequest) => Promise<CreateDocumentResult>
+  /** Host-owned cross-app document creator (the shell routes DOCX into Docs);
+   *  the asking view's webContents id rides along so the result opens in the
+   *  asking window (BUG-1107). */
+  createDocument?: (
+    request: CreateDocumentRequest,
+    senderWcId?: number,
+  ) => Promise<CreateDocumentResult>
 }
 
 let runtime: RuntimePaths = { preloadPath: '' }
@@ -867,7 +872,7 @@ function registerPdfIpc(): void {
       const create = runtime.createDocument
       if (!create) return { ok: false, error: 'pdf: document creation is unavailable in this host' }
       try {
-        return await create(parsed)
+        return await create(parsed, e.sender.id)
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }

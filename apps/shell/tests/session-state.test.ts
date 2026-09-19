@@ -190,19 +190,55 @@ describe('parseSession', () => {
     expect(state.focusedWindow).toBe(1)
   })
 
-  it('drops duplicate paths across windows (the shell dedupes opens anyway)', () => {
+  it('keeps the same file in two windows (per-window dedup, BUG-1108)', () => {
     const state = S.parseSession({
       windows: [
         { tabs: [{ kind: 'docs', path: '/a.docx' }] },
         {
           tabs: [
-            { kind: 'docs', path: '/a.docx' }, // already in window 1
+            { kind: 'docs', path: '/a.docx' }, // the same file, second window — a supported layout
+            { kind: 'pdf', path: '/c.pdf' },
+          ],
+          activePath: '/a.docx',
+        },
+      ],
+    })
+    expect(state.windows[0]!.tabs).toEqual([{ kind: 'docs', path: '/a.docx' }])
+    expect(state.windows[1]!.tabs).toEqual([
+      { kind: 'docs', path: '/a.docx' },
+      { kind: 'pdf', path: '/c.pdf' },
+    ])
+    // the second window's own activePath still validates against its tabs
+    expect(state.windows[1]!.activePath).toBe('/a.docx')
+  })
+
+  it('still drops duplicate paths within one window', () => {
+    const state = S.parseSession({
+      windows: [
+        {
+          tabs: [
+            { kind: 'docs', path: '/a.docx' },
+            { kind: 'docs', path: '/a.docx' }, // same window: would just re-activate
             { kind: 'pdf', path: '/c.pdf' },
           ],
         },
       ],
     })
-    expect(state.windows[1]!.tabs).toEqual([{ kind: 'pdf', path: '/c.pdf' }])
+    expect(state.windows[0]!.tabs).toEqual([
+      { kind: 'docs', path: '/a.docx' },
+      { kind: 'pdf', path: '/c.pdf' },
+    ])
+  })
+
+  it('an activePath repeated in another window stays valid for its own window', () => {
+    const state = S.parseSession({
+      windows: [
+        { tabs: [{ kind: 'docs', path: '/a.docx' }], activePath: '/a.docx' },
+        { tabs: [{ kind: 'docs', path: '/a.docx' }], activePath: '/a.docx' },
+      ],
+    })
+    expect(state.windows[0]!.activePath).toBe('/a.docx')
+    expect(state.windows[1]!.activePath).toBe('/a.docx')
   })
 
   it('ignores an activePath that no listed tab owns', () => {

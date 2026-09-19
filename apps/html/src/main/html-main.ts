@@ -931,24 +931,27 @@ export function setHtmlProvisionalTitleHook(hook: (wc: WebContents, title: strin
   provisionalTitleHook = hook
 }
 
-/** After a Word export the shell opens the new .docx in a docs tab; standalone reveals it */
-let docxExportedHook: ((path: string) => void) | null = null
+/** After a Word export the shell opens the new .docx in a docs tab of the
+ * exporting view's window (senderWcId, BUG-1107); standalone reveals it */
+let docxExportedHook: ((path: string, senderWcId?: number) => void) | null = null
 /** Before the .docx is written: the shell closes a docs tab already showing that path
  * (its unsaved-changes prompt applies); false = the user kept it, so the export is dropped */
-let docxExportPrepareHook: ((path: string) => Promise<boolean>) | null = null
+let docxExportPrepareHook: ((path: string, senderWcId?: number) => Promise<boolean>) | null = null
 
-export function setHtmlDocxExportedHook(hook: (path: string) => void): void {
+export function setHtmlDocxExportedHook(hook: (path: string, senderWcId?: number) => void): void {
   docxExportedHook = hook
 }
 
-export function setHtmlDocxExportPrepareHook(hook: (path: string) => Promise<boolean>): void {
+export function setHtmlDocxExportPrepareHook(
+  hook: (path: string, senderWcId?: number) => Promise<boolean>,
+): void {
   docxExportPrepareHook = hook
 }
 
-function openExportedDocx(path: string): void {
+function openExportedDocx(path: string, senderWcId?: number): void {
   try {
     if (docxExportedHook) {
-      docxExportedHook(path)
+      docxExportedHook(path, senderWcId)
       return
     }
   } catch (err) {
@@ -1676,7 +1679,7 @@ function registerHtmlIpc(): void {
         e.sender.id,
       )
       if (picked.canceled || !picked.filePath) return { ok: true, canceled: true }
-      if (docxExportPrepareHook && !(await docxExportPrepareHook(picked.filePath))) {
+      if (docxExportPrepareHook && !(await docxExportPrepareHook(picked.filePath, e.sender.id))) {
         return { ok: true, canceled: true }
       }
       const workDir = await mkdtemp(join(tmpdir(), 'airy-html-docx-'))
@@ -1691,7 +1694,7 @@ function registerHtmlIpc(): void {
         driver = await ElectronBrowserDriver.create(HTML2DOCX_VIEWPORT)
         const { docx } = await convertHtmlToDocx({ url: pathToFileURL(htmlPath).href }, driver)
         await atomicWriteFile(picked.filePath, docx)
-        openExportedDocx(picked.filePath)
+        openExportedDocx(picked.filePath, e.sender.id)
         return { ok: true, path: picked.filePath }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }

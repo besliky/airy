@@ -249,6 +249,7 @@ import { createQueuedWorkbookDelivery } from './queued-workbook-delivery'
 import { isSameFile, isValidRenameName } from './rename-validation'
 import { TabManager } from './tab-manager'
 import type { DetachedTab } from './tab-manager'
+import { createQuitFlow } from './quit-flow'
 import { ShellWindowRegistry, type ShellWindowEntry } from './shell-windows'
 import { startShellBridge, stopShellBridge } from './bridge/shell-bridge'
 import { initUpdater, updaterMenuItems } from './updater'
@@ -326,8 +327,9 @@ configureSheetsRuntime({
   sidecarPath: SIDECAR_BIN,
   openGeneratedPath: (path) => openGeneratedDocument(path),
   // The sheets AI's create_document (docx/pdf/md) funnels into the docs-owned
-  // creation flow, like the pdf app below.
-  createDocument: createAiDocument,
+  // creation flow, like the pdf app below; the sender's webContents id rides
+  // along so the result opens in the asking tab's window (BUG-1107).
+  createDocument: (request, senderWcId) => createAiDocument(request, senderWcId),
 })
 configureSlidesRuntime({
   preloadPath: join(SLIDES_OUT, 'preload', 'index.js'),
@@ -340,7 +342,7 @@ configurePdfRuntime({
   rendererUrl: process.env.PDF_RENDERER_URL,
   rendererFile: join(PDF_OUT, 'renderer', 'index.html'),
   openGeneratedPath: (path) => openGeneratedDocument(path),
-  createDocument: createAiDocument,
+  createDocument: (request, senderWcId) => createAiDocument(request, senderWcId),
 })
 configureMarkdownRuntime({
   preloadPath: join(MARKDOWN_OUT, 'preload', 'index.js'),
@@ -514,10 +516,14 @@ function focusedManager(): TabManager | null {
 
 /** the manager whose strip holds this editor webContents (tabs live in exactly one window) */
 function managerForWebContents(webContentsId: number): TabManager | null {
-  for (const entry of shellEntries()) {
-    if (entry.manager.tabIdForWebContents(webContentsId) !== undefined) return entry.manager
-  }
-  return null
+  return shellWindows.managerForWebContents(webContentsId)
+}
+
+/** Routing target for a sender-identified hook call (editor module asking the
+ *  shell to open/list/close something): the sender's own window when its tab
+ *  is live, else the focused one (see ShellWindowRegistry.managerForSender) */
+function managerForSender(senderWcId?: number): TabManager | null {
+  return shellWindows.managerForSender(senderWcId)
 }
 
 function isShellWindow(win: BrowserWindow): boolean {
@@ -784,11 +790,16 @@ function persistSessionState(skipStaged = false, exclude?: ShellWindowEntry): vo
   }
 }
 
-/** Persist the open-tab set (debounced — every open/close/reorder/activation fires this) */
+/** Persist the open-tab set (debounced — every open/close/reorder/activation fires this).
+ *  No-op while quitting (BUG-1105): the quit writes ONE snapshot at the first
+ *  confirmed window close; a debounced write firing later — e.g. from a dirty
+ *  guard activating a tab in another window — would re-serialize from the
+ *  surviving windows only and drop the already-closed ones from the session. */
 function scheduleSessionSave(): void {
   if (sessionSaveTimer) clearTimeout(sessionSaveTimer)
   sessionSaveTimer = setTimeout(() => {
     sessionSaveTimer = null
+    if (quitFlow.quitting) return
     persistSessionState()
   }, 800)
 }
@@ -1030,30 +1041,50 @@ function createShellWindow(options: CreateShellWindowOptions = {}): ShellWindowE
     }
     event.preventDefault()
     void (async () => {
+      // any Cancel below aborts this window's close — and with it the whole
+      // quit when one was in flight (abortAppQuit unwinds the quit state)
       for (const tab of dirtySheets) {
         manager.activateTab(tab.id)
-        if (!(await requestSheetsClose(tab.webContents, win))) return
+        if (!(await requestSheetsClose(tab.webContents, win))) {
+          abortAppQuit()
+          return
+        }
       }
       for (const tab of dirtyPdf) {
         manager.activateTab(tab.id)
-        if (!(await requestPdfClose(tab.webContents, win))) return
+        if (!(await requestPdfClose(tab.webContents, win))) {
+          abortAppQuit()
+          return
+        }
       }
       for (const tab of dirtyMarkdown) {
         manager.activateTab(tab.id)
-        if (!(await requestMarkdownClose(tab.webContents, win))) return
+        if (!(await requestMarkdownClose(tab.webContents, win))) {
+          abortAppQuit()
+          return
+        }
       }
       for (const tab of dirtyHtml) {
         manager.activateTab(tab.id)
-        if (!(await requestHtmlClose(tab.webContents, win))) return
+        if (!(await requestHtmlClose(tab.webContents, win))) {
+          abortAppQuit()
+          return
+        }
       }
       for (const tab of dirtySlides) {
         manager.activateTab(tab.id)
-        if (!(await requestSlidesClose(tab.webContents, win))) return
+        if (!(await requestSlidesClose(tab.webContents, win))) {
+          abortAppQuit()
+          return
+        }
       }
       for (const tab of docsTabs) {
         if (!(await docsQueryDirty(tab.webContents))) continue
         manager.activateTab(tab.id)
-        if (!(await requestDocsClose(tab.webContents, win))) return
+        if (!(await requestDocsClose(tab.webContents, win))) {
+          abortAppQuit()
+          return
+        }
       }
       closeConfirmed = true
       finishWindowClose(entry)
@@ -1076,9 +1107,10 @@ function createShellWindow(options: CreateShellWindowOptions = {}): ShellWindowE
 
 /** set by before-quit: close events during a quit must not persist the
  *  session window-by-window (the last window's write would drop the earlier
- *  ones); one write at the first confirmed close keeps them all */
-let quitting = false
-let quitSessionPersisted = false
+ *  ones); one write at the first confirmed close keeps them all. A cancelled
+ *  dirty-guard unwinds the quit (abortAppQuit) so later ordinary closes keep
+ *  their per-window semantics (BUG-1104). */
+const quitFlow = createQuitFlow()
 
 /**
  * Bookkeeping when a window's close is really going through (both the clean
@@ -1096,17 +1128,22 @@ function finishWindowClose(entry: ShellWindowEntry): void {
     if (tab.filePath && isInsideDirectory(stagingDir, tab.filePath))
       removeStagedTabFile(tab.filePath)
   }
-  if (quitting) {
-    // app-wide quit: keep every still-listed window's file-backed tabs for the
-    // next launch, staged ones dropped — written once, at the first window
-    if (!quitSessionPersisted) {
-      persistSessionState(true)
-      quitSessionPersisted = true
-    }
-    return
-  }
-  if (shellEntries().length > 1) persistSessionState(false, entry)
-  else persistSessionState(true)
+  const decision = quitFlow.closeDecision(shellEntries().length)
+  if (!decision.persist) return
+  if (decision.excludeClosing) persistSessionState(false, entry)
+  else persistSessionState(decision.skipStaged)
+}
+
+/**
+ * A cancelled dirty-guard stopped this window's close; when that close was
+ * part of an app-wide quit, the quit is aborted with it (the other windows
+ * keep running). Unwind the quit bookkeeping — and if a quit-time session
+ * write already landed, re-serialize from the live windows so the aborted
+ * quit leaves session state as if it never happened (BUG-1104: the armed
+ * flag used to turn every later close into a skipped write).
+ */
+function abortAppQuit(): void {
+  if (quitFlow.cancel()) persistSessionState(false)
 }
 
 /** point the editor modules' dialog parents at this window (focus follows the shell) */
@@ -1162,23 +1199,28 @@ function installShellModuleHooks(): void {
     },
   })
   setDocsShellHooks({
-    openTab: (openPath, options) => {
+    // every hook resolves the SENDER's window first (BUG-1107: a background
+    // docs tab in an unfocused window must see its own tabs and get its
+    // results there, not in whichever window holds focus); menu-driven calls
+    // arrive without a sender and fall back to the focused window
+    openTab: (openPath, options, senderWcId) => {
       // win:new arrives from a docs renderer with a renderer-named path:
       // route it through the same confinement an OS-level open uses
       // (grant the folder, dedupe an already-open document). Falls through
       // to a plain tab for paths the router cannot place (e.g. missing file).
-      if (openPath && openDocumentPath(openPath)) return
-      focusedManager()?.openDocsTab(openPath, options)
+      if (openPath && openDocumentPath(openPath, managerForSender(senderWcId) ?? undefined)) return
+      managerForSender(senderWcId)?.openDocsTab(openPath, options)
     },
-    openAiDocTab: (content) =>
-      focusedManager()?.openDocsTab(undefined, { newBlank: true, aiContent: content }),
-    listTabs: () =>
-      (focusedManager()?.list() ?? [])
+    openAiDocTab: (content, senderWcId) =>
+      managerForSender(senderWcId)?.openDocsTab(undefined, { newBlank: true, aiContent: content }),
+    listTabs: (senderWcId) =>
+      (managerForSender(senderWcId)?.list() ?? [])
         .filter((t) => t.kind === 'docs')
         .map((t) => ({ id: t.id, title: t.title, focused: t.active })),
-    focusTab: (id) => focusedManager()?.activateTab(id),
+    focusTab: (id, senderWcId) => managerForSender(senderWcId)?.activateTab(id),
     closeActiveTab: () => focusedManager()?.closeActiveTab(),
-    openGeneratedPath: (path) => openGeneratedDocument(path),
+    openGeneratedPath: (path, senderWcId) =>
+      openGeneratedDocument(path, managerForSender(senderWcId)),
   })
   setSheetsCloseTabHook(() => focusedManager()?.closeActiveTab())
   // A File > Open inside an editor tab that picked a file of another type is
@@ -1267,14 +1309,15 @@ function installShellModuleHooks(): void {
     }
   })
   // markdown "convert & open in Docs" → route the fresh .docx to a docs tab
-  setMarkdownDocxExportedHook((path) => {
-    openDocumentPath(path)
+  // in the EXPORTING tab's window (BUG-1107)
+  setMarkdownDocxExportedHook((path, senderWcId) => {
+    openDocumentPath(path, managerForSender(senderWcId) ?? undefined)
   })
   // Word export to a path already open in a docs tab: close that tab before the file is
   // written (its unsaved-changes prompt applies, and a later save of the stale document
   // could otherwise overwrite the export); a cancelled close aborts the export.
-  setHtmlDocxExportPrepareHook(async (path) => {
-    const manager = focusedManager()
+  setHtmlDocxExportPrepareHook(async (path, senderWcId) => {
+    const manager = managerForSender(senderWcId)
     if (!manager) return true
     const stale = manager.findDocsTabByPath(path)
     if (!stale) return true
@@ -1283,8 +1326,8 @@ function installShellModuleHooks(): void {
     if (active && active !== stale) manager.activateTab(active)
     return !manager.findDocsTabByPath(path)
   })
-  setHtmlDocxExportedHook((path) => {
-    openDocumentPath(path)
+  setHtmlDocxExportedHook((path, senderWcId) => {
+    openDocumentPath(path, managerForSender(senderWcId) ?? undefined)
   })
 }
 
@@ -1387,10 +1430,11 @@ function openDocumentPath(filePath: string, into?: TabManager): boolean {
  * reloaded from disk so a re-export to the same path shows the new bytes
  * instead of the previous in-memory document (which may also hold unsaved
  * annotations). In-memory edits on that tab are discarded — Save would
- * overwrite the file we just exported.
+ * overwrite the file we just exported. `into` pins the exporting tab's
+ * window (BUG-1107); without it the focused window gets the tab.
  */
-function openGeneratedDocument(filePath: string): boolean {
-  const manager = focusedManager()
+function openGeneratedDocument(filePath: string, into?: TabManager | null): boolean {
+  const manager = into ?? focusedManager()
   if (manager && PDF_RE.test(filePath)) {
     const existing = manager.findPdfTabByPath(filePath)
     if (existing) {
@@ -1399,7 +1443,7 @@ function openGeneratedDocument(filePath: string): boolean {
       return true
     }
   }
-  return openDocumentPath(filePath)
+  return openDocumentPath(filePath, into ?? undefined)
 }
 
 function routeDocumentPath(filePath: string, into?: TabManager): boolean {
@@ -3447,8 +3491,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
-  quitting = true
-  quitSessionPersisted = false
+  quitFlow.begin()
   // No close prompt may fall through to "Save" during shutdown
   markSheetsShuttingDown()
   stopSheetsSidecar()

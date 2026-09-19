@@ -1708,8 +1708,13 @@ interface SheetsRuntimeConfig {
   sidecarPath?: string | undefined
   /** Shell router used to open exported/AI-generated files in a new Airy tab. */
   openGeneratedPath?: (path: string) => boolean
-  /** Host-owned cross-app document creator (the shell routes docx/pdf/md into Docs). */
-  createDocument?: (request: SheetsAiHostDocumentRequest) => Promise<WorkbookCreateDocumentResult>
+  /** Host-owned cross-app document creator (the shell routes docx/pdf/md into
+   *  Docs); the asking view's webContents id rides along so the result opens
+   *  in the asking window (BUG-1107). */
+  createDocument?: (
+    request: SheetsAiHostDocumentRequest,
+    senderWcId?: number,
+  ) => Promise<WorkbookCreateDocumentResult>
 }
 
 let runtime: SheetsRuntimeConfig = {
@@ -3108,7 +3113,10 @@ export function registerSheetsIpc(): void {
         }
         const create = runtime.createDocument
         if (!create) return { ok: false, error: 'Document creation is unavailable in this host.' }
-        return await create({ type: request.type, title: request.title, content: request.content })
+        return await create(
+          { type: request.type, title: request.title, content: request.content },
+          event.sender.id,
+        )
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }

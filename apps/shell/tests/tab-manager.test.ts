@@ -772,6 +772,110 @@ describe('moving a tab to another window (detach/adopt)', () => {
   })
 })
 
+describe('view watcher teardown across window moves (BUG-1106)', () => {
+  /** net listeners still registered for an event: on() calls minus matching
+   *  removeListener() calls — the fake Map alone would hide stacked pairs */
+  function listenerCount(view: FakeView, event: string): number {
+    const on = view.webContents.on.mock.calls.filter(([ev]) => ev === event).length
+    const off = view.webContents.removeListener.mock.calls.filter(([ev]) => ev === event).length
+    return on - off
+  }
+
+  const WATCHED_EVENTS = [
+    'enter-html-full-screen',
+    'leave-html-full-screen',
+    'render-process-gone',
+    'before-input-event',
+  ]
+
+  function makeManagerWithWindow() {
+    const window = makeShellWindow()
+    const mgr = new TabManager(
+      window as never,
+      () => {},
+      (kind) => applyMenuFor(kind),
+    )
+    return { window, mgr }
+  }
+
+  it('repeated moves keep exactly one watcher set on the view', () => {
+    const a = makeManagerWithWindow()
+    const b = makeManagerWithWindow()
+    const id = a.mgr.openSlidesTab('/tmp/deck.pptx')
+    const view = lastCreatedView(createSlidesView)
+
+    // three round trips A → B → A → B
+    let current = a
+    let currentId = id
+    for (let i = 0; i < 3; i += 1) {
+      const detached = current.mgr.detachTab(currentId)!
+      current = current === a ? b : a
+      currentId = current.mgr.adoptTab(detached)
+    }
+
+    for (const event of WATCHED_EVENTS) {
+      expect(listenerCount(view, event), event).toBe(1)
+    }
+  })
+
+  it('detach leaves no watchers behind on the source manager', () => {
+    const id = manager.openSlidesTab('/tmp/deck.pptx')
+    const view = lastCreatedView(createSlidesView)
+    manager.detachTab(id)
+    for (const event of WATCHED_EVENTS) {
+      expect(listenerCount(view, event), event).toBe(0)
+    }
+  })
+
+  it('only the adopting manager reacts after a move (the old pair is gone)', () => {
+    const onCrashA = vi.fn()
+    const onCrashB = vi.fn()
+    const errorPage = () => 'err'
+    const windowA = makeShellWindow()
+    const managerA = new TabManager(
+      windowA as never,
+      () => {},
+      (kind) => applyMenuFor(kind),
+      undefined,
+      { errorPageBody: errorPage, onCrash: onCrashA },
+    )
+    const windowB = makeShellWindow()
+    const managerB = new TabManager(
+      windowB as never,
+      () => {},
+      (kind) => applyMenuFor(kind),
+      undefined,
+      { errorPageBody: errorPage, onCrash: onCrashB },
+    )
+
+    const idA = managerA.openDocsTab('/tmp/report.docx')
+    const view = lastCreatedView(createDocsView)
+    const detached = managerA.detachTab(idA)!
+    const idB = managerB.adoptTab(detached)
+
+    view.webContents.listeners.get('render-process-gone')!({}, { reason: 'oom' })
+
+    expect(onCrashB).toHaveBeenCalledWith({
+      id: idB,
+      kind: 'docs',
+      title: 'report.docx',
+      reason: 'oom',
+    })
+    expect(onCrashA).not.toHaveBeenCalled()
+    expect(managerA.isTabCrashed(idA)).toBe(false)
+    expect(managerB.isTabCrashed(idB)).toBe(true)
+  })
+
+  it('closing a torn-down docs tab removes its watchers too', async () => {
+    const id = manager.openDocsTab()
+    const view = lastCreatedView(createDocsView)
+    await manager.closeTab(id)
+    for (const event of WATCHED_EVENTS) {
+      expect(listenerCount(view, event), event).toBe(0)
+    }
+  })
+})
+
 describe('move-tab chord wiring', () => {
   const chord = {
     type: 'keyDown',

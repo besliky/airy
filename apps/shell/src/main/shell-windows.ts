@@ -56,6 +56,26 @@ export class ShellWindowRegistry {
     return this.entries.find((e) => e.homeWebContentsId === webContentsId)
   }
 
+  /** the manager whose strip hosts this editor view (a tab lives in exactly
+   *  one window); null when no open tab owns the webContents */
+  managerForWebContents(webContentsId: number): TabManager | null {
+    for (const entry of this.entries) {
+      if (entry.manager.tabIdForWebContents(webContentsId) !== undefined) return entry.manager
+    }
+    return null
+  }
+
+  /** Routing target for a hook call that can name its sender: the window
+   *  whose strip hosts the sender's tab, falling back to the focused one
+   *  when no sender came along (menu-initiated calls) or its tab is already
+   *  gone. Resolving by focus alone teleported background-tab results (AI
+   *  document creation, exports) into whichever window happened to be
+   *  focused (BUG-1107). */
+  managerForSender(senderWcId: number | undefined): TabManager | null {
+    const resolved = senderWcId === undefined ? null : this.managerForWebContents(senderWcId)
+    return resolved ?? this.focused()?.manager ?? null
+  }
+
   /** record a focus event so focused() survives focus moving to non-shell windows */
   notifyFocused(win: BrowserWindow): void {
     const entry = this.forWindow(win)

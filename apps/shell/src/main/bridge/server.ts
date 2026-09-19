@@ -103,13 +103,27 @@ export const BRIDGE_CLOSE_DRAIN_TIMEOUT_MS = 5_000
  * to end(): whichever of the two fires first destroys the socket (destroy
  * also disarms the timer), so the connection cannot outlive its close by
  * more than the drain budget.
+ *
+ * SEC-1101: socket.setTimeout is an IDLE timer — any kernel-level activity,
+ * including incoming bytes the closed connection no longer reads, keeps
+ * re-arming it. A drip-feeding peer (one byte per interval) could hold the
+ * half-closed socket open indefinitely. Back the idle timer with a one-shot
+ * deadline that no traffic can postpone; the drain budget is then a true
+ * upper bound whichever way the peer behaves.
  */
 export function closeWithDrainTimeout(
   socket: DrainableSocket,
   timeoutMs: number = BRIDGE_CLOSE_DRAIN_TIMEOUT_MS,
 ): void {
-  socket.setTimeout(timeoutMs, () => socket.destroy())
-  socket.end(() => socket.destroy())
+  const deadline = setTimeout(() => socket.destroy(), timeoutMs)
+  // a dying connection must never hold the event loop open by its deadline
+  ;(deadline as { unref?: () => void }).unref?.()
+  const finish = (): void => {
+    clearTimeout(deadline)
+    socket.destroy()
+  }
+  socket.setTimeout(timeoutMs, finish)
+  socket.end(finish)
 }
 
 /**

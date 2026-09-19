@@ -128,6 +128,13 @@ export class TabManager {
     number,
     (event: ElectronEvent, input: Input) => void
   >()
+  /** disposer for each view's html-fullscreen + crash watchers, so a view
+   *  leaving this manager (detach to another window, or a close whose docs
+   *  renderer is torn down without being destroyed) takes exactly its own
+   *  listeners back off the webContents (BUG-1106: repeated detach/adopt
+   *  cycles used to stack a fresh set on every adopt while the old pairs
+   *  stayed registered forever, keyed to a dead manager and tab id) */
+  private readonly viewWatchers = new Map<number, () => void>()
 
   constructor(
     private readonly shellWindow: BrowserWindow,
@@ -178,13 +185,20 @@ export class TabManager {
    * restore the normal bounds on leave.
    */
   private trackHtmlFullScreen(id: string, view: WebContentsView): void {
-    view.webContents.on('enter-html-full-screen', () => {
+    const onEnter = (): void => {
       this.htmlFullScreenId = id
       this.layout()
-    })
-    view.webContents.on('leave-html-full-screen', () => {
+    }
+    const onLeave = (): void => {
       if (this.htmlFullScreenId === id) this.htmlFullScreenId = null
       this.layout()
+    }
+    view.webContents.on('enter-html-full-screen', onEnter)
+    view.webContents.on('leave-html-full-screen', onLeave)
+    this.addViewWatcher(view.webContents, () => {
+      if (view.webContents.isDestroyed()) return
+      view.webContents.removeListener('enter-html-full-screen', onEnter)
+      view.webContents.removeListener('leave-html-full-screen', onLeave)
     })
   }
 
@@ -195,7 +209,7 @@ export class TabManager {
    * tab). Intentional teardown reasons never prompt.
    */
   private watchRendererCrash(id: string, view: WebContentsView): void {
-    view.webContents.on('render-process-gone', (_event, details) => {
+    const onGone = (_event: unknown, details: { reason: string }): void => {
       if (!isRecoverableRendererCrash(details.reason)) return
       const tab = this.tabs.find((t) => t.id === id)
       if (!tab || tab.crashed) return
@@ -209,7 +223,26 @@ export class TabManager {
         `crash error page for tab ${id}`,
       )
       this.crashUi?.onCrash({ id, kind: tab.kind, title: tab.title, reason: details.reason })
+    }
+    view.webContents.on('render-process-gone', onGone)
+    this.addViewWatcher(view.webContents, () => {
+      if (view.webContents.isDestroyed()) return
+      view.webContents.removeListener('render-process-gone', onGone)
     })
+  }
+
+  /** register a view-watcher teardown; composed when several target one view */
+  private addViewWatcher(wc: WebContents, dispose: () => void): void {
+    const existing = this.viewWatchers.get(wc.id)
+    this.viewWatchers.set(wc.id, existing ? () => (existing(), dispose()) : dispose)
+  }
+
+  /** take this manager's watchers off a view (it left, or its tab closed) */
+  private detachViewWatchers(wc: WebContents): void {
+    const dispose = this.viewWatchers.get(wc.id)
+    if (!dispose) return
+    this.viewWatchers.delete(wc.id)
+    dispose()
   }
 
   /** whether a tab's renderer crashed and is awaiting recovery (observability for tests) */
@@ -373,9 +406,11 @@ export class TabManager {
     if (idx < 0) return null
     const [removed] = this.tabs.splice(idx, 1)
     const view = removed.view!
-    // the accelerator hook closes over THIS manager's activateTab — re-attach
-    // in the adopting manager instead of switching tabs in the old window
+    // the accelerator hook and the fullscreen/crash watchers close over THIS
+    // manager (and this tab id) — take them off so the adopting manager can
+    // attach its own without stacking stale pairs (BUG-1106)
     this.detachTabAccelerators(view.webContents)
+    this.detachViewWatchers(view.webContents)
     const bleed = this.bleedWcIds.has(view.webContents.id)
     if (bleed) this.bleedWcIds.delete(view.webContents.id)
     if (this.htmlFullScreenId === id) this.htmlFullScreenId = null
@@ -783,6 +818,10 @@ export class TabManager {
       removed.view.setVisible(false)
       this.shellWindow.contentView.removeChildView(removed.view)
       this.detachTabAccelerators(removed.view.webContents)
+      // webContents.close() drops everything with the renderer; the docs
+      // teardown path detaches the view WITHOUT destroying it, so its
+      // watchers must come off explicitly there too (BUG-1106)
+      this.detachViewWatchers(removed.view.webContents)
       if (removed.kind === 'docs') {
         // webContents.close()/.destroy() on a closed docs tab wedges Electron's whole
         // UI thread in a native modal run loop (reproduced consistently; survives

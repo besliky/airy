@@ -76,7 +76,10 @@ export function serializeSession(
   }
 }
 
-/** Parse one window's raw entry list (shared by the v2 and legacy shapes). */
+/** Parse one window's raw entry list (shared by the v2 and legacy shapes).
+ *  `seen` is per-window: opening the same file in two windows is a supported
+ *  layout (runtime dedupe is per window), so only repeats INSIDE one window
+ *  drop (BUG-1108). */
 function parseWindowTabs(raw: unknown, seen: Set<string>): SessionTabEntry[] {
   if (!Array.isArray(raw)) return []
   const tabs: SessionTabEntry[] = []
@@ -87,9 +90,9 @@ function parseWindowTabs(raw: unknown, seen: Set<string>): SessionTabEntry[] {
     if (typeof kind !== 'string' || !RESTORABLE_KINDS.has(kind) || typeof path !== 'string')
       continue
     if (!path || path.length > 4096) continue
-    // duplicate paths would open the same file twice (in one window or two);
-    // the shell dedupes opens anyway, so drop them here to keep the persisted
-    // set canonical
+    // a duplicate within one window would just re-activate the open tab on
+    // restore (the runtime dedupes per window); drop it to keep the
+    // persisted set canonical
     if (seen.has(path)) continue
     seen.add(path)
     tabs.push({ kind: kind as TabKind, path })
@@ -105,18 +108,18 @@ export function parseSession(raw: unknown): SessionState {
   // legacy single-window shape: { tabs, activePath } → one focused window
   if (Array.isArray(record.tabs)) return { windows: [parseLegacyWindow(record)], focusedWindow: 0 }
   if (!Array.isArray(record.windows)) return { windows: [], focusedWindow: 0 }
-  const seen = new Set<string>()
   const windows: SessionWindowState[] = []
   let total = 0
   for (const rawWindow of record.windows) {
     if (total >= MAX_TABS) break
     if (rawWindow === null || typeof rawWindow !== 'object' || Array.isArray(rawWindow)) continue
-    const tabs = parseWindowTabs((rawWindow as Record<string, unknown>).tabs, seen)
+    const windowSeen = new Set<string>()
+    const tabs = parseWindowTabs((rawWindow as Record<string, unknown>).tabs, windowSeen)
     if (tabs.length === 0) continue
     const activePath = (rawWindow as Record<string, unknown>).activePath
     windows.push({
       tabs,
-      activePath: typeof activePath === 'string' && seen.has(activePath) ? activePath : null,
+      activePath: typeof activePath === 'string' && windowSeen.has(activePath) ? activePath : null,
     })
     total += tabs.length
   }

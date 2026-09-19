@@ -3673,8 +3673,8 @@ export function registerDocsIpc(): void {
 
   ipcMain.handle(
     'docs:create-document',
-    (_event, request: CreateDocumentRequest): Promise<CreateDocumentResult> =>
-      createAiDocument(request),
+    (event, request: CreateDocumentRequest): Promise<CreateDocumentResult> =>
+      createAiDocument(request, event.sender.id),
   )
 
   ipcMain.handle('docs:recent', (event) => {
@@ -3901,7 +3901,7 @@ export function registerDocsIpc(): void {
           ...pdfScale(scale),
         })
         writeFileSync(filePath, data)
-        openGeneratedFile(filePath)
+        openGeneratedFile(filePath, event.sender.id)
         return { ok: true, path: filePath }
       } catch (err) {
         // path is already authorized, so the renderer can retry chunked to the same target
@@ -3930,7 +3930,7 @@ export function registerDocsIpc(): void {
       }
       try {
         writeFileSync(filePath, html, 'utf8')
-        openGeneratedFile(filePath)
+        openGeneratedFile(filePath, event.sender.id)
         return { ok: true, path: filePath }
       } catch (err) {
         return { ok: false, error: String(err), path: filePath }
@@ -3986,7 +3986,7 @@ export function registerDocsIpc(): void {
           for (const page of pages) merged.addPage(page)
         }
         writeFileSync(filePath, Buffer.from(await merged.save()))
-        openGeneratedFile(filePath)
+        openGeneratedFile(filePath, event.sender.id)
         return { ok: true, path: filePath }
       } catch (err) {
         return { ok: false, error: String(err) }
@@ -4002,15 +4002,18 @@ export function registerDocsIpc(): void {
     if (!isDocsRenderer(event.sender.id)) throw new Error('Untrusted IPC sender.')
     // A pathless new tab/window starts as a blank document, not the start screen
     const path = openPath ?? undefined
-    if (shellHooks) shellHooks.openTab(path, path ? undefined : { newBlank: true })
+    // the sender's id rides along: the new tab belongs to the asking window
+    if (shellHooks) shellHooks.openTab(path, path ? undefined : { newBlank: true }, event.sender.id)
     else {
       const win = createDocsWindow(path)
       if (!path) markDocsNewBlank(win.webContents.id)
     }
   })
 
-  ipcMain.handle('win:list', (): DocsTabInfo[] => {
-    if (shellHooks) return shellHooks.listTabs()
+  ipcMain.handle('win:list', (event): DocsTabInfo[] => {
+    // the asking renderer lists ITS OWN window's tabs (BUG-1107), not the
+    // focused window's — a background tab must see the list it belongs to
+    if (shellHooks) return shellHooks.listTabs(event.sender.id)
     return BrowserWindow.getAllWindows().map((w) => ({
       id: String(w.id),
       title: w.getTitle(),
@@ -4018,9 +4021,9 @@ export function registerDocsIpc(): void {
     }))
   })
 
-  ipcMain.handle('win:focus', (_event, id: string) => {
+  ipcMain.handle('win:focus', (event, id: string) => {
     if (shellHooks) {
-      shellHooks.focusTab(id)
+      shellHooks.focusTab(id, event.sender.id)
       return
     }
     const win = BrowserWindow.fromId(Number(id))
@@ -4032,17 +4035,20 @@ export function registerDocsIpc(): void {
 }
 
 /** hooks injected by the shell in tab mode; standalone mode leaves these unset
- * and falls back to real multi-BrowserWindow behavior. */
+ * and falls back to real multi-BrowserWindow behavior. Calls that arrive over
+ * IPC carry the asking renderer's webContents id (senderWcId) so the shell
+ * answers in the sender's own window instead of the focused one (BUG-1107);
+ * menu-driven calls pass none and resolve by focus. */
 interface DocsShellHooks {
-  openTab(openPath?: string, options?: { newBlank?: boolean }): void
+  openTab(openPath?: string, options?: { newBlank?: boolean }, senderWcId?: number): void
   /** open a blank docs tab that consumes the queued AI content on boot (create_document) */
-  openAiDocTab?(content: AiDocContent): void
-  listTabs(): DocsTabInfo[]
-  focusTab(id: string): void
+  openAiDocTab?(content: AiDocContent, senderWcId?: number): void
+  listTabs(senderWcId?: number): DocsTabInfo[]
+  focusTab(id: string, senderWcId?: number): void
   /** closes the calling tab instead of the whole shell window (Cmd+W / role:'close') */
   closeActiveTab(): void
   /** Shell router used to open exported PDFs in a new Airy tab. */
-  openGeneratedPath?(path: string): boolean
+  openGeneratedPath?(path: string, senderWcId?: number): boolean
 }
 let shellHooks: DocsShellHooks | null = null
 export function setDocsShellHooks(hooks: DocsShellHooks | null): void {
@@ -4061,10 +4067,12 @@ export function setDocsOpenPathRouter(fn: ((path: string) => boolean) | null): v
 
 /** After writing an exported/AI-generated file: open it in the right tab
  * (shell) or reveal it in the folder (standalone). Tab-opening failure must
- * not report the write itself as failed — the file is already persisted. */
-function openGeneratedFile(path: string): void {
+ * not report the write itself as failed — the file is already persisted.
+ * senderWcId names the exporting tab so the shell opens the result in its
+ * window (BUG-1107). */
+function openGeneratedFile(path: string, senderWcId?: number): void {
   try {
-    if (shellHooks?.openGeneratedPath?.(path)) return
+    if (shellHooks?.openGeneratedPath?.(path, senderWcId)) return
   } catch (err) {
     console.warn('[docs] Failed to open generated file:', err)
   }
@@ -4089,9 +4097,12 @@ export function sanitizeAiDocFileBase(title: string): string {
  * inserts the queued content on boot and saves itself (the full-fidelity
  * HTML → docx conversion lives in the docs renderer); pdf and md are written
  * directly here. Also called by other apps' mains via shell-wired hooks.
+ * senderWcId (the asking tab's webContents id, when known) keeps the result
+ * in the asking window (BUG-1107).
  */
 export async function createAiDocument(
   request: CreateDocumentRequest,
+  senderWcId?: number,
 ): Promise<CreateDocumentResult> {
   const type = request?.type
   const title = sanitizeAiDocFileBase(request?.title)
@@ -4100,7 +4111,7 @@ export async function createAiDocument(
   try {
     if (type === 'docx') {
       const payload: AiDocContent = { title, html: content }
-      if (shellHooks?.openAiDocTab) shellHooks.openAiDocTab(payload)
+      if (shellHooks?.openAiDocTab) shellHooks.openAiDocTab(payload, senderWcId)
       else {
         const win = createDocsWindow(undefined)
         markDocsNewBlank(win.webContents.id)
@@ -4116,13 +4127,13 @@ export async function createAiDocument(
       )
       const filePath = uniquePathIn(defaultSaveDir(), `${title}.pdf`)
       await atomicWriteFile(filePath, bytes)
-      openGeneratedFile(filePath)
+      openGeneratedFile(filePath, senderWcId)
       return { ok: true, path: filePath }
     }
     if (type === 'md' || type === 'html') {
       const filePath = uniquePathIn(defaultSaveDir(), `${title}.${type}`)
       await atomicWriteFile(filePath, Buffer.from(content, 'utf8'))
-      openGeneratedFile(filePath)
+      openGeneratedFile(filePath, senderWcId)
       return { ok: true, path: filePath }
     }
     return { ok: false, error: `unsupported document type: ${String(type)}` }

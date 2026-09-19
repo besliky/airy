@@ -455,12 +455,15 @@ export function setMarkdownFileSavedHook(hook: (wc: WebContents, path: string) =
   fileSavedHook = hook
 }
 
-/** Fired after a "convert & open in Docs" export — the shell routes the new .docx to a docs tab */
-let docxExportedHook: ((path: string) => void) | null = null
+/** Fired after a "convert & open in Docs" export — the shell routes the new
+ * .docx to a docs tab in the exporting view's window (senderWcId, BUG-1107) */
+let docxExportedHook: ((path: string, senderWcId?: number) => void) | null = null
 /** One marked cache session per app process. Old crash leftovers are removed after seven days. */
 let conversionSessionPromise: Promise<string> | null = null
 
-export function setMarkdownDocxExportedHook(hook: (path: string) => void): void {
+export function setMarkdownDocxExportedHook(
+  hook: (path: string, senderWcId?: number) => void,
+): void {
   docxExportedHook = hook
 }
 
@@ -906,7 +909,7 @@ function registerMarkdownIpc(): void {
             safeName,
             bytes,
           )
-          docxExportedHook?.(target)
+          docxExportedHook?.(target, e.sender.id)
           return { ok: true, path: target }
         }
         const win =
