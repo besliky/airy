@@ -1,6 +1,4 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { LocaleProvider, loadLocale, setModuleLang } from '../src/renderer/i18n/locale'
@@ -110,8 +108,9 @@ describe('line-number distance label carries its unit inside the string (UX-908)
   // The dialog used to append a literal ' (pt)' after the label — the unit
   // does not translate (Japanese writes the point unit as a word) and stays
   // mispositioned in RTL. The unit now lives inside ribbonLnDistance for
-  // every locale, so pinning the en DOM text plus one translated sibling and
-  // the absence of the JSX suffix is the whole contract.
+  // every locale, so pinning the en DOM text plus one translated sibling is
+  // the whole behavioral contract; the no-JSX-suffix source scan itself
+  // moved to the tree-wide unit-literal-contract.test.ts (TEST-1103).
   it('renders the localized distance label verbatim, with no JSX unit suffix', () => {
     const { container, unmount } = render()
     // the distance label is the one holding the min-0/max-3168 number input;
@@ -125,10 +124,5 @@ describe('line-number distance label carries its unit inside the string (UX-908)
   it('the unit is translated per locale, not hardcoded after the t() call', () => {
     expect(ribbonEn.ribbonLnDistance).toBe('Distance from text (pt)')
     expect(ribbonJa.ribbonLnDistance).toContain('ポイント')
-    const src = readFileSync(
-      join(__dirname, '../src/renderer/components/LineNumbersDialog.tsx'),
-      'utf8',
-    )
-    expect(src).not.toContain("ribbonLnDistance')} (pt)")
   })
 })
