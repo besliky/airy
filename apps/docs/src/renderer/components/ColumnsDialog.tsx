@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { SectionSettings } from '@airy-office/docx-engine'
+import { useModalDialog } from '@airy-office/ui'
 import { useI18n } from '../i18n/locale'
-import { useModalKeys } from './modal-keys'
 
 const TWIPS_PER_CM = 567
 
@@ -89,7 +89,7 @@ export function ColumnsDialog({
     ),
   )
   const [lineBetween, setLineBetween] = useState(section.columnSep === true)
-  const modalKeys = useModalKeys(onClose)
+  const dialog = useModalDialog(onClose)
 
   const submit = () => {
     const space = num(spacing, 0, 2834, 720)
@@ -127,12 +127,11 @@ export function ColumnsDialog({
   return (
     <div
       className="modal-backdrop"
-      ref={modalKeys.ref}
-      onKeyDown={modalKeys.onKeyDown}
+      {...dialog.backdropProps}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="modal">
-        <h2>{t('layoutColsDialogTitle')}</h2>
+      <div className="modal" {...dialog.dialogProps}>
+        <h2 {...dialog.titleProps}>{t('layoutColsDialogTitle')}</h2>
         <div className="modal-row">
           {presetButton('one', 'layoutColOne')}
           {presetButton('two', 'layoutColTwo')}

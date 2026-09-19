@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import type { NoteNumberFmt, NoteNumbering } from '@airy-office/docx-engine'
-import { Dropdown } from '@airy-office/ui'
+import { Dropdown, useModalDialog } from '@airy-office/ui'
 import { noteNumberingOfKind } from '../note-format'
 import { useI18n, type StringKey } from '../i18n/locale'
-import { useModalKeys } from './modal-keys'
 
 const FORMAT_KEYS: Array<{ key: NoteNumberFmt; nameKey: StringKey }> = [
   { key: 'decimal', nameKey: 'refsFmtDecimal' },
@@ -45,7 +44,7 @@ export function NoteOptionsDialog({
   )
   const [customMark, setCustomMark] = useState(current?.customMark ?? '')
   const [startAt, setStartAt] = useState(String(current?.numStart ?? 1))
-  const modalKeys = useModalKeys(onClose)
+  const dialog = useModalDialog(onClose)
 
   const submit = () => {
     const model: NoteNumbering =
@@ -70,12 +69,11 @@ export function NoteOptionsDialog({
   return (
     <div
       className="modal-backdrop"
-      ref={modalKeys.ref}
-      onKeyDown={modalKeys.onKeyDown}
+      {...dialog.backdropProps}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="modal">
-        <h2>{t('refsNoteOptionsTitle')}</h2>
+      <div className="modal" {...dialog.dialogProps}>
+        <h2 {...dialog.titleProps}>{t('refsNoteOptionsTitle')}</h2>
         <div className="modal-row ln-modes">
           <label className="ln-radio">
             <input
