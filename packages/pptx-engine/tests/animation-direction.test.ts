@@ -85,7 +85,23 @@ describe('animation direction: serialization', () => {
     ])
     expect(xml).toContain('filter="wipe(right)"') // fromLeft travels right
     expect(xml).toContain('filter="wipe(down)"') // fromTop travels down
-    expect(xml).toContain('filter="split(outVertical)"')
+    // split tokens are axis-first per the ECMA-376/MS-OE376 filter dictionary
+    expect(xml).toContain('filter="split(verticalOut)"')
+  })
+
+  it('writes legal split tokens for every axis variant (axis-first dictionary)', () => {
+    const xml = buildTimingXml([
+      anim({ spid: 4, effect: 'splitIn' }), // default horzIn
+      anim({ spid: 4, effect: 'splitIn', direction: 'horzOut' }),
+      anim({ spid: 4, effect: 'splitIn', direction: 'vertIn' }),
+      anim({ spid: 4, effect: 'splitIn', direction: 'vertOut' }),
+    ])
+    expect(xml).toContain('filter="split(horizontalIn)"')
+    expect(xml).toContain('filter="split(horizontalOut)"')
+    expect(xml).toContain('filter="split(verticalIn)"')
+    expect(xml).toContain('filter="split(verticalOut)"')
+    // none of the legacy axis-last tokens (BUG-1207) may leak into the write
+    expect(xml).not.toMatch(/split\((in|out)(Horizontal|Vertical)\)/)
   })
 
   it('writes zoom out variants (entrance settles from 200%, exit grows to 300%)', () => {
@@ -177,6 +193,26 @@ describe('animation direction: read-back', () => {
     const back = readSlideTimingXml(`</p:cSld>${xml}</p:sld>`)
     expect(back[0]!.effect).toBe('wipe')
     expect(back[0]!.direction).toBeUndefined()
+  })
+
+  it('reads foreign legal split tokens and legacy Airy ones with their directions', () => {
+    // BUG-1207: PowerPoint writes axis-first tokens; older Airy builds wrote
+    // the inverted axis-last order — both must read back to the same model so
+    // open→resave never loses a foreign deck's Split direction
+    const splitOf = (filter: string): AnimDirection | undefined =>
+      readSlideTimingXml(
+        `</p:cSld>${buildTimingXml([anim({ spid: 4, effect: 'splitIn' })]).replace('split(horizontalIn)', filter)}</p:sld>`,
+      )[0]!.direction
+    // legal axis-first (PowerPoint/foreign decks)
+    expect(splitOf('split(horizontalIn)')).toBeUndefined() // the default
+    expect(splitOf('split(horizontalOut)')).toBe('horzOut')
+    expect(splitOf('split(verticalIn)')).toBe('vertIn')
+    expect(splitOf('split(verticalOut)')).toBe('vertOut')
+    // legacy axis-last (decks saved by older Airy builds)
+    expect(splitOf('split(inHorizontal)')).toBeUndefined() // the default
+    expect(splitOf('split(outHorizontal)')).toBe('horzOut')
+    expect(splitOf('split(inVertical)')).toBe('vertIn')
+    expect(splitOf('split(outVertical)')).toBe('vertOut')
   })
 
   it('round-trips directions through save/reopen', async () => {

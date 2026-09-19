@@ -454,14 +454,18 @@ function effectBehaviorsXml(gen: IdGen, a: SlideAnimation): string {
         )
       )
     case 'splitIn': {
+      // Legal filter tokens are axis-first (ECMA-376 / MS-OE376 dictionary:
+      // split(horizontalIn|horizontalOut|verticalIn|verticalOut)); the older
+      // axis-last order (inHorizontal…) is not a legal token, so PowerPoint
+      // ignored the effect's direction entirely (BUG-1207)
       const filter =
         dir === 'horzOut'
-          ? 'split(outHorizontal)'
+          ? 'split(horizontalOut)'
           : dir === 'vertIn'
-            ? 'split(inVertical)'
+            ? 'split(verticalIn)'
             : dir === 'vertOut'
-              ? 'split(outVertical)'
-              : 'split(inHorizontal)'
+              ? 'split(verticalOut)'
+              : 'split(horizontalIn)'
       return show + animEffectFilterXml(gen, target, dur, 'in', filter)
     }
     case 'bounce':
@@ -879,10 +883,17 @@ function refineDirection(
       return dir && dir !== def ? { effect: kind, direction: dir } : { effect: kind }
     }
     case 'splitIn': {
-      const v = /^split\((in|out)(Horizontal|Vertical)\)$/.exec(filter ?? '')
-      if (!v) return { effect }
-      const dir =
-        `${v[2] === 'Horizontal' ? 'horz' : 'vert'}${v[1] === 'in' ? 'In' : 'Out'}` as AnimDirection
+      // Legal axis-first tokens (split(horizontalIn)…) from PowerPoint/foreign
+      // decks AND the legacy axis-last tokens (split(inHorizontal)) older Airy
+      // builds wrote must both read back with their direction (BUG-1207)
+      const token = /^split\((\w+)\)$/.exec(filter ?? '')?.[1]
+      const legal = token != null ? /^(horizontal|vertical)(In|Out)$/.exec(token) : null
+      const legacy = token != null ? /^(in|out)(Horizontal|Vertical)$/.exec(token) : null
+      if (!legal && !legacy) return { effect }
+      // legacy tokens carry the axis capitalized (inHorizontal); lowercase unifies
+      const axis = (legal ? legal[1]! : legacy![2]!).toLowerCase()
+      const io = legal ? legal[2]! : legacy![1] === 'in' ? 'In' : 'Out'
+      const dir = `${axis === 'horizontal' ? 'horz' : 'vert'}${io}` as AnimDirection
       return dir === 'horzIn' ? { effect } : { effect, direction: dir }
     }
     case 'zoom':
