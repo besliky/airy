@@ -243,7 +243,7 @@ export function StyleDialog({
           value={value}
           onChange={(e) => pick(Math.max(opts?.min ?? 0, Number(e.target.value) || 0))}
         />
-        <span className="para-unit">pt</span>
+        <span className="para-unit">{t('ribbonPt')}</span>
       </span>
     </label>
   )
