@@ -123,6 +123,28 @@ function instrTextOf(xml: string): string {
 export type TocUpdateResult = 'updated' | 'missing' | 'no-entries'
 
 /**
+ * The identifiers a ToF update may collect for an authored `\c` identifier:
+ * the identifier itself plus — when it is (or aliases) a known caption label —
+ * the canonical id and the current locale's word for it. Legacy documents
+ * authored before UX-1011 stored the translated word in their SEQ
+ * instructions; without the aliases the F9/Update path would rebuild a table
+ * of figures from nothing while Insert Table of Figures finds the captions
+ * (BUG-1110), and mixed old/new captions would split into two independent
+ * SEQ series.
+ */
+function tofLabelAliases(id: string): string[] {
+  const out = new Set([id])
+  for (const { id: canonical, key } of CAPTION_LABELS) {
+    const translated = t(key)
+    if (id === canonical || id === translated) {
+      out.add(canonical)
+      if (translated && translated !== canonical) out.add(translated)
+    }
+  }
+  return [...out]
+}
+
+/**
  * The section break riding in the last region paragraph's pPr, if any. A
  * section's properties live in the pPr of its last paragraph, which for a
  * TOC/ToF region is the last field entry — deleting the region without
@@ -205,8 +227,10 @@ export function updateTocField(
   }> = []
   for (const region of regions) {
     const options = parseTocInstruction(region.instr)
+    // BUG-1110: the update path collects ToF entries under the same
+    // canonical+locale alias set the Insert dialog uses (seqAliases/UX-1011)
     const entries = options.seqIdentifier
-      ? collectTofEntries(editor, blocks, options.seqIdentifier, anchorPage)
+      ? collectTofEntries(editor, blocks, tofLabelAliases(options.seqIdentifier), anchorPage)
       : collectTocEntriesWithPages(editor, headingPages).filter(
           (e) => options.levels === undefined || e.level <= options.levels,
         )
