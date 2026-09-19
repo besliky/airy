@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { closeSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
-import { copyFile, link, mkdir, mkdtemp, rename, rm, stat, unlink } from 'node:fs/promises'
+import { copyFile, link, mkdir, mkdtemp, rm, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 
 import { z } from 'zod'
+
+import { renameDurably } from '@airy-office/electron-utils'
 
 import { MAX_PATCH_ENTRY_BYTES } from '../shared/desktop-api'
 import type { WorkbookChartEdit, WorkbookVisualEdit } from '../shared/desktop-api'
@@ -432,9 +434,6 @@ export function assertManifestPreserved(
 
 /** Transient Windows codes: antivirus/indexer/cloud sync briefly locks a path. */
 const RETRYABLE_RENAME_CODES = new Set(['EPERM', 'EACCES', 'EBUSY'])
-const RENAME_RETRIES = 4
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
  * Same-directory temp + rename keeps the save atomic. Windows refuses the
@@ -447,19 +446,19 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
  * deletes the temp on failure). A persistent lock (the workbook is open in
  * Excel) still fails: surface an actionable message instead of the raw errno,
  * keyed by a stable substring for the renderer's save-error localization table.
+ *
+ * The rename itself rides the shared durability helper from electron-utils
+ * (BUG-1203): after it lands, the parent directory is fsynced on POSIX so the
+ * new dirent survives power loss — the workbook save previously lacked the
+ * dir-fsync that atomicWriteFile already gave every other save path.
  */
 export async function promoteFileAtomically(temporaryPath: string, path: string): Promise<void> {
   await syncFileBestEffort(temporaryPath)
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      await rename(temporaryPath, path)
-      return
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code ?? ''
-      if (!RETRYABLE_RENAME_CODES.has(code)) throw error
-      if (attempt >= RENAME_RETRIES) break
-      await sleep(50 * 2 ** attempt)
-    }
+  try {
+    await renameDurably(temporaryPath, path)
+    return
+  } catch (error) {
+    if (!RETRYABLE_RENAME_CODES.has((error as NodeJS.ErrnoException).code ?? '')) throw error
   }
   await copyOverLockedTarget(temporaryPath, path)
   await unlink(temporaryPath).catch(() => {})
@@ -484,6 +483,10 @@ async function copyOverLockedTarget(temporaryPath: string, path: string): Promis
   }
   try {
     await copyFile(temporaryPath, path)
+    // The last-resort write is in place (no dirent change, so no dir-fsync),
+    // but the landed bytes still get the same file flush the rename path
+    // gives the temp file (BUG-1203) — best-effort for the same lock reasons.
+    await syncFileBestEffort(path)
   } catch (error) {
     if (backup && before) {
       const after = await stat(path).catch(() => null)

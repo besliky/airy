@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto'
 import { closeSync, fsyncSync, openSync, readFileSync, writeFileSync } from 'node:fs'
-import { rename, rm } from 'node:fs/promises'
+import { rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import JSZip from 'jszip'
+
+import { renameDurably } from '@airy-office/electron-utils'
 
 import type {
   CellState,
@@ -1649,7 +1651,10 @@ export async function writeXlsxAtomically(path: string, buffer: Buffer): Promise
   try {
     writeFileSync(temporaryPath, buffer, { flag: 'wx' })
     await syncFileBestEffort(temporaryPath)
-    await rename(temporaryPath, path)
+    // Shared durability helper (BUG-1203): transient Windows rename locks
+    // retry with backoff, and the parent directory is fsynced on POSIX after
+    // the rename — this path previously had neither.
+    await renameDurably(temporaryPath, path)
   } catch (error: unknown) {
     await rm(temporaryPath, { force: true })
     throw error
