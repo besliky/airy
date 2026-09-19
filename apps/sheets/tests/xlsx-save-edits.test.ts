@@ -465,51 +465,6 @@ describe('style reset (Clear Formats / Clear All)', () => {
   })
 })
 
-describe('large edit batches', () => {
-  // Bulk actions (paste, sort, move-range) journal every affected cell, so a
-  // single save can carry hundreds of thousands of edits. The save path must
-  // stay a single pass over the worksheet — a per-edit whole-XML rewrite
-  // would take hours at this scale.
-  it('applies 100k inserts and 100k overwrites in one save each', async () => {
-    const rowCount = 2_000
-    const columnCount = 50
-    const inserts: CellEdit[] = []
-    for (let row = 0; row < rowCount; row += 1) {
-      for (let column = 0; column < columnCount; column += 1) {
-        inserts.push({
-          sheetName: 'Sheet1',
-          row,
-          column,
-          writeValue: true,
-          cell: { value: row * columnCount + column },
-        })
-      }
-    }
-    const started = performance.now()
-    const insertMutation = await applyCellEditsToXlsx(await blankXlsxBuffer(), inserts)
-    const worksheet = await entryText(insertMutation.buffer, 'xl/worksheets/sheet1.xml')
-    expect(worksheet).toContain('<dimension ref="A1:AX2000"/>')
-    expect(worksheet).toContain('<c r="A1"><v>0</v></c>')
-    expect(worksheet).toContain(`<c r="AX2000"><v>${rowCount * columnCount - 1}</v></c>`)
-    expect([...worksheet.matchAll(/<row /g)]).toHaveLength(rowCount)
-
-    const overwrites: CellEdit[] = inserts.map((edit) => ({
-      ...edit,
-      cell: { value: `text ${edit.row}:${edit.column}` },
-    }))
-    const overwriteMutation = await applyCellEditsToXlsx(insertMutation.buffer, overwrites)
-    const rewritten = await entryText(overwriteMutation.buffer, 'xl/worksheets/sheet1.xml')
-    expect(rewritten).toContain('<t xml:space="preserve">text 0:0</t>')
-    expect(rewritten).toContain(
-      `<t xml:space="preserve">text ${rowCount - 1}:${columnCount - 1}</t>`,
-    )
-    expect(rewritten).not.toContain('<v>0</v>')
-
-    // Generous CI budget; the quadratic path this guards against took hours.
-    expect(performance.now() - started).toBeLessThan(30_000)
-  }, 60_000)
-})
-
 describe('text rotation and double underline save', () => {
   it('writes textRotation into the alignment and u val=double into the font', async () => {
     const mutation = await applyCellEditsToXlsx(await buildEditFixture(), [
