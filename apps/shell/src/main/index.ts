@@ -227,7 +227,7 @@ import {
   untitledStagingDir,
 } from './untitled-staging'
 import {
-  isMoveTabToNewWindowInput,
+  isMoveTabToNewWindowInputForKind,
   switchableDigitsForKind,
   tabIndexForDigit,
   tabSwitchTargetForInput,
@@ -991,9 +991,11 @@ function createShellWindow(options: CreateShellWindowOptions = {}): ShellWindowE
   // never reach this hook; TabManager attaches the same decisions to every
   // editor view (see watchTabAccelerators).
   win.webContents.on('before-input-event', (event, input) => {
-    if (isMoveTabToNewWindowInput(input)) {
+    // docs tabs reserve the chord for Word's small-caps mnemonic (see
+    // MOVE_TAB_TO_NEW_WINDOW_RESERVED_KINDS), like reserved digits
+    const active = manager.list().find((t) => t.active)
+    if (isMoveTabToNewWindowInputForKind(input, active?.kind)) {
       event.preventDefault()
-      const active = manager.list().find((t) => t.active)
       if (active && active.id !== 'home') moveTabToNewWindow(entry, active.id)
       return
     }

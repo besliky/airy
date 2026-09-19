@@ -6,8 +6,10 @@ import { describe, expect, it } from 'vitest'
  * reserve for their own Word/Excel shortcuts must never be captured.
  */
 import {
+  MOVE_TAB_TO_NEW_WINDOW_RESERVED_KINDS,
   RESERVED_TAB_DIGITS,
   isMoveTabToNewWindowInput,
+  isMoveTabToNewWindowInputForKind,
   switchableDigitsForKind,
   switchDigitFromInput,
   tabIndexForDigit,
@@ -142,5 +144,38 @@ describe('isMoveTabToNewWindowInput', () => {
     expect(isMoveTabToNewWindowInput(key({ alt: true }))).toBe(false)
     expect(isMoveTabToNewWindowInput(key({ code: 'KeyM' }))).toBe(false)
     expect(isMoveTabToNewWindowInput(key({ type: 'keyUp' }))).toBe(false)
+  })
+})
+
+describe('move-to-new-window chord reservation (UX-1107)', () => {
+  const key = (over: Record<string, unknown> = {}) =>
+    ({
+      type: 'keyDown',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: true,
+      code: 'KeyK',
+      ...over,
+    }) as Parameters<typeof isMoveTabToNewWindowInputForKind>[0]
+
+  it('docs reserves the chord for the Word small-caps mnemonic', () => {
+    // Airy-docs renders small caps as formatting (toggle not bound yet), so
+    // Word muscle memory must not rip the document into a new window
+    expect(MOVE_TAB_TO_NEW_WINDOW_RESERVED_KINDS.has('docs')).toBe(true)
+    expect(isMoveTabToNewWindowInputForKind(key(), 'docs')).toBe(false)
+  })
+
+  it('every other kind keeps the chord; undefined kind (no active tab) keeps it too', () => {
+    for (const kind of ['home', 'sheets', 'slides', 'pdf', 'markdown', 'html'] as const) {
+      expect(MOVE_TAB_TO_NEW_WINDOW_RESERVED_KINDS.has(kind)).toBe(false)
+      expect(isMoveTabToNewWindowInputForKind(key(), kind)).toBe(true)
+    }
+    expect(isMoveTabToNewWindowInputForKind(key(), undefined)).toBe(true)
+  })
+
+  it('non-chords stay non-chords regardless of kind', () => {
+    expect(isMoveTabToNewWindowInputForKind(key({ shift: false }), 'slides')).toBe(false)
+    expect(isMoveTabToNewWindowInputForKind(key({ code: 'KeyM' }), undefined)).toBe(false)
   })
 })

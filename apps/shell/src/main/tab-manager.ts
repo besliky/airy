@@ -57,7 +57,7 @@ import {
   setActiveSlidesWebContents,
   slidesIsDirty,
 } from '../../../slides/src/main/slides-main'
-import { tabSwitchTargetForInput, isMoveTabToNewWindowInput } from './tab-accelerators'
+import { isMoveTabToNewWindowInputForKind, tabSwitchTargetForInput } from './tab-accelerators'
 import type { TabKind, TabSummary } from '../shared/tabs-api'
 
 interface TabRecord {
@@ -267,10 +267,11 @@ export class TabManager {
     const handler = (event: ElectronEvent, input: Input): void => {
       // Ctrl/Cmd+Shift+K moves the active tab to a new window (the chord the
       // shell's Home hook and the shell-built menus share — see
-      // isMoveTabToNewWindowInput for why K is safe)
-      if (isMoveTabToNewWindowInput(input)) {
+      // isMoveTabToNewWindowInput for why K is safe); docs tabs reserve the
+      // chord for Word's small-caps mnemonic, like reserved digits
+      const active = this.tabs.find((t) => t.id === this.activeId)
+      if (isMoveTabToNewWindowInputForKind(input, active?.kind)) {
         event.preventDefault()
-        const active = this.tabs.find((t) => t.id === this.activeId)
         if (active && active.id !== HOME_ID) this.onMoveTabToNewWindow?.(active.id)
         return
       }

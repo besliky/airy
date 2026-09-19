@@ -65,7 +65,9 @@ export interface TabSwitchTabLike {
  * Whether a keydown is the "move the active tab to a new window" chord:
  * Ctrl/Cmd+Shift+K, no Alt. The chord was picked against every editor's
  * keydown map (docs reserves Ctrl+M±Shift, ⌘/Ctrl+T±Shift, ⇧⌘E/G;
- * sheets Ctrl+Y) so the shell never eats an editor shortcut.
+ * sheets Ctrl+Y) so the shell never eats an editor shortcut. The one
+ * external mnemonic it collides with — Word's small caps — is handled by
+ * MOVE_TAB_TO_NEW_WINDOW_RESERVED_KINDS on top of this predicate.
  */
 export function isMoveTabToNewWindowInput(input: InputLike): boolean {
   return (
@@ -75,6 +77,32 @@ export function isMoveTabToNewWindowInput(input: InputLike): boolean {
     !input.alt &&
     input.code === 'KeyK'
   )
+}
+
+/**
+ * Tab kinds whose editor owns Ctrl/Cmd+Shift+K by external mnemonic: Word
+ * uses the chord for small caps and Airy-docs renders that formatting (the
+ * docs toggle is not bound yet), so while a docs tab is active the shell
+ * must not eat the chord — Word muscle memory would otherwise rip the
+ * document into a new window instead of formatting text. Same reservation
+ * shape as RESERVED_TAB_DIGITS: the chord stays inert until docs binds its
+ * small-caps toggle, at which point it starts working with no shell change.
+ */
+export const MOVE_TAB_TO_NEW_WINDOW_RESERVED_KINDS: ReadonlySet<TabKind> = new Set(['docs'])
+
+/**
+ * The move-to-new-window decision for a keydown while the tab of `kind` is
+ * active: the chord minus the kinds that reserve it. Shared by the Home
+ * hook and the per-view hook in TabManager, so the reservation behaves the
+ * same no matter which view owns keyboard focus (kind undefined — no active
+ * tab, never in practice — keeps the chord).
+ */
+export function isMoveTabToNewWindowInputForKind(
+  input: InputLike,
+  kind: TabKind | undefined,
+): boolean {
+  if (!isMoveTabToNewWindowInput(input)) return false
+  return kind === undefined || !MOVE_TAB_TO_NEW_WINDOW_RESERVED_KINDS.has(kind)
 }
 
 /**
