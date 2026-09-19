@@ -313,6 +313,15 @@ const pendingByWc = new Map<number, string>()
  */
 const exportPicksByWc = new Map<number, { dir?: string; pdfPath?: string; videoPath?: string }>()
 /**
+ * Video export suspend state per webContents (slides:set-video-export-active):
+ * the renderer's finally resets the flag, but that never runs when the
+ * renderer crashes or is torn down mid-export — and the webContents (with its
+ * background-throttling state) survives a renderer crash/reload, leaving the
+ * window's timers unclamped forever. Main restores throttling itself on
+ * render-process-gone/destroyed while an export is active (BUG-1208).
+ */
+const videoExportSuspendByWc = new Map<number, () => void>()
+/**
  * Renderer freeze watchdog: the freeze is sporadic and has never
  * reproduced under instrumentation, so when it does happen, capture the
  * discriminating evidence (per-process CPU/RSS, GPU feature state, and on
@@ -4367,7 +4376,28 @@ export function registerSlidesIpc(): void {
   // suspends it for its duration and restores it afterwards
   ipcMain.handle('slides:set-video-export-active', (e, active: boolean) => {
     try {
-      e.sender.setBackgroundThrottling(!active)
+      const wc = e.sender
+      // detach any crash-watch from a previous run first (normal cleanup)
+      videoExportSuspendByWc.get(wc.id)?.()
+      videoExportSuspendByWc.delete(wc.id)
+      wc.setBackgroundThrottling(!active)
+      if (active) {
+        // the renderer's finally never runs on crash/teardown — restore from
+        // main so the flag cannot outlive the export (BUG-1208)
+        const restore = () => {
+          videoExportSuspendByWc.delete(wc.id)
+          wc.removeListener('render-process-gone', restore)
+          wc.removeListener('destroyed', restore)
+          try {
+            if (!wc.isDestroyed()) wc.setBackgroundThrottling(true)
+          } catch {
+            // the webContents died with the renderer — nothing left to restore
+          }
+        }
+        videoExportSuspendByWc.set(wc.id, restore)
+        wc.once('render-process-gone', restore)
+        wc.once('destroyed', restore)
+      }
       return true
     } catch {
       return false

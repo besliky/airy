@@ -88,7 +88,13 @@ export interface RecordTimelineOptions {
   cancel?: { current: boolean }
 }
 
-/** Minimal surface of the recorder/canvas APIs the pipeline needs (mockable in tests). */
+/**
+ * Minimal surface of the recorder/canvas APIs the pipeline needs (mockable in tests).
+ * onerror is part of the surface so encoder failures can never be silent: a
+ * runtime MediaRecorder error (isTypeSupported said yes, the encoder still
+ * died — typically an avc1 level vs frame size mismatch) must fail the export
+ * instead of yielding a truncated "successful" file or a hung dialog.
+ */
 export interface RecorderHost {
   createCanvas(
     width: number,
@@ -107,6 +113,7 @@ export interface RecorderHost {
     stop(): void
     ondataavailable(handler: (e: { data: Blob }) => void): void
     onstop(handler: () => void): void
+    onerror(handler: (e: { error?: unknown }) => void): void
   }
   now(): number
   setTimeout(fn: () => void, ms: number): number
@@ -142,6 +149,9 @@ export const browserRecorderHost: RecorderHost = {
       onstop: (handler) => {
         rec.onstop = () => handler()
       },
+      onerror: (handler) => {
+        rec.onerror = (e) => handler(e)
+      },
     }
   },
   now: () => performance.now(),
@@ -173,10 +183,19 @@ function drawFrame(
 }
 
 /**
+ * Fail the export when recorder.stop() does not settle within this window: a
+ * crashed encoder that fires neither dataavailable/stop nor error must not
+ * hang the export (and the suspended background throttling) forever.
+ */
+export const RECORDER_STOP_TIMEOUT_MS = 5000
+
+/**
  * Record the timeline into a video Blob. Frames are scheduled on the wall
  * clock (start + i*frameMs) and pushed with track.requestFrame() so the
  * container's timestamps match the plan's durations. Resolves null when the
- * timeline is empty or the run was cancelled.
+ * timeline is empty or the run was cancelled. Throws when the encoder fails
+ * (onerror), refuses to finish (stop timeout) or produces no data at all —
+ * the caller reports the failure instead of writing a truncated file.
  */
 export async function recordVideoTimeline(
   opts: RecordTimelineOptions,
@@ -197,7 +216,17 @@ export async function recordVideoTimeline(
   recorder.ondataavailable((e) => {
     if (e.data && e.data.size > 0) chunks.push(e.data)
   })
-  const stopped = new Promise<void>((resolve) => recorder.onstop(() => resolve()))
+  // Encoder errors settle the stopped gate AND fail the run afterwards; some
+  // Chromium builds fire dataavailable+stop on error (truncated-but-"ok"),
+  // others fire nothing at all — the explicit error flag covers both.
+  let recordError: unknown = null
+  const stopped = new Promise<void>((resolve) => {
+    recorder.onstop(() => resolve())
+    recorder.onerror((e) => {
+      recordError = e.error ?? new Error('MediaRecorder failed')
+      resolve()
+    })
+  })
   recorder.start()
 
   const start = host.now()
@@ -210,6 +239,7 @@ export async function recordVideoTimeline(
       cancelled = true
       break
     }
+    if (recordError !== null) break // encoder died — stop pushing frames
     const frame = sampleTimeline(timeline, (i * 1000) / fps)
     drawFrame(ctx, width, height, opts.slideImages, frame.from, frame.to, frame.alpha)
     requestFrame?.()
@@ -217,7 +247,25 @@ export async function recordVideoTimeline(
   }
   // let the last pushed frame land on the recorder clock before closing
   await sleepTo(host.now() + frameMs)
-  recorder.stop()
-  await stopped
+  try {
+    recorder.stop()
+  } catch {
+    // an errored recorder refuses stop(); the gate below is already settled
+    // by onerror — proceed to the error report
+  }
+  await Promise.race([
+    stopped,
+    new Promise<void>((_, reject) =>
+      host.setTimeout(
+        () => reject(new Error('video recorder did not finish (encoder hang)')),
+        RECORDER_STOP_TIMEOUT_MS,
+      ),
+    ),
+  ])
+  if (recordError !== null)
+    throw new Error(
+      `video recording failed: ${String((recordError as Error)?.message ?? recordError)}`,
+    )
+  if (!cancelled && chunks.length === 0) throw new Error('video recorder produced no data')
   return cancelled ? null : new Blob(chunks, { type: opts.mimeType })
 }

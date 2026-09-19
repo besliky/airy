@@ -237,6 +237,16 @@ export interface VideoExportSettings {
 /** Coarse pipeline phase for the progress callback (the dialog renders both). */
 export type VideoExportPhase = 'render' | 'record'
 
+/**
+ * Result of a video export run. ok=false without error = aborted without a
+ * failure worth reporting (canceled save pick / cooperative cancel); ok=false
+ * with error carries the failure reason (the dialog shows it — BUG-1208).
+ */
+export interface VideoExportOutcome {
+  ok: boolean
+  error?: string
+}
+
 /** Blob → base64 (chunked to avoid call stack overflow — same as screen recording). */
 async function blobToBase64(blob: Blob): Promise<string> {
   const buf = new Uint8Array(await blob.arrayBuffer())
@@ -253,27 +263,29 @@ async function blobToBase64(blob: Blob): Promise<string> {
  * dwell) with transitions as crossfades, and an offscreen canvas records the
  * frames through MediaRecorder (mp4 when the Chromium build muxes it, else
  * WebM). Recording is real-time paced — MediaRecorder timestamps frames by
- * the wall clock — so export duration ≈ video duration. Returns success.
+ * the wall clock — so export duration ≈ video duration. Encoder failures
+ * throw out of the recorder and surface here as a failed outcome with the
+ * reason (never a silently truncated file).
  */
 export async function exportVideo(
   ctx: ActionCtx,
   settings: VideoExportSettings,
   onProgress?: (phase: VideoExportPhase, done: number, total: number) => void,
   cancel?: { current: boolean },
-): Promise<boolean> {
+): Promise<VideoExportOutcome> {
   const visible = ctx.slides.filter((s) => !s.hidden)
   if (visible.length === 0) {
     ctx.setStatus(t('appExportNoSlides'))
-    return false
+    return { ok: false }
   }
   if (typeof MediaRecorder === 'undefined') {
     ctx.setStatus(t('appExportVideoFailed', { error: t('appExportVideoNoEncoder') }))
-    return false
+    return { ok: false, error: t('appExportVideoNoEncoder') }
   }
   const mime = pickRecorderMime((m) => MediaRecorder.isTypeSupported(m))
   if (!mime) {
     ctx.setStatus(t('appExportVideoFailed', { error: t('appExportVideoNoEncoder') }))
-    return false
+    return { ok: false, error: t('appExportVideoNoEncoder') }
   }
   const first = visible[0]!
   const dims = videoFrameDimensions(first.widthPx, first.heightPx, settings.heightPreset)
@@ -292,7 +304,7 @@ export async function exportVideo(
     `${exportBaseName(ctx)}.${mime.container}`,
     mime.container,
   )
-  if (!target) return false
+  if (!target) return { ok: false }
   // recording is wall-clock paced: suspend background timer throttling for the
   // run (a minimized window would otherwise clamp frame timers to 1s)
   await window.slidesApi.setVideoExportActive(true)
@@ -314,7 +326,7 @@ export async function exportVideo(
       onProgress: (done, total) => onProgress?.('record', done, total),
       ...(cancel ? { cancel } : {}),
     })
-    if (!blob || blob.size === 0) return false // canceled (or nothing recorded)
+    if (!blob) return { ok: false } // canceled (or nothing recorded)
     const r = await window.slidesApi.exportVideo({
       filePath: target,
       bytesBase64: await blobToBase64(blob),
@@ -325,10 +337,11 @@ export async function exportVideo(
         ? t('appExportVideoDone', { path: r.path ?? '' })
         : t('appExportVideoFailed', { error: r.error ?? t('appUnknownError') }),
     )
-    return r.ok
+    return r.ok ? { ok: true } : { ok: false, error: r.error ?? t('appUnknownError') }
   } catch (err) {
-    ctx.setStatus(t('appExportVideoFailed', { error: String(err) }))
-    return false
+    const error = err instanceof Error ? err.message : String(err)
+    ctx.setStatus(t('appExportVideoFailed', { error }))
+    return { ok: false, error }
   } finally {
     await window.slidesApi.setVideoExportActive(false)
   }

@@ -12,7 +12,7 @@ import React, { useMemo, useRef, useState } from 'react'
 import { useModalDialog } from '@airy-office/ui'
 import { useI18n } from '../i18n/locale'
 import type { TransitionSpec } from '../../shared/ipc'
-import type { VideoExportPhase, VideoExportSettings } from '../file-actions'
+import type { VideoExportOutcome, VideoExportPhase, VideoExportSettings } from '../file-actions'
 import { buildVideoTimeline, hasRehearseTimings, type VideoPlanSlide } from '../video-plan'
 import { pickRecorderMime } from '../video-export'
 import { formatClock } from '../slideshow-utils'
@@ -34,7 +34,7 @@ export function ExportVideoDialog({
     settings: VideoExportSettings,
     onProgress: (phase: VideoExportPhase, done: number, total: number) => void,
     cancel: { current: boolean },
-  ) => Promise<boolean>
+  ) => Promise<VideoExportOutcome>
   onClose: () => void
 }): React.JSX.Element {
   const { t } = useI18n()
@@ -46,6 +46,9 @@ export function ExportVideoDialog({
   const [includeTransitions, setIncludeTransitions] = useState(true)
   const [phase, setPhase] = useState<'idle' | VideoExportPhase>('idle')
   const [progress, setProgress] = useState({ done: 0, total: 0 })
+  // failure reason of the last run (encoder errors and the like — BUG-1208);
+  // cleared when a new run starts, shown next to the options
+  const [error, setError] = useState<string | null>(null)
   const cancelBox = useRef({ current: false }).current
   // mirrors `phase` for the hook's close callback (Escape must not orphan a run)
   const exportingRef = useRef(false)
@@ -78,8 +81,9 @@ export function ExportVideoDialog({
     setPhase('render')
     exportingRef.current = true
     setProgress({ done: 0, total: 0 })
+    setError(null)
     cancelBox.current = false
-    const ok = await onExport(
+    const r = await onExport(
       { fps, heightPreset, useTimings: effectiveUseTimings, secondsPerSlide, includeTransitions },
       (p, done, total) => {
         setPhase(p)
@@ -87,11 +91,13 @@ export function ExportVideoDialog({
       },
       cancelBox,
     )
-    // close on completion and cancel alike; failures keep the status bar message
-    if (ok || cancelBox.current) onClose()
+    // close on completion and cancel alike; failures keep the dialog open and
+    // show the reason (a silent status-bar message would hide behind the modal)
+    if (r.ok || cancelBox.current) onClose()
     else {
       exportingRef.current = false
       setPhase('idle')
+      if (r.error) setError(r.error)
     }
   }
 
@@ -222,6 +228,7 @@ export function ExportVideoDialog({
                     })
                   : t('appExportNoSlides')}
               </div>
+              {error ? <div className="video-export-error">{error}</div> : null}
             </div>
           </>
         )}
