@@ -12,13 +12,16 @@ import { join } from 'node:path'
  * Mechanical trait — the one artifact every adoption shares and nothing else
  * uses:
  *   - a modal ROOT is a JSX element carrying the literal attribute
- *     `className="modal-backdrop"` (every overlay dialog in components/
+ *     `className="modal-backdrop"` (every overlay dialog in the renderer
  *     renders exactly this class on its dimming wrapper);
  *   - an ADOPTED modal spreads the hook's props onto that root, spelled
  *     `{...dialog.backdropProps}` (the controller variable is `dialog` by
  *     the convention every existing adoption follows).
  *
- * Rule, per .tsx file under src/renderer/components:
+ * Rule, per .tsx file under src/renderer (recursive — UX-1207: the scanner
+ * used to stop at components/ while the pgNum modal sat in App.tsx, a blind
+ * spot exactly the class UX-1001/UX-1101 closed; the twins in slides/sheets
+ * have swept their whole renderer since):
  *   backdrops - spreads === LEGACY[file] ?? 0
  *
  * LEGACY is the acknowledged pre-UX-1001 debt (the useModalKeys-era
@@ -28,35 +31,45 @@ import { join } from 'node:path'
  * A brand-new dialog therefore MUST adopt useModalDialog to keep the balance
  * at zero in every file not listed here.
  */
-const SRC = join(__dirname, '../src/renderer/components')
+const SRC = join(__dirname, '../src/renderer')
 
 /** modal roots still on the legacy keyboard-only behavior (no hook) */
 const LEGACY: Record<string, number> = {
   // FontDialog + ParagraphDialog
-  'ContextMenu.tsx': 2,
-  'EquationModal.tsx': 1,
+  'components/ContextMenu.tsx': 2,
+  'components/EquationModal.tsx': 1,
   // shared margin fields dialog (ribbonMargin* labels)
-  'MarginDialog.tsx': 1,
-  'PasswordDialog.tsx': 1,
-  'PrintDialog.tsx': 1,
-  'PromptModal.tsx': 1,
-  'ProtectDialog.tsx': 1,
+  'components/MarginDialog.tsx': 1,
+  'components/PasswordDialog.tsx': 1,
+  'components/PrintDialog.tsx': 1,
+  'components/PromptModal.tsx': 1,
+  'components/ProtectDialog.tsx': 1,
   // BookmarkModal + TableInsertModal
-  'ribbon-insert-tab.tsx': 2,
+  'components/ribbon-insert-tab.tsx': 2,
   // CaptionModal + SourceModal
-  'ribbon-references-tab.tsx': 2,
+  'components/ribbon-references-tab.tsx': 2,
   // TablePropertiesDialog + ListDefineDialog
-  'Ribbon.tsx': 2,
-  'ShortcutsDialog.tsx': 1,
-  'WordCountDialog.tsx': 1,
+  'components/Ribbon.tsx': 2,
+  'components/ShortcutsDialog.tsx': 1,
+  'components/WordCountDialog.tsx': 1,
 }
 
 const occurrences = (src: string, needle: string): number => src.split(needle).length - 1
 
-describe('overlay dialogs adopt useModalDialog (UX-1001)', () => {
-  const files = readdirSync(SRC).filter((f) => f.endsWith('.tsx'))
+/** every .tsx under the renderer, relative to SRC (dialogs live beyond components/ too) */
+function tsxFiles(dir: string, prefix = ''): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) out.push(...tsxFiles(join(dir, entry.name), `${prefix}${entry.name}/`))
+    else if (entry.name.endsWith('.tsx')) out.push(prefix + entry.name)
+  }
+  return out
+}
 
-  it('finds the component directory (scanner sanity)', () => {
+describe('overlay dialogs adopt useModalDialog (UX-1001)', () => {
+  const files = tsxFiles(SRC)
+
+  it('finds the renderer tree (scanner sanity)', () => {
     expect(files.length).toBeGreaterThan(10)
   })
 

@@ -14,7 +14,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/core'
 import { DOMParser as PmDOMParser, type Mark as PmMark } from '@tiptap/pm/model'
 import { NodeSelection } from '@tiptap/pm/state'
-import { Dropdown, useAutoSavePref } from '@airy-office/ui'
+import { Dropdown, useAutoSavePref, useModalDialog } from '@airy-office/ui'
 import { wordRangeAtCaret } from './editor/comments'
 import { markdownPasteHtml } from './editor/markdown-paste'
 import { pasteTextSlice, singleCellPasteText } from './editor/paste-text'
@@ -496,6 +496,82 @@ const DEFAULT_SETTINGS: AiSettings = {
       { apiKey: '', model: p.defaultModel, baseUrl: p.needsBaseUrl ? '' : undefined },
     ]),
   ) as AiSettings['providers'],
+}
+
+/**
+ * Page Number Format modal (UX-1207 adoption of useModalDialog): the dialog
+ * edits App-local section state, so it lives here instead of components/.
+ * The hook brings role/aria-modal/aria-labelledby, the focus trap, Escape
+ * (which this dialog previously had none of) and focus return to the ribbon
+ * trigger that opened it; the backdrop-click close is preserved as-is.
+ */
+export function PgNumFormatModal({
+  fmt,
+  start,
+  sectionHint,
+  onFmt,
+  onStart,
+  onApply,
+  onClose,
+}: {
+  /** Current number-format value ('decimal' = default rendering) */
+  readonly fmt: string
+  /** Start-at input value ('' = continue from previous section) */
+  readonly start: string
+  /** Resolved hint line (blank-page note + which section it applies to) */
+  readonly sectionHint: string
+  readonly onFmt: (fmt: string) => void
+  readonly onStart: (start: string) => void
+  readonly onApply: () => void
+  readonly onClose: () => void
+}): React.JSX.Element {
+  const { t } = useI18n()
+  const dialog = useModalDialog(onClose)
+  return (
+    <div
+      className="modal-backdrop"
+      {...dialog.backdropProps}
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="modal" {...dialog.dialogProps}>
+        <h2 {...dialog.titleProps}>{t('appPageNumFormatTitle')}</h2>
+        <label className="pgnum-row">
+          {t('appNumberFormat')}
+          <Dropdown
+            value={fmt}
+            ariaLabel={t('appNumberFormat')}
+            options={[
+              { value: 'decimal', label: '1, 2, 3, …' },
+              { value: 'numberInDash', label: '- 1 -, - 2 -, - 3 -, …' },
+              { value: 'lowerLetter', label: 'a, b, c, …' },
+              { value: 'upperLetter', label: 'A, B, C, …' },
+              { value: 'lowerRoman', label: 'i, ii, iii, …' },
+              { value: 'upperRoman', label: 'I, II, III, …' },
+              { value: 'chineseCounting', label: '一, 二, 三, …' },
+            ]}
+            onPick={onFmt}
+          />
+        </label>
+        <label className="pgnum-row">
+          {t('appStartAt')}
+          <input
+            type="number"
+            min={0}
+            placeholder={t('appContinueFromPrev')}
+            value={start}
+            onChange={(e) => onStart(e.target.value)}
+          />
+        </label>
+        <p className="pgnum-hint">{sectionHint}</p>
+        <div className="modal-actions">
+          <button onClick={onClose}>{t('appCancel')}</button>
+          <button className="btn-primary" onClick={onApply}>
+            {t('appOk')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function App() {
@@ -5491,53 +5567,20 @@ export function App() {
         />
       )}
       {pgNumModal && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={(e) => e.target === e.currentTarget && setPgNumModal(null)}
-        >
-          <div className="modal">
-            <h2>{t('appPageNumFormatTitle')}</h2>
-            <label className="pgnum-row">
-              {t('appNumberFormat')}
-              <Dropdown
-                value={pgNumModal.fmt}
-                ariaLabel={t('appNumberFormat')}
-                options={[
-                  { value: 'decimal', label: '1, 2, 3, …' },
-                  { value: 'numberInDash', label: '- 1 -, - 2 -, - 3 -, …' },
-                  { value: 'lowerLetter', label: 'a, b, c, …' },
-                  { value: 'upperLetter', label: 'A, B, C, …' },
-                  { value: 'lowerRoman', label: 'i, ii, iii, …' },
-                  { value: 'upperRoman', label: 'I, II, III, …' },
-                  { value: 'chineseCounting', label: '一, 二, 三, …' },
-                ]}
-                onPick={(v) => setPgNumModal({ ...pgNumModal, fmt: v })}
-              />
-            </label>
-            <label className="pgnum-row">
-              {t('appStartAt')}
-              <input
-                type="number"
-                min={0}
-                placeholder={t('appContinueFromPrev')}
-                value={pgNumModal.start}
-                onChange={(e) => setPgNumModal({ ...pgNumModal, start: e.target.value })}
-              />
-            </label>
-            <p className="pgnum-hint">
-              {t('appPgNumHintBlank')}
-              {sections.length > 1
-                ? t('appPgNumAppliesTo', { n: Math.min(activeSection, sections.length - 1) + 1 })
-                : ''}
-            </p>
-            <div className="modal-actions">
-              <button onClick={() => setPgNumModal(null)}>{t('appCancel')}</button>
-              <button className="btn-primary" onClick={applyPgNumFormat}>
-                {t('appOk')}
-              </button>
-            </div>
-          </div>
-        </div>
+        <PgNumFormatModal
+          fmt={pgNumModal.fmt}
+          start={pgNumModal.start}
+          sectionHint={
+            t('appPgNumHintBlank') +
+            (sections.length > 1
+              ? t('appPgNumAppliesTo', { n: Math.min(activeSection, sections.length - 1) + 1 })
+              : '')
+          }
+          onFmt={(fmt) => setPgNumModal({ ...pgNumModal, fmt })}
+          onStart={(start) => setPgNumModal({ ...pgNumModal, start })}
+          onApply={applyPgNumFormat}
+          onClose={() => setPgNumModal(null)}
+        />
       )}
     </div>
   )
