@@ -3,13 +3,18 @@
  * page was auto-refreshed after repagination must save the refreshed number
  * (the genXml still carries the number from generation time).
  */
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { generateTocFieldXml, parseDocx } from '@airy-office/docx-engine'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from '../src/renderer/editor/convert'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { applyTocPageDisplays } from '../src/renderer/editor/toc-refresh'
+
+/** editors created by these tests; destroyed in afterEach so the ProseMirror
+ *  DOMObserver polling timer never outlives the jsdom environment (an
+ *  unhandled "document is not defined" after teardown fails the whole run) */
+const openEditors: Editor[] = []
 
 async function openBlankDoc() {
   const source = await buildDocx({ bodyXml: '<w:p><w:r><w:t>Body text</w:t></w:r></w:p>' })
@@ -19,8 +24,15 @@ async function openBlankDoc() {
     extensions: editorExtensions,
     content: blocksToPmDoc(parsed.blocks) as never,
   })
+  openEditors.push(editor)
   return { editor, parsed }
 }
+
+afterEach(async () => {
+  while (openEditors.length) openEditors.pop()?.destroy()
+  // let a pending DOMObserver flush land while the document still exists
+  await new Promise((resolve) => setTimeout(resolve, 30))
+})
 
 describe('TOC auto page refresh persistence', () => {
   it('saves the refreshed page number of a generated TOC line', async () => {

@@ -1,18 +1,31 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { buildBlankDocx, parseDocx } from '@airy-office/docx-engine'
 import { insertTableAt } from '../src/renderer/components/ribbon-tabs'
 import { blocksToPmDoc } from '../src/renderer/editor/convert'
 import { editorExtensions, TABLE_TRAILING_SKIP } from '../src/renderer/editor/extensions'
 
+/** editors created by these tests; destroyed in afterEach so the ProseMirror
+ *  DOMObserver polling timer never outlives the jsdom environment (an
+ *  unhandled "document is not defined" after teardown fails the whole run) */
+const openEditors: Editor[] = []
+
 async function openBlank(content?: unknown) {
   const parsed = await parseDocx(await buildBlankDocx())
-  return new Editor({
+  const editor = new Editor({
     element: document.createElement('div'),
     extensions: editorExtensions,
     content: (content ?? blocksToPmDoc(parsed.blocks)) as never,
   })
+  openEditors.push(editor)
+  return editor
 }
+
+afterEach(async () => {
+  while (openEditors.length) openEditors.pop()?.destroy()
+  // let a pending DOMObserver flush land while the document still exists
+  await new Promise((resolve) => setTimeout(resolve, 30))
+})
 
 const topLevel = (editor: Editor) => editor.state.doc.content.content.map((n) => n.type.name)
 
