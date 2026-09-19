@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import JSZip from 'jszip'
-import { parseDocx, saveDocx } from '@airy-office/docx-engine'
+import { parseDocx, saveDocx, type StyleUpsert } from '@airy-office/docx-engine'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
 import { docStyleCss } from '../src/renderer/doc-style-css'
 import { styleEditsFromInfo, styleUpsertFromEdits } from '../src/renderer/components/StyleDialog'
@@ -174,5 +174,128 @@ describe('live display update', () => {
     const rule = css.match(/\[data-style="MyQuote"\][^{]*\{[^}]*\}/g) ?? []
     expect(rule.join('\n')).toContain('#0070C0')
     expect(rule.join('\n')).toContain('font-size:14pt')
+  })
+})
+
+const DOC_DEFAULTS_STYLES =
+  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' +
+  '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="22"/></w:rPr></w:rPrDefault>' +
+  '<w:pPrDefault><w:pPr><w:spacing w:after="160"/></w:pPr></w:pPrDefault></w:docDefaults>' +
+  '<w:style w:type="paragraph" w:styleId="Heading9"><w:name w:val="heading 9"/>' +
+  '<w:pPr><w:keepNext/><w:keepLines/><w:outlineLvl w:val="8"/></w:pPr></w:style>' +
+  '<w:style w:type="paragraph" w:styleId="Plain"><w:name w:val="Plain"/></w:style>' +
+  '<w:style w:type="paragraph" w:styleId="OwnSpacing"><w:name w:val="Own Spacing"/>' +
+  '<w:pPr><w:spacing w:before="120" w:after="80"/><w:jc w:val="center"/><w:outlineLvl w:val="2"/></w:pPr>' +
+  '<w:rPr><w:b/><w:color w:val="FF0000"/><w:sz w:val="28"/></w:rPr></w:style>' +
+  '</w:styles>'
+
+async function openDefaultsDoc() {
+  return parseDocx(
+    await buildDocx({
+      bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+      stylesXml: DOC_DEFAULTS_STYLES,
+    }),
+  )
+}
+
+async function saveDocWith(parsed: Awaited<ReturnType<typeof parseDocx>>, upserts: StyleUpsert[]) {
+  const blocks = parsed.blocks
+    .filter((b) => !b.hidden && b.docxIndex !== null)
+    .map((b) => ({ kind: 'original' as const, docxIndex: b.docxIndex! }))
+  return saveDocx(parsed, blocks, { styleUpserts: upserts })
+}
+
+describe('BUG-1002: spacing the chain does not define stays unset', () => {
+  it('seeding 0pt never serializes w:before/after="0" over docDefaults', async () => {
+    const parsed = await openDefaultsDoc()
+    expect(parsed.docDefaults?.spaceAfterTwips).toBe(160)
+    const info = parsed.styles.get('Heading9')!
+    const seed = styleEditsFromInfo(info, parsed.docDefaults)
+    expect(seed.beforePt).toBe(0)
+    expect(seed.afterPt).toBe(0)
+    // modify only the font — the untouched spacing facets stay out of the upsert
+    const { upsert, display } = styleUpsertFromEdits(info, { ...seed, font: 'Calibri' })
+    expect(upsert.pPr?.spaceBeforeTwips).toBeUndefined()
+    expect(upsert.pPr?.spaceAfterTwips).toBeUndefined()
+    expect(display?.spaceBeforeTwips).toBeUndefined()
+    expect(display?.spaceAfterTwips).toBeUndefined()
+    const saved = await saveDocWith(parsed, [upsert])
+    const zip = await JSZip.loadAsync(saved)
+    const stylesXml = await zip.file('word/styles.xml')!.async('string')
+    const heading9 = /<w:style [^>]*w:styleId="Heading9"[\s\S]*?<\/w:style>/.exec(stylesXml)![0]
+    expect(heading9).not.toContain('<w:spacing')
+    // BUG-1001 (docs side): the unedited keepNext/keepLines/outline survive too
+    expect(heading9).toContain('<w:keepNext/><w:keepLines/><w:outlineLvl w:val="8"/>')
+    // the dialog seeds no distinct EA face, so only the latin slots are written
+    expect(heading9).toContain('<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>')
+    const reparsed = await parseDocx(saved)
+    expect(reparsed.docDefaults?.spaceAfterTwips).toBe(160)
+    expect(reparsed.styles.get('Heading9')!.display?.spaceAfterTwips).toBeUndefined()
+  })
+
+  it('an explicit user zero is kept as a real override', async () => {
+    const parsed = await openDefaultsDoc()
+    const info = parsed.styles.get('OwnSpacing')!
+    const seed = styleEditsFromInfo(info)
+    expect(seed.beforePt).toBe(6)
+    const { upsert } = styleUpsertFromEdits(info, { ...seed, beforePt: 0 })
+    expect(upsert.pPr?.spaceBeforeTwips).toBe(0)
+    expect(upsert.pPr?.spaceAfterTwips).toBe(80)
+    const saved = await saveDocWith(parsed, [upsert])
+    const zip = await JSZip.loadAsync(saved)
+    const stylesXml = await zip.file('word/styles.xml')!.async('string')
+    const own = /<w:style [^>]*w:styleId="OwnSpacing"[\s\S]*?<\/w:style>/.exec(stylesXml)![0]
+    expect(own).toContain('<w:spacing w:before="0" w:after="80"/>')
+  })
+
+  it('clearing a facet removes it from the definition instead of leaving it', async () => {
+    const parsed = await openDefaultsDoc()
+    const info = parsed.styles.get('OwnSpacing')!
+    const seed = styleEditsFromInfo(info)
+    const { upsert } = styleUpsertFromEdits(info, {
+      ...seed,
+      bold: false,
+      italic: true,
+      color: '',
+      sizePt: 0,
+      align: '',
+      outline: 0,
+    })
+    expect(upsert.rPr?.bold).toBeNull()
+    expect(upsert.rPr?.italic).toBe(true)
+    expect(upsert.rPr?.color).toBeNull()
+    expect(upsert.rPr?.sizeHalfPoints).toBeNull()
+    expect(upsert.pPr?.align).toBeNull()
+    expect(upsert.pPr?.outlineLevel).toBeNull()
+    // untouched pass-through facets still flatten in
+    expect(upsert.pPr?.spaceAfterTwips).toBe(80)
+    const saved = await saveDocWith(parsed, [upsert])
+    const zip = await JSZip.loadAsync(saved)
+    const stylesXml = await zip.file('word/styles.xml')!.async('string')
+    const own = /<w:style [^>]*w:styleId="OwnSpacing"[\s\S]*?<\/w:style>/.exec(stylesXml)![0]
+    expect(own).not.toContain('<w:b/>')
+    expect(own).not.toContain('<w:color')
+    expect(own).not.toContain('<w:sz ')
+    expect(own).not.toContain('<w:jc ')
+    expect(own).not.toContain('<w:outlineLvl ')
+    expect(own).toContain('<w:i/>')
+    expect(own).toContain('<w:spacing w:before="120" w:after="80"/>')
+  })
+
+  it('a style without facets keeps its definition when nothing is set', async () => {
+    const parsed = await openDefaultsDoc()
+    const info = parsed.styles.get('Plain')!
+    const { upsert } = styleUpsertFromEdits(info, styleEditsFromInfo(info, parsed.docDefaults))
+    const saved = await saveDocWith(parsed, [upsert])
+    const zip = await JSZip.loadAsync(saved)
+    const stylesXml = await zip.file('word/styles.xml')!.async('string')
+    const plain = /<w:style [^>]*w:styleId="Plain"[\s\S]*?<\/w:style>/.exec(stylesXml)![0]
+    // no pPr is invented; the only rPr content is the docDefaults-seeded size flatten
+    expect(plain).toBe(
+      '<w:style w:type="paragraph" w:styleId="Plain" w:customStyle="1">' +
+        '<w:name w:val="Plain"/><w:rPr><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:style>',
+    )
+    expect(upsert.pPr?.outlineLevel).toBeUndefined()
   })
 })

@@ -5,6 +5,10 @@
  * display (a basedOn chain collapses into the style itself), written back to
  * styles.xml through StyleUpsert on save, and pushed live into the document
  * style CSS so every paragraph carrying the pStyle updates on screen at once.
+ * The save-side write is surgical (BUG-1001/1002): untouched facets stay
+ * unset in the upsert so the engine keeps the original definition bytes,
+ * including everything this dialog cannot edit (keepNext, tabs, numPr, …),
+ * and spacing the chain does not define is never pinned over docDefaults.
  */
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
@@ -73,7 +77,9 @@ export function styleEditsFromInfo(
  * Flatten the edits into the save-side upsert plus the style's next resolved
  * display (for the live document style CSS) and its new outline level. Fields
  * the dialog does not edit (underline, strike, indents, non-auto line rules)
- * pass through from the current display so nothing is silently lost.
+ * pass through from the current display so nothing is silently lost; facets
+ * the user cleared carry `null` so the surgical engine patch removes them,
+ * while untouched facets stay `undefined` (the definition keeps its own XML).
  */
 export function styleUpsertFromEdits(
   info: StyleInfo | undefined,
@@ -81,26 +87,38 @@ export function styleUpsertFromEdits(
 ): { upsert: StyleUpsert; display: StyleDisplay | undefined; headingLevel: number | null } {
   const styleId = info?.styleId ?? ''
   const d = info?.display
+  const hadEaFace = Boolean(d?.font && d.font !== (d?.fontAscii ?? ''))
   const rPr: NonNullable<StyleUpsert['rPr']> = {}
-  if (edits.bold) rPr.bold = true
-  if (edits.italic) rPr.italic = true
+  // value = set, null = clear, undefined = the chain never set it (keep)
+  rPr.bold = edits.bold ? true : d?.bold === true ? null : undefined
+  rPr.italic = edits.italic ? true : d?.italic === true ? null : undefined
   if (d?.underline) rPr.underline = true
   if (d?.strike) rPr.strike = true
-  if (edits.color) rPr.color = edits.color.toUpperCase()
-  if (edits.sizePt > 0) rPr.sizeHalfPoints = Math.round(edits.sizePt * 2)
-  if (edits.font) rPr.font = edits.font
-  if (edits.fontEa) rPr.fontEa = edits.fontEa
-  const pPr: NonNullable<StyleUpsert['pPr']> = {
-    spaceBeforeTwips: ptToTwips(edits.beforePt),
-    spaceAfterTwips: ptToTwips(edits.afterPt),
-  }
-  if (edits.align) pPr.align = edits.align
+  rPr.color = edits.color
+    ? edits.color.toUpperCase()
+    : d?.color && d.color !== 'auto'
+      ? null
+      : undefined
+  // the seed always resolves a size (docDefaults fallback), so 0 = the user cleared it
+  rPr.sizeHalfPoints = edits.sizePt > 0 ? Math.round(edits.sizePt * 2) : null
+  rPr.font = edits.font ? edits.font : d?.fontAscii ? null : undefined
+  rPr.fontEa = edits.fontEa ? edits.fontEa : hadEaFace ? null : undefined
+  const pPr: NonNullable<StyleUpsert['pPr']> = {}
+  // BUG-1002: an interval the basedOn chain does not define must stay unset —
+  // writing an explicit w:before/after="0" would pin the style over docDefaults
+  // (typically w:after="160"), visibly removing the spacing on reopen
+  if (edits.beforePt > 0 || d?.spaceBeforeTwips !== undefined)
+    pPr.spaceBeforeTwips = ptToTwips(edits.beforePt)
+  if (edits.afterPt > 0 || d?.spaceAfterTwips !== undefined)
+    pPr.spaceAfterTwips = ptToTwips(edits.afterPt)
+  pPr.align = edits.align ? edits.align : d?.align ? null : undefined
   if (edits.lineSpacing > 0) pPr.lineSpacing = edits.lineSpacing
   else if (d?.lineRawTwips) {
     pPr.lineRule = d.lineRule === 'exact' ? 'exact' : 'atLeast'
     pPr.lineRawTwips = d.lineRawTwips
   }
-  if (edits.outline > 0) pPr.outlineLevel = edits.outline
+  pPr.outlineLevel =
+    edits.outline > 0 ? edits.outline : (info?.headingLevel ?? 0) > 0 ? null : undefined
   if (d?.indentLeftTwips) pPr.indentLeftTwips = d.indentLeftTwips
   if (d?.indentRightTwips) pPr.indentRightTwips = d.indentRightTwips
   if (d?.indentFirstLineTwips) pPr.indentFirstLineTwips = d.indentFirstLineTwips
@@ -133,9 +151,9 @@ export function styleUpsertFromEdits(
   }
   if (edits.align) next.align = edits.align
   else delete next.align
-  next.spaceBeforeTwips = pPr.spaceBeforeTwips
-  next.spaceAfterTwips = pPr.spaceAfterTwips
-  if (pPr.lineSpacing !== undefined) next.lineSpacing = pPr.lineSpacing
+  if (typeof pPr.spaceBeforeTwips === 'number') next.spaceBeforeTwips = pPr.spaceBeforeTwips
+  if (typeof pPr.spaceAfterTwips === 'number') next.spaceAfterTwips = pPr.spaceAfterTwips
+  if (typeof pPr.lineSpacing === 'number') next.lineSpacing = pPr.lineSpacing
   return {
     upsert,
     display: Object.keys(next).length > 0 ? next : undefined,

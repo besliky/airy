@@ -1,5 +1,6 @@
 import JSZip from 'jszip'
 import {
+  PPR_CHILD_ORDER,
   applyImageWrap,
   generateParagraphXml,
   inlineRunsXml,
@@ -157,7 +158,11 @@ export interface SaveOptions {
       startOverrides: Record<number, number>
     }>
   }
-  /** create/modify styles: surgical upsert of word/styles.xml by styleId (replace when present, else append) */
+  /**
+   * create/modify styles in word/styles.xml by styleId: an existing definition
+   * is patched surgically (only the facets StyleUpsert models change — see the
+   * interface), an unknown styleId appends a freshly built element
+   */
   styleUpserts?: StyleUpsert[]
   /**
    * Replace whole zip parts by path (e.g. patched chart parts from
@@ -230,7 +235,16 @@ const HF_REL_TYPE = {
   header: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header',
   footer: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer',
 } as const
-/** Model for creating/modifying a style (used by styleUpserts) */
+/**
+ * Model for creating/modifying a style (used by styleUpserts). Modify is
+ * surgical (BUG-1001): each facet below patches only its own XML inside the
+ * existing `<w:style>` — a value replaces it, `null` removes it from the
+ * definition, `undefined` leaves the existing definition untouched. Every
+ * element the model does not cover (keepNext/keepLines, tabs, shd, pBdr,
+ * numPr, caps, charSpacing, link, next, uiPriority, semiHidden, …) survives a
+ * modify byte-exact. The create path (no style with the styleId yet) builds a
+ * fresh element and simply omits null/undefined facets.
+ */
 export interface StyleUpsert {
   styleId: string
   type: 'paragraph' | 'character'
@@ -239,34 +253,43 @@ export interface StyleUpsert {
   /** built-in style (Heading1…/Normal…): omit w:customStyle, Word marks it the built-in */
   builtin?: boolean
   rPr?: {
-    bold?: boolean
-    italic?: boolean
-    underline?: boolean
-    strike?: boolean
-    /** hex without '#' */
-    color?: string
-    sizeHalfPoints?: number
-    /** latin face (w:rFonts w:ascii/w:hAnsi) */
-    font?: string
-    /** east-asian face when it differs from the latin one (w:rFonts w:eastAsia) */
-    fontEa?: string
+    /** true = set <w:b/>, null = remove it, false/undefined = keep the existing element */
+    bold?: boolean | null
+    italic?: boolean | null
+    /** true = insert <w:u w:val="single"/> only when absent (an existing richer
+     *  val like "double" is preserved), null = remove, undefined = keep */
+    underline?: boolean | null
+    strike?: boolean | null
+    /** hex without '#'; null = remove the w:color element */
+    color?: string | null
+    /** half-points; null = remove w:sz/w:szCs */
+    sizeHalfPoints?: number | null
+    /** latin face (w:rFonts w:ascii/w:hAnsi); null = clear those slots */
+    font?: string | null
+    /** east-asian face when it differs from the latin one (w:rFonts w:eastAsia); null = clear */
+    fontEa?: string | null
   }
   pPr?: {
-    align?: 'left' | 'center' | 'right' | 'justify'
-    spaceBeforeTwips?: number
-    spaceAfterTwips?: number
+    /** null = remove the w:jc element */
+    align?: 'left' | 'center' | 'right' | 'justify' | null
+    /** null = drop the w:before attribute (never serialized over docDefaults by the dialog) */
+    spaceBeforeTwips?: number | null
+    spaceAfterTwips?: number | null
     /** line spacing as a multiple (auto) */
-    lineSpacing?: number
+    lineSpacing?: number | null
     /** non-auto line rule with its raw twips (w:lineRule + w:line); used when lineSpacing is unset */
     lineRule?: 'atLeast' | 'exact'
-    lineRawTwips?: number
-    /** outline level 1-9 (w:outlineLvl = value - 1); omit for body text */
-    outlineLevel?: number
-    indentLeftTwips?: number
-    indentRightTwips?: number
-    indentFirstLineTwips?: number
+    lineRawTwips?: number | null
+    /** outline level 1-9 (w:outlineLvl = value - 1); null = remove it (body text) */
+    outlineLevel?: number | null
+    indentLeftTwips?: number | null
+    indentRightTwips?: number | null
+    indentFirstLineTwips?: number | null
   }
 }
+
+/** facet is actively managed: undefined keeps the existing definition, null clears it */
+const isSet = <T>(v: T | null | undefined): v is T => v !== undefined && v !== null
 
 function buildStyleXml(up: StyleUpsert): string {
   const rPr: string[] = []
@@ -287,20 +310,19 @@ function buildStyleXml(up: StyleUpsert): string {
   const sp = up.pPr
   if (
     sp &&
-    (sp.spaceBeforeTwips !== undefined ||
-      sp.spaceAfterTwips !== undefined ||
-      sp.lineSpacing !== undefined ||
-      sp.lineRawTwips !== undefined)
+    (isSet(sp.spaceBeforeTwips) ||
+      isSet(sp.spaceAfterTwips) ||
+      isSet(sp.lineSpacing) ||
+      isSet(sp.lineRawTwips))
   ) {
-    const lineAttrs =
-      sp.lineSpacing !== undefined
-        ? ` w:line="${Math.round(sp.lineSpacing * 240)}" w:lineRule="auto"`
-        : sp.lineRawTwips !== undefined
-          ? ` w:line="${sp.lineRawTwips}" w:lineRule="${sp.lineRule ?? 'atLeast'}"`
-          : ''
+    const lineAttrs = isSet(sp.lineSpacing)
+      ? ` w:line="${Math.round(sp.lineSpacing * 240)}" w:lineRule="auto"`
+      : isSet(sp.lineRawTwips)
+        ? ` w:line="${sp.lineRawTwips}" w:lineRule="${sp.lineRule ?? 'atLeast'}"`
+        : ''
     const attrs = [
-      sp.spaceBeforeTwips !== undefined ? ` w:before="${sp.spaceBeforeTwips}"` : '',
-      sp.spaceAfterTwips !== undefined ? ` w:after="${sp.spaceAfterTwips}"` : '',
+      isSet(sp.spaceBeforeTwips) ? ` w:before="${sp.spaceBeforeTwips}"` : '',
+      isSet(sp.spaceAfterTwips) ? ` w:after="${sp.spaceAfterTwips}"` : '',
       lineAttrs,
     ].join('')
     pPr.push(`<w:spacing${attrs}/>`)
@@ -308,15 +330,13 @@ function buildStyleXml(up: StyleUpsert): string {
   // CT_PPr schema order: spacing, ind, jc, …, outlineLvl
   if (
     sp &&
-    (sp.indentLeftTwips !== undefined ||
-      sp.indentRightTwips !== undefined ||
-      sp.indentFirstLineTwips !== undefined)
+    (isSet(sp.indentLeftTwips) || isSet(sp.indentRightTwips) || isSet(sp.indentFirstLineTwips))
   ) {
     const attrs = [
-      sp.indentLeftTwips !== undefined ? ` w:left="${sp.indentLeftTwips}"` : '',
-      sp.indentRightTwips !== undefined ? ` w:right="${sp.indentRightTwips}"` : '',
+      isSet(sp.indentLeftTwips) ? ` w:left="${sp.indentLeftTwips}"` : '',
+      isSet(sp.indentRightTwips) ? ` w:right="${sp.indentRightTwips}"` : '',
       // a negative first line is a hanging indent (w:hanging, positive twips)
-      sp.indentFirstLineTwips !== undefined
+      isSet(sp.indentFirstLineTwips)
         ? sp.indentFirstLineTwips < 0
           ? ` w:hanging="${-sp.indentFirstLineTwips}"`
           : ` w:firstLine="${sp.indentFirstLineTwips}"`
@@ -340,6 +360,387 @@ function buildStyleXml(up: StyleUpsert): string {
     (rPr.length > 0 ? `<w:rPr>${rPr.join('')}</w:rPr>` : '') +
     '</w:style>'
   )
+}
+
+/**
+ * CT_RPr child order (ECMA-376 §17.3.2.26) — the schema sequence the style
+ * rPr surgery inserts against, mirroring PPR_CHILD_ORDER for pPr children.
+ */
+const STYLE_RPR_CHILD_ORDER = [
+  'w:rStyle',
+  'w:rFonts',
+  'w:b',
+  'w:bCs',
+  'w:i',
+  'w:iCs',
+  'w:caps',
+  'w:smallCaps',
+  'w:strike',
+  'w:dstrike',
+  'w:outline',
+  'w:shadow',
+  'w:emboss',
+  'w:imprint',
+  'w:noProof',
+  'w:snapToGrid',
+  'w:vanish',
+  'w:webHidden',
+  'w:color',
+  'w:spacing',
+  'w:w',
+  'w:kern',
+  'w:position',
+  'w:sz',
+  'w:szCs',
+  'w:highlight',
+  'w:u',
+  'w:effect',
+  'w:bdr',
+  'w:shd',
+  'w:fitText',
+  'w:vertAlign',
+  'w:rtl',
+  'w:cs',
+  'w:em',
+  'w:lang',
+  'w:eastAsianLayout',
+  'w:specVanish',
+  'w:oMath',
+  'w:rPrChange',
+]
+
+/** CT_Style child order (ECMA-376 §17.7.3) — where a freshly created pPr/rPr block sits */
+const STYLE_CHILD_ORDER = [
+  'w:name',
+  'w:aliases',
+  'w:basedOn',
+  'w:next',
+  'w:link',
+  'w:autoRedefine',
+  'w:hidden',
+  'w:uiPriority',
+  'w:semiHidden',
+  'w:unhideWhenUsed',
+  'w:qFormat',
+  'w:locked',
+  'w:personal',
+  'w:personalCompose',
+  'w:personalReply',
+  'w:cnfStyle',
+  'w:pPr',
+  'w:rPr',
+  'w:tblPr',
+  'w:trPr',
+  'w:tcPr',
+  'w:rsid',
+  'w:pPrChange',
+  'w:rPrChange',
+  'w:tblPrChange',
+  'w:trPrChange',
+  'w:tcPrChange',
+]
+
+type XmlChild = ReturnType<typeof splitXmlChildren>[number]
+
+/** one surgical edit inside a style's pPr/rPr block */
+type StyleChildOp =
+  /** replace the element wholesale (null removes it) — for val-only facets the model fully owns */
+  | { kind: 'element'; tag: string; xml: string | null }
+  /** merge single attributes into the existing element, keeping unmodeled attrs byte-exact;
+   *  a null value removes the attribute; an element left with no attributes is dropped */
+  | { kind: 'attrs'; tag: string; sets: Array<[string, string | null]> }
+  /** insert only when absent — keeps richer existing variants (e.g. w:u w:val="double") */
+  | { kind: 'ensure'; tag: string; xml: string }
+
+/** attributes of an opening tag, order-preserving (values stay XML-escaped as authored) */
+type RawAttrs = Array<[string, string]>
+
+function parseXmlAttrs(openTag: string): RawAttrs {
+  const attrs: RawAttrs = []
+  const re = /([A-Za-z0-9:._-]+)\s*=\s*"([^"]*)"/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(openTag)) !== null) attrs.push([m[1], m[2]])
+  return attrs
+}
+
+function setRawAttr(attrs: RawAttrs, name: string, value: string): void {
+  const hit = attrs.find((a) => a[0] === name)
+  if (hit) hit[1] = value
+  else attrs.push([name, value])
+}
+
+/** re-serialize a childless element; '' when no attribute survives (drop marker) */
+function serializeEmptyElement(tag: string, attrs: RawAttrs): string {
+  return attrs.length > 0 ? `<${tag} ${attrs.map(([n, v]) => `${n}="${v}"`).join(' ')}/>` : ''
+}
+
+/** splice a child in at its CT_* schema position among the existing ones (unknown
+ *  names keep their relative place, mirroring mergePPrFormat's interleave) */
+function insertByRank(children: XmlChild[], child: XmlChild, order: string[]): void {
+  const own = order.indexOf(child.name)
+  let at = children.length
+  let prevRank = -1
+  for (let i = 0; i < children.length; i++) {
+    const r = order.indexOf(children[i].name)
+    const effective = r === -1 ? prevRank : Math.max(r, prevRank)
+    if (own < effective) {
+      at = i
+      break
+    }
+    prevRank = effective
+  }
+  children.splice(at, 0, child)
+}
+
+function applyAttrOp(
+  children: XmlChild[],
+  op: Extract<StyleChildOp, { kind: 'attrs' }>,
+  order: string[],
+): void {
+  const idx = children.findIndex((c) => c.name === op.tag)
+  if (idx >= 0) {
+    const open = /^<[^>]+>/.exec(children[idx].xml)
+    if (!open) return
+    const attrs = parseXmlAttrs(open[0])
+    for (const [name, value] of op.sets) {
+      if (value === null) {
+        const at = attrs.findIndex((a) => a[0] === name)
+        if (at >= 0) attrs.splice(at, 1)
+      } else setRawAttr(attrs, name, value)
+    }
+    const rebuilt = serializeEmptyElement(op.tag, attrs)
+    if (rebuilt === '') children.splice(idx, 1)
+    else children[idx] = { name: op.tag, xml: rebuilt }
+  } else {
+    const attrs: RawAttrs = []
+    for (const [name, value] of op.sets) if (value !== null) attrs.push([name, value])
+    const xml = serializeEmptyElement(op.tag, attrs)
+    if (xml !== '') insertByRank(children, { name: op.tag, xml }, order)
+  }
+}
+
+function applyStyleChildOps(inner: string, order: string[], ops: StyleChildOp[]): XmlChild[] {
+  const children = splitXmlChildren(inner)
+  for (const op of ops) {
+    if (op.kind === 'element') {
+      const idx = children.findIndex((c) => c.name === op.tag)
+      if (op.xml === null) {
+        if (idx >= 0) children.splice(idx, 1)
+      } else if (idx >= 0) children[idx] = { name: op.tag, xml: op.xml }
+      else insertByRank(children, { name: op.tag, xml: op.xml }, order)
+    } else if (op.kind === 'ensure') {
+      if (!children.some((c) => c.name === op.tag))
+        insertByRank(children, { name: op.tag, xml: op.xml }, order)
+    } else {
+      applyAttrOp(children, op, order)
+    }
+  }
+  return children
+}
+
+/** rewrite (or create) the w:pPr / w:rPr block of a style element in place */
+function patchStyleBlock(
+  styleChildren: XmlChild[],
+  blockTag: 'w:pPr' | 'w:rPr',
+  blockOrder: string[],
+  ops: StyleChildOp[],
+): void {
+  if (ops.length === 0) return
+  const idx = styleChildren.findIndex((c) => c.name === blockTag)
+  if (idx >= 0) {
+    const raw = styleChildren[idx].xml
+    const open = /^<[^>]+>/.exec(raw)
+    if (!open) return
+    // a self-closing block (<w:pPr/>) carries no children
+    const inner = raw.endsWith('/>')
+      ? ''
+      : raw.slice(open[0].length, raw.length - `</${blockTag}>`.length)
+    const children = applyStyleChildOps(inner, blockOrder, ops)
+    if (children.length === 0) styleChildren.splice(idx, 1)
+    else
+      styleChildren[idx] = {
+        name: blockTag,
+        xml: `<${blockTag}>${children.map((c) => c.xml).join('')}</${blockTag}>`,
+      }
+  } else {
+    const children = applyStyleChildOps('', blockOrder, ops)
+    if (children.length > 0)
+      insertByRank(
+        styleChildren,
+        {
+          name: blockTag,
+          xml: `<${blockTag}>${children.map((c) => c.xml).join('')}</${blockTag}>`,
+        },
+        STYLE_CHILD_ORDER,
+      )
+  }
+}
+
+/** edits the upsert makes inside the style's pPr (only elements the model owns) */
+function stylePPrOps(up: StyleUpsert): StyleChildOp[] {
+  const sp = up.pPr
+  if (!sp) return []
+  const ops: StyleChildOp[] = []
+  const spacingSets: Array<[string, string | null]> = []
+  if (sp.spaceBeforeTwips !== undefined) {
+    // w:beforeLines would win over the twips value in Word — clear it when setting
+    spacingSets.push(['w:before', isSet(sp.spaceBeforeTwips) ? String(sp.spaceBeforeTwips) : null])
+    if (isSet(sp.spaceBeforeTwips)) spacingSets.push(['w:beforeLines', null])
+  }
+  if (sp.spaceAfterTwips !== undefined) {
+    spacingSets.push(['w:after', isSet(sp.spaceAfterTwips) ? String(sp.spaceAfterTwips) : null])
+    if (isSet(sp.spaceAfterTwips)) spacingSets.push(['w:afterLines', null])
+  }
+  if (isSet(sp.lineSpacing))
+    spacingSets.push(['w:line', String(Math.round(sp.lineSpacing * 240))], ['w:lineRule', 'auto'])
+  else if (isSet(sp.lineRawTwips))
+    spacingSets.push(['w:line', String(sp.lineRawTwips)], ['w:lineRule', sp.lineRule ?? 'atLeast'])
+  if (spacingSets.length > 0) ops.push({ kind: 'attrs', tag: 'w:spacing', sets: spacingSets })
+
+  const indSets: Array<[string, string | null]> = []
+  if (sp.indentLeftTwips !== undefined) {
+    indSets.push(['w:left', isSet(sp.indentLeftTwips) ? String(sp.indentLeftTwips) : null])
+    if (isSet(sp.indentLeftTwips))
+      indSets.push(['w:leftChars', null], ['w:start', null], ['w:startChars', null])
+  }
+  if (sp.indentRightTwips !== undefined) {
+    indSets.push(['w:right', isSet(sp.indentRightTwips) ? String(sp.indentRightTwips) : null])
+    if (isSet(sp.indentRightTwips))
+      indSets.push(['w:rightChars', null], ['w:end', null], ['w:endChars', null])
+  }
+  if (isSet(sp.indentFirstLineTwips)) {
+    // a negative first line is a hanging indent (w:hanging, positive twips)
+    if (sp.indentFirstLineTwips < 0)
+      indSets.push(['w:hanging', String(-sp.indentFirstLineTwips)], ['w:firstLine', null])
+    else indSets.push(['w:firstLine', String(sp.indentFirstLineTwips)], ['w:hanging', null])
+    indSets.push(['w:firstLineChars', null], ['w:hangingChars', null])
+  }
+  if (indSets.length > 0) ops.push({ kind: 'attrs', tag: 'w:ind', sets: indSets })
+
+  if (sp.align !== undefined)
+    ops.push({
+      kind: 'element',
+      tag: 'w:jc',
+      xml:
+        sp.align === null ? null : `<w:jc w:val="${sp.align === 'justify' ? 'both' : sp.align}"/>`,
+    })
+  if (sp.outlineLevel !== undefined) {
+    const lvl = sp.outlineLevel === null ? 0 : Math.min(Math.max(Math.round(sp.outlineLevel), 1), 9)
+    ops.push({
+      kind: 'element',
+      tag: 'w:outlineLvl',
+      xml: sp.outlineLevel === null ? null : `<w:outlineLvl w:val="${lvl - 1}"/>`,
+    })
+  }
+  return ops
+}
+
+/** edits the upsert makes inside the style's rPr (only elements the model owns) */
+function styleRPrOps(up: StyleUpsert): StyleChildOp[] {
+  const r = up.rPr
+  if (!r) return []
+  const ops: StyleChildOp[] = []
+  const fontSets: Array<[string, string | null]> = []
+  if (r.font !== undefined) {
+    if (r.font === null) fontSets.push(['w:ascii', null], ['w:hAnsi', null])
+    else {
+      const f = escapeXmlAttr(r.font)
+      // theme slots and literal faces are mutually exclusive per schema
+      fontSets.push(['w:ascii', f], ['w:hAnsi', f], ['w:asciiTheme', null], ['w:hAnsiTheme', null])
+    }
+  }
+  if (r.fontEa !== undefined) {
+    if (r.fontEa === null) fontSets.push(['w:eastAsia', null])
+    else fontSets.push(['w:eastAsia', escapeXmlAttr(r.fontEa)], ['w:eastAsiaTheme', null])
+  }
+  if (fontSets.length > 0) ops.push({ kind: 'attrs', tag: 'w:rFonts', sets: fontSets })
+
+  for (const [flag, tag] of [
+    [r.bold, 'w:b'],
+    [r.italic, 'w:i'],
+    [r.strike, 'w:strike'],
+  ] as Array<[boolean | null | undefined, string]>) {
+    if (flag === true) ops.push({ kind: 'element', tag, xml: `<${tag}/>` })
+    else if (flag === null) ops.push({ kind: 'element', tag, xml: null })
+  }
+  if (r.underline === true) ops.push({ kind: 'ensure', tag: 'w:u', xml: '<w:u w:val="single"/>' })
+  else if (r.underline === null) ops.push({ kind: 'element', tag: 'w:u', xml: null })
+
+  if (r.color !== undefined) {
+    const themeClear: Array<[string, string | null]> = [
+      ['w:themeColor', null],
+      ['w:themeTint', null],
+      ['w:themeShade', null],
+    ]
+    ops.push({
+      kind: 'attrs',
+      tag: 'w:color',
+      sets:
+        r.color === null
+          ? [['w:val', null], ...themeClear]
+          : [['w:val', escapeXmlAttr(r.color)], ...themeClear],
+    })
+  }
+  if (r.sizeHalfPoints !== undefined) {
+    const sz = r.sizeHalfPoints === null ? null : `<w:sz w:val="${Math.round(r.sizeHalfPoints)}"/>`
+    const szCs =
+      r.sizeHalfPoints === null ? null : `<w:szCs w:val="${Math.round(r.sizeHalfPoints)}"/>`
+    ops.push({ kind: 'element', tag: 'w:sz', xml: sz })
+    ops.push({ kind: 'element', tag: 'w:szCs', xml: szCs })
+  }
+  return ops
+}
+
+/**
+ * BUG-1001: patch an existing `<w:style>` element surgically instead of
+ * replacing it. Only the facets the StyleUpsert model owns are touched —
+ * name, the built-in marker, and the modeled pPr/rPr children; every other
+ * child (keepNext/keepLines, numPr, tabs, shd, pBdr, link, next, uiPriority,
+ * w:default, rsid, …) and every unmodeled attribute (w:cs, w:hint,
+ * w:beforeAutospacing, …) survives byte-exact.
+ */
+function patchStyleDefinition(styleXml: string, up: StyleUpsert): string {
+  const openMatch = /^<w:style\b[^>]*>/.exec(styleXml)
+  if (!openMatch) return buildStyleXml(up)
+  const openTag = openMatch[0]
+  const body = styleXml.slice(openTag.length, styleXml.length - '</w:style>'.length)
+  const children = splitXmlChildren(body)
+
+  // built-in marker: built-ins must not carry w:customStyle, customs must
+  let openOut = openTag
+  const openAttrs = parseXmlAttrs(openTag)
+  const customIdx = openAttrs.findIndex((a) => a[0] === 'w:customStyle')
+  if (up.builtin && customIdx >= 0) {
+    openAttrs.splice(customIdx, 1)
+    openOut = `<w:style ${openAttrs.map(([n, v]) => `${n}="${v}"`).join(' ')}>`
+  } else if (!up.builtin && (customIdx < 0 || openAttrs[customIdx][1] !== '1')) {
+    setRawAttr(openAttrs, 'w:customStyle', '1')
+    openOut = `<w:style ${openAttrs.map(([n, v]) => `${n}="${v}"`).join(' ')}>`
+  }
+
+  // w:name: the only required child — patch its value, insert first when missing
+  const nameVal = escapeXmlAttr(up.name)
+  const nameIdx = children.findIndex((c) => c.name === 'w:name')
+  if (nameIdx >= 0) {
+    const open = /^<[^>]+>/.exec(children[nameIdx].xml)
+    if (open) {
+      const attrs = parseXmlAttrs(open[0])
+      setRawAttr(attrs, 'w:val', nameVal)
+      const xml = serializeEmptyElement('w:name', attrs)
+      if (xml !== '') children[nameIdx] = { name: 'w:name', xml }
+    }
+  } else children.unshift({ name: 'w:name', xml: `<w:name w:val="${nameVal}"/>` })
+
+  if (up.basedOn !== undefined) {
+    const basedOnIdx = children.findIndex((c) => c.name === 'w:basedOn')
+    const xml = `<w:basedOn w:val="${escapeXmlAttr(up.basedOn)}"/>`
+    if (basedOnIdx >= 0) children[basedOnIdx] = { name: 'w:basedOn', xml }
+    else insertByRank(children, { name: 'w:basedOn', xml }, STYLE_CHILD_ORDER)
+  }
+
+  patchStyleBlock(children, 'w:pPr', PPR_CHILD_ORDER, stylePPrOps(up))
+  patchStyleBlock(children, 'w:rPr', STYLE_RPR_CHILD_ORDER, styleRPrOps(up))
+  return `${openOut}${children.map((c) => c.xml).join('')}</w:style>`
 }
 
 const NUMBERING_REL_TYPE =
@@ -998,13 +1399,18 @@ export async function saveDocx(
       : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' +
         '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:styles>'
     for (const up of options.styleUpserts ?? []) {
-      const styleXml = buildStyleXml(up)
       const existing = new RegExp(
-        `<w:style [^>]*w:styleId="${up.styleId.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}"[\\s\\S]*?</w:style>`,
-      )
-      xml = existing.test(xml)
-        ? xml.replace(existing, styleXml)
-        : xml.replace('</w:styles>', `${styleXml}</w:styles>`)
+        `<w:style [^>]*w:styleId="${up.styleId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[\\s\\S]*?</w:style>`,
+      ).exec(xml)
+      if (existing) {
+        // BUG-1001: patch the definition in place — only the modeled facets
+        // change, everything else in the element survives byte-exact
+        const patched = patchStyleDefinition(existing[0], up)
+        xml =
+          xml.slice(0, existing.index) + patched + xml.slice(existing.index + existing[0].length)
+      } else {
+        xml = xml.replace('</w:styles>', `${buildStyleXml(up)}</w:styles>`)
+      }
     }
     stylesXmlOut = xml
   }

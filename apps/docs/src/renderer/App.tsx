@@ -5328,14 +5328,19 @@ export function App() {
             setStyleUpserts((prev) => ({ ...prev, [upsert.styleId]: upsert }))
             // live path: swap the style's resolved display and regenerate the
             // document style CSS — every paragraph carrying the pStyle updates
-            // at once (basedOn children re-resolve on the next open)
+            // at once (basedOn children re-resolve on the next open). The rest
+            // of StyleInfo (numPr, isDefault, linkedCharShell, …) survives the
+            // in-session swap just like the unedited XML survives the save.
             const info = doc.parsed.styles.get(upsert.styleId)
             doc.parsed.styles.set(upsert.styleId, {
-              styleId: upsert.styleId,
+              ...(info ?? {
+                styleId: upsert.styleId,
+                name: upsert.name,
+                type: 'paragraph' as const,
+              }),
               name: upsert.name,
               type: 'paragraph',
-              ...(headingLevel ? { headingLevel } : {}),
-              ...(info?.semiHidden ? { semiHidden: true } : {}),
+              headingLevel: headingLevel ?? undefined,
               qFormat: true,
               display,
             })
