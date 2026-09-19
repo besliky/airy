@@ -41,6 +41,7 @@ export const pl = {
     'Nagrywanie odbywa się w czasie rzeczywistym: 2-minutowe wideo trwa ok. 2 minut.',
   appExportVideoDone: 'Wyeksportowano wideo: {path}',
   appExportVideoFailed: 'Nie udało się wyeksportować wideo: {error}',
+  appExportVideoCancelling: 'Anulowanie…',
   appStatusBgAppliedAll: 'Zastosowano kolor tła do wszystkich slajdów',
   appStatusThemeApplied: 'Zastosowano motyw „{name}”',
   appStatusThemeApplyFailed: 'Nie udało się zastosować motywu: {error}',

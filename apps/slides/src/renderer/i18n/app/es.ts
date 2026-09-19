@@ -42,6 +42,7 @@ export const es = {
     'La grabación es en tiempo real: un vídeo de 2 minutos tarda unos 2 minutos.',
   appExportVideoDone: 'Vídeo exportado: {path}',
   appExportVideoFailed: 'Error al exportar el vídeo: {error}',
+  appExportVideoCancelling: 'Cancelando…',
   appStatusBgAppliedAll: 'Color de fondo aplicado a todas las diapositivas',
   appStatusThemeApplied: 'Se aplicó el tema «{name}»',
   appStatusThemeApplyFailed: 'Error al aplicar el tema: {error}',

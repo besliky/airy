@@ -38,6 +38,7 @@ export const zh = {
   appExportVideoRealtimeNote: '录制按真实时长进行：2 分钟的视频约需 2 分钟录制。',
   appExportVideoDone: '已导出视频：{path}',
   appExportVideoFailed: '导出视频失败：{error}',
+  appExportVideoCancelling: '正在取消…',
   appStatusBgAppliedAll: '已应用背景色到全部页',
   appStatusThemeApplied: '已应用主题「{name}」',
   appStatusThemeApplyFailed: '应用主题失败：{error}',

@@ -302,8 +302,14 @@ export async function exportVideo(
       ctx.images,
       dims.width / first.widthPx,
       (done, total) => onProgress?.('render', done, total),
+      // UX-1202: the render phase is cooperative too — Cancel between slides
+      // stops the loop and no file is ever written (the write is the atomic
+      // last step, so a cancelled run leaves no partial file behind)
+      cancel,
     )
+    if (cancel?.current) return false
     const images = await decodePngImages(pngs)
+    if (cancel?.current) return false
     const blob = await recordVideoTimeline({
       timeline,
       fps: settings.fps,

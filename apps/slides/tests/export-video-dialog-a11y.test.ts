@@ -13,6 +13,11 @@ import type { VideoExportPhase, VideoExportSettings } from '../src/renderer/file
  * the "modal" was keyboard-transparent behind its own aria-modal. The buttons
  * now stay mounted (Export disables itself), focus is handed to Cancel when
  * the run starts, and a focus sentinel pulls any escaping focus back in.
+ *
+ * UX-1202 cancel acknowledgement: the mid-run Cancel button flags the
+ * cooperative box (honored by BOTH the render and record loops) and shows a
+ * disabled "Cancelling…" state until the pipeline unwinds and the dialog
+ * closes — no dead button on a minutes-long run.
  */
 beforeAll(() => {
   ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
@@ -32,14 +37,18 @@ class FakeMediaRecorder {
 ;(globalThis as Record<string, unknown>).MediaRecorder = FakeMediaRecorder
 
 type Progress = (phase: VideoExportPhase, done: number, total: number) => void
+type ExportFn = (
+  settings: VideoExportSettings,
+  onProgress: Progress,
+  cancel: { current: boolean },
+) => Promise<boolean>
 
-function renderDialog(
-  onExport: (
-    settings: VideoExportSettings,
-    onProgress: Progress,
-    cancel: { current: boolean },
-  ) => Promise<boolean>,
-): { container: HTMLElement; unmount: () => void } {
+function renderDialog(onExport: ExportFn): {
+  container: HTMLElement
+  onClose: ReturnType<typeof vi.fn>
+  unmount: () => void
+} {
+  const onClose = vi.fn()
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root: Root = createRoot(container)
@@ -55,13 +64,14 @@ function renderDialog(
             { kind: 'none', durationMs: null },
           ],
           onExport,
-          onClose: vi.fn(),
+          onClose,
         }),
       }),
     ),
   )
   return {
     container,
+    onClose,
     unmount: () => {
       act(() => root.unmount())
       container.remove()
@@ -70,12 +80,14 @@ function renderDialog(
 }
 
 /** Export control that never resolves (the run is "under way"). */
-function pendingExport(): (
-  settings: VideoExportSettings,
-  onProgress: Progress,
-  cancel: { current: boolean },
-) => Promise<boolean> {
+function pendingExport(): ExportFn {
   return () => new Promise<boolean>(() => undefined)
+}
+
+/** The mid-run buttons: [Cancel, Export]. */
+function runButtons(container: HTMLElement): [HTMLButtonElement, HTMLButtonElement] {
+  const buttons = [...container.querySelectorAll<HTMLButtonElement>('.modal-actions button')]
+  return [buttons[0]!, buttons[1]!]
 }
 
 describe('ExportVideoDialog focus retention (UX-1201)', () => {
@@ -128,13 +140,49 @@ describe('ExportVideoDialog focus retention (UX-1201)', () => {
 
   it('labels the mid-run Cancel control in the dialog', () => {
     const { container, unmount } = renderDialog(pendingExport())
-    const exportBtn = container.querySelectorAll<HTMLButtonElement>(
-      '.modal-actions button.primary',
-    )[0]!
+    const [, exportBtn] = runButtons(container)
     act(() => exportBtn.click())
-    const cancelBtn = container.querySelectorAll<HTMLButtonElement>('.modal-actions button')[0]!
+    const [cancelBtn] = runButtons(container)
     expect(cancelBtn.textContent).toBe(t('appSettingsCancel'))
     expect(cancelBtn.disabled).toBe(false) // cancelling stays available
+    unmount()
+  })
+})
+
+describe('ExportVideoDialog cancel acknowledgement (UX-1202)', () => {
+  it('flags the cooperative box, disables itself and relabels to Cancelling…', async () => {
+    let box: { current: boolean } | undefined
+    const onExport: ExportFn = (_settings, _onProgress, cancel) => {
+      box = cancel
+      return new Promise<boolean>(() => undefined)
+    }
+    const { container, unmount } = renderDialog(onExport)
+    const [, exportBtn] = runButtons(container)
+    act(() => exportBtn.click())
+    const [cancelBtn] = runButtons(container)
+    act(() => cancelBtn.click())
+    expect(box?.current).toBe(true) // the render loop reads this between slides
+    expect(cancelBtn.disabled).toBe(true)
+    expect(cancelBtn.textContent).toBe(t('appExportVideoCancelling'))
+    unmount()
+  })
+
+  it('closes the dialog once the cancelled run unwinds', async () => {
+    let release: (ok: boolean) => void = () => undefined
+    const onExport: ExportFn = () =>
+      new Promise<boolean>((resolve) => {
+        release = resolve
+      })
+    const { container, onClose, unmount } = renderDialog(onExport)
+    const [, exportBtn] = runButtons(container)
+    act(() => exportBtn.click())
+    const [cancelBtn] = runButtons(container)
+    act(() => cancelBtn.click())
+    expect(onClose).not.toHaveBeenCalled()
+    await act(async () => {
+      release(false) // cancelled pipelines report failure — cancel closes anyway
+    })
+    expect(onClose).toHaveBeenCalledTimes(1)
     unmount()
   })
 })

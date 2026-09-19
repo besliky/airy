@@ -49,6 +49,8 @@ export function ExportVideoDialog({
   const [includeTransitions, setIncludeTransitions] = useState(true)
   const [phase, setPhase] = useState<'idle' | VideoExportPhase>('idle')
   const [progress, setProgress] = useState({ done: 0, total: 0 })
+  /** Cancel requested mid-run: the button shows it and waits for the pipeline */
+  const [cancelling, setCancelling] = useState(false)
   const cancelBox = useRef({ current: false }).current
   // mirrors `phase` for the hook's close callback (Escape must not orphan a run)
   const exportingRef = useRef(false)
@@ -84,6 +86,7 @@ export function ExportVideoDialog({
     exportingRef.current = true
     setProgress({ done: 0, total: 0 })
     cancelBox.current = false
+    setCancelling(false)
     const ok = await onExport(
       { fps, heightPreset, useTimings: effectiveUseTimings, secondsPerSlide, includeTransitions },
       (p, done, total) => {
@@ -138,10 +141,14 @@ export function ExportVideoDialog({
         <h2 {...dialog.titleProps}>{t('ribbonFileExportVideo')}</h2>
         {exporting ? (
           <div className="video-export-progress">
+            {/* empty until the first slide lands: the native save dialog is
+                still up when the run starts, and "Rendering 0/0" would lie */}
             <div className="video-export-progress-label">
-              {phase === 'render'
-                ? t('appExportVideoRendering', { done: progress.done, total: progress.total })
-                : t('appExportVideoRecording', { percent })}
+              {progress.total > 0
+                ? phase === 'render'
+                  ? t('appExportVideoRendering', { done: progress.done, total: progress.total })
+                  : t('appExportVideoRecording', { percent })
+                : ''}
             </div>
             <div
               className="video-export-bar"
@@ -255,13 +262,23 @@ export function ExportVideoDialog({
         )}
         {/* UX-1201: the buttons never unmount across phases — disabling the
             Export trigger keeps the DOM (and the focus trap's anchor list)
-            stable for the whole recording instead of dropping focus to body */}
+            stable for the whole recording instead of dropping focus to body.
+            UX-1202: Cancel is cooperative in BOTH phases (the render loop
+            checks it between slides) and acknowledges the request instead
+            of leaving a dead button on screen. */}
         <div className="modal-actions">
           <button
             ref={cancelBtnRef}
-            onClick={() => (exporting ? (cancelBox.current = true) : onClose())}
+            disabled={cancelling}
+            onClick={() => {
+              if (!exporting) onClose()
+              else {
+                cancelBox.current = true
+                setCancelling(true)
+              }
+            }}
           >
-            {t('appSettingsCancel')}
+            {cancelling ? t('appExportVideoCancelling') : t('appSettingsCancel')}
           </button>
           <button
             className="primary"

@@ -41,6 +41,7 @@ export const cs = {
     'Nahrávání běží v reálném čase: dvouminutové video trvá asi 2 minuty.',
   appExportVideoDone: 'Video exportováno: {path}',
   appExportVideoFailed: 'Export videa se nezdařil: {error}',
+  appExportVideoCancelling: 'Rušení…',
   appStatusBgAppliedAll: 'Barva pozadí použita na všechny snímky',
   appStatusThemeApplied: 'Použit motiv „{name}“',
   appStatusThemeApplyFailed: 'Použití motivu se nezdařilo: {error}',

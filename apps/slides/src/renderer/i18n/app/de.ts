@@ -41,6 +41,7 @@ export const de = {
     'Die Aufzeichnung läuft in Echtzeit: ein 2-Minuten-Video dauert etwa 2 Minuten.',
   appExportVideoDone: 'Video exportiert: {path}',
   appExportVideoFailed: 'Videoexport fehlgeschlagen: {error}',
+  appExportVideoCancelling: 'Wird abgebrochen…',
   appStatusBgAppliedAll: 'Hintergrundfarbe auf alle Folien angewendet',
   appStatusThemeApplied: 'Design „{name}“ angewendet',
   appStatusThemeApplyFailed: 'Design konnte nicht angewendet werden: {error}',

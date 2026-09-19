@@ -39,6 +39,7 @@ export const zhTW = {
   appExportVideoRealtimeNote: '錄製按實際時長進行：2 分鐘的影片約需 2 分鐘錄製。',
   appExportVideoDone: '已匯出影片：{path}',
   appExportVideoFailed: '匯出影片失敗：{error}',
+  appExportVideoCancelling: '正在取消…',
   appStatusBgAppliedAll: '已將背景色套用到全部頁面',
   appStatusThemeApplied: '已套用佈景主題「{name}」',
   appStatusThemeApplyFailed: '套用佈景主題失敗：{error}',

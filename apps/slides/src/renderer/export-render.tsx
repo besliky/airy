@@ -17,12 +17,15 @@ const EXPORT_PIXEL_RATIO = 2
  * Reuse a single offscreen root page by page, grabbing each page as it's drawn, so the whole
  * deck never sits in memory at once.
  * pixelRatio 1 is enough for AI-vision screenshots (half the tokens of the 2x export default).
+ * `cancel` (cooperative, checked between slides — the video export's render
+ * phase) stops the loop early and returns the slides drawn so far.
  */
 export async function renderSlidesToPngBase64(
   slides: RenderSlide[],
   images: Map<string, HTMLImageElement>,
   pixelRatio: number = EXPORT_PIXEL_RATIO,
   onProgress?: (done: number, total: number) => void,
+  cancel?: { current: boolean },
 ): Promise<string[]> {
   // Offscreen container: mounted outside the body viewport (display:none would give the Konva canvas zero size, unusable)
   const container = document.createElement('div')
@@ -32,6 +35,7 @@ export async function renderSlidesToPngBase64(
   const out: string[] = []
   try {
     for (const slide of slides) {
+      if (cancel?.current) break // UX-1202: Cancel must work during the render phase too
       const stage = await new Promise<Konva.Stage>((resolve) => {
         root.render(
           <SlideThumb

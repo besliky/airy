@@ -39,6 +39,7 @@ export const he = {
   appExportVideoRealtimeNote: 'ההקלטה מתבצעת בזמן אמת: סרטון של 2 דקות ייקח כ-2 דקות.',
   appExportVideoDone: 'הווידאו יוצא: {path}',
   appExportVideoFailed: 'ייצוא הווידאו נכשל: {error}',
+  appExportVideoCancelling: 'מבטל…',
   appStatusBgAppliedAll: 'צבע הרקע הוחל על כל השקופיות',
   appStatusThemeApplied: 'ערכת הנושא "{name}" הוחלה',
   appStatusThemeApplyFailed: 'החלת ערכת הנושא נכשלה: {error}',

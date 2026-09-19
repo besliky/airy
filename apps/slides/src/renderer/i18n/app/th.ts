@@ -39,6 +39,7 @@ export const th = {
   appExportVideoRealtimeNote: 'การบันทึกทำแบบเรียลไทม์: วิดีโอ 2 นาทีใช้เวลาบันทึกราว 2 นาที',
   appExportVideoDone: 'ส่งออกวิดีโอแล้ว: {path}',
   appExportVideoFailed: 'ส่งออกวิดีโอไม่สำเร็จ: {error}',
+  appExportVideoCancelling: 'กำลังยกเลิก…',
   appStatusBgAppliedAll: 'นำสีพื้นหลังไปใช้กับสไลด์ทั้งหมดแล้ว',
   appStatusThemeApplied: 'นำธีม "{name}" ไปใช้แล้ว',
   appStatusThemeApplyFailed: 'นำธีมไปใช้ไม่สำเร็จ: {error}',

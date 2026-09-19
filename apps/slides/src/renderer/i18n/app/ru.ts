@@ -40,6 +40,7 @@ export const ru = {
     'Запись идёт в реальном времени: двухминутное видео займёт около 2 минут.',
   appExportVideoDone: 'Видео экспортировано: {path}',
   appExportVideoFailed: 'Не удалось экспортировать видео: {error}',
+  appExportVideoCancelling: 'Отмена…',
   appStatusBgAppliedAll: 'Цвет фона применен ко всем слайдам',
   appStatusThemeApplied: 'Применена тема «{name}»',
   appStatusThemeApplyFailed: 'Не удалось применить тему: {error}',
