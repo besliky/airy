@@ -15,7 +15,7 @@ import {
 } from '@airy-office/pptx-engine'
 
 import { FencingError } from '../src/docx/session.js'
-import { SlidesSession } from '../src/slides/session.js'
+import { _setDeckOverviewBudgetForTests, SlidesSession } from '../src/slides/session.js'
 import { buildFixturePptx } from './helpers/pptx-fixture.js'
 
 let root: string
@@ -30,6 +30,9 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  // safety net beside each test's own finally: a leaked scaled budget would
+  // poison every later readDeck in this file
+  _setDeckOverviewBudgetForTests(null)
   await rm(root, { recursive: true, force: true })
 })
 
@@ -95,25 +98,39 @@ describe('slides session open/read', () => {
   })
 
   it('tightens previews of a huge deck overview to stay inside the budget', async () => {
-    // 500 duplicated slides with a long first line put the wide-preview
-    // overview over the 30k budget; the tightened render (20-char previews)
-    // brings it back under (the docx session's middle-elide fallback is the
-    // same code shape and is covered there — building a >1100-slide fixture
-    // costs 30+ s of duplicateSlide time for the same branch)
+    // 100 duplicated slides with a long first line put the wide-preview
+    // overview over the budget at the same slide/char ratio as production
+    // (101 slides : 6k budget ≈ 501 : 30k); the tightened render (20-char
+    // previews) brings it back under. A real 500-slide fixture costs 5+s of
+    // duplicateSlide/savePptx CPU for the same branch, and the docx
+    // session's middle-elide fallback is the same code shape — here the
+    // scaled budget also covers it on the same in-memory deck for free.
     const opened = await openPptx(fixture)
     const first = opened.deck.slides[0]!.elements[0] as TextElement
     first.text!.paragraphs = [{ runs: [{ text: 'L'.repeat(80) }] }]
     first.dirty = true
-    for (let i = 0; i < 500; i++) duplicateSlide(opened, 0)
+    for (let i = 0; i < 100; i++) duplicateSlide(opened, 0)
     const { savePptx } = await import('@airy-office/pptx-engine')
     const big = join(root, 'big.pptx')
     await writeFile(big, await savePptx(opened))
     const session = await SlidesSession.open(big, root)
-    const text = session.readDeck()
-    expect(text.length).toBeLessThanOrEqual(31_000)
-    expect(text).toContain('The deck has 501 slide(s)')
-    // tightened previews end with the ellipsis marker
-    expect(text).toMatch(/\|2\|L{19}…$/m)
+    _setDeckOverviewBudgetForTests(6_000)
+    try {
+      const text = session.readDeck()
+      expect(text).toContain('The deck has 101 slide(s)')
+      // tightened previews end with the ellipsis marker and fit the budget
+      expect(text).toMatch(/\|2\|L{19}…$/m)
+      expect(text.length).toBeLessThanOrEqual(6_200)
+      // a deck whose tightened overview still overflows elides the middle;
+      // the slide count is small enough to assert the elided run exactly
+      _setDeckOverviewBudgetForTests(2_000)
+      const elided = session.readDeck()
+      expect(elided).toContain('35 slides elided here; numbering is continuous)…')
+      expect(elided).toMatch(/^0\|2\|L{19}…$/m)
+      expect(elided).toMatch(/^100\|2\|L{19}…$/m)
+    } finally {
+      _setDeckOverviewBudgetForTests(null)
+    }
   })
 
   it('clips a slide detail read at the 30k budget', async () => {

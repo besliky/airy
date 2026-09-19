@@ -18,16 +18,26 @@ import {
 import { UniverFormulaEnginePlugin } from '@univerjs/engine-formula'
 import { UniverSheetsPlugin } from '@univerjs/sheets'
 import { UniverSheetsFormulaPlugin } from '@univerjs/sheets-formula'
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import {
-  FORMULA_STREAM_HOLD_MS,
+  _setFormulaStreamHoldMsForTests,
   installFormulaStreamHold,
   noteFormulaStreamChunk,
   requestFullRecalcAfterStream,
 } from '../src/renderer/formula-stream-hold'
 
 const START_MUTATION = 'formula.mutation.set-formula-calculation-start'
+
+// PERF-1101: shrink the production hold so each settle waits ~600 ms instead
+// of ~1.9 s. 300 ms stays above the engine's 100 ms calculation debounce, so
+// the engine's cycles are still vetoed while the hold is active — the
+// behavior under test is identical, only the waiting shrinks.
+const TEST_HOLD_MS = 300
+const settleWidth = () => TEST_HOLD_MS + 300
+
+beforeAll(() => _setFormulaStreamHoldMsForTests(TEST_HOLD_MS))
+afterAll(() => _setFormulaStreamHoldMsForTests(null))
 
 describe('requestFullRecalcAfterStream', () => {
   it('recomputes dependents left stale by earlier cycles in one forced pass', async () => {
@@ -64,7 +74,7 @@ describe('requestFullRecalcAfterStream', () => {
         range: { startRow: 0, endRow: 6, startColumn: 0, endColumn: 12 },
         value,
       })
-    const settle = () => new Promise((resolve) => setTimeout(resolve, FORMULA_STREAM_HOLD_MS + 900))
+    const settle = () => new Promise((resolve) => setTimeout(resolve, settleWidth()))
 
     const names = ['kim', 'park', 'park', 'lee', 'park']
     const dataRows: Record<number, Record<number, unknown>> = {}

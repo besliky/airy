@@ -5,6 +5,19 @@ import { basename, dirname, join } from 'node:path'
 /** Transient Windows codes: antivirus/indexer briefly locks the rename target. */
 const RETRYABLE_RENAME_CODES = new Set(['EPERM', 'EACCES', 'EBUSY'])
 const RENAME_RETRIES = 4
+const RENAME_RETRY_BASE_DELAY_MS = 50
+
+// Test seam: the exponential rename-retry backoff is honest production
+// pacing for transient Windows AV/indexer locks, but its 50..800 ms sleeps
+// dominate every suite that forces the retries — the retry COUNT and the
+// fallback routing are the contract, the wall-clock pacing is not (PERF-1101).
+// Tests collapse the base delay to ~0; production always runs the real ladder.
+let renameRetryDelayMs = RENAME_RETRY_BASE_DELAY_MS
+
+/** Test-only: collapse the rename retry backoff (null restores the 50 ms ladder). */
+export function _setRenameRetryDelayForTests(ms: number | null): void {
+  renameRetryDelayMs = ms ?? RENAME_RETRY_BASE_DELAY_MS
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -74,7 +87,7 @@ export async function renameDurably(temporaryPath: string, targetPath: string): 
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code ?? ''
       if (!RETRYABLE_RENAME_CODES.has(code) || attempt >= RENAME_RETRIES) throw error
-      await sleep(50 * 2 ** attempt)
+      await sleep(renameRetryDelayMs * 2 ** attempt)
     }
   }
 }

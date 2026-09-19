@@ -19,8 +19,15 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, afterAll, describe, expect, it, vi } from 'vitest'
+import { _setRenameRetryDelayForTests } from '@airy-office/electron-utils/atomic-write'
 import { promoteFileAtomically, promoteFileExclusively } from '../src/gateway/xlsx-package-io'
+
+// PERF-1101: these locks force the shared renameDurably retry ladder; its
+// real 50..800 ms pacing would add ~3 s of sleeps, so collapse it (the retry
+// count and the fallback routing stay pinned by the assertions below).
+beforeAll(() => _setRenameRetryDelayForTests(0))
+afterAll(() => _setRenameRetryDelayForTests(null))
 
 // Directory handles opened for reading are the shared helper's POSIX
 // dir-fsync after the rename (BUG-1203) — nothing else in this suite opens
