@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import { htmlDir, htmlLang, type Lang } from '@airy-office/i18n'
 import { App } from './App'
-import { LocaleProvider, setModuleLang } from './i18n/locale'
+import { LocaleProvider, loadLocale, setModuleLang } from './i18n/locale'
 import type { UiTheme } from '../shared/ipc'
 import '@airy-office/ui/tokens.css'
 import '@airy-office/ui/screentip.css'
@@ -35,10 +35,15 @@ async function bootstrap(): Promise<void> {
   } catch {
     /* dev renderer without the preload bridge */
   }
+  // PERF-904: the UI-language dictionary is a lazy chunk fetched for this one
+  // locale (the other 19 stay unloaded); it rides next to the theme/IPC setup
+  // so it adds no serial wait before the first frame.
+  const stringsReady = loadLocale(lang)
   setModuleLang(lang)
   document.documentElement.lang = htmlLang(lang)
   document.documentElement.dir = htmlDir(lang)
   applyTheme(theme)
+  await stringsReady
   window.desktop?.onThemeChanged(applyTheme)
   void window.desktop
     ?.getAiPanelPrefs?.()

@@ -1,8 +1,12 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { executeOps } from '../src/renderer/ai/ops'
-import { setModuleLang } from '../src/renderer/i18n/locale'
+import { loadLocale, setModuleLang } from '../src/renderer/i18n/locale'
+
+// PERF-904: dictionaries load per locale; the en dictionary this suite
+// asserts against must be loaded first, mirroring the bootstrap-time load.
+beforeAll(() => loadLocale('en'))
 
 interface JsonNode {
   type: string

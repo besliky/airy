@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { AgentLoop, type AgentStreamCallbacks, type AgentTransport } from '@airy-office/agent-core'
 import { editorExtensions } from '../src/renderer/editor/extensions'
@@ -6,6 +6,11 @@ import { createDocsSkill } from '../src/renderer/ai/docs-skill'
 import { buildDocContext, countWords } from '../src/renderer/ai/protocol'
 import { executeTool } from '../src/renderer/ai/tools'
 import { appendStreamedNodes } from '../src/renderer/file-actions'
+import { loadLocale } from '../src/renderer/i18n/locale'
+
+// PERF-904: dictionaries load per locale; the zh table these assertions
+// match must be loaded first, mirroring the bootstrap-time load in main.tsx.
+beforeAll(() => loadLocale('zh'))
 
 /**
  * End-to-end through the local stack: AgentLoop -> docs skill -> tools ->

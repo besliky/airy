@@ -1,16 +1,20 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
 import { Editor } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import { editorExtensions } from '../src/renderer/editor/extensions'
-import { LocaleProvider, setModuleLang } from '../src/renderer/i18n/locale'
+import { LocaleProvider, loadLocale, setModuleLang } from '../src/renderer/i18n/locale'
 import {
   EditorContextMenu,
   FontDialog,
   ParagraphDialog,
 } from '../src/renderer/components/ContextMenu'
+
+// PERF-904: dictionaries load per locale; the en dictionary this suite
+// asserts against must be loaded first, mirroring the bootstrap-time load.
+beforeAll(() => loadLocale('en'))
 
 function createEditor(paraAttrs: Record<string, unknown> = {}): Editor {
   return new Editor({

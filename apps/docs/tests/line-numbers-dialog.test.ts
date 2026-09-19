@@ -1,11 +1,14 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { LocaleProvider, setModuleLang } from '../src/renderer/i18n/locale'
+import { LocaleProvider, loadLocale, setModuleLang } from '../src/renderer/i18n/locale'
 import { LineNumbersDialog } from '../src/renderer/components/LineNumbersDialog'
 
 beforeAll(() => {
   ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
+  // PERF-904: dictionaries load per locale; the en dictionary this suite
+  // asserts against must be loaded first, mirroring the bootstrap-time load.
+  return loadLocale('en')
 })
 
 /**

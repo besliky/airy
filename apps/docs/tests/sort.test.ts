@@ -1,10 +1,11 @@
 import { Editor } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import { parseDocx, saveDocx, type ParsedDocFull } from '@airy-office/docx-engine'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from '../src/renderer/editor/convert'
 import { editorExtensions } from '../src/renderer/editor/extensions'
+import { loadLocale } from '../src/renderer/i18n/locale'
 import {
   parseSortDate,
   parseSortNumber,
@@ -14,6 +15,10 @@ import {
   type SortLevel,
   type SortOptions,
 } from '../src/renderer/editor/sort'
+
+// PERF-904: dictionaries load per locale; the zh table these assertions
+// match must be loaded first, mirroring the bootstrap-time load in main.tsx.
+beforeAll(() => loadLocale('zh'))
 
 /* ================= Word-style key parsing ================= */
 

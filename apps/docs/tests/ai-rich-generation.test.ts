@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import {
@@ -10,6 +10,11 @@ import {
 } from '@airy-office/docx-engine'
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from '../src/renderer/editor/convert'
 import { executeTool } from '../src/renderer/ai/tools'
+import { loadLocale } from '../src/renderer/i18n/locale'
+
+// PERF-904: dictionaries load per locale; the zh table these assertions
+// match must be loaded first, mirroring the bootstrap-time load in main.tsx.
+beforeAll(() => loadLocale('zh'))
 
 /**
  * Guard tests for AI rich generation (tables / code blocks / quotes / TOC):

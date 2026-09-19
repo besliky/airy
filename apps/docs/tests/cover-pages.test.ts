@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { COVER_PRESETS, buildCoverNodes, insertCoverPage } from '../src/renderer/editor/cover-pages'
+import { loadLocale } from '../src/renderer/i18n/locale'
+
+// PERF-904: dictionaries load per locale; the zh table these assertions
+// match must be loaded first, mirroring the bootstrap-time load in main.tsx.
+beforeAll(() => loadLocale('zh'))
 
 function createEditor(): Editor {
   return new Editor({
@@ -45,9 +50,7 @@ describe('buildCoverNodes', () => {
   it('maps styling onto paragraph attrs and text marks', () => {
     const preset = COVER_PRESETS.find((p) => p.id === 'banded')!
     const nodes = buildCoverNodes(preset)
-    const band = nodes.find(
-      (n) => n.content?.some((c) => c.text === '文档标题'),
-    )!
+    const band = nodes.find((n) => n.content?.some((c) => c.text === '文档标题'))!
     expect(band.attrs?.shadingFill).toBeTruthy()
     expect(band.attrs?.align).toBe('center')
     const marks = band.content![0].marks!
