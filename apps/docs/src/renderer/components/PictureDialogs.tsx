@@ -1,5 +1,6 @@
 /**
- * Picture Format dialogs: remove background (tolerance cutout) + crop.
+ * Picture Format dialogs: remove background (tolerance cutout), crop and
+ * compress pictures.
  *
  * Remove background: same interaction as slides' CutoutDialog — a tolerance slider with live
  * preview; the preview computes on a ≤520px downsampled copy, applying recomputes at the
@@ -8,8 +9,11 @@
  * Crop: drag 8 handles on the preview (or drag inside the box to move) to pick the kept
  * region; applying bakes the selection into a new dataUrl at the original resolution
  * (png keeps transparency, jpeg stays jpeg). Reuses the .modal-backdrop/.modal styles.
+ *
+ * Compress: re-encode at 96/150/220 ppi of the display size (never upscaling)
+ * with optional "delete cropped areas"; see editor/compress-picture.ts.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   removeBackground,
   sampleBackgroundColors,
@@ -17,6 +21,7 @@ import {
   type RGB,
 } from '@airy-office/ui'
 import { useI18n, type StringKey } from '../i18n/locale'
+import { compressPictureDataUrl, compressTargetSize, imageSizeOf } from '../editor/compress-picture'
 
 /** Longest side of the preview canvas (px) */
 const PREVIEW_MAX = 520
@@ -562,6 +567,145 @@ export function CropDialog({ dataUrl, onApply, onCancel }: CropProps) {
         <div className="modal-actions">
           <button onClick={onCancel}>{t('ribbonCancel')}</button>
           <button className="primary" onClick={apply} disabled={!loaded || !!error}>
+            {t('ribbonApply')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ================= Compress pictures ================= */
+
+/** Word's resolution presets: e-mail / web / print */
+const COMPRESS_PPI_OPTIONS: Array<{
+  ppi: 96 | 150 | 220
+  labelKey: StringKey
+  noteKey: StringKey
+}> = [
+  { ppi: 96, labelKey: 'ribbonCompressPpi96', noteKey: 'ribbonCompressEmail' },
+  { ppi: 150, labelKey: 'ribbonCompressPpi150', noteKey: 'ribbonCompressWeb' },
+  { ppi: 220, labelKey: 'ribbonCompressPpi220', noteKey: 'ribbonCompressPrint' },
+]
+
+interface CompressProps {
+  dataUrl: string
+  /** display size in CSS px (the size the page shows; drives the ppi math) */
+  displayWidthPx: number
+  displayHeightPx: number
+  /** a:srcRect fractions of the current crop, when one is active */
+  crop: { l: number; t: number; r: number; b: number } | null
+  /** Apply: the re-encoded dataUrl plus whether the crop window was baked in */
+  onApply: (result: { dataUrl: string; deleteCropped: boolean }) => void
+  onCancel: () => void
+}
+
+/**
+ * Compress Pictures: pick a target resolution (96/150/220 ppi of the display
+ * size) and optionally bake away the crop window. Shows the resulting pixel
+ * size before applying; Apply is disabled when nothing would shrink.
+ */
+export function CompressPicturesDialog({
+  dataUrl,
+  displayWidthPx,
+  displayHeightPx,
+  crop,
+  onApply,
+  onCancel,
+}: CompressProps) {
+  const { t } = useI18n()
+  const [ppi, setPpi] = useState<96 | 150 | 220>(150)
+  const [deleteCropped, setDeleteCropped] = useState(!!crop)
+  const [natural, setNatural] = useState<{ widthPx: number; heightPx: number } | null>(null)
+  const [result, setResult] = useState<{ dataUrl: string } | null>(null)
+  const [error, setError] = useState<StringKey | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void imageSizeOf(dataUrl).then((size) => {
+      if (cancelled) return
+      if (!size) setError('ribbonImageLoadFail')
+      else setNatural(size)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [dataUrl])
+
+  const target = useMemo(
+    () =>
+      natural
+        ? compressTargetSize(
+            natural,
+            { widthPx: displayWidthPx, heightPx: displayHeightPx },
+            { ppi, deleteCropped, crop },
+          )
+        : null,
+    [natural, displayWidthPx, displayHeightPx, ppi, deleteCropped, crop],
+  )
+
+  const apply = async () => {
+    const out = await compressPictureDataUrl(
+      dataUrl,
+      { widthPx: displayWidthPx, heightPx: displayHeightPx },
+      { ppi, deleteCropped, crop },
+    )
+    if (!out) {
+      setError('ribbonCompressNoGain')
+      return
+    }
+    setResult({ dataUrl: out.dataUrl })
+    onApply({ dataUrl: out.dataUrl, deleteCropped })
+  }
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
+      <div className="modal compress-modal" style={{ width: 380, maxWidth: 'calc(100vw - 32px)' }}>
+        <h2>{t('ribbonCompressPictures')}</h2>
+        <div className="compress-resolution">
+          {COMPRESS_PPI_OPTIONS.map((opt) => (
+            <label key={opt.ppi}>
+              <input
+                type="radio"
+                name="compress-ppi"
+                checked={ppi === opt.ppi}
+                onChange={() => setPpi(opt.ppi)}
+              />
+              <span>
+                {t(opt.labelKey)} <span className="compress-ppi-note">{t(opt.noteKey)}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <label className="compress-delete-cropped">
+          <input
+            type="checkbox"
+            checked={deleteCropped}
+            disabled={!crop}
+            onChange={(e) => setDeleteCropped(e.target.checked)}
+          />
+          <span>{t('ribbonCompressDeleteCropped')}</span>
+        </label>
+        {target && (
+          <p className="compress-summary">
+            {t('ribbonCompressSummary', {
+              from: `${Math.round(displayWidthPx)}×${Math.round(displayHeightPx)}`,
+              to: `${target.widthPx}×${target.heightPx}`,
+            })}
+          </p>
+        )}
+        {error && (
+          <p className="compress-summary" style={{ color: 'var(--danger)' }}>
+            {t(error)}
+          </p>
+        )}
+        <div className="modal-actions">
+          <button onClick={onCancel}>{t('ribbonCancel')}</button>
+          <button
+            className="primary"
+            disabled={!natural || !!error || !!result}
+            onClick={() => void apply()}
+          >
             {t('ribbonApply')}
           </button>
         </div>

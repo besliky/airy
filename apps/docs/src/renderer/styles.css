@@ -8295,6 +8295,93 @@ body.docs-crop-active
   color: var(--color-btn-primary-text);
 }
 
+/* ---- Alt text dialog (Picture Format / Shape Format / Table Layout) ---- */
+
+.alt-text-modal .modal-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  margin: -8px 0 16px;
+}
+
+.alt-text-modal .alt-text-field {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+.alt-text-modal .alt-text-field input,
+.alt-text-modal .alt-text-field textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  background: var(--surface);
+  color: var(--text);
+  resize: vertical;
+}
+
+.alt-text-modal .alt-text-field input:focus,
+.alt-text-modal .alt-text-field textarea:focus {
+  border-color: var(--word-blue);
+}
+
+/* ---- Compress Pictures dialog (Picture Format) ---- */
+
+.compress-modal .compress-resolution {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+
+.compress-modal .compress-resolution label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  margin: 0;
+  cursor: pointer;
+}
+
+.compress-modal .compress-resolution .compress-ppi-note {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.compress-modal .compress-delete-cropped {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  margin: 0 0 8px;
+  cursor: pointer;
+}
+
+.compress-modal .compress-summary {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0 0 12px;
+}
+
+/* ---- shadow gallery (Picture/Shape Effects) ---- */
+
+.shadow-menu .shadow-menu-preview {
+  width: 18px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--hover);
+  flex: none;
+}
+
 /* ---- keyboard shortcuts sheet ---- */
 
 .modal-shortcuts {

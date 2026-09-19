@@ -1,7 +1,13 @@
 import type { Editor } from '@tiptap/core'
 import type { Node as PmNode } from '@tiptap/pm/model'
 import { isInTable, mergeCells, selectedRect, splitCell } from '@tiptap/pm/tables'
-import type { DocDefaults, Run, StyleInfo, TextboxDisplay } from '@airy-office/docx-engine'
+import type {
+  DocDefaults,
+  Run,
+  ShadowEffect,
+  StyleInfo,
+  TextboxDisplay,
+} from '@airy-office/docx-engine'
 import { getActiveSubEditor } from '../editor/active-editor'
 import { effectiveSizeHalfPoints } from '../editor/text-style-resolve'
 import { textHasCjk } from '../line-metrics'
@@ -32,10 +38,21 @@ export interface RibbonFormatState {
   imageFlipH: boolean
   imageFlipV: boolean
   imageHasDocxIndex: boolean
+  /** picture outline (pic:spPr a:ln) of the selected image, for the border palette */
+  imageBorder: { color: string; widthPt: number } | null
+  /** picture shadow (a:effectLst) of the selected image, for the effects gallery */
+  imageShadow: ShadowEffect | null
+  /** source crop (a:srcRect) of the selected image; feeds Compress Pictures */
+  imageCrop: { l: number; t: number; r: number; b: number } | null
+  /** alt text (wp:docPr title/descr) of the selected image or shape */
+  imageAltTitle: string | null
+  imageAltText: string | null
   textboxSelected: boolean
   shapeFill: string | null
   shapeBorderColor: string | null
   shapePrst: string | null
+  /** shape shadow (wps:spPr a:effectLst) of the first selected box */
+  shapeShadow: ShadowEffect | null
   /**
    * What the selected shape's own text agrees on, for the Shape Format Text
    * group. Selecting a shape as an object leaves no text selection for a mark to
@@ -98,10 +115,16 @@ export const EMPTY_FORMAT_STATE: RibbonFormatState = {
   imageFlipH: false,
   imageFlipV: false,
   imageHasDocxIndex: false,
+  imageBorder: null,
+  imageShadow: null,
+  imageCrop: null,
+  imageAltTitle: null,
+  imageAltText: null,
   textboxSelected: false,
   shapeFill: null,
   shapeBorderColor: null,
   shapePrst: null,
+  shapeShadow: null,
   shapeHasText: false,
   shapeTextBold: false,
   shapeTextItalic: false,
@@ -267,6 +290,11 @@ export function computeFormatState(
     imageFlipH: !!protAttrs.imageFlipH,
     imageFlipV: !!protAttrs.imageFlipV,
     imageHasDocxIndex: protAttrs.docxIndex != null,
+    imageBorder: (protAttrs.imageBorder as RibbonFormatState['imageBorder']) ?? null,
+    imageShadow: (protAttrs.imageShadow as ShadowEffect | null) ?? null,
+    imageCrop: (protAttrs.imageCrop as RibbonFormatState['imageCrop']) ?? null,
+    imageAltTitle: str(protAttrs.imageAltTitle),
+    imageAltText: str(protAttrs.imageAltText),
     textboxSelected: Array.isArray(protAttrs.textboxes) && protAttrs.textboxes.length > 0,
     shapeFill: Array.isArray(protAttrs.textboxes)
       ? str((protAttrs.textboxes[0] as { fill?: string } | undefined)?.fill)
@@ -276,6 +304,9 @@ export function computeFormatState(
       : null,
     shapePrst: Array.isArray(protAttrs.textboxes)
       ? str((protAttrs.textboxes[0] as { prst?: string } | undefined)?.prst)
+      : null,
+    shapeShadow: Array.isArray(protAttrs.textboxes)
+      ? ((protAttrs.textboxes[0] as { shadow?: ShadowEffect } | undefined)?.shadow ?? null)
       : null,
     ...shapeTextStateOf(
       Array.isArray(protAttrs.textboxes)

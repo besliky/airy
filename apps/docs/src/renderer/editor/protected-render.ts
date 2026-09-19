@@ -29,6 +29,7 @@ import {
 } from '../line-metrics'
 import { custGeomBackgroundCss, shapeBackgroundCss, shapeTextInsetsPx } from './shape-svg'
 import { pictureTransformFns, quarterTurnInsetPx, quarterTurnMarginCss } from './image-rotation'
+import { shadowCss } from './shadow-effects'
 import { DK_SIDE, dkBackground, dkBorder, dkColor } from './dark-page'
 import { INLINE_RULE_CLASS, inlineRuleDecls } from './inline-rule'
 import { fillInk } from './shading-ink'
@@ -1029,6 +1030,9 @@ export function textboxBoxStyle(box: TextboxDisplay): string {
         : 'background-repeat:no-repeat;background-size:100% 100%')
     : ''
   const transforms = [box.rotDeg ? `rotate(${box.rotDeg}deg)` : '']
+  // shape shadow (a:effectLst): CSS approximation — drop-shadow follows the
+  // SVG preset silhouette; the inner preset approximates as an inset box
+  const shadowDecl = box.shadow ? (shadowCss(box.shadow) ?? '') : ''
   const floatPos = box.floating
     ? `position:absolute;left:${((box.offsetXEmu ?? 0) / 9525).toFixed(1)}px;` +
       `top:${((box.offsetYEmu ?? 0) / 9525).toFixed(1)}px`
@@ -1039,6 +1043,7 @@ export function textboxBoxStyle(box: TextboxDisplay): string {
     !geomCss && box.borderColor ? `border-color:#${box.borderColor}` : '',
     !geomCss && box.borderColor ? `border-width:${box.borderWidthPx ?? 1}px` : '',
     !geomCss && box.borderColor && box.borderDash ? `border-style:${box.borderDash}` : '',
+    shadowDecl,
     fillImage,
     // shape-style fontRef color: the box default, so runs carrying their own
     // w:color still override it through the run spans (+ dark-page twin)

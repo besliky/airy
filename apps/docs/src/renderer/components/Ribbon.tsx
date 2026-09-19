@@ -24,6 +24,7 @@ import type {
   HeaderFooter,
   Run,
   SectionSettings,
+  ShadowEffect,
   SourceInfo,
   StyleDisplay,
   StyleInfo,
@@ -84,7 +85,9 @@ import {
   setParaAttrs,
 } from './ribbon-tabs'
 import { WRAP_OPTIONS } from './ContextMenu'
-import { CropDialog, CutoutDialog } from './PictureDialogs'
+import { CompressPicturesDialog, CropDialog, CutoutDialog } from './PictureDialogs'
+import { AltTextDialog } from './AltTextDialog'
+import { SHADOW_PRESETS, shadowDecls, shadowPresetKey } from '../editor/shadow-effects'
 import { SortDialog } from './SortDialog'
 import {
   AiryMark,
@@ -130,6 +133,9 @@ import {
   IconPilcrow,
   IconFlipH,
   IconFlipV,
+  IconAltText,
+  IconCompress,
+  IconShadow,
   IconRemoveBg,
   IconReplacePicture,
   IconRotateLeft,
@@ -507,6 +513,38 @@ function ShapeColorPalette({
   )
 }
 
+/** Picture/Shape Effects → Shadow gallery (Word preset slice) */
+function ShadowMenu({
+  current,
+  onPick,
+}: {
+  current: ShadowEffect | null
+  onPick: (shadow: ShadowEffect | null) => void
+}) {
+  const { t } = useI18n()
+  const activeKey = shadowPresetKey(current)
+  return (
+    <div data-rb-panel="" className="layout-menu shadow-menu">
+      {SHADOW_PRESETS.map((preset) => (
+        <button
+          key={preset.labelKey}
+          className={activeKey === preset.labelKey ? 'active' : ''}
+          onClick={() => onPick(preset.shadow)}
+        >
+          <span
+            className="shadow-menu-preview"
+            style={preset.shadow ? (shadowDecls(preset.shadow) ?? undefined) : undefined}
+          />
+          <span>{t(preset.labelKey as StringKey)}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** border weight entries for the picture outline (Word's weight menu slice) */
+const PICTURE_BORDER_WIDTHS = [0.75, 1, 1.5, 2.25, 3] as const
+
 /** Word text highlight colors (OOXML named values) */
 const HIGHLIGHTS = [
   'yellow',
@@ -808,8 +846,13 @@ function RibbonInner({
   const lastRegularTab = useRef<(typeof TABS)[number]>('home')
   const wasInTable = useRef(false)
   const wasInImage = useRef(false)
-  /** Picture Format → remove background / crop dialogs */
-  const [pictureDialog, setPictureDialog] = useState<'cutout' | 'crop' | null>(null)
+  /** Picture Format → remove background / crop / compress / alt text dialogs */
+  const [pictureDialog, setPictureDialog] = useState<'cutout' | 'crop' | 'compress' | 'alt' | null>(
+    null,
+  )
+  /** Shape Format / Table Layout → alt text dialog */
+  const [shapeAltOpen, setShapeAltOpen] = useState(false)
+  const [tableAltOpen, setTableAltOpen] = useState(false)
   const [listDialog, setListDialog] = useState(false)
   const [sortDialog, setSortDialog] = useState(false)
   const [tablePropertiesOpen, setTablePropertiesOpen] = useState(false)
@@ -1004,13 +1047,14 @@ function RibbonInner({
   }
 
   /**
-   * Replace the selected image's bytes (shared by Replace Picture / remove background / crop).
-   * Original images (docxIndex set) swap bytes in place via the imageReplace patch: the
+   * Replace the selected image's bytes (shared by Replace Picture / remove background / crop /
+   * compress). Original images (docxIndex set) swap bytes in place via the imageReplace patch: the
    * drawing XML survives, so wrap/position/docxIndex — and with them the Position gallery —
    * keep working. Images not yet saved (genImage) just update their pending payload.
    * Display size keeps the current width; height adapts to the new image's aspect ratio.
+   * `keepCrop` (Compress without "delete cropped areas") leaves the a:srcRect window alone.
    */
-  const applyPictureBytes = async (dataUrl: string) => {
+  const applyPictureBytes = async (dataUrl: string, opts?: { keepCrop?: boolean }) => {
     if (!canEdit) return
     const m = /^data:(image\/(?:png|jpeg|gif));base64,(.*)$/s.exec(dataUrl)
     if (!m) return
@@ -1032,8 +1076,7 @@ function RibbonInner({
           // The new bytes are the full picture (crop/cutout bake destructively) and
           // the replace pipeline strips a:srcRect on save — drop a Word-authored
           // crop/fill window or it would keep clipping the new image until reload
-          imageCrop: null,
-          imageFillRect: null,
+          ...(opts?.keepCrop ? {} : { imageCrop: null, imageFillRect: null }),
           ...(isOriginal
             ? { imageReplace: { base64: m[2], mime: m[1] } }
             : { genImage: { base64: m[2], mime: m[1], widthPx: w, heightPx: h } }),
@@ -1071,6 +1114,42 @@ function RibbonInner({
       .chain()
       .focus()
       .updateAttributes('docProtected', { [key]: !attrs[key] })
+      .run()
+  }
+
+  /** Picture Effects → Shadow gallery (a:effectLst) */
+  const applyPictureShadow = (shadow: ShadowEffect | null) => {
+    if (!canEdit) return
+    editor.chain().focus().updateAttributes('docProtected', { imageShadow: shadow }).run()
+  }
+
+  /** Picture Border: color palette + weight (pic:spPr a:ln) */
+  const applyPictureBorder = (color: string | null, widthPt: number) => {
+    if (!canEdit) return
+    const attrs = editor.getAttributes('docProtected')
+    if (attrs?.blockType !== 'image') return
+    editor
+      .chain()
+      .focus()
+      .updateAttributes('docProtected', {
+        imageBorder: color ? { color, widthPt } : null,
+      })
+      .run()
+  }
+
+  /** Shape Effects → Shadow gallery on the first selected box */
+  const applyShapeShadow = (shadow: ShadowEffect | null) => {
+    if (!canEdit) return
+    const attrs = editor.getAttributes('docProtected')
+    const boxes = attrs?.textboxes as TextboxDisplay[] | null
+    if (!Array.isArray(boxes) || boxes.length === 0) return
+    const box = { ...boxes[0] }
+    if (shadow) box.shadow = shadow
+    else delete box.shadow
+    editor
+      .chain()
+      .focus()
+      .updateAttributes('docProtected', { textboxes: [box, ...boxes.slice(1)] })
       .run()
   }
 
@@ -2271,6 +2350,41 @@ function RibbonInner({
                     />
                   )}
                 </div>
+                <div className="rb-split-wrap">
+                  <button
+                    className="rb-big"
+                    disabled={!canEdit}
+                    data-tip={t('ribbonShapeEffectsTip')}
+                    onClick={() =>
+                      setDropdown((v) => (v === 'shapeEffects' ? null : 'shapeEffects'))
+                    }
+                  >
+                    <span className="rb-big-icon">
+                      <IconShadow size={28} />
+                    </span>
+                    <span>{t('ribbonShapeEffects')}</span>
+                  </button>
+                  {dropdown === 'shapeEffects' && (
+                    <ShadowMenu
+                      current={fs.shapeShadow}
+                      onPick={(shadow) => {
+                        applyShapeShadow(shadow)
+                        setDropdown(null)
+                      }}
+                    />
+                  )}
+                </div>
+                <div className="rb-col">
+                  <button
+                    className="rb-small"
+                    disabled={!canEdit}
+                    data-tip={t('ribbonAltTextTip')}
+                    onClick={() => setShapeAltOpen(true)}
+                  >
+                    <IconAltText size={18} />
+                    <span>{t('ribbonAltText')}</span>
+                  </button>
+                </div>
               </div>
               <div className="ribbon-group-label">{t('ribbonGroupShapeStyles')}</div>
             </div>
@@ -2412,8 +2526,98 @@ function RibbonInner({
                     <span>{t('ribbonFlipV')}</span>
                   </button>
                 </div>
+                <div className="rb-col">
+                  <button
+                    className="rb-small"
+                    disabled={!canEdit}
+                    data-tip={t('ribbonCompressPicturesTip')}
+                    onClick={() => setPictureDialog('compress')}
+                  >
+                    <IconCompress size={18} />
+                    <span>{t('ribbonCompressPictures')}</span>
+                  </button>
+                  <button
+                    className="rb-small"
+                    disabled={!canEdit}
+                    data-tip={t('ribbonAltTextTip')}
+                    onClick={() => setPictureDialog('alt')}
+                  >
+                    <IconAltText size={18} />
+                    <span>{t('ribbonAltText')}</span>
+                  </button>
+                </div>
               </div>
               <div className="ribbon-group-label">{t('ribbonGroupAdjust')}</div>
+            </div>
+            <div className="ribbon-sep" />
+            {/* ---- Picture Styles: border + effects ---- */}
+            <div className="ribbon-group">
+              <div className="ribbon-group-items">
+                <div className="rb-split-wrap">
+                  <button
+                    className="rb-big"
+                    disabled={!canEdit}
+                    data-tip={t('ribbonPictureBorderTip')}
+                    onClick={() => setDropdown((v) => (v === 'picBorder' ? null : 'picBorder'))}
+                  >
+                    <span className="rb-big-icon">
+                      <IconBorderAll />
+                      <span
+                        className="rb-color-bar"
+                        style={{
+                          background: fs.imageBorder ? `#${fs.imageBorder.color}` : 'transparent',
+                        }}
+                      />
+                    </span>
+                    <span>{t('ribbonPictureBorder')}</span>
+                  </button>
+                  {dropdown === 'picBorder' && (
+                    <ShapeColorPalette
+                      current={fs.imageBorder?.color ?? null}
+                      noneLabel={t('ribbonNoOutline')}
+                      onPick={(hex) => {
+                        applyPictureBorder(hex, fs.imageBorder?.widthPt ?? 1)
+                        setDropdown(null)
+                      }}
+                    />
+                  )}
+                </div>
+                <div className="rb-col">
+                  <Dropdown
+                    disabled={!canEdit}
+                    tip={t('ribbonPictureBorderWeightTip')}
+                    value={String(fs.imageBorder?.widthPt ?? 1)}
+                    options={PICTURE_BORDER_WIDTHS.map((w) => ({
+                      value: String(w),
+                      label: `${w} ${t('ribbonPt')}`,
+                    }))}
+                    onPick={(v) => applyPictureBorder(fs.imageBorder?.color ?? '000000', Number(v))}
+                  />
+                </div>
+                <div className="rb-split-wrap">
+                  <button
+                    className="rb-big"
+                    disabled={!canEdit}
+                    data-tip={t('ribbonPictureEffectsTip')}
+                    onClick={() => setDropdown((v) => (v === 'picEffects' ? null : 'picEffects'))}
+                  >
+                    <span className="rb-big-icon">
+                      <IconShadow size={28} />
+                    </span>
+                    <span>{t('ribbonPictureEffects')}</span>
+                  </button>
+                  {dropdown === 'picEffects' && (
+                    <ShadowMenu
+                      current={fs.imageShadow}
+                      onPick={(shadow) => {
+                        applyPictureShadow(shadow)
+                        setDropdown(null)
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="ribbon-group-label">{t('ribbonGroupPictureStyles')}</div>
             </div>
             <div className="ribbon-sep" />
             {/* ---- Arrange: wrap text / align ---- */}
@@ -3006,6 +3210,16 @@ function RibbonInner({
                 >
                   <IconTableProperties size={17} />
                   <span>{t('ribbonTableProperties')}</span>
+                </button>
+                <button
+                  className="table-command-row"
+                  onClick={() => {
+                    setDropdown(null)
+                    setTableAltOpen(true)
+                  }}
+                >
+                  <IconAltText size={17} />
+                  <span>{t('ribbonAltText')}</span>
                 </button>
               </div>
               <div className="ribbon-group-label">{t('ribbonTableData')}</div>
@@ -4097,6 +4311,75 @@ function RibbonInner({
             void applyPictureBytes(cropped)
           }}
           onCancel={() => setPictureDialog(null)}
+        />
+      )}
+      {pictureDialog === 'compress' && imageDataUrl && (
+        <CompressPicturesDialog
+          dataUrl={imageDataUrl}
+          displayWidthPx={fs.imageWidthPx ?? 0}
+          displayHeightPx={fs.imageHeightPx ?? 0}
+          crop={fs.imageCrop}
+          onApply={(result) => {
+            setPictureDialog(null)
+            // delete-cropped bakes the window into the bytes (crop resets);
+            // otherwise the a:srcRect window keeps clipping as before
+            void applyPictureBytes(result.dataUrl, { keepCrop: !result.deleteCropped })
+          }}
+          onCancel={() => setPictureDialog(null)}
+        />
+      )}
+      {pictureDialog === 'alt' && (
+        <AltTextDialog
+          initial={{ title: fs.imageAltTitle ?? '', description: fs.imageAltText ?? '' }}
+          onApply={(value) => {
+            setPictureDialog(null)
+            editor
+              .chain()
+              .focus()
+              .updateAttributes('docProtected', {
+                imageAltTitle: value.title || null,
+                imageAltText: value.description || null,
+              })
+              .run()
+          }}
+          onCancel={() => setPictureDialog(null)}
+        />
+      )}
+      {shapeAltOpen && (
+        <AltTextDialog
+          initial={{ title: fs.imageAltTitle ?? '', description: fs.imageAltText ?? '' }}
+          onApply={(value) => {
+            setShapeAltOpen(false)
+            editor
+              .chain()
+              .focus()
+              .updateAttributes('docProtected', {
+                imageAltTitle: value.title || null,
+                imageAltText: value.description || null,
+              })
+              .run()
+          }}
+          onCancel={() => setShapeAltOpen(false)}
+        />
+      )}
+      {tableAltOpen && (
+        <AltTextDialog
+          initial={{
+            title: String(editor.getAttributes('docTable').altTitle ?? ''),
+            description: String(editor.getAttributes('docTable').altText ?? ''),
+          }}
+          onApply={(value) => {
+            setTableAltOpen(false)
+            editor
+              .chain()
+              .focus()
+              .updateAttributes('docTable', {
+                altTitle: value.title || null,
+                altText: value.description || null,
+              })
+              .run()
+          }}
+          onCancel={() => setTableAltOpen(false)}
         />
       )}
       {listDialog && (

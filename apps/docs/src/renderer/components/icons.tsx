@@ -408,6 +408,40 @@ export function IconRotateLeft(props: IconProps) {
   )
 }
 
+export function IconShadow(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3.2" y="3.2" width="8.2" height="8.2" rx="0.6" />
+      <path d="M 6.6 12.8 h 6.2 v -6.2" />
+    </Svg>
+  )
+}
+
+export function IconCompress(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="2.4" y="2.4" width="8" height="8" rx="0.6" />
+      <path d="M 11.6 6.4 h 2" />
+      <path d="M 12.6 5.4 v 2" />
+      <path d="M 6.4 11.6 v 2" />
+      <path d="M 5.4 12.6 h 2" />
+    </Svg>
+  )
+}
+
+export function IconAltText(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="2.2" y="2.6" width="6.2" height="5" rx="0.6" />
+      <path d="M 3.2 6.6 l 1.7 -1.9 1.5 1.5 1.1 -1.1 0.9 1" />
+      <path d="M 9.8 4.2 h 4" />
+      <path d="M 9.8 6.6 h 4" />
+      <path d="M 2.6 10 h 11" />
+      <path d="M 2.6 12.4 h 11" />
+    </Svg>
+  )
+}
+
 export function IconFlipH(props: IconProps) {
   return (
     <Svg {...props}>
