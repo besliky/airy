@@ -3894,7 +3894,11 @@ let univerRenderedSignalEpoch = 0
 /// demo rebuild) must drop the flag and re-arm it from the new unit's
 /// mounted canvas (the same connected-canvas condition queueVisualInstall
 /// polls). e2e drivers then truly wait for the new session's grid.
-function rearmUniverRenderedSignal(runtime: UniverRuntime, unitId: string): void {
+///
+/// Exported only for the TEST-1101 contract test
+/// (apps/sheets/tests/univer-rendered-signal.test.ts); the production
+/// callers are the two session-swap paths above.
+export function rearmUniverRenderedSignal(runtime: UniverRuntime, unitId: string): void {
   const epoch = ++univerRenderedSignalEpoch
   document.documentElement.removeAttribute('data-univer-rendered')
   const restore = () => {
