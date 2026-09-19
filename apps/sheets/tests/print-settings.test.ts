@@ -349,6 +349,7 @@ const usedGrid = [
 
 function fakeWorksheet(): PrintWorksheet {
   return {
+    getSheetName: () => 'S1',
     getLastRow: () => 2,
     getLastColumn: () => 1,
     getRowHeight: () => 20,
@@ -394,6 +395,7 @@ function payloadSetup(overrides: Partial<EffectivePageSetup>): EffectivePageSetu
 /// `rows` rows of 20px (15pt) with a value in column A.
 function tallWorksheet(rows: number): PrintWorksheet {
   return {
+    getSheetName: () => 'Tall',
     getLastRow: () => rows - 1,
     getLastColumn: () => 0,
     getRowHeight: () => 20,

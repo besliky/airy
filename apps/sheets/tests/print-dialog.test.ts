@@ -27,6 +27,7 @@ import type { UniverRuntime } from '../src/renderer/univer-state'
 
 function fakeWorksheet(): PrintWorksheet {
   return {
+    getSheetName: () => 'Data',
     getLastRow: () => 2,
     getLastColumn: () => 1,
     getRowHeight: () => 20,

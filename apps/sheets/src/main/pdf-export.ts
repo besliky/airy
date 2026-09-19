@@ -10,7 +10,13 @@ import { BrowserWindow, dialog } from 'electron'
 
 import { showSaveDialogWithMemory } from '@airy-office/electron-utils'
 
-import { evenPageRanges, stitchPlan, type PageVariant } from './pdf-page-variants'
+import {
+  evenPageRanges,
+  pageRangesString,
+  sheetPassesPlan,
+  stitchPlan,
+  type PageVariant,
+} from './pdf-page-variants'
 
 import type { IpcMainInvokeEvent, WebContents } from 'electron'
 import type { PDFDocument } from 'pdf-lib'
@@ -96,6 +102,16 @@ function oddTemplatesFor(request: WorkbookExportPdfRequest): TemplatePair | unde
     : undefined
 }
 
+/// The templates a per-sheet set prints one page variant with.
+function sheetVariantTemplates(
+  set: NonNullable<WorkbookExportPdfRequest['sheets']>[number],
+  variant: PageVariant,
+): TemplatePair {
+  if (variant === 'first') return set.firstPage ?? {}
+  if (variant === 'even') return set.evenPages ?? {}
+  return { headerTemplate: set.headerTemplate, footerTemplate: set.footerTemplate }
+}
+
 /// Chromium prints one header/footer template pair for every page. Excel's
 /// differentFirst / differentOddEven need extra passes — page 1 with the
 /// first-page templates, the even pages with the even ones — stitched into
@@ -111,37 +127,80 @@ async function renderPdf(
     hasEven: request.evenPages !== undefined,
   }
   const showHeaderFooter = oddTemplates !== undefined || flags.hasFirst || flags.hasEven
-  const odd = await printPass(
-    contents,
-    request,
-    showHeaderFooter ? (oddTemplates ?? {}) : undefined,
-  )
-  if (!flags.hasFirst && !flags.hasEven) return odd
+  // Entire-workbook jobs with &A go through the per-sheet planner instead:
+  // every page prints with its owning sheet's name (BUG-1105).
+  const sheetSets =
+    request.sheets !== undefined && showHeaderFooter && request.sheets.length > 0
+      ? request.sheets
+      : undefined
+  if (sheetSets === undefined) {
+    const odd = await printPass(
+      contents,
+      request,
+      showHeaderFooter ? (oddTemplates ?? {}) : undefined,
+    )
+    if (!flags.hasFirst && !flags.hasEven) return odd
 
-  const { PDFDocument: PdfDocument } = await import('pdf-lib')
-  const oddDocument = await PdfDocument.load(odd)
-  const total = oddDocument.getPageCount()
-  const passes: Partial<Record<PageVariant, PDFDocument>> = { odd: oddDocument }
-  if (request.firstPage !== undefined && total >= 1) {
-    const first = await printPass(contents, request, request.firstPage, '1')
-    passes.first = await PdfDocument.load(first)
+    const { PDFDocument: PdfDocument } = await import('pdf-lib')
+    const oddDocument = await PdfDocument.load(odd)
+    const total = oddDocument.getPageCount()
+    const passes: Partial<Record<PageVariant, PDFDocument>> = { odd: oddDocument }
+    if (request.firstPage !== undefined && total >= 1) {
+      const first = await printPass(contents, request, request.firstPage, '1')
+      passes.first = await PdfDocument.load(first)
+    }
+    const evenRanges = evenPageRanges(total)
+    if (request.evenPages !== undefined && evenRanges !== '') {
+      const even = await printPass(contents, request, request.evenPages, evenRanges)
+      passes.even = await PdfDocument.load(even)
+    }
+    const merged = await PdfDocument.create()
+    for (const step of stitchPlan(total, flags)) {
+      // A pass that came back with fewer pages than planned (Chromium and
+      // pdf-lib disagreeing about a range) falls back to the odd print of
+      // that page rather than failing the export.
+      const source = passes[step.source]
+      const [page] =
+        source !== undefined && step.index < source.getPageCount()
+          ? await merged.copyPages(source, [step.index])
+          : await merged.copyPages(passes.odd!, [step.page - 1])
+      if (page) merged.addPage(page)
+    }
+    return Buffer.from(await merged.save())
   }
-  const evenRanges = evenPageRanges(total)
-  if (request.evenPages !== undefined && evenRanges !== '') {
-    const even = await printPass(contents, request, request.evenPages, evenRanges)
-    passes.even = await PdfDocument.load(even)
+
+  // Base pass: holds every page for the count and as the fallback source;
+  // its templates name the last sheet, which owns any pages past the
+  // renderer's counted total (pagination drift).
+  const lastSet = sheetSets[sheetSets.length - 1]!
+  const base = await printPass(contents, request, sheetVariantTemplates(lastSet, 'odd'))
+  const { PDFDocument: PdfDocument } = await import('pdf-lib')
+  const baseDocument = await PdfDocument.load(base)
+  const total = baseDocument.getPageCount()
+  const plan = sheetPassesPlan(
+    total,
+    sheetSets.map((set) => set.pages),
+    flags,
+  )
+  const passes: PDFDocument[] = []
+  for (const pass of plan.passes) {
+    const pdf = await printPass(
+      contents,
+      request,
+      sheetVariantTemplates(sheetSets[pass.sheet]!, pass.variant),
+      pageRangesString(pass.pages),
+    )
+    passes.push(await PdfDocument.load(pdf))
   }
   const merged = await PdfDocument.create()
-  for (const step of stitchPlan(total, flags)) {
-    // A pass that came back with fewer pages than planned (Chromium and
-    // pdf-lib disagreeing about a range) falls back to the odd print of
-    // that page rather than failing the export.
-    const source = passes[step.source]
-    const [page] =
-      source !== undefined && step.index < source.getPageCount()
+  for (let page = 1; page <= total; page += 1) {
+    const step = plan.steps[page - 1] ?? null
+    const source = step === null ? undefined : passes[step.pass]
+    const [copied] =
+      source !== undefined && step !== null && step.index < source.getPageCount()
         ? await merged.copyPages(source, [step.index])
-        : await merged.copyPages(oddDocument, [step.page - 1])
-    if (page) merged.addPage(page)
+        : await merged.copyPages(baseDocument, [page - 1])
+    if (copied) merged.addPage(copied)
   }
   return Buffer.from(await merged.save())
 }
