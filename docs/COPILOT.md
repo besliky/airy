@@ -251,12 +251,16 @@ YAML front matter, setext `===`/`---` headings are plain lines; capped at
 shares the 30k budget (`blocks`/`range` select lines). `insert_content` takes markdown `text`
 (not `html`) at one of three positions — after the first line containing
 `marker`, after heading N (`afterHeading`, 1-based ordinal from the read),
-or after line `at` (`-1` = start; default: end). `apply_ops` runs line ops
+or after line `at` (`-1` = start; default: end). Appending at the end
+preserves the file's trailing-newline shape: a file that ends with a newline
+keeps it (no blank line is added), a file without one keeps ending without
+one, and an empty file gains no leading newline. `apply_ops` runs line ops
 instead of block ops: `insertLines after text`, `replaceLines from to text`
 (empty text deletes the range), `deleteLines from to`, and `findReplace find
 replace matchCase? from? to?` (line-scoped — find and replace must be
-single-line; optional inclusive line window).
-Line indexes are 0-based and shift after every splice — re-read between
+single-line; optional inclusive line window). Line counts and indexes cover
+real lines (a final newline does not create an extra empty final line);
+they are 0-based and shift after every splice — re-read between
 edits. Encoding: UTF-8 only (BOM-prefixed UTF-8/UTF-16 opens; files that are
 not valid UTF-8 are refused with a conversion hint), a leading BOM survives
 saves, untouched lines keep their exact bytes (EOLs included — a CRLF file
@@ -277,11 +281,14 @@ modulo the file's EOL style) after the first line containing `marker` (e.g.
 `</body>` to append rendered content) or after line `at` (`-1` = start;
 default: end). `afterHeading` is a markdown-session option — passing it to an
 html session is an explicit error (html has no heading addressing; position
-via `marker` or `at`). `apply_ops` runs line ops instead of block ops:
-`insertLines after text`, `replaceLines from to text` (empty text deletes
-the range), `deleteLines from to`, and `findReplace find replace matchCase?
-from? to?` (line-scoped — find and replace must be single-line; optional
-inclusive line window). Line indexes are
+via `marker` or `at`). Appending at the end preserves the file's
+trailing-newline shape (no blank line added, an empty file gains no leading
+newline), and line counts and indexes cover real lines — a final newline
+does not create an extra empty final line. `apply_ops` runs line ops
+instead of block ops: `insertLines after text`, `replaceLines from to text`
+(empty text deletes the range), `deleteLines from to`, and `findReplace find
+replace matchCase? from? to?` (line-scoped — find and replace must be
+single-line; optional inclusive line window). Line indexes are
 0-based and shift after every splice — re-read between edits. Encoding:
 UTF-8 (BOM-prefixed UTF-8/UTF-16 accepted); bytes that are not valid UTF-8
 open only when the document declares a usable `<meta charset>` — undeclared
@@ -390,6 +397,10 @@ documents above 1M characters skip the parse5 structure scan.
   that escapes the root is rejected with a clear error. Each session pins the
   root at open time and keeps confining its saves against that root, so a
   later `AIRY_WORKSPACE_ROOT`/cwd change never re-confines a live session.
+  When that pinned root itself disappears mid-session (the workspace
+  directory was moved or renamed), saves are refused with a stale-root error
+  naming the root instead of silently re-creating the dead directory —
+  reopen the document from its new location and re-apply your edits.
   Symlinks are resolved
   for both the root and the candidate before the check, so a link that lives
   inside the root but points outside cannot smuggle paths out (links that

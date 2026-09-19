@@ -8,21 +8,25 @@
 // verbatim, so a file the agent only read never changes on disk.
 //
 // This module owns: the line model (split/join/EOL dominance, BOM flag kept
-// out of the editable text), the open gauntlet (stat-first byte caps, NUL
-// refusal, pre-allocation line cap), the line-ops engine (insertLines/
-// replaceLines/deleteLines/findReplace with atomic batch validation), the
-// insert-position resolver, the read-selection skeleton, and the atomic save
-// with the docx session's fences (drift refusal, save-target ownership, tmp +
-// rename). The sessions stay owners of their true divergence points, declared
-// as LineSessionHooks: the charset decode policy, the structure summary the
-// read renders, and a couple of kind-specific error phrasings.
+// out of the editable text; the phantom entry after a final newline is
+// neither counted nor addressable — BUG-1102), the open gauntlet (stat-first
+// byte caps, NUL refusal, pre-allocation line cap), the line-ops engine
+// (insertLines/replaceLines/deleteLines/findReplace with atomic batch
+// validation), the insert-position resolver, the read-selection skeleton, and
+// the atomic save with the docx session's fences (drift refusal, save-target
+// ownership, tmp + rename, stale-root refusal when the pinned workspace root
+// was renamed away — BUG-1103). The sessions stay owners of their true
+// divergence points, declared as LineSessionHooks: the charset decode policy,
+// the structure summary the read renders, and a couple of kind-specific error
+// phrasings.
 import { randomUUID } from 'node:crypto'
 import type { Stats } from 'node:fs'
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname, basename, join } from 'node:path'
 
 import { assertSaveTargetFree, FencingError, promoteNewFileExclusively } from '../docx/session.js'
-import { resolveConfined, workspaceRoot } from '../docx/paths.js'
+import { assertWorkspaceRootExists, resolveConfined, workspaceRoot } from '../docx/paths.js'
+import { replaceCaseInsensitive } from '../case-fold.js'
 
 // ---- limits (mirror the docx session, scaled to the MCP 30k answer budget) ----
 
@@ -196,6 +200,22 @@ export function dominantEol(lines: readonly Line[]): '\n' | '\r\n' | '\r' {
   return '\n'
 }
 
+/**
+ * The line count agents see and address. When the file ends WITH a line
+ * terminator, splitLines' final entry is a phantom — the zero-width position
+ * after the last newline — and it must neither count nor accept indexes
+ * (BUG-1102): "a\nb\n" is 2 lines, not 3, and appending at its end must not
+ * materialize the phantom as a blank line. A lone unterminated empty entry is
+ * the empty file itself and stays addressable, so inserts into it have a
+ * position (the empty-file append lands before it, keeping it as the new
+ * trailing phantom).
+ */
+export function addressableLineCount(lines: readonly Line[]): number {
+  if (lines.length < 2) return lines.length
+  const last = lines[lines.length - 1]!
+  return last.text === '' && last.eol === '' ? lines.length - 1 : lines.length
+}
+
 /** Join the line model back into text; `bom` re-prepends the leading BOM char. */
 function joinLines(lines: readonly Line[], bom: boolean): string {
   return (bom ? BOM_CHAR : '') + lines.map((l) => l.text + l.eol).join('')
@@ -331,7 +351,9 @@ export function renderRead(
   lines: readonly Line[],
   options: LineReadOptions,
 ): string {
-  const selected = selectedIndexes(options, lines.length)
+  // addressable count: the trailing phantom (final newline) is neither
+  // selectable nor announced (BUG-1102)
+  const selected = selectedIndexes(options, addressableLineCount(lines))
   if (selected === null) {
     const fullText = lines.map((l) => l.text).join('\n')
     return clip(
@@ -481,7 +503,8 @@ export class LineDocument {
   }
 
   get lineCount(): number {
-    return this.lineModel.length
+    // the phantom after a final newline is not a line (BUG-1102)
+    return addressableLineCount(this.lineModel)
   }
 
   get isDirty(): boolean {
@@ -507,7 +530,10 @@ export class LineDocument {
     position: { at?: number; marker?: string },
     options: { afterHeading?: { ordinal: number; line: number }; detailSuffix?: string } = {},
   ): LineInsertResult {
-    const count = this.lineModel.length
+    // addressable count: a phantom after the final newline is not a position
+    // an insert can name (BUG-1102) — "the end" is the last real line, and
+    // the splice lands between it and the phantom
+    const count = addressableLineCount(this.lineModel)
     const eol = dominantEol(this.lineModel)
     let after: number
     let where: string
@@ -538,12 +564,21 @@ export class LineDocument {
       after = count - 1
       where = 'at the end of the document'
     }
-    const shapeNote = ensureTerminatedBefore(this.lineModel, after, eol)
+    // the empty file's lone empty line is the whole file, not a phantom to
+    // terminate: the block lands at the start and the lone line stays as the
+    // trailing phantom — no leading blank line (BUG-1102)
+    const loneEmptyLine =
+      after === 0 &&
+      this.lineModel.length === 1 &&
+      this.lineModel[0]!.text === '' &&
+      this.lineModel[0]!.eol === ''
+    const shapeNote = loneEmptyLine ? null : ensureTerminatedBefore(this.lineModel, after, eol)
     // appending at the end preserves the file's trailing-newline shape: a
     // file that ended without a newline keeps ending without one (shapeNote
-    // firing means exactly that case)
-    const newLines = toLines(text, eol, shapeNote !== null ? '' : eol)
-    this.lineModel.splice(after + 1, 0, ...newLines)
+    // firing means exactly that case); a file that ended WITH one keeps it —
+    // the block is terminated and lands before the trailing phantom
+    const newLines = toLines(text, eol, loneEmptyLine || shapeNote === null ? eol : '')
+    this.lineModel.splice(loneEmptyLine ? after : after + 1, 0, ...newLines)
     this.dirty = true
     const detail = `inserted ${String(newLines.length)} line(s) ${where}${
       shapeNote ? ` (${shapeNote})` : ''
@@ -551,7 +586,7 @@ export class LineDocument {
     return {
       inserted: newLines.length,
       at: after,
-      lineCount: this.lineModel.length,
+      lineCount: addressableLineCount(this.lineModel),
       dirty: true,
       detail,
     }
@@ -567,7 +602,9 @@ export class LineDocument {
     const fail = (message: string): never => {
       throw new Error(`${message} - nothing was applied (atomic); fix and resend the whole batch`)
     }
-    const lineCount = () => work.length
+    // addressable count: ops cannot name the phantom after a final newline
+    // (BUG-1102) — the same count reads and insert_content expose
+    const lineCount = () => addressableLineCount(work)
     const checkRange = (name: string, from: unknown, to: unknown) => {
       if (
         !Number.isInteger(from) ||
@@ -615,10 +652,17 @@ export class LineDocument {
             )
           }
           const eol = dominantEol(work)
-          const shapeNote = ensureTerminatedBefore(work, after as number, eol)
+          // same empty-file handling as insert_content: the block lands at
+          // the start, the lone empty line becomes the trailing phantom —
+          // no leading blank line (BUG-1102)
+          const loneEmptyLine =
+            after === 0 && work.length === 1 && work[0]!.text === '' && work[0]!.eol === ''
+          const shapeNote = loneEmptyLine
+            ? null
+            : ensureTerminatedBefore(work, after as number, eol)
           // same trailing-newline preservation as insert_content
-          const inserted = toLines(text, eol, shapeNote !== null ? '' : eol)
-          work.splice((after as number) + 1, 0, ...inserted)
+          const inserted = toLines(text, eol, loneEmptyLine || shapeNote === null ? eol : '')
+          work.splice((after as number) + (loneEmptyLine ? 0 : 1), 0, ...inserted)
           results.push({
             op: name,
             matched: 1,
@@ -702,33 +746,23 @@ export class LineDocument {
           const from = op.from === undefined ? 0 : op.from
           const to = op.to === undefined ? lineCount() - 1 : op.to
           checkRange(name, from, to)
-          const needle = matchCase ? find : find.toLowerCase()
           let occurrences = 0
           let changedLines = 0
           for (let i = from as number; i <= (to as number); i++) {
             const hay = work[i]!
-            const subject = matchCase ? hay.text : hay.text.toLowerCase()
-            if (!subject.includes(needle)) continue
-            let replaced: string
             if (matchCase) {
+              if (!hay.text.includes(find)) continue
               occurrences += hay.text.split(find).length - 1
-              replaced = hay.text.split(find).join(replace)
+              work[i] = { ...hay, text: hay.text.split(find).join(replace) }
             } else {
-              // rebuild case-insensitively: walk the lowered subject
-              let out = ''
-              let rest = hay.text
-              let restLower = subject
-              for (;;) {
-                const at = restLower.indexOf(needle)
-                if (at === -1) break
-                out += rest.slice(0, at) + replace
-                rest = rest.slice(at + needle.length)
-                restLower = restLower.slice(at + needle.length)
-                occurrences += 1
-              }
-              replaced = out + rest
+              // the shared fold-safe replace: lowered indices cannot slice
+              // the original, where İ (U+0130) shifts every position after
+              // it by expanding to two code units (BUG-1101)
+              const outcome = replaceCaseInsensitive(hay.text, find, replace)
+              if (outcome.count === 0) continue
+              occurrences += outcome.count
+              work[i] = { ...hay, text: outcome.text }
             }
-            work[i] = { ...hay, text: replaced }
             changedLines += 1
           }
           results.push({
@@ -774,6 +808,9 @@ export class LineDocument {
    * a legacy charset declaration via its beforeEncode hook).
    */
   async save(rawPath?: string, options: { overwrite?: boolean } = {}): Promise<LineSaveResult> {
+    // a pinned root that vanished (moved/renamed workspace directory) must
+    // fail here, before confinement + mkdir silently resurrect it (BUG-1103)
+    await assertWorkspaceRootExists(this.root)
     // the root captured at open, not the live one: a drifted
     // AIRY_WORKSPACE_ROOT/cwd between open and save must not re-confine the
     // session (the docx session has the same pinned-root semantics)

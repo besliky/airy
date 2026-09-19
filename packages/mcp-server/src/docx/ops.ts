@@ -18,6 +18,8 @@ import {
   type TableModel,
 } from '@airy-office/docx-engine'
 
+import { caseInsensitiveRanges, replaceCaseInsensitive, type FoldRange } from '../case-fold.js'
+
 // ---- session entry model ----
 
 /**
@@ -447,23 +449,29 @@ function styleOccurrences(
 ): number {
   let count = 0
   const out: Run[] = []
-  const nd = matchCase ? needle : needle.toLowerCase()
   for (const run of runs) {
-    const hay = matchCase ? run.text : run.text.toLowerCase()
-    let idx = hay.indexOf(nd)
-    if (idx === -1 || nd === '') {
+    if (needle === '') {
+      out.push(run)
+      continue
+    }
+    // match ranges in ORIGINAL run coordinates: the case-insensitive fold is
+    // not length-preserving (İ expands), so lowered-index slices corrupted
+    // runs with Turkish text (BUG-1101)
+    const ranges = matchCase
+      ? literalRanges(run.text, needle)
+      : caseInsensitiveRanges(run.text, needle)
+    if (ranges.length === 0) {
       out.push(run)
       continue
     }
     let pos = 0
-    while (idx !== -1) {
-      if (idx > pos) out.push({ ...run, text: run.text.slice(pos, idx) })
-      const hit: Run = { ...run, text: run.text.slice(idx, idx + nd.length) }
+    for (const { start, end } of ranges) {
+      if (start > pos) out.push({ ...run, text: run.text.slice(pos, start) })
+      const hit: Run = { ...run, text: run.text.slice(start, end) }
       apply(hit)
       out.push(hit)
       count++
-      pos = idx + nd.length
-      idx = hay.indexOf(nd, pos)
+      pos = end
     }
     if (pos < run.text.length) out.push({ ...run, text: run.text.slice(pos) })
   }
@@ -472,19 +480,15 @@ function styleOccurrences(
   return count
 }
 
-/** case-insensitive literal replacement (the replacement text is used as-is) */
-function replaceCaseInsensitive(text: string, find: string, replace: string): string {
-  const lower = text.toLowerCase()
-  const nd = find.toLowerCase()
-  let out = ''
-  let pos = 0
-  let idx = lower.indexOf(nd)
+/** all non-overlapping case-SENSITIVE literal matches as original-coordinate ranges */
+function literalRanges(text: string, needle: string): FoldRange[] {
+  const ranges: FoldRange[] = []
+  let idx = text.indexOf(needle)
   while (idx !== -1) {
-    out += text.slice(pos, idx) + replace
-    pos = idx + nd.length
-    idx = lower.indexOf(nd, pos)
+    ranges.push({ start: idx, end: idx + needle.length })
+    idx = text.indexOf(needle, idx + needle.length)
   }
-  return out + text.slice(pos)
+  return ranges
 }
 
 // ---- numbering allocation (renderer allocateListNumId, headless variant) ----
@@ -777,16 +781,21 @@ register({
       : { text: allTextIndexes(env.entries), matched: env.entries.length }
     let changed = 0
     let hits = 0
-    const nd = matchCase ? find : find.toLowerCase()
     for (const index of text) {
       const edit = editEntry(env.entries, index)
       for (const run of edit.gen.runs ?? []) {
-        const hay = matchCase ? run.text : run.text.toLowerCase()
-        if (!hay.includes(nd)) continue
-        hits += hay.split(nd).length - 1
-        run.text = matchCase
-          ? run.text.split(find).join(replace)
-          : replaceCaseInsensitive(run.text, find, replace)
+        if (matchCase) {
+          if (!run.text.includes(find)) continue
+          hits += run.text.split(find).length - 1
+          run.text = run.text.split(find).join(replace)
+        } else {
+          // the shared fold-safe replace: lowered indices cannot slice the
+          // original (İ expands under toLowerCase, BUG-1101)
+          const outcome = replaceCaseInsensitive(run.text, find, replace)
+          if (outcome.count === 0) continue
+          hits += outcome.count
+          run.text = outcome.text
+        }
       }
       if (edit.commit()) changed++
     }

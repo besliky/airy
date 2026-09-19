@@ -3,6 +3,7 @@
 // AIRY_WORKSPACE_ROOT (default: the process working directory). This is the
 // headless twin of the renderer's allowlisted-paths IPC gate.
 import { realpathSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 
 export const WORKSPACE_ROOT_ENV = 'AIRY_WORKSPACE_ROOT'
@@ -12,6 +13,38 @@ export function workspaceRoot(): string {
   const fromEnv = process.env[WORKSPACE_ROOT_ENV]
   if (fromEnv && fromEnv.trim() !== '') return resolve(fromEnv.trim())
   return resolve(process.cwd())
+}
+
+/**
+ * The pinned workspace root vanished mid-session (moved/renamed directory).
+ * Raised by the save paths BEFORE confinement: with the root gone,
+ * realPathOrDeepestExisting falls back to the lexical spelling, the prefix
+ * check trivially passes, and the save's mkdir would silently resurrect the
+ * dead directory (BUG-1103). Refusing beats writing into a directory the
+ * operator believes is gone.
+ */
+export class StaleWorkspaceRootError extends Error {
+  constructor(root: string) {
+    super(
+      `Cannot save: the workspace root "${root}" no longer exists (it may have been moved or ` +
+        'renamed after this document was opened). Reopen the document from its new location and ' +
+        're-apply your edits.',
+    )
+    this.name = 'StaleWorkspaceRootError'
+  }
+}
+
+/**
+ * Guard for sessions that pin the workspace root at open: the save must fail
+ * clearly when that root has since disappeared instead of resurrecting it.
+ */
+export async function assertWorkspaceRootExists(root: string): Promise<void> {
+  try {
+    if ((await stat(root)).isDirectory()) return
+  } catch {
+    // missing root: fall through to the refusal
+  }
+  throw new StaleWorkspaceRootError(root)
 }
 
 export class PathOutsideWorkspaceError extends Error {

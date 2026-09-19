@@ -47,7 +47,7 @@ import {
   type OpResult,
   type SessionEntry,
 } from './ops.js'
-import { resolveConfined, workspaceRoot } from './paths.js'
+import { resolveConfined, assertWorkspaceRootExists, workspaceRoot } from './paths.js'
 import {
   convertViaSoffice,
   findSoffice,
@@ -530,6 +530,10 @@ export class DocxSession {
    * default target is guarded like any save-as, while the native default
    * (the opened file) keeps working unchanged.
    *
+   * Stale-root refusal: when the pinned workspace root has been moved/renamed
+   * since open, the save fails with StaleWorkspaceRootError instead of
+   * re-creating the dead directory (the mkdir never runs).
+   *
    * Default target: the opened .docx; for sessions converted from .doc/.odt a
    * fresh sibling .docx next to the original. format:'origin' exports the
    * edited document back to the original .doc/.odt through LibreOffice
@@ -541,6 +545,9 @@ export class DocxSession {
     options: { overwrite?: boolean } = {},
   ): Promise<SaveResult> {
     if (format === 'origin') return this.saveToOrigin()
+    // a pinned root that vanished (moved/renamed workspace directory) must
+    // fail here, before confinement + mkdir silently resurrect it (BUG-1103)
+    await assertWorkspaceRootExists(this.root)
     const target = resolveConfined(rawPath ?? this.defaultTarget(), this.root)
     await assertSaveTargetFree(target, [this.path, ...this.savedTargets], options.overwrite)
     if (target === this.path && this.baseline) {

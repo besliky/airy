@@ -4,7 +4,7 @@
 // (BOM, EOLs, untouched lines), the failure paths (missing file, outside the
 // workspace root, invalid UTF-8, binary, size caps) and the save fences.
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -128,7 +128,9 @@ describe('markdown tools over MCP', () => {
       const handle = await openFixture(client)
       const opened = await call(client, 'open_document', { path: 'notes.md' })
       expect(opened.structuredContent?.kind).toBe('markdown')
-      expect(opened.structuredContent?.lineCount).toBe(13)
+      // 12 real lines + a trailing newline: the phantom position after the
+      // final \n is not a line (BUG-1102)
+      expect(opened.structuredContent?.lineCount).toBe(12)
       expect(opened.structuredContent?.headingCount).toBe(3)
       expect(opened.structuredContent?.eol).toBe('\n')
 
@@ -150,21 +152,23 @@ describe('markdown tools over MCP', () => {
       expect(byMarker.isError).toBeFalsy()
       expect(byMarker.structuredContent?.at).toBe(8) // marker shifted to line 8
 
-      // default insert appends at the end
+      // default insert appends at the end (12 real lines + 2 + 1 + 2)
       const atEnd = await call(client, 'insert_content', {
         handle,
         text: 'Signed,\nThe Team',
       })
       expect(atEnd.isError).toBeFalsy()
-      expect(atEnd.structuredContent?.lineCount).toBe(18)
+      expect(atEnd.structuredContent?.lineCount).toBe(17)
 
       // line ops: rename a bullet, delete the costs line, scoped find/replace
+      // (the to bound shrinks by one after the delete: the phantom after the
+      // final newline is no longer an addressable index — BUG-1102)
       const ops = await call(client, 'apply_ops', {
         handle,
         ops: [
           { op: 'findReplace', find: 'EMEA: strong', replace: 'EMEA: very strong' },
           { op: 'deleteLines', from: 3, to: 3 },
-          { op: 'findReplace', find: 'promising', replace: 'excellent', from: 10, to: 16 },
+          { op: 'findReplace', find: 'promising', replace: 'excellent', from: 10, to: 15 },
         ],
       })
       expect(ops.isError).toBeFalsy()
@@ -490,8 +494,8 @@ describe('markdown tools over MCP', () => {
       })
       expect(beyond.isError).toBe(true)
       expect(text(beyond)).toContain('out of range')
-      const ok = await call(client, 'read_document', { handle, range: { start: 0, end: 12 } })
-      expect(text(ok)).toContain('Selected 13 line(s)')
+      const ok = await call(client, 'read_document', { handle, range: { start: 0, end: 11 } })
+      expect(text(ok)).toContain('Selected 12 line(s)')
     } finally {
       await close()
     }
@@ -615,7 +619,9 @@ describe('markdown tools over MCP', () => {
         // the relative target resolved against the OPEN-time root
         expect(existsSync(join(root, 'pinned-out.md'))).toBe(true)
         expect(existsSync(join(driftRoot, 'pinned-out.md'))).toBe(false)
-        expect((await readFile(join(root, 'pinned-out.md'), 'utf8')).endsWith('Edit.')).toBe(true)
+        // the appended block landed before the trailing phantom: the file
+        // keeps its final newline instead of losing it (BUG-1102)
+        expect((await readFile(join(root, 'pinned-out.md'), 'utf8')).endsWith('Edit.\n')).toBe(true)
       } finally {
         process.env[WORKSPACE_ROOT_ENV] = root
         await rm(driftRoot, { recursive: true, force: true })
@@ -674,6 +680,144 @@ describe('markdown tools over MCP', () => {
       expect(applied.isError).toBeFalsy()
       const read = await call(client, 'read_document', { handle })
       expect(text(read)).toContain('sales grew by 12 percent')
+    } finally {
+      await close()
+    }
+  })
+
+  it('case-insensitive findReplace survives the length-changing İ fold (BUG-1101)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // audit live repro: toLowerCase maps İ (U+0130) to "i" + U+0307, so
+      // lowered indices after it shift by one and the replacement used to
+      // land mid-word ("İstanbul kWORDnot") with the tail eaten
+      const handle = await openFixture(
+        client,
+        'turkish.md',
+        Buffer.from('İstanbul kelime not\n', 'utf8'),
+      )
+      const ops = await call(client, 'apply_ops', {
+        handle,
+        ops: [{ op: 'findReplace', find: 'kelime', replace: 'WORD', matchCase: false }],
+      })
+      expect(ops.isError).toBeFalsy()
+      expect(String(ops.structuredContent?.summary)).toContain('findReplace: matched 1')
+      await call(client, 'save_document', { handle })
+      expect((await readFile(join(root, 'turkish.md'))).toString('utf8')).toBe(
+        'İstanbul WORD not\n',
+      )
+    } finally {
+      await close()
+    }
+  })
+
+  it('default-append into a file with a trailing newline keeps the shape (BUG-1102)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // audit live repro: "a\nb\n" + insert "c" used to save "a\nb\n\nc" —
+      // the phantom after the final \n became a real blank line and the
+      // file lost its trailing newline; lineCount reported 3 for 2 lines
+      const handle = await openFixture(client, 'tail.md', Buffer.from('a\nb\n', 'utf8'))
+      const opened = await call(client, 'open_document', { path: 'tail.md' })
+      expect(opened.structuredContent?.lineCount).toBe(2)
+      const atEnd = await call(client, 'insert_content', { handle, text: 'c' })
+      expect(atEnd.isError).toBeFalsy()
+      expect(atEnd.structuredContent?.lineCount).toBe(3)
+      expect(text(atEnd)).not.toContain('gained one')
+      await call(client, 'save_document', { handle })
+      expect(Buffer.compare(await readFile(join(root, 'tail.md')), Buffer.from('a\nb\nc\n'))).toBe(
+        0,
+      )
+
+      // the op path lands the same way: insertLines after the LAST line
+      // (index count-1) inserts before the phantom, not after it
+      const handle2 = await openFixture(client, 'tail2.md', Buffer.from('a\r\nb\r\n', 'utf8'))
+      const ops = await call(client, 'apply_ops', {
+        handle: handle2,
+        ops: [{ op: 'insertLines', after: 1, text: 'c' }],
+      })
+      expect(ops.isError).toBeFalsy()
+      await call(client, 'save_document', { handle: handle2 })
+      expect((await readFile(join(root, 'tail2.md'))).toString('utf8')).toBe('a\r\nb\r\nc\r\n')
+
+      // the phantom position is not addressable any more (3 real lines, so
+      // index 3 — the slot after the final \n — is out of range)
+      const phantom = await call(client, 'apply_ops', {
+        handle: handle2,
+        ops: [{ op: 'deleteLines', from: 3, to: 3 }],
+      })
+      expect(phantom.isError).toBe(true)
+      expect(text(phantom)).toContain('0 <= from <= to < 3')
+    } finally {
+      await close()
+    }
+  })
+
+  it('default-append into an empty file adds no leading newline (BUG-1102)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // the empty file's lone empty line is the whole file: the block lands
+      // at the start and the lone line becomes the trailing phantom. The
+      // audit repro had a leading "\n"; default and at:-1 must agree
+      const handle = await openFixture(client, 'empty.md', Buffer.from('', 'utf8'))
+      const opened = await call(client, 'open_document', { path: 'empty.md' })
+      expect(opened.structuredContent?.lineCount).toBe(1)
+      const atEnd = await call(client, 'insert_content', { handle, text: 'hello' })
+      expect(atEnd.isError).toBeFalsy()
+      expect(atEnd.structuredContent?.lineCount).toBe(1)
+      await call(client, 'save_document', { handle })
+      expect((await readFile(join(root, 'empty.md'))).toString('utf8')).toBe('hello\n')
+
+      const handle2 = await openFixture(client, 'empty2.md', Buffer.from('', 'utf8'))
+      await call(client, 'insert_content', { handle: handle2, text: 'hello', at: -1 })
+      await call(client, 'save_document', { handle: handle2 })
+      expect((await readFile(join(root, 'empty2.md'))).toString('utf8')).toBe('hello\n')
+
+      const handle3 = await openFixture(client, 'empty3.md', Buffer.from('', 'utf8'))
+      const ops = await call(client, 'apply_ops', {
+        handle: handle3,
+        ops: [{ op: 'insertLines', after: 0, text: 'hello' }],
+      })
+      expect(ops.isError).toBeFalsy()
+      await call(client, 'save_document', { handle: handle3 })
+      expect((await readFile(join(root, 'empty3.md'))).toString('utf8')).toBe('hello\n')
+    } finally {
+      await close()
+    }
+  })
+
+  it('refuses saves when the pinned workspace root was renamed away (BUG-1103)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // the session pins the root at open: make a subdirectory BE the root,
+      // open inside it, then rename the directory out from under the session
+      const ws = join(root, 'ws')
+      await mkdir(ws, { recursive: true })
+      process.env[WORKSPACE_ROOT_ENV] = ws
+      await writeFile(join(ws, 'doc.md'), 'body\n', 'utf8')
+      const opened = await call(client, 'open_document', { path: 'doc.md' })
+      expect(opened.isError).toBeFalsy()
+      const handle = String(opened.structuredContent?.handle)
+      await call(client, 'insert_content', { handle, text: 'edit' })
+      // the operator renames the workspace directory mid-session
+      await rename(ws, join(root, 'ws2'))
+      try {
+        const saveAs = await call(client, 'save_document', { handle, path: 'out.md' })
+        expect(saveAs.isError).toBe(true)
+        expect(text(saveAs)).toContain('no longer exists')
+        expect(text(saveAs)).toContain('moved or renamed')
+        expect(text(saveAs)).toContain('Reopen the document')
+        // the in-place save gets the same clear refusal (not a drift fence
+        // error about the file itself)
+        const inPlace = await call(client, 'save_document', { handle })
+        expect(inPlace.isError).toBe(true)
+        expect(text(inPlace)).toContain('no longer exists')
+      } finally {
+        process.env[WORKSPACE_ROOT_ENV] = root
+      }
+      // the dead root must not be resurrected by the save's mkdir
+      expect(existsSync(ws)).toBe(false)
+      expect(existsSync(join(root, 'ws2', 'out.md'))).toBe(false)
     } finally {
       await close()
     }
