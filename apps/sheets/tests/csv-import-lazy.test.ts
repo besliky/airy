@@ -7,7 +7,7 @@
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
-import { importCsvFile } from '../src/renderer/data-tools-actions'
+import { importCsvFile, type DataToolsContext } from '../src/renderer/data-tools-actions'
 import { loadLocale } from '../src/renderer/i18n/locale'
 
 const { decodeCsvBuffer, parseCsv, isNumericCell } = vi.hoisted(() => ({
@@ -22,15 +22,7 @@ vi.mock('../src/gateway/csv-import', () => ({ decodeCsvBuffer, parseCsv, isNumer
 // back to raw keys, which is exactly the regression this suite guards.
 beforeAll(() => loadLocale('zh'))
 
-interface Ctx {
-  messages: string[]
-  univerRef: { current: unknown }
-  setMessage: (message: string) => void
-  setPendingEdits: (count: number) => void
-  setAdvancedFilterColumns: (columns: unknown) => void
-}
-
-function makeCtx(setValues = vi.fn()): Ctx {
+function makeCtx(setValues = vi.fn()): DataToolsContext & { messages: string[] } {
   const messages: string[] = []
   const worksheet = { getRange: vi.fn(() => ({ setValues })) }
   const workbook = {
@@ -40,10 +32,11 @@ function makeCtx(setValues = vi.fn()): Ctx {
   return {
     messages,
     univerRef: { current: { univerAPI: { getActiveWorkbook: () => workbook } } },
-    setMessage: (message) => messages.push(message),
+    lazyWorkbookRef: { current: null },
+    setMessage: (message: string) => messages.push(message),
     setPendingEdits: () => {},
     setAdvancedFilterColumns: () => {},
-  }
+  } as unknown as DataToolsContext & { messages: string[] }
 }
 
 describe('importCsvFile', () => {
