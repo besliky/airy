@@ -24,6 +24,7 @@ import {
   LO_CJK_LINE_FACTOR,
   LO_CELL_CJK_LINE_FACTOR,
   LO_CELL_PROP_INC_EM,
+  LO_GRID_BODY_PROP_INC_EM,
   snapLineToPitch,
   estimateFootnoteHeight,
   footnoteLineHeightPx,
@@ -337,9 +338,11 @@ describe("grid compat profile 'lo' (LibreOffice)", () => {
   const pt = (v: number) => (v * 96) / 72
   const zh = '在中国经济社会发展的重要历史时期'
 
-  it('auto multiple scales the SNAPPED height (snap-then-multiply), strict rounding', () => {
-    // LO render of corpus doc 02: 12pt SimSun body, line 276 auto ->
-    // snapUp(15.63pt natural) = 2 cells, x 1.15 = 35.88pt (vs Word 17.94pt)
+  it('grid body auto adds the increment on top of the snapped height (phase C/D)', () => {
+    // 12pt SimSun-class body, line 276 auto under the 312-twip grid:
+    // snapUp(natural) = 2 cells = 31.2pt, + 0.15 x LO_GRID_BODY_PROP_INC_EM x 12
+    // = 34.17pt (local LO 26.2 measures doc 15's body at 34.45pt; the constant
+    // is corpus-pinned across 1.56-1.74em, see line-metrics.ts)
     const r = computeLineMetrics({
       runs: [{ text: zh.repeat(4), sizeHalfPoints: 24 }],
       availWidthPx: 1000,
@@ -348,7 +351,19 @@ describe("grid compat profile 'lo' (LibreOffice)", () => {
       docGrid,
       gridCompat: 'lo',
     })
-    for (const h of r.lineHeights) expect(h).toBeCloseTo(pt(35.88), 2)
+    for (const h of r.lineHeights)
+      expect(h).toBeCloseTo(pt(31.2 + 0.15 * 12 * LO_GRID_BODY_PROP_INC_EM), 2)
+  })
+
+  it('no-grid body keeps the plain product natural x multiple', () => {
+    const r = computeLineMetrics({
+      runs: [{ text: zh.repeat(4), sizeHalfPoints: 24 }],
+      availWidthPx: 1000,
+      lineRule: 'auto',
+      lineRawTwips: 276,
+      gridCompat: 'lo',
+    })
+    for (const h of r.lineHeights) expect(h).toBeCloseTo(pt(12 * LO_CJK_LINE_FACTOR * 1.15), 2)
   })
 
   it('table cells add the constant increment (phase C row step)', () => {

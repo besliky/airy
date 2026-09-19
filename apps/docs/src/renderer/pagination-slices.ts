@@ -1221,12 +1221,31 @@ function _placeParaBlock(
   )
     return
   const totalH = block.height
+  const noteExtra = block.footnoteExtraPx ?? 0
 
   // whole paragraph (text + note reservation) fits: place directly. Trailing
   // space doesn't consume capacity (Word breaks by text only; it may overflow
   // into the bottom margin) — the note reservation is in the height, not here
   if (fits(totalH - spaceAfterPx)) {
     place(totalH)
+    return
+  }
+
+  // footnote spill: when the paragraph's TEXT fits and only its END-CHARGED
+  // note reservation overflows (no explicit per-line bands), Word keeps the
+  // reference line on the page and continues the note text in the next page's
+  // footnote area (continuation separator) instead of dragging the paragraph
+  // to the next page (recorded baselines: LO 24.2 doc 06 p1 ends at note 11
+  // while its 12th paragraph stays; the spilled strip only eats the next
+  // page's note area, which that page's own separator already reserves).
+  // Per-line banded notes keep riding their lines (a mid-paragraph note
+  // follows its reference line, Word semantics)
+  if (
+    noteExtra > 0 &&
+    !(block.noteBands && block.noteBands.length > 0) &&
+    fits(totalH - spaceAfterPx - noteExtra)
+  ) {
+    place(totalH - noteExtra)
     return
   }
 

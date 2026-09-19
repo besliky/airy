@@ -497,14 +497,15 @@ export type GridCompat = 'word' | 'lo'
 /**
  * LO's substituted CJK line factor for the 'lo' profile: LibreOffice renders
  * the missing SimSun-class (Song) faces through its own substitute whose single-spacing
- * natural sits near 1.6em — vs Word's SimSun 1.3029em. Calibrated against the
+ * natural sits near 1.43em — vs Word's SimSun 1.3029em. Calibrated against the
  * recorded LO 24.2 baseline corpus (12pt line-276 body): doc 14's 5 pages need
- * the factor above 1.37em, doc 09's 5 page-starts cap it below 1.66em, and a
- * local LO render of doc 05 measures no-grid cell rows at 31.45pt = 12pt x
- * factor x 1.15 + 8pt spacing + border (1.66em with that machine's fonts).
- * Pinned for CJK-ink body and table-cell lines alike.
+ * the factor above 1.37em, doc 16's 23-item first page needs at least 1.42em,
+ * doc 09's 33-lines page caps it at 1.436em, and doc 03's p2 start (break
+ * after a zh paragraph) allows up to 1.486em. Grid sections are insensitive to
+ * the exact value (both 1.37em and 1.66em snap a 12pt line to the same 2
+ * cells), so only no-grid CJK body follows it.
  */
-export const LO_CJK_LINE_FACTOR = 1.58
+export const LO_CJK_LINE_FACTOR = 1.43
 
 /**
  * LO's substituted CJK factor for table-cell lines ('lo' profile): the 24.2
@@ -525,6 +526,19 @@ export const LO_CELL_CJK_LINE_FACTOR = 1.42
  * no-grid alike). 13.67pt at 12pt = 1.139em.
  */
 export const LO_CELL_PROP_INC_EM = 1.139
+
+/**
+ * LO's proportional-spacing increment for GRID body lines ('lo' profile):
+ * like cells, grid body lines add (multiple − 1) × this × font size on top of
+ * the snapped single height instead of scaling it — the local LO 26.2 render
+ * of doc 15 measures 34.45pt body lines = 2 cells 31.2pt + 0.15 × 1.81em,
+ * and the 24.2 corpus pins the doc-15 six-page phase structure across
+ * 1.56–1.74em (midpoint pinned). Docs 02/10's 24.2 baselines sit just above
+ * the window (they prefer the taller snap×1.15 product): the trade buys doc
+ * 15's 4 page-starts for their 3. No-grid body keeps the plain product
+ * nat × mult (the increment is grid-only).
+ */
+export const LO_GRID_BODY_PROP_INC_EM = 1.65
 
 /**
  * Ceil a line height UP to whole grid cells. Single source for docGrid line
@@ -2070,6 +2084,13 @@ export function computeLineMetrics(input: LineMetricsInput): LineMetricsResultEx
   // the 24.2 baseline brackets the cell step distinctly from the body factor);
   // pure-Latin paragraphs keep the font-level factors
   const loCell = input.gridCompat === 'lo' && tableCellMode
+  // grid body lines take their own additive increment (see LO_GRID_BODY_PROP_INC_EM)
+  const gridBody =
+    input.gridCompat === 'lo' &&
+    !loCell &&
+    !!docGrid &&
+    (docGrid.type === 'lines' || docGrid.type === 'linesAndChars') &&
+    !!docGrid.linePitch
   const loCjkPin =
     input.gridCompat === 'lo' && runs.some((r) => textHasCjk(r.text))
       ? loCell
@@ -2109,12 +2130,18 @@ export function computeLineMetrics(input: LineMetricsInput): LineMetricsResultEx
       : simulateLines(runs, availWidthPx, metrics, defaultFontSizePt, defaultFontFamily, cjkFactor)
 
   // apply the line-height rule per line (emBoxH: the word-profile grid snap
-  // base; loPropIncPx: the LO cell additive proportional increment)
+  // base; loPropIncPx: the LO cell additive proportional increment; body lines
+  // keep phase B's snap-then-multiply — the 24.2 baselines of docs 02/04/10
+  // pin it there, only doc 15's local-26.2 render measures the additive form)
   const lineHeights = lines.map((ln) =>
     computeLineHeight(ln.naturalLineH, lineRule, lineRawTwips, docGrid, {
       emBoxPx: ln.emBoxH,
       gridCompat: input.gridCompat,
-      ...(loCell ? { loPropIncPx: ln.fontSizePx * LO_CELL_PROP_INC_EM } : {}),
+      ...(loCell
+        ? { loPropIncPx: ln.fontSizePx * LO_CELL_PROP_INC_EM }
+        : gridBody
+          ? { loPropIncPx: ln.fontSizePx * LO_GRID_BODY_PROP_INC_EM }
+          : {}),
     }),
   )
 
