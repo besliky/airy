@@ -6,8 +6,9 @@
  * Geometry comes from the same render tree the Konva canvas draws (pathData is
  * SVG d-strings, chart draw primitives, per-run text layout), positioned with
  * the same box/flip/rotation rules the canvas uses (rotation and flips pivot
- * on the box center; a flipped shape's text stays readable, mirroring
- * NodeBody's counter-flip).
+ * on the box center; flips mirror geometry, while a shape's text counter-
+ * mirrors the accumulated inherited flip so glyphs stay readable — the SVG
+ * twin of NodeBody's counter-flip).
  *
  * Deliberately approximated (visual extras, not structure): WordArt
  * extrusion, run shadows/glows/reflections, picture pixel filters
@@ -205,24 +206,15 @@ function fontAttrs(o: {
 }
 
 /** one laid-out line → positioned <text> elements (these become real PDF text) */
-function lineText(
-  line: TextLine,
-  ox: number,
-  oy: number,
-  vert: boolean,
-  flipW: number,
-  flipH: number,
-): string {
+function lineText(line: TextLine, ox: number, oy: number, vert: boolean): string {
   let out = ''
   for (const run of line.runs) {
     if (!run.text) continue
-    const left = ox + run.x
-    const top = oy + line.top
-    const ascentFromTop = run.baselineY - line.top
-    // flipped container: mirror the run's anchor inside the box (glyphs stay readable)
-    const rx = flipW > 0 ? flipW - (left + run.widthPx) : left
-    const ry = flipH > 0 ? flipH - (top + line.height) : top
-    const rby = flipH > 0 ? ry + (line.height - ascentFromTop) : oy + run.baselineY
+    // box-local coordinates; a container's flip mirrors the whole text layer
+    // via its transform wrap (nodeSvg), never the runs themselves
+    const rx = ox + run.x
+    const ry = oy + line.top
+    const rby = oy + run.baselineY
     const deco = [run.underline ? 'underline' : '', run.strike ? 'line-through' : '']
       .filter(Boolean)
       .join(' ')
@@ -252,14 +244,13 @@ function lineText(
  * WordArt warp export: re-run the canvas renderer's per-character warp pass
  * (text-warp.ts) and emit every character as its own <text> with translate/
  * rotate/scale, so the exported PDF keeps selectable text bent like the slide.
- * Flipped containers mirror the character anchors and negate the rotation so
- * the glyphs stay readable, mirroring the straight-run path. Returns null when
- * the preset is unsupported (the caller keeps the straight layout).
+ * Characters keep their box-local centers and rotations; a container's flip
+ * mirrors the whole layer through nodeSvg's transform wrap, like the straight
+ * runs. Returns null when the preset is unsupported (the caller keeps the
+ * straight layout).
  */
 function warpedTextSvg(
   text: NonNullable<ShapeRenderNode['text']>,
-  flipW: number,
-  flipH: number,
   boxW: number,
   boxH: number,
 ): string | null {
@@ -297,15 +288,11 @@ function warpedTextSvg(
   if (!warped) return null
   let out = ''
   for (const g of warped) {
-    // character center in box-local space (inset origin + text-area coord), mirrored
-    // about the box center for flipped containers so the glyphs stay readable
-    const cx = il + g.x
-    const cy = it + g.y
-    const x = flipW > 0 ? flipW - cx : cx
-    const y = flipH > 0 ? flipH - cy : cy
-    let rot = g.rotation ?? 0
-    if (flipW > 0) rot = -rot
-    if (flipH > 0) rot = 180 - rot
+    // character center in box-local space (inset origin + text-area coord);
+    // container flips come from the surrounding transform wrap
+    const x = il + g.x
+    const y = it + g.y
+    const rot = g.rotation ?? 0
     const transform = `translate(${x.toFixed(2)} ${y.toFixed(2)})${
       rot ? ` rotate(${rot.toFixed(2)})` : ''
     }${
@@ -333,21 +320,19 @@ function layoutText(
   text: ShapeRenderNode['text'],
   ox: number,
   oy: number,
-  flipW = 0,
-  flipH = 0,
   box?: { w: number; h: number },
 ): string {
   if (!text) return ''
   const vert = !!text.vert
   const il = text.insets?.l ?? 0
   const it = text.insets?.t ?? 0
-  // WordArt warp replaces the straight runs; vertical layouts and unsupported
-  // presets fall back to the straight path below
+  // WordArt warp replaces the straight runs; vertical layouts, table cells
+  // (no box), and unsupported presets fall back to the straight path below
   if (text.txWarp && !vert && box) {
-    const warped = warpedTextSvg(text, flipW, flipH, box.w, box.h)
+    const warped = warpedTextSvg(text, box.w, box.h)
     if (warped != null) return warped
   }
-  return text.lines.map((l) => lineText(l, ox + il, oy + it, vert, flipW, flipH)).join('')
+  return text.lines.map((l) => lineText(l, ox + il, oy + it, vert)).join('')
 }
 
 /** arrowhead markup (triangle-style approximation of the OOXML head types) */
@@ -575,6 +560,8 @@ function nodeSvg(
   ox: number,
   oy: number,
   images: Map<string, HTMLImageElement>,
+  flipHInherited = false,
+  flipVInherited = false,
 ): string {
   const x = ox + n.box.x
   const y = oy + n.box.y
@@ -593,7 +580,21 @@ function nodeSvg(
 
   let body = ''
   if (n.type === 'group') {
-    body = (n as GroupRenderNode).children.map((c) => nodeSvg(c, 0, 0, images)).join('')
+    // children accumulate the group's flip into their inherited flags (XOR,
+    // exactly like NodeBody's flipHInherited) — a group's mirror wraps the
+    // whole subtree, so each descendant's text counter-mirror cancels it
+    body = (n as GroupRenderNode).children
+      .map((c) =>
+        nodeSvg(
+          c,
+          0,
+          0,
+          images,
+          !!n.box.flipH !== flipHInherited,
+          !!n.box.flipV !== flipVInherited,
+        ),
+      )
+      .join('')
   } else if (n.type === 'picture') {
     const pic = n as PictureRenderNode
     const { box } = pic
@@ -671,18 +672,22 @@ function nodeSvg(
   } else if (n.type === 'text' || n.type === 'shape') {
     const shape = n as ShapeRenderNode
     const geo = shapeGeometry(shape, defs)
-    // PowerPoint flips geometry only; text mirrors position but stays readable
-    const text = layoutText(
-      shape.text,
-      0,
-      0,
-      n.box.flipH ? n.box.w : 0,
-      n.box.flipV ? n.box.h : 0,
-      n.box,
-    )
-    body = flipGeo
-      ? `<g${flipGeo ? ` transform="${flipGeo}"` : ''}>${geo}</g>${text}`
-      : `${geo}${text}`
+    // PowerPoint flips geometry only: the shape's own flip mirrors the
+    // geometry wrap alone, and an inherited group flip mirrors the whole
+    // node (geometry AND the text's slot). The text layer therefore
+    // counter-mirrors by the accumulated INHERITED flip — the SVG twin of
+    // NodeBody's counter-flip group (its XOR counter-flip composes with the
+    // own pivot into exactly this), keeping glyph order readable.
+    const text = layoutText(shape.text, 0, 0, n.box)
+    const textFlip =
+      flipHInherited || flipVInherited
+        ? `translate(${flipHInherited ? n.box.w.toFixed(2) : 0} ${flipVInherited ? n.box.h.toFixed(2) : 0}) scale(${flipHInherited ? -1 : 1} ${flipVInherited ? -1 : 1})`
+        : ''
+    body =
+      flipGeo || textFlip
+        ? `${flipGeo ? `<g transform="${flipGeo}">${geo}</g>` : geo}` +
+          `${textFlip ? `<g transform="${textFlip}">${text}</g>` : text}`
+        : `${geo}${text}`
   }
   if (flipGeo && n.type !== 'text' && n.type !== 'shape') {
     // pictures, charts, tables, and whole groups mirror about the box center

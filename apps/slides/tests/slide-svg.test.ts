@@ -277,8 +277,11 @@ describe('renderSlideSvg', () => {
     const svg = renderSlideSvg(slideOf(node), new Map())
     expect(svg).toContain('rotate(15 100.00 40.00)')
     expect(svg).toContain('translate(200.00 0) scale(-1 1)')
-    // flipped text mirrors its anchor inside the box: 200 - (5 + 6*10) = 135
-    expect(svg).toContain('x="135.00"')
+    // the shape's own flip mirrors geometry only: the text keeps its box-local
+    // anchor (canvas parity — NodeBody's counter-flip composes with the pivot
+    // into identity, glyphs readable at the unmirrored slot)
+    expect(svg).toContain('x="5.00"')
+    expect(svg).toContain('>mirror</text>')
   })
 
   it('mirrors flipped pictures, tables, and whole groups about the box center', () => {
@@ -341,6 +344,65 @@ describe('renderSlideSvg', () => {
     expect(svg).toContain(
       '<g transform="translate(100.00 0) scale(-1 1)"><g transform="translate(0.00 0.00)">',
     )
+  })
+
+  it('keeps text readable inside a flipped group (counter-mirrors the inherited flip)', () => {
+    const textShape = (extra: object = {}): RenderNode =>
+      ({
+        id: 'inner',
+        type: 'shape',
+        sourceId: 'inner',
+        box: box(0, 0, 100, 50, extra),
+        presetGeometry: 'rect',
+        fill: { kind: 'solid', color: '445566' },
+        text: {
+          lines: [{ top: 2, height: 20, paraStart: true, runs: [run('grouped', 5, 18)] }],
+          insets: { l: 0, t: 0, r: 0, b: 0 },
+          anchor: 'top',
+          fontScale: 1,
+          contentHeight: 24,
+          wrap: true,
+        },
+      }) as unknown as ShapeRenderNode
+    const group: RenderNode = {
+      id: 'grp',
+      type: 'group',
+      sourceId: 'grp',
+      box: box(10, 20, 100, 50, { flipH: true }),
+      children: [textShape()],
+    } as unknown as RenderNode
+    const svg = renderSlideSvg(slideOf(group), new Map())
+    // the group mirror wraps the subtree, and the child's text layer carries
+    // its own counter-mirror (same accumulated flip) — the two compose into
+    // identity, so the glyphs stay in reading order instead of mirroring
+    expect((svg.match(/translate\(100\.00 0\) scale\(-1 1\)/g) ?? []).length).toBe(2)
+    expect(svg).toContain('>grouped</text>')
+    // geometry still mirrors: the child rect renders inside the group mirror
+    expect(svg).toContain(
+      '<g transform="translate(100.00 0) scale(-1 1)"><g transform="translate(0.00 0.00)"><rect ',
+    )
+
+    // a child that flips itself inside the flipped group composes the same
+    // way: own flip mirrors its geometry, the inherited flip stays countered
+    const doubleFlip: RenderNode = {
+      ...group,
+      children: [textShape({ flipH: true })],
+    } as unknown as RenderNode
+    const svg2 = renderSlideSvg(slideOf(doubleFlip), new Map())
+    expect(svg2).toContain('>grouped</text>')
+    // group mirror + child geometry flip wrap + text counter wrap = three
+    // translate(100 0) scale(-1 1) transforms about the same box
+    expect((svg2.match(/translate\(100\.00 0\) scale\(-1 1\)/g) ?? []).length).toBe(3)
+
+    // flipV inheritance counter-mirrors vertically the same way
+    const vGroup: RenderNode = {
+      ...group,
+      box: box(10, 20, 100, 50, { flipV: true }),
+      children: [textShape()],
+    } as unknown as RenderNode
+    const svg3 = renderSlideSvg(slideOf(vGroup), new Map())
+    expect((svg3.match(/translate\(0 50\.00\) scale\(1 -1\)/g) ?? []).length).toBe(2)
+    expect(svg3).toContain('>grouped</text>')
   })
   it('exports a WordArt warp as per-character transformed <text>', () => {
     const node: RenderNode = {
