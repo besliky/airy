@@ -47,6 +47,21 @@ export function NoteOptionsDialog({
   const [startAt, setStartAt] = useState(String(current?.numStart ?? 1))
   const modalKeys = useModalKeys(onClose)
 
+  /**
+   * BUG-1005: switching the Footnotes/Endnotes radio reloads the chosen
+   * kind's numbering into the controls (Word's dialog swaps the shown
+   * settings with the radio). Without the re-seed, OK silently overwrote
+   * the other kind's options with values seeded from the kind that was
+   * selected when the dialog opened.
+   */
+  const pickKind = (next: 'footnote' | 'endnote') => {
+    setKind(next)
+    const seeding = noteNumberingOfKind(next, value)
+    setFmt(seeding?.numFmt ?? (next === 'footnote' ? 'decimal' : 'lowerRoman'))
+    setCustomMark(seeding?.customMark ?? '')
+    setStartAt(String(seeding?.numStart ?? 1))
+  }
+
   const submit = () => {
     const model: NoteNumbering =
       fmt === CUSTOM
@@ -82,7 +97,7 @@ export function NoteOptionsDialog({
               type="radio"
               name="refs-kind"
               checked={kind === 'footnote'}
-              onChange={() => setKind('footnote')}
+              onChange={() => pickKind('footnote')}
             />
             {t('refsFootnotes')}
           </label>
@@ -91,7 +106,7 @@ export function NoteOptionsDialog({
               type="radio"
               name="refs-kind"
               checked={kind === 'endnote'}
-              onChange={() => setKind('endnote')}
+              onChange={() => pickKind('endnote')}
             />
             {t('refsEndnotes')}
           </label>
