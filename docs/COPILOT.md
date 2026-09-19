@@ -316,7 +316,9 @@ cells included). `insert_content` takes plain `text` plus `slide`: with
 autoshapes; line breaks become paragraphs, a first text on a bare autoshape
 gets PowerPoint's centered authoring defaults, connectors refuse — they
 cannot hold text), without it a new text box is added at `x`/`y`/`width`/
-`height` inches (default 6 x 1 in at 1", 1"). `apply_ops` is not available
+`height` inches (default 6 x 1 in at 1", 1"; each value capped at 1000 in —
+larger geometry is refused rather than saved as XML PowerPoint would flag
+for repair). `apply_ops` is not available
 for slides (the rich op registry is app-side); pictures, tables, charts,
 groups and slide structure (add/remove/reorder slides) are not editable
 headlessly. Legacy `.ppt`/`.odp` are refused with a conversion hint

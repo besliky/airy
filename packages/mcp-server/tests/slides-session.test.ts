@@ -188,6 +188,24 @@ describe('slides session insert_content', () => {
     })
   })
 
+  it('rejects insert geometry above the 1000 in cap (audit BUG-1110)', async () => {
+    const session = await openSession()
+    // 1e300 in would scale to ~9.1e305 EMU in a:off/a:ext: syntactically
+    // valid XML outside ST_PositiveCoordinate that PowerPoint flags for
+    // repair after a save — refuse it up front instead
+    expect(() => session.insertContent('x', { slide: 0, x: 1e300 })).toThrow(
+      /above the 1000 in cap/,
+    )
+    expect(() => session.insertContent('x', { slide: 0, height: 5000 })).toThrow(
+      /above the 1000 in cap/,
+    )
+    // the cap itself stays usable (off-canvas but inside the OOXML
+    // coordinate universe); nothing was journaled by the refusals
+    expect(() =>
+      session.insertContent('cap', { slide: 0, x: 1000, y: 1000, width: 1000, height: 1000 }),
+    ).not.toThrow()
+  })
+
   it('replaces the text of an existing element and round-trips it', async () => {
     const session = await openSession()
     const result = session.insertContent('Rewritten\nshape text', { slide: 0, element: 1 })

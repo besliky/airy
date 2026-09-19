@@ -25,7 +25,7 @@ import { openDocument } from '../import/open.js'
 import { HtmlSession } from '../html/session.js'
 import { BridgeClientError, sharedLiveBridge } from '../live/client.js'
 import { MarkdownSession } from '../markdown/session.js'
-import { SlidesSession } from '../slides/session.js'
+import { MAX_BOX_INCHES, SlidesSession } from '../slides/session.js'
 import { getSession, removeSession, storeSession, type DocumentSession } from '../sessions/store.js'
 import { TextSession } from '../sessions/text.js'
 import { XlsxSession, type XlsxSessionMeta } from '../xlsx/session.js'
@@ -485,26 +485,42 @@ export function registerTools(server: McpServer): void {
           .number()
           .finite()
           .min(0)
+          .max(MAX_BOX_INCHES)
           .optional()
-          .describe('Slides sessions: text box left edge in inches (default 1)'),
+          .describe(
+            'Slides sessions: text box left edge in inches (default 1; ' +
+              `cap ${String(MAX_BOX_INCHES)})`,
+          ),
         y: z
           .number()
           .finite()
           .min(0)
+          .max(MAX_BOX_INCHES)
           .optional()
-          .describe('Slides sessions: text box top edge in inches (default 1)'),
+          .describe(
+            'Slides sessions: text box top edge in inches (default 1; ' +
+              `cap ${String(MAX_BOX_INCHES)})`,
+          ),
         width: z
           .number()
           .finite()
           .min(0.1)
+          .max(MAX_BOX_INCHES)
           .optional()
-          .describe('Slides sessions: text box width in inches (default 6)'),
+          .describe(
+            'Slides sessions: text box width in inches (default 6; ' +
+              `cap ${String(MAX_BOX_INCHES)})`,
+          ),
         height: z
           .number()
           .finite()
           .min(0.1)
+          .max(MAX_BOX_INCHES)
           .optional()
-          .describe('Slides sessions: text box height in inches (default 1)'),
+          .describe(
+            'Slides sessions: text box height in inches (default 1; ' +
+              `cap ${String(MAX_BOX_INCHES)})`,
+          ),
       },
       annotations: {
         destructiveHint: false,
