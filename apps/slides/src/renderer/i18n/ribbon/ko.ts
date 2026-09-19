@@ -304,6 +304,7 @@ export const ko = {
   ribbonTransDuration: '지속 시간',
   ribbonTransDurationDefault: '기본값',
   ribbonTransDurationTip: '전환 지속 시간(초), 비워 두면 기본값',
+  ribbonTransDurationRange: '허용 범위: 0.1~60초',
   ribbonAnimDirectionTip: '선택한 애니메이션 효과의 방향 옵션',
   // Animations
   ribbonPreview: '미리 보기',
@@ -354,6 +355,7 @@ export const ko = {
   ribbonAnimAfterPrev: '이전 효과 다음에',
   ribbonAnimDuration: '재생 시간:',
   ribbonAnimDurationTip: '애니메이션 재생 시간(초)',
+  ribbonAnimDurationRange: '허용 범위: 0~60초',
   ribbonSecondsUnit: '초',
   ribbonAnimDelay: '지연:',
   ribbonAnimDelayTip: '트리거 후 시작까지의 지연 시간(초)',

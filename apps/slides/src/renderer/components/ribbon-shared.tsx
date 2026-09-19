@@ -29,6 +29,16 @@ export type InsertDropKey =
 
 export const BIG = 28
 
+/**
+ * PowerPoint caps effect durations at 60 s (transitions also start at 0.1 s).
+ * The ribbon's number inputs declare min/max, but a typed «999» would still
+ * commit on blur, so the blur handlers clamp before rounding to
+ * milliseconds (UX-1105): the committed value and the re-mounted input both
+ * land inside the declared range.
+ */
+export const clampDurationSeconds = (v: number, min: number, max: number): number =>
+  Math.min(Math.max(v, min), max)
+
 export type FormatCmd =
   | 'bold'
   | 'italic'

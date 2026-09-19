@@ -314,6 +314,7 @@ export const it = {
   ribbonTransDuration: 'Durata',
   ribbonTransDurationDefault: 'Predefinito',
   ribbonTransDurationTip: 'Durata della transizione in secondi (vuoto = valore predefinito)',
+  ribbonTransDurationRange: 'Intervallo consentito: 0,1–60 secondi',
   ribbonAnimDirectionTip: 'Variante di direzione dell’effetto di animazione selezionato',
   ribbonPreview: 'Anteprima',
   ribbonAnimPreviewTip:
@@ -365,6 +366,7 @@ export const it = {
   ribbonAnimAfterPrev: 'Dopo la Precedente',
   ribbonAnimDuration: 'Durata:',
   ribbonAnimDurationTip: "Durata dell'animazione (secondi)",
+  ribbonAnimDurationRange: 'Intervallo consentito: 0–60 secondi',
   ribbonSecondsUnit: 's',
   ribbonAnimDelay: 'Ritardo:',
   ribbonAnimDelayTip: "Ritardo dopo l'attivazione prima dell'inizio (secondi)",
