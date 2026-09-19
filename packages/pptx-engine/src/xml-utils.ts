@@ -58,3 +58,24 @@ export function creationIdExtXml(): string {
 export function creationIdXml(): string {
   return `<a:extLst>${creationIdExtXml()}</a:extLst>`
 }
+
+/**
+ * Ext uri marking a chart frame as created/claimed by this app: the chart's
+ * <p:cNvPr> carries this marker inside its <a:extLst>, so the chart is offered
+ * for in-app editing on reopen. It deliberately does NOT use cNvPr@descr —
+ * that attribute is the user's alt-text description slot (PAR-304); files from
+ * older versions with descr="aislides-chart" are still recognized on read.
+ */
+export const APP_CHART_MARKER_URI = '{7B1D4C62-95AE-4E68-9D3F-52C08A41E7B4}'
+
+/**
+ * The marker ext fragment. The aislides namespace is declared inline so the
+ * fragment stays valid wherever it is spliced (like creationIdExtXml).
+ */
+export function appChartMarkerExtXml(): string {
+  return (
+    `<a:ext uri="${APP_CHART_MARKER_URI}">` +
+    '<aislides:chart xmlns:aislides="http://schemas.airy-office.app/drawing/2026/main"/>' +
+    '</a:ext>'
+  )
+}

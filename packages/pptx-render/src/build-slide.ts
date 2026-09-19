@@ -234,7 +234,7 @@ function buildNodeInner(
       return buildTable(el as TableElement, box, vp, metrics, media)
     case 'chart': {
       const chartEl = el as ChartElement
-      const appCreated = chartEl.descr === 'aislides-chart'
+      const appCreated = !!chartEl.appCreated
       // Unsupported chart types fall back to a placeholder chip
       const node =
         buildChartNode(`r_${el.id}`, el.id, chartEl.chart, box, vp, metrics) ??

@@ -18,6 +18,7 @@ import {
   themeWithOverride,
 } from './theme'
 import { resolveColorNode as resolveColorNodeShared } from './color'
+import { APP_CHART_MARKER_URI } from './xml-utils'
 import {
   resolvePlaceholderPresetGeom,
   resolvePlaceholderTransform,
@@ -1049,6 +1050,22 @@ function parseSrcRect(sr: any): PictureElement['srcRect'] | undefined {
 // ── p:graphicFrame (table / chart / smartart / ole) kind detection ───
 
 /**
+ * Legacy app-chart marker: versions before PAR-304 wrote descr="aislides-chart"
+ * into the chart frame's cNvPr. Still recognized on read (the marker moves to a
+ * cNvPr extLst ext); writing it stopped with PAR-304.
+ */
+const LEGACY_APP_CHART_DESCR = 'aislides-chart'
+
+/** True when a parsed cNvPr node's <a:extLst> carries an <a:ext> with the given uri. */
+function cnvPrHasExt(cNvPr: any, uri: string): boolean {
+  const exts = cNvPr?.['a:extLst']?.['a:ext']
+  for (const ext of Array.isArray(exts) ? exts : exts ? [exts] : []) {
+    if (ext?.['@_uri'] === uri) return true
+  }
+  return false
+}
+
+/**
  * chartUserShapes overlays, straight lines only (cdr:relSizeAnchor from/to are
  * fractions of the chart frame). Other overlay shapes are rare and skipped.
  */
@@ -1144,13 +1161,19 @@ function graphicFramePassthrough(node: any, anchor: ByteAnchor, ctx: ParseContex
     if (model) {
       const cNvPr = node['p:nvGraphicFramePr']?.['p:cNvPr']
       const descr: string | undefined = cNvPr?.['@_descr'] || undefined
+      // App-chart marker: the cNvPr extLst ext (current) or, for files saved by
+      // older versions, descr="aislides-chart" — the descr slot now belongs to
+      // the user's alt text, so a legacy marker is consumed, not surfaced
+      const hasMarkerExt = cnvPrHasExt(cNvPr, APP_CHART_MARKER_URI)
+      const legacyMarker = descr === LEGACY_APP_CHART_DESCR
       return {
         id: uid('chart'),
         type: 'chart',
         anchor,
         transform: parseXfrm(node['p:xfrm']),
         name: cNvPr?.['@_name'],
-        ...(descr ? { descr } : {}),
+        ...(hasMarkerExt || legacyMarker ? { appCreated: true } : {}),
+        ...(descr && !(legacyMarker && !hasMarkerExt) ? { descr } : {}),
         chart: model,
       } satisfies ChartElement
     }

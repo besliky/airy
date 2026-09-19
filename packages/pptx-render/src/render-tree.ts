@@ -443,7 +443,7 @@ export interface ChartStyleInfo {
 
 export interface ChartRenderNode extends RenderNodeBase {
   type: 'chart'
-  /** Inserted by this app (cNvPr descr="aislides-chart"): chart editing enabled; passthrough charts lack this flag */
+  /** Inserted/claimed by this app (the cNvPr app-chart marker): chart editing enabled; passthrough charts lack this flag */
   appCreated?: boolean
   styleInfo?: ChartStyleInfo
   /** Whole-chart background (chartSpace spPr, e.g. picture fill) drawn under all primitives */
