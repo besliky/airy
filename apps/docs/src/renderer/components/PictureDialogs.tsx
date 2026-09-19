@@ -615,6 +615,9 @@ export function CompressPicturesDialog({
   const [natural, setNatural] = useState<{ widthPx: number; heightPx: number } | null>(null)
   const [result, setResult] = useState<{ dataUrl: string } | null>(null)
   const [error, setError] = useState<StringKey | null>(null)
+  /** UX-1007: the re-encode is async — without a busy state Apply stayed
+   * clickable through the encode and a double click compressed twice */
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -641,17 +644,23 @@ export function CompressPicturesDialog({
   )
 
   const apply = async () => {
-    const out = await compressPictureDataUrl(
-      dataUrl,
-      { widthPx: displayWidthPx, heightPx: displayHeightPx },
-      { ppi, deleteCropped, crop },
-    )
-    if (!out) {
-      setError('ribbonCompressNoGain')
-      return
+    if (busy) return
+    setBusy(true)
+    try {
+      const out = await compressPictureDataUrl(
+        dataUrl,
+        { widthPx: displayWidthPx, heightPx: displayHeightPx },
+        { ppi, deleteCropped, crop },
+      )
+      if (!out) {
+        setError('ribbonCompressNoGain')
+        return
+      }
+      setResult({ dataUrl: out.dataUrl })
+      onApply({ dataUrl: out.dataUrl, deleteCropped })
+    } finally {
+      setBusy(false)
     }
-    setResult({ dataUrl: out.dataUrl })
-    onApply({ dataUrl: out.dataUrl, deleteCropped })
   }
 
   return (
@@ -663,6 +672,7 @@ export function CompressPicturesDialog({
       <div
         className="modal compress-modal"
         style={{ width: 380, maxWidth: 'calc(100vw - 32px)' }}
+        aria-busy={busy}
         {...dialog.dialogProps}
       >
         <h2 {...dialog.titleProps}>{t('ribbonCompressPictures')}</h2>
@@ -673,6 +683,7 @@ export function CompressPicturesDialog({
                 type="radio"
                 name="compress-ppi"
                 checked={ppi === opt.ppi}
+                disabled={busy}
                 onChange={() => setPpi(opt.ppi)}
               />
               <span>
@@ -685,7 +696,7 @@ export function CompressPicturesDialog({
           <input
             type="checkbox"
             checked={deleteCropped}
-            disabled={!crop}
+            disabled={busy || !crop}
             onChange={(e) => setDeleteCropped(e.target.checked)}
           />
           <span>{t('ribbonCompressDeleteCropped')}</span>
@@ -703,11 +714,24 @@ export function CompressPicturesDialog({
             {t(error)}
           </p>
         )}
+        {/* UX-1007: the live region stays mounted (empty when idle) so screen
+         * readers announce the busy line as a content change — the pdf insert
+         * dialog's UX-910 pattern; the spinner only exists while busy */}
+        <div className="compress-busy" role="status" aria-live="polite" aria-atomic="true">
+          {busy && (
+            <>
+              <span className="compress-busy-spin" aria-hidden="true" />
+              {t('ribbonProcessing')}
+            </>
+          )}
+        </div>
         <div className="modal-actions">
-          <button onClick={onCancel}>{t('ribbonCancel')}</button>
+          <button onClick={onCancel} disabled={busy}>
+            {t('ribbonCancel')}
+          </button>
           <button
             className="primary"
-            disabled={!natural || !!error || !!result}
+            disabled={!natural || !!error || !!result || busy}
             onClick={() => void apply()}
           >
             {t('ribbonApply')}
