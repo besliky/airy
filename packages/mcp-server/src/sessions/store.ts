@@ -1,16 +1,17 @@
 // Unified session store: open_document hands out one handle space for every
-// session kind (docx, xlsx, markdown, html, read-only text), and the read/save/close
+// session kind (docx, xlsx, markdown, html, slides, read-only text), and the read/save/close
 // tools dispatch on the session's kind. Kept as a plain Map like the original
 // docx store — handles are random UUIDs and sessions live for the process
 // lifetime or until close_document.
 import type { DocxSession } from '../docx/session.js'
 import type { HtmlSession } from '../html/session.js'
 import type { MarkdownSession } from '../markdown/session.js'
+import type { SlidesSession } from '../slides/session.js'
 import type { TextSession } from './text.js'
 import type { XlsxSession } from '../xlsx/session.js'
 
 export type DocumentSession =
-  DocxSession | XlsxSession | TextSession | MarkdownSession | HtmlSession
+  DocxSession | XlsxSession | TextSession | MarkdownSession | HtmlSession | SlidesSession
 
 const sessions = new Map<string, DocumentSession>()
 

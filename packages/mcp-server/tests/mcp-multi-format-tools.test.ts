@@ -254,9 +254,9 @@ describe('multi-format document tools over MCP', () => {
   it('rejects unsupported formats and format/session mismatches', async () => {
     const { client, close } = await connectSession()
     try {
-      const bad = await call(client, 'open_document', { path: 'deck.pptx' })
+      const bad = await call(client, 'open_document', { path: 'archive.zip' })
       expect(bad.isError).toBe(true)
-      expect(text(bad)).toContain('Unsupported file type ".pptx"')
+      expect(text(bad)).toContain('Unsupported file type ".zip"')
 
       const book = await call(client, 'open_document', { path: 'book.xlsx' })
       const bookHandle = String(book.structuredContent?.handle)
