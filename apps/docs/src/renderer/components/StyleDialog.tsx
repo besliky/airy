@@ -80,6 +80,11 @@ export function styleEditsFromInfo(
  * pass through from the current display so nothing is silently lost; facets
  * the user cleared carry `null` so the surgical engine patch removes them,
  * while untouched facets stay `undefined` (the definition keeps its own XML).
+ *
+ * BUG-1101: clearing a facet the basedOn chain supplies writes an explicit off
+ * (w:val="0" / w:color "auto" / w:outlineLvl 9) — removing only the style's own
+ * element would silently re-inherit the facet after reopen. The live `next`
+ * display mirrors the same resolution, so screen and file agree.
  */
 export function styleUpsertFromEdits(
   info: StyleInfo | undefined,
@@ -87,18 +92,37 @@ export function styleUpsertFromEdits(
 ): { upsert: StyleUpsert; display: StyleDisplay | undefined; headingLevel: number | null } {
   const styleId = info?.styleId ?? ''
   const d = info?.display
+  // what the chain keeps supplying once the style's own facet is gone
+  const chain = info?.chainDisplay
   const hadEaFace = Boolean(d?.font && d.font !== (d?.fontAscii ?? ''))
   const rPr: NonNullable<StyleUpsert['rPr']> = {}
-  // value = set, null = clear, undefined = the chain never set it (keep)
-  rPr.bold = edits.bold ? true : d?.bold === true ? null : undefined
-  rPr.italic = edits.italic ? true : d?.italic === true ? null : undefined
+  // value = set, false = explicit off (chain supplies it), null = remove the
+  // own element, undefined = the chain never set it (keep)
+  rPr.bold = edits.bold
+    ? true
+    : d?.bold === true
+      ? chain?.bold === true
+        ? false
+        : null
+      : undefined
+  rPr.italic = edits.italic
+    ? true
+    : d?.italic === true
+      ? chain?.italic === true
+        ? false
+        : null
+      : undefined
   if (d?.underline) rPr.underline = true
   if (d?.strike) rPr.strike = true
+  // 'auto' is color's explicit-off spelling: the chain would win after a removal
+  const colorInChain = chain?.color !== undefined && chain.color !== 'auto'
   rPr.color = edits.color
     ? edits.color.toUpperCase()
-    : d?.color && d.color !== 'auto'
-      ? null
-      : undefined
+    : colorInChain
+      ? 'auto'
+      : d?.color && d.color !== 'auto'
+        ? null
+        : undefined
   // the seed always resolves a size (docDefaults fallback), so 0 = the user cleared it
   rPr.sizeHalfPoints = edits.sizePt > 0 ? Math.round(edits.sizePt * 2) : null
   rPr.font = edits.font ? edits.font : d?.fontAscii ? null : undefined
@@ -117,8 +141,10 @@ export function styleUpsertFromEdits(
     pPr.lineRule = d.lineRule === 'exact' ? 'exact' : 'atLeast'
     pPr.lineRawTwips = d.lineRawTwips
   }
+  // false = explicit body text (w:outlineLvl 9): a removal would re-inherit
+  // the parent heading level after reopen
   pPr.outlineLevel =
-    edits.outline > 0 ? edits.outline : (info?.headingLevel ?? 0) > 0 ? null : undefined
+    edits.outline > 0 ? edits.outline : (info?.headingLevel ?? 0) > 0 ? false : undefined
   if (d?.indentLeftTwips) pPr.indentLeftTwips = d.indentLeftTwips
   if (d?.indentRightTwips) pPr.indentRightTwips = d.indentRightTwips
   if (d?.indentFirstLineTwips) pPr.indentFirstLineTwips = d.indentFirstLineTwips
@@ -133,23 +159,35 @@ export function styleUpsertFromEdits(
 
   const next: StyleDisplay = { ...(d ?? {}) }
   if (edits.bold) next.bold = true
+  // explicit off resolves to false after reopen — keep screen and file alike
+  else if (rPr.bold === false) next.bold = false
   else delete next.bold
   if (edits.italic) next.italic = true
+  else if (rPr.italic === false) next.italic = false
   else delete next.italic
   if (edits.sizePt > 0) next.sizeHalfPoints = Math.round(edits.sizePt * 2)
+  // 0 = inherit: the chain keeps supplying its size after the own element clears
+  else if (chain?.sizeHalfPoints !== undefined) next.sizeHalfPoints = chain.sizeHalfPoints
   else delete next.sizeHalfPoints
   if (edits.color) next.color = edits.color.toUpperCase()
+  else if (rPr.color === 'auto') next.color = 'auto'
   else delete next.color
   if (edits.font || edits.fontEa) {
     next.fontAscii = edits.font || undefined
     next.font = edits.fontEa || edits.font || undefined
     if (next.font === undefined) delete next.font
     if (next.fontAscii === undefined) delete next.fontAscii
+  } else if (chain?.fontAscii) {
+    // inherit: the chain's faces keep applying once the own slots clear
+    next.fontAscii = chain.fontAscii
+    next.font = chain.font
   } else {
     delete next.font
     delete next.fontAscii
   }
   if (edits.align) next.align = edits.align
+  // w:jc has no off spelling: "default" keeps inheriting the chain's alignment
+  else if (chain?.align) next.align = chain.align
   else delete next.align
   if (typeof pPr.spaceBeforeTwips === 'number') next.spaceBeforeTwips = pPr.spaceBeforeTwips
   if (typeof pPr.spaceAfterTwips === 'number') next.spaceAfterTwips = pPr.spaceAfterTwips

@@ -524,6 +524,105 @@ describe('styleUpserts surgical modify (BUG-1001)', () => {
   })
 })
 
+describe('styleUpserts explicit off (BUG-1101): clearing an inherited facet', () => {
+  // a bold parent with a bold child is the flagship case: removing the child's
+  // own element would silently re-inherit the parent's facet after reopen
+  const INHERIT_STYLES =
+    '<w:style w:type="paragraph" w:styleId="InhBase"><w:name w:val="Inh Base"/>' +
+    '<w:pPr><w:outlineLvl w:val="0"/></w:pPr>' +
+    '<w:rPr><w:b/><w:i/><w:color w:val="2E74B5"/></w:rPr></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="InhChild"><w:name w:val="Inh Child"/>' +
+    '<w:basedOn w:val="InhBase"/><w:rPr><w:b/><w:sz w:val="26"/></w:rPr></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="InhBare"><w:name w:val="Inh Bare"/>' +
+    '<w:basedOn w:val="InhBase"/></w:style>'
+
+  async function openInheritDoc() {
+    return parseDocx(
+      await buildDocx({
+        bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+        extraStylesXml: INHERIT_STYLES,
+      }),
+    )
+  }
+
+  it('false writes w:val="0", color "auto", underline "none" — not a removal', async () => {
+    const parsed = await openInheritDoc()
+    const saved = await saveWithUpsert(parsed, [
+      {
+        styleId: 'InhChild',
+        type: 'paragraph',
+        name: 'Inh Child',
+        rPr: { bold: false, italic: false, color: 'auto', underline: false },
+      },
+    ])
+    const child = /<w:style [^>]*w:styleId="InhChild"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(child).toContain('<w:b w:val="0"/>')
+    // no own w:i existed: the off spelling is inserted at its schema position
+    expect(child).toContain('<w:i w:val="0"/>')
+    expect(child).toContain('<w:color w:val="auto"/>')
+    expect(child).toContain('<w:u w:val="none"/>')
+    expect(child).toContain('<w:sz w:val="26"/>')
+    // and the explicit offs win over the chain after a reopen
+    const reparsed = await parseDocx(saved)
+    expect(reparsed.styles.get('InhChild')!.display).toMatchObject({
+      bold: false,
+      italic: false,
+      color: 'auto',
+      underline: false,
+    })
+  })
+
+  it('outlineLevel false writes w:outlineLvl 9 and blocks the inherited level', async () => {
+    const parsed = await openInheritDoc()
+    expect(parsed.styles.get('InhBare')!.headingLevel).toBe(1) // inherited from InhBase
+    const saved = await saveWithUpsert(parsed, [
+      { styleId: 'InhBare', type: 'paragraph', name: 'Inh Bare', pPr: { outlineLevel: false } },
+    ])
+    const bare = /<w:style [^>]*w:styleId="InhBare"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(bare).toContain('<w:outlineLvl w:val="9"/>')
+    // before BUG-1101 the level re-materialized from InhBase after reopen
+    const reparsed = await parseDocx(saved)
+    expect(reparsed.styles.get('InhBare')!.headingLevel).toBeUndefined()
+  })
+
+  it('the create path omits explicit-off facets', async () => {
+    const parsed = await openInheritDoc()
+    const saved = await saveWithUpsert(parsed, [
+      {
+        styleId: 'Fresh',
+        type: 'paragraph',
+        name: 'Fresh',
+        rPr: { bold: false, color: 'auto', underline: false },
+        pPr: { outlineLevel: false },
+      },
+    ])
+    const fresh = /<w:style [^>]*w:styleId="Fresh"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(fresh).not.toContain('<w:b')
+    expect(fresh).not.toContain('<w:color')
+    expect(fresh).not.toContain('<w:u')
+    expect(fresh).not.toContain('<w:outlineLvl')
+  })
+
+  it('parse exposes own vs chain display for the modify dialog', async () => {
+    const parsed = await openInheritDoc()
+    const child = parsed.styles.get('InhChild')!
+    expect(child.display?.bold).toBe(true) // resolved through the chain
+    expect(child.ownDisplay?.bold).toBe(true) // its own w:b
+    expect(child.chainDisplay?.bold).toBe(true) // InhBase still supplies one
+    expect(child.ownDisplay?.color).toBeUndefined() // color comes from the chain
+    expect(child.chainDisplay?.color).toBe('2E74B5')
+    // a style without a basedOn parent keeps a single (unsplit) display
+    expect(parsed.styles.get('InhBase')!.ownDisplay).toBeUndefined()
+    expect(parsed.styles.get('InhBase')!.chainDisplay).toBeUndefined()
+  })
+})
+
 describe('toggle-off (w:val="0") overrides inherited formatting', () => {
   const TOGGLE_STYLES =
     '<w:style w:type="paragraph" w:styleId="BoldBase"><w:name w:val="Bold Base"/>' +

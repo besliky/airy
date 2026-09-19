@@ -238,6 +238,12 @@ export async function parseStyles(
     resolved.add(styleId)
     if (parent?.display) {
       const own = info.display
+      // BUG-1101: keep the pre-merge views — the modify dialog must tell an
+      // inherited facet (chainDisplay) from the style's own (ownDisplay) to
+      // clear an inherited facet with an explicit off (w:val="0"/"auto")
+      // instead of a removal that silently re-inherits it after reopen
+      info.ownDisplay = own
+      info.chainDisplay = parent.display
       info.display = { ...parent.display, ...(own ?? {}) }
       // w:ind character attributes layer per component: a child's twips-only
       // w:ind keeps the parent's *Chars, a child's explicit zero cancels it

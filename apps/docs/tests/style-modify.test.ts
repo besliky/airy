@@ -267,7 +267,8 @@ describe('BUG-1002: spacing the chain does not define stays unset', () => {
     expect(upsert.rPr?.color).toBeNull()
     expect(upsert.rPr?.sizeHalfPoints).toBeNull()
     expect(upsert.pPr?.align).toBeNull()
-    expect(upsert.pPr?.outlineLevel).toBeNull()
+    // BUG-1101: outline clears as an explicit body-text marker (w:outlineLvl 9)
+    expect(upsert.pPr?.outlineLevel).toBe(false)
     // untouched pass-through facets still flatten in
     expect(upsert.pPr?.spaceAfterTwips).toBe(80)
     const saved = await saveDocWith(parsed, [upsert])
@@ -278,7 +279,7 @@ describe('BUG-1002: spacing the chain does not define stays unset', () => {
     expect(own).not.toContain('<w:color')
     expect(own).not.toContain('<w:sz ')
     expect(own).not.toContain('<w:jc ')
-    expect(own).not.toContain('<w:outlineLvl ')
+    expect(own).toContain('<w:outlineLvl w:val="9"/>')
     expect(own).toContain('<w:i/>')
     expect(own).toContain('<w:spacing w:before="120" w:after="80"/>')
   })
@@ -297,5 +298,88 @@ describe('BUG-1002: spacing the chain does not define stays unset', () => {
         '<w:name w:val="Plain"/><w:rPr><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:style>',
     )
     expect(upsert.pPr?.outlineLevel).toBeUndefined()
+  })
+})
+
+const HEADING_CHAIN_STYLES =
+  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' +
+  '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="22"/></w:rPr></w:rPrDefault>' +
+  '<w:pPrDefault><w:pPr><w:spacing w:after="160"/></w:pPr></w:pPrDefault></w:docDefaults>' +
+  '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+  '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/>' +
+  '<w:basedOn w:val="Normal"/><w:pPr><w:outlineLvl w:val="0"/></w:pPr>' +
+  '<w:rPr><w:b/><w:i/><w:color w:val="2E74B5"/></w:rPr></w:style>' +
+  '<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/>' +
+  '<w:basedOn w:val="Heading1"/><w:pPr><w:outlineLvl w:val="1"/></w:pPr>' +
+  '<w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style>' +
+  '</w:styles>'
+
+async function openChainDoc() {
+  return parseDocx(
+    await buildDocx({
+      bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+      stylesXml: HEADING_CHAIN_STYLES,
+    }),
+  )
+}
+
+describe('BUG-1101: clearing an inherited facet writes an explicit off', () => {
+  it('unchecking Bold on Heading2 (basedOn a bold Heading1) survives the reopen', async () => {
+    const parsed = await openChainDoc()
+    const info = parsed.styles.get('Heading2')!
+    // the seed is the resolved view: bold/italic/color all arrive via Heading1
+    expect(info.display).toMatchObject({ bold: true, italic: true, color: '2E74B5' })
+    expect(info.ownDisplay?.bold).toBe(true)
+    expect(info.chainDisplay?.bold).toBe(true)
+    const seed = styleEditsFromInfo(info, parsed.docDefaults)
+    const { upsert, display } = styleUpsertFromEdits(info, {
+      ...seed,
+      bold: false,
+      italic: false,
+      color: '',
+    })
+    // not null: a removal would let Heading1 re-supply everything after reopen
+    expect(upsert.rPr?.bold).toBe(false)
+    expect(upsert.rPr?.italic).toBe(false)
+    expect(upsert.rPr?.color).toBe('auto')
+    // the live view already shows the cleared state, matching the file
+    expect(display).toMatchObject({ bold: false, italic: false, color: 'auto' })
+    parsed.styles.set('Heading2', { ...info, display })
+    const css = docStyleCss(parsed)
+    const rule = css.match(/\[data-style="Heading2"\][^{]*\{[^}]*\}/g) ?? []
+    expect(rule.join('\n')).toContain('font-weight:400')
+    expect(rule.join('\n')).toContain('font-style:normal')
+    expect(rule.join('\n')).toContain('color:var(--docs-paper-ink)')
+    // save → reopen: the explicit offs win over the chain
+    const saved = await saveDocWith(parsed, [upsert])
+    const zip = await JSZip.loadAsync(saved)
+    const stylesXml = await zip.file('word/styles.xml')!.async('string')
+    const h2 = /<w:style [^>]*w:styleId="Heading2"[\s\S]*?<\/w:style>/.exec(stylesXml)![0]
+    expect(h2).toContain('<w:b w:val="0"/>')
+    expect(h2).toContain('<w:i w:val="0"/>')
+    expect(h2).toContain('<w:color w:val="auto"/>')
+    const reparsed = await parseDocx(saved)
+    expect(reparsed.styles.get('Heading2')!.display).toMatchObject({
+      bold: false,
+      italic: false,
+      color: 'auto',
+    })
+    // Heading1 itself keeps its facets
+    expect(reparsed.styles.get('Heading1')!.display).toMatchObject({
+      bold: true,
+      italic: true,
+      color: '2E74B5',
+    })
+  })
+
+  it('an own-only facet still clears by removal', async () => {
+    const parsed = await openChainDoc()
+    const info = parsed.styles.get('Heading2')!
+    const seed = styleEditsFromInfo(info, parsed.docDefaults)
+    // size is Heading2's own; the chain does not supply one — removal is enough
+    const { upsert, display } = styleUpsertFromEdits(info, { ...seed, sizePt: 0 })
+    expect(upsert.rPr?.sizeHalfPoints).toBeNull()
+    expect(display?.sizeHalfPoints).toBeUndefined()
   })
 })
