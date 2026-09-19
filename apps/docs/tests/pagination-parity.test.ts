@@ -33,6 +33,7 @@ import {
   computeLineMetrics,
   estimateFootnoteHeight,
   resolveNoteStyle,
+  type GridCompat,
 } from '../src/renderer/line-metrics'
 import { loBaselineMetrics } from './helpers/lo-fonts'
 import type { ParsedDoc, DocGrid, ParaFormat, StyleDisplay } from '@airy-office/docx-engine'
@@ -169,6 +170,7 @@ function computeParaLineData(
   contentWidthPx: number,
   docGrid: DocGrid | undefined,
   parsed: ParsedDoc,
+  gridCompat: GridCompat = 'word',
 ): ParaLineData {
   // ── Image ─────────────────────────────────────────────────────────────────
   if (block.type === 'image') {
@@ -193,6 +195,7 @@ function computeParaLineData(
       defaultFontSizePt: 12,
       metrics,
       isEmpty: !text.trim(),
+      ...(gridCompat !== 'word' ? { gridCompat } : {}),
     })
     // Wrapped anchored objects (wrapTopAndBottom) take vertical space not covered by the text estimate
     const wrapCy = anchorWrapHeight(block.originalXml ?? '')
@@ -251,6 +254,7 @@ function computeParaLineData(
     defaultFontFamily: style.fontFamily,
     metrics,
     isEmpty: runs.length === 0 || runs.every((r) => !r.text),
+    ...(gridCompat !== 'word' ? { gridCompat } : {}),
   })
 
   return {
@@ -346,6 +350,7 @@ function computeTableRows(
   contentWidthPx: number,
   docGrid: DocGrid | undefined,
   parsed: ParsedDoc,
+  gridCompat: GridCompat = 'word',
 ): { rows: TableRowBox[]; rowTexts: string[] } {
   const tableXml = block.originalXml ?? ''
   const rows = block.table?.rows
@@ -365,6 +370,7 @@ function computeTableRows(
       defaultFontSizePt: defaults?.sizeHalfPoints ? defaults.sizeHalfPoints / 2 : 12,
       metrics,
       isEmpty: true,
+      ...(gridCompat !== 'word' ? { gridCompat } : {}),
     }).totalHeight
     return {
       rows: Array.from({ length: rowCount }, (_, i) => ({
@@ -433,6 +439,7 @@ function computeTableRows(
             defaultFontSizePt: cellFontSizePt,
             metrics,
             isEmpty: para.runs.length === 0,
+            ...(gridCompat !== 'word' ? { gridCompat } : {}),
           }).totalHeight
         }
       } else {
@@ -447,6 +454,7 @@ function computeTableRows(
             defaultFontSizePt: cellFontSizePt,
             metrics,
             isEmpty: !paraText,
+            ...(gridCompat !== 'word' ? { gridCompat } : {}),
           }).totalHeight
         }
       }
@@ -492,7 +500,11 @@ interface ParityResult {
   error?: string
 }
 
-async function runParity(stem: string, baseline: BaselineEntry): Promise<ParityResult> {
+async function runParity(
+  stem: string,
+  baseline: BaselineEntry,
+  gridCompat: GridCompat = 'word',
+): Promise<ParityResult> {
   const docxPath = join(CORPUS_DIR, `${stem}.docx`)
   if (!existsSync(docxPath)) {
     return {
@@ -582,6 +594,7 @@ async function runParity(stem: string, baseline: BaselineEntry): Promise<ParityR
         contentWidthPx,
         docGrid,
         parsed,
+        gridCompat,
       )
       const totalH = tableRows.reduce((s, r) => s + r.height, 0) + 4
       const box: BlockBox = {
@@ -600,7 +613,7 @@ async function runParity(stem: string, baseline: BaselineEntry): Promise<ParityR
     }
 
     // ── Paragraph/image/passthrough ────────────────────────────────────────
-    const paraData = computeParaLineData(block, contentWidthPx, docGrid, parsed)
+    const paraData = computeParaLineData(block, contentWidthPx, docGrid, parsed, gridCompat)
 
     // Footnote refs: footnote height is added to the paragraph's height (reserving footnote space on that page)
     let footnoteExtra = 0
@@ -615,6 +628,7 @@ async function runParity(stem: string, baseline: BaselineEntry): Promise<ParityR
             metrics,
             resolveNoteStyle(parsed, fn?.styleId, fn?.spacing),
             fn?.richParas,
+            gridCompat,
           )
         }
       }
@@ -822,6 +836,15 @@ describe('pagination parity (F2: line-level pagination + page-break constraints)
     'generates the F2 pagination parity report',
     async () => {
       const stems = Object.keys(baseline).sort()
+
+      // Grid compatibility profile per baseline (PAR-109 phase B): the LO pass
+      // runs the engine under LibreOffice grid semantics, the Word pass under
+      // Word semantics — the two baselines disagree on 10 of 27 docs, so each
+      // is measured against its own engine. PAGINATION_GRID_PROFILE=word|lo
+      // overrides the LO pass for ad-hoc single-profile runs.
+      const profileEnv = process.env.PAGINATION_GRID_PROFILE
+      const loProfile: GridCompat = profileEnv === 'word' || profileEnv === 'lo' ? profileEnv : 'lo'
+
       const results: ParityResult[] = []
 
       for (const stem of stems) {
@@ -840,17 +863,17 @@ describe('pagination parity (F2: line-level pagination + page-break constraints)
           })
           continue
         }
-        const r = await runParity(stem, entry)
+        const r = await runParity(stem, entry, loProfile)
         results.push(r)
       }
 
       // Run a separate pass on the precise Word baseline (valid entries) — the primary acceptance metric
       const wordResults: ParityResult[] = []
       for (const stem of Object.keys(wordBaseline).sort()) {
-        wordResults.push(await runParity(stem, wordBaseline[stem]))
+        wordResults.push(await runParity(stem, wordBaseline[stem], 'word'))
       }
 
-      writeReport(results, wordResults)
+      writeReport(results, wordResults, loProfile)
 
       const summarize = (rs: ParityResult[], label: string) => {
         const valid = rs.filter((r) => !r.error)
@@ -864,23 +887,33 @@ describe('pagination parity (F2: line-level pagination + page-break constraints)
         return { rate, valid }
       }
       console.log('')
-      const lo = summarize(results, 'F2 vs LO')
-      const word = wordResults.length > 0 ? summarize(wordResults, 'F2 vs Word') : null
+      const lo = summarize(results, `F2 vs LO (profile '${loProfile}')`)
+      const word =
+        wordResults.length > 0 ? summarize(wordResults, "F2 vs Word (profile 'word')") : null
 
-      const primary = word ?? lo
-      if (primary.rate < 0.85) {
-        console.warn(
-          `⚠️  parity below 85% (currently ${(primary.rate * 100).toFixed(1)}%), see the report for details`,
-        )
-        primary.valid
-          .filter((r) => r.matchRate < 0.5)
-          .sort((a, b) => a.matchRate - b.matchRate)
-          .slice(0, 5)
-          .forEach((r) =>
-            console.warn(
-              `  ${r.stem}: ${(r.matchRate * 100).toFixed(0)}% (baseline=${r.loPages}, ours=${r.ourPages})`,
-            ),
-          )
+      // PAR-109 hard gates (spec §6): Word parity is the primary acceptance
+      // metric and may not be traded away for LO gains; the LO rate is only
+      // gated under its own 'lo' grid profile.
+      if (word) {
+        expect(word.rate).toBeGreaterThanOrEqual(0.9)
+        expect(word.valid.filter((r) => r.pageDiff === 0).length).toBeGreaterThanOrEqual(25)
+        // per-doc no-regression floor: the imperfect docs' combined Word
+        // matches may not sit more than 1 below their pre-PAR-109 totals
+        // (single-doc drift the global 90% gate can hide)
+        const wordDocFloor: Record<string, number> = {
+          '04-headings-keepnext': 3,
+          '06-with-footnotes': 2,
+          '09-large-paragraph': 4,
+          '15-mixed-content': 1,
+        }
+        const floorTotal = Object.values(wordDocFloor).reduce((s, v) => s + v, 0)
+        const floorSum = word.valid
+          .filter((r) => wordDocFloor[r.stem] !== undefined)
+          .reduce((s, r) => s + r.matchedPageStarts, 0)
+        expect(floorSum).toBeGreaterThanOrEqual(floorTotal - 1)
+      }
+      if (loProfile === 'lo') {
+        expect(lo.rate).toBeGreaterThanOrEqual(0.85)
       }
 
       expect(results.length).toBeGreaterThan(0)
@@ -891,7 +924,11 @@ describe('pagination parity (F2: line-level pagination + page-break constraints)
 
 // ─── Report generation ──────────────────────────────────────────────────────
 
-function writeReport(results: ParityResult[], wordResults: ParityResult[] = []) {
+function writeReport(
+  results: ParityResult[],
+  wordResults: ParityResult[] = [],
+  loProfile: GridCompat = 'lo',
+) {
   const valid = results.filter((r) => !r.error)
   const failed = results.filter((r) => r.error)
   const totalLo = valid.reduce((s, r) => s + r.loPages, 0)
@@ -909,10 +946,11 @@ function writeReport(results: ParityResult[], wordResults: ParityResult[] = []) 
     ``,
     `Generated at: ${new Date().toISOString()}`,
     `Baseline source: LibreOffice headless (coarse baseline)${wordValid.length > 0 ? ` + real Word for Mac (precise baseline, ${wordValid.length} docs)` : ''}`,
+    `Grid compatibility profile (PAR-109 phase B): LO pass '${loProfile}', Word pass 'word' (PAGINATION_GRID_PROFILE overrides the LO pass).`,
     ``,
     `## Overview`,
     ``,
-    `| Metric | F0 baseline | F2 vs LO | F2 vs Word |`,
+    `| Metric | F0 baseline | F2 vs LO ('${loProfile}' profile) | F2 vs Word ('word' profile) |`,
     `|------|--------|--------|--------|`,
     `| Corpus | 28 docs | ${valid.length} docs | ${wordValid.length} docs |`,
     `| Baseline total pages | 108 pages | ${totalLo} pages | ${totalWord} pages |`,
