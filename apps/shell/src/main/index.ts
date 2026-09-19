@@ -249,6 +249,7 @@ import { createQueuedWorkbookDelivery } from './queued-workbook-delivery'
 import { isSameFile, isValidRenameName } from './rename-validation'
 import { TabManager } from './tab-manager'
 import type { DetachedTab } from './tab-manager'
+import { createQuitFlow } from './quit-flow'
 import { ShellWindowRegistry, type ShellWindowEntry } from './shell-windows'
 import { startShellBridge, stopShellBridge } from './bridge/shell-bridge'
 import { initUpdater, updaterMenuItems } from './updater'
@@ -1030,30 +1031,50 @@ function createShellWindow(options: CreateShellWindowOptions = {}): ShellWindowE
     }
     event.preventDefault()
     void (async () => {
+      // any Cancel below aborts this window's close — and with it the whole
+      // quit when one was in flight (abortAppQuit unwinds the quit state)
       for (const tab of dirtySheets) {
         manager.activateTab(tab.id)
-        if (!(await requestSheetsClose(tab.webContents, win))) return
+        if (!(await requestSheetsClose(tab.webContents, win))) {
+          abortAppQuit()
+          return
+        }
       }
       for (const tab of dirtyPdf) {
         manager.activateTab(tab.id)
-        if (!(await requestPdfClose(tab.webContents, win))) return
+        if (!(await requestPdfClose(tab.webContents, win))) {
+          abortAppQuit()
+          return
+        }
       }
       for (const tab of dirtyMarkdown) {
         manager.activateTab(tab.id)
-        if (!(await requestMarkdownClose(tab.webContents, win))) return
+        if (!(await requestMarkdownClose(tab.webContents, win))) {
+          abortAppQuit()
+          return
+        }
       }
       for (const tab of dirtyHtml) {
         manager.activateTab(tab.id)
-        if (!(await requestHtmlClose(tab.webContents, win))) return
+        if (!(await requestHtmlClose(tab.webContents, win))) {
+          abortAppQuit()
+          return
+        }
       }
       for (const tab of dirtySlides) {
         manager.activateTab(tab.id)
-        if (!(await requestSlidesClose(tab.webContents, win))) return
+        if (!(await requestSlidesClose(tab.webContents, win))) {
+          abortAppQuit()
+          return
+        }
       }
       for (const tab of docsTabs) {
         if (!(await docsQueryDirty(tab.webContents))) continue
         manager.activateTab(tab.id)
-        if (!(await requestDocsClose(tab.webContents, win))) return
+        if (!(await requestDocsClose(tab.webContents, win))) {
+          abortAppQuit()
+          return
+        }
       }
       closeConfirmed = true
       finishWindowClose(entry)
@@ -1076,9 +1097,10 @@ function createShellWindow(options: CreateShellWindowOptions = {}): ShellWindowE
 
 /** set by before-quit: close events during a quit must not persist the
  *  session window-by-window (the last window's write would drop the earlier
- *  ones); one write at the first confirmed close keeps them all */
-let quitting = false
-let quitSessionPersisted = false
+ *  ones); one write at the first confirmed close keeps them all. A cancelled
+ *  dirty-guard unwinds the quit (abortAppQuit) so later ordinary closes keep
+ *  their per-window semantics (BUG-1104). */
+const quitFlow = createQuitFlow()
 
 /**
  * Bookkeeping when a window's close is really going through (both the clean
@@ -1096,17 +1118,22 @@ function finishWindowClose(entry: ShellWindowEntry): void {
     if (tab.filePath && isInsideDirectory(stagingDir, tab.filePath))
       removeStagedTabFile(tab.filePath)
   }
-  if (quitting) {
-    // app-wide quit: keep every still-listed window's file-backed tabs for the
-    // next launch, staged ones dropped — written once, at the first window
-    if (!quitSessionPersisted) {
-      persistSessionState(true)
-      quitSessionPersisted = true
-    }
-    return
-  }
-  if (shellEntries().length > 1) persistSessionState(false, entry)
-  else persistSessionState(true)
+  const decision = quitFlow.closeDecision(shellEntries().length)
+  if (!decision.persist) return
+  if (decision.excludeClosing) persistSessionState(false, entry)
+  else persistSessionState(decision.skipStaged)
+}
+
+/**
+ * A cancelled dirty-guard stopped this window's close; when that close was
+ * part of an app-wide quit, the quit is aborted with it (the other windows
+ * keep running). Unwind the quit bookkeeping — and if a quit-time session
+ * write already landed, re-serialize from the live windows so the aborted
+ * quit leaves session state as if it never happened (BUG-1104: the armed
+ * flag used to turn every later close into a skipped write).
+ */
+function abortAppQuit(): void {
+  if (quitFlow.cancel()) persistSessionState(false)
 }
 
 /** point the editor modules' dialog parents at this window (focus follows the shell) */
@@ -3447,8 +3474,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
-  quitting = true
-  quitSessionPersisted = false
+  quitFlow.begin()
   // No close prompt may fall through to "Save" during shutdown
   markSheetsShuttingDown()
   stopSheetsSidecar()
