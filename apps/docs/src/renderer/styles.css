@@ -8372,14 +8372,67 @@ body.docs-crop-active
   margin: 0 0 12px;
 }
 
+/* Compress busy state (UX-1007): the re-encode runs async, so the dialog
+ * stays open with its controls disabled and this polite live region mounted
+ * (empty when idle) while it runs — the pdf insert dialog's UX-910 pattern */
+.compress-modal .compress-busy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.compress-modal .compress-busy-spin {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  animation: compress-busy-spin 0.8s linear infinite;
+}
+
+@keyframes compress-busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compress-modal .compress-busy-spin {
+    animation: none;
+  }
+}
+
 /* ---- shadow gallery (Picture/Shape Effects) ---- */
 
+/* UX-1005: the swatch is a paper bed the shadow preview falls on. Preset
+   shadows are authored document data (black ~43%, shadow-effects.ts) and are
+   never themed (rule 4), so the bed must stay light in BOTH themes — on the
+   dark chrome's hover gray every preset read as the same flat chip. The
+   face carries the shadow declarations; outer drop-shadows land on the bed,
+   the inner preset shades the face itself. */
 .shadow-menu .shadow-menu-preview {
-  width: 18px;
-  height: 13px;
-  border-radius: 2px;
-  background: var(--hover);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 20px;
+  border-radius: 3px;
+  background: var(--swatch-bg);
+  border: 1px solid var(--border-strong);
   flex: none;
+}
+
+/* the shadow-casting face: a white paper tile inside the bed */
+.shadow-menu .shadow-menu-preview-face {
+  --swatch-face: #ffffff;
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--swatch-face);
 }
 
 /* ---- keyboard shortcuts sheet ---- */
