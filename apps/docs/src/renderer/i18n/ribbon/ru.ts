@@ -359,6 +359,8 @@ export const ru = {
   ribbonSeriesN: 'Ряд {n}',
   ribbonChartAddCategory: '+ Категория',
   ribbonChartAddSeries: '+ Ряд',
+  ribbonChartNativeHint:
+    'Эта диаграмма вставлена в файле Word: тип изменить нельзя, редактируются только данные.',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: 'Вставка диаграммы SmartArt',
   ribbonSmartBlockList: 'Простой список блоков',

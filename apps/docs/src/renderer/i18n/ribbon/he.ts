@@ -355,6 +355,7 @@ export const he = {
   ribbonSeriesN: 'סדרה {n}',
   ribbonChartAddCategory: '+ קטגוריה',
   ribbonChartAddSeries: '+ סדרה',
+  ribbonChartNativeHint: 'תרשים זה הוכנס ב-Word: הסוג קבוע, ניתן לערוך את הנתונים בלבד.',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: 'הוספת גרפיקה של SmartArt',
   ribbonSmartBlockList: 'רשימת בלוקים בסיסית',

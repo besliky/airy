@@ -2470,7 +2470,9 @@ function applyEvenAndOddHeaders(xml: string, on: boolean): string {
  * Endnote dialog): each kind's tag is rewritten wholesale — a modeled subset
  * replaces whatever the document carried (pos etc. drop), null removes it.
  * Inserted before w:compat when present (they precede it in CT_Settings),
- * else right after the settings root.
+ * else right after the settings root. The removal covers the paired tag and
+ * the self-closing form (<w:footnotePr/>): leaving a self-closing survivor
+ * behind would duplicate the property when the new tag is inserted (BUG-1017).
  */
 function applyNoteNumbering(
   xml: string,
@@ -2480,7 +2482,10 @@ function applyNoteNumbering(
   for (const root of ['footnotePr', 'endnotePr'] as const) {
     const model = root === 'footnotePr' ? opts.footnotes : opts.endnotes
     if (model === undefined) continue // undefined = keep the document's tag untouched
-    out = out.replace(new RegExp(`<w:${root}[^>]*>[\\s\\S]*?</w:${root}>`), '')
+    out = out.replace(
+      new RegExp(`<w:${root}(?:\\s[^>]*)?/>|<w:${root}[^>]*>[\\s\\S]*?</w:${root}>`),
+      '',
+    )
     if (!model) continue
     const tag =
       `<w:${root}>` +

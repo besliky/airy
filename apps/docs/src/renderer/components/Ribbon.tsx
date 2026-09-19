@@ -530,6 +530,7 @@ function ShadowMenu({
         <button
           key={preset.labelKey}
           className={activeKey === preset.labelKey ? 'active' : ''}
+          aria-pressed={activeKey === preset.labelKey}
           onClick={() => onPick(preset.shadow)}
         >
           <span
@@ -1677,6 +1678,7 @@ function RibbonInner({
           <button
             key={s.key}
             className={`style-card ${activeStyleKey === s.key ? 'active' : ''}`}
+            aria-pressed={activeStyleKey === s.key}
             disabled={!canEdit || !!sub}
             data-tip={s.label}
             onClick={() => apply(s.key)}
@@ -1692,6 +1694,7 @@ function RibbonInner({
           <button
             key={s.key}
             className={`style-card style-card-char ${activeStyleKey === s.key ? 'active' : ''}`}
+            aria-pressed={activeStyleKey === s.key}
             disabled={!canEdit}
             data-tip={s.label}
             onClick={() => apply(s.key)}

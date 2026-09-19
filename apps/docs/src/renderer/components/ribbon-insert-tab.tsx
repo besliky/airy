@@ -697,6 +697,9 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
   }
 
   const singleSeries = kind === 'pie' || kind === 'doughnut'
+  // a native chart without a parsed display has nothing editable here: the
+  // commit would silently no-op, so the dialog says why instead (UX-1010)
+  const nativeOpaque = native && !source
 
   return (
     <div
@@ -723,7 +726,9 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
             <button
               key={value}
               className={kind === value ? 'btn-primary' : ''}
+              aria-pressed={kind === value}
               disabled={native}
+              title={native ? t('ribbonChartNativeHint') : undefined}
               onClick={() => pickKind(value)}
             >
               {label}
@@ -734,6 +739,7 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
           <input
             value={title}
             placeholder={t('ribbonChartTitlePh')}
+            aria-label={t('ribbonChartTitlePh')}
             onChange={(e) => setTitle(e.target.value)}
           />
         </div>
@@ -746,6 +752,7 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
                   <input
                     value={c}
                     inputMode={kind === 'scatter' || kind === 'bubble' ? 'decimal' : undefined}
+                    aria-label={t('ribbonCategoryN', { n: i + 1 })}
                     onChange={(e) => setCat(i, e.target.value)}
                   />
                 </th>
@@ -756,13 +763,18 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
             {series.map((s, i) => (
               <tr key={i}>
                 <th>
-                  <input value={s.name} onChange={(e) => setSerName(i, e.target.value)} />
+                  <input
+                    value={s.name}
+                    aria-label={t('ribbonSeriesN', { n: i + 1 })}
+                    onChange={(e) => setSerName(i, e.target.value)}
+                  />
                 </th>
                 {s.values.map((v, c) => (
                   <td key={c}>
                     <input
                       value={v}
                       inputMode="decimal"
+                      aria-label={`${t('ribbonSeriesN', { n: i + 1 })}: ${categories[c] || t('ribbonCategoryN', { n: c + 1 })}`}
                       onChange={(e) => setSerVal(i, c, e.target.value)}
                     />
                   </td>
@@ -772,15 +784,28 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
           </tbody>
         </table>
         <div className="modal-row">
-          <button onClick={addCategory} disabled={native}>
+          <button
+            onClick={addCategory}
+            disabled={native}
+            title={native ? t('ribbonChartNativeHint') : undefined}
+          >
             {t('ribbonChartAddCategory')}
           </button>
-          <button onClick={addSeries} disabled={native || singleSeries}>
+          <button
+            onClick={addSeries}
+            disabled={native || singleSeries}
+            title={native ? t('ribbonChartNativeHint') : undefined}
+          >
             {t('ribbonChartAddSeries')}
           </button>
         </div>
+        {nativeOpaque && (
+          <p className="modal-error" role="alert">
+            {t('ribbonChartNativeHint')}
+          </p>
+        )}
         <div className="modal-actions">
-          <button className="btn-primary" onClick={commit}>
+          <button className="btn-primary" onClick={commit} disabled={nativeOpaque}>
             {source ? t('ribbonChartUpdate') : t('ribbonInsert')}
           </button>
           <button onClick={onClose}>{t('ribbonCancel')}</button>

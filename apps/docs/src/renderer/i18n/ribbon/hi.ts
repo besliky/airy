@@ -359,6 +359,8 @@ export const hi = {
   ribbonSeriesN: 'शृंखला {n}',
   ribbonChartAddCategory: '+ श्रेणी',
   ribbonChartAddSeries: '+ शृंखला',
+  ribbonChartNativeHint:
+    'यह चार्ट Word में डाला गया था: इसका प्रकार निश्चित है, केवल डेटा संपादित किया जा सकता है।',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: 'SmartArt ग्राफ़िक सम्मिलित करें',
   ribbonSmartBlockList: 'मूल ब्लॉक सूची',

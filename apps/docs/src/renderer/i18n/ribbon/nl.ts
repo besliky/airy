@@ -361,6 +361,8 @@ export const nl = {
   ribbonSeriesN: 'Reeks {n}',
   ribbonChartAddCategory: '+ Categorie',
   ribbonChartAddSeries: '+ Reeks',
+  ribbonChartNativeHint:
+    'Deze grafiek is in Word ingevoegd: het type staat vast, alleen de gegevens kunnen worden bewerkt.',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: 'SmartArt-grafiek invoegen',
   ribbonSmartBlockList: 'Eenvoudige blokkenlijst',

@@ -371,6 +371,7 @@ export const ja = {
   ribbonSeriesN: '系列 {n}',
   ribbonChartAddCategory: '+ カテゴリ',
   ribbonChartAddSeries: '+ 系列',
+  ribbonChartNativeHint: 'Word で挿入されたグラフです。種類は変更できず、データのみ編集できます。',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: 'SmartArt グラフィックの挿入',
   ribbonSmartBlockList: '基本ブロック リスト',

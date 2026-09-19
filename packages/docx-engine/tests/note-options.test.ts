@@ -134,6 +134,37 @@ describe('SaveOptions.noteNumbering (Word note-options dialog)', () => {
     const untouched = await saveDocx(doc, originalOrder(doc))
     expect(untouched).toBe(doc.internal.originalBytes)
   })
+
+  it('a self-closing tag is replaced, not duplicated (BUG-1017)', async () => {
+    // <w:footnotePr/> carries no modeled children: the removal regex must
+    // cover the self-closing form or the inserted tag duplicates it
+    const doc = await parseDocx(await settingsDocx('<w:footnotePr/>'))
+    const out = await saveDocx(doc, originalOrder(doc), {
+      noteNumbering: { footnotes: { numFmt: 'decimal', numStart: 4 } },
+    })
+    const settingsXml = await (
+      await JSZip.loadAsync(out)
+    )
+      .file('word/settings.xml')!
+      .async('string')
+    expect(settingsXml).not.toContain('<w:footnotePr/>')
+    expect(settingsXml.match(/<w:footnotePr/g)).toHaveLength(1)
+    expect(settingsXml).toContain('<w:footnotePr><w:numFmt w:val="decimal"/>')
+    expect(settingsXml).toContain('<w:numStart w:val="4"/></w:footnotePr>')
+  })
+
+  it('a self-closing tag is removed on null too (BUG-1017)', async () => {
+    const doc = await parseDocx(await settingsDocx('<w:footnotePr/>'))
+    const out = await saveDocx(doc, originalOrder(doc), {
+      noteNumbering: { footnotes: null },
+    })
+    const settingsXml = await (
+      await JSZip.loadAsync(out)
+    )
+      .file('word/settings.xml')!
+      .async('string')
+    expect(settingsXml).not.toContain('footnotePr')
+  })
 })
 
 describe('custom note marks (w:customMarkFollows)', () => {

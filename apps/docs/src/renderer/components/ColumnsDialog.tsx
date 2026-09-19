@@ -118,6 +118,7 @@ export function ColumnsDialog({
     <button
       key={key}
       className={`cols-preset ${preset === key ? 'active' : ''}`}
+      aria-pressed={preset === key}
       onClick={() => setPreset(key)}
     >
       {t(labelKey)}

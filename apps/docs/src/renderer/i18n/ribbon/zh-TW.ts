@@ -353,6 +353,7 @@ export const zhTW = {
   ribbonSeriesN: '數列 {n}',
   ribbonChartAddCategory: '+ 類別',
   ribbonChartAddSeries: '+ 數列',
+  ribbonChartNativeHint: '此圖表來自 Word 檔案：類型固定，僅可編輯資料。',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: '插入 SmartArt 圖形',
   ribbonSmartBlockList: '基本區塊清單',

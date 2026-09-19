@@ -54,16 +54,19 @@ function collectTocEntriesWithPages(
 /**
  * Table-of-figures entries from SEQ captions of one label ("Figure"), in
  * document order. Each entry keeps the caption's `_Ref…` anchor (click-to-jump)
- * and its real page number when pagination is available.
+ * and its real page number when pagination is available. `labels` carries the
+ * canonical identifier plus (for legacy documents) the translated SEQ word the
+ * caption may have been authored with — see CAPTION_LABELS (UX-1011).
  */
 export function collectTofEntries(
   editor: Editor,
   blocks: Block[],
-  label: string,
+  labels: string[] | string,
   anchorPage?: (pos: number) => number | null,
 ): TocEntry[] {
+  const wanted = Array.isArray(labels) ? labels : [labels]
   return collectCrossRefSources(editor, blocks)
-    .filter((s) => s.kind === 'caption' && s.seqLabel === label)
+    .filter((s) => s.kind === 'caption' && s.seqLabel !== undefined && wanted.includes(s.seqLabel))
     .map((s) => ({
       level: 1,
       text: s.label,
@@ -135,11 +138,13 @@ function attachSectPr(xml: string, sectPr: string): string {
 }
 
 /**
- * Find the TOC/TOF field region (field begin ... matching end, tracked by
- * fldChar depth across top-level blocks) and replace it with a regenerated
- * dirty field. The authored instruction is parsed first, so an update keeps
- * the chosen switches (level range, \n, \t styles) and rebuilds a table of
- * figures (\c label) from SEQ captions instead of headings.
+ * Find every TOC/TOF field region (field begin ... matching end, tracked by
+ * fldChar depth across top-level blocks) and replace ALL of them with
+ * regenerated dirty fields in one transaction (BUG-1011: documents can carry
+ * a TOC and a table of figures — only the first used to update). Each
+ * authored instruction is parsed first, so an update keeps the chosen
+ * switches (level range, \n, \t styles) and rebuilds a table of figures
+ * (\c label) from SEQ captions instead of headings.
  */
 export function updateTocField(
   editor: Editor,
@@ -148,16 +153,21 @@ export function updateTocField(
   anchorPage?: (pos: number) => number | null,
   opts: { silent?: boolean } = {},
 ): TocUpdateResult {
+  // every TOC/TOF field region (begin ... matching end, tracked by fldChar
+  // depth across top-level blocks) — an update rebuilds ALL of them, like
+  // Word's update-fields pass, instead of only the first (BUG-1011)
   const doc = editor.state.doc
+  const regions: Array<{
+    from: number
+    to: number
+    instr: string
+    keepPageBreak: boolean
+    keepSectPr: string
+  }> = []
   let from = -1
-  let to = -1
   let instr = ''
-  let keepPageBreak = false
-  let keepSectPr = ''
   let depth = 0
-  let found = false
   doc.forEach((node, offset) => {
-    if (found) return
     const xml = xmlOfNode(node as never, blocks)
     if (from === -1) {
       const joined = instrTextOf(xml)
@@ -169,72 +179,119 @@ export function updateTocField(
     depth += (xml.match(/w:fldCharType="begin"/g) ?? []).length
     depth -= (xml.match(/w:fldCharType="end"/g) ?? []).length
     if (depth <= 0) {
-      to = offset + node.nodeSize
-      keepPageBreak = /<w:br\s[^>]*w:type="page"/.test(xml)
-      keepSectPr = SECT_PR_RE.exec(xml)?.[0] ?? ''
-      found = true
+      regions.push({
+        from,
+        to: offset + node.nodeSize,
+        instr,
+        keepPageBreak: /<w:br\s[^>]*w:type="page"/.test(xml),
+        keepSectPr: SECT_PR_RE.exec(xml)?.[0] ?? '',
+      })
+      from = -1
     }
   })
 
-  if (from === -1 || !found) {
+  if (regions.length === 0) {
     if (!opts.silent) window.alert(t('ribbonTocNotFound'))
     return 'missing'
   }
 
-  const options = parseTocInstruction(instr)
-  const entries = options.seqIdentifier
-    ? collectTofEntries(editor, blocks, options.seqIdentifier, anchorPage)
-    : collectTocEntriesWithPages(editor, headingPages).filter(
-        (e) => options.levels === undefined || e.level <= options.levels,
-      )
-  if (entries.length === 0) {
+  // plan every region against the same doc snapshot, then apply the
+  // replacements back-to-front in ONE transaction (positions of earlier
+  // regions stay valid; one undo step for the whole update)
+  let updated = 0
+  const planned: Array<{
+    region: (typeof regions)[number]
+    nodes: ReturnType<typeof tocFieldNodes>
+  }> = []
+  for (const region of regions) {
+    const options = parseTocInstruction(region.instr)
+    const entries = options.seqIdentifier
+      ? collectTofEntries(editor, blocks, options.seqIdentifier, anchorPage)
+      : collectTocEntriesWithPages(editor, headingPages).filter(
+          (e) => options.levels === undefined || e.level <= options.levels,
+        )
+    if (entries.length === 0) {
+      continue // empty field: skipped, reported in the aggregate below
+    }
+    const nodes = tocFieldNodes(
+      entries,
+      options,
+      t(options.seqIdentifier ? 'refsTofFieldLabel' : 'ribbonTocFieldLabel'),
+    )
+    if (region.keepPageBreak) {
+      nodes.push({
+        type: 'docProtected',
+        attrs: {
+          docxIndex: null,
+          blockType: 'passthrough',
+          label: t('ribbonPageBreak'),
+          genXml: PAGE_BREAK_PARAGRAPH_XML,
+          fieldDisplay: { kind: 'pageBreak' },
+        },
+      })
+    }
+    // the region's trailing section break (in the deleted last paragraph's
+    // pPr) moves onto the last regenerated paragraph, keeping the section
+    if (region.keepSectPr && nodes.length > 0) {
+      const last = nodes[nodes.length - 1] as { attrs: Record<string, unknown> }
+      last.attrs.genXml = attachSectPr(String(last.attrs.genXml), region.keepSectPr)
+    }
+    planned.push({ region, nodes })
+    updated += 1
+  }
+
+  if (updated === 0) {
+    const first = parseTocInstruction(regions[0].instr)
     if (!opts.silent)
-      window.alert(t(options.seqIdentifier ? 'refsTofNoCaptions' : 'ribbonTocNoHeadings'))
+      window.alert(t(first.seqIdentifier ? 'refsTofNoCaptions' : 'ribbonTocNoHeadings'))
     return 'no-entries'
   }
 
-  const nodes = tocFieldNodes(
-    entries,
-    options,
-    t(options.seqIdentifier ? 'refsTofFieldLabel' : 'ribbonTocFieldLabel'),
-  )
-  if (keepPageBreak) {
-    nodes.push({
-      type: 'docProtected',
-      attrs: {
-        docxIndex: null,
-        blockType: 'passthrough',
-        label: t('ribbonPageBreak'),
-        genXml: PAGE_BREAK_PARAGRAPH_XML,
-        fieldDisplay: { kind: 'pageBreak' },
-      },
-    })
+  const chain = editor.chain().focus()
+  for (let i = planned.length - 1; i >= 0; i--) {
+    const { region, nodes } = planned[i]
+    chain
+      .deleteRange({ from: region.from, to: region.to })
+      .insertContentAt(region.from, nodes as never)
   }
-  // the region's trailing section break (in the deleted last paragraph's pPr)
-  // moves onto the last regenerated paragraph, keeping the section's layout
-  if (keepSectPr && nodes.length > 0) {
-    const last = nodes[nodes.length - 1] as { attrs: Record<string, unknown> }
-    last.attrs.genXml = attachSectPr(String(last.attrs.genXml), keepSectPr)
-  }
-
-  editor
-    .chain()
-    .focus()
-    .deleteRange({ from, to })
-    .insertContentAt(from, nodes as never)
-    .run()
+  chain.run()
   return 'updated'
 }
 
-const CAPTION_LABEL_KEYS = [
-  'ribbonCaptionFigure',
-  'ribbonCaptionTable',
-  'ribbonCaptionEquation',
+/**
+ * Caption labels: the `id` is the language-independent SEQ / TOC \c identifier
+ * stored in the document; the `key` translates the visible word. Captions and
+ * tables of figures keep working across UI-language switches because matching
+ * and numbering run on the id, not on the translated string (UX-1011).
+ */
+const CAPTION_LABELS = [
+  { id: 'Figure', key: 'ribbonCaptionFigure' },
+  { id: 'Table', key: 'ribbonCaptionTable' },
+  { id: 'Equation', key: 'ribbonCaptionEquation' },
 ] as const
 
+/**
+ * The identifiers a caption of label `id` may carry in this document: the
+ * canonical id, plus the current locale's word for it — captions authored
+ * before UX-1011 (or by a differently-localized writer) stored the translated
+ * word in their SEQ instruction.
+ */
+function seqAliases(id: string, t: (key: StringKey) => string): string[] {
+  const entry = CAPTION_LABELS.find((l) => l.id === id)
+  const translated = entry ? t(entry.key) : null
+  return translated && translated !== id ? [id, translated] : [id]
+}
+
+/** the visible (translated) label word of a canonical caption id */
+function captionDisplayLabel(id: string, t: (key: StringKey) => string): string {
+  const entry = CAPTION_LABELS.find((l) => l.id === id)
+  return entry ? t(entry.key) : id
+}
+
 /** TOC options dialog (Word's Table of Contents options): level range,
- *  page numbers + hyperlinks switches, optional source styles (\t). */
-function TocOptionsModal({
+ *  page numbers + hyperlinks switches, optional source styles (\t).
+ *  Exported for its DOM tests (empty states stay inline, UX-1010). */
+export function TocOptionsModal({
   editor,
   headingPages,
   onClose,
@@ -248,6 +305,8 @@ function TocOptionsModal({
   const [showPages, setShowPages] = useState(true)
   const [hyperlinks, setHyperlinks] = useState(true)
   const [styles, setStyles] = useState('')
+  // inline empty-state message (UX-1010): no blocking window.alert over the dialog
+  const [error, setError] = useState<StringKey | null>(null)
   const dialog = useModalDialog(onClose)
 
   const levelCount = Math.min(Math.max(parseInt(levels, 10) || 3, 1), 9)
@@ -262,7 +321,7 @@ function TocOptionsModal({
       (e) => e.level <= levelCount,
     )
     if (entries.length === 0) {
-      window.alert(t('ribbonTocNoHeadings'))
+      setError('ribbonTocNoHeadings')
       return
     }
     editor
@@ -317,6 +376,11 @@ function TocOptionsModal({
             placeholder={t('refsTocStylesPh')}
           />
         </label>
+        {error && (
+          <p className="modal-error" role="alert">
+            {t(error)}
+          </p>
+        )}
         <div className="modal-actions">
           <button className="btn-ghost" onClick={onClose}>
             {t('ribbonCancel')}
@@ -330,8 +394,9 @@ function TocOptionsModal({
   )
 }
 
-/** Table of Figures dialog: pick the caption label the TOC \c field collects */
-function TofModal({
+/** Table of Figures dialog: pick the caption label the TOC \c field collects.
+ *  Exported for its DOM tests (empty states stay inline, UX-1010). */
+export function TofModal({
   editor,
   blocks,
   anchorPage,
@@ -343,20 +408,23 @@ function TofModal({
   onClose: () => void
 }) {
   const { t } = useI18n()
-  const [label, setLabel] = useState<string>(() => t(CAPTION_LABEL_KEYS[0]))
+  // the picked canonical label id — the dropdown shows translated words
+  const [labelId, setLabelId] = useState<string>(CAPTION_LABELS[0].id)
+  // inline empty-state message (UX-1010): no blocking window.alert over the dialog
+  const [error, setError] = useState<StringKey | null>(null)
   const dialog = useModalDialog(onClose)
 
   const insert = () => {
-    const entries = collectTofEntries(editor, blocks, label, anchorPage)
+    const entries = collectTofEntries(editor, blocks, seqAliases(labelId, t), anchorPage)
     if (entries.length === 0) {
-      window.alert(t('refsTofNoCaptions'))
+      setError('refsTofNoCaptions')
       return
     }
     editor
       .chain()
       .focus()
       .insertContent(
-        tocFieldNodes(entries, { seqIdentifier: label }, t('refsTofFieldLabel')) as never,
+        tocFieldNodes(entries, { seqIdentifier: labelId }, t('refsTofFieldLabel')) as never,
       )
       .run()
     onClose()
@@ -373,12 +441,17 @@ function TofModal({
         <label>
           {t('refsTofLabel')}
           <Dropdown
-            value={label}
+            value={labelId}
             ariaLabel={t('refsTofLabel')}
-            options={CAPTION_LABEL_KEYS.map((k) => ({ value: t(k), label: t(k) }))}
-            onPick={setLabel}
+            options={CAPTION_LABELS.map(({ id, key }) => ({ value: id, label: t(key) }))}
+            onPick={setLabelId}
           />
         </label>
+        {error && (
+          <p className="modal-error" role="alert">
+            {t(error)}
+          </p>
+        )}
         <div className="modal-actions">
           <button className="btn-ghost" onClick={onClose}>
             {t('ribbonCancel')}
@@ -403,13 +476,18 @@ function CaptionModal({
   onClose: () => void
 }) {
   const { t } = useI18n()
-  const CAPTION_LABELS = CAPTION_LABEL_KEYS.map((k) => t(k))
-  const [label, setLabel] = useState<string>(() => t(CAPTION_LABEL_KEYS[0]))
+  // the picked canonical label id; the visible word comes from the locale
+  const [labelId, setLabelId] = useState<string>(CAPTION_LABELS[0].id)
   const [text, setText] = useState('')
 
-  const nextNumber = (lbl: string): number => {
+  const nextNumber = (id: string): number => {
+    // count SEQ fields of every identifier this label may carry (canonical +
+    // legacy translated word, UX-1011)
+    const alternation = seqAliases(id, t)
+      .map((a) => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('|')
+    const re = new RegExp(`SEQ\\s+(?:${alternation})[\\s\\\\]`)
     let count = 0
-    const re = new RegExp(`SEQ\\s+${lbl}[\\s\\\\]`)
     editor.state.doc.forEach((node) => {
       if (node.type.name !== 'docProtected') return
       if (re.test(xmlOfNode(node as never, blocks))) count += 1
@@ -418,11 +496,14 @@ function CaptionModal({
   }
 
   const insert = () => {
-    const number = nextNumber(label)
+    const displayLabel = captionDisplayLabel(labelId, t)
+    const number = nextNumber(labelId)
     // hidden _Ref anchor wraps the SEQ field so cross-references can target this caption
     const anchor = uniqueAnchor('_Ref', allRefAnchorNames(editor.state.doc, blocks))
-    const xml = generateCaptionXml(label, number, text.trim(), anchor)
-    const display = `${label} ${number}${text.trim() ? ` ${text.trim()}` : ''}`
+    // the SEQ instruction carries the canonical id; only the visible prefix
+    // is the translated word (language-independent matching, UX-1011)
+    const xml = generateCaptionXml(labelId, number, text.trim(), anchor, displayLabel)
+    const display = `${displayLabel} ${number}${text.trim() ? ` ${text.trim()}` : ''}`
     editor
       .chain()
       .focus()
@@ -447,10 +528,10 @@ function CaptionModal({
         <label>
           {t('ribbonCaptionLabel')}
           <Dropdown
-            value={label}
+            value={labelId}
             ariaLabel={t('ribbonCaptionLabel')}
-            options={CAPTION_LABELS.map((l) => ({ value: l, label: l }))}
-            onPick={setLabel}
+            options={CAPTION_LABELS.map(({ id, key }) => ({ value: id, label: t(key) }))}
+            onPick={setLabelId}
           />
         </label>
         <label>
@@ -458,7 +539,10 @@ function CaptionModal({
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={t('ribbonCaptionPh', { label, n: nextNumber(label) })}
+            placeholder={t('ribbonCaptionPh', {
+              label: captionDisplayLabel(labelId, t),
+              n: nextNumber(labelId),
+            })}
             onKeyDown={(e) => e.key === 'Enter' && insert()}
           />
         </label>

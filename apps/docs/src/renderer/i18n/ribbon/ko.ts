@@ -368,6 +368,8 @@ export const ko = {
   ribbonSeriesN: '계열 {n}',
   ribbonChartAddCategory: '+ 항목',
   ribbonChartAddSeries: '+ 계열',
+  ribbonChartNativeHint:
+    'Word에서 삽입된 차트입니다. 종류는 고정되어 있고 데이터만 편집할 수 있습니다.',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: 'SmartArt 그래픽 삽입',
   ribbonSmartBlockList: '기본 블록 목록',
