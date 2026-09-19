@@ -306,6 +306,13 @@ export const fr = {
     'Utiliser la transition « {name} » sur cette diapositive (prend effet dans le diaporama PowerPoint)',
   ribbonGroupTiming: 'Minutage',
   ribbonTransApplyAllTip: 'Appliquer la transition de cette diapositive à toutes les diapositives',
+  ribbonEffectOptions: 'Options des effets',
+  ribbonEffectOptionsTip: 'Direction et durée de la transition actuelle',
+  ribbonEffectOptionsDirection: 'Direction',
+  ribbonTransDuration: 'Durée',
+  ribbonTransDurationDefault: 'Par défaut',
+  ribbonTransDurationTip: 'Durée de la transition en secondes (vide = valeur par défaut)',
+  ribbonAnimDirectionTip: 'Variante de direction de l’effet d’animation sélectionné',
   ribbonPreview: 'Aperçu',
   ribbonAnimPreviewTip:
     'Lire toutes les animations de cette diapositive dans le canevas de modification',

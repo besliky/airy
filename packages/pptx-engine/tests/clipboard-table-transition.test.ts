@@ -418,8 +418,9 @@ describe('slide transitions', () => {
     // Newer PowerPoint uses p159:morph; older versions use the Fallback fade
     expect(slide.bodySuffix).toContain('<mc:AlternateContent')
     expect(slide.bodySuffix).toContain('<p159:morph option="byObject"/>')
+    // default morph duration 800ms; the legacy spd bucket is derived from it
     expect(slide.bodySuffix).toContain(
-      '<mc:Fallback><p:transition spd="slow"><p:fade/></p:transition></mc:Fallback>',
+      '<mc:Fallback><p:transition spd="med"><p:fade/></p:transition></mc:Fallback>',
     )
     expect(slide.bodySuffix).toContain('Requires="p159"')
 

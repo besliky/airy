@@ -12,13 +12,12 @@
  */
 import React, { useEffect, useRef, useState } from 'react'
 import type { RenderFill, RenderNode, RenderSlide } from '@airy-office/pptx-render'
-import type { AnimationItem, ShapeKey, ShowSyncState, TransitionKind } from '../../shared/ipc'
+import type { AnimationItem, ShapeKey, ShowSyncState, TransitionSpec } from '../../shared/ipc'
 import { AnimatedSlideStage, useAnimPlayer } from './AnimatedSlide'
 import { useI18n } from '../i18n/locale'
 import { MorphStage } from './MorphStage'
 import { InkLayer, type InkStroke } from './ShowInk'
-
-const ANIMATED = ['fade', 'push', 'wipe', 'split', 'circle'] as const
+import { planTransition } from '../transition-play'
 
 /** dataUrl → HTMLImageElement (picture elements/picture fills/background images, recursing into groups and table cells) */
 function useSlideImages(slides: RenderSlide[] | null): Map<string, HTMLImageElement> {
@@ -79,13 +78,19 @@ export function AudienceView() {
   const images = useSlideImages(slides)
   const [sync, setSync] = useState<ShowSyncState | null>(null)
   const [allAnims, setAllAnims] = useState<AnimationItem[][] | null>(null)
-  const transRef = useRef<TransitionKind[]>([])
+  const transRef = useRef<TransitionSpec[]>([])
   const keysRef = useRef<ShapeKey[][]>([])
-  const [anim, setAnim] = useState<{ kind: TransitionKind; nonce: number }>({
-    kind: 'none',
+  const [anim, setAnim] = useState<{ css: string; durationMs: number | null; nonce: number }>({
+    css: '',
+    durationMs: null,
     nonce: 0,
   })
-  const [morph, setMorph] = useState<{ fromIdx: number; toIdx: number; nonce: number } | null>(null)
+  const [morph, setMorph] = useState<{
+    fromIdx: number
+    toIdx: number
+    durationMs: number | null
+    nonce: number
+  } | null>(null)
   const [strokes, setStrokes] = useState<InkStroke[]>([])
   const [laser, setLaser] = useState<{ x: number; y: number } | null>(null)
 
@@ -122,8 +127,8 @@ export function AudienceView() {
   useEffect(() => {
     if (!slides) return
     let cancelled = false
-    void Promise.all(slides.map((_, i) => window.slidesApi.getTransition(i))).then((kinds) => {
-      if (!cancelled) transRef.current = kinds
+    void Promise.all(slides.map((_, i) => window.slidesApi.getTransition(i))).then((specs) => {
+      if (!cancelled) transRef.current = specs
     })
     void Promise.all(slides.map((_, i) => window.slidesApi.getAnimations(i))).then((lists) => {
       if (!cancelled) setAllAnims(lists)
@@ -210,18 +215,29 @@ export function AudienceView() {
     if (shownRef.current !== sync.idx) {
       const from = shownRef.current
       shownRef.current = sync.idx
-      let kind: TransitionKind = 'none'
       if (sync.fresh && from >= 0) {
-        kind = transRef.current[sync.idx] ?? 'none'
-        if (kind === 'random') kind = ANIMATED[Math.floor(Math.random() * ANIMATED.length)]!
-      }
-      if (kind === 'morph' && from >= 0 && from !== sync.idx) {
-        setMorph((m) => ({ fromIdx: from, toIdx: sync.idx, nonce: (m?.nonce ?? 0) + 1 }))
-        setAnim((a) => ({ kind: 'none', nonce: a.nonce + 1 }))
+        const plan = planTransition(
+          transRef.current[sync.idx] ?? { kind: 'none', durationMs: null },
+          {
+            canMorph: from !== sync.idx,
+            random: Math.random,
+          },
+        )
+        if (plan.morph) {
+          setMorph((m) => ({
+            fromIdx: from,
+            toIdx: sync.idx,
+            durationMs: plan.durationMs,
+            nonce: (m?.nonce ?? 0) + 1,
+          }))
+          setAnim((a) => ({ css: '', durationMs: null, nonce: a.nonce + 1 }))
+        } else {
+          setMorph(null)
+          setAnim((a) => ({ css: plan.css, durationMs: plan.durationMs, nonce: a.nonce + 1 }))
+        }
       } else {
-        if (kind === 'morph') kind = 'fade'
         setMorph(null)
-        setAnim((a) => ({ kind, nonce: a.nonce + 1 }))
+        setAnim((a) => ({ css: '', durationMs: null, nonce: a.nonce + 1 }))
       }
       setStrokes([])
       setLaser(null)
@@ -259,13 +275,19 @@ export function AudienceView() {
                 toKeys={keysRef.current[morph.toIdx] ?? []}
                 images={images}
                 width={fitW}
+                durationMs={morph.durationMs}
                 onDone={() => setMorph(null)}
               />
             </div>
           ) : (
             <div
               key={anim.nonce}
-              className={`ss-frame${anim.kind !== 'none' ? ` ss-anim-${anim.kind}` : ''}`}
+              className={`ss-frame${anim.css ? ` ${anim.css}` : ''}`}
+              style={
+                anim.css && anim.durationMs != null
+                  ? { animationDuration: `${anim.durationMs}ms` }
+                  : undefined
+              }
             >
               <AnimatedSlideStage
                 slide={slide}

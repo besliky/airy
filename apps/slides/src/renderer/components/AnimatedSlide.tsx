@@ -253,15 +253,26 @@ function stateGroupProps(st: NodeAnimState, cx: number, cy: number) {
   }
 }
 
-/** Wipe/split clip: narrows the visible area within rect according to t/mode. */
+/** Wipe/split clip: the visible sub-rect of `rect` at ratio t according to the mode. */
 function wipedRect(
   clip: NonNullable<NodeAnimState['clip']>,
-  rect: { y: number; h: number },
-): { y: number; h: number } {
-  const visH = rect.h * clip.t
-  if (clip.mode === 'top') return { y: rect.y, h: visH }
-  if (clip.mode === 'mid') return { y: rect.y + (rect.h - visH) / 2, h: visH }
-  return { y: rect.y + (rect.h - visH), h: visH }
+  rect: { x: number; y: number; w: number; h: number },
+): { x: number; y: number; w: number; h: number } {
+  const { x, y, w, h } = rect
+  switch (clip.mode) {
+    case 'top':
+      return { x, y, w, h: h * clip.t }
+    case 'mid':
+      return { x, y: y + (h - h * clip.t) / 2, w, h: h * clip.t }
+    case 'lft':
+      return { x, y, w: w * clip.t, h }
+    case 'rgt':
+      return { x: x + w - w * clip.t, y, w: w * clip.t, h }
+    case 'midh':
+      return { x: x + (w - w * clip.t) / 2, y, w: w * clip.t, h }
+    default: // 'btm'
+      return { x, y: y + h - h * clip.t, w, h: h * clip.t }
+  }
 }
 
 /**
@@ -313,12 +324,24 @@ function AnimNode({
     const clipFunc =
       clip != null
         ? (ctx: Context) => {
-            // Wipe/split: clip the visible area to the node's bounding box
-            const r = wipedRect(clip, { y: b.y, h: b.h })
-            // The fixed top/bottom edge is widened outward by m so edge strokes aren't clipped
-            const top = clip.mode === 'top' ? m : 0
-            const btm = clip.mode === 'btm' ? m : 0
-            ctx.rect(b.x - m, r.y - top, b.w + 2 * m, r.h + top + btm)
+            // Wipe/split: clip the visible area to the node's bounding box. The axis
+            // perpendicular to the wipe stays full-width (widened by m for strokes);
+            // the fixed edge is widened outward too so it isn't clipped.
+            const r = wipedRect(clip, { x: b.x, y: b.y, w: b.w, h: b.h })
+            const horizontal = clip.mode === 'lft' || clip.mode === 'rgt' || clip.mode === 'midh'
+            if (horizontal) {
+              const y = b.y - m
+              const h = b.h + 2 * m
+              const x = r.x - (clip.mode === 'lft' ? m : 0)
+              const w = r.w + (clip.mode === 'lft' ? m : clip.mode === 'rgt' ? m : 0)
+              ctx.rect(x, y, w, h)
+            } else {
+              const x = b.x - m
+              const w = b.w + 2 * m
+              const y = r.y - (clip.mode === 'top' ? m : 0)
+              const h = r.h + (clip.mode === 'top' ? m : clip.mode === 'btm' ? m : 0)
+              ctx.rect(x, y, w, h)
+            }
           }
         : undefined
     return (
@@ -360,10 +383,14 @@ function AnimNode({
               {...stateGroupProps(p.st, cx, cyP)}
               clipFunc={(ctx: Context) => {
                 // Paragraph line range; narrowed within the range during wipe. No top/bottom margin, avoiding bleeding into adjacent paragraphs
-                const r = p.st.clip
-                  ? wipedRect(p.st.clip, { y: s.y0, h: s.y1 - s.y0 })
-                  : { y: s.y0, h: s.y1 - s.y0 }
-                ctx.rect(b.x - m, r.y, b.w + 2 * m, r.h)
+                const base = { x: b.x, y: s.y0, w: b.w, h: s.y1 - s.y0 }
+                const r = p.st.clip ? wipedRect(p.st.clip, base) : base
+                const horizontal =
+                  p.st.clip != null &&
+                  (p.st.clip.mode === 'lft' ||
+                    p.st.clip.mode === 'rgt' ||
+                    p.st.clip.mode === 'midh')
+                ctx.rect(r.x, horizontal ? s.y0 : r.y, r.w, horizontal ? s.y1 - s.y0 : r.h)
               }}
             >
               <StaticNode node={node} images={images} />

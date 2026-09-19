@@ -224,3 +224,183 @@ describe('motion paths', () => {
     expect(done.dx).toBeCloseTo(0.25 * W, 5)
   })
 })
+
+describe('effect directions (Effect Options playback)', () => {
+  const H = 540
+  const W = 960
+
+  it('flyIn moves in from the picked edge; corners move on both axes', () => {
+    const left = computeNodeStates(
+      buildSteps([item({ sourceId: 'a', effect: 'flyIn', direction: 'fromLeft' })]),
+      0,
+      250,
+      H,
+      W,
+    ).get('a')!
+    expect(left.dx).toBeLessThan(0)
+    expect(left.dy).toBe(0)
+
+    const corner = computeNodeStates(
+      buildSteps([item({ sourceId: 'a', effect: 'flyIn', direction: 'fromTopRight' })]),
+      0,
+      250,
+      H,
+      W,
+    ).get('a')!
+    expect(corner.dx).toBeGreaterThan(0) // from the right → positive x offset
+    expect(corner.dy).toBeLessThan(0) // from the top → negative y offset
+
+    // default (no direction) still drops in from the bottom
+    const bottom = computeNodeStates(
+      buildSteps([item({ sourceId: 'a', effect: 'flyIn' })]),
+      0,
+      250,
+      H,
+      W,
+    ).get('a')!
+    expect(bottom.dy).toBeGreaterThan(0)
+    expect(bottom.dx).toBe(0)
+  })
+
+  it('flyOut exits toward the picked edge', () => {
+    const out = computeNodeStates(
+      buildSteps([item({ sourceId: 'a', effect: 'flyOut', direction: 'fromTop' })]),
+      0,
+      250,
+      H,
+      W,
+    ).get('a')!
+    expect(out.dy).toBeLessThan(0) // toward the top
+    expect(out.dx).toBe(0)
+  })
+
+  it('wipe clips horizontally for left/right directions', () => {
+    const fromLeft = computeNodeStates(
+      buildSteps([item({ sourceId: 'a', effect: 'wipe', direction: 'fromLeft' })]),
+      0,
+      250,
+      H,
+      W,
+    ).get('a')!
+    expect(fromLeft.clip!.mode).toBe('lft') // reveal anchored at the left edge
+    const fromRight = computeNodeStates(
+      buildSteps([item({ sourceId: 'a', effect: 'wipe', direction: 'fromRight' })]),
+      0,
+      250,
+      H,
+      W,
+    ).get('a')!
+    expect(fromRight.clip!.mode).toBe('rgt')
+    // defaults unchanged: wipe from bottom, wipeDown from top
+    expect(
+      computeNodeStates(buildSteps([item({ sourceId: 'a', effect: 'wipe' })]), 0, 250, H, W).get(
+        'a',
+      )!.clip!.mode,
+    ).toBe('btm')
+    expect(
+      computeNodeStates(
+        buildSteps([item({ sourceId: 'a', effect: 'wipeDown' })]),
+        0,
+        250,
+        H,
+        W,
+      ).get('a')!.clip!.mode,
+    ).toBe('top')
+  })
+
+  it('exit wipe anchors the shrinking region at the far edge (default stays bottom)', () => {
+    const def = computeNodeStates(
+      buildSteps([item({ sourceId: 'a', effect: 'wipeOut' })]),
+      0,
+      250,
+      H,
+      W,
+    ).get('a')!
+    expect(def.clip!.mode).toBe('btm')
+    expect(def.clip!.t).toBeLessThan(1)
+    const fromBottom = computeNodeStates(
+      buildSteps([item({ sourceId: 'a', effect: 'wipeOut', direction: 'fromBottom' })]),
+      0,
+      250,
+      H,
+      W,
+    ).get('a')!
+    expect(fromBottom.clip!.mode).toBe('top')
+    const fromLeft = computeNodeStates(
+      buildSteps([item({ sourceId: 'a', effect: 'wipeOut', direction: 'fromLeft' })]),
+      0,
+      250,
+      H,
+      W,
+    ).get('a')!
+    expect(fromLeft.clip!.mode).toBe('rgt')
+  })
+
+  it('split vertical variants reveal from the vertical center (midh)', () => {
+    const vert = computeNodeStates(
+      buildSteps([item({ sourceId: 'a', effect: 'splitIn', direction: 'vertIn' })]),
+      0,
+      250,
+      H,
+      W,
+    ).get('a')!
+    expect(vert.clip!.mode).toBe('midh')
+    // horizontal variants keep the horizontal-center reveal
+    expect(
+      computeNodeStates(
+        buildSteps([item({ sourceId: 'a', effect: 'splitIn', direction: 'horzOut' })]),
+        0,
+        250,
+        H,
+        W,
+      ).get('a')!.clip!.mode,
+    ).toBe('mid')
+  })
+
+  it('zoom out variants: entrance settles from 200%, exit grows past the slide', () => {
+    const entr = computeNodeStates(
+      buildSteps([item({ sourceId: 'a', effect: 'zoom', direction: 'out' })]),
+      0,
+      250,
+      H,
+      W,
+    ).get('a')!
+    expect(entr.scale).toBeGreaterThan(1)
+    expect(entr.scale).toBeLessThan(2)
+
+    const exit = computeNodeStates(
+      buildSteps([item({ sourceId: 'a', effect: 'zoomOut', direction: 'out' })]),
+      0,
+      250,
+      H,
+      W,
+    ).get('a')!
+    expect(exit.scale).toBeGreaterThan(1)
+    expect(exit.scale).toBeLessThan(3)
+    expect(
+      computeNodeStates(
+        buildSteps([item({ sourceId: 'a', effect: 'zoomOut', direction: 'out' })]),
+        1,
+        null,
+        H,
+        W,
+      ).get('a')!.hidden,
+    ).toBe(true)
+  })
+
+  it('spin counter-clockwise rotates negatively', () => {
+    const ccw = computeNodeStates(
+      buildSteps([item({ sourceId: 'a', effect: 'spin', direction: 'ccw' })]),
+      0,
+      250,
+      H,
+      W,
+    ).get('a')!
+    expect(ccw.rotationDeg).toBeLessThan(0)
+    expect(
+      computeNodeStates(buildSteps([item({ sourceId: 'a', effect: 'spin' })]), 0, 250, H, W).get(
+        'a',
+      )!.rotationDeg,
+    ).toBeGreaterThan(0)
+  })
+})

@@ -6,6 +6,7 @@
 import { useId } from 'react'
 import type { Dispatch, MouseEvent as ReactMouseEvent, ReactNode, SetStateAction } from 'react'
 import type {
+  AnimDirection,
   AnimEffectKind,
   AnimTrigger,
   AnimationItem,
@@ -14,7 +15,7 @@ import type {
   GetLayoutsResult,
   GradientFillSpec,
   InsertKind,
-  TransitionKind,
+  TransitionSpec,
 } from '../../shared/ipc'
 import type { InkPenSettings, InkTool } from '../ink'
 import type { WordArtPreset } from '@airy-office/ui'
@@ -238,6 +239,8 @@ export type RibbonPanelKey =
   | 'para'
   | 'layoutPick'
   | 'slideSize'
+  | 'transOptions'
+  | 'animOptions'
   | 'transparency'
   | 'pictureBorder'
   | 'changeShape'
@@ -441,10 +444,10 @@ export interface Props {
     indentDelta?: 1 | -1
   }) => void
   onInsertTable: (rows: number, cols: number) => void
-  /** Current page's transition effect (for display) */
-  transition: TransitionKind
-  /** Set the transition effect; allSlides=true applies to all pages */
-  onTransition: (kind: TransitionKind, allSlides: boolean) => void
+  /** Current page's transition with its Effect Options (for display) */
+  transition: TransitionSpec
+  /** Set the transition (kind + Effect Options); allSlides=true applies to all pages */
+  onTransition: (spec: TransitionSpec, allSlides: boolean) => void
   // ── Animations tab ─────────────────────────────────────────────────────
   /** Selected shape's current animation effect (gallery highlight; null when no selection/no animation) */
   selectedAnimEffect: AnimEffectKind | null
@@ -459,8 +462,13 @@ export interface Props {
   onAddAnimation: (effect: AnimEffectKind) => void
   /** Append one motion-path animation to the selected shape (moves along a preset path) */
   onApplyMotionPath: (path: string) => void
-  /** Change timingAnim's trigger/duration/delay */
-  onAnimTiming: (patch: { trigger?: AnimTrigger; durationMs?: number; delayMs?: number }) => void
+  /** Change timingAnim's trigger/duration/delay/direction */
+  onAnimTiming: (patch: {
+    trigger?: AnimTrigger
+    durationMs?: number
+    delayMs?: number
+    direction?: AnimDirection
+  }) => void
   /** Animation pane (right side) toggle */
   animPaneOpen: boolean
   onToggleAnimPane: () => void

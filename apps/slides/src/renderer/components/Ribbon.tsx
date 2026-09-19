@@ -11,7 +11,17 @@ import React, {
   useState,
   type ReactNode,
 } from 'react'
-import type { AnimEffectKind, GradientFillSpec, TransitionKind } from '../../shared/ipc'
+import type {
+  AnimDirection,
+  AnimEffectKind,
+  GradientFillSpec,
+  TransitionDir,
+  TransitionKind,
+  TransitionSpec,
+} from '../../shared/ipc'
+import { ANIM_EFFECT_DIRS, TRANSITION_DIRS, TRANSITION_DEFAULT_DIR } from '../../shared/ipc'
+import { ANIM_DEFAULT_DIRECTION } from '../animation-play'
+import { transitionWithKind } from '../transition-play'
 import type { ChartStyleInfo } from '@airy-office/pptx-render'
 import {
   useDismissablePopover,
@@ -269,6 +279,38 @@ const TRANSITIONS: Array<{ kind: TransitionKind; label: StringKey; icon: React.R
   { kind: 'zoom', label: 'ribbonTransZoom', icon: <IconTransZoom size={BIG} /> },
   { kind: 'random', label: 'ribbonTransRandom', icon: <IconTransRandom size={BIG} /> },
 ]
+
+/** Direction option labels (shared panes vocabulary — used by transition and animation Effect Options). */
+const DIR_LABEL: Record<TransitionDir | AnimDirection, StringKey> = {
+  fromBottom: 'paneDirFromBottom',
+  fromTop: 'paneDirFromTop',
+  fromLeft: 'paneDirFromLeft',
+  fromRight: 'paneDirFromRight',
+  fromBottomLeft: 'paneDirFromBottomLeft',
+  fromBottomRight: 'paneDirFromBottomRight',
+  fromTopLeft: 'paneDirFromTopLeft',
+  fromTopRight: 'paneDirFromTopRight',
+  in: 'paneDirIn',
+  out: 'paneDirOut',
+  horzIn: 'paneDirHorzIn',
+  horzOut: 'paneDirHorzOut',
+  vertIn: 'paneDirVertIn',
+  vertOut: 'paneDirVertOut',
+  cw: 'paneDirCw',
+  ccw: 'paneDirCcw',
+}
+
+/** Split transition's four Effect Options combos (orientation × in/out). */
+const SPLIT_VARIANTS = ['horzIn', 'horzOut', 'vertIn', 'vertOut'] as const
+type SplitVariant = (typeof SPLIT_VARIANTS)[number]
+
+function splitVariantOf(spec: TransitionSpec): SplitVariant {
+  return `${spec.orient === 'vert' ? 'vert' : 'horz'}${spec.dir === 'in' ? 'In' : 'Out'}` as SplitVariant
+}
+
+function splitVariantPatch(v: SplitVariant): Pick<TransitionSpec, 'dir' | 'orient'> {
+  return { orient: v.startsWith('vert') ? 'vert' : 'horz', dir: v.endsWith('In') ? 'in' : 'out' }
+}
 
 /** Animation effect gallery (entrance/emphasis/exit; icons drawn per effect, colored by class). */
 const ANIM_EFFECTS: Array<{
@@ -1249,6 +1291,7 @@ export function Ribbon({
   const [paraOpen, setParaOpen] = useState(false)
   const [layoutPickOpen, setLayoutPickOpen] = useState(false)
   const [slideSizeOpen, setSlideSizeOpen] = useState(false)
+  const [transOptionsOpen, setTransOptionsOpen] = useState(false)
   const [transparencyOpen, setTransparencyOpen] = useState(false)
   const [pictureBorderOpen, setPictureBorderOpen] = useState(false)
   const [changeShapeOpen, setChangeShapeOpen] = useState(false)
@@ -1328,6 +1371,7 @@ export function Ribbon({
     if (!keep.includes('para')) setParaOpen(false)
     if (!keep.includes('layoutPick')) setLayoutPickOpen(false)
     if (!keep.includes('slideSize')) setSlideSizeOpen(false)
+    if (!keep.includes('transOptions')) setTransOptionsOpen(false)
     if (!keep.includes('transparency')) setTransparencyOpen(false)
     if (!keep.includes('pictureBorder')) setPictureBorderOpen(false)
     if (!keep.includes('changeShape')) setChangeShapeOpen(false)
@@ -1365,6 +1409,7 @@ export function Ribbon({
     shapeFillOpen ||
     layoutPickOpen ||
     slideSizeOpen ||
+    transOptionsOpen ||
     transparencyOpen ||
     lineSpacingOpen ||
     collapseOpen != null
@@ -2147,9 +2192,9 @@ export function Ribbon({
               {TRANSITIONS.map((tr) => (
                 <button
                   key={tr.kind}
-                  className={`rb-big ${transition === tr.kind ? 'active' : ''}`}
+                  className={`rb-big ${transition.kind === tr.kind ? 'active' : ''}`}
                   disabled={!hasDoc}
-                  onClick={() => onTransition(tr.kind, false)}
+                  onClick={() => onTransition(transitionWithKind(transition, tr.kind), false)}
                   data-tip={
                     tr.kind === 'none'
                       ? t('ribbonTransNoneTip')
@@ -2160,6 +2205,95 @@ export function Ribbon({
                   <span>{t(tr.label)}</span>
                 </button>
               ))}
+              <div className="rb-drop-wrap">
+                <button
+                  className={`rb-big ${transOptionsOpen ? 'active' : ''}`}
+                  disabled={!hasDoc || transition.kind === 'none'}
+                  onMouseDown={(e) => {
+                    e.stopPropagation()
+                    closeSiblingPanels(e, closePanels, 'transOptions')
+                  }}
+                  onClick={() => setTransOptionsOpen((v) => !v)}
+                  data-tip={t('ribbonEffectOptionsTip')}
+                >
+                  <span className="rb-big-icon">
+                    <IconTransWipe size={BIG} />
+                    <RbCaret />
+                  </span>
+                  <span>{t('ribbonEffectOptions')}</span>
+                </button>
+                {transOptionsOpen && (
+                  <div
+                    className="rb-drop rb-trans-options"
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    {transition.kind === 'split' ? (
+                      <label>
+                        {t('ribbonEffectOptionsDirection')}
+                        <Dropdown
+                          value={splitVariantOf(transition)}
+                          tip={t('ribbonEffectOptionsDirection')}
+                          options={SPLIT_VARIANTS.map((v) => ({
+                            value: v,
+                            label: t(DIR_LABEL[v]),
+                          }))}
+                          onPick={(v) =>
+                            onTransition({ ...transition, ...splitVariantPatch(v) }, false)
+                          }
+                        />
+                      </label>
+                    ) : TRANSITION_DIRS[transition.kind].length > 0 ? (
+                      <label>
+                        {t('ribbonEffectOptionsDirection')}
+                        <Dropdown
+                          value={
+                            transition.dir ??
+                            TRANSITION_DEFAULT_DIR[transition.kind] ??
+                            'fromBottom'
+                          }
+                          tip={t('ribbonEffectOptionsDirection')}
+                          options={TRANSITION_DIRS[transition.kind].map((d) => ({
+                            value: d,
+                            label: t(DIR_LABEL[d]),
+                          }))}
+                          onPick={(dir) => onTransition({ ...transition, dir }, false)}
+                        />
+                      </label>
+                    ) : null}
+                    <label>
+                      {t('ribbonTransDuration')}
+                      <input
+                        key={`trans-dur-${transition.kind}-${transition.durationMs ?? ''}`}
+                        type="number"
+                        min={0.1}
+                        max={60}
+                        step={0.05}
+                        defaultValue={
+                          transition.durationMs != null
+                            ? (transition.durationMs / 1000).toFixed(2)
+                            : ''
+                        }
+                        placeholder={t('ribbonTransDurationDefault')}
+                        onBlur={(e) => {
+                          const v = parseFloat(e.target.value)
+                          onTransition(
+                            {
+                              ...transition,
+                              durationMs: Number.isFinite(v) && v > 0 ? Math.round(v * 1000) : null,
+                            },
+                            false,
+                          )
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                        }}
+                        title={t('ribbonTransDurationTip')}
+                      />
+                      {t('ribbonSecondsUnit')}
+                    </label>
+                  </div>
+                )}
+              </div>
             </Group>
             <div className="ribbon-sep" />
             <Group label={t('ribbonGroupTiming')}>
@@ -2353,6 +2487,20 @@ export function Ribbon({
                     onPick={(trigger) => onAnimTiming({ trigger })}
                   />
                 </label>
+                {timingAnim && ANIM_EFFECT_DIRS[timingAnim.effect].length > 0 && (
+                  <label>
+                    {t('ribbonEffectOptionsDirection')}
+                    <Dropdown
+                      value={timingAnim.direction ?? ANIM_DEFAULT_DIRECTION[timingAnim.effect]!}
+                      tip={t('ribbonAnimDirectionTip')}
+                      options={ANIM_EFFECT_DIRS[timingAnim.effect].map((d) => ({
+                        value: d,
+                        label: t(DIR_LABEL[d]),
+                      }))}
+                      onPick={(direction) => onAnimTiming({ direction })}
+                    />
+                  </label>
+                )}
                 <label>
                   {t('ribbonAnimDuration')}
                   <input

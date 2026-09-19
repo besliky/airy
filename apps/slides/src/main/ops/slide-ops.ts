@@ -46,13 +46,16 @@ import {
   setSlideTransition,
   elementSpid,
   matchesElementRef,
+  ANIM_DIR_VALUES,
   ANIM_EFFECTS,
   ANIM_TRIGGERS,
+  TRANSITION_DIR_INFO,
   TRANSITION_KINDS,
   type SectionInfo,
   type ThemeSpec,
   type SlideAnimation,
   type SlideTransitionKind,
+  type SlideTransitionOptions,
   type TextElement,
 } from '@airy-office/pptx-engine'
 import {
@@ -438,10 +441,34 @@ register({
         `op "setTransition" needs "kind": one of [${TRANSITION_KINDS.join(', ')}].`,
       )
     }
+    // Effect Options: dir must be one the kind offers, orient horz/vert,
+    // duration non-negative milliseconds (or null = effect default)
+    const info = TRANSITION_DIR_INFO[op.kind as SlideTransitionKind]
+    if (op.dir != null && !info.dirs.includes(op.dir as (typeof info.dirs)[number])) {
+      throw new GuidedError(
+        `op "setTransition": dir "${op.dir}" is not offered by "${op.kind}" (one of [${info.dirs.join(', ')}], or omit).`,
+      )
+    }
+    if (op.orient != null && op.orient !== 'horz' && op.orient !== 'vert') {
+      throw new GuidedError('op "setTransition": orient must be "horz" or "vert".')
+    }
+    if (
+      op.durationMs !== undefined &&
+      op.durationMs !== null &&
+      (typeof op.durationMs !== 'number' || !Number.isFinite(op.durationMs) || op.durationMs < 0)
+    ) {
+      throw new GuidedError(
+        'op "setTransition" needs "durationMs": non-negative milliseconds, or null for the effect default.',
+      )
+    }
   },
   apply(op, ctx): OpRecord {
     const { slide } = resolveSlide(ctx, op)
-    setSlideTransition(slide, op.kind as SlideTransitionKind)
+    setSlideTransition(slide, op.kind as SlideTransitionKind, {
+      ...(op.dir != null ? { dir: op.dir as SlideTransitionOptions['dir'] } : {}),
+      ...(op.orient != null ? { orient: op.orient as SlideTransitionOptions['orient'] } : {}),
+      ...(op.durationMs !== undefined ? { durationMs: op.durationMs as number | null } : {}),
+    })
     return { op, after: op.kind }
   },
 })
@@ -485,6 +512,14 @@ register({
           `op "setAnimations": items[${i}].trigger must be one of [${ANIM_TRIGGERS.join(', ')}].`,
         )
       }
+      if (
+        raw.direction != null &&
+        !ANIM_DIR_VALUES.includes(raw.direction as (typeof ANIM_DIR_VALUES)[number])
+      ) {
+        throw new GuidedError(
+          `op "setAnimations": items[${i}].direction must be one of [${ANIM_DIR_VALUES.join(', ')}], or omit.`,
+        )
+      }
       for (const f of ['durationMs', 'delayMs'] as const) {
         if (
           typeof raw[f] !== 'number' ||
@@ -516,6 +551,9 @@ register({
         trigger: raw.trigger as SlideAnimation['trigger'],
         durationMs: Math.max(0, Math.round(raw.durationMs as number)),
         delayMs: Math.max(0, Math.round(raw.delayMs as number)),
+        ...(raw.direction != null
+          ? { direction: raw.direction as SlideAnimation['direction'] }
+          : {}),
         ...(raw.motionPath != null
           ? { motionPath: raw.motionPath as SlideAnimation['motionPath'] }
           : {}),

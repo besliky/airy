@@ -15,7 +15,7 @@ import type { ShapeKey } from '../../shared/ipc'
 import { fillToKonva } from '../konva-adapter'
 import { StaticNode } from '../NodeBody'
 
-/** Tween duration (ms); PowerPoint Morph defaults to longer, we use a snappier 500ms. */
+/** Tween duration default (ms); PowerPoint Morph defaults to longer, we use a snappier 500ms. */
 const MORPH_MS = 500
 
 function easeInOut(t: number): number {
@@ -92,6 +92,7 @@ export function MorphStage({
   toKeys,
   images,
   width,
+  durationMs,
   onDone,
 }: {
   from: RenderSlide
@@ -100,6 +101,8 @@ export function MorphStage({
   toKeys: ShapeKey[]
   images: Map<string, HTMLImageElement>
   width: number
+  /** Explicit duration from the transition's Effect Options (p14:dur); null = the snappy default */
+  durationMs?: number | null
   /** Tween finished (guaranteed to fire only once) */
   onDone: () => void
 }) {
@@ -110,8 +113,9 @@ export function MorphStage({
   useEffect(() => {
     let raf = 0
     const t0 = performance.now()
+    const total = Math.max(1, durationMs ?? MORPH_MS)
     const tick = () => {
-      const u = (performance.now() - t0) / MORPH_MS
+      const u = (performance.now() - t0) / total
       if (u >= 1) {
         setT(1)
         onDoneRef.current()
@@ -122,7 +126,7 @@ export function MorphStage({
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [])
+  }, [durationMs])
 
   const plan = useMemo(() => buildPlan(from, to, fromKeys, toKeys), [from, to, fromKeys, toKeys])
 

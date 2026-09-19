@@ -305,6 +305,13 @@ export const ja = {
     'このスライドに「{name}」の画面切り替えを適用（PowerPoint のスライドショーで有効）',
   ribbonGroupTiming: 'タイミング',
   ribbonTransApplyAllTip: '現在のスライドの画面切り替え効果をすべてのスライドに適用',
+  ribbonEffectOptions: '効果のオプション',
+  ribbonEffectOptionsTip: '現在の切り替えの方向と継続時間',
+  ribbonEffectOptionsDirection: '方向',
+  ribbonTransDuration: '継続時間',
+  ribbonTransDurationDefault: '既定',
+  ribbonTransDurationTip: '切り替えの継続時間（秒）。空欄で既定値',
+  ribbonAnimDirectionTip: '選択したアニメーション効果の方向バリエーション',
   // Animations
   ribbonPreview: 'プレビュー',
   ribbonAnimPreviewTip: '編集キャンバス上で現在のスライドの全アニメーションを再生',
