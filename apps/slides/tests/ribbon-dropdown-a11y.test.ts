@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 /**
@@ -91,4 +91,76 @@ describe('direction dropdowns name themselves by field, not value (UX-1104)', ()
       expect(directionDds[i as number]![0]).toContain('ariaLabel=')
     },
   )
+})
+
+describe('every dropdown names itself by field, not current value (UX-1206)', () => {
+  const RENDERER = join(__dirname, '../src/renderer')
+
+  /** every .tsx under the renderer, relative to RENDERER */
+  function tsxFiles(dir: string, prefix = ''): string[] {
+    const out: string[] = []
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory())
+        out.push(...tsxFiles(join(dir, entry.name), `${prefix}${entry.name}/`))
+      else if (entry.name.endsWith('.tsx')) out.push(prefix + entry.name)
+    }
+    return out
+  }
+
+  /**
+   * Opening tags of every <Dropdown …> in the source. The tag ends at the
+   * first '>' at JSX-brace depth 0, so attribute values containing '>' (arrow
+   * callbacks, comparisons) cannot end the tag early — a plain regex to the
+   * first '/>' would silently span two elements when a dropdown carries
+   * children instead of being self-closing.
+   */
+  function dropdownTags(src: string): string[] {
+    const tags: string[] = []
+    let i = src.indexOf('<Dropdown')
+    while (i >= 0) {
+      if (/[\s/>]/.test(src[i + 9] ?? '>')) {
+        let depth = 0
+        let j = i + 1
+        while (j < src.length) {
+          const c = src[j]
+          if (c === '{') depth++
+          else if (c === '}') depth--
+          else if (c === '>' && depth === 0) break
+          j++
+        }
+        tags.push(src.slice(i, j + 1))
+      }
+      i = src.indexOf('<Dropdown', i + 1)
+    }
+    return tags
+  }
+
+  /**
+   * The shared Dropdown (packages/ui) always sets aria-label on its trigger,
+   * falling back to the current option's label («1pt», «On Click») — an
+   * explicit aria-label overrides the visible field label it sits next to,
+   * so without one the control answers to its value, not its field. The
+   * UX-1104 gate only caught direction pickers (DIR_LABEL in options);
+   * UX-1206 found the border-weight and animation-Start dropdowns in the
+   * same wave. This rule is the full ratchet: EVERY <Dropdown> element in
+   * the renderer carries an explicit ariaLabel (slides is at zero).
+   */
+  const unlabeled = tsxFiles(RENDERER).flatMap((file) => {
+    const src = readFileSync(join(RENDERER, file), 'utf8')
+    return dropdownTags(src)
+      .filter((tag) => !tag.includes('ariaLabel='))
+      .map(() => file)
+  })
+
+  it('finds dropdowns to check (scanner sanity, >= 15)', () => {
+    const total = tsxFiles(RENDERER).reduce(
+      (n, file) => n + dropdownTags(readFileSync(join(RENDERER, file), 'utf8')).length,
+      0,
+    )
+    expect(total).toBeGreaterThanOrEqual(15)
+  })
+
+  it('leaves no value-named dropdown behind', () => {
+    expect(unlabeled).toEqual([])
+  })
 })
