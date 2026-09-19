@@ -128,7 +128,7 @@ describe('atomicWriteFile', () => {
     }
     // the temp write rides a file handle first; the next non-temp handle
     // write is the non-atomic fallback itself
-    setInPlaceWriteError(Object.assign(new Error("EIO: fallback write failed"), { code: "EIO" }))
+    setInPlaceWriteError(Object.assign(new Error('EIO: fallback write failed'), { code: 'EIO' }))
 
     await expect(atomicWriteFile(target, Buffer.from('new'))).rejects.toThrow(
       'fallback write failed',

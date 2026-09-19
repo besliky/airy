@@ -74,7 +74,9 @@ async function main(): Promise<number> {
     return 2
   }
   if (entry === null) {
-    console.error(`No entry script found in ${join(outDir, 'index.html')} — unexpected build layout.`)
+    console.error(
+      `No entry script found in ${join(outDir, 'index.html')} — unexpected build layout.`,
+    )
     return 2
   }
   const eagerBytes = rows.filter((r) => r.eager).reduce((sum, r) => sum + r.bytes, 0)

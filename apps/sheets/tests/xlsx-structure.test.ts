@@ -2277,24 +2277,30 @@ describe('mixed structural journals (move-range + move-cols)', () => {
     // remaps A1:A2 → B1:B2 — inside the B1:C2 rectangle the subsequent range
     // move wants to cut. The preflight must run against the remapped sqref
     // and refuse; against the stale A1:A2 it would not overlap at all.
-    const solo = await applyCellEditsToXlsx(await buildMixedFixture(protectedWorksheet), [], [
-      { sheetName: SHEET, ops: [cols(0, 1, 2)] },
-    ])
+    const solo = await applyCellEditsToXlsx(
+      await buildMixedFixture(protectedWorksheet),
+      [],
+      [{ sheetName: SHEET, ops: [cols(0, 1, 2)] }],
+    )
     const soloSheet = await JSZip.loadAsync(solo.buffer)
     expect(await soloSheet.file('xl/worksheets/sheet1.xml')?.async('text')).toContain(
       'sqref="B1:B2"',
     )
 
     await expect(
-      applyCellEditsToXlsx(await buildMixedFixture(protectedWorksheet), [], [
-        {
-          sheetName: SHEET,
-          ops: [
-            cols(0, 1, 2),
-            { kind: 'move-range', from: area(0, 1, 1, 2), to: area(4, 4, 5, 5) },
-          ],
-        },
-      ]),
+      applyCellEditsToXlsx(
+        await buildMixedFixture(protectedWorksheet),
+        [],
+        [
+          {
+            sheetName: SHEET,
+            ops: [
+              cols(0, 1, 2),
+              { kind: 'move-range', from: area(0, 1, 1, 2), to: area(4, 4, 5, 5) },
+            ],
+          },
+        ],
+      ),
     ).rejects.toThrow(/allow-edit/)
   })
 
