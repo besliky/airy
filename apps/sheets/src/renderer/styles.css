@@ -5798,3 +5798,76 @@ textarea:focus {
   font-size: 13px;
   color: var(--text-muted);
 }
+
+/* Outline +/- gutter: fixed overlay pinned over the header strips. */
+.outline-gutter {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 30;
+}
+
+.outline-gutter-button {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  line-height: 10px;
+  font-size: 10px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 2px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.outline-gutter-button:hover {
+  background: var(--hover);
+  border-color: var(--border-hover);
+}
+
+.outline-gutter-button:active {
+  background: var(--pressed);
+}
+
+/* Text to Columns dialog: type selects over a scrollable preview. */
+.t2c-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  margin: 0;
+}
+
+.t2c-other-input,
+.t2c-breaks-input,
+.t2c-destination-input {
+  width: 140px;
+}
+
+.t2c-preview {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.t2c-preview table {
+  border-collapse: collapse;
+  min-width: 100%;
+}
+
+.t2c-preview th,
+.t2c-preview td {
+  border: 1px solid var(--border-subtle);
+  padding: 2px 8px;
+  font-size: 12px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

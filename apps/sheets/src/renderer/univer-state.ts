@@ -180,6 +180,13 @@ export const CLOSURE_MAX_CELLS = 50_000
 /// Shared mutable state between App.tsx and univer-sync.ts.
 export const journalSuppression = { active: false }
 
+/// Raised around the outline gutter's own hide/show-row commands: those
+/// journal through the normal mutation listener (the save must see them),
+/// but their NATIVE undo entry is dropped — the gutter pushes a combined
+/// visual-undo step (visibility + collapsed flag) instead, so one ⌘Z
+/// reverts the whole collapse like Excel.
+export const outlineUndoGate = { active: false }
+
 /// An AI batch whose applied payload exceeds this many cells keeps no undo
 /// entry: the stack retains the full mutation matrices both ways (five
 /// 200k-cell copies held ~336MB), and entries accumulate across proposals.
@@ -229,7 +236,7 @@ export function installJournalSuppressionUndoFilter(): void {
   }
   const originalPush = proto.pushUndoRedo
   proto.pushUndoRedo = function (this: unknown, item: UndoRedoItemLike) {
-    if (journalSuppression.active) return
+    if (journalSuppression.active || outlineUndoGate.active) return
     if (aiBulkUndoGate.active) {
       if (aiBulkUndoGate.dropped) return
       aiBulkUndoGate.cells += undoPayloadCells(item, AI_UNDO_CELL_BUDGET + 1)

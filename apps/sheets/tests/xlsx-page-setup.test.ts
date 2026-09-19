@@ -407,3 +407,61 @@ describe('applyPageSetupState page breaks', () => {
     expect(xml).toBe(BARE)
   })
 })
+
+describe('applyPageSetupState outlinePr', () => {
+  it('creates sheetPr/outlinePr after the worksheet root when absent', () => {
+    const xml = applyPageSetupState(BARE, {
+      sheetName: 'S',
+      outlineSummaryBelow: false,
+      outlineSummaryRight: false,
+    })
+    expect(xml).toBe(
+      '<worksheet><sheetPr><outlinePr summaryBelow="0" summaryRight="0"/></sheetPr>' +
+        '<sheetData/></worksheet>',
+    )
+  })
+
+  it('only writes non-default attributes and nests inside an existing sheetPr', () => {
+    const xml = applyPageSetupState(
+      '<worksheet><sheetPr><tabColor rgb="FF112233"/><pageSetUpPr fitToPage="1"/></sheetPr><sheetData/></worksheet>',
+      { sheetName: 'S', outlineSummaryBelow: false, outlineSummaryRight: true },
+    )
+    expect(xml).toContain('<tabColor rgb="FF112233"/><outlinePr summaryBelow="0"/><pageSetUpPr')
+  })
+
+  it('rewrites just the summary attributes of an existing outlinePr', () => {
+    const xml =
+      '<worksheet><sheetPr><outlinePr applyStyles="1" summaryBelow="0" showOutlineSymbols="0"/></sheetPr><sheetData/></worksheet>'
+    const patched = applyPageSetupState(xml, {
+      sheetName: 'S',
+      outlineSummaryBelow: true,
+      outlineSummaryRight: false,
+    })
+    expect(patched).toContain(
+      '<outlinePr applyStyles="1" showOutlineSymbols="0" summaryRight="0"/>',
+    )
+  })
+
+  it('drops the element when both placements return to the defaults', () => {
+    const xml =
+      '<worksheet><sheetPr><outlinePr summaryBelow="0"/></sheetPr><sheetData/></worksheet>'
+    const patched = applyPageSetupState(xml, {
+      sheetName: 'S',
+      outlineSummaryBelow: true,
+      outlineSummaryRight: true,
+    })
+    expect(patched).toBe('<worksheet><sheetPr></sheetPr><sheetData/></worksheet>')
+  })
+
+  it('round-trips the Rust-read schema fields', () => {
+    // The wire names the sidecar serializes (PagePrintInfo camelCase) map
+    // straight onto SheetPageSetupState.
+    const xml = applyPageSetupState(BARE, {
+      sheetName: 'S',
+      outlineSummaryBelow: false,
+      outlineSummaryRight: true,
+    })
+    expect(xml).toContain('summaryBelow="0"')
+    expect(xml).not.toContain('summaryRight')
+  })
+})

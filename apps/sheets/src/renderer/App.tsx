@@ -260,9 +260,15 @@ import {
   handleCreateConsolidate as handleCreateConsolidateImpl,
   handleCreateSubtotal as handleCreateSubtotalImpl,
   handleInsertSymbol as handleInsertSymbolImpl,
+  handleOutlineSettings as handleOutlineSettingsImpl,
+  handleTextToColumns as handleTextToColumnsImpl,
   listDefinedNames as listDefinedNamesImpl,
+  outlinePlacement,
+  readTextToColumnsSource as readTextToColumnsSourceImpl,
+  toggleOutlineGroup,
   type DataToolsContext,
 } from './data-tools-actions'
+import { installOutlineGutter, type OutlineGutterHandle } from './outline-gutter'
 import { installTsvClipboardFix } from './clipboard-tsv'
 import { installFilteredCopyHook } from './filtered-copy'
 import { installFilterRangeOutlineSuppression } from './filter-range-outline'
@@ -478,6 +484,9 @@ export function App(): React.JSX.Element {
   const visualInstallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sparklineDisposablesRef = useRef<{ dispose(): void }[]>([])
   const sparklineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /// The outline +/- gutter overlay; reinstalled per workbook session (the
+  /// scroll observer binds the session's render unit).
+  const outlineGutterRef = useRef<OutlineGutterHandle | null>(null)
   const visualViewportKeyRef = useRef('')
   const demoVisualDisposablesRef = useRef<{ dispose(): void }[]>([])
   const demoVisualInstallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -512,6 +521,28 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     recomputeSheetContent()
   }, [workbookFile, recomputeSheetContent])
+  // The outline +/- gutter: one overlay per workbook session (its scroll
+  // observer binds the session's render unit). Demo workbooks without a
+  // streamed state simply have no outline to show.
+  useEffect(() => {
+    const runtime = univerRef.current
+    if (!runtime || !runtime.univerAPI.getActiveWorkbook()) return
+    outlineGutterRef.current = installOutlineGutter(runtime, lazyWorkbookRef, {
+      placement: () => {
+        const state = lazyWorkbookRef.current
+        const sheetId = runtime.univerAPI.getActiveWorkbook()?.getActiveSheet()?.getSheetId()
+        if (!state || !sheetId) return { summaryBelow: true, summaryRight: true }
+        return outlinePlacement(state, sheetId)
+      },
+      onToggle: (axis, detail, summary, collapse) => {
+        toggleOutlineGroup(dataToolsContext(), axis, detail, summary, collapse)
+      },
+    })
+    return () => {
+      outlineGutterRef.current?.dispose()
+      outlineGutterRef.current = null
+    }
+  }, [workbookFile?.sessionId])
   // The close guard lives in the main process; keep it fed with the badge count.
   useEffect(() => {
     window.desktopApi?.notifyPendingEdits?.(pendingEdits)
@@ -738,7 +769,14 @@ export function App(): React.JSX.Element {
 
   /** App-scope refs/state bundle for the extracted data-tool actions (data-tools-actions.ts). */
   function dataToolsContext(): DataToolsContext {
-    return { univerRef, lazyWorkbookRef, setMessage, setPendingEdits, setAdvancedFilterColumns }
+    return {
+      univerRef,
+      lazyWorkbookRef,
+      setMessage,
+      setPendingEdits,
+      setAdvancedFilterColumns,
+      onOutlineChanged: () => outlineGutterRef.current?.refresh(),
+    }
   }
 
   function pageLayoutContext(): PageLayoutContext {
@@ -4356,6 +4394,18 @@ export function App(): React.JSX.Element {
           )
         }
         onCreateSubtotal={(config) => handleCreateSubtotalImpl(dataToolsContext(), config)}
+        onGetT2cSource={() => readTextToColumnsSourceImpl(dataToolsContext())}
+        onApplyTextToColumns={(config) => handleTextToColumnsImpl(dataToolsContext(), config)}
+        onGetOutlineSettings={() => {
+          const state = lazyWorkbookRef.current
+          const sheetId = univerRef.current?.univerAPI
+            .getActiveWorkbook()
+            ?.getActiveSheet()
+            ?.getSheetId()
+          if (!state || !sheetId) return { summaryBelow: true, summaryRight: true }
+          return outlinePlacement(state, sheetId)
+        }}
+        onApplyOutlineSettings={(value) => handleOutlineSettingsImpl(dataToolsContext(), value)}
         onCreateConsolidate={(config) => handleCreateConsolidateImpl(dataToolsContext(), config)}
         onGetConsolidateDefault={() => consolidateDefaultReferenceImpl(dataToolsContext())}
         onApplyHeaderFooter={(result) => handleApplyHeaderFooterImpl(pageLayoutContext(), result)}

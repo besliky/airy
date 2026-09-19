@@ -915,7 +915,7 @@ fn reads_saved_print_settings_and_print_names() {
         (
             "xl/worksheets/sheet1.xml",
             r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>
+<sheetPr><outlinePr summaryBelow="0"/><pageSetUpPr fitToPage="1"/></sheetPr>
 <customSheetViews><customSheetView guid="{1}"><pageSetup paperSize="1" orientation="landscape"/><headerFooter><oddHeader>decoy</oddHeader></headerFooter></customSheetView></customSheetViews>
 <sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>
 <printOptions gridLines="1" headings="true"/>
@@ -970,6 +970,10 @@ fn reads_saved_print_settings_and_print_names() {
     assert_eq!(margins.footer, 0.4);
     assert_eq!(setup.odd_header.as_deref(), Some("&CBudget &A"));
     assert_eq!(setup.odd_footer.as_deref(), Some("&CSeite &P von &N"));
+    // outlinePr: a present attribute decides, an absent one stays None
+    // (Excel's default is true).
+    assert_eq!(setup.outline_summary_below, Some(false));
+    assert_eq!(setup.outline_summary_right, None);
 }
 
 /// differentOddEven/differentFirst plus all six section texts come

@@ -1379,6 +1379,8 @@ function parsePagePrintSettings(input: unknown): WorkbookRangeResult['pageSetup'
     (input.evenFooter !== undefined && !isBoundedString(input.evenFooter, 500)) ||
     (input.firstHeader !== undefined && !isBoundedString(input.firstHeader, 500)) ||
     (input.firstFooter !== undefined && !isBoundedString(input.firstFooter, 500)) ||
+    (input.outlineSummaryBelow !== undefined && typeof input.outlineSummaryBelow !== 'boolean') ||
+    (input.outlineSummaryRight !== undefined && typeof input.outlineSummaryRight !== 'boolean') ||
     (input.headerFooterPictures !== undefined &&
       !isHeaderFooterPictureList(input.headerFooterPictures))
   ) {
@@ -1429,6 +1431,12 @@ function parsePagePrintSettings(input: unknown): WorkbookRangeResult['pageSetup'
     ...(validated.evenFooter === undefined ? {} : { evenFooter: validated.evenFooter }),
     ...(validated.firstHeader === undefined ? {} : { firstHeader: validated.firstHeader }),
     ...(validated.firstFooter === undefined ? {} : { firstFooter: validated.firstFooter }),
+    ...(validated.outlineSummaryBelow === undefined
+      ? {}
+      : { outlineSummaryBelow: validated.outlineSummaryBelow }),
+    ...(validated.outlineSummaryRight === undefined
+      ? {}
+      : { outlineSummaryRight: validated.outlineSummaryRight }),
     ...(validated.headerFooterPictures === undefined
       ? {}
       : {
