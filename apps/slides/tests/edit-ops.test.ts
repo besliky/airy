@@ -10,10 +10,12 @@ import {
   createBlankPptx,
   getSlideAnimations,
   extractMergeSlideSource,
+  addPicture,
   openPptx,
   parseMasterPart,
   patchSlideXml,
   savePptx,
+  solidPng,
   TABLE_STYLE_PRESETS,
   type OpenedPptx,
   type SlideElement,
@@ -1314,5 +1316,66 @@ describe('setTableStyle resolves model-facing fields', () => {
     })
     expect(named.applied).toBe(false)
     expect(named.failures![0]!.error).toContain('#RRGGBB')
+  })
+})
+
+describe('setAltText op (PAR-304: cNvPr title/descr authoring)', () => {
+  it('writes title/descr, journals before/after, and clears with null', async () => {
+    const r = runTxn(opened, {
+      ops: [
+        {
+          op: 'setAltText',
+          target: { slide: 0, el: titleId },
+          alt: { title: 'Header', descr: 'Slide heading' },
+        },
+      ],
+    })
+    expect(r.applied).toBe(true)
+    const el = els().find((e) => e.id === titleId) as TextElement
+    expect(el.title).toBe('Header')
+    expect(el.descr).toBe('Slide heading')
+    expect(r.records![0]!.before).toEqual({ title: null, descr: null })
+    expect(patchSlideXml(opened.deck.slides[0]!)).toContain('title="Header"')
+
+    // Round-trip: the attributes survive save → reopen
+    const reopened = await openPptx(await savePptx(opened))
+    const el2 = reopened.deck.slides[0]!.elements[0] as TextElement
+    expect(el2.title).toBe('Header')
+    expect(el2.descr).toBe('Slide heading')
+
+    // null clears
+    const clear = runTxn(opened, {
+      ops: [{ op: 'setAltText', target: { slide: 0, el: titleId }, alt: { title: null } }],
+    })
+    expect(clear.applied).toBe(true)
+    expect((els().find((e) => e.id === titleId) as TextElement).title).toBeUndefined()
+  })
+
+  it('guides a missing payload and non-string fields', () => {
+    const missing = runTxn(opened, {
+      ops: [{ op: 'setAltText', target: { slide: 0, el: titleId } }],
+    })
+    expect(missing.applied).toBe(false)
+    expect(missing.failures![0]!.error).toContain('"alt"')
+    const typed = runTxn(opened, {
+      ops: [{ op: 'setAltText', target: { slide: 0, el: titleId }, alt: { title: 5 } }],
+    })
+    expect(typed.applied).toBe(false)
+    expect(typed.failures![0]!.error).toContain('alt.title')
+  })
+
+  it('refuses ink pictures whose descr slot holds the vector payload', () => {
+    const pic = addPicture(opened, opened.deck.slides[0]!, {
+      bytes: solidPng(4, 4, [0, 128, 0]),
+      ext: 'png',
+      offset: { x: 0, y: 2_000_000, cx: 457200, cy: 457200 },
+    })!
+    // The renderer marks its ink strokes by the aislides-ink name prefix
+    pic.name = 'aislides-ink-2'
+    const r = runTxn(opened, {
+      ops: [{ op: 'setAltText', target: { slide: 0, el: pic.id }, alt: { descr: 'x' } }],
+    })
+    expect(r.applied).toBe(false)
+    expect(r.failures![0]!.error).toContain('does not support alt text')
   })
 })
