@@ -144,12 +144,14 @@ describe('html tools over MCP', () => {
       expect(inserted.structuredContent?.inserted).toBe(2)
       expect(inserted.structuredContent?.at).toBe(12)
 
-      // line ops: retarget a link, fix a typo, delete the old list line
+      // line ops: retarget a link, fix a typo, delete the old list line.
+      // the window is 12..14: line 15 is the phantom after the final
+      // newline and no longer an addressable index (BUG-1102)
       const ops = await call(client, 'apply_ops', {
         handle,
         ops: [
           { op: 'findReplace', find: 'detail.html', replace: 'full-detail.html' },
-          { op: 'findReplace', find: 'promising', replace: 'excellent', from: 12, to: 16 },
+          { op: 'findReplace', find: 'promising', replace: 'excellent', from: 12, to: 14 },
           { op: 'deleteLines', from: 11, to: 11 },
         ],
       })
@@ -620,6 +622,39 @@ describe('html tools over MCP', () => {
       expect((await readFile(join(root, 'turkish.html'))).toString('utf8')).toBe(
         '<p>İstanbul WORD not</p>\n',
       )
+    } finally {
+      await close()
+    }
+  })
+
+  it('default-append keeps the trailing-newline shape and skips no leading newline (BUG-1102)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // file WITH a trailing newline: the fragment lands after the last
+      // real line, the final \n survives, no blank line appears
+      const handle = await openFixture(
+        client,
+        'tail.html',
+        Buffer.from('<p>a</p>\n<p>b</p>\n', 'utf8'),
+      )
+      const opened = await call(client, 'open_document', { path: 'tail.html' })
+      expect(opened.structuredContent?.lineCount).toBe(2)
+      const atEnd = await call(client, 'insert_content', { handle, html: '<p>c</p>' })
+      expect(atEnd.isError).toBeFalsy()
+      expect(atEnd.structuredContent?.lineCount).toBe(3)
+      await call(client, 'save_document', { handle })
+      expect(
+        Buffer.compare(
+          await readFile(join(root, 'tail.html')),
+          Buffer.from('<p>a</p>\n<p>b</p>\n<p>c</p>\n'),
+        ),
+      ).toBe(0)
+
+      // empty file: no leading newline (default and at:-1 agree)
+      const handle2 = await openFixture(client, 'empty.html', Buffer.from('', 'utf8'))
+      await call(client, 'insert_content', { handle: handle2, html: '<p>hello</p>' })
+      await call(client, 'save_document', { handle: handle2 })
+      expect((await readFile(join(root, 'empty.html'))).toString('utf8')).toBe('<p>hello</p>\n')
     } finally {
       await close()
     }

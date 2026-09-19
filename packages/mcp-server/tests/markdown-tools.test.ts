@@ -128,7 +128,9 @@ describe('markdown tools over MCP', () => {
       const handle = await openFixture(client)
       const opened = await call(client, 'open_document', { path: 'notes.md' })
       expect(opened.structuredContent?.kind).toBe('markdown')
-      expect(opened.structuredContent?.lineCount).toBe(13)
+      // 12 real lines + a trailing newline: the phantom position after the
+      // final \n is not a line (BUG-1102)
+      expect(opened.structuredContent?.lineCount).toBe(12)
       expect(opened.structuredContent?.headingCount).toBe(3)
       expect(opened.structuredContent?.eol).toBe('\n')
 
@@ -150,21 +152,23 @@ describe('markdown tools over MCP', () => {
       expect(byMarker.isError).toBeFalsy()
       expect(byMarker.structuredContent?.at).toBe(8) // marker shifted to line 8
 
-      // default insert appends at the end
+      // default insert appends at the end (12 real lines + 2 + 1 + 2)
       const atEnd = await call(client, 'insert_content', {
         handle,
         text: 'Signed,\nThe Team',
       })
       expect(atEnd.isError).toBeFalsy()
-      expect(atEnd.structuredContent?.lineCount).toBe(18)
+      expect(atEnd.structuredContent?.lineCount).toBe(17)
 
       // line ops: rename a bullet, delete the costs line, scoped find/replace
+      // (the to bound shrinks by one after the delete: the phantom after the
+      // final newline is no longer an addressable index — BUG-1102)
       const ops = await call(client, 'apply_ops', {
         handle,
         ops: [
           { op: 'findReplace', find: 'EMEA: strong', replace: 'EMEA: very strong' },
           { op: 'deleteLines', from: 3, to: 3 },
-          { op: 'findReplace', find: 'promising', replace: 'excellent', from: 10, to: 16 },
+          { op: 'findReplace', find: 'promising', replace: 'excellent', from: 10, to: 15 },
         ],
       })
       expect(ops.isError).toBeFalsy()
@@ -490,8 +494,8 @@ describe('markdown tools over MCP', () => {
       })
       expect(beyond.isError).toBe(true)
       expect(text(beyond)).toContain('out of range')
-      const ok = await call(client, 'read_document', { handle, range: { start: 0, end: 12 } })
-      expect(text(ok)).toContain('Selected 13 line(s)')
+      const ok = await call(client, 'read_document', { handle, range: { start: 0, end: 11 } })
+      expect(text(ok)).toContain('Selected 12 line(s)')
     } finally {
       await close()
     }
@@ -615,7 +619,9 @@ describe('markdown tools over MCP', () => {
         // the relative target resolved against the OPEN-time root
         expect(existsSync(join(root, 'pinned-out.md'))).toBe(true)
         expect(existsSync(join(driftRoot, 'pinned-out.md'))).toBe(false)
-        expect((await readFile(join(root, 'pinned-out.md'), 'utf8')).endsWith('Edit.')).toBe(true)
+        // the appended block landed before the trailing phantom: the file
+        // keeps its final newline instead of losing it (BUG-1102)
+        expect((await readFile(join(root, 'pinned-out.md'), 'utf8')).endsWith('Edit.\n')).toBe(true)
       } finally {
         process.env[WORKSPACE_ROOT_ENV] = root
         await rm(driftRoot, { recursive: true, force: true })
@@ -700,6 +706,81 @@ describe('markdown tools over MCP', () => {
       expect((await readFile(join(root, 'turkish.md'))).toString('utf8')).toBe(
         'İstanbul WORD not\n',
       )
+    } finally {
+      await close()
+    }
+  })
+
+  it('default-append into a file with a trailing newline keeps the shape (BUG-1102)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // audit live repro: "a\nb\n" + insert "c" used to save "a\nb\n\nc" —
+      // the phantom after the final \n became a real blank line and the
+      // file lost its trailing newline; lineCount reported 3 for 2 lines
+      const handle = await openFixture(client, 'tail.md', Buffer.from('a\nb\n', 'utf8'))
+      const opened = await call(client, 'open_document', { path: 'tail.md' })
+      expect(opened.structuredContent?.lineCount).toBe(2)
+      const atEnd = await call(client, 'insert_content', { handle, text: 'c' })
+      expect(atEnd.isError).toBeFalsy()
+      expect(atEnd.structuredContent?.lineCount).toBe(3)
+      expect(text(atEnd)).not.toContain('gained one')
+      await call(client, 'save_document', { handle })
+      expect(Buffer.compare(await readFile(join(root, 'tail.md')), Buffer.from('a\nb\nc\n'))).toBe(
+        0,
+      )
+
+      // the op path lands the same way: insertLines after the LAST line
+      // (index count-1) inserts before the phantom, not after it
+      const handle2 = await openFixture(client, 'tail2.md', Buffer.from('a\r\nb\r\n', 'utf8'))
+      const ops = await call(client, 'apply_ops', {
+        handle: handle2,
+        ops: [{ op: 'insertLines', after: 1, text: 'c' }],
+      })
+      expect(ops.isError).toBeFalsy()
+      await call(client, 'save_document', { handle: handle2 })
+      expect((await readFile(join(root, 'tail2.md'))).toString('utf8')).toBe('a\r\nb\r\nc\r\n')
+
+      // the phantom position is not addressable any more (3 real lines, so
+      // index 3 — the slot after the final \n — is out of range)
+      const phantom = await call(client, 'apply_ops', {
+        handle: handle2,
+        ops: [{ op: 'deleteLines', from: 3, to: 3 }],
+      })
+      expect(phantom.isError).toBe(true)
+      expect(text(phantom)).toContain('0 <= from <= to < 3')
+    } finally {
+      await close()
+    }
+  })
+
+  it('default-append into an empty file adds no leading newline (BUG-1102)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // the empty file's lone empty line is the whole file: the block lands
+      // at the start and the lone line becomes the trailing phantom. The
+      // audit repro had a leading "\n"; default and at:-1 must agree
+      const handle = await openFixture(client, 'empty.md', Buffer.from('', 'utf8'))
+      const opened = await call(client, 'open_document', { path: 'empty.md' })
+      expect(opened.structuredContent?.lineCount).toBe(1)
+      const atEnd = await call(client, 'insert_content', { handle, text: 'hello' })
+      expect(atEnd.isError).toBeFalsy()
+      expect(atEnd.structuredContent?.lineCount).toBe(1)
+      await call(client, 'save_document', { handle })
+      expect((await readFile(join(root, 'empty.md'))).toString('utf8')).toBe('hello\n')
+
+      const handle2 = await openFixture(client, 'empty2.md', Buffer.from('', 'utf8'))
+      await call(client, 'insert_content', { handle: handle2, text: 'hello', at: -1 })
+      await call(client, 'save_document', { handle: handle2 })
+      expect((await readFile(join(root, 'empty2.md'))).toString('utf8')).toBe('hello\n')
+
+      const handle3 = await openFixture(client, 'empty3.md', Buffer.from('', 'utf8'))
+      const ops = await call(client, 'apply_ops', {
+        handle: handle3,
+        ops: [{ op: 'insertLines', after: 0, text: 'hello' }],
+      })
+      expect(ops.isError).toBeFalsy()
+      await call(client, 'save_document', { handle: handle3 })
+      expect((await readFile(join(root, 'empty3.md'))).toString('utf8')).toBe('hello\n')
     } finally {
       await close()
     }
