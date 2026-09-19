@@ -2,8 +2,8 @@
 
 `packages/mcp-server` (npm name `@airy-office/mcp`) is a Model Context
 Protocol server that lets CLI coding agents work with real office files:
-headless `.docx` / `.xlsx` / `.pptx` / Markdown / HTML editing through the
-suite's own engines,
+headless `.docx` / `.xlsx` / `.pptx` / Markdown / HTML editing and `.pdf`
+text extraction through the suite's own engines,
 plus a live bridge into the running Airy desktop app. It speaks MCP over stdio,
 runs as a plain Node process (no Electron, no display), and needs no
 installed app for the headless tools.
@@ -196,7 +196,7 @@ Headless (no app required):
 | Tool                 | Signature (short)                                                                                                                                                                                                            |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ping`               | `()` — liveness probe                                                                                                                                                                                                        |
-| `open_document`      | `(path)` — open `.docx/.xlsx/.xlsm/.xls/.ods/.doc/.odt/.md/.markdown/.html/.htm/.pptx`, returns a session handle + meta                                                                                                      |
+| `open_document`      | `(path)` — open `.docx/.xlsx/.xlsm/.xls/.ods/.doc/.odt/.md/.markdown/.html/.htm/.pptx/.pdf`, returns a session handle + meta                                                                                                 |
 | `read_document`      | `(handle, blocks? \| range?)` — block overview or full restricted HTML for text documents; markdown: heading structure; html: parse5 structure summary (lines)                                                               |
 | `read_workbook`      | `(handle, sheet?, range?)` — sheet overview or a pipe table of an A1 range                                                                                                                                                   |
 | `read_deck`          | `(handle, slide?)` — deck overview (`index\|elements\|preview` per slide) or one slide's element list + full text                                                                                                            |
@@ -323,6 +323,12 @@ headlessly. Legacy `.ppt`/`.odp` are refused with a conversion hint
 (`soffice --convert-to pptx`). Saves keep untouched zip entries
 byte-identical and a zero-edit save writes the original bytes back verbatim.
 
+PDF reading (`.pdf`) is extraction-only: the document opens read-only
+(`editable: false`) with text extracted by pdfjs through the file-parse
+package (pages separated by blank lines; scanned/image-only pages extract no
+text). `read_document` shows the text, saving is refused — headless PDF
+editing is out of scope.
+
 ## Live mode
 
 When the Airy app runs, its main process starts a bridge server on a local
@@ -382,6 +388,7 @@ deliberate choice) and its result says whose turn it was (`anotherClient`).
 | `.md` / `.markdown` | native (UTF-8, BOM accepted; invalid UTF-8 refused)              | line-preserving UTF-8; zero-edit saves round-trip verbatim; UTF-16 originals convert to UTF-8 on save                                                 |
 | `.html` / `.htm`    | native (UTF-8, BOM accepted; declared legacy charsets accepted)  | line-preserving UTF-8; zero-edit saves round-trip verbatim; legacy/UTF-16 originals convert to UTF-8 (legacy charset declarations rewritten to utf-8) |
 | `.pptx`             | native (pptx-engine; text boxes and shape text editable)         | byte-preserving `.pptx`; zero-edit saves round-trip verbatim                                                                                          |
+| `.pdf`              | read-only text extraction (pdfjs via file-parse)                 | not editable (saving is refused)                                                                                                                      |
 
 Byte preservation differs by format. `docx` saves keep untouched parts
 byte-identical, and a zero-edit save writes the original bytes back verbatim.

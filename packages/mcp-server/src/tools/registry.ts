@@ -172,7 +172,8 @@ export function registerTools(server: McpServer): void {
         'UTF-8/UTF-16 and declared legacy charsets accepted, undeclared non-UTF-8 refused). ' +
         '.pptx opens as an editable slides session (read_deck shows the slide/element structure; ' +
         "insert_content adds text boxes or replaces a shape's text; legacy .ppt/.odp are refused " +
-        'with a conversion hint). The path ' +
+        'with a conversion hint). .pdf opens read-only as extracted text (pdfjs; pages separated ' +
+        'by blank lines; not editable headlessly). The path ' +
         'must be absolute or workspace-relative and stay inside the server ' +
         'workspace root (AIRY_WORKSPACE_ROOT env var, default: the process working directory). ' +
         'Read-only: nothing is written until save_document. Close sessions with close_document.',
@@ -734,9 +735,12 @@ export function registerTools(server: McpServer): void {
     async ({ handle, path, overwrite, format }) => {
       const session = getSession(handle)
       if (session instanceof TextSession) {
+        const meta = session.meta()
         throw new Error(
-          'This is a read-only text session (legacy .doc without LibreOffice); it cannot be saved. ' +
-            'Install LibreOffice to open the document as an editable converted .docx session.',
+          `This is a read-only text session (.${meta.format}); it cannot be saved.` +
+            (meta.format === 'doc'
+              ? ' Install LibreOffice to open the document as an editable converted .docx session.'
+              : ''),
         )
       }
       if (session instanceof MarkdownSession) {
