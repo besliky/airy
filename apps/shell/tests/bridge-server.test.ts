@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { connect } from 'node:net'
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   bridgeInfoPath,
@@ -486,6 +486,40 @@ describe('closeWithDrainTimeout', () => {
     closeWithDrainTimeout(socket)
     socket.finishEnd()
     expect(socket.destroyed).toBe(true)
+  })
+
+  it('destroys on the hard deadline even while drip-fed data keeps the idle timer re-armed (SEC-1101)', () => {
+    // socket.setTimeout is an IDLE timer: incoming bytes reset it at the
+    // kernel level, so a peer writing one byte per interval holds the
+    // half-closed socket forever. The one-shot deadline must not care.
+    vi.useFakeTimers()
+    try {
+      const socket = fakeDrainableSocket()
+      closeWithDrainTimeout(socket)
+      // the drip-feed keeps the idle timer perpetually re-armed, so it never
+      // fires (fireTimeout stays unreached, as in the real scenario)
+      vi.advanceTimersByTime(BRIDGE_CLOSE_DRAIN_TIMEOUT_MS - 1)
+      expect(socket.destroyed).toBe(false)
+      vi.advanceTimersByTime(1)
+      expect(socket.destroyed).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('clears the hard deadline once the buffer drains (no late second destroy)', () => {
+    vi.useFakeTimers()
+    try {
+      const socket = fakeDrainableSocket()
+      closeWithDrainTimeout(socket)
+      socket.finishEnd()
+      expect(socket.destroyed).toBe(true)
+      socket.destroyed = false
+      vi.advanceTimersByTime(BRIDGE_CLOSE_DRAIN_TIMEOUT_MS * 2)
+      expect(socket.destroyed).toBe(false) // the deadline timer was cleared
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
