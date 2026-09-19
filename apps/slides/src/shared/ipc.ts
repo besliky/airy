@@ -578,6 +578,83 @@ export type TransitionKind =
   | 'zoom'
   | 'random'
 
+/**
+ * Transition direction ("Effect Options"), named by where the incoming slide
+ * comes from; 'in'/'out' are the zoom and split-dir variants.
+ */
+export type TransitionDir =
+  | 'fromBottom'
+  | 'fromTop'
+  | 'fromLeft'
+  | 'fromRight'
+  | 'fromBottomLeft'
+  | 'fromBottomRight'
+  | 'fromTopLeft'
+  | 'fromTopRight'
+  | 'in'
+  | 'out'
+
+/** A slide's transition: kind + Effect Options (echoed by getTransition). */
+export interface TransitionSpec {
+  kind: TransitionKind
+  /** Direction variant (only kinds that offer one) */
+  dir?: TransitionDir
+  /** Split orientation (split only) */
+  orient?: 'horz' | 'vert'
+  /** Explicit duration (ms; p14:dur + legacy spd bucket); null = effect default */
+  durationMs: number | null
+}
+
+/** Which directions a transition kind offers (empty = the kind has no options). */
+export const TRANSITION_DIRS: Record<TransitionKind, readonly TransitionDir[]> = {
+  none: [],
+  morph: [],
+  fade: [],
+  circle: [],
+  dissolve: [],
+  random: [],
+  push: ['fromBottom', 'fromTop', 'fromLeft', 'fromRight'],
+  wipe: ['fromBottom', 'fromTop', 'fromLeft', 'fromRight'],
+  cover: [
+    'fromBottom',
+    'fromTop',
+    'fromLeft',
+    'fromRight',
+    'fromBottomLeft',
+    'fromBottomRight',
+    'fromTopLeft',
+    'fromTopRight',
+  ],
+  pull: [
+    'fromBottom',
+    'fromTop',
+    'fromLeft',
+    'fromRight',
+    'fromBottomLeft',
+    'fromBottomRight',
+    'fromTopLeft',
+    'fromTopRight',
+  ],
+  split: ['in', 'out'],
+  zoom: ['in', 'out'],
+}
+
+/** The direction a plain, option-less transition of each kind plays as (null = no direction). */
+export const TRANSITION_DEFAULT_DIR: Record<TransitionKind, TransitionDir | null> = {
+  none: null,
+  morph: null,
+  fade: null,
+  circle: null,
+  dissolve: null,
+  random: null,
+  push: 'fromBottom',
+  wipe: 'fromRight',
+  cover: 'fromRight',
+  pull: 'fromRight',
+  split: 'out',
+  zoom: 'in',
+}
+
 // ── Shape animations (the "Animations" tab) ──────────────────────────
 
 export type AnimEffectKind =
@@ -604,6 +681,67 @@ export type AnimEffectKind =
 
 export type AnimTrigger = 'onClick' | 'withPrev' | 'afterPrev'
 
+/** Direction variant of an animation effect ("Effect Options"; PowerPoint-style names). */
+export type AnimDirection =
+  | 'fromTop'
+  | 'fromBottom'
+  | 'fromLeft'
+  | 'fromRight'
+  | 'fromTopLeft'
+  | 'fromTopRight'
+  | 'fromBottomLeft'
+  | 'fromBottomRight'
+  | 'horzIn'
+  | 'horzOut'
+  | 'vertIn'
+  | 'vertOut'
+  | 'in'
+  | 'out'
+  | 'cw'
+  | 'ccw'
+
+/** Which directions an effect offers (empty = the effect has no direction option). */
+export const ANIM_EFFECT_DIRS: Record<AnimEffectKind, readonly AnimDirection[]> = {
+  appear: [],
+  fade: [],
+  flyIn: [
+    'fromTop',
+    'fromBottom',
+    'fromLeft',
+    'fromRight',
+    'fromTopLeft',
+    'fromTopRight',
+    'fromBottomLeft',
+    'fromBottomRight',
+  ],
+  wipe: ['fromTop', 'fromBottom', 'fromLeft', 'fromRight'],
+  wipeDown: ['fromTop', 'fromBottom', 'fromLeft', 'fromRight'],
+  splitIn: ['horzIn', 'horzOut', 'vertIn', 'vertOut'],
+  bounce: [],
+  flipIn: [],
+  zoom: ['in', 'out'],
+  pulse: [],
+  spin: ['cw', 'ccw'],
+  grow: [],
+  teeter: [],
+  disappear: [],
+  fadeOut: [],
+  flyOut: [
+    'fromTop',
+    'fromBottom',
+    'fromLeft',
+    'fromRight',
+    'fromTopLeft',
+    'fromTopRight',
+    'fromBottomLeft',
+    'fromBottomRight',
+  ],
+  wipeOut: ['fromTop', 'fromBottom', 'fromLeft', 'fromRight'],
+  shrink: [],
+  zoomOut: ['in', 'out'],
+  motionPath: [],
+}
+
 /** One animation (list order = play order); sourceId locates the target element. */
 export interface AnimationItem {
   sourceId: string
@@ -613,6 +751,8 @@ export interface AnimationItem {
   trigger: AnimTrigger
   durationMs: number
   delayMs: number
+  /** Direction variant (only effects listed in ANIM_EFFECT_DIRS; undefined = the effect's default) */
+  direction?: AnimDirection
   /** Path when effect='motionPath' (SVG subset M/L/C/Z, coordinates 0..1 relative to slide width/height) */
   motionPath?: string
   /** Per-paragraph animation: 0-based paragraph number; default = the whole shape */
@@ -632,10 +772,16 @@ export interface SetAnimationsOp {
   items: Array<Omit<AnimationItem, 'targetName'>>
 }
 
-/** Set the transition effect; slideIndex=-1 applies to all pages. */
+/** Set the transition effect; slideIndex=-1 applies to all pages (Effect Options ride along; omitted fields = defaults). */
 export interface SetTransitionOp {
   slideIndex: number
   kind: TransitionKind
+  /** Direction variant (kinds that offer one) */
+  dir?: TransitionDir
+  /** Split orientation (split only) */
+  orient?: 'horz' | 'vert'
+  /** Explicit duration ms (p14:dur); null/omitted = effect default */
+  durationMs?: number | null
 }
 
 /** Batch-write each page's auto-advance time (<p:transition advTm>, ms; ms=null clears). Used by rehearsal timing save. */
@@ -1471,8 +1617,8 @@ export interface SlidesApi {
   applyTheme: (op: ApplyThemeOp) => Promise<RenderSlide[] | { error: string } | null>
   /** Set the transition effect (takes effect in PowerPoint shows of the saved pptx); returns success */
   setTransition: (op: SetTransitionOp) => Promise<boolean>
-  /** The current page's transition effect (echoed on page switch) */
-  getTransition: (slideIndex: number) => Promise<TransitionKind>
+  /** The current page's transition with its Effect Options (echoed on page switch) */
+  getTransition: (slideIndex: number) => Promise<TransitionSpec>
   /** Batch-write each page's auto-advance time (rehearsal timing save; the saved pptx auto-advances in PowerPoint shows); returns success */
   setAdvanceTimes: (op: SetAdvanceTimesOp) => Promise<boolean>
   /** The current page's animation list (read by the Animations tab / during shows) */

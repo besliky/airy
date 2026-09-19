@@ -13,7 +13,7 @@ import type {
   MasterPartItem,
   PasteSlideMode,
   SectionInfo,
-  TransitionKind,
+  TransitionSpec,
 } from '../shared/ipc'
 import type { BrushFormat } from './format-brush'
 import type { InkTool } from './ink'
@@ -136,7 +136,7 @@ export interface ActionCtx {
   selAnim: number
   setSelAnim: Set<number>
   setHoverAnim: Set<{ nonce: number; items: AnimationItem[] } | null>
-  setTransition: Set<TransitionKind>
+  setTransition: Set<TransitionSpec>
   animByParagraph: boolean
   timingIdx: number
 

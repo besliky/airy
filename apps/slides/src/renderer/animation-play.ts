@@ -11,7 +11,7 @@
  * around the Konva node (opacity/scale/rotation/offset/wipe clip) — a CSS approximation
  * matching one-to-one the OOXML effects the engine writes into the pptx.
  */
-import type { AnimEffectKind, AnimationItem } from '../shared/ipc'
+import type { AnimDirection, AnimEffectKind, AnimationItem } from '../shared/ipc'
 
 export interface TimedAnim {
   item: AnimationItem
@@ -25,6 +25,57 @@ export interface AnimStep {
   auto: boolean
   items: TimedAnim[]
   totalMs: number
+}
+
+/** Direction each effect plays as when the model has none (mirrors the engine's ANIM_DEFAULT_DIR). */
+export const ANIM_DEFAULT_DIRECTION: Partial<Record<AnimEffectKind, AnimDirection>> = {
+  flyIn: 'fromBottom',
+  flyOut: 'fromBottom',
+  wipe: 'fromBottom',
+  wipeDown: 'fromTop',
+  wipeOut: 'fromTop',
+  splitIn: 'horzIn',
+  zoom: 'in',
+  zoomOut: 'in',
+  spin: 'cw',
+}
+
+/**
+ * Clip reveal mode: which area stays visible as t (0..1) grows.
+ * Vertical reveals anchor top/bottom or expand from the horizontal center (mid);
+ * horizontal reveals anchor left/right or expand from the vertical center (midh).
+ */
+export type ClipMode = 'btm' | 'top' | 'mid' | 'lft' | 'rgt' | 'midh'
+
+/** Per-axis travel sign of the fly directions (in slide-width/height units). */
+function flyDelta(dir: AnimDirection): { dx: 0 | 1 | -1; dy: 0 | 1 | -1 } {
+  const out = { dx: 0 as 0 | 1 | -1, dy: 0 as 0 | 1 | -1 }
+  if (dir.includes('Left')) out.dx = -1
+  else if (dir.includes('Right')) out.dx = 1
+  if (dir.includes('Top')) out.dy = -1
+  else if (dir.includes('Bottom')) out.dy = 1
+  return out
+}
+
+/** Entrance wipe: the visible region grows from the "from" edge. */
+const ENTR_WIPE_MODE: Record<'fromTop' | 'fromBottom' | 'fromLeft' | 'fromRight', ClipMode> = {
+  fromBottom: 'btm',
+  fromTop: 'top',
+  fromLeft: 'lft',
+  fromRight: 'rgt',
+}
+
+/** Exit wipe: content is erased toward the "from" edge, so the visible region is anchored at the opposite one. */
+const EXIT_WIPE_MODE: Record<'fromTop' | 'fromBottom' | 'fromLeft' | 'fromRight', ClipMode> = {
+  fromBottom: 'top',
+  fromTop: 'btm',
+  fromLeft: 'rgt',
+  fromRight: 'lft',
+}
+
+function wipeDir(item: AnimationItem): 'fromTop' | 'fromBottom' | 'fromLeft' | 'fromRight' {
+  return (item.direction ?? ANIM_DEFAULT_DIRECTION[item.effect]) as
+    'fromTop' | 'fromBottom' | 'fromLeft' | 'fromRight'
 }
 
 /** Effect category (entrance/emphasis/exit/motion path). */
@@ -104,8 +155,8 @@ export interface NodeAnimState {
   /** Extra offset (px, canvas coordinates) */
   dx: number
   dy: number
-  /** Clip reveal: t=visible ratio 0..1; mode=visible area anchored to bottom (btm)/top (top)/center (mid); null = no clipping */
-  clip: { t: number; mode: 'btm' | 'top' | 'mid' } | null
+  /** Clip reveal: t=visible ratio 0..1; mode=which region stays visible (see ClipMode); null = no clipping */
+  clip: { t: number; mode: ClipMode } | null
 }
 
 const NORMAL: NodeAnimState = {
@@ -193,7 +244,10 @@ export function samplePathPoints(path: string): Array<{ x: number; y: number }> 
 }
 
 /** Point on the path at progress q (0..1), by arc length. */
-export function pointAtPath(pts: Array<{ x: number; y: number }>, q: number): { x: number; y: number } {
+export function pointAtPath(
+  pts: Array<{ x: number; y: number }>,
+  q: number,
+): { x: number; y: number } {
   if (pts.length === 1) return pts[0]!
   const lens: number[] = [0]
   for (let i = 1; i < pts.length; i++) {
@@ -225,8 +279,15 @@ function cachedPathPoints(path: string): Array<{ x: number; y: number }> {
 }
 
 /** Write the state of a single animation at progress p (0..1) into st; p=1 means finished. */
-function applyEffect(st: NodeAnimState, item: AnimationItem, p: number, canvasW: number, canvasH: number): void {
+function applyEffect(
+  st: NodeAnimState,
+  item: AnimationItem,
+  p: number,
+  canvasW: number,
+  canvasH: number,
+): void {
   const q = easeOut(Math.min(1, Math.max(0, p)))
+  const dir = item.direction ?? ANIM_DEFAULT_DIRECTION[item.effect]
   switch (item.effect) {
     case 'appear':
       st.hidden = false
@@ -235,21 +296,23 @@ function applyEffect(st: NodeAnimState, item: AnimationItem, p: number, canvasW:
       st.hidden = false
       st.opacity = q
       break
-    case 'flyIn':
+    case 'flyIn': {
       st.hidden = false
-      st.dy = (1 - q) * canvasH
+      const d = flyDelta(dir ?? 'fromBottom')
+      st.dx = (1 - q) * d.dx * canvasW
+      st.dy = (1 - q) * d.dy * canvasH
       break
+    }
     case 'wipe':
-      st.hidden = false
-      st.clip = p >= 1 ? null : { t: q, mode: 'btm' }
-      break
     case 'wipeDown':
       st.hidden = false
-      st.clip = p >= 1 ? null : { t: q, mode: 'top' }
+      st.clip = p >= 1 ? null : { t: q, mode: ENTR_WIPE_MODE[wipeDir(item)] }
       break
     case 'splitIn':
       st.hidden = false
-      st.clip = p >= 1 ? null : { t: q, mode: 'mid' }
+      // In/out share the from-center visual (approximation); the axis comes from the variant
+      st.clip =
+        p >= 1 ? null : { t: q, mode: dir === 'vertIn' || dir === 'vertOut' ? 'midh' : 'mid' }
       break
     case 'bounce':
       // Drop from above + decaying bounce (written as (b-1)*positive to avoid -0 at the end)
@@ -264,17 +327,25 @@ function applyEffect(st: NodeAnimState, item: AnimationItem, p: number, canvasW:
       break
     case 'zoom':
       st.hidden = false
-      st.scale = q
-      st.opacity = Math.min(1, q * 2)
+      if (dir === 'out') {
+        // Start oversized (200%) and settle to place, fading in
+        st.scale = 2 - q
+        st.opacity = Math.min(1, q * 2)
+      } else {
+        st.scale = q
+        st.opacity = Math.min(1, q * 2)
+      }
       break
     case 'pulse': {
       const s = p >= 1 ? 0 : Math.sin(Math.PI * p)
       st.scale = 1 + 0.08 * s
       break
     }
-    case 'spin':
-      st.rotationDeg = p >= 1 ? 0 : 360 * q
+    case 'spin': {
+      const deg = 360 * q
+      st.rotationDeg = p >= 1 ? 0 : dir === 'ccw' ? -deg : deg
       break
+    }
     case 'grow':
       st.scale = 1 + 0.5 * q
       break
@@ -291,12 +362,15 @@ function applyEffect(st: NodeAnimState, item: AnimationItem, p: number, canvasW:
       st.opacity = 1 - q
       if (p >= 1) st.hidden = true
       break
-    case 'flyOut':
-      st.dy = q * canvasH
+    case 'flyOut': {
+      const d = flyDelta(dir ?? 'fromBottom')
+      st.dx = q * d.dx * canvasW
+      st.dy = q * d.dy * canvasH
       if (p >= 1) st.hidden = true
       break
+    }
     case 'wipeOut':
-      st.clip = p >= 1 ? null : { t: 1 - q, mode: 'btm' }
+      st.clip = p >= 1 ? null : { t: 1 - q, mode: EXIT_WIPE_MODE[wipeDir(item)] }
       if (p >= 1) st.hidden = true
       break
     case 'shrink':
@@ -307,8 +381,14 @@ function applyEffect(st: NodeAnimState, item: AnimationItem, p: number, canvasW:
       if (p >= 1) st.hidden = true
       break
     case 'zoomOut':
-      st.scale = Math.max(0.01, 1 - q)
-      st.opacity = 1 - q
+      if (dir === 'out') {
+        // Grow past the slide (300%) and fade away
+        st.scale = 1 + 2 * q
+        st.opacity = 1 - q
+      } else {
+        st.scale = Math.max(0.01, 1 - q)
+        st.opacity = 1 - q
+      }
       if (p >= 1) st.hidden = true
       break
     case 'motionPath': {
@@ -356,7 +436,8 @@ export function computeNodeStates(
       let p: number | null
       if (si < played) p = 1
       else if (si === played && activeMs != null) {
-        p = activeMs <= t.startMs ? null : Math.min(1, (activeMs - t.startMs) / (t.endMs - t.startMs))
+        p =
+          activeMs <= t.startMs ? null : Math.min(1, (activeMs - t.startMs) / (t.endMs - t.startMs))
       } else p = null
       if (p == null) continue
       // Playing/finished: reset to normal first, then apply this effect (later animations on the same node override earlier ones)

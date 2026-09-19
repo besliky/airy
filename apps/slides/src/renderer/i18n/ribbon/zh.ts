@@ -291,6 +291,13 @@ export const zh = {
   ribbonTransApplyTip: '当前页使用「{name}」切换（PowerPoint 放映生效）',
   ribbonGroupTiming: '计时',
   ribbonTransApplyAllTip: '把当前页的切换效果应用到全部页',
+  ribbonEffectOptions: '效果选项',
+  ribbonEffectOptionsTip: '当前切换的方向和持续时间',
+  ribbonEffectOptionsDirection: '方向',
+  ribbonTransDuration: '持续时间',
+  ribbonTransDurationDefault: '默认',
+  ribbonTransDurationTip: '切换持续时间（秒），留空为默认值',
+  ribbonAnimDirectionTip: '所选动画效果的方向变体',
   // Animations
   ribbonPreview: '预览',
   ribbonAnimPreviewTip: '在编辑画布上播放当前页全部动画',

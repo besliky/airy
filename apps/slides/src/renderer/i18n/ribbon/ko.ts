@@ -298,6 +298,13 @@ export const ko = {
   ribbonTransApplyTip: '이 슬라이드에 "{name}" 전환 적용(PowerPoint 슬라이드 쇼에서 적용됨)',
   ribbonGroupTiming: '타이밍',
   ribbonTransApplyAllTip: '현재 슬라이드의 화면 전환 효과를 모든 슬라이드에 적용',
+  ribbonEffectOptions: '효과 옵션',
+  ribbonEffectOptionsTip: '현재 전환의 방향 및 지속 시간',
+  ribbonEffectOptionsDirection: '방향',
+  ribbonTransDuration: '지속 시간',
+  ribbonTransDurationDefault: '기본값',
+  ribbonTransDurationTip: '전환 지속 시간(초), 비워 두면 기본값',
+  ribbonAnimDirectionTip: '선택한 애니메이션 효과의 방향 옵션',
   // Animations
   ribbonPreview: '미리 보기',
   ribbonAnimPreviewTip: '편집 캔버스에서 현재 슬라이드의 모든 애니메이션 재생',

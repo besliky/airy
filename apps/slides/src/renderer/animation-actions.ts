@@ -3,21 +3,30 @@
  * Functions take the ActionCtx built fresh per call.
  */
 import type { ShapeRenderNode } from '@airy-office/pptx-render'
-import type { AnimEffectKind, AnimTrigger, AnimationItem, TransitionKind } from '../shared/ipc'
+import type {
+  AnimDirection,
+  AnimEffectKind,
+  AnimTrigger,
+  AnimationItem,
+  TransitionSpec,
+} from '../shared/ipc'
 import type { ActionCtx } from './action-context'
 import { t } from './i18n/locale'
 
 export async function applyTransition(
   ctx: ActionCtx,
-  kind: TransitionKind,
+  spec: TransitionSpec,
   allSlides: boolean,
 ): Promise<void> {
   const ok = await window.slidesApi.setTransition({
     slideIndex: allSlides ? -1 : ctx.current,
-    kind,
+    kind: spec.kind,
+    ...(spec.dir != null ? { dir: spec.dir } : {}),
+    ...(spec.orient != null ? { orient: spec.orient } : {}),
+    durationMs: spec.durationMs,
   })
   if (ok) {
-    ctx.setTransition(kind)
+    ctx.setTransition(spec)
     ctx.setDirty(true)
     ctx.setStatus(allSlides ? t('appStatusTransitionAll') : t('appStatusTransitionSet'))
   }
@@ -137,7 +146,12 @@ export function applyMotionPath(ctx: ActionCtx, path: string): void {
 
 export function patchAnimTiming(
   ctx: ActionCtx,
-  patch: { trigger?: AnimTrigger; durationMs?: number; delayMs?: number },
+  patch: {
+    trigger?: AnimTrigger
+    durationMs?: number
+    delayMs?: number
+    direction?: AnimDirection
+  },
 ): void {
   if (ctx.timingIdx < 0) return
   const next = ctx.animations.map((a, i) => (i === ctx.timingIdx ? { ...a, ...patch } : a))

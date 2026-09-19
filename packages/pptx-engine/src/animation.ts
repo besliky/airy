@@ -51,6 +51,121 @@ export type AnimTrigger = 'onClick' | 'withPrev' | 'afterPrev'
 export const ANIM_TRIGGERS: readonly AnimTrigger[] = ['onClick', 'withPrev', 'afterPrev']
 export type AnimClass = 'entrance' | 'emphasis' | 'exit' | 'path'
 
+/**
+ * Direction variant ("Effect Options") of an effect, named PowerPoint-style.
+ * Fly/wipe effects move in from/toward an edge or corner; split picks axis+in/out;
+ * zoom picks in/out; spin picks clockwise/counter-clockwise.
+ */
+export type AnimDirection =
+  | 'fromTop'
+  | 'fromBottom'
+  | 'fromLeft'
+  | 'fromRight'
+  | 'fromTopLeft'
+  | 'fromTopRight'
+  | 'fromBottomLeft'
+  | 'fromBottomRight'
+  | 'horzIn'
+  | 'horzOut'
+  | 'vertIn'
+  | 'vertOut'
+  | 'in'
+  | 'out'
+  | 'cw'
+  | 'ccw'
+
+/** Every AnimDirection value (op validation). */
+export const ANIM_DIR_VALUES = [
+  'fromTop',
+  'fromBottom',
+  'fromLeft',
+  'fromRight',
+  'fromTopLeft',
+  'fromTopRight',
+  'fromBottomLeft',
+  'fromBottomRight',
+  'horzIn',
+  'horzOut',
+  'vertIn',
+  'vertOut',
+  'in',
+  'out',
+  'cw',
+  'ccw',
+] as const satisfies readonly AnimDirection[]
+
+const QUAD_DIRS = ['fromTop', 'fromBottom', 'fromLeft', 'fromRight'] as const
+const FLY_DIRS = [
+  'fromTop',
+  'fromBottom',
+  'fromLeft',
+  'fromRight',
+  'fromTopLeft',
+  'fromTopRight',
+  'fromBottomLeft',
+  'fromBottomRight',
+] as const
+
+/** Direction variants each effect offers (empty = effect has no direction option). */
+export const ANIM_DIRECTIONS: Record<AnimEffectKind, readonly AnimDirection[]> = {
+  appear: [],
+  fade: [],
+  flyIn: FLY_DIRS,
+  wipe: QUAD_DIRS,
+  wipeDown: QUAD_DIRS,
+  splitIn: ['horzIn', 'horzOut', 'vertIn', 'vertOut'],
+  bounce: [],
+  flipIn: [],
+  zoom: ['in', 'out'],
+  pulse: [],
+  spin: ['cw', 'ccw'],
+  grow: [],
+  teeter: [],
+  disappear: [],
+  fadeOut: [],
+  flyOut: FLY_DIRS,
+  wipeOut: QUAD_DIRS,
+  shrink: [],
+  zoomOut: ['in', 'out'],
+  motionPath: [],
+}
+
+/** The direction a plain, option-less effect plays as (undefined in the model). */
+export const ANIM_DEFAULT_DIR: Partial<Record<AnimEffectKind, AnimDirection>> = {
+  flyIn: 'fromBottom',
+  flyOut: 'fromBottom',
+  wipe: 'fromBottom',
+  wipeDown: 'fromTop',
+  wipeOut: 'fromTop',
+  splitIn: 'horzIn',
+  zoom: 'in',
+  zoomOut: 'in',
+  spin: 'cw',
+}
+
+/** PowerPoint's directional presetSubtype bitmask: 1=Top, 2=Right, 4=Bottom, 8=Left; corners OR-combine. */
+const DIR_SUBTYPE: Record<(typeof FLY_DIRS)[number], number> = {
+  fromTop: 1,
+  fromRight: 2,
+  fromBottom: 4,
+  fromLeft: 8,
+  fromTopRight: 3,
+  fromBottomRight: 6,
+  fromTopLeft: 9,
+  fromBottomLeft: 12,
+}
+
+const SUBTYPE_DIR: Record<number, (typeof FLY_DIRS)[number]> = {
+  1: 'fromTop',
+  2: 'fromRight',
+  4: 'fromBottom',
+  8: 'fromLeft',
+  3: 'fromTopRight',
+  6: 'fromBottomRight',
+  9: 'fromTopLeft',
+  12: 'fromBottomLeft',
+}
+
 export interface SlideAnimation {
   /** Target shape's cNvPr id (<p:spTgt spid>) */
   spid: number
@@ -58,6 +173,8 @@ export interface SlideAnimation {
   trigger: AnimTrigger
   durationMs: number
   delayMs: number
+  /** Direction variant (only effects listed in ANIM_DIRECTIONS; undefined = the effect's default) */
+  direction?: AnimDirection
   /**
    * Motion path (valid when effect='motionPath'): SVG subset M/L/C/Z,
    * coordinates 0..1 relative to slide width/height (same as OOXML animMotion's
@@ -66,6 +183,11 @@ export interface SlideAnimation {
   motionPath?: string
   /** Per-paragraph animation: 0-based paragraph number (written as pgRg st/end); unset = whole shape */
   paragraph?: number
+}
+
+/** The direction this animation plays as (explicit or the effect's built-in default). */
+function effectiveDir(a: SlideAnimation): AnimDirection | undefined {
+  return a.direction ?? ANIM_DEFAULT_DIR[a.effect]
 }
 
 /** Effect → class (entrance/emphasis/exit/motion path). */
@@ -133,10 +255,11 @@ export const ANIM_EFFECTS = Object.keys(PRESET) as readonly AnimEffectKind[]
 
 function effectFromPreset(cls: string, id: number, sub: number): AnimEffectKind {
   if (cls === 'path') return 'motionPath'
-  // Effects sharing a presetID distinguished by subtype (e.g. wipe direction)
+  // Effects sharing a presetID distinguished by subtype (PowerPoint's directional
+  // bitmask: 4=fromBottom, 1=fromTop; other subtypes fall through with a direction)
   const bySub: Record<string, AnimEffectKind> = {
-    'entr:22:1': 'wipe',
-    'entr:22:4': 'wipeDown',
+    'entr:22:4': 'wipe',
+    'entr:22:1': 'wipeDown',
   }
   const exact: Record<string, AnimEffectKind> = {
     'entr:1': 'appear',
@@ -234,6 +357,40 @@ function moveAnimXml(
   ])
 }
 
+/** Off-screen edge formula for one slide axis (pos = the 1.0 edge, neg = the 0.0 edge). */
+const edgeFormula = (axis: 'w' | 'h', pos: boolean): string =>
+  pos ? `1+#ppt_${axis}/2` : `0-#ppt_${axis}/2`
+
+/** Fly in/out start offsets per direction: which axis starts at which off-screen edge. */
+function flyOffsets(dir: AnimDirection | undefined): { x?: string; y?: string } {
+  if (!dir || !(dir in DIR_SUBTYPE)) return {}
+  const out: { x?: string; y?: string } = {}
+  if (dir.includes('Left')) out.x = edgeFormula('w', false)
+  else if (dir.includes('Right')) out.x = edgeFormula('w', true)
+  if (dir.includes('Top')) out.y = edgeFormula('h', false)
+  else if (dir.includes('Bottom')) out.y = edgeFormula('h', true)
+  return out
+}
+
+/** Wipe travel direction ("wipe(up)") for a from-direction: fromBottom travels up, fromLeft travels right, … */
+const WIPE_TRAVEL: Record<(typeof QUAD_DIRS)[number], string> = {
+  fromBottom: 'up',
+  fromTop: 'down',
+  fromLeft: 'right',
+  fromRight: 'left',
+}
+
+/** animEffect filter of one effect + direction (the filter drives real playback). */
+function animEffectFilterXml(
+  gen: IdGen,
+  tgt: string,
+  dur: number,
+  transition: 'in' | 'out',
+  filter: string,
+): string {
+  return `<p:animEffect transition="${transition}" filter="${filter}"><p:cBhvr><p:cTn id="${gen.next()}" dur="${dur}"/>${tgt}</p:cBhvr></p:animEffect>`
+}
+
 /** Default motionPath (straight line to the right, 1/4 of the slide width). */
 export const DEFAULT_MOTION_PATH = 'M 0 0 L 0.25 0'
 
@@ -256,35 +413,54 @@ function effectBehaviorsXml(gen: IdGen, a: SlideAnimation): string {
   const target = tgtElXml(a)
   const show = setVisibilityXml(gen, target, true, 0)
   const hideAtEnd = setVisibilityXml(gen, target, false, Math.max(0, dur - 1))
+  const dir = effectiveDir(a)
   switch (a.effect) {
     case 'appear':
       return show
     case 'fade':
+      return show + animEffectFilterXml(gen, target, dur, 'in', 'fade')
+    case 'flyIn': {
+      // Both axes always animate (identity formula on the still axis), matching the default shape
+      const off = flyOffsets(dir)
       return (
         show +
-        `<p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="${gen.next()}" dur="${dur}"/>${target}</p:cBhvr></p:animEffect>`
+        moveAnimXml(gen, target, dur, 'ppt_x', off.x ?? '#ppt_x', '#ppt_x') +
+        moveAnimXml(gen, target, dur, 'ppt_y', off.y ?? '1+#ppt_h/2', '#ppt_y')
       )
-    case 'flyIn':
-      return (
-        show +
-        moveAnimXml(gen, target, dur, 'ppt_x', '#ppt_x', '#ppt_x') +
-        moveAnimXml(gen, target, dur, 'ppt_y', '1+#ppt_h/2', '#ppt_y')
-      )
+    }
     case 'wipe':
       return (
         show +
-        `<p:animEffect transition="in" filter="wipe(up)"><p:cBhvr><p:cTn id="${gen.next()}" dur="${dur}"/>${target}</p:cBhvr></p:animEffect>`
+        animEffectFilterXml(
+          gen,
+          target,
+          dur,
+          'in',
+          `wipe(${WIPE_TRAVEL[dir as (typeof QUAD_DIRS)[number]] ?? 'up'})`,
+        )
       )
     case 'wipeDown':
       return (
         show +
-        `<p:animEffect transition="in" filter="wipe(down)"><p:cBhvr><p:cTn id="${gen.next()}" dur="${dur}"/>${target}</p:cBhvr></p:animEffect>`
+        animEffectFilterXml(
+          gen,
+          target,
+          dur,
+          'in',
+          `wipe(${WIPE_TRAVEL[dir as (typeof QUAD_DIRS)[number]] ?? 'down'})`,
+        )
       )
-    case 'splitIn':
-      return (
-        show +
-        `<p:animEffect transition="in" filter="split(inHorizontal)"><p:cBhvr><p:cTn id="${gen.next()}" dur="${dur}"/>${target}</p:cBhvr></p:animEffect>`
-      )
+    case 'splitIn': {
+      const filter =
+        dir === 'horzOut'
+          ? 'split(outHorizontal)'
+          : dir === 'vertIn'
+            ? 'split(inVertical)'
+            : dir === 'vertOut'
+              ? 'split(outVertical)'
+              : 'split(inHorizontal)'
+      return show + animEffectFilterXml(gen, target, dur, 'in', filter)
+    }
     case 'bounce':
       // Drop from above + damped rebound (ppt_y keyframes approximating PowerPoint's bounce)
       return (
@@ -307,19 +483,24 @@ function effectBehaviorsXml(gen: IdGen, a: SlideAnimation): string {
         '<p:from x="0" y="100000"/><p:to x="100000" y="100000"/></p:animScale>'
       )
     case 'zoom':
-      return (
-        show +
-        `<p:animScale><p:cBhvr><p:cTn id="${gen.next()}" dur="${dur}" fill="hold"/>${target}</p:cBhvr>` +
-        '<p:from x="0" y="0"/><p:to x="100000" y="100000"/></p:animScale>'
-      )
+      // dir="in": grow from nothing (default); "out": start oversized (200%) and settle
+      return dir === 'out'
+        ? show +
+            animEffectFilterXml(gen, target, dur, 'in', 'fade') +
+            `<p:animScale><p:cBhvr><p:cTn id="${gen.next()}" dur="${dur}" fill="hold"/>${target}</p:cBhvr>` +
+            '<p:from x="200000" y="200000"/><p:to x="100000" y="100000"/></p:animScale>'
+        : show +
+            `<p:animScale><p:cBhvr><p:cTn id="${gen.next()}" dur="${dur}" fill="hold"/>${target}</p:cBhvr>` +
+            '<p:from x="0" y="0"/><p:to x="100000" y="100000"/></p:animScale>'
     case 'pulse':
       return (
         `<p:animScale><p:cBhvr><p:cTn id="${gen.next()}" dur="${Math.max(1, Math.round(dur / 2))}" autoRev="1" fill="hold"/>${target}</p:cBhvr>` +
         '<p:by x="106000" y="106000"/></p:animScale>'
       )
     case 'spin':
+      // 360° = 21600000 (1/60000 degree units); ccw negates
       return (
-        `<p:animRot by="21600000"><p:cBhvr><p:cTn id="${gen.next()}" dur="${dur}" fill="hold"/>${target}` +
+        `<p:animRot by="${dir === 'ccw' ? '-21600000' : '21600000'}"><p:cBhvr><p:cTn id="${gen.next()}" dur="${dur}" fill="hold"/>${target}` +
         '<p:attrNameLst><p:attrName>r</p:attrName></p:attrNameLst></p:cBhvr></p:animRot>'
       )
     case 'grow':
@@ -340,20 +521,24 @@ function effectBehaviorsXml(gen: IdGen, a: SlideAnimation): string {
     case 'disappear':
       return setVisibilityXml(gen, target, false, 0)
     case 'fadeOut':
+      return animEffectFilterXml(gen, target, dur, 'out', 'fade') + hideAtEnd
+    case 'flyOut': {
+      const off = flyOffsets(dir)
       return (
-        `<p:animEffect transition="out" filter="fade"><p:cBhvr><p:cTn id="${gen.next()}" dur="${dur}"/>${target}</p:cBhvr></p:animEffect>` +
+        moveAnimXml(gen, target, dur, 'ppt_x', '#ppt_x', off.x ?? '#ppt_x') +
+        moveAnimXml(gen, target, dur, 'ppt_y', '#ppt_y', off.y ?? '1+#ppt_h/2') +
         hideAtEnd
       )
-    case 'flyOut':
-      return (
-        moveAnimXml(gen, target, dur, 'ppt_x', '#ppt_x', '#ppt_x') +
-        moveAnimXml(gen, target, dur, 'ppt_y', '#ppt_y', '1+#ppt_h/2') +
-        hideAtEnd
-      )
+    }
     case 'wipeOut':
       return (
-        `<p:animEffect transition="out" filter="wipe(down)"><p:cBhvr><p:cTn id="${gen.next()}" dur="${dur}"/>${target}</p:cBhvr></p:animEffect>` +
-        hideAtEnd
+        animEffectFilterXml(
+          gen,
+          target,
+          dur,
+          'out',
+          `wipe(${WIPE_TRAVEL[dir as (typeof QUAD_DIRS)[number]] ?? 'down'})`,
+        ) + hideAtEnd
       )
     case 'shrink':
       // Shrink and rotate out (approximation of Shrink & Turn)
@@ -365,11 +550,15 @@ function effectBehaviorsXml(gen: IdGen, a: SlideAnimation): string {
         hideAtEnd
       )
     case 'zoomOut':
-      return (
-        `<p:animScale><p:cBhvr><p:cTn id="${gen.next()}" dur="${dur}" fill="hold"/>${target}</p:cBhvr>` +
-        '<p:from x="100000" y="100000"/><p:to x="1000" y="1000"/></p:animScale>' +
-        hideAtEnd
-      )
+      // dir="in": shrink into the center (default); "out": grow past the slide and fade
+      return dir === 'out'
+        ? animEffectFilterXml(gen, target, dur, 'out', 'fade') +
+            `<p:animScale><p:cBhvr><p:cTn id="${gen.next()}" dur="${dur}" fill="hold"/>${target}</p:cBhvr>` +
+            '<p:from x="100000" y="100000"/><p:to x="300000" y="300000"/></p:animScale>' +
+            hideAtEnd
+        : `<p:animScale><p:cBhvr><p:cTn id="${gen.next()}" dur="${dur}" fill="hold"/>${target}</p:cBhvr>` +
+            '<p:from x="100000" y="100000"/><p:to x="1000" y="1000"/></p:animScale>' +
+            hideAtEnd
     case 'motionPath':
       return motionAnimXml(gen, target, dur, a.motionPath ?? DEFAULT_MOTION_PATH)
   }
@@ -418,12 +607,19 @@ function placeAnims(
   return groups
 }
 
+/** presetSubtype honoring the direction variant (fly/wipe effects: PowerPoint's directional bitmask). */
+function presetSubtypeOf(a: SlideAnimation): number {
+  const dir = effectiveDir(a)
+  if (dir && dir in DIR_SUBTYPE) return DIR_SUBTYPE[dir as (typeof FLY_DIRS)[number]]
+  return PRESET[a.effect].sub
+}
+
 /** One effect's <p:par> (cTn with presetID/presetClass + start + behaviors). */
 function effectParXml(gen: IdGen, p: Placed): string {
   const preset = PRESET[p.a.effect]
   return (
     '<p:par>' +
-    `<p:cTn id="${gen.next()}" presetID="${preset.id}" presetClass="${preset.cls}" presetSubtype="${preset.sub}" fill="hold" grpId="${p.grpId}" nodeType="${NODE_TYPE[p.a.trigger]}">` +
+    `<p:cTn id="${gen.next()}" presetID="${preset.id}" presetClass="${preset.cls}" presetSubtype="${presetSubtypeOf(p.a)}" fill="hold" grpId="${p.grpId}" nodeType="${NODE_TYPE[p.a.trigger]}">` +
     `<p:stCondLst><p:cond delay="${p.startMs}"/></p:stCondLst>` +
     `<p:childTnLst>${effectBehaviorsXml(gen, p.a)}</p:childTnLst>` +
     '</p:cTn></p:par>'
@@ -637,6 +833,65 @@ function findCTnEnd(xml: string, openEnd: number): number {
 }
 
 /**
+ * Direction read-back. The animEffect filter (our writes and PowerPoint's both carry
+ * it) is ground truth for the wipe family — it also canonicalizes the wipe/wipeDown
+ * kind; the directional presetSubtype covers fly effects and filter-less foreign
+ * wipes; zoom/spin read their scale/rotation behaviors.
+ */
+function refineDirection(
+  effect: AnimEffectKind,
+  body: string,
+  sub: number,
+): { effect: AnimEffectKind; direction?: AnimDirection } {
+  const filter = /<p:animEffect\b[^>]*\bfilter="([\w()-]+)"/.exec(body)?.[1]
+  switch (effect) {
+    case 'flyIn':
+    case 'flyOut':
+      // 4 = fromBottom, the written default for both kinds
+      return sub === 4 ? { effect } : { effect, direction: SUBTYPE_DIR[sub] }
+    case 'wipe':
+    case 'wipeDown':
+    case 'wipeOut': {
+      const travel = /^wipe\((up|down|left|right)\)$/.exec(filter ?? '')?.[1]
+      const dirFromTravel: AnimDirection | undefined =
+        travel === 'up'
+          ? 'fromBottom'
+          : travel === 'down'
+            ? 'fromTop'
+            : travel === 'left'
+              ? 'fromRight'
+              : travel === 'right'
+                ? 'fromLeft'
+                : undefined
+      const dir = dirFromTravel ?? SUBTYPE_DIR[sub]
+      if (effect === 'wipeOut') {
+        const def = ANIM_DEFAULT_DIR.wipeOut!
+        return dir && dir !== def ? { effect, direction: dir } : { effect }
+      }
+      // Entrance wipe: down-travel = wipeDown's default; everything else is wipe + direction
+      const kind: AnimEffectKind = dir === 'fromTop' ? 'wipeDown' : 'wipe'
+      const def = ANIM_DEFAULT_DIR[kind]!
+      return dir && dir !== def ? { effect: kind, direction: dir } : { effect: kind }
+    }
+    case 'splitIn': {
+      const v = /^split\((in|out)(Horizontal|Vertical)\)$/.exec(filter ?? '')
+      if (!v) return { effect }
+      const dir =
+        `${v[2] === 'Horizontal' ? 'horz' : 'vert'}${v[1] === 'in' ? 'In' : 'Out'}` as AnimDirection
+      return dir === 'horzIn' ? { effect } : { effect, direction: dir }
+    }
+    case 'zoom':
+      return /<p:from x="200000"/.test(body) ? { effect, direction: 'out' } : { effect }
+    case 'zoomOut':
+      return /<p:to x="300000"/.test(body) ? { effect, direction: 'out' } : { effect }
+    case 'spin':
+      return /\bby="-21600000"/.test(body) ? { effect, direction: 'ccw' } : { effect }
+    default:
+      return { effect }
+  }
+}
+
+/**
  * Read the bodySuffix's animation list (for UI echo + slideshow).
  * Parses every effect cTn carrying presetClass; delay is derived back to the user
  * delay per the write convention (withPrev minus previous start / afterPrev minus
@@ -678,7 +933,8 @@ export function readSlideTimingXml(bodySuffix: string): SlideAnimation[] {
     while ((dm = durRe.exec(body)) !== null) durationMs = Math.max(durationMs, Number(dm[1]))
     // pulse with autoRev: actual duration = dur*2
     if (/\bautoRev="1"/.test(body)) durationMs *= 2
-    const effect = effectFromPreset(cls, pid, psub)
+    const refined = refineDirection(effectFromPreset(cls, pid, psub), body, psub)
+    const effect = refined.effect
     if (effect === 'appear' || effect === 'disappear') durationMs = 0
 
     if (trigger === 'onClick') {
@@ -690,7 +946,14 @@ export function readSlideTimingXml(bodySuffix: string): SlideAnimation[] {
     prevStart = startMs
     prevEnd = startMs + Math.max(1, durationMs)
 
-    const anim: SlideAnimation = { spid, effect, trigger, durationMs, delayMs }
+    const anim: SlideAnimation = {
+      spid,
+      effect,
+      trigger,
+      durationMs,
+      delayMs,
+      ...(refined.direction != null ? { direction: refined.direction } : {}),
+    }
     const pgM = /<p:pgRg\s[^>]*\bst="(\d+)"/.exec(body)
     if (pgM) anim.paragraph = Number(pgM[1])
     if (effect === 'motionPath') {
@@ -712,6 +975,7 @@ function animEq(x: SlideAnimation, y: SlideAnimation): boolean {
     x.trigger === y.trigger &&
     x.durationMs === y.durationMs &&
     x.delayMs === y.delayMs &&
+    (x.direction ?? null) === (y.direction ?? null) &&
     (x.motionPath ?? null) === (y.motionPath ?? null) &&
     (x.paragraph ?? null) === (y.paragraph ?? null)
   )

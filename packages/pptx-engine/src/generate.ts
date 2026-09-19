@@ -1359,6 +1359,109 @@ export const TRANSITION_KINDS = [
   'random',
 ] as const satisfies readonly SlideTransitionKind[]
 
+/**
+ * Transition direction, named by where the incoming slide comes from (PowerPoint's
+ * "Effect Options" wording). Serialized to the OOXML `dir` attribute, which instead
+ * encodes the direction of travel — the opposite side ("From Bottom" travels up →
+ * dir="u"). 'in'/'out' are the zoom and split-dir variants.
+ */
+export type SlideTransitionDir =
+  | 'fromBottom'
+  | 'fromTop'
+  | 'fromLeft'
+  | 'fromRight'
+  | 'fromBottomLeft'
+  | 'fromBottomRight'
+  | 'fromTopLeft'
+  | 'fromTopRight'
+  | 'in'
+  | 'out'
+
+export type SlideTransitionOrient = 'horz' | 'vert'
+
+/** Effect Options of one transition kind: direction list (empty = no options) and the default. */
+export interface TransitionDirInfo {
+  dirs: readonly SlideTransitionDir[]
+  /** Default direction (what a plain `<p:transition>` without options plays as) */
+  default: SlideTransitionDir | null
+}
+
+const SIDE_TRANSITION_DIRS = [
+  'fromBottom',
+  'fromTop',
+  'fromLeft',
+  'fromRight',
+] as const satisfies readonly SlideTransitionDir[]
+const ALL_SIDE_TRANSITION_DIRS = [
+  ...SIDE_TRANSITION_DIRS,
+  'fromBottomLeft',
+  'fromBottomRight',
+  'fromTopLeft',
+  'fromTopRight',
+] as const satisfies readonly SlideTransitionDir[]
+const IN_OUT_TRANSITION_DIRS = ['in', 'out'] as const satisfies readonly SlideTransitionDir[]
+
+/** Which directions each kind offers in Effect Options (PowerPoint parity). */
+export const TRANSITION_DIR_INFO: Record<SlideTransitionKind, TransitionDirInfo> = {
+  none: { dirs: [], default: null },
+  morph: { dirs: [], default: null },
+  fade: { dirs: [], default: null },
+  circle: { dirs: [], default: null },
+  dissolve: { dirs: [], default: null },
+  random: { dirs: [], default: null },
+  push: { dirs: SIDE_TRANSITION_DIRS, default: 'fromBottom' },
+  wipe: { dirs: SIDE_TRANSITION_DIRS, default: 'fromRight' },
+  cover: { dirs: ALL_SIDE_TRANSITION_DIRS, default: 'fromRight' },
+  pull: { dirs: ALL_SIDE_TRANSITION_DIRS, default: 'fromRight' },
+  split: { dirs: IN_OUT_TRANSITION_DIRS, default: 'out' },
+  zoom: { dirs: IN_OUT_TRANSITION_DIRS, default: 'in' },
+}
+
+/** Semantic "from" direction → OOXML travel-direction attribute value. */
+const DIR_TO_XML: Record<
+  Exclude<SlideTransitionDir, 'in' | 'out'>,
+  'l' | 'r' | 'u' | 'd' | 'ld' | 'lu' | 'rd' | 'ru'
+> = {
+  fromBottom: 'u',
+  fromTop: 'd',
+  fromLeft: 'r',
+  fromRight: 'l',
+  fromBottomLeft: 'ru',
+  fromBottomRight: 'lu',
+  fromTopLeft: 'rd',
+  fromTopRight: 'ld',
+}
+
+const XML_TO_DIR: Record<string, Exclude<SlideTransitionDir, 'in' | 'out'>> = {
+  u: 'fromBottom',
+  d: 'fromTop',
+  r: 'fromLeft',
+  l: 'fromRight',
+  ru: 'fromBottomLeft',
+  lu: 'fromBottomRight',
+  rd: 'fromTopLeft',
+  ld: 'fromTopRight',
+}
+
+/** Effect Options carried by a transition: direction, split orientation, duration. */
+export interface SlideTransitionOptions {
+  /** Direction variant (push/wipe/cover/pull: where the slide comes from; split/zoom: in/out) */
+  dir?: SlideTransitionDir
+  /** Split orientation (split only; default horz) */
+  orient?: SlideTransitionOrient
+  /** Explicit duration in ms (p14:dur + legacy spd bucket); null/undefined = no explicit duration */
+  durationMs?: number | null
+}
+
+/** A transition as read back from XML: kind + its Effect Options. */
+export interface SlideTransitionSpec {
+  kind: SlideTransitionKind
+  dir?: SlideTransitionDir
+  orient?: SlideTransitionOrient
+  /** Explicit p14:dur in ms; null = unset (reader default) */
+  durationMs: number | null
+}
+
 const TRANSITION_INNER: Record<Exclude<SlideTransitionKind, 'none' | 'morph'>, string> = {
   fade: '<p:fade/>',
   push: '<p:push dir="u"/>',
@@ -1373,16 +1476,79 @@ const TRANSITION_INNER: Record<Exclude<SlideTransitionKind, 'none' | 'morph'>, s
 }
 
 /**
+ * Build one kind's inner element honoring Effect Options. Defaults reproduce the
+ * plain TRANSITION_INNER bytes (byte-preservation for option-less writes).
+ */
+function transitionInnerXml(
+  kind: Exclude<SlideTransitionKind, 'none' | 'morph'>,
+  opts?: SlideTransitionOptions,
+): string {
+  const xmlDir = (fallback: string): string => {
+    const d = opts?.dir
+    return d && d !== 'in' && d !== 'out' ? (DIR_TO_XML[d] ?? fallback) : fallback
+  }
+  switch (kind) {
+    case 'push':
+      return `<p:push dir="${xmlDir('u')}"/>`
+    case 'wipe':
+      return `<p:wipe dir="${xmlDir('l')}"/>`
+    case 'cover':
+      return `<p:cover dir="${xmlDir('l')}"/>`
+    case 'pull':
+      return `<p:pull dir="${xmlDir('l')}"/>`
+    case 'split':
+      return `<p:split orient="${opts?.orient === 'vert' ? 'vert' : 'horz'}" dir="${opts?.dir === 'in' ? 'in' : 'out'}"/>`
+    case 'zoom':
+      // dir="in" is the schema default — keep the plain element for it
+      return opts?.dir === 'out' ? '<p:zoom dir="out"/>' : TRANSITION_INNER.zoom
+    default:
+      return TRANSITION_INNER[kind]
+  }
+}
+
+/** Legacy spd bucket alongside the exact p14:dur (pre-2010 readers play the bucket). */
+function transitionSpdOf(ms: number): 'slow' | 'med' | 'fast' {
+  return ms <= 500 ? 'fast' : ms <= 1000 ? 'med' : 'slow'
+}
+
+/**
  * Morph transition: PowerPoint 2019+'s <p159:morph> (2015/main namespace), wrapped
  * in mc:AlternateContent — older PowerPoint uses the Fallback fade without erroring.
+ * p14:dur carries the explicit duration (default 800ms, morph's snappier default).
  */
-const MORPH_TRANSITION_XML =
-  '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">' +
-  '<mc:Choice xmlns:p159="http://schemas.microsoft.com/office/powerpoint/2015/main" Requires="p159">' +
-  '<p:transition xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" spd="slow" p14:dur="800">' +
-  '<p159:morph option="byObject"/></p:transition></mc:Choice>' +
-  '<mc:Fallback><p:transition spd="slow"><p:fade/></p:transition></mc:Fallback>' +
-  '</mc:AlternateContent>'
+const morphTransitionXml = (durMs?: number | null): string => {
+  const dur = durMs == null ? 800 : Math.max(1, Math.round(durMs))
+  const spd = transitionSpdOf(dur)
+  return (
+    '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">' +
+    '<mc:Choice xmlns:p159="http://schemas.microsoft.com/office/powerpoint/2015/main" Requires="p159">' +
+    `<p:transition xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" spd="${spd}" p14:dur="${dur}">` +
+    '<p159:morph option="byObject"/></p:transition></mc:Choice>' +
+    `<mc:Fallback><p:transition spd="${spd}"><p:fade/></p:transition></mc:Fallback>` +
+    '</mc:AlternateContent>'
+  )
+}
+
+/**
+ * The whole transition XML for kind + options. With an explicit duration the plain
+ * kinds get the same AlternateContent shape morph uses: the Choice carries
+ * p14:dur (exact ms, PowerPoint 2010+), the Fallback only the legacy spd bucket.
+ */
+function transitionXml(kind: SlideTransitionKind, opts?: SlideTransitionOptions): string {
+  if (kind === 'morph') return morphTransitionXml(opts?.durationMs)
+  if (kind === 'none') return '' // callers handle 'none' as removal before getting here
+  const inner = transitionInnerXml(kind, opts)
+  if (opts?.durationMs == null) return `<p:transition>${inner}</p:transition>`
+  const dur = Math.max(1, Math.round(opts.durationMs))
+  const spd = transitionSpdOf(dur)
+  return (
+    '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">' +
+    '<mc:Choice xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" Requires="p14">' +
+    `<p:transition spd="${spd}" p14:dur="${dur}">${inner}</p:transition></mc:Choice>` +
+    `<mc:Fallback><p:transition spd="${spd}">${inner}</p:transition></mc:Fallback>` +
+    '</mc:AlternateContent>'
+  )
+}
 
 const TRANSITION_RE = /<p:transition\b[^>]*\/>|<p:transition\b[^>]*>[\s\S]*?<\/p:transition>/
 /** AlternateContent-wrapped transition (only counts when Choice is immediately followed by p:transition, avoiding other AC blocks). */
@@ -1400,32 +1566,65 @@ function transitionInsertPos(body: string): number {
 /**
  * In-place patch of the bodySuffix's <p:transition> (schema order: after clrMapOvr,
  * before timing). kind='none' only removes the effect; 'morph' writes an
- * AlternateContent-wrapped p159:morph. A configured auto-advance time (advTm) is
- * kept when switching effects. Returns
- * the new bodySuffix.
+ * AlternateContent-wrapped p159:morph. Effect Options (direction/orientation/
+ * duration) serialize per kind; without options the bytes match the legacy plain
+ * form. A configured auto-advance time (advTm) is kept when switching effects.
+ * Returns the new bodySuffix.
  */
-export function patchSlideTransitionXml(bodySuffix: string, kind: SlideTransitionKind): string {
+export function patchSlideTransitionXml(
+  bodySuffix: string,
+  kind: SlideTransitionKind,
+  opts?: SlideTransitionOptions,
+): string {
   const advTm = readSlideAdvanceTimeXml(bodySuffix)
   const stripped = bodySuffix.replace(AC_TRANSITION_RE, '').replace(TRANSITION_RE, '')
   if (kind === 'none') return advTm == null ? stripped : patchSlideAdvanceTimeXml(stripped, advTm)
-  const xml =
-    kind === 'morph'
-      ? MORPH_TRANSITION_XML
-      : `<p:transition>${TRANSITION_INNER[kind]}</p:transition>`
+  const xml = transitionXml(kind, opts)
   const at = transitionInsertPos(stripped)
   if (at < 0) return stripped
   const out = stripped.slice(0, at) + xml + stripped.slice(at)
   return advTm == null ? out : patchSlideAdvanceTimeXml(out, advTm)
 }
 
+/** The transition block (AlternateContent-wrapped form first), or null when absent. */
+function transitionBlock(bodySuffix: string): string | null {
+  return (AC_TRANSITION_RE.exec(bodySuffix) ?? TRANSITION_RE.exec(bodySuffix))?.[0] ?? null
+}
+
+/** Read the full transition (kind + Effect Options) from the bodySuffix; unmodeled effects map to kind='none'. */
+export function readSlideTransitionSpecXml(bodySuffix: string): SlideTransitionSpec {
+  const block = transitionBlock(bodySuffix)
+  if (!block) return { kind: 'none', durationMs: null }
+  const durM = /\bp14:dur="(\d+)"/.exec(block)
+  const spec: SlideTransitionSpec = {
+    kind: 'none',
+    durationMs: durM ? Number(durM[1]) : null,
+  }
+  if (/<[\w.]+:morph[\s/>]/.test(block)) {
+    spec.kind = 'morph'
+    return spec
+  }
+  const kind = /<p:(fade|push|wipe|split|circle|cover|pull|dissolve|zoom|random)\b/.exec(block)?.[1]
+  spec.kind = (kind as SlideTransitionKind | undefined) ?? 'none'
+  const attr = (el: string, name: string): string | undefined =>
+    new RegExp(`<p:${el}\\b[^>]*\\b${name}="([\\w-]+)"`).exec(block)?.[1]
+  if (spec.kind === 'split') {
+    spec.orient = attr('split', 'orient') === 'vert' ? 'vert' : 'horz'
+    const d = attr('split', 'dir')
+    if (d === 'in' || d === 'out') spec.dir = d
+  } else if (spec.kind === 'zoom') {
+    const d = attr('zoom', 'dir')
+    if (d === 'in' || d === 'out') spec.dir = d
+  } else {
+    const d = attr(spec.kind, 'dir')
+    if (d && XML_TO_DIR[d]) spec.dir = XML_TO_DIR[d]
+  }
+  return spec
+}
+
 /** Read the current transition from the bodySuffix (for UI echo; unmodeled effects map to 'none'). */
 export function readSlideTransitionXml(bodySuffix: string): SlideTransitionKind {
-  // AlternateContent wrapper first (morph, or PowerPoint's newer form with p14:dur)
-  const m = AC_TRANSITION_RE.exec(bodySuffix) ?? TRANSITION_RE.exec(bodySuffix)
-  if (!m) return 'none'
-  if (/<[\w.]+:morph[\s/>]/.test(m[0])) return 'morph'
-  const kind = /<p:(fade|push|wipe|split|circle|cover|pull|dissolve|zoom|random)\b/.exec(m[0])?.[1]
-  return (kind as SlideTransitionKind | undefined) ?? 'none'
+  return readSlideTransitionSpecXml(bodySuffix).kind
 }
 
 // ── Auto-advance time patch (<p:transition advTm="ms">, for saving rehearsed timings) ────

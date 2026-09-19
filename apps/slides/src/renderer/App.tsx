@@ -29,6 +29,7 @@ import type {
   SetEffectsPatch,
   SlideComment,
   TransitionKind,
+  TransitionSpec,
 } from '../shared/ipc'
 import { SlideCanvas, selectionChromeColor } from './SlideCanvas'
 import { tableCellOverlayBox } from './table-hit'
@@ -114,6 +115,7 @@ import * as fileActions from './file-actions'
 import * as clipboardActions from './clipboard-actions'
 import * as insertActions from './insert-actions'
 import * as animationActions from './animation-actions'
+import { transitionDirClass } from './transition-play'
 import * as showActions from './show-actions'
 import * as slideActions from './slide-actions'
 import * as pictureEditActions from './picture-edit-actions'
@@ -437,7 +439,10 @@ export function App() {
     window.addEventListener('focus', probe)
     return () => window.removeEventListener('focus', probe)
   }, [])
-  const [transition, setTransition] = useState<TransitionKind>('none')
+  const [transition, setTransition] = useState<TransitionSpec>({
+    kind: 'none',
+    durationMs: null,
+  })
   // ── Animations tab: current page's animation list + pane/preview ─────────────
   const [animations, setAnimations] = useState<AnimationItem[]>([])
   const [showAnimPane, setShowAnimPane] = useState(false)
@@ -1578,23 +1583,29 @@ export function App() {
   }, [hasDoc, current, path])
 
   const applyTransition = useCallback(
-    (kind: TransitionKind, allSlides: boolean) =>
-      animationActions.applyTransition(ctxRef.current, kind, allSlides),
+    (spec: TransitionSpec, allSlides: boolean) =>
+      animationActions.applyTransition(ctxRef.current, spec, allSlides),
     [],
   )
 
   // ── Transitions tab: one-shot canvas preview when an effect is clicked (PPT-style) ──
-  const [transPreviewKind, setTransPreviewKind] = useState<TransitionKind | null>(null)
-  const previewTransitionOnCanvas = useCallback((kind: TransitionKind) => {
-    const concrete =
-      kind === 'random'
+  const [transPreview, setTransPreview] = useState<TransitionSpec | null>(null)
+  const previewTransitionOnCanvas = useCallback((spec: TransitionSpec) => {
+    const kind =
+      spec.kind === 'random'
         ? PREVIEWABLE_TRANSITIONS[Math.floor(Math.random() * PREVIEWABLE_TRANSITIONS.length)]!
-        : kind
-    if (concrete === 'none') return
-    // drop the class for one frame so re-clicking the same effect restarts its animation
-    setTransPreviewKind(null)
-    requestAnimationFrame(() => setTransPreviewKind(concrete))
+        : spec.kind
+    if (kind === 'none') return
+    const preview: TransitionSpec = { ...spec, kind }
+    // drop the classes for one frame so re-clicking the same effect restarts its animation
+    setTransPreview(null)
+    requestAnimationFrame(() => setTransPreview(preview))
   }, [])
+
+  /** Editor preview classes (tp- family + the shared direction modifier) and inline duration. */
+  const transPreviewCss = transPreview
+    ? `tp-${transPreview.kind}${transitionDirClass(transPreview.kind, transPreview)}`
+    : ''
 
   // ── Animations tab: current page's animation list (refreshed after page switch/edit/undo; re-fetched whenever the slide identity changes) ──
   useEffect(() => {
@@ -2975,9 +2986,9 @@ export function App() {
         onFontSize={onFontSize}
         onInsertTable={(rows, cols) => void insertTable(rows, cols)}
         transition={transition}
-        onTransition={(kind, all) => {
-          void applyTransition(kind, all)
-          if (!all) previewTransitionOnCanvas(kind)
+        onTransition={(spec, all) => {
+          void applyTransition(spec, all)
+          if (!all) previewTransitionOnCanvas(spec)
         }}
         selectedAnimEffect={selectedAnimEffect}
         timingAnim={timingIdx >= 0 ? animations[timingIdx]! : null}
@@ -3634,14 +3645,17 @@ export function App() {
                         >
                           <div
                             ref={stageRelRef}
-                            className={`stage-rel${transPreviewKind ? ` tp-${transPreviewKind}` : ''}`}
+                            className={`stage-rel${transPreviewCss ? ` ${transPreviewCss}` : ''}`}
                             onAnimationEnd={(e) => {
-                              if (e.target === e.currentTarget) setTransPreviewKind(null)
+                              if (e.target === e.currentTarget) setTransPreview(null)
                             }}
                             style={{
                               position: 'relative',
                               width: slide.widthPx,
                               height: slide.heightPx,
+                              ...(transPreviewCss && transPreview?.durationMs != null
+                                ? { animationDuration: `${transPreview.durationMs}ms` }
+                                : {}),
                             }}
                             onDragOver={(e) => {
                               if (e.dataTransfer.types.includes('Files')) e.preventDefault()

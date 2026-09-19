@@ -92,7 +92,7 @@ import {
   slideDurableId,
   getSlideComments,
   getSlideNotes,
-  getSlideTransition,
+  getSlideTransitionSpec,
   elementSpid,
   getSlideAnimations,
   listEmbeddedFonts,
@@ -197,6 +197,7 @@ import type {
   SetNotesOp,
   SetSlideHiddenOp,
   SetTransitionOp,
+  TransitionSpec,
   AddSectionOp,
   RenameSectionOp,
   RemoveSectionOp,
@@ -3773,7 +3774,14 @@ export function registerSlidesIpc(): void {
       op.slideIndex === -1 ? slides.map((_, i) => i) : slides[op.slideIndex] ? [op.slideIndex] : []
     if (idxs.length === 0) return false
     const r = sessionTxn(session, {
-      ops: idxs.map((i) => ({ op: 'setTransition', target: { slide: i }, kind: op.kind })),
+      ops: idxs.map((i) => ({
+        op: 'setTransition',
+        target: { slide: i },
+        kind: op.kind,
+        ...(op.dir != null ? { dir: op.dir } : {}),
+        ...(op.orient != null ? { orient: op.orient } : {}),
+        ...(op.durationMs !== undefined ? { durationMs: op.durationMs } : {}),
+      })),
     })
     return r !== null
   })
@@ -3781,7 +3789,9 @@ export function registerSlidesIpc(): void {
   ipcMain.handle('slides:get-transition', (e, slideIndex: number) => {
     const session = sessions.get(e.sender.id)
     const slide = session?.opened.deck.slides[slideIndex]
-    return slide ? getSlideTransition(slide) : 'none'
+    return slide
+      ? getSlideTransitionSpec(slide)
+      : ({ kind: 'none', durationMs: null } satisfies TransitionSpec)
   })
 
   // Rehearsal timing save: batch-write each page's auto-advance time (<p:transition advTm>, ms)
@@ -3831,6 +3841,7 @@ export function registerSlidesIpc(): void {
         trigger: a.trigger,
         durationMs: a.durationMs,
         delayMs: a.delayMs,
+        ...(a.direction != null ? { direction: a.direction } : {}),
         ...(a.motionPath != null ? { motionPath: a.motionPath } : {}),
         ...(a.paragraph != null ? { paragraph: a.paragraph } : {}),
       })

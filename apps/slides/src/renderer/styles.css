@@ -4921,6 +4921,42 @@ body.vib .slide-list {
   width: 58px;
 }
 
+/* Transitions tab "Effect Options" panel: direction dropdown + duration box rows */
+.rb-trans-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 240px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.rb-trans-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.rb-trans-options .gs-dd {
+  width: 132px;
+}
+
+.rb-trans-options .gs-dd-btn {
+  height: 22px;
+}
+
+.rb-trans-options input {
+  width: 58px;
+  font-size: 12px;
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text);
+}
+
 /* ── Animation pane (reuses the comments-pane skeleton) ───────────────── */
 
 .anim-pane .comments-list {
@@ -5705,7 +5741,10 @@ body.vib .slide-list {
 }
 @keyframes tp-push {
   from {
-    transform: translateY(-100%);
+    transform: var(--tr-from-tf, translateY(100%));
+  }
+  to {
+    transform: translateY(0);
   }
 }
 
@@ -5714,7 +5753,7 @@ body.vib .slide-list {
 }
 @keyframes tp-wipe {
   from {
-    clip-path: inset(0 100% 0 0);
+    clip-path: var(--tr-from-clip, inset(0 0 0 100%));
   }
   to {
     clip-path: inset(0 0 0 0);
@@ -5726,10 +5765,10 @@ body.vib .slide-list {
 }
 @keyframes tp-split {
   from {
-    clip-path: inset(0 50%);
+    clip-path: var(--tr-from-clip, inset(50% 0 50% 0));
   }
   to {
-    clip-path: inset(0 0);
+    clip-path: inset(0 0 0 0);
   }
 }
 
@@ -5750,7 +5789,10 @@ body.vib .slide-list {
 }
 @keyframes tp-cover {
   from {
-    transform: translateX(-100%);
+    transform: var(--tr-from-tf, translateX(-100%));
+  }
+  to {
+    transform: translateX(0);
   }
 }
 
@@ -5759,7 +5801,7 @@ body.vib .slide-list {
 }
 @keyframes tp-pull {
   from {
-    clip-path: inset(0 0 0 100%);
+    clip-path: var(--tr-from-clip, inset(0 0 0 100%));
   }
   to {
     clip-path: inset(0 0 0 0);
@@ -5781,7 +5823,11 @@ body.vib .slide-list {
 @keyframes tp-zoom {
   from {
     opacity: 0;
-    transform: scale(0.5);
+    transform: var(--tr-from-tf, scale(0.5));
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
@@ -6468,7 +6514,11 @@ body.show-curtain::after {
   line-height: 0;
 }
 
-/* Page transition animations: CSS approximations of the Transitions-tab PowerPoint effects (applied to the entering page) */
+/* Page transition animations: CSS approximations of the Transitions-tab PowerPoint effects (applied to the entering page).
+ * Direction variants feed the keyframes' custom properties: --tr-from-tf (transform-based
+ * effects) and --tr-from-clip (clip-based effects). Defaults inside the keyframes match
+ * what a plain <p:transition> of that kind serializes to (push dir="u", wipe/cover/pull
+ * dir="l", split horz). The Effect-Options duration overrides animationDuration inline. */
 .slideshow .ss-anim-fade {
   animation: ss-fade 0.5s ease both;
 }
@@ -6489,6 +6539,59 @@ body.show-curtain::after {
   animation: ss-circle 0.6s ease-out both;
 }
 
+/* Transition direction modifiers (shared by the show frames and the editor previews):
+ * each "from X" pins the incoming content off-screen at that side (transform-based)
+ * or anchors the reveal at that edge (clip-based). */
+.tr-fromBottom {
+  --tr-from-tf: translateY(100%);
+  --tr-from-clip: inset(100% 0 0 0);
+}
+
+.tr-fromTop {
+  --tr-from-tf: translateY(-100%);
+  --tr-from-clip: inset(0 0 100% 0);
+}
+
+.tr-fromLeft {
+  --tr-from-tf: translateX(100%);
+  --tr-from-clip: inset(0 100% 0 0);
+}
+
+.tr-fromRight {
+  --tr-from-tf: translateX(-100%);
+  --tr-from-clip: inset(0 0 0 100%);
+}
+
+.tr-fromBottomLeft {
+  --tr-from-tf: translate(100%, 100%);
+  --tr-from-clip: inset(100% 100% 0 0);
+}
+
+.tr-fromBottomRight {
+  --tr-from-tf: translate(-100%, 100%);
+  --tr-from-clip: inset(100% 0 0 100%);
+}
+
+.tr-fromTopLeft {
+  --tr-from-tf: translate(100%, -100%);
+  --tr-from-clip: inset(0 100% 100% 0);
+}
+
+.tr-fromTopRight {
+  --tr-from-tf: translate(-100%, -100%);
+  --tr-from-clip: inset(0 0 100% 100%);
+}
+
+/* Split with a vertical split-line (orient="vert"): reveal expands from the vertical center */
+.tr-split-vert {
+  --tr-from-clip: inset(0 50% 0 50%);
+}
+
+/* Zoom "out" variant: start oversized and settle */
+.tr-zoom-out {
+  --tr-from-tf: scale(1.8);
+}
+
 @keyframes ss-fade {
   from {
     opacity: 0;
@@ -6500,7 +6603,7 @@ body.show-curtain::after {
 
 @keyframes ss-push {
   from {
-    transform: translateY(100%);
+    transform: var(--tr-from-tf, translateY(100%));
   }
   to {
     transform: translateY(0);
@@ -6509,7 +6612,7 @@ body.show-curtain::after {
 
 @keyframes ss-wipe {
   from {
-    clip-path: inset(0 100% 0 0);
+    clip-path: var(--tr-from-clip, inset(0 0 0 100%));
   }
   to {
     clip-path: inset(0 0 0 0);
@@ -6518,7 +6621,7 @@ body.show-curtain::after {
 
 @keyframes ss-split {
   from {
-    clip-path: inset(50% 0 50% 0);
+    clip-path: var(--tr-from-clip, inset(50% 0 50% 0));
   }
   to {
     clip-path: inset(0 0 0 0);
@@ -8814,7 +8917,7 @@ body.show-curtain::after {
 }
 @keyframes ss-cover {
   from {
-    transform: translateX(100%);
+    transform: var(--tr-from-tf, translateX(-100%));
   }
   to {
     transform: translateX(0);
@@ -8822,7 +8925,7 @@ body.show-curtain::after {
 }
 @keyframes ss-pull {
   from {
-    clip-path: inset(0 0 0 100%);
+    clip-path: var(--tr-from-clip, inset(0 0 0 100%));
   }
   to {
     clip-path: inset(0 0 0 0);
@@ -8830,7 +8933,7 @@ body.show-curtain::after {
 }
 @keyframes ss-zoomin {
   from {
-    transform: scale(0.2);
+    transform: var(--tr-from-tf, scale(0.2));
     opacity: 0;
   }
   to {

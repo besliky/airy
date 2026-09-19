@@ -37,9 +37,12 @@ import {
   readSlideAdvanceTimeXml,
   readSlideHiddenXml,
   readSlideTransitionXml,
+  readSlideTransitionSpecXml,
   removeSlideBackgroundXml,
   type GradientFillPatch,
   type SlideTransitionKind,
+  type SlideTransitionOptions,
+  type SlideTransitionSpec,
   type StrokePatch,
 } from './generate'
 import {
@@ -104,7 +107,11 @@ export {
   cNvPrIdsInXml,
   ANIM_EFFECTS,
   ANIM_TRIGGERS,
+  ANIM_DIRECTIONS,
+  ANIM_DEFAULT_DIR,
+  ANIM_DIR_VALUES,
   type AnimClass,
+  type AnimDirection,
   type AnimEffectKind,
   type AnimTrigger,
   type SlideAnimation,
@@ -144,14 +151,20 @@ export {
   readSlideAdvanceTimeXml,
   readSlideHiddenXml,
   readSlideTransitionXml,
+  readSlideTransitionSpecXml,
   removeSlideBackgroundXml,
   generateParagraphXml,
   generateXfrmXml,
   isConnectorXml,
   TRANSITION_KINDS,
+  TRANSITION_DIR_INFO,
   type GradientFillPatch,
   type BackgroundImagePatch,
+  type SlideTransitionDir,
   type SlideTransitionKind,
+  type SlideTransitionOptions,
+  type SlideTransitionOrient,
+  type SlideTransitionSpec,
   type StrokePatch,
 } from './generate'
 export {
@@ -3918,15 +3931,24 @@ export function pasteElements(
 
 // ── Slide transitions ───────────────────────────────────────────────────
 
-/** Set/clear the transition (writes bodySuffix, persisted with the whole-slide rebuild on save). */
-export function setSlideTransition(slide: Slide, kind: SlideTransitionKind): void {
-  slide.bodySuffix = patchSlideTransitionXml(slide.bodySuffix, kind)
+/** Set/clear the transition with its Effect Options (writes bodySuffix, persisted with the whole-slide rebuild on save). */
+export function setSlideTransition(
+  slide: Slide,
+  kind: SlideTransitionKind,
+  opts?: SlideTransitionOptions,
+): void {
+  slide.bodySuffix = patchSlideTransitionXml(slide.bodySuffix, kind, opts)
   slide.structureDirty = true
 }
 
 /** Read the current transition. */
 export function getSlideTransition(slide: Slide): SlideTransitionKind {
   return readSlideTransitionXml(slide.bodySuffix)
+}
+
+/** Read the current transition with its Effect Options (direction/orientation/duration). */
+export function getSlideTransitionSpec(slide: Slide): SlideTransitionSpec {
+  return readSlideTransitionSpecXml(slide.bodySuffix)
 }
 
 /** Set/clear the auto-advance time (advTm, ms; saved by rehearsal timing, auto-advances in PowerPoint slideshows). */
