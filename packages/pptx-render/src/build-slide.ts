@@ -210,8 +210,31 @@ function buildNode(
   if (node) {
     const durable = parentGroup ? groupChildDurableId(parentGroup, el) : elementDurableId(el)
     if (durable) node.durableId = durable
+    attachAltText(node, el)
   }
   return node
+}
+
+/**
+ * Expose the element's cNvPr alt text on the render node (the Format pane edits
+ * it). The descr slot doubles as editor storage on two picture flavors —
+ * freehand-ink strokes keep their vector payload there, 3D posters keep the
+ * model reference — so those report altTextLocked instead of their payload,
+ * and the pane refuses to write descr for them.
+ */
+function attachAltText(node: RenderNode, el: SlideElement): void {
+  if (!['text', 'shape', 'picture', 'group', 'table', 'chart'].includes(el.type)) return
+  const title = (el as { title?: string }).title
+  const descr = (el as { descr?: string }).descr
+  const payloadSlot =
+    el.type === 'picture' &&
+    (el.name?.startsWith('aislides-ink') || descr?.startsWith('aislides-3d:'))
+  if (payloadSlot) {
+    node.altTextLocked = true
+    if (title) node.altText = { title }
+    return
+  }
+  node.altText = { ...(title ? { title } : {}), ...(descr ? { descr } : {}) }
 }
 
 function buildNodeInner(

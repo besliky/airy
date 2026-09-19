@@ -40,6 +40,16 @@ export interface RenderNodeBase {
    * results/snapping, and marquee drags may start on top of it.
    */
   background?: boolean
+  /**
+   * cNvPr alt text (title + description) for the Format pane's Alt Text section.
+   * Present only on element kinds that support alt text editing.
+   */
+  altText?: { title?: string; descr?: string }
+  /**
+   * Alt text editing unavailable: the cNvPr descr slot carries an editor payload
+   * (freehand-ink vector points, a 3D-model reference) that must not be overwritten.
+   */
+  altTextLocked?: boolean
 }
 
 /** Resolved render fill (RGBA / gradient stops / image dataUrl). */

@@ -301,4 +301,12 @@ export const cs = {
   paneShowEnded: 'Konec prezentace.',
   paneShowRehearseTip: 'Vyzkoušet časování: čas na tomto snímku / celkový čas',
   paneShowRehearseTotal: 'Celkem {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: 'Alternativní text',
+  paneAltTextTitle: 'Název',
+  paneAltTextDescription: 'Popis',
+  paneAltTextHint: 'Popište objekt pro lidi, kteří ho nemohou vidět.',
+  paneAltTextLocked:
+    'Alternativní text není pro tento objekt k dispozici (v poli popisu jsou uložena data editoru).',
 } satisfies Record<keyof typeof zh, string>

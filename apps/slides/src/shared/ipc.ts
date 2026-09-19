@@ -1325,6 +1325,12 @@ export interface SlidesApi {
     sourceId: string
     effects: SetEffectsPatch
   }) => Promise<RenderSlide | null>
+  /** Object alt text (cNvPr title/description): undefined fields stay, null clears */
+  setAltText: (op: {
+    slideIndex: number
+    sourceId: string
+    alt: { title?: string | null; descr?: string | null }
+  }) => Promise<RenderSlide | null>
   /** Text box body properties (direction / autofit / internal margins / wrap) */
   setTextBodyProps: (op: {
     slideIndex: number

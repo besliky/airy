@@ -3117,6 +3117,25 @@ export function registerSlidesIpc(): void {
   )
 
   ipcMain.handle(
+    'slides:set-alt-text',
+    (
+      e,
+      op: {
+        slideIndex: number
+        sourceId: string
+        alt: { title?: string | null; descr?: string | null }
+      },
+    ) => {
+      const session = sessions.get(e.sender.id)
+      if (!session) return null
+      const r = sessionTxn(session, {
+        ops: [{ op: 'setAltText', target: { slide: op.slideIndex, el: op.sourceId }, alt: op.alt }],
+      })
+      return r ? rebuildSlide(session, op.slideIndex) : null
+    },
+  )
+
+  ipcMain.handle(
     'slides:set-text-body-props',
     (
       e,

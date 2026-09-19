@@ -304,4 +304,12 @@ export const ms = {
   paneShowEnded: 'Persembahan slaid tamat.',
   paneShowRehearseTip: 'Raptai Pemasaan: masa pada slaid ini / jumlah masa',
   paneShowRehearseTotal: 'Jumlah {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: 'Teks Alt',
+  paneAltTextTitle: 'Tajuk',
+  paneAltTextDescription: 'Penerangan',
+  paneAltTextHint: 'Huraikan objek untuk orang yang tidak dapat melihatnya.',
+  paneAltTextLocked:
+    'Teks alt tidak tersedia untuk objek ini (medan penerangannya menyimpan data editor).',
 } satisfies Record<keyof typeof zh, string>

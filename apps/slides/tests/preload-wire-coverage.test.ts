@@ -225,6 +225,7 @@ const PINNED_API_MEMBERS = `
   setAdvanceTimes
   setAiSettings
   setAnimations
+  setAltText
   setAutoSavePref
   setEffects
   setElementFont

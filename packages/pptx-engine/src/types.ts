@@ -436,6 +436,11 @@ interface ElementBase {
   txBox?: boolean
   name?: string
   /**
+   * <p:cNvPr title>: the object's alt-text title (pure user data, shown in the
+   * Alt Text pane; never used for editor bookkeeping).
+   */
+  title?: string
+  /**
    * <p:cNvPr descr="…">: for most elements this is the user's alt-text
    * description; a few picture flavors store an editor-owned payload there
    * instead (freehand-ink vector points, "aislides-3d:" model refs), which the

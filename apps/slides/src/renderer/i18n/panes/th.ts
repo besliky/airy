@@ -300,4 +300,11 @@ export const th = {
   paneShowEnded: 'จบการนำเสนอแล้ว',
   paneShowRehearseTip: 'ซ้อมการกำหนดเวลา: เวลาบนสไลด์นี้ / เวลารวม',
   paneShowRehearseTotal: 'รวม {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: 'ข้อความกำกับ',
+  paneAltTextTitle: 'ชื่อเรื่อง',
+  paneAltTextDescription: 'คำอธิบาย',
+  paneAltTextHint: 'อธิบายวัตถุสำหรับผู้ที่มองไม่เห็น',
+  paneAltTextLocked: 'ข้อความกำกับไม่พร้อมใช้งานสำหรับวัตถุนี้ (ช่องคำอธิบายเก็บข้อมูลของตัวแก้ไข)',
 } satisfies Record<keyof typeof zh, string>

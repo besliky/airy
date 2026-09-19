@@ -303,4 +303,12 @@ export const id = {
   paneShowEnded: 'Peragaan slide berakhir.',
   paneShowRehearseTip: 'Latih Pengaturan Waktu: waktu pada slide ini / total waktu',
   paneShowRehearseTotal: 'Total {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: 'Teks Alt',
+  paneAltTextTitle: 'Judul',
+  paneAltTextDescription: 'Deskripsi',
+  paneAltTextHint: 'Jelaskan objek untuk orang yang tidak dapat melihatnya.',
+  paneAltTextLocked:
+    'Teks alt tidak tersedia untuk objek ini (kolom deskripsinya menyimpan data editor).',
 } satisfies Record<keyof typeof zh, string>

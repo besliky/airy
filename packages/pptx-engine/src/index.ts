@@ -2885,6 +2885,61 @@ function ensureAppChartMarker(el: SlideElement): boolean {
   return true
 }
 
+/** Name prefix of renderer-created freehand-ink pictures: their cNvPr descr holds the vector payload, not alt text. */
+const INK_NAME_PREFIX = 'aislides-ink'
+/** cNvPr descr prefix of an embedded 3D-model picture: a media part reference, not alt text. */
+const MODEL3D_DESCR_PREFIX = 'aislides-3d:'
+
+/**
+ * Set an element's alt text — the cNvPr title/description attributes — via XML
+ * surgery on the element's anchor bytes. Works for every top-level element kind
+ * (shape/text/picture/table/chart/group; the first cNvPr in the slice is always
+ * the element's own). Field semantics: undefined = leave untouched, '' or null
+ * = remove the attribute, any other string = write (entity-escaped). The model
+ * fields are synced so a render rebuild sees the change without a reparse.
+ *
+ * Refuses pictures whose descr slot carries an editor payload (freehand-ink
+ * vector points, 3D-model refs) — overwriting it would break the eraser/3D
+ * association, so their alt text is not editable. A chart still carrying the
+ * legacy descr marker is migrated to the extLst marker as its descr is replaced,
+ * keeping "app-created" recognition alive.
+ */
+export function setElementAltText(
+  slide: Slide,
+  elementId: string,
+  alt: { title?: string | null; descr?: string | null },
+): boolean {
+  const el = slide.elements.find((e) => e.id === elementId)
+  if (!el) return false
+  if (el.type === 'picture') {
+    if (el.name?.startsWith(INK_NAME_PREFIX) || el.descr?.startsWith(MODEL3D_DESCR_PREFIX)) {
+      return false
+    }
+  }
+  const xml = el.anchor.originalXml
+  const m = /<p:cNvPr\b[^>]*\/?>/.exec(xml)
+  if (!m) return false
+  let tag = m[0]
+  const setAttr = (attr: 'title' | 'descr', value: string | null | undefined): void => {
+    if (value === undefined) return
+    const attrRe = new RegExp(`\\s${attr}="[^"]*"`)
+    if (value === null || value === '') tag = tag.replace(attrRe, '')
+    else if (attrRe.test(tag)) tag = tag.replace(attrRe, ` ${attr}="${escapeXmlAttr(value)}"`)
+    else tag = tag.replace(/(\/?>)$/, ` ${attr}="${escapeXmlAttr(value)}"$1`)
+  }
+  const legacyMarker = / descr="aislides-chart"/.test(tag)
+  setAttr('title', alt.title)
+  setAttr('descr', alt.descr)
+  el.anchor.originalXml = xml.slice(0, m.index) + tag + xml.slice(m.index + m[0].length)
+  // Lazy legacy migration: replacing/removing the descr marker would strip the
+  // chart's "app-created" tag — mint the extLst marker so recognition survives
+  if (el.type === 'chart' && legacyMarker && alt.descr !== undefined) ensureAppChartMarker(el)
+  if (alt.title !== undefined) el.title = alt.title || undefined
+  if (alt.descr !== undefined) el.descr = alt.descr || undefined
+  slide.structureDirty = true
+  return true
+}
+
 /** Escape RegExp special characters. */
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

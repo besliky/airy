@@ -394,6 +394,30 @@ individual runs are set through `setText` run `link` fields.
 }
 ```
 
+### setAltText
+
+`{alt:{title?,descr?} — string fields; null/"" clears}`
+
+Object alt text (accessibility): writes the element's `cNvPr` title and
+description. Omitted fields stay untouched. Refuses ink strokes and 3D-model
+posters (their description slot stores editor data).
+
+```json
+{
+  "op": "setAltText",
+  "target": { "slide": 0, "el": "e_PICTURE" },
+  "alt": { "title": "Team photo", "descr": "The team at the 2026 kickoff" }
+}
+```
+
+```json
+{
+  "op": "setAltText",
+  "target": { "slide": 0, "el": "e_CHART" },
+  "alt": { "descr": null }
+}
+```
+
 ### setImageFill (not-ai-callable)
 
 `{source:{mediaPath}|{bytes:base64|dataURL,ext},tile?} — use the image tools instead`

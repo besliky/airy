@@ -301,4 +301,11 @@ export const ko = {
   paneShowEnded: '슬라이드 쇼가 끝났습니다.',
   paneShowRehearseTip: '예행 연습: 현재 슬라이드 시간 / 전체 시간',
   paneShowRehearseTotal: '전체 {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: '대체 텍스트',
+  paneAltTextTitle: '제목',
+  paneAltTextDescription: '설명',
+  paneAltTextHint: '개체를 볼 수 없는 사용자를 위해 설명을 입력하세요.',
+  paneAltTextLocked: '이 개체는 대체 텍스트를 지원하지 않습니다(설명 칸에 편집기 데이터가 저장됨).',
 } satisfies Record<keyof typeof zh, string>

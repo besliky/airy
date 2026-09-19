@@ -305,4 +305,12 @@ export const pt = {
   paneShowEnded: 'Fim da apresentação de slides.',
   paneShowRehearseTip: 'Testar Intervalos: tempo neste slide / tempo total',
   paneShowRehearseTotal: 'Total {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: 'Texto alternativo',
+  paneAltTextTitle: 'Título',
+  paneAltTextDescription: 'Descrição',
+  paneAltTextHint: 'Descreva o objeto para pessoas que não conseguem vê-lo.',
+  paneAltTextLocked:
+    'O texto alternativo não está disponível para este objeto (o campo de descrição armazena dados do editor).',
 } satisfies Record<keyof typeof zh, string>

@@ -306,4 +306,12 @@ export const de = {
   paneShowEnded: 'Ende der Bildschirmpräsentation.',
   paneShowRehearseTip: 'Neue Einblendezeiten testen: Zeit auf dieser Folie / Gesamtzeit',
   paneShowRehearseTotal: 'Gesamt {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: 'Alternativtext',
+  paneAltTextTitle: 'Titel',
+  paneAltTextDescription: 'Beschreibung',
+  paneAltTextHint: 'Beschreiben Sie das Objekt für Personen, die es nicht sehen können.',
+  paneAltTextLocked:
+    'Für dieses Objekt ist kein Alternativtext verfügbar (im Beschreibungsfeld sind Editor-Daten gespeichert).',
 } satisfies Record<keyof typeof zh, string>
