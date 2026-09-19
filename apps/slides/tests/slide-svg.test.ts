@@ -300,6 +300,45 @@ describe('renderSlideSvg', () => {
       '<g transform="translate(100.00 0) scale(-1 1)"><g transform="translate(0.00 0.00)">',
     )
   })
+  it('exports a WordArt warp as per-character transformed <text>', () => {
+    const node: RenderNode = {
+      id: 'w1',
+      type: 'text',
+      sourceId: 'w1',
+      box: box(50, 40, 300, 120),
+      text: {
+        lines: [{ top: 6, height: 24, paraStart: true, runs: [run('Warp', 8, 22)] }],
+        insets: { l: 10, t: 6, r: 4, b: 4 },
+        anchor: 'top',
+        fontScale: 1,
+        contentHeight: 30,
+        wrap: true,
+        txWarp: { prst: 'textArchUp' },
+      },
+    } as unknown as ShapeRenderNode
+    const svg = renderSlideSvg(slideOf(node), new Map())
+    // one <text> per character, each carrying its own warp transform
+    const chars = svg.match(/<text x="0" y="-?[\d.]+"[^>]* transform="translate\(/g) ?? []
+    expect(chars).toHaveLength(4)
+    expect(svg).toContain('>W</text>')
+    expect(svg).toContain('>p</text>')
+    // arch rotates the edge characters along the tangent (first rises left, last right)
+    const rots = [...svg.matchAll(/rotate\((-?[\d.]+)\)/g)].map((m) => Number(m[1]))
+    expect(rots.length).toBeGreaterThanOrEqual(4)
+    expect(Math.min(...rots)).toBeLessThan(0)
+    expect(Math.max(...rots)).toBeGreaterThan(0)
+    // unsupported presets fall back to the straight run layout
+    const straight: RenderNode = {
+      ...node,
+      text: {
+        ...(node as { text: object }).text,
+        txWarp: { prst: 'textRingOutside' },
+      },
+    } as unknown as RenderNode
+    const svg2 = renderSlideSvg(slideOf(straight), new Map())
+    expect(svg2).toContain('>Warp</text>')
+  })
+
   it('draws a 360° pie wedge as a closed full circle', () => {
     const chart: RenderNode = {
       id: 'c2',

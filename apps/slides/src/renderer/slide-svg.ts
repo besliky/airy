@@ -10,10 +10,11 @@
  * NodeBody's counter-flip).
  *
  * Deliberately approximated (visual extras, not structure): WordArt
- * warps/extrusion, run shadows/glows/reflections, picture pixel filters
+ * extrusion, run shadows/glows/reflections, picture pixel filters
  * (duotone/clrChange/lum render the unfiltered image), pattern fills
  * (diagonal-stripe approximation), smoothed chart polylines export as their
- * control points, and rotated-text anchors follow the box center. When SVG
+ * control points, and rotated-text anchors follow the box center (WordArt
+ * envelope warps re-run the canvas warp pass per character). When SVG
  * assembly throws, the exporter falls back to the raster page for that slide.
  */
 import type {
@@ -28,6 +29,8 @@ import type {
   TableRenderNode,
   TextLine,
 } from '@airy-office/pptx-render'
+import type { GlyphDraw } from './konva-adapter'
+import { measureGlyph, warpGlyphs } from './text-warp'
 
 let defSeq = 0
 
@@ -232,6 +235,86 @@ function lineText(
   return out
 }
 
+/**
+ * WordArt warp export: re-run the canvas renderer's per-character warp pass
+ * (text-warp.ts) and emit every character as its own <text> with translate/
+ * rotate/scale, so the exported PDF keeps selectable text bent like the slide.
+ * Flipped containers mirror the character anchors and negate the rotation so
+ * the glyphs stay readable, mirroring the straight-run path. Returns null when
+ * the preset is unsupported (the caller keeps the straight layout).
+ */
+function warpedTextSvg(
+  text: NonNullable<ShapeRenderNode['text']>,
+  flipW: number,
+  flipH: number,
+  boxW: number,
+  boxH: number,
+): string | null {
+  const il = text.insets?.l ?? 0
+  const it = text.insets?.t ?? 0
+  const ir = text.insets?.r ?? 0
+  const ib = text.insets?.b ?? 0
+  const glyphs: GlyphDraw[] = []
+  for (const line of text.lines) {
+    for (const run of line.runs) {
+      if (!run.text) continue
+      glyphs.push({
+        text: run.text,
+        x: run.x,
+        y: line.top,
+        fontSize: run.fontSizePx,
+        fontFamily: run.fontFamily,
+        fill: cssColor(run.color) || '#000',
+        fontStyle:
+          [run.bold ? 'bold' : '', run.italic ? 'italic' : ''].filter(Boolean).join(' ') ||
+          'normal',
+        textDecoration: [run.underline ? 'underline' : '', run.strike ? 'line-through' : '']
+          .filter(Boolean)
+          .join(' '),
+      })
+    }
+  }
+  const warped = warpGlyphs(
+    glyphs,
+    Math.max(boxW - il - ir, 1),
+    Math.max(boxH - it - ib, 1),
+    text.txWarp!,
+    measureGlyph,
+  )
+  if (!warped) return null
+  let out = ''
+  for (const g of warped) {
+    // character center in box-local space (inset origin + text-area coord), mirrored
+    // about the box center for flipped containers so the glyphs stay readable
+    const cx = il + g.x
+    const cy = it + g.y
+    const x = flipW > 0 ? flipW - cx : cx
+    const y = flipH > 0 ? flipH - cy : cy
+    let rot = g.rotation ?? 0
+    if (flipW > 0) rot = -rot
+    if (flipH > 0) rot = 180 - rot
+    const transform = `translate(${x.toFixed(2)} ${y.toFixed(2)})${
+      rot ? ` rotate(${rot.toFixed(2)})` : ''
+    }${
+      g.scaleX != null || g.scaleY != null
+        ? ` scale(${(g.scaleX ?? 1).toFixed(3)} ${(g.scaleY ?? 1).toFixed(3)})`
+        : ''
+    }`
+    const deco = g.textDecoration ? ` text-decoration="${g.textDecoration}"` : ''
+    const outline = g.stroke
+      ? ` stroke="${cssColor(g.stroke) || g.stroke}" stroke-width="${(g.strokeWidth ?? 1).toFixed(2)}" paint-order="stroke fill"`
+      : ''
+    // baseline sits 0.2em below the character center (0.8em ascent − 0.6em half line)
+    out += `<text x="0" y="${(0.2 * g.fontSize).toFixed(2)}"${fontAttrs({
+      fontFamily: g.fontFamily,
+      fontSizePx: g.fontSize,
+      bold: g.fontStyle.includes('bold'),
+      italic: g.fontStyle.includes('italic'),
+    })} text-anchor="middle"${deco}${outline} fill="${cssColor(g.fill) || '#000'}" transform="${transform}" xml:space="preserve">${escText(g.text)}</text>`
+  }
+  return out
+}
+
 /** a text layout (shape body / table cell) → highlight + <text> elements */
 function layoutText(
   text: ShapeRenderNode['text'],
@@ -239,11 +322,18 @@ function layoutText(
   oy: number,
   flipW = 0,
   flipH = 0,
+  box?: { w: number; h: number },
 ): string {
   if (!text) return ''
   const vert = !!text.vert
   const il = text.insets?.l ?? 0
   const it = text.insets?.t ?? 0
+  // WordArt warp replaces the straight runs; vertical layouts and unsupported
+  // presets fall back to the straight path below
+  if (text.txWarp && !vert && box) {
+    const warped = warpedTextSvg(text, flipW, flipH, box.w, box.h)
+    if (warped != null) return warped
+  }
   return text.lines.map((l) => lineText(l, ox + il, oy + it, vert, flipW, flipH)).join('')
 }
 
@@ -569,7 +659,14 @@ function nodeSvg(
     const shape = n as ShapeRenderNode
     const geo = shapeGeometry(shape, defs)
     // PowerPoint flips geometry only; text mirrors position but stays readable
-    const text = layoutText(shape.text, 0, 0, n.box.flipH ? n.box.w : 0, n.box.flipV ? n.box.h : 0)
+    const text = layoutText(
+      shape.text,
+      0,
+      0,
+      n.box.flipH ? n.box.w : 0,
+      n.box.flipV ? n.box.h : 0,
+      n.box,
+    )
     body = flipGeo
       ? `<g${flipGeo ? ` transform="${flipGeo}"` : ''}>${geo}</g>${text}`
       : `${geo}${text}`

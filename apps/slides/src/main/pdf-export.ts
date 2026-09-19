@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { buildPrintDocumentHtml } from '../shared/print-html'
 
 export interface PdfExportWindow {
   loadFile(path: string): Promise<void>
@@ -16,6 +17,13 @@ export interface ExportSlidesPdfOptions {
   widthPx: number
   heightPx: number
   filePath: string
+  /**
+   * Page layout: 'full' paints one slide per PDF page (default); the other
+   * layouts reuse the print sheet's exact page assembly (A4 portrait).
+   */
+  layout?: 'full' | 'notes' | 'handout2' | 'handout3'
+  /** Per-slide speaker notes for the 'notes' layout (same order as pages) */
+  notes?: string[]
   createWindow(): PdfExportWindow
   openExportedPdf(path: string): void
 }
@@ -55,18 +63,34 @@ export async function exportSlidesPdf({
   widthPx,
   heightPx,
   filePath,
+  layout = 'full',
+  notes,
   createWindow,
   openExportedPdf,
 }: ExportSlidesPdfOptions): Promise<ExportSlidesPdfResult> {
-  // PDF page size: fixed 7.5in height, width by slide ratio (16:9 -> 13.333in, 4:3 -> 10in)
-  const heightIn = 7.5
-  const widthIn = Math.round((widthPx / heightPx) * heightIn * 1000) / 1000
+  // PDF page size: 'full' keeps the slide ratio at the 7.5in print height; the
+  // notes/handout layouts print on A4 portrait exactly like the print sheet
+  const heightIn = layout === 'full' ? 7.5 : 11.69
+  const widthIn =
+    layout === 'full' ? Math.round((widthPx / heightPx) * heightIn * 1000) / 1000 : 8.27
+  const html =
+    layout === 'full'
+      ? buildPdfExportHtml(pages, widthIn, heightIn)
+      : // same assembly the print preview/print job use, with the vector slides
+        // inlined where the preview puts its bitmap thumbnails
+        buildPrintDocumentHtml({
+          srcs: pages.map((p) => (p.svg ? '' : `data:image/png;base64,${p.pngBase64 ?? ''}`)),
+          svgs: pages.map((p) => p.svg),
+          ratio: widthPx / heightPx,
+          layout,
+          ...(layout === 'notes' ? { notes: notes ?? [] } : {}),
+        })
   const win = createWindow()
   let tempDir: string | null = null
   try {
     tempDir = await mkdtemp(join(tmpdir(), 'airy-slides-pdf-'))
     const htmlPath = join(tempDir, 'slides.html')
-    await writeFile(htmlPath, buildPdfExportHtml(pages, widthIn, heightIn), 'utf8')
+    await writeFile(htmlPath, html, 'utf8')
     await win.loadFile(htmlPath)
     // The window is scripting-disabled (javascript: false, like sheets'
     // pdf-export), so no fonts/images-ready probe runs: loadFile resolves at

@@ -1179,6 +1179,12 @@ export interface TextBodyPropsPatch {
   /** Internal margins (EMU); only the provided sides are written */
   insets?: Partial<{ l: number; t: number; r: number; b: number }>
   wrap?: boolean
+  /** Text columns 1-13 (PowerPoint's column ceiling); 1 removes numCol/spcCol */
+  numCol?: number
+  /** Column gap (EMU), written when > 0; dropped again when numCol returns to 1 */
+  spcCol?: number
+  /** WordArt preset text warp (<a:prstTxWarp prst>); null removes the element */
+  warp?: { prst: string; adj?: Record<string, number> } | null
 }
 
 /**
@@ -1213,6 +1219,16 @@ export function setElementTextBodyProps(
 
   if (patch.vert !== undefined) setAttr('vert', patch.vert === 'horz' ? null : patch.vert)
   if (patch.wrap !== undefined) setAttr('wrap', patch.wrap ? 'square' : 'none')
+  if (patch.numCol !== undefined) {
+    const n = Math.min(13, Math.max(1, Math.round(patch.numCol)))
+    setAttr('numCol', n > 1 ? String(n) : null)
+    // back to one column: PowerPoint drops the gap attribute with it
+    if (n <= 1) setAttr('spcCol', null)
+  }
+  if (patch.spcCol !== undefined) {
+    const gap = Math.max(0, Math.round(patch.spcCol))
+    setAttr('spcCol', gap > 0 ? String(gap) : null)
+  }
   if (patch.insets) {
     for (const side of ['l', 't', 'r', 'b'] as const) {
       const v = patch.insets[side]
@@ -1235,6 +1251,18 @@ export function setElementTextBodyProps(
     const at = warp ? warp.index + warp[0].length : 0
     inner = inner.slice(0, at) + child + inner.slice(at)
   }
+  if (patch.warp !== undefined) {
+    inner = inner.replace(/<a:prstTxWarp\b(?:[^>]*?\/>|[\s\S]*?<\/a:prstTxWarp>)/, '')
+    if (patch.warp) {
+      const adj = Object.entries(patch.warp.adj ?? {})
+        .filter(([, v]) => Number.isFinite(v))
+        .map(([n, v]) => `<a:gd name="${n}" fmla="val ${Math.round(v)}"/>`)
+        .join('')
+      const avLst = adj ? `<a:avLst>${adj}</a:avLst>` : '<a:avLst/>'
+      // schema order: prstTxWarp is the first bodyPr child, before the autofit choice
+      inner = `<a:prstTxWarp prst="${patch.warp.prst}">${avLst}</a:prstTxWarp>` + inner
+    }
+  }
 
   const rebuilt = inner ? `${openTag}${inner}</a:bodyPr>` : `${openTag.slice(0, -1).trimEnd()}/>`
   xml = xml.slice(0, whole.index) + rebuilt + xml.slice(whole.index + bodyXml.length)
@@ -1247,6 +1275,30 @@ export function setElementTextBodyProps(
     else t.text.vert = patch.vert
   }
   if (patch.wrap !== undefined) t.text.wrap = patch.wrap
+  if (patch.numCol !== undefined) {
+    const n = Math.min(13, Math.max(1, Math.round(patch.numCol)))
+    if (n > 1) t.text.numCol = n
+    else {
+      delete t.text.numCol
+      delete t.text.spcCol
+    }
+  }
+  if (patch.spcCol !== undefined) {
+    const gap = Math.max(0, Math.round(patch.spcCol))
+    if (gap > 0) t.text.spcCol = gap
+    else delete t.text.spcCol
+  }
+  if (patch.warp !== undefined) {
+    const adj = Object.fromEntries(
+      Object.entries(patch.warp?.adj ?? {}).filter(([, v]) => Number.isFinite(v)),
+    )
+    if (patch.warp) {
+      t.text.txWarp = {
+        prst: patch.warp.prst,
+        ...(Object.keys(adj).length ? { adj } : {}),
+      }
+    } else delete t.text.txWarp
+  }
   if (patch.insets) {
     const base = { l: 91440, t: 45720, r: 91440, b: 45720, ...(t.text.insets ?? {}) }
     if (patch.insets.l != null) base.l = Math.max(0, Math.round(patch.insets.l))

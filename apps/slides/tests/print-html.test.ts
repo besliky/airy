@@ -29,6 +29,41 @@ describe('printPageCount', () => {
   })
 })
 
+describe('buildPrintDocumentHtml svgs', () => {
+  it('inline vector slides replace their <img> slot without changing the layout', () => {
+    const svgs = [
+      '<svg xmlns="http://www.w3.org/2000/svg"><text>First</text></svg>',
+      undefined,
+      '<svg xmlns="http://www.w3.org/2000/svg"><text>Third</text></svg>',
+    ]
+    const html = buildPrintDocumentHtml({
+      srcs: srcs(3),
+      svgs,
+      ratio: 16 / 9,
+      layout: 'handout2',
+    })
+    // 3 slides at 2 per sheet = 2 A4 pages, one bitmap slot kept
+    expect(html.match(/class="page handout h2"/g)).toHaveLength(2)
+    expect(html).toContain('<svg xmlns="http://www.w3.org/2000/svg"><text>First</text></svg>')
+    expect(html).toContain('<div class="cell"><img src="blob:img-1">')
+    // the svg cells carry the same frame rules as the bitmap cells
+    expect(html).toContain('.page.handout .cell svg { border: 1px solid #bbb;')
+  })
+
+  it('notes pages inline the svg above the escaped notes text', () => {
+    const html = buildPrintDocumentHtml({
+      srcs: srcs(1),
+      svgs: ['<svg><text>Deck</text></svg>'],
+      ratio: 16 / 9,
+      layout: 'notes',
+      notes: ['Say <this>'],
+    })
+    expect(html).toMatch(
+      /<div class="page notes"><svg><text>Deck<\/text><\/svg><div class="note">Say &lt;this&gt;<\/div><\/div>/,
+    )
+  })
+})
+
 describe('buildPrintDocumentHtml', () => {
   it('full layout sizes pages by the slide ratio and can frame slides', () => {
     const html = buildPrintDocumentHtml({ srcs: srcs(2), ratio: 16 / 9, layout: 'full' })

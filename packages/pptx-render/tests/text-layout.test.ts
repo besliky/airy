@@ -1392,6 +1392,25 @@ describe('bodyPr numCol columns', () => {
       vp,
     })
     expect(layout.lines.length).toBe(1)
+    expect(layout.numCol).toBeUndefined()
+    expect(layout.spcCol).toBeUndefined()
+  })
+
+  it('surfaces numCol and the spcCol gap (px) for the format pane', () => {
+    const layout = layoutText({
+      body: {
+        ...body({ paragraphs: [{ runs: [{ text: 'x', fontSize: 20 }] }] }),
+        numCol: 3,
+        spcCol: 127000,
+      },
+      boxWidthPx: 400,
+      boxHeightPx: 100,
+      metrics: new HeuristicMetrics(),
+      vp,
+    })
+    expect(layout.numCol).toBe(3)
+    // 127000 EMU = 10pt -> px at the baseline 96dpi scale
+    expect(layout.spcCol).toBeCloseTo((127000 / 914400) * 96, 1)
   })
 })
 

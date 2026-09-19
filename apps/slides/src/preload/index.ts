@@ -192,6 +192,9 @@ const api: SlidesApi = {
       autofit?: 'none' | 'shrink' | 'resize'
       insets?: Partial<{ l: number; t: number; r: number; b: number }>
       wrap?: boolean
+      numCol?: number
+      spcCol?: number
+      warp?: { prst: string; adj?: Record<string, number> } | null
     }
   }) => ipcRenderer.invoke('slides:set-text-body-props', op),
   setEffects: (op: { slideIndex: number; sourceId: string; effects: SetEffectsPatch }) =>

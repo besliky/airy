@@ -184,4 +184,66 @@ describe('slides PDF export', () => {
     expect(existsSync(dirname(win.loadedPath!))).toBe(false)
     expect(win.destroyed).toBe(true)
   })
+
+  it('handout2/handout3 layouts pack ceil(slides/N) A4 pages with the vector slides inline', async () => {
+    const win = new TestPdfWindow()
+    const pages = ['a', 'b', 'c', 'd', 'e'].map((label) => ({ svg: vectorSlide(label) }))
+    const result = await exportSlidesPdf({
+      pages,
+      widthPx: 1600,
+      heightPx: 900,
+      filePath: await outputPath(),
+      layout: 'handout3',
+      createWindow: () => win,
+      openExportedPdf: () => {},
+    })
+    expect(result.ok).toBe(true)
+    // 5 slides at 3 per sheet = 2 pages; the assembly is the print sheet's
+    expect(win.loadedHtml).toContain('@page { size: 8.27in 11.69in; margin: 0; }')
+    expect(win.loadedHtml.match(/class="page handout h3"/g)).toHaveLength(2)
+    // the vector slides stay inline (selectable text) in their cells
+    expect(win.loadedHtml).toContain('<div class="cell"><svg xmlns=')
+    expect(win.loadedHtml).toContain('>e</text>')
+    expect(win.printOptions).toEqual({
+      landscape: false,
+      printBackground: true,
+      pageSize: { width: 8.27, height: 11.69 },
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      preferCSSPageSize: false,
+    })
+
+    const win2 = new TestPdfWindow()
+    await exportSlidesPdf({
+      pages: pages.slice(0, 4),
+      widthPx: 1600,
+      heightPx: 900,
+      filePath: await outputPath(),
+      layout: 'handout2',
+      createWindow: () => win2,
+      openExportedPdf: () => {},
+    })
+    expect(win2.loadedHtml.match(/class="page handout h2"/g)).toHaveLength(2)
+  })
+
+  it('notes layout pairs each vector slide with its notes text on A4', async () => {
+    const win = new TestPdfWindow()
+    const result = await exportSlidesPdf({
+      pages: [{ svg: vectorSlide('One') }, { pngBase64: singlePixelPngBase64() }],
+      widthPx: 1600,
+      heightPx: 900,
+      filePath: await outputPath(),
+      layout: 'notes',
+      notes: ['Remember the <agenda>', ''],
+      createWindow: () => win,
+      openExportedPdf: () => {},
+    })
+    expect(result.ok).toBe(true)
+    expect(win.loadedHtml.match(/class="page notes"/g)).toHaveLength(2)
+    // notes text is present and escaped, slide text stays selectable
+    expect(win.loadedHtml).toContain('Remember the &lt;agenda&gt;')
+    expect(win.loadedHtml).toContain('>One</text>')
+    // the raster fallback page keeps its bitmap slot
+    expect(win.loadedHtml).toContain(`data:image/png;base64,${singlePixelPngBase64()}`)
+    expect(win.loadedHtml).toContain('@page { size: 8.27in 11.69in; margin: 0; }')
+  })
 })

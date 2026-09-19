@@ -1113,6 +1113,13 @@ export interface ExportPdfOp {
   /** Rendered pixel width/height of the slide page (used to compute the PDF page aspect ratio) */
   widthPx: number
   heightPx: number
+  /**
+   * Page layout: 'full' = one slide per page (default); 'notes' = notes pages,
+   * 'handout2'/'handout3' = handouts — assembled exactly like the print sheet (A4)
+   */
+  layout?: 'full' | 'notes' | 'handout2' | 'handout3'
+  /** Per-slide speaker notes for the 'notes' layout (same order as pages) */
+  notes?: string[]
 }
 
 export interface ExportPdfResult {
@@ -1328,6 +1335,12 @@ export interface SlidesApi {
       /** Internal margins (EMU); only the provided sides are written */
       insets?: Partial<{ l: number; t: number; r: number; b: number }>
       wrap?: boolean
+      /** Text columns 1-13; 1 removes numCol/spcCol */
+      numCol?: number
+      /** Column gap (EMU) */
+      spcCol?: number
+      /** WordArt text warp preset; null removes it */
+      warp?: { prst: string; adj?: Record<string, number> } | null
     }
   }) => Promise<RenderSlide | null>
   /** External clipboard content probe (internal/slide = last copy came from this app) */
