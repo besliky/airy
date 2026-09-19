@@ -17,6 +17,9 @@ const tUpd = createI18n({
     updInstallOnQuit: '退出时安装',
     updNotifyTitle: 'Airy 有新版本',
     updNotifyBody: 'Airy {version} 已发布。点击打开下载页面。',
+    updManualTitle: 'Airy 更新',
+    updManualBody: 'Airy 在 macOS 上不支持自动更新（未签名构建）。请从发布页面下载最新版本。',
+    updManualButton: '打开发布页面',
   },
   en: {
     updAvailableTitle: 'Update Available',
@@ -30,6 +33,10 @@ const tUpd = createI18n({
     updInstallOnQuit: 'Install on Quit',
     updNotifyTitle: 'Airy Update Available',
     updNotifyBody: 'Airy {version} is available. Click to open the download page.',
+    updManualTitle: 'Airy Updates',
+    updManualBody:
+      'Airy cannot update itself on macOS (unsigned builds). Download the latest version from the releases page.',
+    updManualButton: 'Open Releases Page',
   },
   ja: {
     updAvailableTitle: '新しいバージョンがあります',
@@ -44,6 +51,10 @@ const tUpd = createI18n({
     updInstallOnQuit: '終了時にインストール',
     updNotifyTitle: 'Airy のアップデートがあります',
     updNotifyBody: 'Airy {version} が利用可能です。クリックしてダウンロードページを開きます。',
+    updManualTitle: 'Airy のアップデート',
+    updManualBody:
+      'Airy は macOS 上で自己更新できません（未署名ビルド）。最新版はリリースページからダウンロードしてください。',
+    updManualButton: 'リリースページを開く',
   },
   ko: {
     updAvailableTitle: '업데이트 가능',
@@ -58,6 +69,10 @@ const tUpd = createI18n({
     updInstallOnQuit: '종료 시 설치',
     updNotifyTitle: 'Airy 업데이트 가능',
     updNotifyBody: 'Airy {version}을(를) 사용할 수 있습니다. 클릭하여 다운로드 페이지를 여세요.',
+    updManualTitle: 'Airy 업데이트',
+    updManualBody:
+      'Airy는 macOS에서 자체 업데이트를 할 수 없습니다(서명되지 않은 빌드). 최신 버전은 릴리스 페이지에서 내려받으세요.',
+    updManualButton: '릴리스 페이지 열기',
   },
   fr: {
     updAvailableTitle: 'Mise à jour disponible',
@@ -72,6 +87,10 @@ const tUpd = createI18n({
     updInstallOnQuit: 'Installer à la fermeture',
     updNotifyTitle: 'Mise à jour Airy disponible',
     updNotifyBody: 'Airy {version} est disponible. Cliquez pour ouvrir la page de téléchargement.',
+    updManualTitle: 'Mises à jour d’Airy',
+    updManualBody:
+      'Airy ne peut pas se mettre à jour sur macOS (builds non signées). Téléchargez la dernière version depuis la page des versions.',
+    updManualButton: 'Ouvrir la page des versions',
   },
   de: {
     updAvailableTitle: 'Update verfügbar',
@@ -86,6 +105,10 @@ const tUpd = createI18n({
     updInstallOnQuit: 'Beim Beenden installieren',
     updNotifyTitle: 'Airy-Update verfügbar',
     updNotifyBody: 'Airy {version} ist verfügbar. Klicken Sie, um die Download-Seite zu öffnen.',
+    updManualTitle: 'Airy-Updates',
+    updManualBody:
+      'Airy kann sich unter macOS nicht selbst aktualisieren (unsignierte Builds). Laden Sie die neueste Version von der Releases-Seite herunter.',
+    updManualButton: 'Releases-Seite öffnen',
   },
   es: {
     updAvailableTitle: 'Actualización disponible',
@@ -99,6 +122,10 @@ const tUpd = createI18n({
     updInstallOnQuit: 'Instalar al salir',
     updNotifyTitle: 'Actualización de Airy disponible',
     updNotifyBody: 'Airy {version} está disponible. Haga clic para abrir la página de descargas.',
+    updManualTitle: 'Actualizaciones de Airy',
+    updManualBody:
+      'Airy no puede actualizarse solo en macOS (compilaciones sin firmar). Descargue la última versión desde la página de versiones.',
+    updManualButton: 'Abrir la página de versiones',
   },
   pt: {
     updAvailableTitle: 'Atualização disponível',
@@ -112,6 +139,10 @@ const tUpd = createI18n({
     updInstallOnQuit: 'Instalar ao sair',
     updNotifyTitle: 'Atualização do Airy disponível',
     updNotifyBody: 'Airy {version} está disponível. Clique para abrir a página de download.',
+    updManualTitle: 'Atualizações do Airy',
+    updManualBody:
+      'O Airy não pode se autoatualizar no macOS (compilações não assinadas). Baixe a versão mais recente na página de lançamentos.',
+    updManualButton: 'Abrir a página de lançamentos',
   },
   it: {
     updAvailableTitle: 'Aggiornamento disponibile',
@@ -125,6 +156,10 @@ const tUpd = createI18n({
     updInstallOnQuit: "Installa all'uscita",
     updNotifyTitle: 'Aggiornamento di Airy disponibile',
     updNotifyBody: 'Airy {version} è disponibile. Fai clic per aprire la pagina di download.',
+    updManualTitle: 'Aggiornamenti di Airy',
+    updManualBody:
+      "Airy non può aggiornarsi da solo su macOS (build non firmate). Scarica l'ultima versione dalla pagina delle release.",
+    updManualButton: 'Apri la pagina delle release',
   },
   ru: {
     updAvailableTitle: 'Доступно обновление',
@@ -138,6 +173,10 @@ const tUpd = createI18n({
     updInstallOnQuit: 'Установить при выходе',
     updNotifyTitle: 'Доступно обновление Airy',
     updNotifyBody: 'Доступна версия Airy {version}. Нажмите, чтобы открыть страницу загрузки.',
+    updManualTitle: 'Обновления Airy',
+    updManualBody:
+      'Airy не может обновлять сам себя в macOS (неподписанные сборки). Скачайте последнюю версию со страницы релизов.',
+    updManualButton: 'Открыть страницу релизов',
   },
   cs: {
     updAvailableTitle: 'K dispozici je aktualizace',
@@ -151,6 +190,10 @@ const tUpd = createI18n({
     updInstallOnQuit: 'Nainstalovat při ukončení',
     updNotifyTitle: 'K dispozici je aktualizace Airy',
     updNotifyBody: 'Airy {version} je k dispozici. Kliknutím otevřete stránku se stažením.',
+    updManualTitle: 'Aktualizace Airy',
+    updManualBody:
+      'Airy se v systému macOS nemůže aktualizovat sám (nepodepsaná sestavení). Nejnovější verzi stáhněte ze stránky vydání.',
+    updManualButton: 'Otevřít stránku vydání',
   },
   pl: {
     updAvailableTitle: 'Dostępna aktualizacja',
@@ -164,6 +207,10 @@ const tUpd = createI18n({
     updInstallOnQuit: 'Zainstaluj przy wyjściu',
     updNotifyTitle: 'Dostępna aktualizacja Airy',
     updNotifyBody: 'Airy {version} jest dostępny. Kliknij, aby otworzyć stronę pobierania.',
+    updManualTitle: 'Aktualizacje Airy',
+    updManualBody:
+      'Airy nie może samodzielnie aktualizować się w systemie macOS (niepodpisane kompilacje). Pobierz najnowszą wersję ze strony wydań.',
+    updManualButton: 'Otwórz stronę wydań',
   },
   nl: {
     updAvailableTitle: 'Update beschikbaar',
@@ -177,6 +224,10 @@ const tUpd = createI18n({
     updInstallOnQuit: 'Installeren bij afsluiten',
     updNotifyTitle: 'Airy-update beschikbaar',
     updNotifyBody: 'Airy {version} is beschikbaar. Klik om de downloadpagina te openen.',
+    updManualTitle: 'Airy-updates',
+    updManualBody:
+      'Airy kan zichzelf op macOS niet bijwerken (niet-ondertekende builds). Download de nieuwste versie van de releases-pagina.',
+    updManualButton: 'Releases-pagina openen',
   },
   th: {
     updAvailableTitle: 'มีอัปเดตให้ใช้งาน',
@@ -190,6 +241,10 @@ const tUpd = createI18n({
     updInstallOnQuit: 'ติดตั้งเมื่อปิดโปรแกรม',
     updNotifyTitle: 'มีอัปเดต Airy',
     updNotifyBody: 'Airy {version} พร้อมให้ใช้งานแล้ว คลิกเพื่อเปิดหน้าดาวน์โหลด',
+    updManualTitle: 'อัปเดต Airy',
+    updManualBody:
+      'Airy อัปเดตตัวเองบน macOS ไม่ได้ (บิลด์ที่ไม่ได้ลงนาม) โปรดดาวน์โหลดเวอร์ชันล่าสุดจากหน้ารีลีส',
+    updManualButton: 'เปิดหน้ารีลีส',
   },
   id: {
     updAvailableTitle: 'Pembaruan Tersedia',
@@ -203,6 +258,10 @@ const tUpd = createI18n({
     updInstallOnQuit: 'Pasang saat Keluar',
     updNotifyTitle: 'Pembaruan Airy Tersedia',
     updNotifyBody: 'Airy {version} tersedia. Klik untuk membuka halaman unduhan.',
+    updManualTitle: 'Pembaruan Airy',
+    updManualBody:
+      'Airy tidak dapat memperbarui dirinya sendiri di macOS (build tidak ditandatangani). Unduh versi terbaru dari halaman rilis.',
+    updManualButton: 'Buka Halaman Rilis',
   },
   ms: {
     updAvailableTitle: 'Kemas Kini Tersedia',
@@ -216,6 +275,10 @@ const tUpd = createI18n({
     updInstallOnQuit: 'Pasang ketika Keluar',
     updNotifyTitle: 'Kemas Kini Airy Tersedia',
     updNotifyBody: 'Airy {version} tersedia. Klik untuk membuka halaman muat turun.',
+    updManualTitle: 'Kemas Kini Airy',
+    updManualBody:
+      'Airy tidak boleh mengemas kini sendiri di macOS (binaan tidak ditandatangani). Muat turun versi terkini dari halaman keluaran.',
+    updManualButton: 'Buka Halaman Keluaran',
   },
   he: {
     updAvailableTitle: 'עדכון זמין',
@@ -229,6 +292,10 @@ const tUpd = createI18n({
     updInstallOnQuit: 'התקן ביציאה',
     updNotifyTitle: 'עדכון Airy זמין',
     updNotifyBody: 'Airy {version} זמין. לחץ כדי לפתוח את דף ההורדה.',
+    updManualTitle: 'עדכוני Airy',
+    updManualBody:
+      'Airy אינו יכול לעדכן את עצמו ב-macOS (בילדים לא חתומים). הורד את הגרסה החדשה מעמוד המהדורות.',
+    updManualButton: 'פתח את עמוד המהדורות',
   },
   hi: {
     updAvailableTitle: 'अपडेट उपलब्ध',
@@ -242,6 +309,10 @@ const tUpd = createI18n({
     updInstallOnQuit: 'बंद होने पर इंस्टॉल करें',
     updNotifyTitle: 'Airy अपडेट उपलब्ध',
     updNotifyBody: 'Airy {version} उपलब्ध है। डाउनलोड पेज खोलने के लिए क्लिक करें।',
+    updManualTitle: 'Airy अपडेट',
+    updManualBody:
+      'Airy macOS पर खुद को अपडेट नहीं कर सकता (अनसाइन्ड बिल्ड)। नवीनतम संस्करण रिलीज़ पेज से डाउनलोड करें।',
+    updManualButton: 'रिलीज़ पेज खोलें',
   },
   ar: {
     updAvailableTitle: 'التحديث متاح',
@@ -255,6 +326,10 @@ const tUpd = createI18n({
     updInstallOnQuit: 'التثبيت عند الإغلاق',
     updNotifyTitle: 'تحديث Airy متاح',
     updNotifyBody: 'Airy {version} متاح. انقر لفتح صفحة التنزيل.',
+    updManualTitle: 'تحديثات Airy',
+    updManualBody:
+      'لا يستطيع Airy تحديث نفسه على macOS (إصدارات غير موقّعة). نزّل أحدث إصدار من صفحة الإصدارات.',
+    updManualButton: 'فتح صفحة الإصدارات',
   },
   'zh-TW': {
     updAvailableTitle: '發現新版本',
@@ -268,6 +343,9 @@ const tUpd = createI18n({
     updInstallOnQuit: '結束時安裝',
     updNotifyTitle: 'Airy 有新版本',
     updNotifyBody: 'Airy {version} 已推出。點按以開啟下載頁面。',
+    updManualTitle: 'Airy 更新',
+    updManualBody: 'Airy 在 macOS 上不支援自動更新（未簽署建置）。請從發布頁面下載最新版本。',
+    updManualButton: '打開發布頁面',
   },
 })
 

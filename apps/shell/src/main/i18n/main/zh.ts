@@ -89,6 +89,7 @@ export const zh = {
   tabCloseOthers: '关闭其他标签页',
   tabCloseAll: '关闭全部标签页',
   tabDuplicate: '复制标签页',
+  moveTabToNewWindow: '移到新窗口',
   menuSelectTab: '选择标签页',
   menuQuit: '退出',
   menuSelectTabN: '标签页 {n}',

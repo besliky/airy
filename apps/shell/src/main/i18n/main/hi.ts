@@ -100,6 +100,7 @@ export const hi = {
   tabCloseOthers: 'अन्य टैब बंद करें',
   tabCloseAll: 'सभी टैब बंद करें',
   tabDuplicate: 'टैब डुप्लिकेट करें',
+  moveTabToNewWindow: 'नई विंडो में ले जाएँ',
   menuSelectTab: 'टैब चुनें',
   menuQuit: 'बाहर निकलें',
   menuSelectTabN: 'टैब {n}',

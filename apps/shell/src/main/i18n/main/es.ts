@@ -100,6 +100,7 @@ export const es = {
   tabCloseOthers: 'Cerrar las demás',
   tabCloseAll: 'Cerrar todas',
   tabDuplicate: 'Duplicar',
+  moveTabToNewWindow: 'Mover a una ventana nueva',
   menuSelectTab: 'Seleccionar pestaña',
   menuQuit: 'Salir',
   menuSelectTabN: 'Pestaña {n}',

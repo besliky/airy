@@ -100,6 +100,7 @@ export const id = {
   tabCloseOthers: 'Tutup Lainnya',
   tabCloseAll: 'Tutup Semua',
   tabDuplicate: 'Duplikatkan',
+  moveTabToNewWindow: 'Pindah ke Jendela Baru',
   menuSelectTab: 'Pilih Tab',
   menuQuit: 'Keluar',
   menuSelectTabN: 'Tab {n}',

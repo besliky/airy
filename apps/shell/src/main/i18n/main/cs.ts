@@ -97,6 +97,7 @@ export const cs = {
   tabCloseOthers: 'Zavřít ostatní',
   tabCloseAll: 'Zavřít vše',
   tabDuplicate: 'Duplikovat',
+  moveTabToNewWindow: 'Přesunout do nového okna',
   menuSelectTab: 'Vybrat kartu',
   menuQuit: 'Ukončit',
   menuSelectTabN: 'Karta {n}',

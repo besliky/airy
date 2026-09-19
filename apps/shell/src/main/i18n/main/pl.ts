@@ -100,6 +100,7 @@ export const pl = {
   tabCloseOthers: 'Zamknij pozostałe',
   tabCloseAll: 'Zamknij wszystkie',
   tabDuplicate: 'Duplikuj',
+  moveTabToNewWindow: 'Przenieś do nowego okna',
   menuSelectTab: 'Wybierz kartę',
   menuQuit: 'Zakończ',
   menuSelectTabN: 'Karta {n}',

@@ -99,6 +99,7 @@ export const ms = {
   tabCloseOthers: 'Tutup Yang Lain',
   tabCloseAll: 'Tutup Semua',
   tabDuplicate: 'Duplikasi',
+  moveTabToNewWindow: 'Alih ke Tetingkap Baharu',
   menuSelectTab: 'Pilih Tab',
   menuQuit: 'Keluar',
   menuSelectTabN: 'Tab {n}',

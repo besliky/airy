@@ -14,7 +14,8 @@ import {
 /**
  * Updater state machine (src/main/updater/core.ts) against mock feeds: the
  * in-app flow (check → offer → download → install), the quiet no-update and
- * network-error paths, the deb notify-only fallback, and the macOS noop.
+ * network-error paths, the deb notify-only fallback, the macOS manual
+ * dialog, and the off noop.
  * core.ts is pure — no Electron, no electron-updater.
  */
 
@@ -47,6 +48,7 @@ function createMockUi() {
     offerUpdate: vi.fn<UpdaterUi['offerUpdate']>(async () => 'download' as const),
     offerInstall: vi.fn<UpdaterUi['offerInstall']>(async () => 'now' as const),
     notifyAboutRelease: vi.fn<UpdaterUi['notifyAboutRelease']>(),
+    notifyManualUpdate: vi.fn<UpdaterUi['notifyManualUpdate']>(),
   }
 }
 
@@ -73,7 +75,7 @@ interface Harness {
   controller: UpdaterController
 }
 
-function createHarness(policy: 'in-app' | 'notify-only' | 'off' = 'in-app'): Harness {
+function createHarness(policy: 'in-app' | 'notify-only' | 'manual' | 'off' = 'in-app'): Harness {
   const client = createMockClient()
   const ui = createMockUi()
   const log = vi.fn()
@@ -99,8 +101,11 @@ describe('detectUpdatePolicy', () => {
     expect(detectUpdatePolicy('linux', {})).toBe('notify-only')
   })
 
-  it('macOS (and anything unknown) keeps the updater off', () => {
-    expect(detectUpdatePolicy('darwin')).toBe('off')
+  it('macOS is manual-only (dialog + releases link, no feed contact)', () => {
+    expect(detectUpdatePolicy('darwin')).toBe('manual')
+  })
+
+  it('anything unknown keeps the updater off', () => {
     expect(detectUpdatePolicy('freebsd')).toBe('off')
   })
 })
@@ -246,7 +251,34 @@ describe('deb installs (notify-only)', () => {
   })
 })
 
-describe('macOS (off policy)', () => {
+describe('macOS (manual policy)', () => {
+  it('never schedules an automatic check', () => {
+    vi.useFakeTimers()
+    try {
+      const h = createHarness('manual')
+      h.controller.start()
+      vi.advanceTimersByTime(DEFAULT_START_DELAY_MS * 2)
+      expect(h.client.checkForUpdates).not.toHaveBeenCalled()
+      expect(h.ui.notifyManualUpdate).not.toHaveBeenCalled()
+      expect(h.controller.status).toEqual({ phase: 'idle' })
+      expect(h.controller.active).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a manual check shows the releases dialog and never contacts the feed', () => {
+    const h = createHarness('manual')
+    h.controller.checkNow()
+    expect(h.ui.notifyManualUpdate).toHaveBeenCalledWith({ releasesUrl: RELEASES_LATEST_URL })
+    expect(h.client.checkForUpdates).not.toHaveBeenCalled()
+    expect(h.client.downloadUpdate).not.toHaveBeenCalled()
+    expect(h.controller.status).toEqual({ phase: 'idle' })
+    expect(h.log).not.toHaveBeenCalled()
+  })
+})
+
+describe('off policy (dev / unknown platforms)', () => {
   it('is a noop: no scheduled check, manual check refused, idle forever', () => {
     vi.useFakeTimers()
     try {

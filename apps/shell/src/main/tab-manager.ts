@@ -57,7 +57,7 @@ import {
   setActiveSlidesWebContents,
   slidesIsDirty,
 } from '../../../slides/src/main/slides-main'
-import { tabSwitchTargetForInput } from './tab-accelerators'
+import { tabSwitchTargetForInput, isMoveTabToNewWindowInput } from './tab-accelerators'
 import type { TabKind, TabSummary } from '../shared/tabs-api'
 
 interface TabRecord {
@@ -73,6 +73,24 @@ interface TabRecord {
   crashed?: boolean
 }
 
+/**
+ * A tab lifted out of one window's strip (context menu / accelerator "Move to
+ * New Window"): the editor's live WebContentsView plus everything the tab
+ * record carried. The renderer session (document, edits, scroll position)
+ * travels with the view — re-parenting it moves the editor, it does not
+ * reopen the file. Another TabManager adopts it via adoptTab().
+ */
+export interface DetachedTab {
+  kind: TabKind
+  view: WebContentsView
+  title: string
+  filePath?: string
+  present?: boolean
+  crashed?: boolean
+  /** the view covered its window's tab strip (slides show bleed) — re-applied by the adopter */
+  bleed?: boolean
+}
+
 /** Renderer-crash recovery hooks, supplied by the shell (localized prompt + error page). */
 export interface TabCrashUi {
   /** body text for the in-tab error page shown while awaiting the decision */
@@ -86,10 +104,12 @@ const TAB_STRIP_HEIGHT = 40
 const HOME_ID = 'home'
 
 /**
- * Owns every open tab (Home + docs + sheets) inside the shell's single
- * BrowserWindow. Docs/sheets tabs are WebContentsView children of that
- * window; only the active one is visible at a time. Home has no view of its
- * own — hiding every other tab reveals the shell window's own content.
+ * Owns every open tab (Home + docs + sheets + …) inside ONE shell
+ * BrowserWindow. Editor tabs are WebContentsView children of that window;
+ * only the active one is visible at a time. Home has no view of its own —
+ * hiding every other tab reveals the window's own content. The shell keeps
+ * one manager per window; detachTab/adoptTab move a tab (with its live
+ * renderer) between them.
  */
 export class TabManager {
   private readonly tabs: TabRecord[] = [{ id: HOME_ID, kind: 'home', view: null, title: 'Airy' }]
@@ -212,6 +232,15 @@ export class TabManager {
    */
   private watchTabAccelerators(view: WebContentsView): void {
     const handler = (event: ElectronEvent, input: Input): void => {
+      // Ctrl/Cmd+Shift+K moves the active tab to a new window (the chord the
+      // shell's Home hook and the shell-built menus share — see
+      // isMoveTabToNewWindowInput for why K is safe)
+      if (isMoveTabToNewWindowInput(input)) {
+        event.preventDefault()
+        const active = this.tabs.find((t) => t.id === this.activeId)
+        if (active && active.id !== HOME_ID) this.onMoveTabToNewWindow?.(active.id)
+        return
+      }
       const target = tabSwitchTargetForInput(input, this.list())
       if (target === null) return
       event.preventDefault()
@@ -322,6 +351,74 @@ export class TabManager {
    * delete staged untitled files when their tab closes without a first save.
    */
   onTabClosed?: (tab: { id: string; kind: TabKind; filePath?: string }) => void
+
+  /**
+   * Fired when the move-tab chord fires on this window's active tab (the
+   * shell opens a second BrowserWindow and adopts the tab there). Not fired
+   * for the Home tab — it belongs to this window's own renderer.
+   */
+  onMoveTabToNewWindow?: (id: string) => void
+
+  /**
+   * Lift a document tab (and its live editor view) out of this strip for
+   * another window: the view is detached from this window's content view but
+   * its renderer keeps running — the adopting TabManager re-parents it, so
+   * the editor session (document, unsaved state, scroll) moves untouched.
+   * Home cannot move (it is the window's own renderer); a detached tab never
+   * triggers onTabClosed, so its staged untitled file survives the move.
+   */
+  detachTab(id: string): DetachedTab | null {
+    if (id === HOME_ID) return null
+    const idx = this.tabs.findIndex((t) => t.id === id)
+    if (idx < 0) return null
+    const [removed] = this.tabs.splice(idx, 1)
+    const view = removed.view!
+    // the accelerator hook closes over THIS manager's activateTab — re-attach
+    // in the adopting manager instead of switching tabs in the old window
+    this.detachTabAccelerators(view.webContents)
+    const bleed = this.bleedWcIds.has(view.webContents.id)
+    if (bleed) this.bleedWcIds.delete(view.webContents.id)
+    if (this.htmlFullScreenId === id) this.htmlFullScreenId = null
+    view.setVisible(false)
+    this.shellWindow.contentView.removeChildView(view)
+    if (this.activeId === id) {
+      const fallback = this.tabs[idx - 1] ?? this.tabs[0]
+      this.activateTab(fallback.id)
+    } else {
+      this.onChanged()
+    }
+    return {
+      kind: removed.kind,
+      view,
+      title: removed.title,
+      filePath: removed.filePath,
+      present: removed.present,
+      crashed: removed.crashed,
+      bleed,
+    }
+  }
+
+  /** Take a tab detached from another window into this strip and activate it. */
+  adoptTab(detached: DetachedTab): string {
+    const id = `t${this.nextId++}`
+    this.shellWindow.contentView.addChildView(detached.view)
+    detached.view.setVisible(false)
+    if (detached.bleed) this.bleedWcIds.add(detached.view.webContents.id)
+    this.trackHtmlFullScreen(id, detached.view)
+    this.watchRendererCrash(id, detached.view)
+    this.watchTabAccelerators(detached.view)
+    this.tabs.push({
+      id,
+      kind: detached.kind,
+      view: detached.view,
+      title: detached.title,
+      filePath: detached.filePath,
+      present: detached.present,
+      crashed: detached.crashed,
+    })
+    this.activateTab(id)
+    return id
+  }
 
   /** file-backed tabs in strip order (session persistence; untitled/present tabs have no file) */
   sessionTabs(): Array<{ id: string; kind: TabKind; filePath: string | undefined }> {

@@ -96,6 +96,7 @@ export const he = {
   tabCloseOthers: 'סגירת האחרות',
   tabCloseAll: 'סגירת הכול',
   tabDuplicate: 'שכפול',
+  moveTabToNewWindow: 'העבר לחלון חדש',
   menuSelectTab: 'בחירת לשונית',
   menuQuit: 'יציאה',
   menuSelectTabN: 'לשונית {n}',

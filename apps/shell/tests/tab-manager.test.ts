@@ -672,3 +672,144 @@ describe('renderer crash recovery', () => {
     expect(manager.isTabCrashed(id)).toBe(true)
   })
 })
+
+describe('moving a tab to another window (detach/adopt)', () => {
+  it('detachTab lifts the tab with its live view and falls back to the previous tab', () => {
+    const sheetsId = manager.openSheetsTab('/tmp/a.xlsx')
+    const sheetsView = lastCreatedView(createSheetsView)
+    const slidesId = manager.openSlidesTab('/tmp/b.pptx')
+    const slidesView = lastCreatedView(createSlidesView)
+
+    const detached = manager.detachTab(slidesId)!
+
+    expect(detached).toMatchObject({ kind: 'slides', title: 'b.pptx', filePath: '/tmp/b.pptx' })
+    expect(detached.view).toBe(slidesView)
+    // removed from the source strip, previous tab re-activated (and shown)
+    expect(manager.list().map((t) => t.id)).toEqual(['home', sheetsId])
+    expect(manager.list().find((t) => t.id === sheetsId)?.active).toBe(true)
+    expect(sheetsView.setVisible).toHaveBeenLastCalledWith(true)
+    // the view left this window's content view (hidden, renderer still alive)
+    expect(shellWindow.contentView.removeChildView).toHaveBeenCalledWith(slidesView)
+    expect(slidesView.webContents.close).not.toHaveBeenCalled()
+    expect(slidesView.setVisible).toHaveBeenLastCalledWith(false)
+  })
+
+  it('never detaches the Home tab and reports unknown ids as null', () => {
+    expect(manager.detachTab('home')).toBeNull()
+    expect(manager.detachTab('nope')).toBeNull()
+  })
+
+  it('detach does not fire onTabClosed (the staged file survives the move)', () => {
+    const onTabClosed = vi.fn()
+    manager.onTabClosed = onTabClosed
+    const id = manager.openSheetsTab('/tmp/a.xlsx')
+    manager.detachTab(id)
+    expect(onTabClosed).not.toHaveBeenCalled()
+  })
+
+  it('detach detaches the accelerator hook so the adopter can re-attach its own', () => {
+    const id = manager.openDocsTab()
+    const view = lastCreatedView(createDocsView)
+    manager.detachTab(id)
+    expect(view.webContents.listeners.has('before-input-event')).toBe(false)
+  })
+
+  it('adoptTab re-parents the view into the adopting window and activates it', () => {
+    const detached = (() => {
+      const id = manager.openSheetsTab('/tmp/a.xlsx')
+      return manager.detachTab(id)!
+    })()
+
+    const window2 = makeShellWindow()
+    const manager2 = new TabManager(
+      window2 as never,
+      () => onChanged(),
+      (kind) => applyMenuFor(kind),
+    )
+    const adoptedId = manager2.adoptTab(detached)
+
+    expect(manager2.list()).toEqual([
+      { id: 'home', kind: 'home', title: 'Airy', closable: false, active: false },
+      { id: adoptedId, kind: 'sheets', title: 'a.xlsx', closable: true, active: true },
+    ])
+    expect(window2.contentView.addChildView).toHaveBeenCalledWith(detached.view)
+    expect(detached.view.setVisible).toHaveBeenLastCalledWith(true)
+    expect(detached.view.webContents.on).toHaveBeenCalledWith(
+      'before-input-event',
+      expect.any(Function),
+    )
+  })
+
+  it('a moved tab switches tabs in its NEW window only', async () => {
+    const docsId = manager.openDocsTab()
+    manager.openSheetsTab('/tmp/a.xlsx')
+    const sheetsView = lastCreatedView(createSheetsView)
+    const detached = manager.detachTab(manager.list().find((t) => t.kind === 'sheets')!.id)!
+
+    const window2 = makeShellWindow()
+    const manager2 = new TabManager(
+      window2 as never,
+      () => {},
+      (kind) => applyMenuFor(kind),
+    )
+    manager2.openDocsTab('/tmp/z.docx')
+    manager2.adoptTab(detached)
+
+    // Ctrl+2 inside the moved view: window 2 has [home, z.docx, a.xlsx]
+    const handler = sheetsView.webContents.listeners.get('before-input-event')!
+    const event = { preventDefault: vi.fn() }
+    handler(event, {
+      type: 'keyDown',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: false,
+      code: 'Digit2',
+    })
+    expect(event.preventDefault).toHaveBeenCalled()
+    expect(manager2.list().find((t) => t.title === 'z.docx')?.active).toBe(true)
+    expect(manager.list().find((t) => t.id === docsId)?.active).toBe(true) // source untouched
+  })
+})
+
+describe('move-tab chord wiring', () => {
+  const chord = {
+    type: 'keyDown',
+    control: true,
+    meta: false,
+    alt: false,
+    shift: true,
+    code: 'KeyK',
+  }
+
+  function emitKey(view: FakeView, input: unknown): { preventDefault: () => void } {
+    const handler = view.webContents.listeners.get('before-input-event')
+    expect(handler).toBeDefined()
+    const event = { preventDefault: vi.fn() }
+    handler!(event, input)
+    return event
+  }
+
+  it('fires onMoveTabToNewWindow for the active editor tab and eats the chord', () => {
+    const onMove = vi.fn()
+    manager.onMoveTabToNewWindow = onMove
+    const id = manager.openSheetsTab()
+    const view = lastCreatedView(createSheetsView)
+
+    const event = emitKey(view, chord)
+    expect(event.preventDefault).toHaveBeenCalledTimes(1)
+    expect(onMove).toHaveBeenCalledWith(id)
+  })
+
+  it('eats the chord but stays cold while Home is the active tab', () => {
+    const onMove = vi.fn()
+    manager.onMoveTabToNewWindow = onMove
+    manager.openSheetsTab()
+    const view = lastCreatedView(createSheetsView)
+    manager.activateTab('home')
+
+    const event = emitKey(view, chord)
+    expect(event.preventDefault).toHaveBeenCalledTimes(1)
+    expect(onMove).not.toHaveBeenCalled()
+  })
+})

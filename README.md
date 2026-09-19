@@ -70,8 +70,10 @@ agent-driven document work, and it diverges in three ways:
    (`apps/shell/src/main/updater/`, Windows and AppImage): it checks
    `github.com/besliky/airy` shortly after startup but only notifies — the
    download and the install (with restart) each need explicit consent, deb
-   installs get a click-through notice, and macOS stays off. Releases are
-   unsigned; see [SECURITY.md](SECURITY.md) for the updater posture.
+   installs get a click-through notice, and macOS gets a notify dialog from
+   Help → Check for Updates linking to the releases page (no in-app
+   download). Releases are unsigned; see [SECURITY.md](SECURITY.md) for the
+   updater posture.
 2. **MCP server.** `packages/mcp-server` (`@airy-office/mcp`, bin
    `airy-mcp`) exposes the document engines to coding agents over MCP —
    see [docs/COPILOT.md](docs/COPILOT.md).

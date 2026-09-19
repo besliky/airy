@@ -96,6 +96,7 @@ export const ar = {
   tabCloseOthers: 'إغلاق الباقية',
   tabCloseAll: 'إغلاق الكل',
   tabDuplicate: 'تكرار',
+  moveTabToNewWindow: 'نقل إلى نافذة جديدة',
   menuSelectTab: 'اختيار علامة تبويب',
   menuQuit: 'إنهاء',
   menuSelectTabN: 'علامة تبويب {n}',
