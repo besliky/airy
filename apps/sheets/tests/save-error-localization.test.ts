@@ -1,6 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import { localizeSaveError, stripIpcErrorWrapper } from '../src/renderer/save-actions'
+import { loadLocale } from '../src/renderer/i18n/locale'
+
+// BUG-1202: since PERF-901 the dictionaries load lazily per locale. Without
+// loadLocale('zh'), t() returns the raw English-ish key, which still passed
+// the old not-null/not-same asserts — the file stopped checking localization
+// altogether. Loading zh makes every assert below verify a real translation.
+beforeAll(() => loadLocale('zh'))
 
 describe('localizeSaveError', () => {
   it('maps user-reachable gateway errors to localized messages', () => {
@@ -24,7 +31,9 @@ describe('localizeSaveError', () => {
     for (const message of localized) {
       const mapped = localizeSaveError(message)
       expect(mapped, message).not.toBeNull()
-      expect(mapped, message).not.toBe(message)
+      // the mapped string is a real zh translation — not the raw key that an
+      // unloaded dictionary would hand back
+      expect(mapped, message).toMatch(/[\u4e00-\u9fff]/)
     }
   })
 
