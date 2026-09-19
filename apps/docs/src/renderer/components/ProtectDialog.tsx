@@ -32,6 +32,22 @@ export interface ProtectDialogResult {
 export const PROTECTION_MODES = ['trackedChanges', 'comments', 'readOnly', 'forms'] as const
 export type ProtectionMode = (typeof PROTECTION_MODES)[number]
 
+// Test seam: production hashes dialog passwords with the engine default
+// (100000 SHA-512 iterations, ~0.5s per hash — honest Word-compatible work,
+// but it would dominate every dialog suite). Tests substitute a
+// lower-iteration factory with the same signature; only which function is
+// called changes, never the dialog logic around it. Verification needs no
+// seam: it always derives its iteration count from the document's stored
+// credentials.
+let hashPasswordFactory: typeof hashProtectionPassword = hashProtectionPassword
+
+/** Test-only: substitute the password hasher (null restores the engine default). */
+export function _setProtectionPasswordHasherForTests(
+  factory: typeof hashProtectionPassword | null,
+): void {
+  hashPasswordFactory = factory ?? hashProtectionPassword
+}
+
 const MODE_LABEL_KEYS = {
   trackedChanges: 'appProtectModeTracked',
   comments: 'appProtectModeComments',
@@ -111,7 +127,7 @@ export function ProtectDialog({
             ? writeProtection?.recommended
               ? { recommended: true }
               : null
-            : { ...recommended, ...(await hashProtectionPassword(modifyPwd)) }
+            : { ...recommended, ...(await hashPasswordFactory(modifyPwd)) }
       }
 
       if (protectionChanged) {
@@ -131,7 +147,7 @@ export function ProtectDialog({
                   algorithmSid: protection.algorithmSid,
                 }
               : protectPwd && protectPwd !== KEEP
-                ? await hashProtectionPassword(protectPwd)
+                ? await hashPasswordFactory(protectPwd)
                 : {}
           result.protection = { edit: mode, enforced: true, ...creds }
         }

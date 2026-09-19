@@ -1,11 +1,25 @@
 // Protect Document dialog (Review > Protect): the dialog turns form state into
 // a diff (ProtectDialogResult) — untouched sections must stay undefined, and
 // removing a password-protected restriction must verify the password first.
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { hashProtectionPassword, verifyProtectionPassword } from '@airy-office/docx-engine'
-import { ProtectDialog, type ProtectDialogResult } from '../src/renderer/components/ProtectDialog'
+import {
+  _setProtectionPasswordHasherForTests,
+  ProtectDialog,
+  type ProtectDialogResult,
+} from '../src/renderer/components/ProtectDialog'
+
+// PERF-1002: the dialog's hasher runs with the engine default (100000 SHA-512
+// iterations) in production; this suite swaps it for a 1000-iteration factory
+// with the same signature so the runtime tracks the dialog logic, not the
+// KDF. Credentials carry their own spinCount, so verification below re-hashes
+// at the same reduced count and stays consistent.
+beforeAll(() => {
+  _setProtectionPasswordHasherForTests((password) => hashProtectionPassword(password, 1000))
+})
+afterAll(() => _setProtectionPasswordHasherForTests(null))
 
 type Props = Parameters<typeof ProtectDialog>[0]
 
@@ -43,13 +57,12 @@ async function mount(partial: Partial<Props>) {
   }
   // submit hashes/verifies passwords asynchronously (iterated SHA-512); keep
   // flushing until the expected outcome shows up instead of guessing a delay.
-  // The cap only bounds a runaway; under the parallel root test runner (or a
-  // loaded CI box) 2×100k SHA-512 iterations can legitimately take tens of
-  // seconds, so keep it generous.
+  // The cap only bounds a runaway — with the 1000-iteration test factory the
+  // hashing itself is milliseconds.
   const submit = async (done: () => boolean) => {
     await click(host.querySelector('.btn-primary')!)
     const start = Date.now()
-    while (!done() && Date.now() - start < 45_000) {
+    while (!done() && Date.now() - start < 10_000) {
       await act(async () => {
         await new Promise((r) => setTimeout(r, 10))
       })
@@ -105,8 +118,7 @@ describe('ProtectDialog', () => {
     await d.cleanup()
   })
 
-  // 3×100k-iteration SHA-512 (hash + confirm + verify): generous timeout
-  // because the parallel root test runner legitimately loads the CPU.
+  // hash + confirm + verify through the 1000-iteration test factory
   it('setting a modify password produces verifiable writeProtection credentials', async () => {
     const d = await mount({})
     const [, , modify, modifyConfirm] = d.passwordInputs()
@@ -118,7 +130,7 @@ describe('ProtectDialog', () => {
     expect(result.writeProtection?.hash).toBeTruthy()
     expect(await verifyProtectionPassword('to-modify', result.writeProtection!)).toBe(true)
     await d.cleanup()
-  }, 60_000)
+  })
 
   it('enabling a comments restriction without password enforces mode only', async () => {
     const d = await mount({})
