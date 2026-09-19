@@ -728,6 +728,7 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
               className={kind === value ? 'btn-primary' : ''}
               aria-pressed={kind === value}
               disabled={native}
+              title={native ? t('ribbonChartNativeHint') : undefined}
               onClick={() => pickKind(value)}
             >
               {label}
@@ -738,6 +739,7 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
           <input
             value={title}
             placeholder={t('ribbonChartTitlePh')}
+            aria-label={t('ribbonChartTitlePh')}
             onChange={(e) => setTitle(e.target.value)}
           />
         </div>
@@ -750,6 +752,7 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
                   <input
                     value={c}
                     inputMode={kind === 'scatter' || kind === 'bubble' ? 'decimal' : undefined}
+                    aria-label={t('ribbonCategoryN', { n: i + 1 })}
                     onChange={(e) => setCat(i, e.target.value)}
                   />
                 </th>
@@ -760,13 +763,18 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
             {series.map((s, i) => (
               <tr key={i}>
                 <th>
-                  <input value={s.name} onChange={(e) => setSerName(i, e.target.value)} />
+                  <input
+                    value={s.name}
+                    aria-label={t('ribbonSeriesN', { n: i + 1 })}
+                    onChange={(e) => setSerName(i, e.target.value)}
+                  />
                 </th>
                 {s.values.map((v, c) => (
                   <td key={c}>
                     <input
                       value={v}
                       inputMode="decimal"
+                      aria-label={`${t('ribbonSeriesN', { n: i + 1 })}: ${categories[c] || t('ribbonCategoryN', { n: c + 1 })}`}
                       onChange={(e) => setSerVal(i, c, e.target.value)}
                     />
                   </td>
@@ -776,10 +784,18 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
           </tbody>
         </table>
         <div className="modal-row">
-          <button onClick={addCategory} disabled={native}>
+          <button
+            onClick={addCategory}
+            disabled={native}
+            title={native ? t('ribbonChartNativeHint') : undefined}
+          >
             {t('ribbonChartAddCategory')}
           </button>
-          <button onClick={addSeries} disabled={native || singleSeries}>
+          <button
+            onClick={addSeries}
+            disabled={native || singleSeries}
+            title={native ? t('ribbonChartNativeHint') : undefined}
+          >
             {t('ribbonChartAddSeries')}
           </button>
         </div>
