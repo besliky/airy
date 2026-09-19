@@ -82,7 +82,10 @@ export interface FilePrintNames {
 /// File-space A1 areas → this session's screen space (envelope semantics,
 /// like streamed merges). Fully deleted areas drop out; when nothing
 /// survives the caller falls back to the used range.
-function mapAreasToScreen(areas: readonly string[], ops: readonly StructuralJournalOp[]): string[] {
+export function mapAreasToScreen(
+  areas: readonly string[],
+  ops: readonly StructuralJournalOp[],
+): string[] {
   if (ops.length === 0) return [...areas]
   const mapped: string[] = []
   for (const area of areas) {
@@ -104,7 +107,7 @@ function mapAreasToScreen(areas: readonly string[], ops: readonly StructuralJour
 
 /// File-space title rows → screen space (row axis only — column edits must
 /// not drop them). Deleted rows shrink the span; all deleted → null.
-function mapTitleRowsToScreen(
+export function mapTitleRowsToScreen(
   titles: string | null,
   ops: readonly StructuralJournalOp[],
 ): string | null {

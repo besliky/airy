@@ -1307,4 +1307,13 @@ export const he = {
   scUnhideRows: 'הצגת שורות',
   scHideColumns: 'הסתרת עמודות',
   scUnhideColumns: 'הצגת עמודות',
+  appPrintSelectionMissing: 'אין בחירה להדפסה.',
+  appTextToColsEmpty: 'אין תוכן לפיצול בעמודה שנבחרה.',
+  appTextToColsNeedDelimiter: 'בחרו לפחות מפריד אחד.',
+  appTextToColsBadDestination: '„{ref}” אינו הפניה לתא בגיליון זה.',
+  appOutlineSettings: 'הגדרות',
+  appOutlineSettingsTitle: 'מיקום סיכומי המתאר',
+  appOutlineSettingsSaved: 'הגדרות המתאר נרשמו — יחולו בשמירה.',
+  appOutlineNoSummaryLine: 'שורת הסיכום תיפול מחוץ לגיליון.',
+  appTextToColsDone: 'פוצלו {rows} שורות ל-{columns} עמודות ב-{cell}.',
 } satisfies Record<keyof typeof zh, string>

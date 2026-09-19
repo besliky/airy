@@ -1305,4 +1305,13 @@ export const zh = {
   scUnhideRows: '取消隐藏行',
   scHideColumns: '隐藏列',
   scUnhideColumns: '取消隐藏列',
+  appPrintSelectionMissing: '没有可打印的选定区域。',
+  appTextToColsEmpty: '所选列没有可拆分的内容。',
+  appTextToColsNeedDelimiter: '请至少选择一个分隔符号。',
+  appTextToColsBadDestination: '“{ref}”不是本工作表中的单元格引用。',
+  appOutlineSettings: '设置',
+  appOutlineSettingsTitle: '设置分级显示的汇总位置',
+  appOutlineSettingsSaved: '已记录分级显示设置，保存时写入文件。',
+  appOutlineNoSummaryLine: '汇总行将落在工作表之外。',
+  appTextToColsDone: '已将 {rows} 行拆分为 {columns} 列，起始单元格 {cell}。',
 }

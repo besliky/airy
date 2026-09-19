@@ -1277,4 +1277,13 @@ export const zhTW = {
   scUnhideRows: '取消隱藏列',
   scHideColumns: '隱藏欄',
   scUnhideColumns: '取消隱藏欄',
+  appPrintSelectionMissing: '沒有可列印的選定範圍。',
+  appTextToColsEmpty: '所選欄沒有可分割的內容。',
+  appTextToColsNeedDelimiter: '請至少選擇一個分隔符號。',
+  appTextToColsBadDestination: '「{ref}」不是本工作表中的儲存格參照。',
+  appOutlineSettings: '設定',
+  appOutlineSettingsTitle: '設定大綱的摘要位置',
+  appOutlineSettingsSaved: '已記錄大綱設定，儲存時寫入檔案。',
+  appOutlineNoSummaryLine: '摘要列將落在工作表之外。',
+  appTextToColsDone: '已將 {rows} 列分割為 {columns} 欄，起始儲存格 {cell}。',
 } satisfies Record<keyof typeof zh, string>

@@ -1328,4 +1328,13 @@ export const th = {
   scUnhideRows: 'แสดงแถว',
   scHideColumns: 'ซ่อนคอลัมน์',
   scUnhideColumns: 'แสดงคอลัมน์',
+  appPrintSelectionMissing: 'ไม่มีส่วนที่เลือกไว้สำหรับพิมพ์',
+  appTextToColsEmpty: 'คอลัมน์ที่เลือกไม่มีเนื้อหาให้แยก',
+  appTextToColsNeedDelimiter: 'เลือกตัวคั่นอย่างน้อยหนึ่งตัว',
+  appTextToColsBadDestination: '“{ref}” ไม่ใช่การอ้างอิงเซลล์ในชีตนี้',
+  appOutlineSettings: 'การตั้งค่า',
+  appOutlineSettingsTitle: 'ตำแหน่งสรุปของเค้าร่าง',
+  appOutlineSettingsSaved: 'บันทึกการตั้งค่าเค้าร่างแล้ว จะมีผลเมื่อบันทึก',
+  appOutlineNoSummaryLine: 'แถวสรุปจะอยู่นอกชีต',
+  appTextToColsDone: 'แยก {rows} แถวเป็น {columns} คอลัมน์ที่ {cell}',
 } satisfies Record<keyof typeof zh, string>

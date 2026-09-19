@@ -1361,4 +1361,13 @@ export const id = {
   scUnhideRows: 'Tampilkan baris',
   scHideColumns: 'Sembunyikan kolom',
   scUnhideColumns: 'Tampilkan kolom',
+  appPrintSelectionMissing: 'Tidak ada yang dipilih untuk dicetak.',
+  appTextToColsEmpty: 'Kolom yang dipilih tidak memiliki konten untuk dipisah.',
+  appTextToColsNeedDelimiter: 'Pilih minimal satu pemisah.',
+  appTextToColsBadDestination: '“{ref}” bukan referensi sel pada sheet ini.',
+  appOutlineSettings: 'Pengaturan',
+  appOutlineSettingsTitle: 'Penempatan ringkasan kerangka',
+  appOutlineSettingsSaved: 'Pengaturan kerangka dicatat — diterapkan saat menyimpan.',
+  appOutlineNoSummaryLine: 'Baris ringkasan akan berada di luar sheet.',
+  appTextToColsDone: '{rows} baris dipecah menjadi {columns} kolom di {cell}.',
 } satisfies Record<keyof typeof zh, string>

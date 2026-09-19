@@ -1410,4 +1410,13 @@ export const ja = {
   scUnhideRows: '行の再表示',
   scHideColumns: '列を非表示',
   scUnhideColumns: '列の再表示',
+  appPrintSelectionMissing: '印刷する選択範囲がありません。',
+  appTextToColsEmpty: '選択した列には分割する内容がありません。',
+  appTextToColsNeedDelimiter: '区切り記号を少なくとも 1 つ選んでください。',
+  appTextToColsBadDestination: '「{ref}」はこのシートのセル参照ではありません。',
+  appOutlineSettings: '設定',
+  appOutlineSettingsTitle: 'アウトラインの集計位置を設定します',
+  appOutlineSettingsSaved: 'アウトライン設定を記録しました。保存時に適用されます。',
+  appOutlineNoSummaryLine: '集計行がシートの外になります。',
+  appTextToColsDone: '{rows} 行を {columns} 列に分割しました（{cell} から）。',
 } satisfies Record<keyof typeof zh, string>

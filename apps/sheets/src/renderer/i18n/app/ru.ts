@@ -1379,4 +1379,13 @@ export const ru = {
   scUnhideRows: 'Показать строки',
   scHideColumns: 'Скрыть столбцы',
   scUnhideColumns: 'Показать столбцы',
+  appPrintSelectionMissing: 'Нет выделенной области для печати.',
+  appTextToColsEmpty: 'В выбранном столбце нет содержимого для разделения.',
+  appTextToColsNeedDelimiter: 'Выберите хотя бы один разделитель.',
+  appTextToColsBadDestination: '«{ref}» — не ссылка на ячейку этого листа.',
+  appOutlineSettings: 'Параметры структуры',
+  appOutlineSettingsTitle: 'Размещение итогов структуры',
+  appOutlineSettingsSaved: 'Параметры структуры записаны — применятся при сохранении.',
+  appOutlineNoSummaryLine: 'Итоговая строка оказалась бы за пределами листа.',
+  appTextToColsDone: 'Разделено строк: {rows}, столбцов: {columns}, начиная с {cell}.',
 } satisfies Record<keyof typeof zh, string>

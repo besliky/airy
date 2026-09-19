@@ -1396,4 +1396,13 @@ export const nl = {
   scUnhideRows: 'Rijen weergeven',
   scHideColumns: 'Kolommen verbergen',
   scUnhideColumns: 'Kolommen weergeven',
+  appPrintSelectionMissing: 'Er is niets geselecteerd om af te drukken.',
+  appTextToColsEmpty: 'De geselecteerde kolom bevat geen tekst om te splitsen.',
+  appTextToColsNeedDelimiter: 'Kies minstens één scheidingsteken.',
+  appTextToColsBadDestination: '„{ref}” is geen celverwijzing op dit blad.',
+  appOutlineSettings: 'Instellingen',
+  appOutlineSettingsTitle: 'Plaatsing van overzichtsubtotalen',
+  appOutlineSettingsSaved: 'Overzichtsinstellingen vastgelegd — toegepast bij opslaan.',
+  appOutlineNoSummaryLine: 'De subtotalenrij zou buiten het blad vallen.',
+  appTextToColsDone: '{rows} rijen gesplitst in {columns} kolommen vanaf {cell}.',
 } satisfies Record<keyof typeof zh, string>

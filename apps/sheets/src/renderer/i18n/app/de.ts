@@ -1411,4 +1411,14 @@ export const de = {
   scUnhideRows: 'Zeilen einblenden',
   scHideColumns: 'Spalten ausblenden',
   scUnhideColumns: 'Spalten einblenden',
+  appPrintSelectionMissing: 'Es gibt nichts Ausgewähltes zum Drucken.',
+  appTextToColsEmpty: 'Die ausgewählte Spalte hat keinen Inhalt zum Aufteilen.',
+  appTextToColsNeedDelimiter: 'Wählen Sie mindestens ein Trennzeichen.',
+  appTextToColsBadDestination: '„{ref}“ ist kein Zellbezug auf diesem Blatt.',
+  appOutlineSettings: 'Einstellungen',
+  appOutlineSettingsTitle: 'Platzierung der Gliederungssummen',
+  appOutlineSettingsSaved:
+    'Gliederungseinstellungen aufgezeichnet — sie werden beim Speichern übernommen.',
+  appOutlineNoSummaryLine: 'Die Summenzeile läge außerhalb des Blatts.',
+  appTextToColsDone: '{rows} Zeilen in {columns} Spalten bei {cell} aufgeteilt.',
 } satisfies Record<keyof typeof zh, string>

@@ -1358,4 +1358,13 @@ export const hi = {
   scUnhideRows: 'पंक्तियाँ दिखाएँ',
   scHideColumns: 'कॉलम छिपाएँ',
   scUnhideColumns: 'कॉलम दिखाएँ',
+  appPrintSelectionMissing: 'प्रिंट करने के लिए कुछ भी चयनित नहीं है।',
+  appTextToColsEmpty: 'चयनित कॉलम में विभाजित करने की सामग्री नहीं है।',
+  appTextToColsNeedDelimiter: 'कम से कम एक पृथक्कारक चुनें।',
+  appTextToColsBadDestination: '“{ref}” इस शीट का सेल संदर्भ नहीं है।',
+  appOutlineSettings: 'सेटिंग्स',
+  appOutlineSettingsTitle: 'रूपरेखा सारांश स्थान',
+  appOutlineSettingsSaved: 'रूपरेखा सेटिंग्स दर्ज हुईं — सहेजने पर लागू होंगी।',
+  appOutlineNoSummaryLine: 'सारांश पंक्ति शीट के बाहर होगी।',
+  appTextToColsDone: '{cell} पर {rows} पंक्तियाँ {columns} कॉलम में विभाजित हुईं।',
 } satisfies Record<keyof typeof zh, string>

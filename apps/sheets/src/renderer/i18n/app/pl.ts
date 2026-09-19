@@ -1389,4 +1389,13 @@ export const pl = {
   scUnhideRows: 'Pokaż wiersze',
   scHideColumns: 'Ukryj kolumny',
   scUnhideColumns: 'Pokaż kolumny',
+  appPrintSelectionMissing: 'Nie ma nic zaznaczonego do wydrukowania.',
+  appTextToColsEmpty: 'Zaznaczona kolumna nie ma treści do podzielenia.',
+  appTextToColsNeedDelimiter: 'Wybierz co najmniej jeden separator.',
+  appTextToColsBadDestination: '„{ref}” nie jest odwołaniem do komórki w tym arkuszu.',
+  appOutlineSettings: 'Ustawienia',
+  appOutlineSettingsTitle: 'Położenie sum konspektu',
+  appOutlineSettingsSaved: 'Zapisano ustawienia konspektu — zostaną zastosowane przy zapisie.',
+  appOutlineNoSummaryLine: 'Wiersz sum znalazłby się poza arkuszem.',
+  appTextToColsDone: 'Podzielono {rows} wierszy na {columns} kolumny od {cell}.',
 } satisfies Record<keyof typeof zh, string>

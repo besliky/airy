@@ -1402,4 +1402,13 @@ export const es = {
   scUnhideRows: 'Mostrar filas',
   scHideColumns: 'Ocultar columnas',
   scUnhideColumns: 'Mostrar columnas',
+  appPrintSelectionMissing: 'No hay nada seleccionado para imprimir.',
+  appTextToColsEmpty: 'La columna seleccionada no tiene contenido que dividir.',
+  appTextToColsNeedDelimiter: 'Elija al menos un delimitador.',
+  appTextToColsBadDestination: '«{ref}» no es una referencia de celda de esta hoja.',
+  appOutlineSettings: 'Configuración',
+  appOutlineSettingsTitle: 'Ubicación de los totales del esquema',
+  appOutlineSettingsSaved: 'Configuración del esquema registrada: se aplica al guardar.',
+  appOutlineNoSummaryLine: 'La fila de totales quedaría fuera de la hoja.',
+  appTextToColsDone: '{rows} filas divididas en {columns} columnas en {cell}.',
 } satisfies Record<keyof typeof zh, string>

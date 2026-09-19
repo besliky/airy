@@ -1327,4 +1327,13 @@ export const ar = {
   scUnhideRows: 'إظهار الصفوف',
   scHideColumns: 'إخفاء الأعمدة',
   scUnhideColumns: 'إظهار الأعمدة',
+  appPrintSelectionMissing: 'لا يوجد تحديد للطباعة.',
+  appTextToColsEmpty: 'لا يوجد محتوى لتقسيمه في العمود المحدد.',
+  appTextToColsNeedDelimiter: 'اختر محرف فاصل واحدًا على الأقل.',
+  appTextToColsBadDestination: '«{ref}» ليس مرجع خلية في هذه الورقة.',
+  appOutlineSettings: 'الإعدادات',
+  appOutlineSettingsTitle: 'موضع ملخصات المخطط التفصيلي',
+  appOutlineSettingsSaved: 'تم تسجيل إعدادات المخطط التفصيلي — تُطبق عند الحفظ.',
+  appOutlineNoSummaryLine: 'سيقع صف الملخص خارج الورقة.',
+  appTextToColsDone: 'تم تقسيم {rows} صفًا إلى {columns} أعمدة عند {cell}.',
 } satisfies Record<keyof typeof zh, string>
