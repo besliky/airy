@@ -54,16 +54,19 @@ function collectTocEntriesWithPages(
 /**
  * Table-of-figures entries from SEQ captions of one label ("Figure"), in
  * document order. Each entry keeps the caption's `_Ref…` anchor (click-to-jump)
- * and its real page number when pagination is available.
+ * and its real page number when pagination is available. `labels` carries the
+ * canonical identifier plus (for legacy documents) the translated SEQ word the
+ * caption may have been authored with — see CAPTION_LABELS (UX-1011).
  */
 export function collectTofEntries(
   editor: Editor,
   blocks: Block[],
-  label: string,
+  labels: string[] | string,
   anchorPage?: (pos: number) => number | null,
 ): TocEntry[] {
+  const wanted = Array.isArray(labels) ? labels : [labels]
   return collectCrossRefSources(editor, blocks)
-    .filter((s) => s.kind === 'caption' && s.seqLabel === label)
+    .filter((s) => s.kind === 'caption' && s.seqLabel !== undefined && wanted.includes(s.seqLabel))
     .map((s) => ({
       level: 1,
       text: s.label,
@@ -226,11 +229,35 @@ export function updateTocField(
   return 'updated'
 }
 
-const CAPTION_LABEL_KEYS = [
-  'ribbonCaptionFigure',
-  'ribbonCaptionTable',
-  'ribbonCaptionEquation',
+/**
+ * Caption labels: the `id` is the language-independent SEQ / TOC \c identifier
+ * stored in the document; the `key` translates the visible word. Captions and
+ * tables of figures keep working across UI-language switches because matching
+ * and numbering run on the id, not on the translated string (UX-1011).
+ */
+const CAPTION_LABELS = [
+  { id: 'Figure', key: 'ribbonCaptionFigure' },
+  { id: 'Table', key: 'ribbonCaptionTable' },
+  { id: 'Equation', key: 'ribbonCaptionEquation' },
 ] as const
+
+/**
+ * The identifiers a caption of label `id` may carry in this document: the
+ * canonical id, plus the current locale's word for it — captions authored
+ * before UX-1011 (or by a differently-localized writer) stored the translated
+ * word in their SEQ instruction.
+ */
+function seqAliases(id: string, t: (key: StringKey) => string): string[] {
+  const entry = CAPTION_LABELS.find((l) => l.id === id)
+  const translated = entry ? t(entry.key) : null
+  return translated && translated !== id ? [id, translated] : [id]
+}
+
+/** the visible (translated) label word of a canonical caption id */
+function captionDisplayLabel(id: string, t: (key: StringKey) => string): string {
+  const entry = CAPTION_LABELS.find((l) => l.id === id)
+  return entry ? t(entry.key) : id
+}
 
 /** TOC options dialog (Word's Table of Contents options): level range,
  *  page numbers + hyperlinks switches, optional source styles (\t).
@@ -352,13 +379,14 @@ export function TofModal({
   onClose: () => void
 }) {
   const { t } = useI18n()
-  const [label, setLabel] = useState<string>(() => t(CAPTION_LABEL_KEYS[0]))
+  // the picked canonical label id — the dropdown shows translated words
+  const [labelId, setLabelId] = useState<string>(CAPTION_LABELS[0].id)
   // inline empty-state message (UX-1010): no blocking window.alert over the dialog
   const [error, setError] = useState<StringKey | null>(null)
   const dialog = useModalDialog(onClose)
 
   const insert = () => {
-    const entries = collectTofEntries(editor, blocks, label, anchorPage)
+    const entries = collectTofEntries(editor, blocks, seqAliases(labelId, t), anchorPage)
     if (entries.length === 0) {
       setError('refsTofNoCaptions')
       return
@@ -367,7 +395,7 @@ export function TofModal({
       .chain()
       .focus()
       .insertContent(
-        tocFieldNodes(entries, { seqIdentifier: label }, t('refsTofFieldLabel')) as never,
+        tocFieldNodes(entries, { seqIdentifier: labelId }, t('refsTofFieldLabel')) as never,
       )
       .run()
     onClose()
@@ -384,10 +412,10 @@ export function TofModal({
         <label>
           {t('refsTofLabel')}
           <Dropdown
-            value={label}
+            value={labelId}
             ariaLabel={t('refsTofLabel')}
-            options={CAPTION_LABEL_KEYS.map((k) => ({ value: t(k), label: t(k) }))}
-            onPick={setLabel}
+            options={CAPTION_LABELS.map(({ id, key }) => ({ value: id, label: t(key) }))}
+            onPick={setLabelId}
           />
         </label>
         {error && (
@@ -419,13 +447,18 @@ function CaptionModal({
   onClose: () => void
 }) {
   const { t } = useI18n()
-  const CAPTION_LABELS = CAPTION_LABEL_KEYS.map((k) => t(k))
-  const [label, setLabel] = useState<string>(() => t(CAPTION_LABEL_KEYS[0]))
+  // the picked canonical label id; the visible word comes from the locale
+  const [labelId, setLabelId] = useState<string>(CAPTION_LABELS[0].id)
   const [text, setText] = useState('')
 
-  const nextNumber = (lbl: string): number => {
+  const nextNumber = (id: string): number => {
+    // count SEQ fields of every identifier this label may carry (canonical +
+    // legacy translated word, UX-1011)
+    const alternation = seqAliases(id, t)
+      .map((a) => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('|')
+    const re = new RegExp(`SEQ\\s+(?:${alternation})[\\s\\\\]`)
     let count = 0
-    const re = new RegExp(`SEQ\\s+${lbl}[\\s\\\\]`)
     editor.state.doc.forEach((node) => {
       if (node.type.name !== 'docProtected') return
       if (re.test(xmlOfNode(node as never, blocks))) count += 1
@@ -434,11 +467,14 @@ function CaptionModal({
   }
 
   const insert = () => {
-    const number = nextNumber(label)
+    const displayLabel = captionDisplayLabel(labelId, t)
+    const number = nextNumber(labelId)
     // hidden _Ref anchor wraps the SEQ field so cross-references can target this caption
     const anchor = uniqueAnchor('_Ref', allRefAnchorNames(editor.state.doc, blocks))
-    const xml = generateCaptionXml(label, number, text.trim(), anchor)
-    const display = `${label} ${number}${text.trim() ? ` ${text.trim()}` : ''}`
+    // the SEQ instruction carries the canonical id; only the visible prefix
+    // is the translated word (language-independent matching, UX-1011)
+    const xml = generateCaptionXml(labelId, number, text.trim(), anchor, displayLabel)
+    const display = `${displayLabel} ${number}${text.trim() ? ` ${text.trim()}` : ''}`
     editor
       .chain()
       .focus()
@@ -463,10 +499,10 @@ function CaptionModal({
         <label>
           {t('ribbonCaptionLabel')}
           <Dropdown
-            value={label}
+            value={labelId}
             ariaLabel={t('ribbonCaptionLabel')}
-            options={CAPTION_LABELS.map((l) => ({ value: l, label: l }))}
-            onPick={setLabel}
+            options={CAPTION_LABELS.map(({ id, key }) => ({ value: id, label: t(key) }))}
+            onPick={setLabelId}
           />
         </label>
         <label>
@@ -474,7 +510,10 @@ function CaptionModal({
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={t('ribbonCaptionPh', { label, n: nextNumber(label) })}
+            placeholder={t('ribbonCaptionPh', {
+              label: captionDisplayLabel(labelId, t),
+              n: nextNumber(labelId),
+            })}
             onKeyDown={(e) => e.key === 'Enter' && insert()}
           />
         </label>

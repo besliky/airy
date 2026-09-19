@@ -35,6 +35,27 @@ function captionNode(label: string, n: number, text: string, anchor: string) {
   }
 }
 
+/** a caption with a canonical SEQ id but a translated visible word — the
+ *  shape the Caption dialog writes since UX-1011 */
+function captionNodeLocalized(
+  label: string,
+  n: number,
+  text: string,
+  anchor: string,
+  display: string,
+) {
+  return {
+    type: 'docProtected',
+    attrs: {
+      docxIndex: null,
+      blockType: 'passthrough',
+      label: 'Caption',
+      genXml: generateCaptionXml(label, n, text, anchor, display),
+      fieldDisplay: { kind: 'text', left: `${display} ${n}${text ? ` ${text}` : ''}` },
+    },
+  }
+}
+
 /** PM nodes for a generated field, mirroring the ribbon insert (tocFieldNodes) */
 function fieldNodes(entries: Parameters<typeof generateTocFieldXml>[0], options = {}) {
   return generateTocFieldXml(entries, options).map((xml, i) => ({
@@ -190,6 +211,39 @@ describe('table of figures authoring', () => {
     expect(updateTocField(editor, parsed.blocks, undefined, undefined, { silent: true })).toBe(
       'missing',
     )
+  })
+
+  it('stores a canonical SEQ id while showing the translated word (UX-1011)', async () => {
+    const { editor, parsed } = await openDoc('<w:p><w:r><w:t>Body</w:t></w:r></w:p>')
+    // CaptionModal shape: canonical id in SEQ, translated word visible
+    editor.commands.insertContentAt(editor.state.doc.content.size, [
+      captionNodeLocalized('Figure', 1, 'Architektur', '_Ref111111111', 'Abbildung'),
+    ] as never)
+    // the stored instruction keeps the canonical id — matching survives a
+    // UI-language switch
+    let stored = ''
+    editor.state.doc.forEach((node) => {
+      if (node.type.name === 'docProtected') stored = String(node.attrs.genXml)
+    })
+    expect(stored).toContain('SEQ Figure \\* ARABIC')
+    expect(stored).toContain('Abbildung ')
+    // canonical match finds it; the display keeps the translated word
+    const entries = collectTofEntries(editor, parsed.blocks, ['Figure'])
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({ text: 'Abbildung 1 Architektur', level: 1 })
+  })
+
+  it('collects legacy captions authored with the translated SEQ word (UX-1011)', async () => {
+    const { editor, parsed } = await openDoc('<w:p><w:r><w:t>Body</w:t></w:r></w:p>')
+    // pre-UX-1011 caption: the SEQ instruction carried the translated label
+    editor.commands.insertContentAt(editor.state.doc.content.size, [
+      captionNode('Abbildung', 1, 'Architektur', '_Ref111111111'),
+    ] as never)
+    // canonical id alone misses it; the alias list (id + locale word) collects
+    expect(collectTofEntries(editor, parsed.blocks, ['Figure'])).toHaveLength(0)
+    const entries = collectTofEntries(editor, parsed.blocks, ['Figure', 'Abbildung'])
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({ text: 'Abbildung 1 Architektur' })
   })
 })
 

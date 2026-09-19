@@ -2470,13 +2470,20 @@ export function generateTocFieldXml(entries: TocEntry[], options: TocFieldOption
  * static number is the visible result until then. An optional hidden anchor
  * (`_Ref…`, Word's cross-reference target for captions) wraps the SEQ field so
  * REF \r / \p fields can resolve this caption.
+ *
+ * `label` is the SEQ identifier stored in the document — language-independent
+ * (UX-1011): `displayLabel` overrides only the visible prefix, so a UI in
+ * another locale shows its own word while `SEQ` / `TOC \c` matching by the
+ * stored identifier stays stable across UI-language switches.
  */
 export function generateCaptionXml(
   label: string,
   number: number,
   text: string,
   anchor?: string,
+  displayLabel?: string,
 ): string {
+  const shown = displayLabel ?? label
   const rPr = '<w:rPr><w:color w:val="44546A"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>'
   const run = (inner: string) => `<w:r>${rPr}${inner}</w:r>`
   // bookmark ids must stay unique within the story: anchor names carry random
@@ -2488,7 +2495,7 @@ export function generateCaptionXml(
   const bmEnd = anchor ? `<w:bookmarkEnd w:id="${bmId}"/>` : ''
   return (
     '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="80" w:after="200"/></w:pPr>' +
-    run(`<w:t xml:space="preserve">${escapeXmlText(label)} </w:t>`) +
+    run(`<w:t xml:space="preserve">${escapeXmlText(shown)} </w:t>`) +
     bmStart +
     run('<w:fldChar w:fldCharType="begin" w:dirty="true"/>') +
     run(
