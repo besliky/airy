@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-19
+
+### Added
+
+- Shell: Move tab to a new window — tabs carry their live editor session between
+  windows, multi-window session restore, and window-scoped tab routing for background
+  opens. macOS gains a manual "Check for Updates" dialog linking to the releases page.
+- MCP: headless slides deck tools (open/read/insert/save for .pptx) and read-only PDF
+  text extraction — every Airy format now has headless tools.
+- Slides: alt text editing for all element kinds with a collision-free chart marker;
+  transition directions and exact durations plus animation directions (Effect
+  Options); text columns, WordArt transform presets, and Notes/Handouts PDF export
+  layouts.
+- Sheets: print scopes (selection / active sheets / entire workbook with per-sheet
+  headers, page order, and collation), a full Text-to-Columns wizard (multi-delimiter,
+  fixed-width, column types, destination), and the outline +/- gutter with undo and
+  Outline Settings.
+- Docs: pagination compatibility profiles — Word parity 97.3% page-starts (page counts
+  25/25) and a LibreOffice profile at 95.7% with hard test gates on both.
+
+### Fixed
+
+- Styles: Modify Style patches definitions surgically (keepNext/numbering/tabs
+  survive) and supports explicit offsets (w:val="0") against inherited facets.
+- Docs: TOC updates preserve section breaks; picture compression keeps the crop rect
+  unless asked; shadow effects merge into existing effect lists; chart workbook sync
+  preserves authored formulas; all TOC/TOF fields update together; wildcard search and
+  compare hardening from the audit cycle.
+- Slides: PDF export scopes SVG ids per slide (no more cross-slide clip/gradient
+  bleed), flipped groups render text correctly, and workbook-wide printing labels
+  pages with the owning sheet name.
+- Shell: cancelling quit restores per-window sessions; tab detach/adopt no longer
+  leaks listeners; window-scoped path dedup allows one file in two windows.
+- MCP: case-insensitive replace is index-safe around U+0130; appends no longer
+  fabricate phantom lines; renamed workspace roots fail loudly.
+- Bridge: closed connections stop dispatching; dribbled chunks coalesce; oversized
+  answers return a typed error; the drain deadline cannot be reset by peer data.
+
+### Changed
+
+- Modal dialog semantics (focus trap, Escape, role) now enforced by per-app coverage
+  contracts across docs, sheets, and slides; the outline gutter is keyboard-accessible.
+- Test wall time back under 135s despite +600 tests since v0.12.0 (scaled fixture
+  budgets, collapsed retry pacing); docs renderer entry −43% via lazy locale
+  dictionaries carries into CI bundle gates.
+
 ## [0.12.0] - 2026-09-19
 
 ### Added
@@ -262,7 +308,8 @@ agent-driven document work.
 - The `gsk` CLI search backend and the `@genspark/cli` dependency.
 - The Genspark AI provider — AI in the app is bring-your-own-key only.
 
-[Unreleased]: https://github.com/besliky/airy/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/besliky/airy/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/besliky/airy/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/besliky/airy/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/besliky/airy/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/besliky/airy/compare/v0.9.3...v0.10.0
