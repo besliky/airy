@@ -309,11 +309,12 @@ export async function exportVideo(
   // run (a minimized window would otherwise clamp frame timers to 1s)
   await window.slidesApi.setVideoExportActive(true)
   try {
-    const pngs = await renderSlidesToPngBase64(
-      visible,
-      ctx.images,
-      dims.width / first.widthPx,
-      (done, total) => onProgress?.('render', done, total),
+    // Mixed slide sizes aspect-fit into the frame (letterbox/pillarbox) instead
+    // of stretching to the first slide's shape (BUG-1211): each slide renders
+    // at its own fit scale so no PNG is over- or under-sampled for its box
+    const scales = visible.map((s) => Math.min(dims.width / s.widthPx, dims.height / s.heightPx))
+    const pngs = await renderSlidesToPngBase64(visible, ctx.images, scales, (done, total) =>
+      onProgress?.('render', done, total),
     )
     const images = await decodePngImages(pngs)
     const blob = await recordVideoTimeline({
@@ -322,6 +323,7 @@ export async function exportVideo(
       width: dims.width,
       height: dims.height,
       slideImages: images,
+      slideSizes: visible.map((s) => ({ width: s.widthPx, height: s.heightPx })),
       mimeType: mime.mimeType,
       onProgress: (done, total) => onProgress?.('record', done, total),
       ...(cancel ? { cancel } : {}),

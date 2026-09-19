@@ -11,7 +11,7 @@
  * wall clock — a 2-minute deck takes ~2 minutes to export.
  */
 import type { VideoTimeline } from './video-plan'
-import { sampleTimeline, videoFrameCount } from './video-plan'
+import { fitIntoFrame, sampleTimeline, videoFrameCount } from './video-plan'
 
 /** Container the recording lands in (drives the save dialog's file filter). */
 export type VideoExportContainer = 'mp4' | 'webm'
@@ -79,6 +79,13 @@ export interface RecordTimelineOptions {
   height: number
   /** Slide bitmap per timeline item (same order as timeline.items) */
   slideImages: ReadonlyArray<CanvasImageSource>
+  /**
+   * Source slide size per timeline item (deck order facts, same indexing as
+   * slideImages). Provided, each slide aspect-fits into the frame (mixed-size
+   * decks letterbox instead of stretching to the frame's shape — BUG-1211);
+   * omitted, every image fills the frame exactly as before.
+   */
+  slideSizes?: ReadonlyArray<{ width: number; height: number }>
   mimeType: string
   /** Defaults to videoBitrate(height) */
   videoBitsPerSecond?: number
@@ -167,16 +174,22 @@ function drawFrame(
   from: number,
   to: number,
   alpha: number,
+  rects?: ReadonlyArray<{ dx: number; dy: number; dw: number; dh: number }>,
 ): void {
   ctx.fillStyle = '#000'
   ctx.fillRect(0, 0, width, height)
+  const full = { dx: 0, dy: 0, dw: width, dh: height }
   const fromImg = images[from]
-  if (fromImg) ctx.drawImage(fromImg, 0, 0, width, height)
+  if (fromImg) {
+    const r = rects?.[from] ?? full
+    ctx.drawImage(fromImg, r.dx, r.dy, r.dw, r.dh)
+  }
   if (to !== from && alpha > 0) {
     const toImg = images[to]
     if (toImg) {
       ctx.globalAlpha = Math.min(1, Math.max(0, alpha))
-      ctx.drawImage(toImg, 0, 0, width, height)
+      const r = rects?.[to] ?? full
+      ctx.drawImage(toImg, r.dx, r.dy, r.dw, r.dh)
       ctx.globalAlpha = 1
     }
   }
@@ -232,6 +245,9 @@ export async function recordVideoTimeline(
   const start = host.now()
   const sleepTo = (atMs: number) =>
     new Promise<void>((resolve) => host.setTimeout(resolve, Math.max(0, atMs - host.now())))
+  // per-slide aspect-fit rectangles (BUG-1211): without slideSizes every
+  // image fills the frame (the historical stretch behavior)
+  const rects = opts.slideSizes?.map((s) => fitIntoFrame(s.width, s.height, width, height))
   let cancelled = false
   for (let i = 0; i < totalFrames; i++) {
     await sleepTo(start + i * frameMs)
@@ -241,7 +257,7 @@ export async function recordVideoTimeline(
     }
     if (recordError !== null) break // encoder died — stop pushing frames
     const frame = sampleTimeline(timeline, (i * 1000) / fps)
-    drawFrame(ctx, width, height, opts.slideImages, frame.from, frame.to, frame.alpha)
+    drawFrame(ctx, width, height, opts.slideImages, frame.from, frame.to, frame.alpha, rects)
     requestFrame?.()
     opts.onProgress?.(i + 1, totalFrames)
   }

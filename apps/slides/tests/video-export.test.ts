@@ -22,6 +22,8 @@ interface FakeHostState {
   requestedFrames: number
   chunks: Blob[]
   recorderCalls: string[]
+  /** drawImage target boxes (x, y, w, h) — filled when a test passes slideSizes */
+  drawBoxes?: Array<[number, number, number, number]>
 }
 
 /** Failure injections for the recorder host (BUG-1208 paths). */
@@ -42,8 +44,9 @@ function fakeHost(state: FakeHostState, behavior?: FakeHostBehavior): RecorderHo
         fillStyle: '#000',
         globalAlpha: 1,
         fillRect() {},
-        drawImage(img: { tag: string }, _x?: number, _y?: number, _w?: number, _h?: number) {
+        drawImage(img: { tag: string }, x?: number, y?: number, w?: number, h?: number) {
           state.draws.push({ tag: img.tag, alpha: this.globalAlpha })
+          state.drawBoxes?.push([x ?? 0, y ?? 0, w ?? 0, h ?? 0])
         },
       }
       return {
@@ -324,5 +327,53 @@ describe('recordVideoTimeline', () => {
       fakeHost(state, { noData: true }),
     )
     expect(cancelled).toBeNull() // cancel is not a failure — no error thrown
+  })
+
+  it('aspect-fits each slide into the frame when slideSizes is provided', async () => {
+    // BUG-1211: a 4:3 slide among 16:9 ones must pillarbox into the 16:9 frame
+    // (240x180 centered) instead of stretching to 320x180. Hard cuts (no
+    // transitions) keep exactly one draw per frame.
+    const timeline = buildVideoTimeline(
+      {
+        slides: [{}, {}],
+        advanceMs: [500, 500],
+        transitions: [
+          { kind: 'none', durationMs: null },
+          { kind: 'none', durationMs: null },
+        ],
+        options: { fps: 10, useTimings: true, secondsPerSlide: 5, includeTransitions: true },
+      },
+      never,
+    )
+    const state: FakeHostState = {
+      draws: [],
+      requestedFrames: 0,
+      chunks: [],
+      recorderCalls: [],
+      drawBoxes: [],
+    }
+    const blob = await recordVideoTimeline(
+      {
+        timeline,
+        fps: 10,
+        width: 320,
+        height: 180,
+        slideImages: [image('s0'), image('s1')],
+        slideSizes: [
+          { width: 1600, height: 900 }, // 16:9 — fills the frame
+          { width: 1280, height: 960 }, // 4:3 — pillarboxed
+        ],
+        mimeType: 'video/webm',
+      },
+      fakeHost(state),
+    )
+    expect(blob).not.toBeNull()
+    expect(state.drawBoxes!.length).toBe(10) // 1s of content at 10fps
+    // frames 0..4 hold the 16:9 slide full-frame
+    expect(state.drawBoxes![0]).toEqual([0, 0, 320, 180])
+    expect(state.drawBoxes![4]).toEqual([0, 0, 320, 180])
+    // frames 5..9 hold the 4:3 slide pillarboxed with black side bars
+    expect(state.drawBoxes![5]).toEqual([40, 0, 240, 180])
+    expect(state.drawBoxes![9]).toEqual([40, 0, 240, 180])
   })
 })
