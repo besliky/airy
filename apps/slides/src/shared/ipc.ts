@@ -1274,6 +1274,22 @@ export interface ExportPdfResult {
   error?: string
 }
 
+/** Export as video: the renderer recorded the container bytes (canvas + MediaRecorder); the main process only writes them atomically. */
+export interface ExportVideoOp {
+  /** Target video absolute path (chosen via pickExportVideoPath) */
+  filePath: string
+  /** Recorded video bytes (base64) */
+  bytesBase64: string
+  /** MediaRecorder mime that produced the bytes (informational) */
+  mimeType: string
+}
+
+export interface ExportVideoResult {
+  ok: boolean
+  path?: string
+  error?: string
+}
+
 /** Print: same page assembly as ExportPdfOp, using the system print dialog. */
 export interface PrintSlidesOp {
   pngsBase64: string[]
@@ -1321,6 +1337,7 @@ export type MenuCommand =
   | 'save-as'
   | 'export-pdf'
   | 'export-images'
+  | 'export-video'
   | 'print'
   | 'shortcuts'
   | 'zoom-in'
@@ -1716,6 +1733,14 @@ export interface SlidesApi {
   pickExportPdfPath: (defaultName: string) => Promise<string | null>
   /** Main process printToPDF via a hidden window, written to disk */
   exportPdf: (op: ExportPdfOp) => Promise<ExportPdfResult>
+  /** Export as video: shows the save dialog (filter follows the container), cancel returns null */
+  pickExportVideoPath: (defaultName: string, container: 'mp4' | 'webm') => Promise<string | null>
+  /** Write the recorded video bytes to the picked path atomically */
+  exportVideo: (op: ExportVideoOp) => Promise<ExportVideoResult>
+  /** Each slide's rehearsed auto-advance time in ms (<p:transition advTm>; null = none) */
+  getAdvanceTimes: () => Promise<Array<number | null>>
+  /** Suspend/restore background timer throttling while a video export records (real-time pacing) */
+  setVideoExportActive: (active: boolean) => Promise<boolean>
   /** Print (system dialog; cancel counts as ok=false without an error) */
   printSlides: (op: PrintSlidesOp) => Promise<{ ok: boolean; error?: string }>
   save: () => Promise<{ ok: boolean; path?: string; error?: string; slides?: RenderSlide[] }>

@@ -18,6 +18,7 @@ export const ja = {
   dlgPickExportDir: 'エクスポート先フォルダーの選択',
   btnExport: 'エクスポート',
   dlgExportPdf: 'PDF としてエクスポート',
+  dlgExportVideo: '動画としてエクスポート',
   errExportDestNotPicked:
     'エクスポート先がこのウィンドウで選択されていません。エクスポートダイアログで再選択してください。',
   dlgAddAttachment: '添付ファイルの追加',
@@ -103,6 +104,7 @@ export const ja = {
   menuSaveAs: '名前を付けて保存…',
   menuExportPdf: 'PDF としてエクスポート…',
   menuExportImages: '画像としてエクスポート…',
+  menuExportVideo: '動画としてエクスポート…',
   menuPrint: '印刷…',
   menuClose: '閉じる',
   menuQuit: '終了',

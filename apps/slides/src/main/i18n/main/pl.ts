@@ -18,6 +18,7 @@ export const pl = {
   dlgPickExportDir: 'Wybierz folder eksportu',
   btnExport: 'Eksportuj',
   dlgExportPdf: 'Eksportuj jako PDF',
+  dlgExportVideo: 'Eksportuj jako wideo',
   errExportDestNotPicked:
     'Miejsce docelowe eksportu nie zostało wybrane w tym oknie; wybierz je ponownie w oknie dialogowym eksportu.',
   dlgAddAttachment: 'Dodaj załączniki',
@@ -105,6 +106,7 @@ export const pl = {
   menuSaveAs: 'Zapisz jako…',
   menuExportPdf: 'Eksportuj jako PDF…',
   menuExportImages: 'Eksportuj jako obrazy…',
+  menuExportVideo: 'Eksportuj jako wideo…',
   menuPrint: 'Drukuj…',
   menuClose: 'Zamknij',
   menuQuit: 'Zakończ',

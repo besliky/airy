@@ -18,6 +18,7 @@ export const ko = {
   dlgPickExportDir: '내보낼 폴더 선택',
   btnExport: '내보내기',
   dlgExportPdf: 'PDF로 내보내기',
+  dlgExportVideo: '동영상으로 내보내기',
   errExportDestNotPicked:
     '내보내기 대상이 이 창에서 선택되지 않았습니다. 내보내기 대화상자에서 다시 선택하세요.',
   dlgAddAttachment: '첨부 파일 추가',
@@ -102,6 +103,7 @@ export const ko = {
   menuSaveAs: '다른 이름으로 저장…',
   menuExportPdf: 'PDF로 내보내기…',
   menuExportImages: '이미지로 내보내기…',
+  menuExportVideo: '동영상으로 내보내기…',
   menuPrint: '인쇄…',
   menuClose: '닫기',
   menuQuit: '끝내기',

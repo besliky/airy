@@ -35,6 +35,7 @@ export const zh = {
   ribbonFileExportPdf: '导出为 PDF…',
   ribbonFilePrint: '打印…',
   ribbonFileExportImages: '导出为图片…',
+  ribbonFileExportVideo: '导出为视频…',
   ribbonUnsavedSuffix: ' — 未保存',
   ribbonSaveTip: '保存 (⌘S)',
   ribbonAutoSave: '自动保存',

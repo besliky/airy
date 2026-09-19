@@ -1139,6 +1139,7 @@ export function Ribbon({
   onExportPdf,
   onPrint,
   onExportImages,
+  onExportVideo,
   onFormat,
   zoom,
   onZoom,
@@ -1841,6 +1842,15 @@ export function Ribbon({
                   }}
                 >
                   {t('ribbonFileExportImages')}
+                </button>
+                <button
+                  disabled={!hasDoc}
+                  onClick={() => {
+                    setFileOpen(false)
+                    onExportVideo()
+                  }}
+                >
+                  {t('ribbonFileExportVideo')}
                 </button>
               </div>
             )}

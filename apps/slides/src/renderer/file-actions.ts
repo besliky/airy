@@ -7,6 +7,8 @@ import type { RenderSlide } from '@airy-office/pptx-render'
 import type { ActionCtx } from './action-context'
 import { renderSlidesToPngBase64 } from './export-render'
 import { renderSlideSvg } from './slide-svg'
+import { buildVideoTimeline, videoFrameDimensions } from './video-plan'
+import { decodePngImages, pickRecorderMime, recordVideoTimeline } from './video-export'
 import { t } from './i18n/locale'
 import { showToast } from '@airy-office/ui/toast-bus'
 
@@ -215,5 +217,119 @@ export async function exportPdf(ctx: ActionCtx, layout: PdfExportLayout = 'full'
     )
   } catch (err) {
     ctx.setStatus(t('appExportPdfFailed', { error: String(err) }))
+  }
+}
+
+// ── Export video (File > Export Video) ────────────────────────────────────────
+
+/** Dialog-facing video export settings (resolution preset names the slide height). */
+export interface VideoExportSettings {
+  fps: number
+  heightPreset: 720 | 1080
+  /** Pace slides by rehearsed auto-advance times where recorded */
+  useTimings: boolean
+  /** Dwell for slides without timings (seconds), or all slides when timings are off */
+  secondsPerSlide: number
+  /** Play transitions as crossfades; false = hard cuts */
+  includeTransitions: boolean
+}
+
+/** Coarse pipeline phase for the progress callback (the dialog renders both). */
+export type VideoExportPhase = 'render' | 'record'
+
+/** Blob → base64 (chunked to avoid call stack overflow — same as screen recording). */
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buf = new Uint8Array(await blob.arrayBuffer())
+  let bin = ''
+  for (let i = 0; i < buf.length; i += 0x8000) {
+    bin += String.fromCharCode(...buf.subarray(i, i + 0x8000))
+  }
+  return btoa(bin)
+}
+
+/**
+ * Export the deck as a video: slides render to PNGs through the images-export
+ * path, the pure timeline paces them by rehearsed timings (or the fallback
+ * dwell) with transitions as crossfades, and an offscreen canvas records the
+ * frames through MediaRecorder (mp4 when the Chromium build muxes it, else
+ * WebM). Recording is real-time paced — MediaRecorder timestamps frames by
+ * the wall clock — so export duration ≈ video duration. Returns success.
+ */
+export async function exportVideo(
+  ctx: ActionCtx,
+  settings: VideoExportSettings,
+  onProgress?: (phase: VideoExportPhase, done: number, total: number) => void,
+  cancel?: { current: boolean },
+): Promise<boolean> {
+  const visible = ctx.slides.filter((s) => !s.hidden)
+  if (visible.length === 0) {
+    ctx.setStatus(t('appExportNoSlides'))
+    return false
+  }
+  if (typeof MediaRecorder === 'undefined') {
+    ctx.setStatus(t('appExportVideoFailed', { error: t('appExportVideoNoEncoder') }))
+    return false
+  }
+  const mime = pickRecorderMime((m) => MediaRecorder.isTypeSupported(m))
+  if (!mime) {
+    ctx.setStatus(t('appExportVideoFailed', { error: t('appExportVideoNoEncoder') }))
+    return false
+  }
+  const first = visible[0]!
+  const dims = videoFrameDimensions(first.widthPx, first.heightPx, settings.heightPreset)
+  // deck facts for the timeline: per-slide transitions + rehearsed timings
+  const [transitions, advanceMs] = await Promise.all([
+    Promise.all(ctx.slides.map((_, i) => window.slidesApi.getTransition(i))),
+    window.slidesApi.getAdvanceTimes(),
+  ])
+  const timeline = buildVideoTimeline({
+    slides: ctx.slides,
+    advanceMs,
+    transitions,
+    options: settings,
+  })
+  const target = await window.slidesApi.pickExportVideoPath(
+    `${exportBaseName(ctx)}.${mime.container}`,
+    mime.container,
+  )
+  if (!target) return false
+  // recording is wall-clock paced: suspend background timer throttling for the
+  // run (a minimized window would otherwise clamp frame timers to 1s)
+  await window.slidesApi.setVideoExportActive(true)
+  try {
+    const pngs = await renderSlidesToPngBase64(
+      visible,
+      ctx.images,
+      dims.width / first.widthPx,
+      (done, total) => onProgress?.('render', done, total),
+    )
+    const images = await decodePngImages(pngs)
+    const blob = await recordVideoTimeline({
+      timeline,
+      fps: settings.fps,
+      width: dims.width,
+      height: dims.height,
+      slideImages: images,
+      mimeType: mime.mimeType,
+      onProgress: (done, total) => onProgress?.('record', done, total),
+      ...(cancel ? { cancel } : {}),
+    })
+    if (!blob || blob.size === 0) return false // canceled (or nothing recorded)
+    const r = await window.slidesApi.exportVideo({
+      filePath: target,
+      bytesBase64: await blobToBase64(blob),
+      mimeType: mime.mimeType,
+    })
+    ctx.setStatus(
+      r.ok
+        ? t('appExportVideoDone', { path: r.path ?? '' })
+        : t('appExportVideoFailed', { error: r.error ?? t('appUnknownError') }),
+    )
+    return r.ok
+  } catch (err) {
+    ctx.setStatus(t('appExportVideoFailed', { error: String(err) }))
+    return false
+  } finally {
+    await window.slidesApi.setVideoExportActive(false)
   }
 }

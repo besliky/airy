@@ -36,6 +36,7 @@ export const ko = {
   ribbonFileExportPdf: 'PDF로 내보내기…',
   ribbonFilePrint: '인쇄…',
   ribbonFileExportImages: '이미지로 내보내기…',
+  ribbonFileExportVideo: '동영상으로 내보내기…',
   ribbonUnsavedSuffix: ' — 저장되지 않음',
   ribbonSaveTip: '저장 (⌘S)',
   ribbonAutoSave: '자동 저장',

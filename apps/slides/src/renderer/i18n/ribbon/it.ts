@@ -35,6 +35,7 @@ export const it = {
   ribbonFileExportPdf: 'Esporta come PDF…',
   ribbonFilePrint: 'Stampa…',
   ribbonFileExportImages: 'Esporta come immagini…',
+  ribbonFileExportVideo: 'Esporta come video…',
   ribbonUnsavedSuffix: ' — Non salvato',
   ribbonSaveTip: 'Salva (⌘S)',
   ribbonAutoSave: 'Salvataggio automatico',

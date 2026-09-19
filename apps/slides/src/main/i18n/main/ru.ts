@@ -18,6 +18,7 @@ export const ru = {
   dlgPickExportDir: 'Выбор папки для экспорта',
   btnExport: 'Экспорт',
   dlgExportPdf: 'Экспорт в PDF',
+  dlgExportVideo: 'Экспорт в видео',
   errExportDestNotPicked:
     'Папка экспорта не была выбрана в этом окне; выберите её заново в диалоге экспорта.',
   dlgAddAttachment: 'Добавление вложений',
@@ -105,6 +106,7 @@ export const ru = {
   menuSaveAs: 'Сохранить как…',
   menuExportPdf: 'Экспорт в PDF…',
   menuExportImages: 'Экспорт в изображения…',
+  menuExportVideo: 'Экспорт в видео…',
   menuPrint: 'Печать…',
   menuClose: 'Закрыть',
   menuQuit: 'Выход',

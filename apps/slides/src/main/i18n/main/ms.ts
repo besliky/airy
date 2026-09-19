@@ -18,6 +18,7 @@ export const ms = {
   dlgPickExportDir: 'Pilih Folder Eksport',
   btnExport: 'Eksport',
   dlgExportPdf: 'Eksport sebagai PDF',
+  dlgExportVideo: 'Eksport sebagai Video',
   errExportDestNotPicked:
     'Destinasi eksport tidak dipilih dalam tetingkap ini; pilih semula melalui dialog eksport.',
   dlgAddAttachment: 'Tambah Lampiran',
@@ -103,6 +104,7 @@ export const ms = {
   menuSaveAs: 'Simpan Sebagai…',
   menuExportPdf: 'Eksport sebagai PDF…',
   menuExportImages: 'Eksport sebagai imej…',
+  menuExportVideo: 'Eksport sebagai Video…',
   menuPrint: 'Cetak…',
   menuClose: 'Tutup',
   menuQuit: 'Keluar',

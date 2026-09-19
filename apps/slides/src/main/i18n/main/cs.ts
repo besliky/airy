@@ -18,6 +18,7 @@ export const cs = {
   dlgPickExportDir: 'Zvolte složku pro export',
   btnExport: 'Exportovat',
   dlgExportPdf: 'Exportovat jako PDF',
+  dlgExportVideo: 'Exportovat jako video',
   errExportDestNotPicked:
     'Cíl exportu nebyl v tomto okně vybrán; vyberte jej znovu v exportním dialogu.',
   dlgAddAttachment: 'Přidat přílohy',
@@ -104,6 +105,7 @@ export const cs = {
   menuSaveAs: 'Uložit jako…',
   menuExportPdf: 'Exportovat jako PDF…',
   menuExportImages: 'Exportovat jako obrázky…',
+  menuExportVideo: 'Exportovat jako video…',
   menuPrint: 'Tisk…',
   menuClose: 'Zavřít',
   menuQuit: 'Ukončit',

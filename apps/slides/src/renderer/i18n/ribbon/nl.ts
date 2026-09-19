@@ -35,6 +35,7 @@ export const nl = {
   ribbonFileExportPdf: 'Exporteren als PDF…',
   ribbonFilePrint: 'Afdrukken…',
   ribbonFileExportImages: 'Exporteren als afbeeldingen…',
+  ribbonFileExportVideo: 'Exporteren als video…',
   ribbonUnsavedSuffix: ' — Niet opgeslagen',
   ribbonSaveTip: 'Opslaan (⌘S)',
   ribbonAutoSave: 'Automatisch opslaan',

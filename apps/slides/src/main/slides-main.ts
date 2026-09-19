@@ -37,6 +37,7 @@ import {
   ALL_OPEN_EXTENSIONS,
   OPEN_EXTENSION_GROUPS,
   appMenuLabels,
+  atomicWriteFile,
   configuredAuthorName,
   configuredDefaultSaveDir,
   contextMenuLabels,
@@ -92,6 +93,7 @@ import {
   slideDurableId,
   getSlideComments,
   getSlideNotes,
+  getSlideAdvanceTime,
   getSlideTransitionSpec,
   elementSpid,
   getSlideAnimations,
@@ -181,6 +183,8 @@ import type {
   ExportImagesResult,
   ExportPdfOp,
   ExportPdfResult,
+  ExportVideoOp,
+  ExportVideoResult,
   OpenResult,
   PasteElementsOp,
   DuplicateElementsOp,
@@ -303,10 +307,11 @@ let pendingOpenPath: string | null = null
 const pendingByWc = new Map<number, string>()
 /**
  * Last picked export destination per webContents (slides:pick-export-dir /
- * slides:pick-export-pdf-path): the export channels are confined to it, so
- * a renderer cannot name an arbitrary write target.
+ * slides:pick-export-pdf-path / slides:pick-export-video-path): the export
+ * channels are confined to it, so a renderer cannot name an arbitrary write
+ * target.
  */
-const exportPicksByWc = new Map<number, { dir?: string; pdfPath?: string }>()
+const exportPicksByWc = new Map<number, { dir?: string; pdfPath?: string; videoPath?: string }>()
 /**
  * Renderer freeze watchdog: the freeze is sporadic and has never
  * reproduced under instrumentation, so when it does happen, capture the
@@ -4198,7 +4203,8 @@ export function registerSlidesIpc(): void {
       // a canceled pick must not leave the previous directory usable —
       // exporting requires a fresh successful pick
       delete picks.dir
-      if (picks.pdfPath === undefined) exportPicksByWc.delete(e.sender.id)
+      if (picks.pdfPath === undefined && picks.videoPath === undefined)
+        exportPicksByWc.delete(e.sender.id)
       else exportPicksByWc.set(e.sender.id, picks)
       return null
     }
@@ -4254,7 +4260,8 @@ export function registerSlidesIpc(): void {
       // a canceled pick must not keep the previous file usable — exporting
       // requires a fresh successful pick
       delete picks.pdfPath
-      if (picks.dir === undefined) exportPicksByWc.delete(e.sender.id)
+      if (picks.dir === undefined && picks.videoPath === undefined)
+        exportPicksByWc.delete(e.sender.id)
       else exportPicksByWc.set(e.sender.id, picks)
       return null
     }
@@ -4287,6 +4294,84 @@ export function registerSlidesIpc(): void {
       // routing), not whichever window happens to be focused
       openExportedPdf: (path) => openExportedPdf(path, e.sender.id),
     })
+  })
+
+  // ── Export video: the renderer records the container bytes (canvas + MediaRecorder,
+  // slides/video-export.ts); the main process owns the save dialog and the atomic write ──
+
+  ipcMain.handle(
+    'slides:pick-export-video-path',
+    async (e, defaultName: string, container: 'mp4' | 'webm') => {
+      const parent = dialogParent()
+      const ext = container === 'webm' ? 'webm' : 'mp4'
+      const options = {
+        title: tm('dlgExportVideo'),
+        defaultPath: defaultName,
+        filters: [{ name: ext === 'mp4' ? 'MPEG-4 Video' : 'WebM Video', extensions: [ext] }],
+      }
+      const r = await showSaveDialogWithMemory(dialog, parent, options, getDraftsDir(), e.sender.id)
+      const picked = r.canceled || !r.filePath ? null : r.filePath
+      const picks = exportPicksByWc.get(e.sender.id) ?? {}
+      if (!picked) {
+        // a canceled pick must not keep the previous file usable — exporting
+        // requires a fresh successful pick
+        delete picks.videoPath
+        if (picks.dir === undefined && picks.pdfPath === undefined)
+          exportPicksByWc.delete(e.sender.id)
+        else exportPicksByWc.set(e.sender.id, picks)
+        return null
+      }
+      try {
+        // a fresh target may not exist yet: resolve through its deepest
+        // existing ancestor so the stored value is the physical file location
+        picks.videoPath = realPathOrDeepestExisting(picked, (p) => realpathSync(p))
+      } catch {
+        return null
+      }
+      exportPicksByWc.set(e.sender.id, picks)
+      return picked
+    },
+  )
+
+  ipcMain.handle(
+    'slides:export-video',
+    async (e, op: ExportVideoOp): Promise<ExportVideoResult> => {
+      // the video must land exactly on the file the user picked for this tab,
+      // physically re-resolved (a symlink swap after the pick must not pass)
+      const pickedFile = exportPicksByWc.get(e.sender.id)?.videoPath
+      if (!pickedFile || !exportFileMatchesPick(pickedFile, op.filePath, (p) => realpathSync(p))) {
+        return { ok: false, error: tm('errExportDestNotPicked') }
+      }
+      try {
+        // atomic (temp + rename): a crash mid-write can only damage the
+        // dot-prefixed temp, never a previous export at the same path
+        await atomicWriteFile(op.filePath, Buffer.from(op.bytesBase64, 'base64'))
+        shell.showItemInFolder(op.filePath)
+        return { ok: true, path: op.filePath }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    },
+  )
+
+  // Whole-deck rehearsed auto-advance times (<p:transition advTm>) in one call:
+  // the video export reads them to pace the timeline
+  ipcMain.handle('slides:get-advance-times', (e): Array<number | null> => {
+    const session = sessions.get(e.sender.id)
+    return session ? session.opened.deck.slides.map((s) => getSlideAdvanceTime(s)) : []
+  })
+
+  // A video export records in real time (MediaRecorder timestamps frames by the
+  // wall clock), so background timer throttling — a minimized/occluded window
+  // clamps setTimeout to 1s — would stretch the recording; the exporter
+  // suspends it for its duration and restores it afterwards
+  ipcMain.handle('slides:set-video-export-active', (e, active: boolean) => {
+    try {
+      e.sender.setBackgroundThrottling(!active)
+      return true
+    } catch {
+      return false
+    }
   })
 
   ipcMain.handle(
@@ -4678,6 +4763,7 @@ export function buildSlidesMenu(): Menu {
         // to export or print at all
         { label: tm('menuExportPdf'), click: () => send('export-pdf') },
         { label: tm('menuExportImages'), click: () => send('export-images') },
+        { label: tm('menuExportVideo'), click: () => send('export-video') },
         { label: tm('menuPrint'), accelerator: 'CmdOrCtrl+P', click: () => send('print') },
         { type: 'separator' },
         // Ctrl/Cmd+W closes the active tab everywhere (shell tab mode) or the

@@ -36,6 +36,7 @@ export const ja = {
   ribbonFileExportPdf: 'PDF としてエクスポート…',
   ribbonFilePrint: '印刷…',
   ribbonFileExportImages: '画像としてエクスポート…',
+  ribbonFileExportVideo: '動画としてエクスポート…',
   ribbonUnsavedSuffix: ' — 未保存',
   ribbonSaveTip: '保存 (⌘S)',
   ribbonAutoSave: '自動保存',
