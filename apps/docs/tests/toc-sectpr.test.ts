@@ -4,7 +4,7 @@
  * entries used to drop the sectPr, silently destroying the layout of the
  * section that follows the TOC (columns, margins, footer references).
  */
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { parseDocx } from '@airy-office/docx-engine'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
@@ -30,6 +30,11 @@ const HEADINGS_XML =
   '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Chapter One</w:t></w:r></w:p>' +
   '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Deeper</w:t></w:r></w:p>'
 
+/** editors created by these tests; destroyed in afterEach so the ProseMirror
+ *  DOMObserver polling timer never outlives the jsdom environment (an
+ *  unhandled "document is not defined" after teardown fails the whole run) */
+const openEditors: Editor[] = []
+
 async function openTocDoc() {
   const parsed = await parseDocx(await buildDocx({ bodyXml: TOC_WITH_SECTPR_XML + HEADINGS_XML }))
   const editor = new Editor({
@@ -37,8 +42,15 @@ async function openTocDoc() {
     extensions: editorExtensions,
     content: blocksToPmDoc(parsed.blocks) as never,
   })
+  openEditors.push(editor)
   return { editor, parsed }
 }
+
+afterEach(async () => {
+  while (openEditors.length) openEditors.pop()?.destroy()
+  // let a pending DOMObserver flush land while the document still exists
+  await new Promise((resolve) => setTimeout(resolve, 30))
+})
 
 /** genXml of every regenerated toc line in document order */
 function tocLineXmls(editor: Editor): string[] {
