@@ -593,13 +593,14 @@ function stylePPrOps(up: StyleUpsert): StyleChildOp[] {
   const ops: StyleChildOp[] = []
   const spacingSets: Array<[string, string | null]> = []
   if (sp.spaceBeforeTwips !== undefined) {
-    // w:beforeLines would win over the twips value in Word — clear it when setting
+    // w:beforeLines would win over the twips value in Word — clear it on both
+    // set and null-clear (BUG-1103: a lone null left the winning twin behind)
     spacingSets.push(['w:before', isSet(sp.spaceBeforeTwips) ? String(sp.spaceBeforeTwips) : null])
-    if (isSet(sp.spaceBeforeTwips)) spacingSets.push(['w:beforeLines', null])
+    spacingSets.push(['w:beforeLines', null])
   }
   if (sp.spaceAfterTwips !== undefined) {
     spacingSets.push(['w:after', isSet(sp.spaceAfterTwips) ? String(sp.spaceAfterTwips) : null])
-    if (isSet(sp.spaceAfterTwips)) spacingSets.push(['w:afterLines', null])
+    spacingSets.push(['w:afterLines', null])
   }
   if (isSet(sp.lineSpacing))
     spacingSets.push(['w:line', String(Math.round(sp.lineSpacing * 240))], ['w:lineRule', 'auto'])
@@ -610,19 +611,20 @@ function stylePPrOps(up: StyleUpsert): StyleChildOp[] {
   const indSets: Array<[string, string | null]> = []
   if (sp.indentLeftTwips !== undefined) {
     indSets.push(['w:left', isSet(sp.indentLeftTwips) ? String(sp.indentLeftTwips) : null])
-    if (isSet(sp.indentLeftTwips))
-      indSets.push(['w:leftChars', null], ['w:start', null], ['w:startChars', null])
+    indSets.push(['w:leftChars', null], ['w:start', null], ['w:startChars', null])
   }
   if (sp.indentRightTwips !== undefined) {
     indSets.push(['w:right', isSet(sp.indentRightTwips) ? String(sp.indentRightTwips) : null])
-    if (isSet(sp.indentRightTwips))
-      indSets.push(['w:rightChars', null], ['w:end', null], ['w:endChars', null])
+    indSets.push(['w:rightChars', null], ['w:end', null], ['w:endChars', null])
   }
-  if (isSet(sp.indentFirstLineTwips)) {
+  if (sp.indentFirstLineTwips !== undefined) {
+    // BUG-1103: null clears the whole first-line family instead of a no-op;
     // a negative first line is a hanging indent (w:hanging, positive twips)
-    if (sp.indentFirstLineTwips < 0)
+    if (sp.indentFirstLineTwips !== null && sp.indentFirstLineTwips < 0)
       indSets.push(['w:hanging', String(-sp.indentFirstLineTwips)], ['w:firstLine', null])
-    else indSets.push(['w:firstLine', String(sp.indentFirstLineTwips)], ['w:hanging', null])
+    else if (sp.indentFirstLineTwips !== null)
+      indSets.push(['w:firstLine', String(sp.indentFirstLineTwips)], ['w:hanging', null])
+    else indSets.push(['w:firstLine', null], ['w:hanging', null])
     indSets.push(['w:firstLineChars', null], ['w:hangingChars', null])
   }
   if (indSets.length > 0) ops.push({ kind: 'attrs', tag: 'w:ind', sets: indSets })

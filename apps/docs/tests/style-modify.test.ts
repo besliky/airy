@@ -60,11 +60,16 @@ describe('styleUpsertFromEdits', () => {
       styleId: 'MyQuote',
       type: 'paragraph',
       name: 'My Quote',
-      rPr: { bold: true, italic: true, color: 'C00000', sizeHalfPoints: 28 },
-      pPr: { align: 'center', spaceBeforeTwips: 120, spaceAfterTwips: 120, indentLeftTwips: 720 },
+      rPr: { bold: true, color: 'C00000', sizeHalfPoints: 28 },
+      pPr: { align: 'center' },
     })
-    // dialog keeps fields it does not edit
+    // BUG-1102: untouched fields stay unset — the engine keeps their bytes and
+    // the basedOn chain keeps supplying inherited values
+    expect(upsert.rPr?.italic).toBeUndefined()
     expect(upsert.rPr?.font).toBeUndefined()
+    expect(upsert.pPr?.spaceBeforeTwips).toBeUndefined()
+    expect(upsert.pPr?.spaceAfterTwips).toBeUndefined()
+    expect(upsert.pPr?.indentLeftTwips).toBeUndefined()
     expect(display).toMatchObject({ bold: true, italic: true, color: 'C00000', sizeHalfPoints: 28 })
     expect(headingLevel).toBeNull()
   })
@@ -131,7 +136,7 @@ describe('styleUpserts save round-trip (engine)', () => {
     expect(reparsed.styles.get('Heading4')!.display?.bold).toBe(true)
   })
 
-  it('exact line rules and east-asian fonts survive the upsert', async () => {
+  it('exact line rules and east-asian fonts survive an untouched modify', async () => {
     const parsed = await parseDocx(
       await buildDocx({
         bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
@@ -144,17 +149,21 @@ describe('styleUpserts save round-trip (engine)', () => {
     const info = parsed.styles.get('Rule')!
     const edits = styleEditsFromInfo(info)
     expect(edits.lineSpacing).toBe(0) // exact rule: no multiple to edit
+    // BUG-1102: nothing changed → nothing but the name is written; the exact
+    // line rule and both font slots are no longer flattened into the upsert
     const { upsert } = styleUpsertFromEdits(info, edits)
-    expect(upsert.pPr).toMatchObject({ lineRule: 'exact', lineRawTwips: 480 })
-    expect(upsert.rPr).toMatchObject({ font: 'Calibri', fontEa: 'SimSun' })
-    const blocks = parsed.blocks
-      .filter((b) => !b.hidden && b.docxIndex !== null)
-      .map((b) => ({ kind: 'original' as const, docxIndex: b.docxIndex! }))
-    const saved = await saveDocx(parsed, blocks, { styleUpserts: [upsert] })
+    expect(upsert.pPr?.lineRule).toBeUndefined()
+    expect(upsert.pPr?.lineRawTwips).toBeUndefined()
+    expect(upsert.pPr?.lineSpacing).toBeUndefined()
+    expect(upsert.rPr?.font).toBeUndefined()
+    expect(upsert.rPr?.fontEa).toBeUndefined()
+    const saved = await saveDocWith(parsed, [upsert])
     const reparsed = await parseDocx(saved)
     expect(reparsed.styles.get('Rule')!.display).toMatchObject({
       lineRule: 'exact',
       lineRawTwips: 480,
+      fontAscii: 'Calibri',
+      font: 'SimSun',
     })
   })
 })
@@ -241,7 +250,8 @@ describe('BUG-1002: spacing the chain does not define stays unset', () => {
     expect(seed.beforePt).toBe(6)
     const { upsert } = styleUpsertFromEdits(info, { ...seed, beforePt: 0 })
     expect(upsert.pPr?.spaceBeforeTwips).toBe(0)
-    expect(upsert.pPr?.spaceAfterTwips).toBe(80)
+    // untouched after stays out of the upsert (BUG-1102) and in the file
+    expect(upsert.pPr?.spaceAfterTwips).toBeUndefined()
     const saved = await saveDocWith(parsed, [upsert])
     const zip = await JSZip.loadAsync(saved)
     const stylesXml = await zip.file('word/styles.xml')!.async('string')
@@ -269,8 +279,8 @@ describe('BUG-1002: spacing the chain does not define stays unset', () => {
     expect(upsert.pPr?.align).toBeNull()
     // BUG-1101: outline clears as an explicit body-text marker (w:outlineLvl 9)
     expect(upsert.pPr?.outlineLevel).toBe(false)
-    // untouched pass-through facets still flatten in
-    expect(upsert.pPr?.spaceAfterTwips).toBe(80)
+    // BUG-1102: the untouched interval stays out of the upsert (and in the file)
+    expect(upsert.pPr?.spaceAfterTwips).toBeUndefined()
     const saved = await saveDocWith(parsed, [upsert])
     const zip = await JSZip.loadAsync(saved)
     const stylesXml = await zip.file('word/styles.xml')!.async('string')
@@ -287,17 +297,23 @@ describe('BUG-1002: spacing the chain does not define stays unset', () => {
   it('a style without facets keeps its definition when nothing is set', async () => {
     const parsed = await openDefaultsDoc()
     const info = parsed.styles.get('Plain')!
-    const { upsert } = styleUpsertFromEdits(info, styleEditsFromInfo(info, parsed.docDefaults))
+    const { upsert } = styleUpsertFromEdits(
+      info,
+      styleEditsFromInfo(info, parsed.docDefaults),
+      parsed.docDefaults,
+    )
     const saved = await saveDocWith(parsed, [upsert])
     const zip = await JSZip.loadAsync(saved)
     const stylesXml = await zip.file('word/styles.xml')!.async('string')
     const plain = /<w:style [^>]*w:styleId="Plain"[\s\S]*?<\/w:style>/.exec(stylesXml)![0]
-    // no pPr is invented; the only rPr content is the docDefaults-seeded size flatten
+    // BUG-1102: no pPr/rPr is invented — even the docDefaults-seeded size is
+    // no longer flattened into an untouched style
     expect(plain).toBe(
       '<w:style w:type="paragraph" w:styleId="Plain" w:customStyle="1">' +
-        '<w:name w:val="Plain"/><w:rPr><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:style>',
+        '<w:name w:val="Plain"/></w:style>',
     )
     expect(upsert.pPr?.outlineLevel).toBeUndefined()
+    expect(upsert.rPr?.sizeHalfPoints).toBeUndefined()
   })
 })
 
@@ -381,5 +397,77 @@ describe('BUG-1101: clearing an inherited facet writes an explicit off', () => {
     const { upsert, display } = styleUpsertFromEdits(info, { ...seed, sizePt: 0 })
     expect(upsert.rPr?.sizeHalfPoints).toBeNull()
     expect(display?.sizeHalfPoints).toBeUndefined()
+  })
+})
+
+const CHAIN_FLATTEN_STYLES =
+  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' +
+  '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+  '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+  '<w:style w:type="paragraph" w:styleId="Parent"><w:name w:val="Parent"/>' +
+  '<w:pPr><w:spacing w:after="160"/><w:ind w:left="720"/></w:pPr>' +
+  '<w:rPr><w:b/><w:u w:val="single"/></w:rPr></w:style>' +
+  '<w:style w:type="paragraph" w:styleId="Child"><w:name w:val="Child"/>' +
+  '<w:basedOn w:val="Parent"/></w:style>' +
+  '</w:styles>'
+
+describe('BUG-1102: a modify no longer flattens chain values into the style', () => {
+  async function openFlattenDoc() {
+    return parseDocx(
+      await buildDocx({
+        bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+        stylesXml: CHAIN_FLATTEN_STYLES,
+      }),
+    )
+  }
+
+  it('an untouched modify leaves the child style bare — the parent keeps supplying', async () => {
+    const parsed = await openFlattenDoc()
+    const info = parsed.styles.get('Child')!
+    // the seed resolves everything through Parent (spacing, indent, bold, underline)
+    expect(info.display).toMatchObject({
+      bold: true,
+      underline: true,
+      spaceAfterTwips: 160,
+      indentLeftTwips: 720,
+    })
+    const { upsert } = styleUpsertFromEdits(info, styleEditsFromInfo(info))
+    expect(upsert.pPr?.spaceAfterTwips).toBeUndefined()
+    expect(upsert.pPr?.indentLeftTwips).toBeUndefined()
+    expect(upsert.rPr?.bold).toBeUndefined()
+    expect(upsert.rPr?.underline).toBeUndefined()
+    const saved = await saveDocWith(parsed, [upsert])
+    const zip = await JSZip.loadAsync(saved)
+    const stylesXml = await zip.file('word/styles.xml')!.async('string')
+    const child = /<w:style [^>]*w:styleId="Child"[\s\S]*?<\/w:style>/.exec(stylesXml)![0]
+    // none of Parent's facets were pinned into the child definition
+    expect(child).not.toContain('<w:spacing')
+    expect(child).not.toContain('<w:ind ')
+    expect(child).not.toContain('<w:b/>')
+    expect(child).not.toContain('<w:u ')
+    const reparsed = await parseDocx(saved)
+    expect(reparsed.styles.get('Child')!.display).toMatchObject({
+      bold: true,
+      underline: true,
+      spaceAfterTwips: 160,
+    })
+  })
+
+  it('a changed spacing interval becomes the child override', async () => {
+    const parsed = await openFlattenDoc()
+    const info = parsed.styles.get('Child')!
+    const seed = styleEditsFromInfo(info)
+    expect(seed.afterPt).toBe(8) // Parent's 160 twips
+    const { upsert, display } = styleUpsertFromEdits(info, { ...seed, afterPt: 3 })
+    expect(upsert.pPr?.spaceAfterTwips).toBe(60)
+    expect(upsert.pPr?.spaceBeforeTwips).toBeUndefined()
+    expect(display?.spaceAfterTwips).toBe(60)
+    const saved = await saveDocWith(parsed, [upsert])
+    const zip = await JSZip.loadAsync(saved)
+    const stylesXml = await zip.file('word/styles.xml')!.async('string')
+    const child = /<w:style [^>]*w:styleId="Child"[\s\S]*?<\/w:style>/.exec(stylesXml)![0]
+    expect(child).toContain('<w:spacing w:after="60"/>')
+    const reparsed = await parseDocx(saved)
+    expect(reparsed.styles.get('Child')!.display?.spaceAfterTwips).toBe(60)
   })
 })

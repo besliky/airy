@@ -623,6 +623,86 @@ describe('styleUpserts explicit off (BUG-1101): clearing an inherited facet', ()
   })
 })
 
+describe('null clears win the Word twins (BUG-1103)', () => {
+  // LibreOffice-authored CJK documents carry the *Lines/*Chars spellings,
+  // which take precedence over twips in Word — a null clear that leaves the
+  // twin behind is a silent no-op there
+  const TWIN_STYLE =
+    '<w:style w:type="paragraph" w:styleId="Twins"><w:name w:val="Twins"/>' +
+    '<w:pPr><w:spacing w:before="120" w:beforeLines="100" w:after="160" w:afterLines="50"/>' +
+    '<w:ind w:left="720" w:leftChars="300" w:start="720" w:firstLine="360" w:firstLineChars="150"/></w:pPr></w:style>'
+
+  async function openTwinDoc() {
+    return parseDocx(
+      await buildDocx({
+        bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+        extraStylesXml: TWIN_STYLE,
+      }),
+    )
+  }
+
+  it('clearing spacing removes the *Lines twins that would win over nothing', async () => {
+    const parsed = await openTwinDoc()
+    const saved = await saveWithUpsert(parsed, [
+      {
+        styleId: 'Twins',
+        type: 'paragraph',
+        name: 'Twins',
+        pPr: { spaceBeforeTwips: null, spaceAfterTwips: null },
+      },
+    ])
+    const twins = /<w:style [^>]*w:styleId="Twins"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(twins).not.toContain('<w:spacing')
+    expect(twins).not.toContain('w:before')
+    expect(twins).not.toContain('w:after')
+    // the ind element is untouched by a spacing clear
+    expect(twins).toContain('<w:ind w:left="720" w:leftChars="300" w:start="720"')
+  })
+
+  it('clearing indents removes *Chars/* twins; firstLine null clears the whole family', async () => {
+    const parsed = await openTwinDoc()
+    const saved = await saveWithUpsert(parsed, [
+      {
+        styleId: 'Twins',
+        type: 'paragraph',
+        name: 'Twins',
+        pPr: { indentLeftTwips: null, indentFirstLineTwips: null },
+      },
+    ])
+    const twins = /<w:style [^>]*w:styleId="Twins"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(twins).not.toContain('<w:ind')
+    expect(twins).not.toContain('w:left')
+    expect(twins).not.toContain('w:start')
+    expect(twins).not.toContain('w:firstLine')
+    expect(twins).not.toContain('w:hanging')
+    // the spacing element survives untouched
+    expect(twins).toContain('w:beforeLines="100"')
+  })
+
+  it('setting a value still clears the twins (symmetric with the null clear)', async () => {
+    const parsed = await openTwinDoc()
+    const saved = await saveWithUpsert(parsed, [
+      {
+        styleId: 'Twins',
+        type: 'paragraph',
+        name: 'Twins',
+        pPr: { spaceBeforeTwips: 200, indentFirstLineTwips: -240 },
+      },
+    ])
+    const twins = /<w:style [^>]*w:styleId="Twins"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(twins).toContain('w:before="200"')
+    expect(twins).not.toContain('w:beforeLines')
+    expect(twins).toContain('w:hanging="240"')
+    expect(twins).not.toContain('w:firstLineChars')
+  })
+})
+
 describe('toggle-off (w:val="0") overrides inherited formatting', () => {
   const TOGGLE_STYLES =
     '<w:style w:type="paragraph" w:styleId="BoldBase"><w:name w:val="Bold Base"/>' +

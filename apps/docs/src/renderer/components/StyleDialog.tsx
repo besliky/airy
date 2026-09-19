@@ -1,14 +1,14 @@
 /**
  * Word's Modify Style dialog (Home ▸ Styles): edit a paragraph style's
  * definition — name, font, size, bold/italic, color, alignment, spacing and
- * outline level. The edited definition is flattened from the style's resolved
- * display (a basedOn chain collapses into the style itself), written back to
- * styles.xml through StyleUpsert on save, and pushed live into the document
- * style CSS so every paragraph carrying the pStyle updates on screen at once.
- * The save-side write is surgical (BUG-1001/1002): untouched facets stay
- * unset in the upsert so the engine keeps the original definition bytes,
- * including everything this dialog cannot edit (keepNext, tabs, numPr, …),
- * and spacing the chain does not define is never pinned over docDefaults.
+ * outline level. Only fields the user actually changed are written back to
+ * styles.xml through StyleUpsert (BUG-1102: the resolved-display flatten used
+ * to pin basedOn-chain values into the style on every modify); a facet the
+ * chain supplies is cleared with an explicit off instead of a removal
+ * (BUG-1101). The result is pushed live into the document style CSS so every
+ * paragraph carrying the pStyle updates on screen at once; the save-side
+ * write is surgical (BUG-1001), so untouched facets keep their original bytes,
+ * including everything this dialog cannot edit (keepNext, tabs, numPr, …).
  */
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
@@ -75,11 +75,14 @@ export function styleEditsFromInfo(
 
 /**
  * Flatten the edits into the save-side upsert plus the style's next resolved
- * display (for the live document style CSS) and its new outline level. Fields
- * the dialog does not edit (underline, strike, indents, non-auto line rules)
- * pass through from the current display so nothing is silently lost; facets
- * the user cleared carry `null` so the surgical engine patch removes them,
- * while untouched facets stay `undefined` (the definition keeps its own XML).
+ * display (for the live document style CSS) and its new outline level.
+ * BUG-1102: only fields the user actually changed are written — an untouched
+ * value stays `undefined` so the surgical engine keeps the definition's own
+ * bytes and a basedOn parent keeps supplying inherited facets to the child
+ * (the resolved-display flatten used to pin chain values into every style it
+ * modified, stopping inheritance from propagating). Facets the dialog cannot
+ * edit at all (underline, strike, indents, non-auto line rules) are never
+ * written here for the same reason.
  *
  * BUG-1101: clearing a facet the basedOn chain supplies writes an explicit off
  * (w:val="0" / w:color "auto" / w:outlineLvl 9) — removing only the style's own
@@ -89,65 +92,66 @@ export function styleEditsFromInfo(
 export function styleUpsertFromEdits(
   info: StyleInfo | undefined,
   edits: StyleEdits,
+  docDefaults?: DocDefaults,
 ): { upsert: StyleUpsert; display: StyleDisplay | undefined; headingLevel: number | null } {
   const styleId = info?.styleId ?? ''
   const d = info?.display
   // what the chain keeps supplying once the style's own facet is gone
   const chain = info?.chainDisplay
+  // the seed the dialog opened with: unchanged fields are not written
+  const seed = styleEditsFromInfo(info, docDefaults)
   const hadEaFace = Boolean(d?.font && d.font !== (d?.fontAscii ?? ''))
   const rPr: NonNullable<StyleUpsert['rPr']> = {}
   // value = set, false = explicit off (chain supplies it), null = remove the
-  // own element, undefined = the chain never set it (keep)
-  rPr.bold = edits.bold
-    ? true
-    : d?.bold === true
-      ? chain?.bold === true
-        ? false
-        : null
-      : undefined
-  rPr.italic = edits.italic
-    ? true
-    : d?.italic === true
-      ? chain?.italic === true
-        ? false
-        : null
-      : undefined
-  if (d?.underline) rPr.underline = true
-  if (d?.strike) rPr.strike = true
+  // own element, undefined = untouched (keep the definition's own XML)
+  if (edits.bold !== seed.bold)
+    rPr.bold = edits.bold
+      ? true
+      : d?.bold === true
+        ? chain?.bold === true
+          ? false
+          : null
+        : undefined
+  if (edits.italic !== seed.italic)
+    rPr.italic = edits.italic
+      ? true
+      : d?.italic === true
+        ? chain?.italic === true
+          ? false
+          : null
+        : undefined
   // 'auto' is color's explicit-off spelling: the chain would win after a removal
   const colorInChain = chain?.color !== undefined && chain.color !== 'auto'
-  rPr.color = edits.color
-    ? edits.color.toUpperCase()
-    : colorInChain
-      ? 'auto'
-      : d?.color && d.color !== 'auto'
-        ? null
-        : undefined
-  // the seed always resolves a size (docDefaults fallback), so 0 = the user cleared it
-  rPr.sizeHalfPoints = edits.sizePt > 0 ? Math.round(edits.sizePt * 2) : null
-  rPr.font = edits.font ? edits.font : d?.fontAscii ? null : undefined
-  rPr.fontEa = edits.fontEa ? edits.fontEa : hadEaFace ? null : undefined
+  if (edits.color !== seed.color)
+    rPr.color = edits.color
+      ? edits.color.toUpperCase()
+      : colorInChain
+        ? 'auto'
+        : d?.color && d.color !== 'auto'
+          ? null
+          : undefined
+  // 0 = the user cleared the resolved size (docDefaults fallback seed)
+  if (edits.sizePt !== seed.sizePt)
+    rPr.sizeHalfPoints = edits.sizePt > 0 ? Math.round(edits.sizePt * 2) : null
+  if (edits.font !== seed.font) rPr.font = edits.font ? edits.font : d?.fontAscii ? null : undefined
+  if (edits.fontEa !== seed.fontEa)
+    rPr.fontEa = edits.fontEa ? edits.fontEa : hadEaFace ? null : undefined
   const pPr: NonNullable<StyleUpsert['pPr']> = {}
-  // BUG-1002: an interval the basedOn chain does not define must stay unset —
-  // writing an explicit w:before/after="0" would pin the style over docDefaults
-  // (typically w:after="160"), visibly removing the spacing on reopen
-  if (edits.beforePt > 0 || d?.spaceBeforeTwips !== undefined)
-    pPr.spaceBeforeTwips = ptToTwips(edits.beforePt)
-  if (edits.afterPt > 0 || d?.spaceAfterTwips !== undefined)
-    pPr.spaceAfterTwips = ptToTwips(edits.afterPt)
-  pPr.align = edits.align ? edits.align : d?.align ? null : undefined
-  if (edits.lineSpacing > 0) pPr.lineSpacing = edits.lineSpacing
-  else if (d?.lineRawTwips) {
-    pPr.lineRule = d.lineRule === 'exact' ? 'exact' : 'atLeast'
-    pPr.lineRawTwips = d.lineRawTwips
-  }
+  // BUG-1002/1102: an interval is written only when the user changed the
+  // seeded value — an untouched interval must stay inherited (writing it, even
+  // as w:before/after="0", would pin the style over docDefaults or the chain)
+  if (edits.beforePt !== seed.beforePt) pPr.spaceBeforeTwips = ptToTwips(edits.beforePt)
+  if (edits.afterPt !== seed.afterPt) pPr.spaceAfterTwips = ptToTwips(edits.afterPt)
+  if (edits.align !== seed.align)
+    pPr.align = edits.align ? edits.align : d?.align ? null : undefined
+  // same dirty rule for the spacing multiple: an untouched chain value stays inherited
+  if (edits.lineSpacing > 0 && edits.lineSpacing !== seed.lineSpacing)
+    pPr.lineSpacing = edits.lineSpacing
   // false = explicit body text (w:outlineLvl 9): a removal would re-inherit
   // the parent heading level after reopen
-  pPr.outlineLevel =
-    edits.outline > 0 ? edits.outline : (info?.headingLevel ?? 0) > 0 ? false : undefined
-  if (d?.indentLeftTwips) pPr.indentLeftTwips = d.indentLeftTwips
-  if (d?.indentRightTwips) pPr.indentRightTwips = d.indentRightTwips
-  if (d?.indentFirstLineTwips) pPr.indentFirstLineTwips = d.indentFirstLineTwips
+  if (edits.outline !== seed.outline)
+    pPr.outlineLevel =
+      edits.outline > 0 ? edits.outline : (info?.headingLevel ?? 0) > 0 ? false : undefined
   const upsert: StyleUpsert = {
     styleId,
     type: 'paragraph',
@@ -160,17 +164,18 @@ export function styleUpsertFromEdits(
   const next: StyleDisplay = { ...(d ?? {}) }
   if (edits.bold) next.bold = true
   // explicit off resolves to false after reopen — keep screen and file alike
-  else if (rPr.bold === false) next.bold = false
+  // (rPr.bold false = cleared now; d.bold false = an untouched authored off)
+  else if (rPr.bold === false || d?.bold === false) next.bold = false
   else delete next.bold
   if (edits.italic) next.italic = true
-  else if (rPr.italic === false) next.italic = false
+  else if (rPr.italic === false || d?.italic === false) next.italic = false
   else delete next.italic
   if (edits.sizePt > 0) next.sizeHalfPoints = Math.round(edits.sizePt * 2)
   // 0 = inherit: the chain keeps supplying its size after the own element clears
   else if (chain?.sizeHalfPoints !== undefined) next.sizeHalfPoints = chain.sizeHalfPoints
   else delete next.sizeHalfPoints
   if (edits.color) next.color = edits.color.toUpperCase()
-  else if (rPr.color === 'auto') next.color = 'auto'
+  else if (rPr.color === 'auto' || d?.color === 'auto') next.color = 'auto'
   else delete next.color
   if (edits.font || edits.fontEa) {
     next.fontAscii = edits.font || undefined
@@ -256,7 +261,7 @@ export function StyleDialog({
       onClose()
       return
     }
-    const { upsert, display, headingLevel } = styleUpsertFromEdits(info, edits)
+    const { upsert, display, headingLevel } = styleUpsertFromEdits(info, edits, docDefaults)
     onApply(upsert, display, headingLevel)
     // outline-level change retags the paragraphs already carrying the style
     if (headingLevel !== (info.headingLevel ?? null))
