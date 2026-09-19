@@ -726,6 +726,7 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
             <button
               key={value}
               className={kind === value ? 'btn-primary' : ''}
+              aria-pressed={kind === value}
               disabled={native}
               onClick={() => pickKind(value)}
             >
