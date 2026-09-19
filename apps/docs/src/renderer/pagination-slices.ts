@@ -362,11 +362,14 @@ export function computeSectionedSlicesF2(
     openRegion(y, section, headerH, headerTop)
     // BUG-1108: the spilled note continuation from the previous page grows
     // this page's footnote area into the body, like Word's does; clamped to a
-    // fraction of the page so a pathological note can never zero it out
-    pageNoteSepPx =
-      (curBlockNotes ? FOOTNOTE_SEPARATOR_H : 0) +
-      Math.min(pendingSpillPx, contentH * NOTE_SPILL_MAX_FRAC)
-    pendingSpillPx = 0
+    // fraction of the page so a pathological note can never zero it out.
+    // BUG-1211: a note longer than the clamp continues past this page too —
+    // Word carries the remainder onto every following page until the note
+    // ends, so the uncharged overflow stays pending instead of evaporating
+    const spillCharged = Math.min(pendingSpillPx, contentH * NOTE_SPILL_MAX_FRAC)
+    pageNoteSepPx = (curBlockNotes ? FOOTNOTE_SEPARATOR_H : 0) + spillCharged
+    pendingSpillPx = Math.max(pendingSpillPx - spillCharged, 0)
+    if (pendingSpillPx < 0.5) pendingSpillPx = 0
     pageFloatBottom = 0
   }
   // advance on overflow: change column if not the last, turn the page on the last (headerH/headerTop: table header repeated at column top after a table break)

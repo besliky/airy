@@ -1400,6 +1400,23 @@ describe('computeSectionedSlicesF2 — line-level pagination', () => {
     expect(slices.map((s) => s.start)).toEqual([0, 150, 270])
     expect(slices[slices.length - 1].end).toBe(370)
   })
+
+  // BUG-1211: a note longer than the half-page clamp continues on the pages
+  // after the first charged one — the clamp remainder used to be discarded
+  // (pendingSpillPx = 0), so pages 2+ of a pathological note were
+  // systematically over-capacity in the model
+  it('a clamped spill carries its remainder onto the following page', () => {
+    // page 1 (capacity 184 after the separator): text 150 placed, note 190
+    // spills 156 (190 - 34 leftover); page 2 charges min(156, 100) = 100 and
+    // carries 56; page 3 charges the carried 56
+    const spiller = block(0, 340, { footnoteExtraPx: 190 })
+    const filler = Array.from({ length: 8 }, (_, i) => block(150 + i * 40, 40))
+    const slices = computeSectionedSlicesF2([spiller, ...filler], geoms1, 470)
+    // page 2 (capacity 100): two 40px blocks; page 3 (capacity 144): three;
+    // page 4 opens at 350 — without the carry page 3 held five (start 430)
+    expect(slices.map((s) => s.start)).toEqual([0, 150, 230, 350])
+    expect(slices[slices.length - 1].end).toBe(470)
+  })
 })
 
 describe('computeSectionedSlicesF2 — mid-paragraph page breaks (innerBreaks)', () => {
