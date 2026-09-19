@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { generateParagraphXml, parseDocx, type GenerateContext } from '../src/index'
+import {
+  generateParagraphXml,
+  parseDocx,
+  saveDocx,
+  type GenerateContext,
+  type StyleUpsert,
+} from '../src/index'
 import { buildDocx } from './helpers/build-docx'
 
 const GEN_CTX: GenerateContext = {
@@ -249,7 +255,7 @@ describe('linkedStyle (w:link) and docDefaults backfill', () => {
 })
 
 describe('styleUpserts style write-back', () => {
-  it('new styles are appended, modified styles are replaced in place', async () => {
+  it('new styles are appended, modified styles are patched in place', async () => {
     const { saveDocx } = await import('../src/index')
     const parsed = await parseDocx(
       await buildDocx({ bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>' }),
@@ -273,7 +279,8 @@ describe('styleUpserts style write-back', () => {
     const st = reparsed.styles.get('MyQuote')!
     expect(st.name).toBe('我的引用')
     expect(st.display).toMatchObject({ italic: true, color: '595959', sizeHalfPoints: 20 })
-    // Modify: upsert the same styleId again — replaces instead of duplicating
+    // Modify: upsert the same styleId again — patches instead of duplicating,
+    // and facets the upsert does not mention survive (BUG-1001)
     const parsed2 = await parseDocx(saved)
     const blocks2 = parsed2.blocks
       .filter((b) => !b.hidden && b.docxIndex !== null)
@@ -288,7 +295,232 @@ describe('styleUpserts style write-back', () => {
     expect(stylesXml.match(/w:styleId="MyQuote"/g)).toHaveLength(1)
     const reparsed2 = await parseDocx(saved2)
     expect(reparsed2.styles.get('MyQuote')!.display).toMatchObject({ bold: true })
-    expect(reparsed2.styles.get('MyQuote')!.display?.italic).toBeUndefined()
+    // untouched facets of the existing definition are kept, not dropped
+    expect(reparsed2.styles.get('MyQuote')!.display).toMatchObject({ italic: true })
+    expect(reparsed2.styles.get('MyQuote')!.display).toMatchObject({ color: '595959' })
+    expect(reparsed2.styles.get('MyQuote')!.display).toMatchObject({ sizeHalfPoints: 20 })
+  })
+})
+
+/** Word-like heading/list style carrying everything the StyleUpsert model cannot edit */
+const RICH_STYLE =
+  '<w:style w:type="paragraph" w:styleId="Rich"><w:name w:val="Rich"/>' +
+  '<w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="9"/><w:qFormat/>' +
+  '<w:pPr><w:keepNext/><w:keepLines/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr>' +
+  '<w:tabs><w:tab w:val="num" w:pos="720"/></w:tabs><w:shd w:val="clear" w:fill="F2F2F2"/>' +
+  '<w:spacing w:before="240" w:after="120" w:beforeAutospacing="0"/><w:ind w:left="720" w:leftChars="200"/>' +
+  '<w:jc w:val="left"/></w:pPr>' +
+  '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Times New Roman" w:hint="default"/>' +
+  '<w:b/><w:color w:val="FF0000"/><w:sz w:val="40"/><w:szCs w:val="40"/><w:u w:val="double"/></w:rPr></w:style>'
+
+async function openRichDoc() {
+  return parseDocx(
+    await buildDocx({
+      bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+      extraStylesXml: RICH_STYLE,
+    }),
+  )
+}
+
+async function saveWithUpsert(
+  parsed: Awaited<ReturnType<typeof parseDocx>>,
+  upserts: StyleUpsert[],
+) {
+  const blocks = parsed.blocks
+    .filter((b) => !b.hidden && b.docxIndex !== null)
+    .map((b) => ({ kind: 'original' as const, docxIndex: b.docxIndex! }))
+  return saveDocx(parsed, blocks, { styleUpserts: upserts })
+}
+
+async function stylesXmlOf(bytes: Uint8Array): Promise<string> {
+  const zip = await (await import('jszip')).default.loadAsync(bytes)
+  return zip.file('word/styles.xml')!.async('string')
+}
+
+describe('styleUpserts surgical modify (BUG-1001)', () => {
+  it('a font modify keeps keepNext/numPr/tabs/shd/link/next byte-exact', async () => {
+    const parsed = await openRichDoc()
+    const saved = await saveWithUpsert(parsed, [
+      { styleId: 'Rich', type: 'paragraph', name: 'Rich', rPr: { font: 'Calibri' } },
+    ])
+    const xml = await stylesXmlOf(saved)
+    const rich = /<w:style [^>]*w:styleId="Rich"[\s\S]*?<\/w:style>/.exec(xml)![0]
+    expect(rich).toContain('<w:keepNext/><w:keepLines/>')
+    expect(rich).toContain('<w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr>')
+    expect(rich).toContain('<w:tabs><w:tab w:val="num" w:pos="720"/></w:tabs>')
+    expect(rich).toContain('<w:shd w:val="clear" w:fill="F2F2F2"/>')
+    expect(rich).toContain('<w:basedOn w:val="Normal"/><w:next w:val="Normal"/>')
+    expect(rich).toContain('<w:uiPriority w:val="9"/>')
+    expect(rich).toContain('<w:qFormat/>')
+    expect(rich).toContain('<w:jc w:val="left"/>')
+    // the edited face lands in rFonts; unmodeled slots (cs, hint) survive
+    expect(rich).toContain(
+      '<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Times New Roman" w:hint="default"/>',
+    )
+    // non-edited rPr elements are untouched
+    expect(rich).toContain('<w:b/><w:color w:val="FF0000"/>')
+    expect(rich).toContain('<w:sz w:val="40"/><w:szCs w:val="40"/><w:u w:val="double"/>')
+    // pPr spacing/ind are merged at attribute level, unmodeled attrs kept
+    expect(rich).toContain('<w:spacing w:before="240" w:after="120" w:beforeAutospacing="0"/>')
+    expect(rich).toContain('<w:ind w:left="720" w:leftChars="200"/>')
+  })
+
+  it('round-trips through the parser: numPr, keepNext, tabs and heading stay', async () => {
+    const parsed = await openRichDoc()
+    const saved = await saveWithUpsert(parsed, [
+      { styleId: 'Rich', type: 'paragraph', name: 'Rich', rPr: { font: 'Calibri', bold: true } },
+    ])
+    const reparsed = await parseDocx(saved)
+    const info = reparsed.styles.get('Rich')!
+    expect(info.numPr).toEqual({ numId: '2', ilvl: 0 })
+    expect(info.display).toMatchObject({ keepNext: true, keepLines: true })
+    expect(info.display?.tabStops).toEqual([{ pos: 720, val: 'left' }])
+    expect(info.display).toMatchObject({ shadingFill: 'F2F2F2' })
+    expect(info.display).toMatchObject({ fontAscii: 'Calibri', bold: true })
+    expect(info.display?.csFont).toBe('Times New Roman')
+    expect(info.qFormat).toBe(true)
+  })
+
+  it('null facets clear their elements, undefined leaves them alone', async () => {
+    const parsed = await openRichDoc()
+    const saved = await saveWithUpsert(parsed, [
+      {
+        styleId: 'Rich',
+        type: 'paragraph',
+        name: 'Rich',
+        rPr: { bold: null, color: null, sizeHalfPoints: null, underline: true },
+        pPr: { align: null, outlineLevel: null },
+      },
+    ])
+    const rich = /<w:style [^>]*w:styleId="Rich"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(rich).not.toContain('<w:b/>')
+    expect(rich).not.toContain('<w:color')
+    expect(rich).not.toContain('<w:sz ')
+    expect(rich).not.toContain('<w:szCs ')
+    expect(rich).not.toContain('<w:jc ')
+    expect(rich).not.toContain('<w:outlineLvl ')
+    // w:u ensure-present keeps the richer authored value
+    expect(rich).toContain('<w:u w:val="double"/>')
+  })
+
+  it('outline level and non-auto line rules land at their CT_PPr schema position', async () => {
+    const parsed = await openRichDoc()
+    const saved = await saveWithUpsert(parsed, [
+      {
+        styleId: 'Rich',
+        type: 'paragraph',
+        name: 'Rich',
+        pPr: { outlineLevel: 2, lineRawTwips: 480, lineRule: 'exact', align: 'center' },
+      },
+    ])
+    const rich = /<w:style [^>]*w:styleId="Rich"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    // inserted facets interleave with the kept ones in schema order
+    expect(rich).toContain(
+      '<w:spacing w:before="240" w:after="120" w:beforeAutospacing="0" w:line="480" w:lineRule="exact"/>',
+    )
+    expect(rich).toContain('<w:jc w:val="center"/>')
+    expect(rich.indexOf('<w:jc w:val="center"/>')).toBeGreaterThan(rich.indexOf('</w:ind>'))
+    expect(rich.indexOf('<w:outlineLvl w:val="1"/>')).toBeGreaterThan(
+      rich.indexOf('<w:jc w:val="center"/>'),
+    )
+  })
+
+  it('pPr/rPr blocks are created in schema position when the style had none', async () => {
+    const parsed = await parseDocx(
+      await buildDocx({
+        bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+        extraStylesXml:
+          '<w:style w:type="paragraph" w:styleId="Bare"><w:name w:val="Bare"/>' +
+          '<w:semiHidden/></w:style>',
+      }),
+    )
+    const saved = await saveWithUpsert(parsed, [
+      {
+        styleId: 'Bare',
+        type: 'paragraph',
+        name: 'Bare',
+        rPr: { bold: true },
+        pPr: { align: 'right' },
+      },
+    ])
+    const bare = /<w:style [^>]*w:styleId="Bare"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(bare).toContain('<w:semiHidden/>')
+    expect(bare).toContain('<w:pPr><w:jc w:val="right"/></w:pPr><w:rPr><w:b/></w:rPr>')
+  })
+
+  it('w:before/w:after are omitted when unset and kept when explicitly zeroed (BUG-1002)', async () => {
+    const parsed = await parseDocx(
+      await buildDocx({
+        bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+        extraStylesXml:
+          '<w:style w:type="paragraph" w:styleId="NoSpacing"><w:name w:val="No Spacing"/></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="OwnSpacing"><w:name w:val="Own Spacing"/>' +
+          '<w:pPr><w:spacing w:before="120"/></w:pPr></w:style>',
+      }),
+    )
+    // a style without its own spacing must stay attribute-less so docDefaults
+    // (typically w:after="160") keeps applying
+    const saved = await saveWithUpsert(parsed, [
+      { styleId: 'NoSpacing', type: 'paragraph', name: 'No Spacing', pPr: { align: 'center' } },
+      {
+        styleId: 'OwnSpacing',
+        type: 'paragraph',
+        name: 'Own Spacing',
+        pPr: { spaceAfterTwips: 0 },
+      },
+    ])
+    const xml = await stylesXmlOf(saved)
+    const noSpacing = /<w:style [^>]*w:styleId="NoSpacing"[\s\S]*?<\/w:style>/.exec(xml)![0]
+    expect(noSpacing).not.toContain('<w:spacing')
+    expect(noSpacing).toContain('<w:jc w:val="center"/>')
+    // an explicit zero is Word-legitimate: the user asked for no spacing
+    const ownSpacing = /<w:style [^>]*w:styleId="OwnSpacing"[\s\S]*?<\/w:style>/.exec(xml)![0]
+    expect(ownSpacing).toContain('<w:spacing w:before="120" w:after="0"/>')
+  })
+
+  it('modifying one spacing attribute keeps the other and unmodeled twins', async () => {
+    const parsed = await openRichDoc()
+    const saved = await saveWithUpsert(parsed, [
+      { styleId: 'Rich', type: 'paragraph', name: 'Rich', pPr: { spaceAfterTwips: 200 } },
+    ])
+    const rich = /<w:style [^>]*w:styleId="Rich"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(rich).toContain('<w:spacing w:before="240" w:after="200" w:beforeAutospacing="0"/>')
+  })
+
+  it('built-ins lose w:customStyle, customs gain it; the rest of the tag is untouched', async () => {
+    const parsed = await parseDocx(
+      await buildDocx({
+        bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+        extraStylesXml:
+          '<w:style w:type="paragraph" w:customStyle="1" w:styleId="Marked"><w:name w:val="Marked"/></w:style>',
+      }),
+    )
+    const saved = await saveWithUpsert(parsed, [
+      {
+        styleId: 'Heading1',
+        type: 'paragraph',
+        name: 'heading 1',
+        builtin: true,
+        rPr: { bold: true },
+      },
+      { styleId: 'Marked', type: 'paragraph', name: 'Marked', rPr: { italic: true } },
+    ])
+    const xml = await stylesXmlOf(saved)
+    const heading1 = /<w:style [^>]*w:styleId="Heading1"[\s\S]*?<\/w:style>/.exec(xml)![0]
+    expect(heading1).not.toContain('w:customStyle')
+    // the default Heading1 element keeps its authored opening tag bytes
+    expect(heading1.startsWith('<w:style w:type="paragraph" w:styleId="Heading1">')).toBe(true)
+    expect(heading1).toContain('<w:b/>')
+    const marked = /<w:style [^>]*w:styleId="Marked"[\s\S]*?<\/w:style>/.exec(xml)![0]
+    expect(marked).toContain('w:customStyle="1"')
   })
 })
 
