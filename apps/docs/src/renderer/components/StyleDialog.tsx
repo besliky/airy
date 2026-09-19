@@ -23,7 +23,9 @@ const ptToTwips = (pt: number) => Math.round(pt * TWIPS_PER_PT)
 const twipsToPt = (twips: number | undefined) =>
   twips === undefined ? 0 : Math.round((twips / TWIPS_PER_PT) * 10) / 10
 
-/** styles Word treats as built-in: the upsert must not mark them w:customStyle */
+/** id-pattern fallback for styles the parser has no definition for: the
+ *  upsert must not mark Normal|HeadingN custom (the parser's missing-
+ *  w:customStyle flag covers every other built-in, BUG-1022) */
 function isBuiltinStyleId(styleId: string): boolean {
   return /^(Normal|Heading[1-9])$/i.test(styleId)
 }
@@ -156,7 +158,9 @@ export function styleUpsertFromEdits(
     styleId,
     type: 'paragraph',
     name: edits.name.trim() || info?.name || styleId,
-    ...(isBuiltinStyleId(styleId) ? { builtin: true } : {}),
+    // BUG-1022: the parser flags built-ins by their missing w:customStyle (any
+    // definition, not just Normal|HeadingN); the id pattern stays as fallback
+    ...(info?.builtin || isBuiltinStyleId(styleId) ? { builtin: true } : {}),
     rPr,
     pPr,
   }

@@ -44,6 +44,42 @@ const BUILT_IN_PARA_DEFAULTS: Pick<
   'spaceAfterTwips' | 'lineRawTwips' | 'lineRule' | 'lineSpacing'
 > = { spaceAfterTwips: 160, lineRawTwips: 276, lineRule: 'auto', lineSpacing: 1.15 }
 
+/** Word built-in style names/ids beyond what headingLevel already detects,
+ * lowercased with spaces stripped (matches both "List Paragraph" and
+ * "ListParagraph"). A definition without w:customStyle="1" whose name or id
+ * matches one of these is built-in, so a Modify-style upsert must not mark
+ * it w:customStyle (BUG-1022: Title/Subtitle/Quote/ListParagraph/TOC1-9/…
+ * used to flip to custom on modify). */
+const BUILTIN_STYLE_KEYS = new Set([
+  'normal',
+  'title',
+  'subtitle',
+  'quote',
+  'intensequote',
+  'listparagraph',
+  'nospacing',
+  'bodytext',
+  'bodytextindent',
+  'normalweb',
+  'tocheading',
+  'header',
+  'footer',
+  'caption',
+  'captionfigure',
+  'captiontable',
+  'captionequation',
+  'footnotetext',
+  'endnotetext',
+  'footnotereference',
+  'endnotereference',
+  'hyperlink',
+  'followedhyperlink',
+])
+for (let i = 1; i <= 9; i++) {
+  BUILTIN_STYLE_KEYS.add(`heading${i}`)
+  BUILTIN_STYLE_KEYS.add(`toc${i}`)
+}
+
 export async function parseStyles(
   zip: JSZip,
   theme?: ThemeColors | null,
@@ -153,6 +189,8 @@ export async function parseStyles(
     const styleId = attrs['w:styleId']
     if (!styleId) continue
     const name = attrsOf(findChild(styleNode, 'w:name') ?? {})['w:val'] ?? styleId
+    const normId = styleId.toLowerCase().replace(/\s+/g, '')
+    const normName = name.toLowerCase().replace(/\s+/g, '')
     let headingLevel: number | undefined
     if (type === 'paragraph') {
       const nameMatch = /^heading\s*([1-9])$/i.exec(name) ?? /^Heading([1-9])$/.exec(styleId)
@@ -201,6 +239,11 @@ export async function parseStyles(
       tableDisplay: type === 'table' ? tableStyleDisplayOf(styleNode, theme) : undefined,
       numPr,
       isDefault: attrs['w:default'] === '1' || attrs['w:default'] === 'true' ? true : undefined,
+      builtin:
+        attrs['w:customStyle'] !== '1' &&
+        (BUILTIN_STYLE_KEYS.has(normId) || BUILTIN_STYLE_KEYS.has(normName))
+          ? true
+          : undefined,
     })
   }
 
