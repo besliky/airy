@@ -57,10 +57,18 @@ export function createQuitFlow(): QuitFlow {
     closeDecision(liveWindows) {
       if (quitting) {
         // app-wide quit: one write at the first confirmed close keeps every
-        // still-registered window's file-backed tabs for the next launch
+        // still-registered window's file-backed tabs for the next launch.
+        // No skipStaged here (BUG-1105): other windows' guards may still be
+        // pending, and stripping their never-saved tabs now would lose the
+        // crash-restore safety net for documents whose windows are still
+        // live — a cancelled guard would leave unsaved untitled work both
+        // unrestorable and purged as orphans on the next launch. Staged
+        // files of windows that DO confirm are deleted by their own close
+        // before this write runs, and restore prunes nonexistent paths
+        // anyway.
         if (quitSessionPersisted) return { persist: false, skipStaged: false, excludeClosing: false }
         quitSessionPersisted = true
-        return { persist: true, skipStaged: true, excludeClosing: false }
+        return { persist: true, skipStaged: false, excludeClosing: false }
       }
       if (liveWindows > 1) {
         // ordinary close of one of several windows: the survivors keep their

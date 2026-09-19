@@ -25,12 +25,16 @@ describe('createQuitFlow', () => {
     })
   })
 
-  it('a quit persists exactly once, at the first confirmed close', () => {
+  it('a quit persists exactly once, at the first confirmed close, without skipStaged', () => {
     const flow = createQuitFlow()
     flow.begin()
     expect(flow.quitting).toBe(true)
-    // first confirmed window close writes the quit snapshot...
-    expect(flow.closeDecision(3)).toEqual({ persist: true, skipStaged: true, excludeClosing: false })
+    // first confirmed window close writes the quit snapshot — skipStaged stays
+    // OFF (BUG-1105): windows whose dirty guards are still pending keep their
+    // never-saved tabs restorable in case the quit is cancelled or the app
+    // crashes mid-quit; the confirming window's staged files are already
+    // deleted and simply prune away on the next restore
+    expect(flow.closeDecision(3)).toEqual({ persist: true, skipStaged: false, excludeClosing: false })
     // ...later confirmed closes must not shrink it (their windows are gone)
     expect(flow.closeDecision(2)).toEqual({ persist: false, skipStaged: false, excludeClosing: false })
   })

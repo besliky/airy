@@ -790,11 +790,16 @@ function persistSessionState(skipStaged = false, exclude?: ShellWindowEntry): vo
   }
 }
 
-/** Persist the open-tab set (debounced — every open/close/reorder/activation fires this) */
+/** Persist the open-tab set (debounced — every open/close/reorder/activation fires this).
+ *  No-op while quitting (BUG-1105): the quit writes ONE snapshot at the first
+ *  confirmed window close; a debounced write firing later — e.g. from a dirty
+ *  guard activating a tab in another window — would re-serialize from the
+ *  surviving windows only and drop the already-closed ones from the session. */
 function scheduleSessionSave(): void {
   if (sessionSaveTimer) clearTimeout(sessionSaveTimer)
   sessionSaveTimer = setTimeout(() => {
     sessionSaveTimer = null
+    if (quitFlow.quitting) return
     persistSessionState()
   }, 800)
 }
