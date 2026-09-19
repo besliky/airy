@@ -1,7 +1,17 @@
 // Unit tests for the headless slides session (PAR-001): open/read formats,
 // insert_content (text box + existing-shape text replace), save round-trips,
 // byte preservation, mtime fencing, save-target ownership and confinement.
-import { mkdtemp, readFile, rm, writeFile, rename, stat, utimes } from 'node:fs/promises'
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+  rename,
+  stat,
+  utimes,
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -290,13 +300,28 @@ describe('slides session save fences', () => {
 
   it('refuses to save when the pinned workspace root disappeared', async () => {
     const nested = join(root, 'nested')
-    const { mkdir } = await import('node:fs/promises')
     await mkdir(nested)
     const nestedDeck = join(nested, 'deck.pptx')
     await writeFile(nestedDeck, fixture)
     const session = await SlidesSession.open(nestedDeck, nested)
     await rename(nested, join(root, 'renamed'))
     await expect(session.save()).rejects.toThrow(/no longer exists/)
+  })
+
+  it('cleans the tmp dotfile when the save fails after writing it (BUG-1111)', async () => {
+    const session = await openSession()
+    session.insertContent('Edit', { slide: 0 })
+    // a non-empty DIRECTORY at the target: overwrite consent passes the
+    // guard, but the promote's rename onto a non-empty directory fails
+    // AFTER the `.<name>.airy-<uuid>` dotfile was written (zero-edit saves
+    // write it directly, edited saves stream it via savePptxToFile) — the
+    // failure must not orphan that dotfile next to the target forever
+    const target = join(root, 'blocked.pptx')
+    await mkdir(target)
+    await writeFile(join(target, 'keep'), 'contents')
+    await expect(session.save(target, { overwrite: true })).rejects.toThrow()
+    const leftovers = (await readdir(root)).filter((name) => name.startsWith('.blocked.pptx.airy-'))
+    expect(leftovers).toEqual([])
   })
 
   it('keeps saves confined to the workspace root', async () => {

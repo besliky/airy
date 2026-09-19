@@ -15,7 +15,12 @@ import { copyFile, mkdtemp, rename, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 
-import { saveTargetExistsError, FencingError, assertSaveTargetFree } from '../docx/session.js'
+import {
+  saveTargetExistsError,
+  FencingError,
+  assertSaveTargetFree,
+  withSaveTmpCleanup,
+} from '../docx/session.js'
 import { assertWorkspaceRootExists, resolveConfined, workspaceRoot } from '../docx/paths.js'
 import {
   convertViaSoffice,
@@ -636,13 +641,14 @@ export class XlsxSession {
         extension: 'ods',
         outDir,
       })
-      // 3. atomic promote onto the original .ods
-      const tmpTarget = join(
-        dirname(this.originPath),
-        `.${basename(this.originPath)}.airy-${randomUUID()}`,
-      )
-      await copyFile(output, tmpTarget)
-      await rename(tmpTarget, this.originPath)
+      // 3. atomic promote onto the original .ods (local capture: the null
+      // guard at the top of saveToOrigin does not reach inside the closure)
+      const originPath = this.originPath
+      const tmpTarget = join(dirname(originPath), `.${basename(originPath)}.airy-${randomUUID()}`)
+      await withSaveTmpCleanup(tmpTarget, async () => {
+        await copyFile(output, tmpTarget)
+        await rename(tmpTarget, originPath)
+      })
       const bytes = await statOrNull(this.originPath)
       this.edits.length = 0
       this.savedPath = this.originPath
