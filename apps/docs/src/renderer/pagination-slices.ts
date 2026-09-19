@@ -507,7 +507,12 @@ export function computeSectionedSlicesF2(
     const block = blocks[bi]
     curBi = bi
     curBlockNotes = (block.footnoteExtraPx ?? 0) > 0
-    if (curBlockNotes) pageNoteSepPx = FOOTNOTE_SEPARATOR_H
+    // BUG-1210: charge, never overwrite — a note-bearing block arriving on a
+    // page that opened with a spill charge used to wipe the continuation
+    // budget (plain assignment of the separator height), handing body room
+    // back that Word's grown footnote area had already eaten. The separator
+    // strip is subsumed by a larger spill charge (max), never the reverse.
+    if (curBlockNotes) pageNoteSepPx = Math.max(pageNoteSepPx, FOOTNOTE_SEPARATOR_H)
 
     // section change
     const bSection = block.section ?? curSection

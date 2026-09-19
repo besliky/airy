@@ -1379,6 +1379,27 @@ describe('computeSectionedSlicesF2 — line-level pagination', () => {
     // next page capacity 200 - 100 = 100: two 40px blocks fit, the third turns
     expect(slices.map((s) => s.start)).toEqual([0, 150, 230])
   })
+
+  // BUG-1210: the spill charge must survive a note-bearing block arriving on
+  // the charged page — the per-block separator assignment used to overwrite
+  // the continuation budget (plain = instead of max), giving the page back up
+  // to half its body that the spilled note's continuation had already eaten
+  it('a note-bearing block on the charged page does not wipe the spill charge', () => {
+    // page 1 (capacity 200 - 16 separator = 184): spiller text 150 placed,
+    // note 100 spills 66 (100 - 34 leftover); page 2 opens charged 66
+    const spiller = block(0, 250, { footnoteExtraPx: 100 })
+    const p1 = block(150, 60) // plain block turns the page at 150
+    // note-bearing block fits on the charged page (60 used + 70 = 130):
+    // BUG-1210 regression wiped the 66px charge down to the 16px separator
+    const n1 = block(210, 60, { footnoteExtraPx: 10 })
+    const p2 = block(270, 50)
+    const p3 = block(320, 50)
+    const slices = computeSectionedSlicesF2([spiller, p1, n1, p2, p3], geoms1, 370)
+    // charged page capacity 200 - 66 = 134: p1 + n1 = 130 fit, p2 (would need
+    // 180) turns at 270; with the wiped charge p2 stayed until 320
+    expect(slices.map((s) => s.start)).toEqual([0, 150, 270])
+    expect(slices[slices.length - 1].end).toBe(370)
+  })
 })
 
 describe('computeSectionedSlicesF2 — mid-paragraph page breaks (innerBreaks)', () => {
