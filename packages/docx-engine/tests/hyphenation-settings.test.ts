@@ -103,6 +103,65 @@ describe('SaveOptions.hyphenation (Layout → Hyphenation authoring)', () => {
   })
 })
 
+describe('hyphenation switches land at their CT_Settings sequence slot (BUG-1018)', () => {
+  // a realistic Word settings part: zoom/proofing/defaultTabStop ahead of the
+  // hyphenation slot, characterSpacingControl/compat/rsids after it
+  const RICH_SETTINGS =
+    '<w:zoom w:percent="100"/>' +
+    '<w:proofState w:spelling="clean" w:grammar="clean"/>' +
+    '<w:defaultTabStop w:val="720"/>' +
+    '<w:characterSpacingControl w:val="doNotCompress"/>' +
+    '<w:compat/>' +
+    '<w:rsids/>' +
+    '<w:themeFontLang w:val="en-US"/>' +
+    '<w:clrSchemeMapping w:val="lightColor"/>' +
+    '<w:decimalSymbol w:val="."/>' +
+    '<w:listSeparator w:val=","/>'
+
+  it('autoHyphenation goes after defaultTabStop, before the settings tail', async () => {
+    const doc = await parseDocx(await settingsDocx(RICH_SETTINGS))
+    const xml = await settingsOf(
+      await saveDocx(doc, originalOrder(doc), { hyphenation: { auto: true } }),
+    )
+    // inserted before the first tail element (characterSpacingControl)…
+    expect(xml).toContain(
+      '<w:defaultTabStop w:val="720"/><w:autoHyphenation/><w:characterSpacingControl',
+    )
+    // …not at the root's start ahead of w:zoom/w:proofState
+    expect(xml).not.toMatch(/<w:settings[^>]*><w:autoHyphenation/)
+  })
+
+  it('hyphenationZone follows the flag and stays ahead of the tail', async () => {
+    const doc = await parseDocx(await settingsDocx(RICH_SETTINGS))
+    const xml = await settingsOf(
+      await saveDocx(doc, originalOrder(doc), { hyphenation: { auto: true, zoneTwips: 425 } }),
+    )
+    expect(xml).toContain(
+      '<w:defaultTabStop w:val="720"/><w:autoHyphenation/><w:hyphenationZone w:val="425"/><w:characterSpacingControl',
+    )
+  })
+
+  it('an existing consecutiveHyphenLimit anchors the flag ahead of itself', async () => {
+    const doc = await parseDocx(
+      await settingsDocx(
+        '<w:defaultTabStop w:val="720"/><w:consecutiveHyphenLimit w:val="2"/><w:compat/>',
+      ),
+    )
+    const xml = await settingsOf(
+      await saveDocx(doc, originalOrder(doc), { hyphenation: { auto: true } }),
+    )
+    expect(xml).toContain('<w:autoHyphenation/><w:consecutiveHyphenLimit w:val="2"/>')
+  })
+
+  it('settings without any tail element append the switches at the end', async () => {
+    const doc = await parseDocx(await settingsDocx('<w:zoom w:percent="100"/>'))
+    const xml = await settingsOf(
+      await saveDocx(doc, originalOrder(doc), { hyphenation: { auto: true } }),
+    )
+    expect(xml).toContain('<w:zoom w:percent="100"/><w:autoHyphenation/></w:settings>')
+  })
+})
+
 describe('soft hyphen round-trip (w:softHyphen)', () => {
   it('a generated paragraph keeps U+00AD as <w:softHyphen/> and re-parses', async () => {
     const doc = await parseDocx(await buildDocx({ bodyXml: '<w:p><w:r><w:t>a</w:t></w:r></w:p>' }))

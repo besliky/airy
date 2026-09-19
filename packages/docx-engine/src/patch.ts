@@ -2521,9 +2521,89 @@ function applyNoteNumbering(
 }
 
 /**
+ * CT_Settings children that FOLLOW the hyphenation switches
+ * (autoHyphenation, consecutiveHyphenLimit, hyphenationZone) in the schema
+ * sequence (ECMA-376 §17.15.1.78). A new hyphenation switch must land after
+ * w:zoom/w:view/w:defaultTabStop and before this tail — inserting it at the
+ * root's start used to put it before w:zoom/w:view and risk Word's
+ * sequence-strict settings reader rejecting the part (BUG-1018).
+ */
+const SETTINGS_TAGS_AFTER_HYPHENATION = [
+  'w:doNotHyphenateCaps',
+  'w:showEnvelope',
+  'w:summaryLength',
+  'w:clickAndTypeStyle',
+  'w:defaultTableStyle',
+  'w:evenAndOddHeaders',
+  'w:bookFoldRevPrinting',
+  'w:bookFoldPrinting',
+  'w:bookFoldPrintingSheets',
+  'w:drawingGridHorizontalSpacing',
+  'w:drawingGridVerticalSpacing',
+  'w:doNotUseMarginsForDrawingGridOrigin',
+  'w:drawingGridHorizontalOrigin',
+  'w:drawingGridVerticalOrigin',
+  'w:doNotShadeFormData',
+  'w:noPunctuationKerning',
+  'w:characterSpacingControl',
+  'w:printTwoOnOne',
+  'w:strictFirstAndLastChars',
+  'w:noLineBreaksAfter',
+  'w:noLineBreaksBefore',
+  'w:savePreviewPicture',
+  'w:doNotValidateAgainstSchema',
+  'w:saveInvalidXml',
+  'w:ignoreMixedContent',
+  'w:alwaysShowPlaceholderText',
+  'w:doNotDemarcateInvalidXml',
+  'w:saveXmlDataOnly',
+  'w:useXSLTWhenSaving',
+  'w:saveThroughXslt',
+  'w:showXMLTags',
+  'w:alwaysMergeEmptyNamespace',
+  'w:updateFields',
+  'w:hdrShapeDefaults',
+  'w:footnotePr',
+  'w:endnotePr',
+  'w:compat',
+  'w:rsids',
+  'w:mathPr',
+  'w:uiCompat97To2003',
+  'w:attachedSchema',
+  'w:themeFontLang',
+  'w:clrSchemeMapping',
+  'w:doNotIncludeSubdocsInStats',
+  'w:doNotAutoCompressPictures',
+  'w:forceUpgrade',
+  'w:captions',
+  'w:readModeInkLockDown',
+  'w:smartTagType',
+  'w:shapeDefaults',
+  'w:doNotEmbedSmartTags',
+  'w:decimalSymbol',
+  'w:listSeparator',
+]
+
+/**
+ * Insert a settings.xml child at a CT_Settings sequence-valid position: right
+ * before the first of `afterTags` present in the part (the elements that must
+ * follow the inserted tag), or — when the settings carry none of them — at the
+ * end, which is then the schema-valid slot relative to what exists.
+ */
+function insertSettingsChild(xml: string, tagXml: string, afterTags: string[]): string {
+  const anchor = new RegExp(
+    afterTags.map((t) => `<${t}(?:\\s[^>]*)?/>|<${t}(?:\\s[^>]*)?>`).join('|'),
+  ).exec(xml)
+  if (anchor) return xml.slice(0, anchor.index) + tagXml + xml.slice(anchor.index)
+  return xml.replace(/<\/w:settings>\s*$/, `${tagXml}</w:settings>`)
+}
+
+/**
  * Hyphenation switches (settings.xml): <w:autoHyphenation/> on/off and the
- * <w:hyphenationZone> (twips; null removes). The zone follows autoHyphenation
- * in CT_Settings, so it is inserted right after it (or after the root).
+ * <w:hyphenationZone> (twips; null removes it). Both land at their
+ * CT_Settings sequence slot — the zone follows autoHyphenation/consecutive
+ * HyphenLimit, the flag precedes them (BUG-1018: both used to be inserted at
+ * the root's start, ahead of w:zoom/w:view).
  */
 function applyHyphenationSettings(
   xml: string,
@@ -2532,16 +2612,21 @@ function applyHyphenationSettings(
   let out = xml
   if (opts.auto !== undefined) {
     out = out.replace(/<w:autoHyphenation[^>]*\/>/, '')
-    if (opts.auto) out = out.replace(/(<w:settings[^>]*>)/, '$1<w:autoHyphenation/>')
+    if (opts.auto)
+      out = insertSettingsChild(out, '<w:autoHyphenation/>', [
+        'w:consecutiveHyphenLimit',
+        'w:hyphenationZone',
+        ...SETTINGS_TAGS_AFTER_HYPHENATION,
+      ])
   }
   if (opts.zoneTwips !== undefined) {
     out = out.replace(/<w:hyphenationZone[^>]*\/>/, '')
-    if (opts.zoneTwips !== null) {
-      const tag = `<w:hyphenationZone w:val="${opts.zoneTwips}"/>`
-      out = /<w:autoHyphenation[^>]*\/>/.test(out)
-        ? out.replace(/(<w:autoHyphenation[^>]*\/>)/, `$1${tag}`)
-        : out.replace(/(<w:settings[^>]*>)/, `$1${tag}`)
-    }
+    if (opts.zoneTwips !== null)
+      out = insertSettingsChild(
+        out,
+        `<w:hyphenationZone w:val="${opts.zoneTwips}"/>`,
+        SETTINGS_TAGS_AFTER_HYPHENATION,
+      )
   }
   return out
 }
