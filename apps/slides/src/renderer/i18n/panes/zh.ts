@@ -246,6 +246,8 @@ export const zh = {
   paneInsetT: '上边距',
   paneInsetB: '下边距',
   paneTextWrap: '形状中的文字自动换行',
+  paneTextboxColumns: '分栏',
+  paneTextboxColSpacing: '栏间距',
 
   panePresenterEndShow: '结束放映',
   panePresenterEndTip: '结束放映（Esc）',

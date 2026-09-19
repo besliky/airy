@@ -249,6 +249,8 @@ export const pl = {
   paneInsetT: 'Górny margines',
   paneInsetB: 'Dolny margines',
   paneTextWrap: 'Zawijaj tekst w kształcie',
+  paneTextboxColumns: 'Kolumny',
+  paneTextboxColSpacing: 'Odstęp',
 
   panePresenterEndShow: 'Zakończ pokaz',
   panePresenterEndTip: 'Zakończ pokaz (Esc)',

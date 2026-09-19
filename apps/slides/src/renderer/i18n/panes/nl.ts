@@ -251,6 +251,8 @@ export const nl = {
   paneInsetT: 'Bovenmarge',
   paneInsetB: 'Ondermarge',
   paneTextWrap: 'Tekst in vorm laten teruglopen',
+  paneTextboxColumns: 'Kolommen',
+  paneTextboxColSpacing: 'Afstand',
 
   panePresenterEndShow: 'Voorstelling beëindigen',
   panePresenterEndTip: 'Voorstelling beëindigen (Esc)',

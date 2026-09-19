@@ -490,7 +490,7 @@ interface Props {
   onImageFill?: (sourceId: string) => void
   /** Text box vertical alignment */
   onTextAnchor?: (sourceId: string, anchor: 'top' | 'middle' | 'bottom') => void
-  /** Text box body properties (direction / autofit / internal margins / wrap) */
+  /** Text box body properties (direction / autofit / internal margins / wrap / columns) */
   onTextBodyProps?: (
     sourceId: string,
     props: {
@@ -498,6 +498,10 @@ interface Props {
       autofit?: 'none' | 'shrink' | 'resize'
       insets?: Partial<{ l: number; t: number; r: number; b: number }>
       wrap?: boolean
+      /** Text columns 1-13; 1 removes the column attributes */
+      numCol?: number
+      /** Column gap (EMU) */
+      spcCol?: number
     },
   ) => void
   /** Shape/picture effects (shadow / glow / soft edge); null clears an effect */
@@ -2408,6 +2412,40 @@ export function FormatPane({
                     />
                     <span>{t('paneTextWrap')}</span>
                   </label>
+                  <div className="fp-prow">
+                    <span>{t('paneTextboxColumns')}</span>
+                    <Dropdown
+                      value={String(shape.text.numCol ?? 1)}
+                      ariaLabel={t('paneTextboxColumns')}
+                      options={[1, 2, 3, 4].map((n) => ({
+                        value: String(n),
+                        label: String(n),
+                      }))}
+                      onPick={(v) => {
+                        const n = Number(v)
+                        onTextBodyProps(node.sourceId, {
+                          numCol: n,
+                          // PowerPoint's multi-column presets carry a 0.5" default gap
+                          ...(n > 1 && !(shape.text!.spcCol ?? 0) ? { spcCol: 457200 } : {}),
+                        })
+                      }}
+                    />
+                  </div>
+                  {(shape.text.numCol ?? 1) > 1 &&
+                    spinRow(
+                      t('paneTextboxColSpacing'),
+                      fmtCm(shape.text!.spcCol ?? 0),
+                      (raw) => {
+                        const v = parseFloat(raw)
+                        if (!Number.isNaN(v) && v >= 0)
+                          onTextBodyProps(node.sourceId, { spcCol: Math.round(v * 360000) })
+                      },
+                      (dir) => {
+                        const curCm = (shape.text!.spcCol ?? 0) / pxPerCm
+                        const next = Math.max(0, Math.round((curCm + dir * 0.1) * 100) / 100)
+                        onTextBodyProps(node.sourceId, { spcCol: Math.round(next * 360000) })
+                      },
+                    )}
                 </>
               )}
             </>

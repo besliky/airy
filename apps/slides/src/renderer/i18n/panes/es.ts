@@ -249,6 +249,8 @@ export const es = {
   paneInsetT: 'Margen superior',
   paneInsetB: 'Margen inferior',
   paneTextWrap: 'Ajustar texto en la forma',
+  paneTextboxColumns: 'Columnas',
+  paneTextboxColSpacing: 'Espaciado',
 
   panePresenterEndShow: 'Finalizar presentación',
   panePresenterEndTip: 'Finalizar la presentación (Esc)',

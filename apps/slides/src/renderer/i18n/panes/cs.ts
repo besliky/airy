@@ -248,6 +248,8 @@ export const cs = {
   paneInsetT: 'Horní okraj',
   paneInsetB: 'Dolní okraj',
   paneTextWrap: 'Zalomit text v obrazci',
+  paneTextboxColumns: 'Sloupce',
+  paneTextboxColSpacing: 'Mezera',
 
   panePresenterEndShow: 'Ukončit prezentaci',
   panePresenterEndTip: 'Ukončit prezentaci (Esc)',

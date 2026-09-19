@@ -1328,6 +1328,10 @@ export interface SlidesApi {
       /** Internal margins (EMU); only the provided sides are written */
       insets?: Partial<{ l: number; t: number; r: number; b: number }>
       wrap?: boolean
+      /** Text columns 1-13; 1 removes numCol/spcCol */
+      numCol?: number
+      /** Column gap (EMU) */
+      spcCol?: number
     }
   }) => Promise<RenderSlide | null>
   /** External clipboard content probe (internal/slide = last copy came from this app) */

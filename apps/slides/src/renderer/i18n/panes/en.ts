@@ -249,6 +249,8 @@ export const en = {
   paneInsetT: 'Top margin',
   paneInsetB: 'Bottom margin',
   paneTextWrap: 'Wrap text in shape',
+  paneTextboxColumns: 'Columns',
+  paneTextboxColSpacing: 'Spacing',
 
   panePresenterEndShow: 'End Show',
   panePresenterEndTip: 'End show (Esc)',

@@ -250,6 +250,8 @@ export const pt = {
   paneInsetT: 'Margem superior',
   paneInsetB: 'Margem inferior',
   paneTextWrap: 'Quebrar texto na forma',
+  paneTextboxColumns: 'Colunas',
+  paneTextboxColSpacing: 'Espaçamento',
 
   panePresenterEndShow: 'Finalizar Apresentação',
   panePresenterEndTip: 'Finalizar a apresentação (Esc)',

@@ -247,6 +247,8 @@ export const he = {
   paneInsetT: 'שוליים עליונים',
   paneInsetB: 'שוליים תחתונים',
   paneTextWrap: 'גלישת טקסט בצורה',
+  paneTextboxColumns: 'עמודות',
+  paneTextboxColSpacing: 'מרווח',
 
   panePresenterEndShow: 'סיים הצגה',
   panePresenterEndTip: 'סיים את ההצגה (Esc)',

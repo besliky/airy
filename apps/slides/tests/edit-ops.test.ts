@@ -124,6 +124,36 @@ describe('op validation (guided errors)', () => {
     expect(r.failures![0]!.error).toContain('finite number')
   })
 
+  it('setTextBodyProps validates the column count and gap', () => {
+    const bad = runTxn(opened, {
+      ops: [{ op: 'setTextBodyProps', target: { slide: 0, el: titleId }, props: { numCol: 0 } }],
+    })
+    expect(bad.applied).toBe(false)
+    expect(bad.failures![0]!.error).toContain('"numCol" must be an integer 1-13')
+    const badGap = runTxn(opened, {
+      ops: [
+        {
+          op: 'setTextBodyProps',
+          target: { slide: 0, el: titleId },
+          props: { numCol: 2, spcCol: -1 },
+        },
+      ],
+    })
+    expect(badGap.applied).toBe(false)
+    expect(badGap.failures![0]!.error).toContain('"spcCol" must be a column gap in EMU')
+    const ok = runTxn(opened, {
+      ops: [
+        {
+          op: 'setTextBodyProps',
+          target: { slide: 0, el: titleId },
+          props: { numCol: 2, spcCol: 457200 },
+        },
+      ],
+    })
+    expect(ok.applied).toBe(true)
+    expect((els().find((x) => x.id === titleId) as TextElement).text!.numCol).toBe(2)
+  })
+
   it('setFont rejects a non-hex color', () => {
     const r = runTxn(opened, {
       ops: [{ op: 'setFont', target: { slide: 0, el: titleId }, font: { color: 'red' } }],

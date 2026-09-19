@@ -248,6 +248,8 @@ export const ko = {
   paneInsetT: '위쪽 여백',
   paneInsetB: '아래쪽 여백',
   paneTextWrap: '도형의 텍스트 줄 바꿈',
+  paneTextboxColumns: '열',
+  paneTextboxColSpacing: '열 간격',
 
   panePresenterEndShow: '쇼 마침',
   panePresenterEndTip: '쇼 마침(Esc)',

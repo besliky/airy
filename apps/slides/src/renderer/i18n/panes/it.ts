@@ -251,6 +251,8 @@ export const it = {
   paneInsetT: 'Margine superiore',
   paneInsetB: 'Margine inferiore',
   paneTextWrap: 'Testo a capo nella forma',
+  paneTextboxColumns: 'Colonne',
+  paneTextboxColSpacing: 'Spaziatura',
 
   panePresenterEndShow: 'Fine presentazione',
   panePresenterEndTip: 'Termina la presentazione (Esc)',

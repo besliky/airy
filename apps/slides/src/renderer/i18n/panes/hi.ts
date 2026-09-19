@@ -249,6 +249,8 @@ export const hi = {
   paneInsetT: 'ऊपरी हाशिया',
   paneInsetB: 'निचला हाशिया',
   paneTextWrap: 'आकृति में पाठ लपेटें',
+  paneTextboxColumns: 'कॉलम',
+  paneTextboxColSpacing: 'अंतराल',
 
   panePresenterEndShow: 'शो समाप्त करें',
   panePresenterEndTip: 'शो समाप्त करें (Esc)',

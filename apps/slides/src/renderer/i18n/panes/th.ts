@@ -248,6 +248,8 @@ export const th = {
   paneInsetT: 'ระยะขอบบน',
   paneInsetB: 'ระยะขอบล่าง',
   paneTextWrap: 'ตัดข้อความในรูปร่าง',
+  paneTextboxColumns: 'คอลัมน์',
+  paneTextboxColSpacing: 'ระยะห่าง',
 
   panePresenterEndShow: 'จบการนำเสนอ',
   panePresenterEndTip: 'จบการนำเสนอ (Esc)',

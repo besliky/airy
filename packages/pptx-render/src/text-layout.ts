@@ -1106,6 +1106,7 @@ export function layoutText(input: TextLayoutInput): RenderTextLayout {
     ...(result.inkBottom ? { inkBottom: result.inkBottom } : {}),
     wrap,
     autofit: body.autofit ?? 'none',
+    ...(numCol > 1 ? { numCol, spcCol: colGapPx } : {}),
     ...(extrusion ? { extrusion } : {}),
     ...(body.txWarp ? { txWarp: body.txWarp } : {}),
   }

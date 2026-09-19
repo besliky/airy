@@ -256,6 +256,10 @@ export interface RenderTextLayout {
    * wordArtVert keeps Latin upright too). vert/vert270: whole-block rotation (lines keep
    * pre-rotation tops/heights; every run carries rotate90/rotate270). */
   vert?: 'eaVert' | 'vert' | 'vert270' | 'wordArtVert'
+  /** bodyPr numCol: the lines flow across N columns (column positions are baked into runs) */
+  numCol?: number
+  /** bodyPr spcCol: gap between the columns (px), surfaced for the format pane */
+  spcCol?: number
   /** WordArt text extrusion: glyphs get offset copies in this color behind them (px) */
   extrusion?: { color: string; dx: number; dy: number }
   /** WordArt envelope warp: the renderer bends glyphs along the preset's curves */

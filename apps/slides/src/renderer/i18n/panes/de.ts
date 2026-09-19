@@ -252,6 +252,8 @@ export const de = {
   paneInsetT: 'Oberer Rand',
   paneInsetB: 'Unterer Rand',
   paneTextWrap: 'Text in Form umbrechen',
+  paneTextboxColumns: 'Spalten',
+  paneTextboxColSpacing: 'Abstand',
 
   panePresenterEndShow: 'Präsentation beenden',
   panePresenterEndTip: 'Präsentation beenden (Esc)',

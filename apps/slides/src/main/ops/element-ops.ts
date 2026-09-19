@@ -498,9 +498,17 @@ register({
   validate(op, ctx) {
     resolveElement(ctx, op)
     const props = op.props as TextBodyPropsPatch | undefined
-    if (!props || (!props.vert && !props.autofit && !props.insets && props.wrap === undefined)) {
+    if (
+      !props ||
+      (!props.vert &&
+        !props.autofit &&
+        !props.insets &&
+        props.wrap === undefined &&
+        props.numCol === undefined &&
+        props.spcCol === undefined)
+    ) {
       throw new GuidedError(
-        'op "setTextBodyProps" needs "props" with at least one of vert/autofit/insets/wrap.',
+        'op "setTextBodyProps" needs "props" with at least one of vert/autofit/insets/wrap/numCol/spcCol.',
       )
     }
     if (props.vert && !['horz', 'eaVert', 'vert', 'vert270', 'wordArtVert'].includes(props.vert)) {
@@ -510,6 +518,22 @@ register({
     }
     if (props.autofit && !['none', 'shrink', 'resize'].includes(props.autofit)) {
       throw new GuidedError('op "setTextBodyProps": "autofit" must be none/shrink/resize.')
+    }
+    if (
+      props.numCol !== undefined &&
+      (!Number.isInteger(props.numCol) || props.numCol < 1 || props.numCol > 13)
+    ) {
+      throw new GuidedError(
+        'op "setTextBodyProps": "numCol" must be an integer 1-13 (PowerPoint\'s column ceiling).',
+      )
+    }
+    if (
+      props.spcCol !== undefined &&
+      (!Number.isFinite(props.spcCol) || props.spcCol < 0 || props.spcCol > 51206400)
+    ) {
+      throw new GuidedError(
+        'op "setTextBodyProps": "spcCol" must be a column gap in EMU (0..51206400).',
+      )
     }
   },
   apply(op, ctx): OpRecord {

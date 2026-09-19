@@ -250,6 +250,8 @@ export const id = {
   paneInsetT: 'Margin atas',
   paneInsetB: 'Margin bawah',
   paneTextWrap: 'Bungkus teks dalam bentuk',
+  paneTextboxColumns: 'Kolom',
+  paneTextboxColSpacing: 'Jarak',
 
   panePresenterEndShow: 'Akhiri Peragaan',
   panePresenterEndTip: 'Akhiri peragaan (Esc)',

@@ -3128,6 +3128,10 @@ export function registerSlidesIpc(): void {
           autofit?: 'none' | 'shrink' | 'resize'
           insets?: Partial<{ l: number; t: number; r: number; b: number }>
           wrap?: boolean
+          /** Text columns 1-13; 1 removes numCol/spcCol */
+          numCol?: number
+          /** Column gap (EMU) */
+          spcCol?: number
         }
       },
     ) => {

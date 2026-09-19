@@ -248,6 +248,8 @@ export const ja = {
   paneInsetT: '上余白',
   paneInsetB: '下余白',
   paneTextWrap: '図形内でテキストを折り返す',
+  paneTextboxColumns: '段組み',
+  paneTextboxColSpacing: '段の間隔',
 
   panePresenterEndShow: 'スライドショーの終了',
   panePresenterEndTip: 'スライドショーを終了（Esc）',

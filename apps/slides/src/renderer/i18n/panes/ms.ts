@@ -250,6 +250,8 @@ export const ms = {
   paneInsetT: 'Jidar atas',
   paneInsetB: 'Jidar bawah',
   paneTextWrap: 'Balut teks dalam bentuk',
+  paneTextboxColumns: 'Lajur',
+  paneTextboxColSpacing: 'Jarak',
 
   panePresenterEndShow: 'Tamatkan Persembahan',
   panePresenterEndTip: 'Tamatkan persembahan (Esc)',

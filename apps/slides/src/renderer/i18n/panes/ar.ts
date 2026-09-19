@@ -248,6 +248,8 @@ export const ar = {
   paneInsetT: 'الهامش العلوي',
   paneInsetB: 'الهامش السفلي',
   paneTextWrap: 'التفاف النص في الشكل',
+  paneTextboxColumns: 'الأعمدة',
+  paneTextboxColSpacing: 'التباعد',
 
   panePresenterEndShow: 'إنهاء العرض',
   panePresenterEndTip: 'إنهاء العرض (Esc)',

@@ -248,6 +248,8 @@ export const ru = {
   paneInsetT: 'Верхнее поле',
   paneInsetB: 'Нижнее поле',
   paneTextWrap: 'Переносить текст в фигуре',
+  paneTextboxColumns: 'Колонки',
+  paneTextboxColSpacing: 'Интервал между колонками',
 
   panePresenterEndShow: 'Завершить показ',
   panePresenterEndTip: 'Завершить показ (Esc)',

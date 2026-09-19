@@ -251,6 +251,8 @@ export const fr = {
   paneInsetT: 'Marge supérieure',
   paneInsetB: 'Marge inférieure',
   paneTextWrap: 'Renvoyer le texte à la ligne dans la forme',
+  paneTextboxColumns: 'Colonnes',
+  paneTextboxColSpacing: 'Espacement',
 
   panePresenterEndShow: 'Arrêter le diaporama',
   panePresenterEndTip: 'Arrêter le diaporama (Échap)',

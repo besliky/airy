@@ -247,6 +247,8 @@ export const zhTW = {
   paneInsetT: '上邊界',
   paneInsetB: '下邊界',
   paneTextWrap: '圖案的文字自動換行',
+  paneTextboxColumns: '欄',
+  paneTextboxColSpacing: '欄間距',
 
   panePresenterEndShow: '結束放映',
   panePresenterEndTip: '結束放映（Esc）',
