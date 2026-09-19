@@ -420,12 +420,15 @@ function effectBehaviorsXml(gen: IdGen, a: SlideAnimation): string {
     case 'fade':
       return show + animEffectFilterXml(gen, target, dur, 'in', 'fade')
     case 'flyIn': {
-      // Both axes always animate (identity formula on the still axis), matching the default shape
+      // Both axes always animate with an identity formula on the still axis,
+      // matching PowerPoint's own fly-in writes. The still axis must be the
+      // identity '#ppt_y'/'#ppt_x' — a bottom-edge formula there turns a pure
+      // From Left/Right entrance into a diagonal one in PowerPoint (BUG-1206).
       const off = flyOffsets(dir)
       return (
         show +
         moveAnimXml(gen, target, dur, 'ppt_x', off.x ?? '#ppt_x', '#ppt_x') +
-        moveAnimXml(gen, target, dur, 'ppt_y', off.y ?? '1+#ppt_h/2', '#ppt_y')
+        moveAnimXml(gen, target, dur, 'ppt_y', off.y ?? '#ppt_y', '#ppt_y')
       )
     }
     case 'wipe':
@@ -523,10 +526,12 @@ function effectBehaviorsXml(gen: IdGen, a: SlideAnimation): string {
     case 'fadeOut':
       return animEffectFilterXml(gen, target, dur, 'out', 'fade') + hideAtEnd
     case 'flyOut': {
+      // Same still-axis identity discipline as flyIn (BUG-1206): flying out
+      // toward a pure left/right edge must not dip below the slide first.
       const off = flyOffsets(dir)
       return (
         moveAnimXml(gen, target, dur, 'ppt_x', '#ppt_x', off.x ?? '#ppt_x') +
-        moveAnimXml(gen, target, dur, 'ppt_y', '#ppt_y', off.y ?? '1+#ppt_h/2') +
+        moveAnimXml(gen, target, dur, 'ppt_y', '#ppt_y', off.y ?? '#ppt_y') +
         hideAtEnd
       )
     }

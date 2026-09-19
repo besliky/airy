@@ -53,6 +53,30 @@ describe('animation direction: serialization', () => {
     expect(xml).toContain('<p:strVal val="1+#ppt_w/2"/></p:val></p:tav>')
   })
 
+  it('keeps purely horizontal fly directions horizontal (still axis animates identity)', () => {
+    // BUG-1206: Fly In/Out From Left/Right move one axis only in PowerPoint;
+    // the still axis must be the identity formula (#ppt_y), not the bottom-edge
+    // '1+#ppt_h/2' — that made the file play a diagonal entrance/exit while the
+    // in-app preview (flyDelta dy=0) played it horizontally.
+    const tavVals = (xml: string, axis: 'ppt_x' | 'ppt_y'): string[] => {
+      const block = [...xml.matchAll(/<p:anim[\s\S]*?<\/p:anim>/g)]
+        .map((m) => m[0])
+        .find((b) => b.includes(`<p:attrName>${axis}</p:attrName>`))!
+      return [...block.matchAll(/<p:strVal val="([^"]*)"\/>/g)].map((m) => m[1]!)
+    }
+    for (const effect of ['flyIn', 'flyOut'] as const) {
+      for (const direction of ['fromLeft', 'fromRight'] as const) {
+        const xml = buildTimingXml([anim({ spid: 4, effect, direction })])
+        expect(tavVals(xml, 'ppt_y'), `${effect}/${direction}`).toEqual(['#ppt_y', '#ppt_y'])
+        const edge = direction === 'fromLeft' ? '0-#ppt_w/2' : '1+#ppt_w/2'
+        // entrance starts off-screen and lands; exit starts in place and leaves
+        expect(tavVals(xml, 'ppt_x'), `${effect}/${direction}`).toEqual(
+          effect === 'flyIn' ? [edge, '#ppt_x'] : ['#ppt_x', edge],
+        )
+      }
+    }
+  })
+
   it('writes wipe travel per direction and split axis variants', () => {
     const xml = buildTimingXml([
       anim({ spid: 4, effect: 'wipe', direction: 'fromLeft' }),
