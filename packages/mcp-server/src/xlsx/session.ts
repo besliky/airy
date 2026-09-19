@@ -15,8 +15,13 @@ import { copyFile, mkdtemp, rename, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 
-import { saveTargetExistsError, FencingError, assertSaveTargetFree } from '../docx/session.js'
-import { resolveConfined, workspaceRoot } from '../docx/paths.js'
+import {
+  saveTargetExistsError,
+  FencingError,
+  assertSaveTargetFree,
+  withSaveTmpCleanup,
+} from '../docx/session.js'
+import { assertWorkspaceRootExists, resolveConfined, workspaceRoot } from '../docx/paths.js'
 import {
   convertViaSoffice,
   findSoffice,
@@ -518,6 +523,11 @@ export class XlsxSession {
    * entry patches, the sidecar reassembles the archive (untouched entries
    * raw-copied byte-identical) and the result lands atomically.
    *
+   * Stale-root refusal: when the pinned workspace root has been moved/renamed
+   * since open, the save fails with StaleWorkspaceRootError (BUG-1103) — the
+   * same guard the docx/line/slides sessions run, so a renamed root yields
+   * the documented refusal instead of a raw ENOENT from the gateway.
+   *
    * Default target: the opened .xlsx; for imported .xls/.ods books a fresh
    * sibling .xlsx next to the original (true legacy output is not supported;
    * format 'origin' refuses for .xls and exports .ods via LibreOffice). A
@@ -530,6 +540,9 @@ export class XlsxSession {
     format: 'xlsx' | 'origin' = 'xlsx',
     options: { overwrite?: boolean } = {},
   ): Promise<XlsxSaveResult> {
+    // a pinned root that vanished (moved/renamed workspace directory) must
+    // fail here, before confinement lets the gateway write anywhere (BUG-1103)
+    await assertWorkspaceRootExists(this.root)
     if (format === 'origin') return this.saveToOrigin()
     const target = resolveConfined(rawPath ?? this.defaultTarget(), this.root)
     await assertSaveTargetFree(target, [this.backingPath, ...this.savedTargets], options.overwrite)
@@ -628,13 +641,14 @@ export class XlsxSession {
         extension: 'ods',
         outDir,
       })
-      // 3. atomic promote onto the original .ods
-      const tmpTarget = join(
-        dirname(this.originPath),
-        `.${basename(this.originPath)}.airy-${randomUUID()}`,
-      )
-      await copyFile(output, tmpTarget)
-      await rename(tmpTarget, this.originPath)
+      // 3. atomic promote onto the original .ods (local capture: the null
+      // guard at the top of saveToOrigin does not reach inside the closure)
+      const originPath = this.originPath
+      const tmpTarget = join(dirname(originPath), `.${basename(originPath)}.airy-${randomUUID()}`)
+      await withSaveTmpCleanup(tmpTarget, async () => {
+        await copyFile(output, tmpTarget)
+        await rename(tmpTarget, originPath)
+      })
       const bytes = await statOrNull(this.originPath)
       this.edits.length = 0
       this.savedPath = this.originPath

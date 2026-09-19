@@ -1706,8 +1706,11 @@ interface SheetsRuntimeConfig {
   rendererFile: string
   /** absolute path to the Rust xlsx-sidecar binary */
   sidecarPath?: string | undefined
-  /** Shell router used to open exported/AI-generated files in a new Airy tab. */
-  openGeneratedPath?: (path: string) => boolean
+  /** Shell router used to open exported/AI-generated files in a new Airy tab;
+   *  the asking view's webContents id rides along so the tab opens in the
+   *  sender's window, not whichever window holds focus (BUG-1107 focus
+   *  routing). */
+  openGeneratedPath?: (path: string, senderWcId?: number) => boolean
   /** Host-owned cross-app document creator (the shell routes docx/pdf/md into
    *  Docs); the asking view's webContents id rides along so the result opens
    *  in the asking window (BUG-1107). */
@@ -1731,9 +1734,9 @@ export function configureSheetsRuntime(config: SheetsRuntimeConfig): void {
 /** After writing an exported/AI-generated file: open it in the right tab
  * (shell) or reveal it in the folder (standalone). Tab-opening failure must
  * not report the write itself as failed — the file is already persisted. */
-function openGeneratedFile(path: string): void {
+function openGeneratedFile(path: string, senderWcId?: number): void {
   try {
-    if (runtime.openGeneratedPath?.(path)) return
+    if (runtime.openGeneratedPath?.(path, senderWcId)) return
   } catch (err) {
     console.warn('[sheets] Failed to open generated file:', err)
   }
@@ -3002,7 +3005,7 @@ export function registerSheetsIpc(): void {
     sessionFor(event)
     const request = workbookExportPdfRequestSchema.parse(input)
     const result = await exportPdf(event, request)
-    if (!result.canceled && result.path) openGeneratedFile(result.path)
+    if (!result.canceled && result.path) openGeneratedFile(result.path, event.sender.id)
     return result
   })
 
@@ -3096,9 +3099,9 @@ export function registerSheetsIpc(): void {
           // UTF-8 BOM so Excel decodes the reopened file correctly (same as exportCsv)
           await atomicWriteFile(
             filePath,
-            Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(request.content, 'utf8')]),
+            Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(request.content, 'utf-8')]),
           )
-          openGeneratedFile(filePath)
+          openGeneratedFile(filePath, event.sender.id)
           return { ok: true, path: filePath }
         }
         if (request.type === 'xlsx') {
@@ -3108,7 +3111,7 @@ export function registerSheetsIpc(): void {
             `${sanitizeGeneratedFileBase(request.title)}.xlsx`,
           )
           await atomicWriteFile(filePath, buffer)
-          openGeneratedFile(filePath)
+          openGeneratedFile(filePath, event.sender.id)
           return { ok: true, path: filePath }
         }
         const create = runtime.createDocument

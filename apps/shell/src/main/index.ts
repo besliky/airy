@@ -325,7 +325,11 @@ configureSheetsRuntime({
   rendererUrl: process.env.SHEETS_RENDERER_URL,
   rendererFile: join(SHEETS_OUT, 'renderer', 'index.html'),
   sidecarPath: SIDECAR_BIN,
-  openGeneratedPath: (path) => openGeneratedDocument(path),
+  // Generated-file opens (exports, AI-created files) resolve the ASKING
+  // tab's window first (BUG-1107 focus routing); without a sender — e.g. a
+  // standalone fallback — the focused window gets the tab.
+  openGeneratedPath: (path, senderWcId) =>
+    openGeneratedDocument(path, managerForSender(senderWcId)),
   // The sheets AI's create_document (docx/pdf/md) funnels into the docs-owned
   // creation flow, like the pdf app below; the sender's webContents id rides
   // along so the result opens in the asking tab's window (BUG-1107).
@@ -335,26 +339,30 @@ configureSlidesRuntime({
   preloadPath: join(SLIDES_OUT, 'preload', 'index.js'),
   rendererDevUrl: process.env.SLIDES_RENDERER_URL,
   rendererFilePath: join(SLIDES_OUT, 'renderer', 'index.html'),
-  openGeneratedPath: (path) => openGeneratedDocument(path),
+  openGeneratedPath: (path, senderWcId) =>
+    openGeneratedDocument(path, managerForSender(senderWcId)),
 })
 configurePdfRuntime({
   preloadPath: join(PDF_OUT, 'preload', 'index.js'),
   rendererUrl: process.env.PDF_RENDERER_URL,
   rendererFile: join(PDF_OUT, 'renderer', 'index.html'),
-  openGeneratedPath: (path) => openGeneratedDocument(path),
+  openGeneratedPath: (path, senderWcId) =>
+    openGeneratedDocument(path, managerForSender(senderWcId)),
   createDocument: (request, senderWcId) => createAiDocument(request, senderWcId),
 })
 configureMarkdownRuntime({
   preloadPath: join(MARKDOWN_OUT, 'preload', 'index.js'),
   rendererUrl: process.env.MARKDOWN_RENDERER_URL,
   rendererFile: join(MARKDOWN_OUT, 'renderer', 'index.html'),
-  openGeneratedPath: (path) => openGeneratedDocument(path),
+  openGeneratedPath: (path, senderWcId) =>
+    openGeneratedDocument(path, managerForSender(senderWcId)),
 })
 configureHtmlRuntime({
   preloadPath: join(HTML_OUT, 'preload', 'index.js'),
   rendererUrl: process.env.HTML_RENDERER_URL,
   rendererFile: join(HTML_OUT, 'renderer', 'index.html'),
-  openGeneratedPath: (path) => openGeneratedDocument(path),
+  openGeneratedPath: (path, senderWcId) =>
+    openGeneratedDocument(path, managerForSender(senderWcId)),
 })
 // privileged-scheme registration is only legal before app ready
 registerHtmlSchemes()

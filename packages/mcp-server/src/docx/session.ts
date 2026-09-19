@@ -223,6 +223,24 @@ export async function promoteNewFileExclusively(tmp: string, target: string): Pr
   await rm(tmp, { force: true })
 }
 
+/**
+ * Run a save's tmp-write + promote with the orphan cleanup the individual
+ * steps lack: when anything between creating the `.<name>.airy-<uuid>`
+ * dotfile and its promote throws (a failed write, a crashed engine stream,
+ * a rejected rename), the dotfile is removed instead of leaking next to the
+ * target forever (BUG-1111). Best-effort — a cleanup failure never masks
+ * the original save error. On success the promote consumed the tmp file
+ * (rename) or removed it (link), so no cleanup runs at all.
+ */
+export async function withSaveTmpCleanup<T>(tmp: string, body: () => Promise<T>): Promise<T> {
+  try {
+    return await body()
+  } catch (e) {
+    await rm(tmp, { force: true }).catch(() => undefined)
+    throw e
+  }
+}
+
 interface FileStamp {
   mtimeMs: number
   size: number
@@ -569,15 +587,17 @@ export class DocxSession {
     // basename, not a '/'-split: on Windows the split leaves the whole path
     // in the temp name and writeFile fails on the colons/backslashes
     const tmp = join(dirname(target), `.${basename(target) || 'doc'}.airy-${randomUUID()}`)
-    await writeFile(tmp, bytes)
-    // a fresh (guarded) target promotes exclusively: a file created between
-    // the guard's stat and this write surfaces the clobber error instead of
-    // being silently replaced; targets this session owns replace by intent
-    if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
-      await rename(tmp, target)
-    } else {
-      await promoteNewFileExclusively(tmp, target)
-    }
+    await withSaveTmpCleanup(tmp, async () => {
+      await writeFile(tmp, bytes)
+      // a fresh (guarded) target promotes exclusively: a file created between
+      // the guard's stat and this write surfaces the clobber error instead of
+      // being silently replaced; targets this session owns replace by intent
+      if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
+        await rename(tmp, target)
+      } else {
+        await promoteNewFileExclusively(tmp, target)
+      }
+    })
 
     // refresh the fence so chained saves keep working
     if (target === this.path) {
@@ -674,12 +694,14 @@ export class DocxSession {
         extension: this.origin.format,
         outDir: workDir,
       })
-      const tmpTarget = join(
-        dirname(this.origin.path),
-        `.${basename(this.origin.path)}.airy-${randomUUID()}`,
-      )
-      await copyFile(output, tmpTarget)
-      await rename(tmpTarget, this.origin.path)
+      // local capture: the null guard above does not reach inside the cleanup
+      // closure, and the promote must target exactly the checked origin path
+      const originPath = this.origin.path
+      const tmpTarget = join(dirname(originPath), `.${basename(originPath)}.airy-${randomUUID()}`)
+      await withSaveTmpCleanup(tmpTarget, async () => {
+        await copyFile(output, tmpTarget)
+        await rename(tmpTarget, originPath)
+      })
       this.savedPath = this.origin.path
       this.savedTargets.add(this.origin.path)
       const info = await stat(this.origin.path)

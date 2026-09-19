@@ -206,14 +206,16 @@ Headless (no app required):
 | `save_document`      | `(handle, path?, overwrite?, format?)` — atomic save; refuses existing targets without `overwrite: true`; `format: "origin"` exports back to the legacy format                                                               |
 | `close_document`     | `(handle)` — close the session, clean up temp files                                                                                                                                                                          |
 
-Live (app running; always target the _active_ tab):
+Live (app running; always target the _active_ tab of the **focused** shell
+window — with several shell windows open, bring the one you mean to the
+front first; tabs of unfocused windows are invisible to the live tools):
 
-| Tool               | Signature (short)                                                    |
-| ------------------ | -------------------------------------------------------------------- |
-| `live_status`      | `()` — bridge ping, protocol version, open documents                 |
-| `live_get_context` | `()` — active document's blocks, selection (`<sel>`), comments, path |
-| `live_apply_ops`   | `(ops?, html?)` — one combined edit turn (html first, then ops)      |
-| `live_undo`        | `()` — revert the last agent turn                                    |
+| Tool               | Signature (short)                                                     |
+| ------------------ | --------------------------------------------------------------------- |
+| `live_status`      | `()` — bridge ping, protocol version, focused window's open documents |
+| `live_get_context` | `()` — active document's blocks, selection (`<sel>`), comments, path  |
+| `live_apply_ops`   | `(ops?, html?)` — one combined edit turn (html first, then ops)       |
+| `live_undo`        | `()` — revert the last agent turn                                     |
 
 In `live_apply_ops` the html is inserted at the **end** of the document, so
 block indexes from `live_get_context` stay valid when the ops run — the ops
@@ -232,9 +234,11 @@ The live bridge additionally accepts the embedded registry's extra ops —
 `setImageProperties` (resize/align image blocks) and `insertToc` (insert a
 TOC field after a block) — and `setFont` / `setMatchedFont` gain a
 `link: { url } | null` field. Live `apply_ops` / `insert_content` only work
-on the ACTIVE tab when it is a **docs** document; a sheets/slides/pdf tab in
-front answers `not_docs_tab` (use the headless workbook tools for
-spreadsheets).
+on the ACTIVE tab of the FOCUSED shell window, and only when it is a
+**docs** document; a sheets/slides/pdf tab in front answers `not_docs_tab`
+(use the headless workbook tools for spreadsheets). With several shell
+windows open, every live tool — `live_status` included — sees only the
+focused window: focus the window whose document you mean before calling.
 
 Workbook editing goes through `apply_workbook_ops`: one batch of cell edits,
 each targeting a single cell by sheet (name or index) and A1 ref with a
@@ -316,7 +320,9 @@ cells included). `insert_content` takes plain `text` plus `slide`: with
 autoshapes; line breaks become paragraphs, a first text on a bare autoshape
 gets PowerPoint's centered authoring defaults, connectors refuse — they
 cannot hold text), without it a new text box is added at `x`/`y`/`width`/
-`height` inches (default 6 x 1 in at 1", 1"). `apply_ops` is not available
+`height` inches (default 6 x 1 in at 1", 1"; each value capped at 1000 in —
+larger geometry is refused rather than saved as XML PowerPoint would flag
+for repair). `apply_ops` is not available
 for slides (the rich op registry is app-side); pictures, tables, charts,
 groups and slide structure (add/remove/reorder slides) are not editable
 headlessly. Legacy `.ppt`/`.odp` are refused with a conversion hint
@@ -326,7 +332,9 @@ byte-identical and a zero-edit save writes the original bytes back verbatim.
 PDF reading (`.pdf`) is extraction-only: the document opens read-only
 (`editable: false`) with text extracted by pdfjs through the file-parse
 package (pages separated by blank lines; scanned/image-only pages extract no
-text). `read_document` shows the text, saving is refused — headless PDF
+text). `read_document` shows the text and rejects `blocks`/`range` — an
+extraction session has no block or line model, so the read is always the
+whole text truncated at 30k characters; saving is refused — headless PDF
 editing is out of scope.
 
 ## Live mode
@@ -340,6 +348,13 @@ random token per app session. The MCP server discovers the file by trying
 `GenOffice` / `GenOffice Dev` layouts; `AIRY_BRIDGE_FILE` overrides the
 location exclusively (no fallback — set it when the app's userData is
 redirected, e.g. `AIRY_USER_DATA` in dev).
+
+Window scope: the app can host several shell windows, but the live bridge
+resolves every call against the **focused** window — `live_status` lists
+and the live edits address the focused window's tab strip and its ACTIVE
+tab. Tabs of unfocused windows are simply not visible over the bridge;
+focus the window you mean (the headless tools, by contrast, work on any
+file in the workspace regardless of what the app shows).
 
 The client sends the token with every call and rereads the info file on
 each connect, so an app restart (new token) never authorizes a stale
@@ -431,8 +446,9 @@ documents above 1M characters skip the parse5 structure scan.
   later `AIRY_WORKSPACE_ROOT`/cwd change never re-confines a live session.
   When that pinned root itself disappears mid-session (the workspace
   directory was moved or renamed), saves are refused with a stale-root error
-  naming the root instead of silently re-creating the dead directory —
-  reopen the document from its new location and re-apply your edits.
+  naming the root instead of silently re-creating the dead directory — for
+  every session kind alike (docx, workbook, slides, markdown/html) — reopen
+  the document from its new location and re-apply your edits.
   Symlinks are resolved
   for both the root and the candidate before the check, so a link that lives
   inside the root but points outside cannot smuggle paths out (links that

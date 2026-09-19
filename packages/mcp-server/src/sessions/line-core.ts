@@ -24,7 +24,12 @@ import type { Stats } from 'node:fs'
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname, basename, join } from 'node:path'
 
-import { assertSaveTargetFree, FencingError, promoteNewFileExclusively } from '../docx/session.js'
+import {
+  assertSaveTargetFree,
+  FencingError,
+  promoteNewFileExclusively,
+  withSaveTmpCleanup,
+} from '../docx/session.js'
 import { assertWorkspaceRootExists, resolveConfined, workspaceRoot } from '../docx/paths.js'
 import { replaceCaseInsensitive } from '../case-fold.js'
 
@@ -848,12 +853,14 @@ export class LineDocument {
       dirname(target),
       `.${basename(target) || this.hooks.kind}.airy-${randomUUID()}`,
     )
-    await writeFile(tmp, bytes)
-    if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
-      await rename(tmp, target)
-    } else {
-      await promoteNewFileExclusively(tmp, target)
-    }
+    await withSaveTmpCleanup(tmp, async () => {
+      await writeFile(tmp, bytes)
+      if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
+        await rename(tmp, target)
+      } else {
+        await promoteNewFileExclusively(tmp, target)
+      }
+    })
     if (target === this.path) {
       try {
         const info = await stat(this.path)

@@ -452,8 +452,10 @@ interface RuntimePaths {
   preloadPath: string
   rendererUrl?: string
   rendererFile?: string
-  /** Shell router used to open generated PDFs in a new Airy tab. */
-  openGeneratedPath?: (path: string) => boolean
+  /** Shell router used to open generated PDFs in a new Airy tab; the asking
+   *  view's webContents id rides along so the tab opens in the sender's
+   *  window, not whichever window holds focus (BUG-1107 focus routing). */
+  openGeneratedPath?: (path: string, senderWcId?: number) => boolean
   /** Host-owned cross-app document creator (the shell routes DOCX into Docs);
    *  the asking view's webContents id rides along so the result opens in the
    *  asking window (BUG-1107). */
@@ -540,9 +542,9 @@ async function createStandaloneDocument(
   }
 }
 
-function openGeneratedPdf(path: string): void {
+function openGeneratedPdf(path: string, senderWcId?: number): void {
   try {
-    if (runtime.openGeneratedPath?.(path)) return
+    if (runtime.openGeneratedPath?.(path, senderWcId)) return
   } catch (err) {
     // The file is already safely persisted; a tab-opening failure must not
     // report the merge itself as failed.
@@ -1096,7 +1098,7 @@ function registerPdfIpc(): void {
           String(suggestedName || 'pages.pdf'),
         )
         await writeFile(targetPath, bytes)
-        openGeneratedPdf(targetPath)
+        openGeneratedPdf(targetPath, e.sender.id)
         return { ok: true, savedPath: targetPath }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -1243,7 +1245,7 @@ function registerPdfIpc(): void {
           String(suggestedName || 'merged.pdf'),
         )
         await writeFile(targetPath, merged)
-        openGeneratedPdf(targetPath)
+        openGeneratedPdf(targetPath, e.sender.id)
         return { ok: true, savedPath: targetPath, appendedCount: appended }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -1272,7 +1274,7 @@ function registerPdfIpc(): void {
           String(suggestedName || 'merged-pages.pdf'),
         )
         await writeFile(targetPath, bytes)
-        openGeneratedPdf(targetPath)
+        openGeneratedPdf(targetPath, e.sender.id)
         return { ok: true, savedPath: targetPath }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -1352,7 +1354,7 @@ function registerPdfIpc(): void {
           String(suggestedName || 'split-pages.pdf'),
         )
         await writeFile(targetPath, bytes)
-        openGeneratedPdf(targetPath)
+        openGeneratedPdf(targetPath, e.sender.id)
         return { ok: true, savedPath: targetPath }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }

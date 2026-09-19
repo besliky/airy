@@ -2,7 +2,8 @@
 // A1 parsing, read rendering, the cell-edit journal and the save/origin
 // matrix — all against a stub sidecar IO and a mocked save module (the real
 // gateway save needs the sidecar binary; covered by the integration file).
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { mkdtemp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -250,6 +251,29 @@ describe('XlsxSession journal + save matrix', () => {
     await session.save()
     session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 'two' }] })
     await expect(session.save()).resolves.toMatchObject({ path: join(root, 'book.xlsx') })
+  })
+
+  it('refuses to save when the pinned workspace root was renamed away (BUG-1103 parity)', async () => {
+    // the session pins the root at open; renaming that directory mid-session
+    // must fail with the documented stale-root refusal (like docx/line/slides
+    // sessions), not a raw ENOENT from the save gateway
+    const ws = join(root, 'ws')
+    await mkdir(ws, { recursive: true })
+    const wsBook = join(ws, 'book.xlsx')
+    await writeFile(wsBook, 'stub-xlsx-bytes')
+    const session = await XlsxSession.open(wsBook, ws, makeStubIo())
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 'edit' }] })
+    await rename(ws, join(root, 'ws2'))
+    // save-as, in-place and origin-export all refuse with the same error
+    await expect(session.save(join('out.xlsx'))).rejects.toThrow(/no longer exists/)
+    await expect(session.save()).rejects.toThrow(/no longer exists/)
+    await expect(session.save(undefined, 'origin')).rejects.toThrow(/no longer exists/)
+    await expect(session.save()).rejects.toThrow(/Reopen the document/)
+    // the gateway was never reached and the dead root stayed dead
+    expect(saveCalls).toHaveLength(0)
+    expect(existsSync(ws)).toBe(false)
+    expect(existsSync(join(root, 'out.xlsx'))).toBe(false)
+    await session.close()
   })
 
   it('refuses save-as over an existing unrelated file unless overwrite is set', async () => {

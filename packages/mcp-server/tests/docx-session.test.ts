@@ -1,7 +1,7 @@
 // Unit tests for the headless docx session: parse model, read formats,
 // insert_content, apply_ops semantics (validation-forward, atomicity),
 // byte-preservation, mtime fencing and path confinement.
-import { mkdtemp, readFile, writeFile, rm, mkdir, stat, rename } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, writeFile, rm, mkdir, stat, rename } from 'node:fs/promises'
 import { existsSync, readdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -521,6 +521,21 @@ describe('save: byte preservation and fencing', () => {
     // the renamed-away directory was not resurrected
     expect(existsSync(ws)).toBe(false)
     expect(existsSync(join(root, 'ws2', 'out.docx'))).toBe(false)
+  })
+
+  it('cleans the tmp dotfile when the save fails after writing it (BUG-1111)', async () => {
+    const session = await openSession()
+    session.insertContent('<p>edit</p>', 0)
+    // a non-empty DIRECTORY at the target: overwrite consent passes the
+    // guard, but the promote's rename onto a non-empty directory fails
+    // AFTER the `.<name>.airy-<uuid>` dotfile was written — the failure
+    // must not orphan that dotfile next to the target forever
+    const target = join(root, 'blocked.docx')
+    await mkdir(target)
+    await writeFile(join(target, 'keep'), 'contents')
+    await expect(session.save(target, 'docx', { overwrite: true })).rejects.toThrow()
+    const leftovers = (await readdir(root)).filter((name) => name.startsWith('.blocked.docx.airy-'))
+    expect(leftovers).toEqual([])
   })
 })
 

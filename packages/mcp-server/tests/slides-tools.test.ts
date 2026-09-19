@@ -150,6 +150,38 @@ describe('slides tools over MCP', () => {
     }
   })
 
+  it('caps insert geometry at 1000 inches with a schema error (audit BUG-1110)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const opened = await call(client, 'open_document', { path: 'deck.pptx' })
+      const handle = String(opened.structuredContent?.handle)
+      // 1e300 in scales to ~9.1e305 EMU in a:off/a:ext — valid XML outside
+      // ST_PositiveCoordinate that PowerPoint flags for repair after save
+      const huge = await call(client, 'insert_content', {
+        handle,
+        slide: 0,
+        text: 'x',
+        x: 1e300,
+      })
+      expect(huge.isError).toBe(true)
+      expect(text(huge)).toContain('<=1000')
+      // the cap itself stays accepted (off-canvas but inside the OOXML
+      // coordinate universe)
+      const atCap = await call(client, 'insert_content', {
+        handle,
+        slide: 0,
+        text: 'cap',
+        x: 1000,
+        y: 1000,
+        width: 1000,
+        height: 1000,
+      })
+      expect(atCap.isError).toBeFalsy()
+    } finally {
+      await close()
+    }
+  })
+
   it('routes tools by session kind with actionable errors', async () => {
     const { client, close } = await connectSession()
     try {

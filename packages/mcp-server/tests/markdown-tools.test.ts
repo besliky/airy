@@ -572,6 +572,30 @@ describe('markdown tools over MCP', () => {
     }
   })
 
+  it('cleans the tmp dotfile when the save fails after writing it (BUG-1111)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const handle = await openFixture(client, 'orphan.md')
+      await call(client, 'insert_content', { handle, text: 'edit' })
+      // a non-empty DIRECTORY at the target: overwrite consent passes the
+      // guard, but the promote's rename onto a non-empty directory fails
+      // AFTER the `.<name>.airy-<uuid>` dotfile was written — the failure
+      // must not orphan that dotfile next to the target forever
+      await mkdir(join(root, 'blocked.md'))
+      await writeFile(join(root, 'blocked.md', 'keep'), 'contents')
+      const failed = await call(client, 'save_document', {
+        handle,
+        path: 'blocked.md',
+        overwrite: true,
+      })
+      expect(failed.isError).toBe(true)
+      const leftovers = (await readdir(root)).filter((name) => name.startsWith('.blocked.md.airy-'))
+      expect(leftovers).toEqual([])
+    } finally {
+      await close()
+    }
+  })
+
   it('labels sessions and builds temp names from the file basename, not the whole path', async () => {
     const { client, close } = await connectSession()
     try {

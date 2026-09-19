@@ -109,6 +109,19 @@ describe('pdf read-only session over MCP', () => {
       expect(text(read)).toContain('editable: false')
       expect(text(read)).toContain('pages are separated by blank lines')
 
+      // a text-extraction session has no block/line model: selections are
+      // rejected loudly instead of silently ignored (audit BUG-1112) — the
+      // agent would otherwise mistake a truncated read for its selection
+      const blocks = await call(client, 'read_document', { handle, blocks: [0] })
+      expect(blocks.isError).toBe(true)
+      expect(text(blocks)).toContain('does not apply to read-only text sessions')
+      const ranged = await call(client, 'read_document', { handle, range: { start: 0, end: 3 } })
+      expect(ranged.isError).toBe(true)
+      expect(text(ranged)).toContain('does not apply to read-only text sessions')
+      // a plain read still works after the refusals
+      const again = await call(client, 'read_document', { handle })
+      expect(again.isError).toBeFalsy()
+
       const saved = await call(client, 'save_document', { handle })
       expect(saved.isError).toBe(true)
       expect(text(saved)).toContain('read-only text session (.pdf)')

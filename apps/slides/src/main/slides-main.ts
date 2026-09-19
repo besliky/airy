@@ -1063,9 +1063,9 @@ function chartColorSchemes(
 /** After a successful Slides → PDF export: open the file in a PDF tab (shell)
  * or reveal it in the folder (standalone). Tab-opening failure must not
  * report the export itself as failed — the file is already persisted. */
-function openExportedPdf(path: string): void {
+function openExportedPdf(path: string, senderWcId?: number): void {
   try {
-    if (runtime.openGeneratedPath?.(path)) return
+    if (runtime.openGeneratedPath?.(path, senderWcId)) return
   } catch (err) {
     console.warn('[slides] Failed to open exported PDF:', err)
   }
@@ -4283,7 +4283,9 @@ export function registerSlidesIpc(): void {
           show: false,
           webPreferences: { sandbox: true, javascript: false },
         }),
-      openExportedPdf,
+      // the exported PDF opens in the exporting tab's window (BUG-1107 focus
+      // routing), not whichever window happens to be focused
+      openExportedPdf: (path) => openExportedPdf(path, e.sender.id),
     })
   })
 

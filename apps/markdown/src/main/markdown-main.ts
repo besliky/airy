@@ -413,8 +413,10 @@ interface RuntimePaths {
   preloadPath: string
   rendererUrl?: string
   rendererFile?: string
-  /** Shell router used to open exported PDFs in a new Airy tab. */
-  openGeneratedPath?: (path: string) => boolean
+  /** Shell router used to open exported PDFs in a new Airy tab; the asking
+   *  view's webContents id rides along so the tab opens in the sender's
+   *  window, not whichever window holds focus (BUG-1107 focus routing). */
+  openGeneratedPath?: (path: string, senderWcId?: number) => boolean
 }
 
 let runtime: RuntimePaths = { preloadPath: '' }
@@ -426,9 +428,9 @@ export function configureMarkdownRuntime(paths: RuntimePaths): void {
 /** After a successful Markdown → PDF export: open the file in a PDF tab (shell)
  * or reveal it in the folder (standalone). Tab-opening failure must not
  * report the export itself as failed — the file is already persisted. */
-function openExportedPdf(path: string): void {
+function openExportedPdf(path: string, senderWcId?: number): void {
   try {
-    if (runtime.openGeneratedPath?.(path)) return
+    if (runtime.openGeneratedPath?.(path, senderWcId)) return
   } catch (err) {
     console.warn('[markdown] Failed to open exported PDF:', err)
   }
@@ -971,7 +973,7 @@ function registerMarkdownIpc(): void {
           margins: { top: 0.6, bottom: 0.6, left: 0.6, right: 0.6 },
         })
         await atomicWriteFile(picked.filePath, pdf)
-        openExportedPdf(picked.filePath)
+        openExportedPdf(picked.filePath, e.sender.id)
         return { ok: true, path: picked.filePath }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }

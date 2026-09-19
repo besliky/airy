@@ -44,6 +44,7 @@ import {
   countWords,
   FencingError,
   promoteNewFileExclusively,
+  withSaveTmpCleanup,
 } from '../docx/session.js'
 import { assertWorkspaceRootExists, resolveConfined, workspaceRoot } from '../docx/paths.js'
 
@@ -70,6 +71,14 @@ export const INSERT_MAX_CHARS = 200_000
 const EMU_PER_INCH = 914_400
 /** default text box: 6 x 1 in at (1", 1") — inside both 16:9 and 4:3 canvases */
 const DEFAULT_BOX_INCHES = { x: 1, y: 1, width: 6, height: 1 }
+/**
+ * Upper bound for insert geometry (inches). Generous against any real canvas
+ * (a 16:9 deck is 13.3 x 7.5 in) while staying far inside OOXML's
+ * ST_PositiveCoordinate ceiling (~29,820 in / 2.7e13 EMU): an unbounded
+ * agent value like 1e300 serialized into a:off/a:ext as syntactically valid
+ * XML that PowerPoint then flags for repair (audit BUG-1110).
+ */
+export const MAX_BOX_INCHES = 1000
 
 function clip(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1))}…`
@@ -367,6 +376,22 @@ export class SlidesSession {
         `text is ${String(text.length)} characters; the cap is ${String(INSERT_MAX_CHARS)}`,
       )
     }
+    // geometry cap before any element dispatch, mirroring the tool schema: a
+    // value beyond the OOXML coordinate universe would serialize as valid XML
+    // that PowerPoint flags for repair (audit BUG-1110)
+    for (const [name, value] of [
+      ['x', options.x],
+      ['y', options.y],
+      ['width', options.width],
+      ['height', options.height],
+    ] as const) {
+      if (value !== undefined && value > MAX_BOX_INCHES) {
+        throw new Error(
+          `${name} ${String(value)} in is above the ${String(MAX_BOX_INCHES)} in cap for text box ` +
+            'geometry — keep the box on the slide canvas',
+        )
+      }
+    }
     const slide = this.requireSlide(options.slide)
     const paragraphs: Paragraph[] = text.split(/\r\n|\r|\n/).map((line) => ({
       runs: [{ text: line }],
@@ -477,25 +502,27 @@ export class SlidesSession {
     // in the temp name and writeFile fails on the colons/backslashes
     const tmp = join(dirname(target), `.${basename(target) || 'deck'}.airy-${randomUUID()}`)
     let unchanged = false
-    if (!this.edited) {
-      // zero-edit save: the original bytes round-trip verbatim (the engine's
-      // regenerated zip container would re-compress identical entries)
-      await writeFile(tmp, this.originalBytes)
-      unchanged = true
-    } else {
-      // savePptxToFile lands the deck at tmp atomically (its own temp +
-      // rename); the promote below carries the docx session's ownership rules
-      await savePptxToFile(this.opened, tmp)
-      commitSaved(this.opened)
-    }
-    // a fresh (guarded) target promotes exclusively: a file created between
-    // the guard's stat and this write surfaces the clobber error instead of
-    // being silently replaced; targets this session owns replace by intent
-    if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
-      await rename(tmp, target)
-    } else {
-      await promoteNewFileExclusively(tmp, target)
-    }
+    await withSaveTmpCleanup(tmp, async () => {
+      if (!this.edited) {
+        // zero-edit save: the original bytes round-trip verbatim (the engine's
+        // regenerated zip container would re-compress identical entries)
+        await writeFile(tmp, this.originalBytes)
+        unchanged = true
+      } else {
+        // savePptxToFile lands the deck at tmp atomically (its own temp +
+        // rename); the promote below carries the docx session's ownership rules
+        await savePptxToFile(this.opened, tmp)
+        commitSaved(this.opened)
+      }
+      // a fresh (guarded) target promotes exclusively: a file created between
+      // the guard's stat and this write surfaces the clobber error instead of
+      // being silently replaced; targets this session owns replace by intent
+      if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
+        await rename(tmp, target)
+      } else {
+        await promoteNewFileExclusively(tmp, target)
+      }
+    })
 
     // refresh the fence so chained saves keep working
     if (target === this.path) {
