@@ -25,6 +25,7 @@ import { openDocument } from '../import/open.js'
 import { HtmlSession } from '../html/session.js'
 import { BridgeClientError, sharedLiveBridge } from '../live/client.js'
 import { MarkdownSession } from '../markdown/session.js'
+import { SlidesSession } from '../slides/session.js'
 import { getSession, removeSession, storeSession, type DocumentSession } from '../sessions/store.js'
 import { TextSession } from '../sessions/text.js'
 import { XlsxSession, type XlsxSessionMeta } from '../xlsx/session.js'
@@ -168,7 +169,11 @@ export function registerTools(server: McpServer): void {
         'non-UTF-8 bytes are refused), and ' +
         '.html/.htm likewise (read_document shows a parse5 structure summary — ' +
         'headings/links/title; insert_content splices an HTML fragment verbatim; BOM-prefixed ' +
-        'UTF-8/UTF-16 and declared legacy charsets accepted, undeclared non-UTF-8 refused). The path ' +
+        'UTF-8/UTF-16 and declared legacy charsets accepted, undeclared non-UTF-8 refused). ' +
+        '.pptx opens as an editable slides session (read_deck shows the slide/element structure; ' +
+        "insert_content adds text boxes or replaces a shape's text; legacy .ppt/.odp are refused " +
+        'with a conversion hint). .pdf opens read-only as extracted text (pdfjs; pages separated ' +
+        'by blank lines; not editable headlessly). The path ' +
         'must be absolute or workspace-relative and stay inside the server ' +
         'workspace root (AIRY_WORKSPACE_ROOT env var, default: the process working directory). ' +
         'Read-only: nothing is written until save_document. Close sessions with close_document.',
@@ -235,6 +240,9 @@ export function registerTools(server: McpServer): void {
           'This handle is a workbook session; use read_workbook (sheet + range) instead.',
         )
       }
+      if (session instanceof SlidesSession) {
+        throw new Error('This handle is a slides session; use read_deck (slide) instead.')
+      }
       if (session instanceof TextSession) {
         return { content: [{ type: 'text' as const, text: session.readDocument() }] }
       }
@@ -289,6 +297,41 @@ export function registerTools(server: McpServer): void {
         ...(sheet !== undefined ? { sheet } : {}),
         ...(range !== undefined ? { range } : {}),
       })
+      return { content: [{ type: 'text' as const, text }] }
+    },
+  )
+
+  server.registerTool(
+    'read_deck',
+    {
+      title: 'Read presentation',
+      description:
+        'Read an open slides (.pptx) session. Without options returns the deck overview: ' +
+        '"index|elements|content preview" one line per slide plus deck stats. With slide (0-based ' +
+        'index) returns that slide in detail: the element list "index|type|name|text preview" ' +
+        '(types include text, shape, picture, group(n), table(rxc), chart, passthrough; ' +
+        "placeholders render as text:title / shape:body) and the slide's full text (groups and " +
+        'table cells included). Element indexes address insert_content (slideElement); re-read ' +
+        'after edits — a new text box lands at the end of the element list.',
+      inputSchema: {
+        handle: z.string().min(1).describe('Session handle from open_document'),
+        slide: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe('0-based slide index to read in full (from the deck overview)'),
+      },
+      annotations: {
+        readOnlyHint: true,
+      },
+    },
+    async ({ handle, slide }) => {
+      const session = getSession(handle)
+      if (!(session instanceof SlidesSession)) {
+        throw new Error('This handle is not a slides session; use read_document or read_workbook.')
+      }
+      const text = slide === undefined ? session.readDeck() : session.readSlide(slide)
       return { content: [{ type: 'text' as const, text }] }
     },
   )
@@ -364,7 +407,8 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Insert content',
       description:
-        'Insert new content into an open .docx, markdown, or html document. Docx sessions take a ' +
+        'Insert new content into an open .docx, markdown, html, or slides (.pptx) document. ' +
+        'Docx sessions take a ' +
         'restricted HTML fragment (no DOM features needed). Supported tags: p, h1-h6, ul, ol, li ' +
         '(nested lists allowed), strong/b, em/i, u, s, a[href], br, blockquote, pre, table/tr/th/td ' +
         '(header row styled, cells plain text). Unknown tags keep their text; markdown fences and ' +
@@ -379,8 +423,11 @@ export function registerTools(server: McpServer): void {
         "on disk, modulo the file's EOL style) at one of two positions: after the first line " +
         'containing `marker` (e.g. "</body>" to append rendered content), or after line `at` ' +
         '(-1 = document start; default: end of document; marker > at). Passing afterHeading to ' +
-        'an html session is an explicit error — it is a markdown-session option. Insertion ' +
-        'happens in memory; persist with save_document.',
+        'an html session is an explicit error — it is a markdown-session option. Slides sessions ' +
+        'take plain `text` plus `slide` (0-based index, required): with `slideElement` the text ' +
+        "replaces that element's body (text boxes and autoshapes; line breaks become " +
+        'paragraphs), without it a new text box is added at x/y/width/height (inches; default ' +
+        '6 x 1 in at 1", 1"). Insertion happens in memory; persist with save_document.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
         html: z
@@ -394,7 +441,7 @@ export function registerTools(server: McpServer): void {
           .string()
           .min(1)
           .optional()
-          .describe('Markdown source to insert (markdown sessions)'),
+          .describe('Markdown source to insert (markdown sessions) or plain text (slides)'),
         at: z
           .number()
           .int()
@@ -419,13 +466,108 @@ export function registerTools(server: McpServer): void {
             'Markdown/HTML sessions: insert after the first line containing this exact substring ' +
               '(html: e.g. "</body>"); ignored for docx sessions',
           ),
+        slide: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe('Slides sessions: 0-based slide index to edit (required)'),
+        slideElement: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe(
+            'Slides sessions: element index on the slide (from read_deck) whose text is ' +
+              'replaced; omit to add a new text box',
+          ),
+        x: z
+          .number()
+          .finite()
+          .min(0)
+          .optional()
+          .describe('Slides sessions: text box left edge in inches (default 1)'),
+        y: z
+          .number()
+          .finite()
+          .min(0)
+          .optional()
+          .describe('Slides sessions: text box top edge in inches (default 1)'),
+        width: z
+          .number()
+          .finite()
+          .min(0.1)
+          .optional()
+          .describe('Slides sessions: text box width in inches (default 6)'),
+        height: z
+          .number()
+          .finite()
+          .min(0.1)
+          .optional()
+          .describe('Slides sessions: text box height in inches (default 1)'),
       },
       annotations: {
         destructiveHint: false,
       },
     },
-    async ({ handle, html, text, at, afterHeading, marker }) => {
+    async ({
+      handle,
+      html,
+      text,
+      at,
+      afterHeading,
+      marker,
+      slide,
+      slideElement,
+      x,
+      y,
+      width,
+      height,
+    }) => {
       const session = getSession(handle)
+      const slidesOptions = { slide, slideElement, x, y, width, height }
+      const hasSlidesOptions = Object.values(slidesOptions).some((value) => value !== undefined)
+      if (session instanceof SlidesSession) {
+        if (html !== undefined) {
+          throw new Error('This handle is a slides session: pass plain text in `text`, not `html`.')
+        }
+        if (at !== undefined || afterHeading !== undefined || marker !== undefined) {
+          throw new Error(
+            'at/afterHeading/marker are docx/markdown/html insert options; a slides session ' +
+              'positions inserts via slide (+ optional slideElement, x, y, width, height).',
+          )
+        }
+        if (slide === undefined) {
+          throw new Error(
+            'A slides insert needs `slide` (0-based slide index from read_deck) plus `text`.',
+          )
+        }
+        const result = session.insertContent(text ?? '', {
+          slide,
+          ...(slideElement !== undefined ? { element: slideElement } : {}),
+          ...(x !== undefined ? { x } : {}),
+          ...(y !== undefined ? { y } : {}),
+          ...(width !== undefined ? { width } : {}),
+          ...(height !== undefined ? { height } : {}),
+        })
+        const meta = session.meta()
+        return content(
+          {
+            slide: result.slide,
+            element: result.element,
+            added: result.added,
+            paragraphs: result.paragraphs,
+            dirty: meta.dirty,
+          },
+          `${result.detail}. Call read_deck with the slide index if you need the new state.`,
+        )
+      }
+      if (hasSlidesOptions) {
+        throw new Error(
+          'slide/slideElement/x/y/width/height are slides-session insert options ' +
+            `(this handle is a "${session.meta().kind}" session).`,
+        )
+      }
       if (session instanceof MarkdownSession) {
         if (html !== undefined) {
           throw new Error(
@@ -556,7 +698,8 @@ export function registerTools(server: McpServer): void {
         '(untouched lines keep their exact bytes, EOLs included, and a zero-edit save round-trips ' +
         'the file verbatim; an edited save writes UTF-8 with the original BOM flag re-applied, ' +
         'html additionally rewriting a legacy charset declaration to utf-8, and the format ' +
-        'parameter is not accepted); xlsx saves keep untouched zip entries ' +
+        'parameter is not accepted); pptx saves keep untouched zip entries byte-identical and a ' +
+        'zero-edit save writes the original bytes back verbatim; xlsx saves keep untouched zip entries ' +
         'byte-identical except ' +
         'xl/workbook.xml, which is rewritten when needed to force recalculation on open (the ' +
         'fullCalcOnLoad flag) — so even a zero-edit xlsx save may touch that one entry, and for ' +
@@ -577,11 +720,12 @@ export function registerTools(server: McpServer): void {
               'file is refused)',
           ),
         format: z
-          .enum(['docx', 'xlsx', 'origin'])
+          .enum(['docx', 'xlsx', 'pptx', 'origin'])
           .optional()
           .describe(
             'Output format: default matches the session (docx sessions -> "docx", workbooks -> ' +
-              '"xlsx"); "origin" exports back to the original legacy/ODF format via LibreOffice',
+              '"xlsx", slides -> "pptx"); "origin" exports back to the original legacy/ODF ' +
+              'format via LibreOffice',
           ),
       },
       annotations: {
@@ -591,9 +735,12 @@ export function registerTools(server: McpServer): void {
     async ({ handle, path, overwrite, format }) => {
       const session = getSession(handle)
       if (session instanceof TextSession) {
+        const meta = session.meta()
         throw new Error(
-          'This is a read-only text session (legacy .doc without LibreOffice); it cannot be saved. ' +
-            'Install LibreOffice to open the document as an editable converted .docx session.',
+          `This is a read-only text session (.${meta.format}); it cannot be saved.` +
+            (meta.format === 'doc'
+              ? ' Install LibreOffice to open the document as an editable converted .docx session.'
+              : ''),
         )
       }
       if (session instanceof MarkdownSession) {
@@ -627,10 +774,23 @@ export function registerTools(server: McpServer): void {
         )
       }
       const saveOptions = overwrite === undefined ? {} : { overwrite }
-      if (session instanceof XlsxSession) {
-        if (format === 'docx') {
+      if (session instanceof SlidesSession) {
+        if (format !== undefined && format !== 'pptx') {
           throw new Error(
-            'format "docx" is not valid for a workbook session; use "xlsx" or "origin".',
+            `format "${format}" is not valid for a slides session; it always saves .pptx.`,
+          )
+        }
+        const result = await session.save(path, saveOptions)
+        return content(
+          result,
+          `Saved ${result.bytes} bytes to ${result.path} (${result.format})` +
+            `${result.unchanged ? ' (no changes: bytes round-tripped verbatim)' : ''}`,
+        )
+      }
+      if (session instanceof XlsxSession) {
+        if (format !== undefined && format !== 'xlsx' && format !== 'origin') {
+          throw new Error(
+            `format "${format}" is not valid for a workbook session; use "xlsx" or "origin".`,
           )
         }
         const result = await session.save(
@@ -645,9 +805,9 @@ export function registerTools(server: McpServer): void {
             `${result.warnings.length > 0 ? `. ${result.warnings.join(' ')}` : ''}`,
         )
       }
-      if (format === 'xlsx') {
+      if (format !== undefined && format !== 'docx' && format !== 'origin') {
         throw new Error(
-          'format "xlsx" is not valid for a text document session; use "docx" or "origin".',
+          `format "${format}" is not valid for a text document session; use "docx" or "origin".`,
         )
       }
       const result = await session.save(path, format === 'origin' ? 'origin' : 'docx', saveOptions)
@@ -939,6 +1099,7 @@ type AnyOpenMeta =
   | ReturnType<TextSession['meta']>
   | ReturnType<MarkdownSession['meta']>
   | ReturnType<HtmlSession['meta']>
+  | ReturnType<SlidesSession['meta']>
 
 function summarizeOpenMeta(meta: AnyOpenMeta): string {
   if (meta.kind === 'xlsx') {
@@ -975,6 +1136,14 @@ function summarizeOpenMeta(meta: AnyOpenMeta): string {
       `Opened ${meta.fileName} as an editable html session: ${String(meta.lineCount)} lines, ` +
       `${String(meta.headingCount)} heading(s), ${String(meta.linkCount)} link(s)` +
       `${meta.title ? `, title "${meta.title}"` : ''}. ` +
+      `${warningNote(meta.warnings)}Handle: ${meta.handle}. Path: ${meta.path}`
+    )
+  }
+  if (meta.kind === 'slides') {
+    return (
+      `Opened ${meta.fileName} as an editable slides session: ${String(meta.slideCount)} slide(s), ` +
+      `${String(meta.elementCount)} element(s), ${String(meta.wordCount)} words of slide text ` +
+      `(${meta.size.widthIn} x ${meta.size.heightIn} in canvas). ` +
       `${warningNote(meta.warnings)}Handle: ${meta.handle}. Path: ${meta.path}`
     )
   }

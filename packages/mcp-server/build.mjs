@@ -10,7 +10,11 @@
 // The banner defines a real CJS `require` for the inlined CommonJS
 // dependencies (word-extractor via @airy-office/file-parse calls
 // require('buffer') at load time); without it esbuild's ESM interop shim
-// throws "Dynamic require of X is not supported".
+// throws "Dynamic require of X is not supported". The import uses an
+// underscored alias: bundled modules may import the same `node:module`
+// binding by its plain name (file-parse's pdf.ts does), and two top-level
+// declarations of `createRequire` in the single concatenated ESM file are a
+// SyntaxError even though each was valid in its own module.
 import { build } from 'esbuild'
 
 await build({
@@ -23,6 +27,6 @@ await build({
   sourcemap: true,
   logLevel: 'info',
   banner: {
-    js: "import { createRequire } from 'node:module'\nconst require = createRequire(import.meta.url)",
+    js: "import { createRequire as __airyCreateRequire } from 'node:module'\nconst require = __airyCreateRequire(import.meta.url)",
   },
 })

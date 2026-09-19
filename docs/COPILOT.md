@@ -2,7 +2,8 @@
 
 `packages/mcp-server` (npm name `@airy-office/mcp`) is a Model Context
 Protocol server that lets CLI coding agents work with real office files:
-headless `.docx` / `.xlsx` / Markdown / HTML editing through the suite's own engines,
+headless `.docx` / `.xlsx` / `.pptx` / Markdown / HTML editing and `.pdf`
+text extraction through the suite's own engines,
 plus a live bridge into the running Airy desktop app. It speaks MCP over stdio,
 runs as a plain Node process (no Electron, no display), and needs no
 installed app for the headless tools.
@@ -192,17 +193,18 @@ of which copy of the server connects to it.
 
 Headless (no app required):
 
-| Tool                 | Signature (short)                                                                                                                                                  |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ping`               | `()` — liveness probe                                                                                                                                              |
-| `open_document`      | `(path)` — open `.docx/.xlsx/.xlsm/.xls/.ods/.doc/.odt/.md/.markdown/.html/.htm`, returns a session handle + meta                                                  |
-| `read_document`      | `(handle, blocks? \| range?)` — block overview or full restricted HTML for text documents; markdown: heading structure; html: parse5 structure summary (lines)     |
-| `read_workbook`      | `(handle, sheet?, range?)` — sheet overview or a pipe table of an A1 range                                                                                         |
-| `insert_content`     | `(handle, html, at?)` — docx: restricted-HTML fragment after block `at`; markdown: `text` + `at`/`afterHeading`/`marker`; html: verbatim fragment at `at`/`marker` |
-| `apply_ops`          | `(handle, ops, dryRun?)` — validated, atomic batch of edit ops (max 100): block ops for docx, line ops for markdown/html                                           |
-| `apply_workbook_ops` | `(handle, edits, dryRun?)` — validated batch of cell edits: value / formula / style / rich text (max 100)                                                          |
-| `save_document`      | `(handle, path?, overwrite?, format?)` — atomic save; refuses existing targets without `overwrite: true`; `format: "origin"` exports back to the legacy format     |
-| `close_document`     | `(handle)` — close the session, clean up temp files                                                                                                                |
+| Tool                 | Signature (short)                                                                                                                                                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ping`               | `()` — liveness probe                                                                                                                                                                                                        |
+| `open_document`      | `(path)` — open `.docx/.xlsx/.xlsm/.xls/.ods/.doc/.odt/.md/.markdown/.html/.htm/.pptx/.pdf`, returns a session handle + meta                                                                                                 |
+| `read_document`      | `(handle, blocks? \| range?)` — block overview or full restricted HTML for text documents; markdown: heading structure; html: parse5 structure summary (lines)                                                               |
+| `read_workbook`      | `(handle, sheet?, range?)` — sheet overview or a pipe table of an A1 range                                                                                                                                                   |
+| `read_deck`          | `(handle, slide?)` — deck overview (`index\|elements\|preview` per slide) or one slide's element list + full text                                                                                                            |
+| `insert_content`     | `(handle, html, at?)` — docx: restricted-HTML fragment after block `at`; markdown: `text` + `at`/`afterHeading`/`marker`; html: verbatim fragment at `at`/`marker`; slides: `text` + `slide` (+ `slideElement`/box geometry) |
+| `apply_ops`          | `(handle, ops, dryRun?)` — validated, atomic batch of edit ops (max 100): block ops for docx, line ops for markdown/html                                                                                                     |
+| `apply_workbook_ops` | `(handle, edits, dryRun?)` — validated batch of cell edits: value / formula / style / rich text (max 100)                                                                                                                    |
+| `save_document`      | `(handle, path?, overwrite?, format?)` — atomic save; refuses existing targets without `overwrite: true`; `format: "origin"` exports back to the legacy format                                                               |
+| `close_document`     | `(handle)` — close the session, clean up temp files                                                                                                                                                                          |
 
 Live (app running; always target the _active_ tab):
 
@@ -303,6 +305,30 @@ would render the saved file as mojibake. HTML files cap at 8 MiB and
 materialized); documents above 1M characters skip the structure scan (read
 shows the text only).
 
+Slides editing (`.pptx`) goes through the suite's pptx engine. `read_deck`
+without options returns the deck overview — `index|elements|content preview`
+per slide plus deck stats; with `slide` (0-based index) it returns that
+slide's element list (`index|type|name|text preview`; types `text`, `shape`,
+`picture`, `group(n)`, `table(rxc)`, `chart`, `passthrough`, placeholders as
+`text:title` / `shape:body`) and the slide's full text (groups and table
+cells included). `insert_content` takes plain `text` plus `slide`: with
+`slideElement` the text replaces that element's body (text boxes and
+autoshapes; line breaks become paragraphs, a first text on a bare autoshape
+gets PowerPoint's centered authoring defaults, connectors refuse — they
+cannot hold text), without it a new text box is added at `x`/`y`/`width`/
+`height` inches (default 6 x 1 in at 1", 1"). `apply_ops` is not available
+for slides (the rich op registry is app-side); pictures, tables, charts,
+groups and slide structure (add/remove/reorder slides) are not editable
+headlessly. Legacy `.ppt`/`.odp` are refused with a conversion hint
+(`soffice --convert-to pptx`). Saves keep untouched zip entries
+byte-identical and a zero-edit save writes the original bytes back verbatim.
+
+PDF reading (`.pdf`) is extraction-only: the document opens read-only
+(`editable: false`) with text extracted by pdfjs through the file-parse
+package (pages separated by blank lines; scanned/image-only pages extract no
+text). `read_document` shows the text, saving is refused — headless PDF
+editing is out of scope.
+
 ## Live mode
 
 When the Airy app runs, its main process starts a bridge server on a local
@@ -361,6 +387,8 @@ deliberate choice) and its result says whose turn it was (`anotherClient`).
 | `.odt`              | via soffice → editable `.docx` (without soffice: clear error)    | `.docx`; `format: "origin"` best-effort `.odt` via soffice                                                                                            |
 | `.md` / `.markdown` | native (UTF-8, BOM accepted; invalid UTF-8 refused)              | line-preserving UTF-8; zero-edit saves round-trip verbatim; UTF-16 originals convert to UTF-8 on save                                                 |
 | `.html` / `.htm`    | native (UTF-8, BOM accepted; declared legacy charsets accepted)  | line-preserving UTF-8; zero-edit saves round-trip verbatim; legacy/UTF-16 originals convert to UTF-8 (legacy charset declarations rewritten to utf-8) |
+| `.pptx`             | native (pptx-engine; text boxes and shape text editable)         | byte-preserving `.pptx`; zero-edit saves round-trip verbatim                                                                                          |
+| `.pdf`              | read-only text extraction (pdfjs via file-parse)                 | not editable (saving is refused)                                                                                                                      |
 
 Byte preservation differs by format. `docx` saves keep untouched parts
 byte-identical, and a zero-edit save writes the original bytes back verbatim.
@@ -369,13 +397,14 @@ their exact bytes (EOLs included) and a zero-edit save round-trips the file
 verbatim; an edited save writes UTF-8 with the original BOM re-applied (html
 sessions also rewrite a legacy charset declaration to `utf-8`, so the saved
 file renders correctly in browsers).
+`pptx` saves keep untouched zip entries byte-identical (dirty slides are
+rebuilt from their byte anchors) and a zero-edit save writes the original
+bytes back verbatim.
 `xlsx` saves keep untouched zip entries byte-identical **except
 `xl/workbook.xml`**: the save gateway always ensures the `fullCalcOnLoad`
 flag so edited formulas recalculate on open, so even a zero-edit workbook
 save may rewrite that one entry — and the save result's `unchanged` flag is
 journal-based for workbooks (no edits journaled), not a byte guarantee.
-
-Headless slides and PDF tools are planned (backlog).
 
 Reads are bounded to keep tool answers inside the ~30k-character MCP budget:
 `read_document` truncates its output at 30,000 characters (markdown/html
@@ -385,7 +414,10 @@ elides the middle first; a selected-blocks read tells you to narrow the
 range), `read_document`'s `blocks` parameter accepts at most 200 indexes per
 call, a `range` may span at most 10,000 blocks/lines (a larger span is
 rejected up front — split it into several reads), and `read_workbook` ranges
-cap at 20,000 cells (split larger ranges into smaller reads). Markdown and
+cap at 20,000 cells (split larger ranges into smaller reads). `read_deck`
+answers share the same 30k budget (the deck overview tightens previews and
+elides the middle first; a slide detail read truncates), and slides
+`insert_content` text caps at 200,000 characters. Markdown and
 HTML sessions add an 8 MiB / 2,000,000-line open cap (larger files are
 refused with a clear error, by stat before the content is read); HTML
 documents above 1M characters skip the parse5 structure scan.

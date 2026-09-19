@@ -47,8 +47,14 @@ describe('extensionOf', () => {
 
 describe('openDocument routing', () => {
   it('rejects unsupported extensions with the supported list', async () => {
-    await expect(openDocument(join(root, 'deck.pptx'), root)).rejects.toThrow(
-      /Unsupported file type "\.pptx".*\.docx, \.xlsx/,
+    await expect(openDocument(join(root, 'archive.zip'), root)).rejects.toThrow(
+      /Unsupported file type "\.zip".*\.docx, \.xlsx/,
+    )
+  })
+
+  it('refuses legacy .ppt with a conversion hint (.pptx itself is supported)', async () => {
+    await expect(openDocument(join(root, 'deck.ppt'), root)).rejects.toThrow(
+      /Convert the deck to \.pptx/,
     )
   })
 

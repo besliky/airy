@@ -15,16 +15,24 @@
 //                       editing; PAR-003)
 //   .html/.htm       -> HtmlSession (native text session, line-based editing
 //                       with a parse5 structure summary; PAR-004)
+//   .pptx            -> SlidesSession (native pptx-engine model; PAR-001 —
+//                       legacy .ppt/.odp are refused with a conversion hint:
+//                       soffice pptx round-trips lose too much to promise
+//                       byte fidelity)
+//   .pdf             -> read-only TextSession (pdfjs text extraction through
+//                       @airy-office/file-parse; PAR-002 — pages are joined
+//                       with blank lines, editing is not supported headlessly)
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { extname, join } from 'node:path'
 
-import { docToText } from '@airy-office/file-parse'
+import { docToText, pdfToText } from '@airy-office/file-parse'
 
 import { DocxSession, type SessionOrigin } from '../docx/session.js'
 import { resolveConfined } from '../docx/paths.js'
 import { HtmlSession } from '../html/session.js'
 import { MarkdownSession } from '../markdown/session.js'
+import { SlidesSession } from '../slides/session.js'
 import { TextSession } from '../sessions/text.js'
 import { XlsxSession } from '../xlsx/session.js'
 import { convertViaSoffice, findSoffice, SOFFICE_FILTERS, sofficeMissingError } from './soffice.js'
@@ -41,9 +49,12 @@ export const SUPPORTED_OPEN_EXTENSIONS = [
   'markdown',
   'html',
   'htm',
+  'pptx',
+  'pdf',
 ] as const
 
-export type OpenedDocument = DocxSession | XlsxSession | TextSession | MarkdownSession | HtmlSession
+export type OpenedDocument =
+  DocxSession | XlsxSession | TextSession | MarkdownSession | HtmlSession | SlidesSession
 
 export function extensionOf(path: string): string {
   return extname(path).replace('.', '').toLowerCase()
@@ -61,6 +72,14 @@ async function statOrNull(path: string): Promise<{ mtimeMs: number; size: number
 const DOC_TEXT_FALLBACK_WARNING =
   'Legacy .doc opened read-only: text extraction without formatting structure. ' +
   'Full editing (converted .docx session) requires LibreOffice.'
+
+const PDF_TEXT_WARNING =
+  'PDF opened read-only: text extraction via pdfjs (pages are separated by blank lines; ' +
+  'scanned/image-only pages extract no text). Editing PDFs headlessly is not supported.'
+
+const LEGACY_PRESENTATION_HINT =
+  'Legacy presentation formats are not supported yet. Convert the deck to .pptx first, ' +
+  'e.g. "soffice --convert-to pptx file.ppt", then open the .pptx.'
 
 /** Open a document of any supported format inside the workspace root. */
 export async function openDocument(rawPath: string, root?: string): Promise<OpenedDocument> {
@@ -102,6 +121,19 @@ export async function openDocument(rawPath: string, root?: string): Promise<Open
     case 'html':
     case 'htm':
       return HtmlSession.open(rawPath, root)
+    case 'pptx':
+      return SlidesSession.open(rawPath, root)
+    case 'pdf':
+      return TextSession.open(rawPath, root, {
+        format: 'pdf',
+        warning: PDF_TEXT_WARNING,
+        extract: (bytes) => pdfToText(bytes),
+      })
+    case 'ppt':
+    case 'odp':
+    case 'pps':
+    case 'pot':
+      throw new Error(LEGACY_PRESENTATION_HINT)
     default:
       throw new Error(
         `Unsupported file type ".${ext || '(none)'}". Supported extensions: ` +
