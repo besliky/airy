@@ -533,10 +533,14 @@ function ShadowMenu({
           aria-pressed={activeKey === preset.labelKey}
           onClick={() => onPick(preset.shadow)}
         >
-          <span
-            className="shadow-menu-preview"
-            style={preset.shadow ? (shadowDecls(preset.shadow) ?? undefined) : undefined}
-          />
+          {/* UX-1005: bed + face — the drop-shadow needs light paper behind it
+           * in dark themes too, or the presets are indistinguishable */}
+          <span className="shadow-menu-preview">
+            <span
+              className="shadow-menu-preview-face"
+              style={preset.shadow ? (shadowDecls(preset.shadow) ?? undefined) : undefined}
+            />
+          </span>
           <span>{t(preset.labelKey as StringKey)}</span>
         </button>
       ))}

@@ -8374,12 +8374,31 @@ body.docs-crop-active
 
 /* ---- shadow gallery (Picture/Shape Effects) ---- */
 
+/* UX-1005: the swatch is a paper bed the shadow preview falls on. Preset
+   shadows are authored document data (black ~43%, shadow-effects.ts) and are
+   never themed (rule 4), so the bed must stay light in BOTH themes — on the
+   dark chrome's hover gray every preset read as the same flat chip. The
+   face carries the shadow declarations; outer drop-shadows land on the bed,
+   the inner preset shades the face itself. */
 .shadow-menu .shadow-menu-preview {
-  width: 18px;
-  height: 13px;
-  border-radius: 2px;
-  background: var(--hover);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 20px;
+  border-radius: 3px;
+  background: var(--swatch-bg);
+  border: 1px solid var(--border-strong);
   flex: none;
+}
+
+/* the shadow-casting face: a white paper tile inside the bed */
+.shadow-menu .shadow-menu-preview-face {
+  --swatch-face: #ffffff;
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--swatch-face);
 }
 
 /* ---- keyboard shortcuts sheet ---- */
