@@ -1076,10 +1076,19 @@ function RibbonInner({
           imageHeightPx: h,
           // The new bytes are the full picture (crop/cutout bake destructively) and
           // the replace pipeline strips a:srcRect on save — drop a Word-authored
-          // crop/fill window or it would keep clipping the new image until reload
+          // crop/fill window or it would keep clipping the new image until reload.
+          // keepCrop (Compress without "delete cropped areas") keeps the window:
+          // the compressed bytes cover the same frame, the fractional srcRect
+          // coordinates survive the resample (BUG-1006).
           ...(opts?.keepCrop ? {} : { imageCrop: null, imageFillRect: null }),
           ...(isOriginal
-            ? { imageReplace: { base64: m[2], mime: m[1] } }
+            ? {
+                imageReplace: {
+                  base64: m[2],
+                  mime: m[1],
+                  ...(opts?.keepCrop ? { keepCrop: true } : {}),
+                },
+              }
             : { genImage: { base64: m[2], mime: m[1], widthPx: w, heightPx: h } }),
         })
         .run()

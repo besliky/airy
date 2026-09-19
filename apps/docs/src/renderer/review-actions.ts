@@ -209,9 +209,16 @@ export function convertNotes(
     })
   })
 
-  // renumber + re-mark every reference (attrs-only edits: positions stay valid)
+  // renumber + re-mark every reference (attrs-only edits: positions stay valid).
+  // BUG-1004: the docNoteRef switch is only half of the conversion — the note
+  // lists rebuild as React state OUTSIDE ProseMirror history, so an undo that
+  // reverts just this transaction would restore e.g. footnote references whose
+  // bodies now live in the endnote list: the save would emit a dangling
+  // w:footnoteReference (Word repair risk). Word treats the Convert Notes
+  // dialog as one atomic operation; the transaction stays out of history so
+  // undo skips it entirely (earlier events still undo, mapped past it).
   const counts: Record<'footnote' | 'endnote', number> = { footnote: 0, endnote: 0 }
-  const tr = editor.state.tr
+  const tr = editor.state.tr.setMeta('addToHistory', false)
   for (const { pos, target } of order) {
     counts[target] += 1
     const node = editor.state.doc.nodeAt(pos)

@@ -148,6 +148,64 @@ describe('picture shadow (pic:spPr a:effectLst)', () => {
   })
 })
 
+describe('shadow merge preserves authored non-shadow effects (BUG-1007)', () => {
+  /** Word-authored effectLst: glow + reflection + softEdge, no shadow */
+  const GLOW_REFLECTION_SPPR = PIC_SPPR_XML.replace(
+    '</pic:spPr>',
+    '<a:effectLst><a:glow rad="50800"><a:srgbClr val="4472C4"/></a:glow>' +
+      '<a:reflection blurRad="6350" stA="44000" stPos="0" endA="0" endPos="45000" dist="0" dir="5400000" sy="-100000" algn="bl" rotWithShape="0"/>' +
+      '<a:softEdge rad="6350"/></a:effectLst></pic:spPr>',
+  )
+
+  it('authoring a shadow keeps glow/reflection/softEdge in the effectLst', () => {
+    const out = patchImageParagraphXml(GLOW_REFLECTION_SPPR, { shadow: OFFSET_DIAG_SHADOW })
+    expect(out).toContain('<a:glow rad="50800">')
+    expect(out).toContain('<a:reflection ')
+    expect(out).toContain('<a:softEdge rad="6350"/>')
+    expect(out).toContain('<a:outerShdw blurRad="50800" dist="38100" dir="2700000"')
+  })
+
+  it('clearing the shadow keeps the sibling effects', () => {
+    const shadowed = patchImageParagraphXml(GLOW_REFLECTION_SPPR, { shadow: OFFSET_DIAG_SHADOW })
+    const cleared = patchImageParagraphXml(shadowed, { shadow: null })
+    expect(cleared).not.toContain('outerShdw')
+    expect(cleared).toContain('<a:glow rad="50800">')
+    expect(cleared).toContain('<a:softEdge rad="6350"/>')
+    expect(cleared).toContain('<a:effectLst>')
+  })
+
+  it('replaces an existing Word-authored shadow, keeping the rest', () => {
+    const authored = PIC_SPPR_XML.replace(
+      '</pic:spPr>',
+      '<a:effectLst>' +
+        '<a:outerShdw blurRad="12700" dist="0" dir="5400000" rotWithShape="0"><a:srgbClr val="000000"/></a:outerShdw>' +
+        '<a:softEdge rad="6350"/></a:effectLst></pic:spPr>',
+    )
+    const out = patchImageParagraphXml(authored, { shadow: OFFSET_DIAG_SHADOW })
+    expect(out.match(/<a:outerShdw/g)).toHaveLength(1)
+    expect(out).toContain('blurRad="50800"')
+    expect(out).toContain('<a:softEdge rad="6350"/>')
+  })
+
+  it('shape styles merge keeps textbox effects too (patchShapeStyles)', () => {
+    const withEffects = TEXTBOX_PARAGRAPH.replace(
+      '</wps:spPr>',
+      '<a:effectLst><a:glow rad="50800"><a:srgbClr val="4472C4"/></a:glow></a:effectLst></wps:spPr>',
+    )
+    const shadowed = patchShapeStyles(withEffects, [{ shadow: OFFSET_DIAG_SHADOW }])
+    expect(shadowed).toContain('<a:outerShdw')
+    const cleared = patchShapeStyles(shadowed, [{ shadow: null }])
+    expect(cleared).toContain('<a:glow rad="50800">')
+    expect(cleared).not.toContain('outerShdw')
+  })
+
+  it('a self-closing effectLst still takes the shadow', () => {
+    const empty = PIC_SPPR_XML.replace('</pic:spPr>', '<a:effectLst/></pic:spPr>')
+    const out = patchImageParagraphXml(empty, { shadow: OFFSET_DIAG_SHADOW })
+    expect(out).toContain('<a:effectLst><a:outerShdw')
+  })
+})
+
 describe('picture outline (pic:spPr a:ln)', () => {
   it('writes the outline with the weight in EMU', () => {
     const out = patchImageParagraphXml(PIC_SPPR_XML, {

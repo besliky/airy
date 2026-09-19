@@ -3126,8 +3126,11 @@ export const DocProtected = Node.create({
       /** alt text description (wp:docPr descr) of the image or shape drawing */
       imageAltText: { default: null as string | null },
       /** replacement bytes for an original image (crop/background removal/replace):
-       *  the drawing XML — and with it docxIndex, wrap and position — survives */
-      imageReplace: { default: null as { base64: string; mime: string } | null },
+       *  the drawing XML — and with it docxIndex, wrap and position — survives;
+       *  keepCrop (compress without "delete cropped areas") also keeps a:srcRect */
+      imageReplace: {
+        default: null as { base64: string; mime: string; keepCrop?: boolean } | null,
+      },
       /** new chart awaiting embedding at save time (data snapshot; edits live in chartDisplay) */
       genChart: { default: null as NewChart | null },
       /** new SmartArt diagram awaiting embedding at save time (quartet parts written by the engine) */

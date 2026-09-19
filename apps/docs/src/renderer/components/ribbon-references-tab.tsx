@@ -120,6 +120,21 @@ function instrTextOf(xml: string): string {
 export type TocUpdateResult = 'updated' | 'missing' | 'no-entries'
 
 /**
+ * The section break riding in the last region paragraph's pPr, if any. A
+ * section's properties live in the pPr of its last paragraph, which for a
+ * TOC/ToF region is the last field entry — deleting the region without
+ * re-attaching it would silently drop the section (BUG-1003).
+ */
+const SECT_PR_RE = /<w:sectPr\b[^>]*\/>|<w:sectPr\b[^>]*>[\s\S]*?<\/w:sectPr>/
+
+/** inject a sectPr fragment into a generated paragraph's pPr (CT_PPr order: after rPr, at the end) */
+function attachSectPr(xml: string, sectPr: string): string {
+  return xml.includes('</w:pPr>')
+    ? xml.replace('</w:pPr>', `${sectPr}</w:pPr>`)
+    : xml.replace(/^<w:p(\s[^>]*)?>/, (open) => `${open}<w:pPr>${sectPr}</w:pPr>`)
+}
+
+/**
  * Find the TOC/TOF field region (field begin ... matching end, tracked by
  * fldChar depth across top-level blocks) and replace it with a regenerated
  * dirty field. The authored instruction is parsed first, so an update keeps
@@ -138,6 +153,7 @@ export function updateTocField(
   let to = -1
   let instr = ''
   let keepPageBreak = false
+  let keepSectPr = ''
   let depth = 0
   let found = false
   doc.forEach((node, offset) => {
@@ -155,6 +171,7 @@ export function updateTocField(
     if (depth <= 0) {
       to = offset + node.nodeSize
       keepPageBreak = /<w:br\s[^>]*w:type="page"/.test(xml)
+      keepSectPr = SECT_PR_RE.exec(xml)?.[0] ?? ''
       found = true
     }
   })
@@ -192,6 +209,12 @@ export function updateTocField(
         fieldDisplay: { kind: 'pageBreak' },
       },
     })
+  }
+  // the region's trailing section break (in the deleted last paragraph's pPr)
+  // moves onto the last regenerated paragraph, keeping the section's layout
+  if (keepSectPr && nodes.length > 0) {
+    const last = nodes[nodes.length - 1] as { attrs: Record<string, unknown> }
+    last.attrs.genXml = attachSectPr(String(last.attrs.genXml), keepSectPr)
   }
 
   editor
