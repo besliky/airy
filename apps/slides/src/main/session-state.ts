@@ -29,8 +29,10 @@ export interface RuntimePaths {
   preloadPath: string
   rendererDevUrl?: string | undefined
   rendererFilePath?: string | undefined
-  /** Shell router used to open exported PDFs in a new Airy tab. */
-  openGeneratedPath?: (path: string) => boolean
+  /** Shell router used to open exported PDFs in a new Airy tab; the asking
+   *  view's webContents id rides along so the tab opens in the sender's
+   *  window, not whichever window holds focus (BUG-1107 focus routing). */
+  openGeneratedPath?: (path: string, senderWcId?: number) => boolean
 }
 
 export const runtime: RuntimePaths = {
