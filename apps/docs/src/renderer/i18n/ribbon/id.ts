@@ -357,6 +357,8 @@ export const id = {
   ribbonSeriesN: 'Seri {n}',
   ribbonChartAddCategory: '+ Kategori',
   ribbonChartAddSeries: '+ Seri',
+  ribbonChartNativeHint:
+    'Grafik ini disisipkan di Word: tipenya tetap, hanya data yang dapat diedit.',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: 'Sisipkan Grafik SmartArt',
   ribbonSmartBlockList: 'Daftar Blok Dasar',

@@ -363,6 +363,8 @@ export const de = {
   ribbonSeriesN: 'Reihe {n}',
   ribbonChartAddCategory: '+ Kategorie',
   ribbonChartAddSeries: '+ Reihe',
+  ribbonChartNativeHint:
+    'Dieses Diagramm wurde in Word eingefügt: Der Typ ist fest, nur die Daten sind editierbar.',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: 'SmartArt-Grafik einfügen',
   ribbonSmartBlockList: 'Einfache Blockliste',

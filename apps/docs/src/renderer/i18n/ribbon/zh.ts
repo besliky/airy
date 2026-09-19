@@ -366,6 +366,7 @@ export const zh = {
   ribbonSeriesN: '系列 {n}',
   ribbonChartAddCategory: '+ 类别',
   ribbonChartAddSeries: '+ 系列',
+  ribbonChartNativeHint: '此图表来自 Word 文件：类型固定，仅可编辑数据。',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: '插入 SmartArt 图形',
   ribbonSmartBlockList: '基本块列表',

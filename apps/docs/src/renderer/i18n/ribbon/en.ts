@@ -357,6 +357,7 @@ export const en = {
   ribbonSeriesN: 'Series {n}',
   ribbonChartAddCategory: '+ Category',
   ribbonChartAddSeries: '+ Series',
+  ribbonChartNativeHint: 'This chart was inserted in Word: its type is fixed, only the data edits.',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: 'Insert SmartArt',
   ribbonSmartBlockList: 'Basic Block List',

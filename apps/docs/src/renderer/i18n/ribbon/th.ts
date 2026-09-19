@@ -356,6 +356,7 @@ export const th = {
   ribbonSeriesN: 'ชุดข้อมูล {n}',
   ribbonChartAddCategory: '+ ประเภท',
   ribbonChartAddSeries: '+ ชุดข้อมูล',
+  ribbonChartNativeHint: 'แผนภูมินี้แทรกไว้ใน Word: ชนิดถูกกำหนดตายตัว แก้ไขได้เฉพาะข้อมูล',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: 'แทรกกราฟิก SmartArt',
   ribbonSmartBlockList: 'รายการบล็อกพื้นฐาน',

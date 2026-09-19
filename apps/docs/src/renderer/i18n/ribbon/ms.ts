@@ -358,6 +358,8 @@ export const ms = {
   ribbonSeriesN: 'Siri {n}',
   ribbonChartAddCategory: '+ Kategori',
   ribbonChartAddSeries: '+ Siri',
+  ribbonChartNativeHint:
+    'Carta ini disisipkan dalam Word: jenisnya tetap, hanya data boleh diedit.',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: 'Sisipkan Grafik SmartArt',
   ribbonSmartBlockList: 'Senarai Blok Asas',

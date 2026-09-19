@@ -233,8 +233,9 @@ const CAPTION_LABEL_KEYS = [
 ] as const
 
 /** TOC options dialog (Word's Table of Contents options): level range,
- *  page numbers + hyperlinks switches, optional source styles (\t). */
-function TocOptionsModal({
+ *  page numbers + hyperlinks switches, optional source styles (\t).
+ *  Exported for its DOM tests (empty states stay inline, UX-1010). */
+export function TocOptionsModal({
   editor,
   headingPages,
   onClose,
@@ -248,6 +249,8 @@ function TocOptionsModal({
   const [showPages, setShowPages] = useState(true)
   const [hyperlinks, setHyperlinks] = useState(true)
   const [styles, setStyles] = useState('')
+  // inline empty-state message (UX-1010): no blocking window.alert over the dialog
+  const [error, setError] = useState<StringKey | null>(null)
   const dialog = useModalDialog(onClose)
 
   const levelCount = Math.min(Math.max(parseInt(levels, 10) || 3, 1), 9)
@@ -262,7 +265,7 @@ function TocOptionsModal({
       (e) => e.level <= levelCount,
     )
     if (entries.length === 0) {
-      window.alert(t('ribbonTocNoHeadings'))
+      setError('ribbonTocNoHeadings')
       return
     }
     editor
@@ -317,6 +320,11 @@ function TocOptionsModal({
             placeholder={t('refsTocStylesPh')}
           />
         </label>
+        {error && (
+          <p className="modal-error" role="alert">
+            {t(error)}
+          </p>
+        )}
         <div className="modal-actions">
           <button className="btn-ghost" onClick={onClose}>
             {t('ribbonCancel')}
@@ -330,8 +338,9 @@ function TocOptionsModal({
   )
 }
 
-/** Table of Figures dialog: pick the caption label the TOC \c field collects */
-function TofModal({
+/** Table of Figures dialog: pick the caption label the TOC \c field collects.
+ *  Exported for its DOM tests (empty states stay inline, UX-1010). */
+export function TofModal({
   editor,
   blocks,
   anchorPage,
@@ -344,12 +353,14 @@ function TofModal({
 }) {
   const { t } = useI18n()
   const [label, setLabel] = useState<string>(() => t(CAPTION_LABEL_KEYS[0]))
+  // inline empty-state message (UX-1010): no blocking window.alert over the dialog
+  const [error, setError] = useState<StringKey | null>(null)
   const dialog = useModalDialog(onClose)
 
   const insert = () => {
     const entries = collectTofEntries(editor, blocks, label, anchorPage)
     if (entries.length === 0) {
-      window.alert(t('refsTofNoCaptions'))
+      setError('refsTofNoCaptions')
       return
     }
     editor
@@ -379,6 +390,11 @@ function TofModal({
             onPick={setLabel}
           />
         </label>
+        {error && (
+          <p className="modal-error" role="alert">
+            {t(error)}
+          </p>
+        )}
         <div className="modal-actions">
           <button className="btn-ghost" onClick={onClose}>
             {t('ribbonCancel')}

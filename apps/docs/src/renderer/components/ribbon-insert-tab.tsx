@@ -697,6 +697,9 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
   }
 
   const singleSeries = kind === 'pie' || kind === 'doughnut'
+  // a native chart without a parsed display has nothing editable here: the
+  // commit would silently no-op, so the dialog says why instead (UX-1010)
+  const nativeOpaque = native && !source
 
   return (
     <div
@@ -779,8 +782,13 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
             {t('ribbonChartAddSeries')}
           </button>
         </div>
+        {nativeOpaque && (
+          <p className="modal-error" role="alert">
+            {t('ribbonChartNativeHint')}
+          </p>
+        )}
         <div className="modal-actions">
-          <button className="btn-primary" onClick={commit}>
+          <button className="btn-primary" onClick={commit} disabled={nativeOpaque}>
             {source ? t('ribbonChartUpdate') : t('ribbonInsert')}
           </button>
           <button onClick={onClose}>{t('ribbonCancel')}</button>

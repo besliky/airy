@@ -358,6 +358,8 @@ export const pl = {
   ribbonSeriesN: 'Seria {n}',
   ribbonChartAddCategory: '+ Kategoria',
   ribbonChartAddSeries: '+ Seria',
+  ribbonChartNativeHint:
+    'Ten wykres został wstawiony w programie Word: typ jest stały, edytowalne są tylko dane.',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: 'Wstaw grafikę SmartArt',
   ribbonSmartBlockList: 'Podstawowa lista bloków',

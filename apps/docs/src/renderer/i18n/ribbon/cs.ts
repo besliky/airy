@@ -357,6 +357,7 @@ export const cs = {
   ribbonSeriesN: 'Řada {n}',
   ribbonChartAddCategory: '+ Kategorie',
   ribbonChartAddSeries: '+ Řada',
+  ribbonChartNativeHint: 'Tento graf byl vložen ve Wordu: typ je pevný, upravovat lze pouze data.',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: 'Vložit grafiku SmartArt',
   ribbonSmartBlockList: 'Základní seznam bloků',

@@ -362,6 +362,8 @@ export const es = {
   ribbonSeriesN: 'Serie {n}',
   ribbonChartAddCategory: '+ Categoría',
   ribbonChartAddSeries: '+ Serie',
+  ribbonChartNativeHint:
+    'Este gráfico se insertó en Word: su tipo es fijo, solo se editan los datos.',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: 'Insertar gráfico SmartArt',
   ribbonSmartBlockList: 'Lista de bloques básica',

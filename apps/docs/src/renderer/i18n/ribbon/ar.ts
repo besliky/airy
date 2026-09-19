@@ -355,6 +355,7 @@ export const ar = {
   ribbonSeriesN: 'السلسلة {n}',
   ribbonChartAddCategory: '+ فئة',
   ribbonChartAddSeries: '+ سلسلة',
+  ribbonChartNativeHint: 'أُدرج هذا المخطط في Word: نوعه ثابت، ويمكن تحرير البيانات فقط.',
   // SmartArt dialog
   ribbonSmartArtInsertTitle: 'إدراج رسم SmartArt',
   ribbonSmartBlockList: 'قائمة كتل أساسية',
