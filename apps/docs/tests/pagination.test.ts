@@ -1417,6 +1417,46 @@ describe('computeSectionedSlicesF2 — line-level pagination', () => {
     expect(slices.map((s) => s.start)).toEqual([0, 150, 230, 350])
     expect(slices[slices.length - 1].end).toBe(470)
   })
+
+  // BUG-1212: the product path resolves per-reference noteBands (applyBlockMeta),
+  // so the spill budget used to be unreachable there — the end-charged branch
+  // guards bands out and the line-level split dragged the paragraph and its
+  // note to the next page. A last-line band that overflows spills like the
+  // end-charged reservation does: the reference line stays (Word baseline)
+  it('a banded paragraph whose last-line note overflows stays and spills', () => {
+    // 3 lines of 60 (text 180), note 100 referenced on the last line: page 1
+    // (capacity 184 after the separator) hosts the text (4px leftover), 96 of
+    // the note spills; page 2 opens charged 96 (capacity 104)
+    const para = lineBlock(0, [60, 60, 60], {
+      footnoteExtraPx: 100,
+      noteBands: [{ offset: 120, height: 100 }],
+      height: 280,
+    })
+    const b1 = block(280, 60)
+    const b2 = block(340, 60)
+    const b3 = block(400, 60)
+    const slices = computeSectionedSlicesF2([para, b1, b2, b3], geoms1, 460)
+    // the paragraph stays whole on page 1; the charged page 2 holds b1 only
+    // and page 3 opens at 340 — without the banded spill the paragraph itself
+    // piled onto page 1 and one page 2 swallowed all three fillers
+    expect(slices.map((s) => s.start)).toEqual([0, 280, 340])
+    expect(slices[slices.length - 1].end).toBe(460)
+  })
+
+  it('a banded note on a non-last line still moves its reference line (no spill)', () => {
+    // mid-paragraph notes follow their reference line: the last-line spill
+    // must not hijack a band whose line can simply turn the page
+    const filler = block(0, 150)
+    const lines = [0, 30].map((off) => ({ offsetInBlock: off, height: 30 }))
+    const para = block(150, 60 + 50, {
+      lineBoxes: lines,
+      widowControl: false,
+      footnoteExtraPx: 50,
+      noteBands: [{ offset: 0, height: 50 }],
+    })
+    const slices = computeSectionedSlicesF2([filler, para], geoms1, 210)
+    expect(slices.map((s) => s.start)).toEqual([0, 150])
+  })
 })
 
 describe('computeSectionedSlicesF2 — mid-paragraph page breaks (innerBreaks)', () => {
@@ -2277,20 +2317,56 @@ describe('measureBlocks — break-only paragraphs', () => {
     expect(blocks[0].height).toBe(110)
   })
 
+  it('a DOM-resolved band (product note path) spills instead of dragging its paragraph', () => {
+    // BUG-1212 proxy for the shipping pipeline: App.tsx always pairs
+    // footnoteExtraPx with per-ref footnoteBands and applyBlockMeta resolves
+    // them through the DOM markers, so the slicer sees noteBands — the spill
+    // budget must stay reachable for exactly this shape
+    const el = document.createElement('p')
+    el.getBoundingClientRect = () => ({ top: 100, height: 180 }) as DOMRect
+    const sup = document.createElement('sup')
+    sup.className = 'doc-note-ref'
+    sup.setAttribute('data-note-kind', 'footnote')
+    sup.getBoundingClientRect = () => ({ top: 100, height: 8 }) as DOMRect
+    el.appendChild(sup)
+    const para: BlockBox = {
+      top: 0,
+      height: 180,
+      docxIndex: 0,
+      el,
+      lineBoxes: [{ offsetInBlock: 0, height: 180 }],
+    }
+    applyBlockMeta([para], () => ({ footnoteExtraPx: 100, footnoteBands: [{ heightPx: 100 }] }))
+    expect(para.noteBands).toEqual([{ offset: 0, height: 100 }])
+    expect(para.height).toBe(280)
+    const b1 = block(280, 60)
+    const b2 = block(340, 60)
+    const b3 = block(400, 60)
+    const slices = computeSectionedSlicesF2([para, b1, b2, b3], geoms1, 460)
+    // same shape as the banded-spill engine test: paragraph stays, next page
+    // pays for the spilled continuation
+    expect(slices.map((s) => s.start)).toEqual([0, 280, 340])
+  })
+
   it('a split paragraph charges each note on the page holding its reference line', () => {
-    // 4 lines x 40 after a 100px filler; the line at offset 120 carries a 60px
-    // note → its page must reserve line + note, splitting the paragraph earlier
-    const filler = block(0, 100)
+    // 4 lines x 40 after a 140px filler (page capacity 300 - separator 16):
+    // lines 0-1 fit, the tail with the line at offset 120 (carrying a 60px
+    // note) turns the page, so the note is charged on its reference line's
+    // page. BUG-1212 note: when the TEXT fits and only the note overflows, the
+    // paragraph now stays and the note spills instead (last-line band test in
+    // the spill cluster) — this fixture keeps the text itself overflowing so
+    // the split path is what places the band
+    const filler = block(0, 140)
     const lines = [0, 40, 80, 120].map((off) => ({ offsetInBlock: off, height: 40 }))
-    const b = block(100, 160 + 60, {
+    const b = block(140, 160 + 60, {
       lineBoxes: lines,
       footnoteExtraPx: 60,
       noteBands: [{ offset: 130, height: 60 }],
     })
     const geoms = [{ contentHeight: 300, forceBreak: false }]
-    const slices = computeSectionedSlicesF2([filler, b], geoms, 260)
+    const slices = computeSectionedSlicesF2([filler, b], geoms, 300)
     // lines 0-1 on page 1 (widow rule keeps 2 on the next page), lines 2-3 + note on page 2
-    expect(slices.map((s) => s.start)).toEqual([0, 180])
+    expect(slices.map((s) => s.start)).toEqual([0, 220])
   })
 
   it('a reference line whose note cannot fit moves to the next page with its note', () => {

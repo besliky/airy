@@ -1278,7 +1278,8 @@ function _placeParaBlock(
   // while its 12th paragraph stays; the spilled strip only eats the next
   // page's note area, which that page's own separator already reserves).
   // Per-line banded notes keep riding their lines (a mid-paragraph note
-  // follows its reference line, Word semantics)
+  // follows its reference line, Word semantics) — their spill twin is the
+  // last-band branch in the line-level placement below
   if (
     noteExtra > 0 &&
     !(block.noteBands && block.noteBands.length > 0) &&
@@ -1314,6 +1315,22 @@ function _placeParaBlock(
   // line-level placement
   const nLines = lineBoxes.length
   const bandH = noteBandHeights(block, lineBoxes)
+
+  // BUG-1212: banded twin of the end-charged spill above — the product path
+  // resolves per-reference noteBands (applyBlockMeta), so the guard above
+  // kept the whole spill budget unreachable outside the parity harness: a
+  // paragraph whose text fits but whose last-line band does not dragged the
+  // paragraph and its note to the next page. Word keeps the reference line
+  // on the page and continues the note in the next page's footnote area
+  // (same recorded baselines), so place the text whole and spill the part of
+  // the last band the leftover room cannot host
+  const lastBand = bandH?.[nLines - 1] ?? 0
+  if (lastBand > 0 && noteSpill && fits(totalH - spaceAfterPx - lastBand)) {
+    const left = roomLeft?.() ?? 0
+    place(totalH - lastBand)
+    noteSpill(Math.max(lastBand - Math.max(left - (totalH - lastBand), 0), 0))
+    return
+  }
 
   if (totalH > contentH) {
     // paragraph exceeds one page: hard line-level cut
