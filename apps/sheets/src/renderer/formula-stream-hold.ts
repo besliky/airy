@@ -22,6 +22,18 @@ const NOTIFICATION_MUTATION = 'formula.mutation.set-formula-calculation-notifica
 /** Chunks arrive tens of milliseconds apart; a scroll burst ends within this, so the merged cycle lands in the pause after it. */
 export const FORMULA_STREAM_HOLD_MS = 1000
 
+// Test seam: the full-recalc test drives the hold ladder headlessly and pays
+// three settle waits of hold+margin, so the 1 s production hold alone costs
+// ~6 s of wall in that suite (PERF-1101). Tests shrink the hold — staying
+// above the engine's 100 ms calculation debounce so the veto branch still
+// fires; production always runs the 1 s default.
+let holdMs = FORMULA_STREAM_HOLD_MS
+
+/** Test-only: shorten the stream hold (null restores the 1 s default). */
+export function _setFormulaStreamHoldMsForTests(ms: number | null): void {
+  holdMs = ms ?? FORMULA_STREAM_HOLD_MS
+}
+
 interface TriggerControllerInternals {
   _executingDirtyData?: Record<string, unknown>
   _executionInProgressParams?: unknown
@@ -87,7 +99,7 @@ export function installFormulaStreamHold(runtime: UniverRuntime): void {
   current = state
   const injector = runtime.univer.__getInjector()
   const commandService = injector.get(ICommandService)
-  const holding = () => Date.now() - state.lastChunkAt < FORMULA_STREAM_HOLD_MS
+  const holding = () => Date.now() - state.lastChunkAt < holdMs
 
   const flush = () => {
     state.timer = null
@@ -116,7 +128,7 @@ export function installFormulaStreamHold(runtime: UniverRuntime): void {
   }
   const schedule = () => {
     if (state.timer) clearTimeout(state.timer)
-    state.timer = setTimeout(flush, FORMULA_STREAM_HOLD_MS + 20)
+    state.timer = setTimeout(flush, holdMs + 20)
   }
   state.schedule = schedule
 
