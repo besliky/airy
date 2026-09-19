@@ -921,7 +921,10 @@ describe('pagination parity (F2: line-level pagination + page-break constraints)
         expect(floorSum).toBeGreaterThanOrEqual(floorTotal - 1)
       }
       if (loProfile === 'lo') {
-        expect(lo.rate).toBeGreaterThanOrEqual(0.85)
+        // PAR-109 phases C+D DoD: >= 89/93 page-starts under the 'lo' profile
+        // (0.95 pins the landed state; the residual 02/10/23 misses are
+        // baseline-internal contradictions, see .orchestrator/LOGS/PAR-109CD.md)
+        expect(lo.rate).toBeGreaterThanOrEqual(0.95)
       }
 
       expect(results.length).toBeGreaterThan(0)
