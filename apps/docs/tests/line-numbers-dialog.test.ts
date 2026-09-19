@@ -1,7 +1,11 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { LocaleProvider, loadLocale, setModuleLang } from '../src/renderer/i18n/locale'
+import { en as ribbonEn } from '../src/renderer/i18n/ribbon/en'
+import { ja as ribbonJa } from '../src/renderer/i18n/ribbon/ja'
 import { LineNumbersDialog } from '../src/renderer/components/LineNumbersDialog'
 
 beforeAll(() => {
@@ -99,5 +103,32 @@ describe('LineNumbersDialog modal semantics (UX-904)', () => {
     expect(document.activeElement).not.toBe(trigger)
     unmount()
     expect(document.activeElement).toBe(trigger)
+  })
+})
+
+describe('line-number distance label carries its unit inside the string (UX-908)', () => {
+  // The dialog used to append a literal ' (pt)' after the label — the unit
+  // does not translate (Japanese writes the point unit as a word) and stays
+  // mispositioned in RTL. The unit now lives inside ribbonLnDistance for
+  // every locale, so pinning the en DOM text plus one translated sibling and
+  // the absence of the JSX suffix is the whole contract.
+  it('renders the localized distance label verbatim, with no JSX unit suffix', () => {
+    const { container, unmount } = render()
+    // the distance label is the one holding the min-0/max-3168 number input;
+    // its sibling is the Auto checkbox label
+    const labels = [...container.querySelectorAll('.margin-row label')]
+    const distance = labels.find((l) => l.querySelector('input[min="0"][max="3168"]'))!
+    expect(distance.textContent).toBe('Distance from text (pt)')
+    unmount()
+  })
+
+  it('the unit is translated per locale, not hardcoded after the t() call', () => {
+    expect(ribbonEn.ribbonLnDistance).toBe('Distance from text (pt)')
+    expect(ribbonJa.ribbonLnDistance).toContain('ポイント')
+    const src = readFileSync(
+      join(__dirname, '../src/renderer/components/LineNumbersDialog.tsx'),
+      'utf8',
+    )
+    expect(src).not.toContain("ribbonLnDistance')} (pt)")
   })
 })

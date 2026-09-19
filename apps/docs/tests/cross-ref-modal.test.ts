@@ -18,6 +18,8 @@ import { CrossRefModal } from '../src/renderer/components/ribbon-insert-tab'
 import { blocksToPmDoc } from '../src/renderer/editor/convert'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { t } from '../src/renderer/i18n/locale'
+import { en as ribbonEn } from '../src/renderer/i18n/ribbon/en'
+import { zh as ribbonZh } from '../src/renderer/i18n/ribbon/zh'
 
 const BODY =
   '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Chapter One</w:t></w:r></w:p>' +
@@ -182,5 +184,21 @@ describe('CrossRefModal insert flow (BUG-918)', () => {
     expect(alert).not.toHaveBeenCalled()
     expect(editor.state.doc.firstChild!.attrs.hiddenBookmarks).toBeNull()
     alert.mockRestore()
+  })
+})
+
+describe('cross-reference anchor failure alert copy (UX-907)', () => {
+  // The read-only case is fenced off silently before any anchor work
+  // (UX-715 gate, tested above), so this alert only fires when the target
+  // node cannot be resolved. Its text must say so — the old wording claimed
+  // a read-only document, which was wrong for the only case that shows it.
+  it('says the anchor could not be created, and never claims a read-only document', () => {
+    for (const dict of [ribbonEn, ribbonZh]) {
+      const text = dict.ribbonCrossRefNoAnchor
+      expect(text.length).toBeGreaterThan(0)
+      expect(/read.?only|只读/i.test(text)).toBe(false)
+    }
+    expect(ribbonEn.ribbonCrossRefNoAnchor).toMatch(/anchor/i)
+    expect(ribbonZh.ribbonCrossRefNoAnchor).toContain('锚点')
   })
 })
