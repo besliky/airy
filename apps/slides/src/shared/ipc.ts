@@ -1278,8 +1278,12 @@ export interface ExportPdfResult {
 export interface ExportVideoOp {
   /** Target video absolute path (chosen via pickExportVideoPath) */
   filePath: string
-  /** Recorded video bytes (base64) */
-  bytesBase64: string
+  /**
+   * Recorded video bytes. Structured clone carries TypedArrays natively —
+   * a 5-min 1080p export is ~375 MB here instead of >1.2 GB of transient
+   * renderer memory for a base64 string (binary + btoa + IPC copy) (BUG-1209).
+   */
+  bytes: Uint8Array
   /** MediaRecorder mime that produced the bytes (informational) */
   mimeType: string
 }

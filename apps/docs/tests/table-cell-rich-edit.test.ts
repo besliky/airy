@@ -1,7 +1,7 @@
 import { Editor } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import { parseDocx } from '@airy-office/docx-engine'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from '../src/renderer/editor/convert'
 import { editorExtensions } from '../src/renderer/editor/extensions'
@@ -24,6 +24,11 @@ const TABLE =
 const RELS =
   '<Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="mailto:team@example.com" TargetMode="External"/>'
 
+/** editors created by these tests; destroyed in afterEach so the ProseMirror
+ *  DOMObserver polling timer never outlives the jsdom environment (an
+ *  unhandled "document is not defined" after teardown fails the whole run) */
+const openEditors: Editor[] = []
+
 async function openDoc() {
   const source = await buildDocx({ bodyXml: TABLE, extraRels: RELS })
   const parsed = await parseDocx(source)
@@ -32,8 +37,15 @@ async function openDoc() {
     extensions: editorExtensions,
     content: blocksToPmDoc(parsed.blocks) as never,
   })
+  openEditors.push(editor)
   return { editor, parsed }
 }
+
+afterEach(async () => {
+  while (openEditors.length) openEditors.pop()?.destroy()
+  // let a pending DOMObserver flush land while the document still exists
+  await new Promise((resolve) => setTimeout(resolve, 30))
+})
 
 describe('rich table cell edits', () => {
   it('keeps hyperlink and per-run formatting when the cell text is edited', async () => {

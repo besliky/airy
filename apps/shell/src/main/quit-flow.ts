@@ -23,9 +23,10 @@ export interface WindowClosePersistDecision {
 }
 
 export interface QuitFlow {
-  /** true between before-quit and the quit finishing or being cancelled */
   readonly quitting: boolean
-  /** before-quit: window closes from here on belong to the app-wide quit */
+  /** before-quit: window closes from here on belong to the app-wide quit.
+   *  A repeat while the quit is still in flight is a no-op (BUG-1219) —
+   *  re-arming happens only after cancel() reset the flags. */
   begin(): void
   /** a dirty-guard Cancel stopped a window close while windows stay open;
    *  returns true when a quit-time session snapshot has already landed and
@@ -45,6 +46,15 @@ export function createQuitFlow(): QuitFlow {
       return quitting
     },
     begin() {
+      // a second before-quit while the quit is still in flight (repeat Cmd+Q
+      // with a window-modal prompt still open, or a programmatic app.quit()
+      // from the updater) must NOT re-arm the snapshot counter (BUG-1219):
+      // the first confirmed close already wrote the one quit snapshot, and a
+      // re-armed counter would let the next confirmed close overwrite it
+      // without the already-closed windows — shrinking a snapshot this
+      // module promises never to shrink — and make a later cancel() look
+      // like nothing persisted, skipping the recovery rewrite
+      if (quitting) return
       quitting = true
       quitSessionPersisted = false
     },

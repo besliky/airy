@@ -89,6 +89,7 @@ export function ExportVideoDialog({
     setPhase('render')
     exportingRef.current = true
     setProgress({ done: 0, total: 0 })
+    setFailReason(null)
     cancelBox.current = false
     setCancelling(false)
     setFailReason(null)

@@ -39,6 +39,16 @@ async function openDoc(bodyXml = BODY) {
   return { editor, blocks: parsed.blocks }
 }
 
+afterEach(async () => {
+  // the tracked editors must be destroyed before the jsdom environment goes
+  // away — a leaked ProseMirror DOMObserver polling timer fires after
+  // teardown ("document is not defined") and fails the whole run
+  for (const editor of editors) editor.destroy()
+  editors.clear()
+  // let a pending DOMObserver flush land while the document still exists
+  await new Promise((resolve) => setTimeout(resolve, 30))
+})
+
 describe('CrossRefModal dialog semantics (UX-902)', () => {
   let editor: Editor
   let blocks: Block[]

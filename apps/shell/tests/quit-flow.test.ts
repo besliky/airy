@@ -51,12 +51,41 @@ describe('createQuitFlow', () => {
     })
   })
 
-  it('begin() re-arms a quit after the previous one finished', () => {
+  it('begin() re-arms a quit after the previous one was cancelled', () => {
     const flow = createQuitFlow()
     flow.begin()
     flow.closeDecision(1)
+    flow.cancel()
+    // a genuine second quit must start fresh: its first confirmed close
+    // writes a snapshot again
     flow.begin()
+    expect(flow.quitting).toBe(true)
     expect(flow.closeDecision(1).persist).toBe(true)
+  })
+
+  it('a repeated begin() mid-quit keeps persist-once armed (BUG-1219)', () => {
+    const flow = createQuitFlow()
+    flow.begin()
+    expect(flow.closeDecision(3).persist).toBe(true)
+    // a second before-quit while the quit is still in flight (repeat Cmd+Q
+    // with a prompt open) must not re-arm the snapshot counter: the next
+    // confirmed close used to overwrite the quit snapshot without the
+    // already-closed windows
+    flow.begin()
+    expect(flow.quitting).toBe(true)
+    expect(flow.closeDecision(2).persist).toBe(false)
+  })
+
+  it('a cancel after a repeated begin() still requests the recovery rewrite (BUG-1219)', () => {
+    const flow = createQuitFlow()
+    flow.begin()
+    flow.closeDecision(2)
+    flow.begin()
+    // the snapshot from before the repeat is stale (a window already
+    // closed); the cancel must replace it, not skip the rewrite like it did
+    // when the repeat had reset the counter
+    expect(flow.cancel()).toBe(true)
+    expect(flow.quitting).toBe(false)
   })
 
   it('a cancelled guard unwinds the quit: later closes are ordinary again (BUG-1104)', () => {

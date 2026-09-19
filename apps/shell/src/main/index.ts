@@ -250,6 +250,8 @@ import { isSameFile, isValidRenameName } from './rename-validation'
 import { TabManager } from './tab-manager'
 import type { DetachedTab } from './tab-manager'
 import { createQuitFlow } from './quit-flow'
+import { createShutdownEffects } from './shutdown-effects'
+import { createWindowCloseGuard } from './window-close-guard'
 import { ShellWindowRegistry, type ShellWindowEntry } from './shell-windows'
 import { startShellBridge, stopShellBridge } from './bridge/shell-bridge'
 import { initUpdater, updaterMenuItems } from './updater'
@@ -763,9 +765,10 @@ function sessionRestoreEnabled(): boolean {
 let sessionSaveTimer: ReturnType<typeof setTimeout> | null = null
 
 /** write the live windows' session in window order (skipStaged drops
- *  untitled-staged tabs — quit only; exclude leaves a closing window out) */
+ *  untitled-staged tabs — quit only; exclude leaves a closing window out;
+ *  windows whose close already went through never serialize — BUG-1218) */
 function persistSessionState(skipStaged = false, exclude?: ShellWindowEntry): void {
-  const entries = shellEntries().filter((e) => e !== exclude)
+  const entries = shellWindows.persistableEntries(exclude)
   if (entries.length === 0) return
   try {
     const stagingDir = skipStaged ? UNTITLED_STAGING_DIR() : null
@@ -1025,82 +1028,55 @@ function createShellWindow(options: CreateShellWindowOptions = {}): ShellWindowE
   })
 
   // Closing a window walks its dirty sheets/pdf/slides/docs tabs through the
-  // same save/don't-save/cancel prompt; any cancel aborts the close. Closing
-  // one of several windows is an ordinary close — the others keep running.
-  // docs dirtiness lives renderer-side, so any live docs tab forces the async path
-  // and gets queried there (clean tabs pass through without activation).
-  let closeConfirmed = false
-  win.on('close', (event) => {
-    if (closeConfirmed) return
-    const dirtySheets = manager.dirtySheetsTabs()
-    const dirtyPdf = manager.dirtyPdfTabs()
-    const dirtyMarkdown = manager.dirtyMarkdownTabs()
-    const dirtyHtml = manager.dirtyHtmlTabs()
-    const dirtySlides = manager.dirtySlidesTabs()
-    const docsTabs = manager.docsTabs()
-    if (
-      dirtySheets.length === 0 &&
-      dirtyPdf.length === 0 &&
-      dirtyMarkdown.length === 0 &&
-      dirtyHtml.length === 0 &&
-      dirtySlides.length === 0 &&
-      docsTabs.length === 0
-    ) {
-      finishWindowClose(entry)
-      return
-    }
-    event.preventDefault()
-    void (async () => {
-      // any Cancel below aborts this window's close — and with it the whole
-      // quit when one was in flight (abortAppQuit unwinds the quit state)
-      for (const tab of dirtySheets) {
-        manager.activateTab(tab.id)
-        if (!(await requestSheetsClose(tab.webContents, win))) {
-          abortAppQuit()
-          return
+  // same save/don't-save/cancel prompt; any cancel aborts the close (and an
+  // in-flight quit with it). A close event arriving while a prompt is still
+  // open is swallowed — the running cycle owns the decision (BUG-1217).
+  // docs dirtiness lives renderer-side, so any live docs tab forces the async
+  // path and gets queried there (clean tabs pass through without activation).
+  win.on(
+    'close',
+    createWindowCloseGuard({
+      // walk order: sheets, pdf, markdown, html, slides, then docs
+      dirtyTabs: () => [
+        ...tagGuardTabs('sheets', manager.dirtySheetsTabs()),
+        ...tagGuardTabs('pdf', manager.dirtyPdfTabs()),
+        ...tagGuardTabs('markdown', manager.dirtyMarkdownTabs()),
+        ...tagGuardTabs('html', manager.dirtyHtmlTabs()),
+        ...tagGuardTabs('slides', manager.dirtySlidesTabs()),
+        ...tagGuardTabs('docs', manager.docsTabs()),
+      ],
+      requestClose: async (tab) => {
+        // any false below aborts this window's close — and with it the whole
+        // quit when one was in flight (abortAppQuit unwinds the quit state)
+        switch (tab.kind) {
+          case 'sheets':
+            manager.activateTab(tab.id)
+            return requestSheetsClose(tab.webContents, win)
+          case 'pdf':
+            manager.activateTab(tab.id)
+            return requestPdfClose(tab.webContents, win)
+          case 'markdown':
+            manager.activateTab(tab.id)
+            return requestMarkdownClose(tab.webContents, win)
+          case 'html':
+            manager.activateTab(tab.id)
+            return requestHtmlClose(tab.webContents, win)
+          case 'slides':
+            manager.activateTab(tab.id)
+            return requestSlidesClose(tab.webContents, win)
+          case 'docs':
+            if (!(await docsQueryDirty(tab.webContents))) return true
+            manager.activateTab(tab.id)
+            return requestDocsClose(tab.webContents, win)
         }
-      }
-      for (const tab of dirtyPdf) {
-        manager.activateTab(tab.id)
-        if (!(await requestPdfClose(tab.webContents, win))) {
-          abortAppQuit()
-          return
-        }
-      }
-      for (const tab of dirtyMarkdown) {
-        manager.activateTab(tab.id)
-        if (!(await requestMarkdownClose(tab.webContents, win))) {
-          abortAppQuit()
-          return
-        }
-      }
-      for (const tab of dirtyHtml) {
-        manager.activateTab(tab.id)
-        if (!(await requestHtmlClose(tab.webContents, win))) {
-          abortAppQuit()
-          return
-        }
-      }
-      for (const tab of dirtySlides) {
-        manager.activateTab(tab.id)
-        if (!(await requestSlidesClose(tab.webContents, win))) {
-          abortAppQuit()
-          return
-        }
-      }
-      for (const tab of docsTabs) {
-        if (!(await docsQueryDirty(tab.webContents))) continue
-        manager.activateTab(tab.id)
-        if (!(await requestDocsClose(tab.webContents, win))) {
-          abortAppQuit()
-          return
-        }
-      }
-      closeConfirmed = true
-      finishWindowClose(entry)
-      if (!win.isDestroyed()) win.close()
-    })()
-  })
+      },
+      finishClose: () => finishWindowClose(entry),
+      closeWindow: () => win.close(),
+      isWindowAlive: () => !win.isDestroyed(),
+      abortQuit: abortAppQuit,
+      logFailure: (err) => console.error('[shell] window close guard failed:', err),
+    }),
+  )
 
   win.on('closed', () => {
     shellWindows.remove(win)
@@ -1122,6 +1098,19 @@ function createShellWindow(options: CreateShellWindowOptions = {}): ShellWindowE
  *  their per-window semantics (BUG-1104). */
 const quitFlow = createQuitFlow()
 
+/** before-quit's process-wide effects (sheets no-prompt close mode, sidecar,
+ *  live bridge, pdf workers) and their rollback for a cancelled quit
+ *  (BUG-1216: they used to stay armed forever after one aborted quit) */
+const shutdownEffects = createShutdownEffects({
+  setSheetsShuttingDown: markSheetsShuttingDown,
+  stopSidecar: stopSheetsSidecar,
+  disposePdfWorkers: disposePdfConversionWorkers,
+  bridgeEnabled: liveBridgeEnabled,
+  stopBridge: stopShellBridge,
+  startBridge: startLiveBridge,
+  log: (message, err) => console.error(message, err),
+})
+
 /**
  * Bookkeeping when a window's close is really going through (both the clean
  * path and the post-guard path): its never-saved untitled tabs die with it —
@@ -1139,9 +1128,18 @@ function finishWindowClose(entry: ShellWindowEntry): void {
       removeStagedTabFile(tab.filePath)
   }
   const decision = quitFlow.closeDecision(shellEntries().length)
-  if (!decision.persist) return
-  if (decision.excludeClosing) persistSessionState(false, entry)
-  else persistSessionState(decision.skipStaged)
+  if (decision.persist) {
+    if (decision.excludeClosing) persistSessionState(false, entry)
+    else persistSessionState(decision.skipStaged)
+  }
+  // mark only AFTER this window's own snapshot write (the quit snapshot and
+  // the last-window ordinary close legitimately include the closer): every
+  // write from here on — another window's ordinary close, the recovery
+  // rewrite when a later guard cancels the quit — must leave this window
+  // out; 'closed' removes it from the registry moments later (BUG-1218: the
+  // recovery rewrite used to resurrect a window whose confirmed close had
+  // not yet received its asynchronous 'closed' event)
+  entry.closingConfirmed = true
 }
 
 /**
@@ -1150,10 +1148,33 @@ function finishWindowClose(entry: ShellWindowEntry): void {
  * keep running). Unwind the quit bookkeeping — and if a quit-time session
  * write already landed, re-serialize from the live windows so the aborted
  * quit leaves session state as if it never happened (BUG-1104: the armed
- * flag used to turn every later close into a skipped write).
+ * flag used to turn every later close into a skipped write). The quit's
+ * before-quit effects unwind with it (BUG-1216): sheets close prompts come
+ * back and the live bridge restarts when its setting says so.
  */
 function abortAppQuit(): void {
-  if (quitFlow.cancel()) persistSessionState(false)
+  if (!quitFlow.quitting) return
+  const restoreSession = quitFlow.cancel()
+  shutdownEffects.rollback()
+  if (restoreSession) persistSessionState(false)
+}
+
+/** which editor's close prompt runs for a dirty-tab walk step */
+type GuardedTabKind = 'sheets' | 'pdf' | 'markdown' | 'html' | 'slides' | 'docs'
+
+/** a TabManager dirty-tab collector result tagged with its prompt kind */
+interface KindTaggedGuardTab {
+  id: string
+  webContents: WebContents
+  kind: GuardedTabKind
+}
+
+/** tag one collector's tabs for the window close guard's kind dispatch */
+function tagGuardTabs(
+  kind: GuardedTabKind,
+  tabs: Array<{ id: string; webContents: WebContents }>,
+): KindTaggedGuardTab[] {
+  return tabs.map((tab) => ({ ...tab, kind }))
 }
 
 /** point the editor modules' dialog parents at this window (focus follows the shell) */
@@ -1682,6 +1703,15 @@ function liveBridgeEnabled(): boolean {
   return effectiveLiveBridgeEnabled(readAppSettings(APP_SETTINGS_PATH()).liveBridge)
 }
 
+/** start (or return the running) live bridge server — startup, the Settings
+ *  toggle, and the rollback after an aborted quit (BUG-1216) share this */
+function startLiveBridge() {
+  return startShellBridge({
+    userDataDir: app.getPath('userData'),
+    getTabManager: () => focusedManager(),
+  })
+}
+
 /** serialized toggle: transition the server first, persist only on success
  *  (see live-bridge-toggle.ts); a failed start rejects the IPC result and
  *  leaves the previous stored value in place */
@@ -1690,10 +1720,7 @@ const setLiveBridgeEnabled = createLiveBridgeToggle({
   toggleAllowed: () => liveBridgeToggleAllowed(),
   persist: (on) => writeAppSetting(APP_SETTINGS_PATH(), 'liveBridge', on),
   start: async () => {
-    await startShellBridge({
-      userDataDir: app.getPath('userData'),
-      getTabManager: () => focusedManager(),
-    })
+    await startLiveBridge()
   },
   stop: () => stopShellBridge(),
 })
@@ -3451,10 +3478,7 @@ app.whenReady().then(async () => {
   // Settings → General or AIRY_DISABLE_BRIDGE=1 (agents keep working unless
   // the user explicitly opts out, so the default stays on)
   if (liveBridgeEnabled()) {
-    void startShellBridge({
-      userDataDir: app.getPath('userData'),
-      getTabManager: () => focusedManager(),
-    }).catch((err: unknown) => {
+    void startLiveBridge().catch((err: unknown) => {
       console.error('bridge server failed to start:', err)
     })
   }
@@ -3502,11 +3526,8 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   quitFlow.begin()
-  // No close prompt may fall through to "Save" during shutdown
-  markSheetsShuttingDown()
-  stopSheetsSidecar()
-  // close the live bridge socket and remove the token file (best-effort)
-  void stopShellBridge()
-  // kill in-flight pdf->docx conversion workers (best-effort)
-  disposePdfConversionWorkers()
+  // no close prompt may fall through to "Save" during shutdown, the sidecar
+  // and pdf workers stop, and the live bridge closes its socket — the whole
+  // set rolls back if a cancelled dirty-guard aborts the quit (BUG-1216)
+  shutdownEffects.arm()
 })

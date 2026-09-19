@@ -331,6 +331,7 @@ export async function exportVideo(
       width: dims.width,
       height: dims.height,
       slideImages: images,
+      slideSizes: visible.map((s) => ({ width: s.widthPx, height: s.heightPx })),
       mimeType: mime.mimeType,
       onProgress: (done, total) => onProgress?.('record', done, total),
       ...(cancel ? { cancel } : {}),
@@ -345,7 +346,9 @@ export async function exportVideo(
     }
     const r = await window.slidesApi.exportVideo({
       filePath: target,
-      bytesBase64: await blobToBase64(blob),
+      // binary over structured clone — no base64 string ever materializes
+      // (BUG-1209); the Uint8Array is a zero-copy view over the ArrayBuffer
+      bytes: new Uint8Array(await blob.arrayBuffer()),
       mimeType: mime.mimeType,
     })
     if (r.ok) {

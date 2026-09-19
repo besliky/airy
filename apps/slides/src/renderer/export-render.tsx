@@ -23,7 +23,7 @@ const EXPORT_PIXEL_RATIO = 2
 export async function renderSlidesToPngBase64(
   slides: RenderSlide[],
   images: Map<string, HTMLImageElement>,
-  pixelRatio: number = EXPORT_PIXEL_RATIO,
+  pixelRatio: number | ReadonlyArray<number> = EXPORT_PIXEL_RATIO,
   onProgress?: (done: number, total: number) => void,
   cancel?: { current: boolean },
 ): Promise<string[]> {
@@ -48,7 +48,11 @@ export async function renderSlidesToPngBase64(
       })
       // Wait one frame for Konva to finish batchDraw, then capture
       await new Promise((r) => requestAnimationFrame(r))
-      const dataUrl = stage.toDataURL({ mimeType: 'image/png', pixelRatio })
+      const ratio =
+        typeof pixelRatio === 'number'
+          ? pixelRatio
+          : (pixelRatio[out.length] ?? pixelRatio[0] ?? EXPORT_PIXEL_RATIO)
+      const dataUrl = stage.toDataURL({ mimeType: 'image/png', pixelRatio: ratio })
       out.push(dataUrl.replace(/^data:image\/png;base64,/, ''))
       onProgress?.(out.length, slides.length)
     }

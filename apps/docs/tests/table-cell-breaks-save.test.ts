@@ -1,7 +1,7 @@
 import { Editor } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import { parseDocx } from '@airy-office/docx-engine'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from '../src/renderer/editor/convert'
 import { editorExtensions } from '../src/renderer/editor/extensions'
@@ -26,6 +26,11 @@ const TABLE =
   '</w:tr>' +
   '</w:tbl>'
 
+/** editors created by these tests; destroyed in afterEach so the ProseMirror
+ *  DOMObserver polling timer never outlives the jsdom environment (an
+ *  unhandled "document is not defined" after teardown fails the whole run) */
+const openEditors: Editor[] = []
+
 async function openDoc() {
   const source = await buildDocx({ bodyXml: TABLE })
   const parsed = await parseDocx(source)
@@ -34,8 +39,15 @@ async function openDoc() {
     extensions: editorExtensions,
     content: blocksToPmDoc(parsed.blocks) as never,
   })
+  openEditors.push(editor)
   return { editor, parsed }
 }
+
+afterEach(async () => {
+  while (openEditors.length) openEditors.pop()?.destroy()
+  // let a pending DOMObserver flush land while the document still exists
+  await new Promise((resolve) => setTimeout(resolve, 30))
+})
 
 describe('table cells with breaks/tabs survive an untouched save', () => {
   it('keeps the untouched table on the original-bytes path', async () => {
