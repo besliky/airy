@@ -2,7 +2,7 @@ import { Editor } from '@tiptap/core'
 import JSZip from 'jszip'
 import { TextSelection } from '@tiptap/pm/state'
 import { parseDocx, saveDocx } from '@airy-office/docx-engine'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from '../src/renderer/editor/convert'
 import { editorExtensions } from '../src/renderer/editor/extensions'
@@ -43,6 +43,11 @@ const BODY =
   '</w:sdtContent></w:sdt>' +
   '<w:p><w:r><w:t>Body after the TOC</w:t></w:r></w:p>'
 
+/** editors created by these tests; destroyed in afterEach so the ProseMirror
+ *  DOMObserver polling timer never outlives the jsdom environment (an
+ *  unhandled "document is not defined" after teardown fails the whole run) */
+const openEditors: Editor[] = []
+
 async function openDoc() {
   const bytes = await buildDocx({ bodyXml: BODY, stylesXml: STYLES_XML })
   const parsed = await parseDocx(bytes)
@@ -51,8 +56,15 @@ async function openDoc() {
     extensions: editorExtensions,
     content: blocksToPmDoc(parsed.blocks) as never,
   })
+  openEditors.push(editor)
   return { bytes, parsed, editor }
 }
+
+afterEach(async () => {
+  while (openEditors.length) openEditors.pop()?.destroy()
+  // let a pending DOMObserver flush land while the document still exists
+  await new Promise((resolve) => setTimeout(resolve, 30))
+})
 
 describe('TOC sdt under a style chain declaring w:lang eastAsia', () => {
   it('parses the inherited East Asian lang onto pPr-less paragraphs', async () => {
