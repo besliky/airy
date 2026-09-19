@@ -17,8 +17,8 @@ export const ru = {
   layoutColThree: 'Три',
   layoutColLeft: 'Слева',
   layoutColRight: 'Справа',
-  layoutColSpacing: 'Интервал',
-  layoutColWidth: 'Ширина',
-  layoutColWidth1: 'Ширина колонки 1',
+  layoutColSpacing: 'Интервал (см)',
+  layoutColWidth: 'Ширина (см)',
+  layoutColWidth1: 'Ширина колонки 1 (см)',
   layoutLineBetween: 'Разделитель колонок',
 } satisfies Record<keyof typeof zh, string>

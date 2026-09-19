@@ -17,8 +17,8 @@ export const th = {
   layoutColThree: 'สาม',
   layoutColLeft: 'ซ้าย',
   layoutColRight: 'ขวา',
-  layoutColSpacing: 'ระยะห่าง',
-  layoutColWidth: 'ความกว้าง',
-  layoutColWidth1: 'ความกว้างคอลัมน์ 1',
+  layoutColSpacing: 'ระยะห่าง (ซม.)',
+  layoutColWidth: 'ความกว้าง (ซม.)',
+  layoutColWidth1: 'ความกว้างคอลัมน์ 1 (ซม.)',
   layoutLineBetween: 'เส้นคั่นคอลัมน์',
 } satisfies Record<keyof typeof zh, string>

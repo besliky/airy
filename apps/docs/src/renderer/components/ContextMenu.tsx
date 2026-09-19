@@ -806,7 +806,7 @@ export function ParagraphDialog({ editor, onClose }: { editor: Editor; onClose: 
           value={value}
           onChange={(e) => set(Math.max(0, Number(e.target.value) || 0))}
         />
-        <span className="para-unit">pt</span>
+        <span className="para-unit">{t('ribbonPt')}</span>
       </span>
     </label>
   )
@@ -870,7 +870,7 @@ export function ParagraphDialog({ editor, onClose }: { editor: Editor; onClose: 
                   value={linePt}
                   onChange={(e) => setLinePt(Math.max(0, Number(e.target.value) || 0))}
                 />
-                <span className="para-unit">pt</span>
+                <span className="para-unit">{t('ribbonPt')}</span>
               </span>
             </label>
           ) : (

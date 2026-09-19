@@ -17,8 +17,8 @@ export const cs = {
   layoutColThree: 'Tři',
   layoutColLeft: 'Vlevo',
   layoutColRight: 'Vpravo',
-  layoutColSpacing: 'Mezera',
-  layoutColWidth: 'Šířka',
-  layoutColWidth1: 'Šířka sloupce 1',
+  layoutColSpacing: 'Mezera (cm)',
+  layoutColWidth: 'Šířka (cm)',
+  layoutColWidth1: 'Šířka sloupce 1 (cm)',
   layoutLineBetween: 'Linka mezi sloupci',
 } satisfies Record<keyof typeof zh, string>

@@ -17,8 +17,8 @@ export const ar = {
   layoutColThree: 'ثلاثة',
   layoutColLeft: 'يسار',
   layoutColRight: 'يمين',
-  layoutColSpacing: 'التباعد',
-  layoutColWidth: 'العرض',
-  layoutColWidth1: 'عرض العمود 1',
+  layoutColSpacing: 'التباعد (سم)',
+  layoutColWidth: 'العرض (سم)',
+  layoutColWidth1: 'عرض العمود 1 (سم)',
   layoutLineBetween: 'خط بين الأعمدة',
 } satisfies Record<keyof typeof zh, string>

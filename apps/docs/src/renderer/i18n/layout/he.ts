@@ -17,8 +17,8 @@ export const he = {
   layoutColThree: 'שלוש',
   layoutColLeft: 'שמאל',
   layoutColRight: 'ימין',
-  layoutColSpacing: 'ריווח',
-  layoutColWidth: 'רוחב',
-  layoutColWidth1: 'רוחב עמודה 1',
+  layoutColSpacing: 'ריווח (ס"מ)',
+  layoutColWidth: 'רוחב (ס"מ)',
+  layoutColWidth1: 'רוחב עמודה 1 (ס"מ)',
   layoutLineBetween: 'קו בין עמודות',
 } satisfies Record<keyof typeof zh, string>

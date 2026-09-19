@@ -17,8 +17,8 @@ export const en = {
   layoutColThree: 'Three',
   layoutColLeft: 'Left',
   layoutColRight: 'Right',
-  layoutColSpacing: 'Spacing',
-  layoutColWidth: 'Width',
-  layoutColWidth1: 'Column 1 width',
+  layoutColSpacing: 'Spacing (cm)',
+  layoutColWidth: 'Width (cm)',
+  layoutColWidth1: 'Column 1 width (cm)',
   layoutLineBetween: 'Line between columns',
 } satisfies Record<keyof typeof zh, string>

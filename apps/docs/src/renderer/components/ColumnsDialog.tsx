@@ -141,7 +141,7 @@ export function ColumnsDialog({
         </div>
         <div className="modal-row margin-row">
           <label>
-            {t('layoutColSpacing')} (cm)
+            {t('layoutColSpacing')}
             <input
               type="number"
               min={0}
@@ -154,7 +154,7 @@ export function ColumnsDialog({
             />
           </label>
           <label>
-            {unequal ? t('layoutColWidth1') : t('layoutColWidth')} (cm)
+            {unequal ? t('layoutColWidth1') : t('layoutColWidth')}
             <input
               type="number"
               min={1}

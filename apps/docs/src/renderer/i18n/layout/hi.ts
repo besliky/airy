@@ -17,8 +17,8 @@ export const hi = {
   layoutColThree: 'तीन',
   layoutColLeft: 'बाएँ',
   layoutColRight: 'दाएँ',
-  layoutColSpacing: 'अंतराल',
-  layoutColWidth: 'चौड़ाई',
-  layoutColWidth1: 'कॉलम 1 की चौड़ाई',
+  layoutColSpacing: 'अंतराल (सेमी)',
+  layoutColWidth: 'चौड़ाई (सेमी)',
+  layoutColWidth1: 'कॉलम 1 की चौड़ाई (सेमी)',
   layoutLineBetween: 'कॉलम के बीच रेखा',
 } satisfies Record<keyof typeof zh, string>

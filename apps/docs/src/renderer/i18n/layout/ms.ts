@@ -17,8 +17,8 @@ export const ms = {
   layoutColThree: 'Tiga',
   layoutColLeft: 'Kiri',
   layoutColRight: 'Kanan',
-  layoutColSpacing: 'Jarak',
-  layoutColWidth: 'Lebar',
-  layoutColWidth1: 'Lebar lajur 1',
+  layoutColSpacing: 'Jarak (cm)',
+  layoutColWidth: 'Lebar (cm)',
+  layoutColWidth1: 'Lebar lajur 1 (cm)',
   layoutLineBetween: 'Garis pemisah lajur',
 } satisfies Record<keyof typeof zh, string>
