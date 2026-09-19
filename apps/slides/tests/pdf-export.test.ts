@@ -6,6 +6,8 @@ import { PNG } from 'pngjs'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { buildPdfExportHtml, exportSlidesPdf, type PdfExportWindow } from '../src/main/pdf-export'
+import { renderSlideSvg } from '../src/renderer/slide-svg'
+import type { RenderNode, RenderSlide, ShapeRenderNode } from '@airy-office/pptx-render'
 
 const roots: string[] = []
 
@@ -46,6 +48,33 @@ const vectorSlide = (label: string): string =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="100%" height="100%">` +
   `<rect width="1600" height="900" fill="#123456"/>` +
   `<text x="80" y="120" font-family="Carlito" font-size="44.00" fill="#ffffff">${label}</text></svg>`
+
+/** a real gradient slide through the vector painter (defs + url(#id) reference) */
+function gradientSlideSvg(angleDeg: number, prefix: string): string {
+  const node: RenderNode = {
+    id: 'g',
+    type: 'shape',
+    sourceId: 'g',
+    box: { x: 0, y: 0, w: 800, h: 450, rotationDeg: 0, flipH: false, flipV: false },
+    presetGeometry: 'rect',
+    fill: {
+      kind: 'gradient',
+      stops: [
+        { pos: 0, color: 'FF0000' },
+        { pos: 1, color: '0000FF' },
+      ],
+      angleDeg,
+    },
+  } as unknown as ShapeRenderNode
+  const slide = {
+    widthPx: 1600,
+    heightPx: 900,
+    scale: 1,
+    background: { kind: 'solid', color: 'FFFFFF' },
+    nodes: [node],
+  } as unknown as RenderSlide
+  return renderSlideSvg(slide, new Map(), prefix)
+}
 
 class TestPdfWindow implements PdfExportWindow {
   loadedPath: string | null = null
@@ -97,6 +126,31 @@ describe('slides PDF export', () => {
     expect((html.match(/<div class="page">/g) ?? []).length).toBe(3)
     expect(html).toContain('@page { size: 13.333in 7.5in; margin: 0; }')
     expect(html).toContain('.page svg { display: block; width: 100%; height: 100%; }')
+  })
+
+  it('joins vector pages without defs id collisions (each url(#) finds its own defs)', () => {
+    // url(#id) is document-global: two inline SVGs that both say id="grad0"
+    // would cross-reference (slide 2 painted with slide 1's gradient)
+    const html = buildPdfExportHtml(
+      [
+        { svg: gradientSlideSvg(0, 'p0-') },
+        { svg: gradientSlideSvg(90, 'p1-') },
+        { svg: vectorSlide('text page') },
+      ],
+      13.333,
+      7.5,
+    )
+    // every id in the joined document is unique
+    const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1])
+    expect(ids.length).toBeGreaterThanOrEqual(2)
+    expect(new Set(ids).size).toBe(ids.length)
+    // each page's reference points at the defs emitted in the same page
+    const pages = html.split('<div class="page">').slice(1)
+    expect(pages).toHaveLength(3)
+    expect(pages[0]).toContain('<linearGradient id="p0-grad0"')
+    expect(pages[0]).toContain('fill="url(#p0-grad0)"')
+    expect(pages[1]).toContain('<linearGradient id="p1-grad0"')
+    expect(pages[1]).toContain('fill="url(#p1-grad0)"')
   })
 
   it('loads a temporary HTML file containing all pages, writes the PDF, then removes the directory', async () => {

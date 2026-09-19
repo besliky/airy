@@ -184,7 +184,10 @@ export async function exportPdf(ctx: ActionCtx, layout: PdfExportLayout = 'full'
     const pages: Array<{ svg?: string; pngBase64?: string }> = []
     for (const { slide } of visible) {
       try {
-        pages.push({ svg: renderSlideSvg(slide, ctx.images) })
+        // per-slide id prefix: every page inlines into ONE print document and
+        // url(#id) is document-global (BUG-1104) — 'p0-grad0' cannot collide
+        // with 'p1-grad0'
+        pages.push({ svg: renderSlideSvg(slide, ctx.images, `p${pages.length}-`) })
       } catch {
         // raster fallback for this slide only (unexpected node structures)
         const [png] = await renderSlidesToPngBase64([slide], ctx.images)

@@ -32,7 +32,20 @@ import type {
 import type { GlyphDraw } from './konva-adapter'
 import { measureGlyph, warpGlyphs } from './text-warp'
 
+/**
+ * def id uniqueness: url(#id) resolves against the WHOLE HTML document, and
+ * every page of a PDF export is an inline <svg> in one document, so per-slide
+ * ids like `grad0` would collide (slide 2's url(#grad0) resolves to slide 1's
+ * gradient). Each render therefore prefixes its ids: an explicit prefix from
+ * the caller when it knows the slide's position ('' for the legacy unprefixed
+ * ids), otherwise a per-render counter — unique across every render in the
+ * process, so no assembly of outputs can collide.
+ */
 let defSeq = 0
+let renderSeq = 0
+let idPrefix = ''
+
+const nextDefId = (kind: string): string => `${idPrefix}${kind}${defSeq++}`
 
 const escText = (s: string) =>
   s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)
@@ -98,7 +111,7 @@ function paintFill(
     return { fill: cssColor(fill.color) || 'none', fillOpacity: alpha }
   }
   if (fill.kind === 'gradient') {
-    const id = `grad${defSeq++}`
+    const id = nextDefId('grad')
     const stops = fill.stops
       .map((s) => `<stop offset="${(s.pos * 100).toFixed(2)}%" stop-color="${cssColor(s.color)}"/>`)
       .join('')
@@ -118,7 +131,7 @@ function paintFill(
   }
   if (fill.kind === 'image' && fill.dataUrl) {
     if (fill.mode === 'tile' && fill.tile) {
-      const id = `tile${defSeq++}`
+      const id = nextDefId('tile')
       const tw = Math.max(fill.tile.scaleX, 1)
       const th = Math.max(fill.tile.scaleY, 1)
       defs.push(
@@ -132,7 +145,7 @@ function paintFill(
     const t = fill.fillRect?.t ?? 0
     const r = fill.fillRect?.r ?? 0
     const b = fill.fillRect?.b ?? 0
-    const id = `clip${defSeq++}`
+    const id = nextDefId('clip')
     defs.push(
       `<clipPath id="${id}"><rect x="0" y="0" width="${boxW.toFixed(2)}" height="${boxH.toFixed(2)}"/></clipPath>`,
     )
@@ -150,7 +163,7 @@ function paintFill(
     }
   }
   if (fill.kind === 'pattern') {
-    const id = `pat${defSeq++}`
+    const id = nextDefId('pat')
     const cell = Math.max(fill.cellPx, 2)
     const fg = cssColor(fill.fg) || '#000'
     const bg = cssColor(fill.bg) || '#fff'
@@ -604,11 +617,11 @@ function nodeSvg(
       let clipAttr = ''
       const clip = pic.clip
       if (clip?.pathData) {
-        const id = `clip${defSeq++}`
+        const id = nextDefId('clip')
         defs.push(`<clipPath id="${id}"><path d="${clip.pathData}"/></clipPath>`)
         clipAttr = ` clip-path="url(#${id})"`
       } else if (clip?.cornerRadiusPx) {
-        const id = `clip${defSeq++}`
+        const id = nextDefId('clip')
         defs.push(
           `<clipPath id="${id}"><rect width="${box.w.toFixed(2)}" height="${box.h.toFixed(2)}" rx="${clip.cornerRadiusPx.toFixed(2)}"/></clipPath>`,
         )
@@ -689,8 +702,18 @@ const defsMarkup = (defs: string[]): string => (defs.length ? `<defs>${defs.join
 /**
  * Render one slide to a self-contained inline SVG (real text elements).
  * Throws on unexpected structures — callers fall back to the raster page.
+ *
+ * `prefix` scopes the generated defs ids (see nextDefId): multi-page callers
+ * that inline several renders into one document pass a per-slide prefix
+ * ('p0-', 'p1-', …); a caller that renders a single SVG may pass '' for the
+ * legacy unprefixed ids; omitted, every render gets a unique auto prefix.
  */
-export function renderSlideSvg(slide: RenderSlide, images: Map<string, HTMLImageElement>): string {
+export function renderSlideSvg(
+  slide: RenderSlide,
+  images: Map<string, HTMLImageElement>,
+  prefix?: string,
+): string {
+  idPrefix = prefix ?? `s${renderSeq++}-`
   defSeq = 0
   const defs: string[] = []
   const bg = paintFill(slide.background, slide.widthPx, slide.heightPx, defs)

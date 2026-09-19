@@ -141,10 +141,52 @@ describe('renderSlideSvg', () => {
         angleDeg: 90,
       },
     } as unknown as ShapeRenderNode
-    const svg = renderSlideSvg(slideOf(gradient), new Map())
+    const svg = renderSlideSvg(slideOf(gradient), new Map(), '')
     expect(svg).toContain('<linearGradient id="grad0"')
     expect(svg).toContain('fill="url(#grad0)"')
     expect(svg).toContain('stop-color="#FF0000"')
+  })
+
+  it('scopes defs ids per render so pages joined into one document cannot collide', () => {
+    // url(#id) resolves against the whole HTML document, so two inline SVGs
+    // that both define id="grad0" cross-reference each other (BUG-1104)
+    const gradientSlide = slideOf({
+      id: 'g1',
+      type: 'shape',
+      sourceId: 'g1',
+      box: box(0, 0, 100, 100),
+      presetGeometry: 'rect',
+      fill: {
+        kind: 'gradient',
+        stops: [
+          { pos: 0, color: 'FF0000' },
+          { pos: 1, color: '0000FF' },
+        ],
+        angleDeg: 90,
+      },
+    } as unknown as ShapeRenderNode)
+    const pictureSlide = slideOf({
+      id: 'p1',
+      type: 'picture',
+      sourceId: 'p1',
+      box: box(0, 0, 200, 100),
+      dataUrl: 'data:image/png;base64,AAAA',
+      clip: { pathData: 'M0 0L200 0L200 100L0 100Z' },
+    } as unknown as PictureRenderNode)
+    // explicit prefixes (what exportPdf passes per slide) are deterministic
+    const first = renderSlideSvg(gradientSlide, new Map(), 'p0-')
+    const second = renderSlideSvg(pictureSlide, new Map(), 'p1-')
+    expect(first).toContain('<linearGradient id="p0-grad0"')
+    expect(first).toContain('fill="url(#p0-grad0)"')
+    expect(second).toContain('<clipPath id="p1-clip0"')
+    expect(second).toContain('clip-path="url(#p1-clip0)"')
+    // omitted prefixes still never repeat: each render gets its own scope
+    const a = renderSlideSvg(gradientSlide, new Map())
+    const b = renderSlideSvg(gradientSlide, new Map())
+    const idOf = (svg: string) => /<linearGradient id="([^"]+)"/.exec(svg)?.[1]
+    expect(idOf(a)).toBeTruthy()
+    expect(idOf(a)).not.toBe(idOf(b))
+    expect(a).toContain(`fill="url(#${idOf(a)})"`)
   })
 
   it('pictures embed the image and crop via srcRect; tables draw cells + text', () => {
