@@ -310,6 +310,8 @@ export function RibbonHomeTab({ rb }: { rb: RibbonTabCtx }) {
             disabled={!hasDoc}
             onClick={() => onSlideShow(slideShowFromStart)}
             data-tip={t(slideShowFromStart ? 'ribbonFromBeginningTip' : 'ribbonFromCurrentTip')}
+            aria-haspopup="menu"
+            aria-expanded={slideShowOpen}
           >
             <span className="rb-big-icon">
               <span className="rb-split-main">
@@ -389,6 +391,8 @@ export function RibbonHomeTab({ rb }: { rb: RibbonTabCtx }) {
             disabled={!hasDoc}
             onClick={onAddSlide}
             data-tip={t('ribbonNewSlideTip')}
+            aria-haspopup="menu"
+            aria-expanded={layoutOpen}
           >
             <span className="rb-big-icon">
               <span className="rb-split-main">
@@ -436,6 +440,8 @@ export function RibbonHomeTab({ rb }: { rb: RibbonTabCtx }) {
               }}
               onClick={() => setLayoutPickOpen((v) => !v)}
               data-tip={t('ribbonLayoutTip')}
+              aria-haspopup="menu"
+              aria-expanded={layoutPickOpen}
             >
               <IconSlideLayout size={20} />
               <span>{t('ribbonLayout')}</span>
@@ -539,6 +545,8 @@ export function RibbonHomeTab({ rb }: { rb: RibbonTabCtx }) {
                   aria-label={
                     editing || hasTextSelection ? t('ribbonGroupFont') : t('ribbonFontTipDisabled')
                   }
+                  aria-haspopup="menu"
+                  aria-expanded={fontOpen}
                   onMouseDown={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
@@ -714,6 +722,8 @@ export function RibbonHomeTab({ rb }: { rb: RibbonTabCtx }) {
                   disabled={!editing && !hasTextSelection}
                   data-tip={t('ribbonFontSizeTip')}
                   aria-label={t('ribbonFontSizeTip')}
+                  aria-haspopup="menu"
+                  aria-expanded={sizeOpen}
                   onMouseDown={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
@@ -800,6 +810,8 @@ export function RibbonHomeTab({ rb }: { rb: RibbonTabCtx }) {
                 className="rb-icon"
                 disabled={!editing && !hasSelection}
                 data-tip={t('ribbonFontColor')}
+                aria-haspopup="menu"
+                aria-expanded={colorOpen}
                 onMouseDown={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
@@ -862,6 +874,8 @@ export function RibbonHomeTab({ rb }: { rb: RibbonTabCtx }) {
             disabled={!hasDoc}
             data-tip={t('ribbonGroupParagraph')}
             data-keep-edit=""
+            aria-haspopup="menu"
+            aria-expanded={paraOpen}
             onMouseDown={(e) => {
               e.stopPropagation()
               closeSiblingPanels(e, closePanels, 'para')
@@ -1106,6 +1120,8 @@ export function RibbonHomeTab({ rb }: { rb: RibbonTabCtx }) {
                       disabled={!hasSelection}
                       data-tip={t('ribbonLineSpacing')}
                       aria-label={t('ribbonLineSpacing')}
+                      aria-haspopup="menu"
+                      aria-expanded={lineSpacingOpen}
                       onMouseDown={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
@@ -1203,6 +1219,8 @@ export function RibbonHomeTab({ rb }: { rb: RibbonTabCtx }) {
                 ? t('ribbonAlignMenuTip')
                 : t('ribbonSelectFirstHint', { title: t('ribbonAlignMenu') })
             }
+            aria-haspopup="menu"
+            aria-expanded={arrangeOpen}
             onMouseDown={(e) => {
               e.stopPropagation()
               closeSiblingPanels(e, closePanels, 'arrange')

@@ -96,6 +96,8 @@ export function RibbonInsertTab({ rb }: { rb: RibbonTabCtx }) {
             disabled={!hasDoc}
             onClick={onAddSlide}
             data-tip={t('ribbonNewSlideTip')}
+            aria-haspopup="menu"
+            aria-expanded={layoutOpen}
           >
             <span className="rb-big-icon">
               <span className="rb-split-main">
@@ -140,6 +142,8 @@ export function RibbonInsertTab({ rb }: { rb: RibbonTabCtx }) {
             className={`rb-big ${tableOpen ? 'active' : ''}`}
             disabled={!hasDoc}
             data-tip={t('ribbonInsertTableTip')}
+            aria-haspopup="menu"
+            aria-expanded={tableOpen}
             onMouseDown={(e) => {
               e.stopPropagation()
               closeSiblingPanels(e, closePanels, 'table')
