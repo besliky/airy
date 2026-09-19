@@ -1352,6 +1352,33 @@ describe('computeSectionedSlicesF2 — line-level pagination', () => {
     const slices = computeSectionedSlicesF2([before, heading, body], geoms1, 240)
     expect(slices.map((s) => s.start)).toEqual([0, 140])
   })
+
+  // BUG-1108: the spilled note's continuation eats the next page's body from
+  // below (Word's footnote area grows into it) — it used to be unbudgeted
+  it('a footnote spill charges the continuation against the next page', () => {
+    // page capacity 200: text 150 fits, the end-charged note (100) does not;
+    // the leftover 50 hosts part of the note, 50 spills
+    const spiller = block(0, 250, { footnoteExtraPx: 100 })
+    const b1 = block(150, 100)
+    const b2 = block(250, 100)
+    const slices = computeSectionedSlicesF2([spiller, b1, b2], geoms1, 350)
+    // next page capacity 200 - 50 spilled = 150: b1 fits, b2 turns again
+    expect(slices.map((s) => s.start)).toEqual([0, 150, 250])
+    // control: without the reservation the two blocks share page 2
+    const plain = computeSectionedSlicesF2([block(0, 150), b1, b2], geoms1, 350)
+    expect(plain.map((s) => s.start)).toEqual([0, 150])
+  })
+
+  it('the spill charge is clamped to half the page (pathological notes never zero it)', () => {
+    // text 150 + note 190: spill 140, but only min(140, 200*0.5)=100 is charged
+    const spiller = block(0, 340, { footnoteExtraPx: 190 })
+    const b1 = block(150, 40)
+    const b2 = block(190, 40)
+    const b3 = block(230, 40)
+    const slices = computeSectionedSlicesF2([spiller, b1, b2, b3], geoms1, 270)
+    // next page capacity 200 - 100 = 100: two 40px blocks fit, the third turns
+    expect(slices.map((s) => s.start)).toEqual([0, 150, 230])
+  })
 })
 
 describe('computeSectionedSlicesF2 — mid-paragraph page breaks (innerBreaks)', () => {
