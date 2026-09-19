@@ -312,6 +312,7 @@ export const fr = {
   ribbonTransDuration: 'Durée',
   ribbonTransDurationDefault: 'Par défaut',
   ribbonTransDurationTip: 'Durée de la transition en secondes (vide = valeur par défaut)',
+  ribbonTransDurationRange: 'Plage autorisée : 0,1 à 60 secondes',
   ribbonAnimDirectionTip: 'Variante de direction de l’effet d’animation sélectionné',
   ribbonPreview: 'Aperçu',
   ribbonAnimPreviewTip:
@@ -364,6 +365,7 @@ export const fr = {
   ribbonAnimAfterPrev: 'Après la précédente',
   ribbonAnimDuration: 'Durée :',
   ribbonAnimDurationTip: "Durée de l'animation (secondes)",
+  ribbonAnimDurationRange: 'Plage autorisée : 0 à 60 secondes',
   ribbonSecondsUnit: 's',
   ribbonAnimDelay: 'Délai :',
   ribbonAnimDelayTip: 'Délai après le déclenchement avant le début (secondes)',

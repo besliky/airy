@@ -297,6 +297,7 @@ export const zh = {
   ribbonTransDuration: '持续时间',
   ribbonTransDurationDefault: '默认',
   ribbonTransDurationTip: '切换持续时间（秒），留空为默认值',
+  ribbonTransDurationRange: '允许：0.1–60 秒',
   ribbonAnimDirectionTip: '所选动画效果的方向变体',
   // Animations
   ribbonPreview: '预览',
@@ -345,6 +346,7 @@ export const zh = {
   ribbonAnimAfterPrev: '上一动画之后',
   ribbonAnimDuration: '持续时间：',
   ribbonAnimDurationTip: '动画时长（秒）',
+  ribbonAnimDurationRange: '允许：0–60 秒',
   ribbonSecondsUnit: '秒',
   ribbonAnimDelay: '延迟：',
   ribbonAnimDelayTip: '触发后延迟多久开始（秒）',

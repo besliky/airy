@@ -125,6 +125,7 @@ import {
   Group,
   RbCaret,
   RIBBON_SHAPE_STYLES,
+  clampDurationSeconds,
   closeSiblingPanels,
   type Props,
   type RibbonPanelKey,
@@ -2239,6 +2240,7 @@ export function Ribbon({
                         <Dropdown
                           value={splitVariantOf(transition)}
                           tip={t('ribbonEffectOptionsDirection')}
+                          ariaLabel={t('ribbonEffectOptionsDirection')}
                           options={SPLIT_VARIANTS.map((v) => ({
                             value: v,
                             label: t(DIR_LABEL[v]),
@@ -2258,6 +2260,7 @@ export function Ribbon({
                             'fromBottom'
                           }
                           tip={t('ribbonEffectOptionsDirection')}
+                          ariaLabel={t('ribbonEffectOptionsDirection')}
                           options={TRANSITION_DIRS[transition.kind].map((d) => ({
                             value: d,
                             label: t(DIR_LABEL[d]),
@@ -2285,7 +2288,10 @@ export function Ribbon({
                           onTransition(
                             {
                               ...transition,
-                              durationMs: Number.isFinite(v) && v > 0 ? Math.round(v * 1000) : null,
+                              durationMs:
+                                Number.isFinite(v) && v > 0
+                                  ? Math.round(clampDurationSeconds(v, 0.1, 60) * 1000)
+                                  : null,
                             },
                             false,
                           )
@@ -2293,7 +2299,7 @@ export function Ribbon({
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
                         }}
-                        title={t('ribbonTransDurationTip')}
+                        title={`${t('ribbonTransDurationTip')} — ${t('ribbonTransDurationRange')}`}
                       />
                       {t('ribbonSecondsUnit')}
                     </label>
@@ -2499,6 +2505,7 @@ export function Ribbon({
                     <Dropdown
                       value={timingAnim.direction ?? ANIM_DEFAULT_DIRECTION[timingAnim.effect]!}
                       tip={t('ribbonAnimDirectionTip')}
+                      ariaLabel={t('ribbonEffectOptionsDirection')}
                       options={ANIM_EFFECT_DIRS[timingAnim.effect].map((d) => ({
                         value: d,
                         label: t(DIR_LABEL[d]),
@@ -2513,22 +2520,20 @@ export function Ribbon({
                     key={`dur-${timingAnim?.sourceId ?? ''}-${timingAnim?.durationMs ?? ''}`}
                     type="number"
                     min={0}
+                    max={60}
                     step={0.1}
                     disabled={!timingAnim}
                     defaultValue={timingAnim ? (timingAnim.durationMs / 1000).toFixed(2) : ''}
                     onBlur={(e) => {
                       const v = parseFloat(e.target.value)
-                      if (
-                        timingAnim &&
-                        Number.isFinite(v) &&
-                        Math.round(v * 1000) !== timingAnim.durationMs
-                      )
-                        onAnimTiming({ durationMs: Math.max(0, Math.round(v * 1000)) })
+                      const ms = Math.round(clampDurationSeconds(v, 0, 60) * 1000)
+                      if (timingAnim && Number.isFinite(v) && ms !== timingAnim.durationMs)
+                        onAnimTiming({ durationMs: ms })
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
                     }}
-                    title={t('ribbonAnimDurationTip')}
+                    title={`${t('ribbonAnimDurationTip')} — ${t('ribbonAnimDurationRange')}`}
                   />
                   {t('ribbonSecondsUnit')}
                 </label>

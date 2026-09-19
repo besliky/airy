@@ -311,6 +311,7 @@ export const ja = {
   ribbonTransDuration: '継続時間',
   ribbonTransDurationDefault: '既定',
   ribbonTransDurationTip: '切り替えの継続時間（秒）。空欄で既定値',
+  ribbonTransDurationRange: '許容範囲：0.1～60秒',
   ribbonAnimDirectionTip: '選択したアニメーション効果の方向バリエーション',
   // Animations
   ribbonPreview: 'プレビュー',
@@ -361,6 +362,7 @@ export const ja = {
   ribbonAnimAfterPrev: '直前の動作の後',
   ribbonAnimDuration: '継続時間：',
   ribbonAnimDurationTip: 'アニメーションの長さ（秒）',
+  ribbonAnimDurationRange: '許容範囲：0～60秒',
   ribbonSecondsUnit: '秒',
   ribbonAnimDelay: '遅延：',
   ribbonAnimDelayTip: 'トリガー後、開始までの遅延（秒）',
