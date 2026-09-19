@@ -21,6 +21,7 @@ import {
   computeLineHeight,
   cssGridLineExpr,
   gridBoxFactor,
+  LO_CJK_LINE_FACTOR,
   snapLineToPitch,
   estimateFootnoteHeight,
   footnoteLineHeightPx,
@@ -319,8 +320,98 @@ describe('grid snap base (raw em box, word profile)', () => {
 
   it('computeLineHeight without an emBox keeps the natural-height snap (Yu Mincho probes)', () => {
     // box-less callers (footnote line heights) fall back to the natural height
-    expect(computeLineHeight(1.44 * pt(10.5), undefined, undefined, docGrid)).toBeCloseTo(pt(15.6), 2)
+    expect(computeLineHeight(1.44 * pt(10.5), undefined, undefined, docGrid)).toBeCloseTo(
+      pt(15.6),
+      2,
+    )
     expect(computeLineHeight(1.44 * pt(13), undefined, undefined, docGrid)).toBeCloseTo(pt(31.2), 2)
+  })
+})
+
+// ─── Grid compatibility profile 'lo' (PAR-109 phase B) ─────────────────────
+
+describe("grid compat profile 'lo' (LibreOffice)", () => {
+  const docGrid = { type: 'lines' as const, linePitch: 312 } // 15.6pt cells
+  const pt = (v: number) => (v * 96) / 72
+  const zh = '在中国经济社会发展的重要历史时期'
+
+  it('auto multiple scales the SNAPPED height (snap-then-multiply), strict rounding', () => {
+    // LO render of corpus doc 02: 12pt SimSun body, line 276 auto ->
+    // snapUp(15.63pt natural) = 2 cells, x 1.15 = 35.88pt (vs Word 17.94pt)
+    const r = computeLineMetrics({
+      runs: [{ text: zh.repeat(4), sizeHalfPoints: 24 }],
+      availWidthPx: 1000,
+      lineRule: 'auto',
+      lineRawTwips: 276,
+      docGrid,
+      gridCompat: 'lo',
+    })
+    for (const h of r.lineHeights) expect(h).toBeCloseTo(pt(35.88), 2)
+  })
+
+  it('strict cell boundary: a natural height a hair past the pitch takes 2 cells', () => {
+    // SimSun 12pt natural 15.63pt vs the 15.6pt pitch: Word's 0.4% ε keeps it
+    // in 1 cell, LO has no such tolerance and rounds up (the doc-02 body case:
+    // 2-cell lines under the 1.15 multiple)
+    const h = computeLineHeight(pt(15.63), 'auto', 240, docGrid, { gridCompat: 'lo' })
+    expect(h).toBeCloseTo(pt(31.2), 2)
+    const w = computeLineHeight(pt(15.63), 'auto', 240, docGrid, { gridCompat: 'word' })
+    expect(w).toBeCloseTo(pt(15.6), 2)
+  })
+
+  it('CJK ink sizes lines by the LO substitute factor, Latin paragraphs are untouched', () => {
+    const zhLine = computeLineMetrics({
+      runs: [{ text: zh, sizeHalfPoints: 24 }],
+      availWidthPx: 1000,
+      docGrid,
+      gridCompat: 'lo',
+    }).lineHeights[0]
+    // pinned LO_CJK_LINE_FACTOR natural -> 2 cells under the grid
+    expect(zhLine).toBeCloseTo(pt(31.2), 2)
+    const zhNoGrid = computeLineMetrics({
+      runs: [{ text: zh, sizeHalfPoints: 24 }],
+      availWidthPx: 1000,
+      gridCompat: 'lo',
+    }).lineHeights[0]
+    expect(zhNoGrid).toBeCloseTo(pt(12 * LO_CJK_LINE_FACTOR), 2)
+    const en = computeLineMetrics({
+      runs: [{ text: 'Latin only paragraph', sizeHalfPoints: 24 }],
+      availWidthPx: 1000,
+      gridCompat: 'lo',
+    })
+    const enWord = computeLineMetrics({
+      runs: [{ text: 'Latin only paragraph', sizeHalfPoints: 24 }],
+      availWidthPx: 1000,
+    })
+    expect(en.lineHeights[0]).toBe(enWord.lineHeights[0])
+  })
+
+  it('without a grid the profile is inert (non-grid sections are profile-invariant)', () => {
+    const input = {
+      runs: [{ text: zh.repeat(3), sizeHalfPoints: 24 }],
+      availWidthPx: 100,
+      lineRule: 'auto' as const,
+      lineRawTwips: 276,
+    }
+    const a = computeLineMetrics({ ...input, gridCompat: 'lo' })
+    const b = computeLineMetrics(input)
+    expect(a.totalHeight).toBeGreaterThan(0)
+    expect(a.lineCount).toBe(b.lineCount)
+    // same wrapping; CJK lines differ by the substitute factor only
+    expect(a.lineTexts).toEqual(b.lineTexts)
+  })
+
+  it('the word profile is the default and equals an explicit gridCompat word', () => {
+    const input = {
+      runs: [{ text: zh, sizeHalfPoints: 26 }],
+      availWidthPx: 1000,
+      docGrid,
+      lineRule: 'auto' as const,
+      lineRawTwips: 276,
+    }
+    expect(computeLineMetrics(input).lineHeights).toEqual(
+      computeLineMetrics({ ...input, gridCompat: 'word' }).lineHeights,
+    )
   })
 })
 

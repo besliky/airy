@@ -485,6 +485,28 @@ function gridBoxOf(heightPx: number, fontSizePx: number, lineFactor: number): nu
 }
 
 /**
+ * Grid compatibility profile (PAR-109 phase B). The engine's default 'word'
+ * profile reproduces Word for Mac (the precise pagination baseline); 'lo'
+ * reproduces LibreOffice 24.2 (the coarse baseline) where the two disagree on
+ * typed docGrid semantics. Profiles are disjoint: 'lo' only changes sections
+ * with a typed line grid, so a 'word'-profile run is byte-identical whether
+ * or not any 'lo' consumer exists.
+ */
+export type GridCompat = 'word' | 'lo'
+
+/**
+ * LO's substituted CJK line factor for the 'lo' profile: LibreOffice renders
+ * the missing SimSun-class (Song) faces through its own substitute whose single-spacing
+ * natural sits near 1.6em — vs Word's SimSun 1.3029em. Calibrated against the
+ * recorded LO 24.2 baseline corpus (12pt line-276 body): doc 14's 5 pages need
+ * the factor above 1.37em, doc 09's 5 page-starts cap it below 1.66em, and a
+ * local LO render of doc 05 measures no-grid cell rows at 31.45pt = 12pt x
+ * factor x 1.15 + 8pt spacing + border (1.66em with that machine's fonts).
+ * Pinned for CJK-ink body and table-cell lines alike.
+ */
+export const LO_CJK_LINE_FACTOR = 1.58
+
+/**
  * Ceil a line height UP to whole grid cells. Single source for docGrid line
  * snapping: the pagination model calls it directly and cssGridLineExpr emits
  * the same formula (ε included) as a CSS round(up) — keep them in lockstep.
@@ -503,31 +525,53 @@ export function snapLineToPitch(heightPx: number, pitchPx: number): number {
  * @param lineRule      'auto'|'atLeast'|'exact'
  * @param lineRawTwips  raw w:spacing w:line twips (auto = multiple of 240; atLeast/exact = absolute)
  * @param docGrid       the section docGrid (optional; when present, round to linePitch)
- * @param opts          emBoxPx: the line's raw em-box height (grid snap base)
+ * @param opts          emBoxPx: the line's raw em-box height (grid snap base);
+ *                      gridCompat: 'word' (default) | 'lo' compatibility profile
  */
 export function computeLineHeight(
   naturalLineH: number,
   lineRule: 'auto' | 'atLeast' | 'exact' | undefined,
   lineRawTwips: number | undefined,
   docGrid: DocGrid | undefined,
-  opts?: { emBoxPx?: number },
+  opts?: { emBoxPx?: number; gridCompat?: GridCompat },
 ): number {
+  const pitchPx =
+    docGrid && (docGrid.type === 'lines' || docGrid.type === 'linesAndChars') && docGrid.linePitch
+      ? docGrid.linePitch * TWIPS_TO_PX
+      : 0
+
+  // LO 24.2/26.2 profile (M1, PAR-109 phase B; measured from LO renders of
+  // the corpus, see .orchestrator/LOGS/PAR-109.md): the single-spacing height
+  // rounds UP to whole cells with STRICT rounding (no Word's boundary ε — a
+  // 15.63pt SimSun-class natural on the 15.6pt pitch takes 2 cells) and the
+  // multiple then scales the SNAPPED height (snap-then-multiply, the order
+  // the Word probe replaced): 2 cells x 1.15 = 35.9pt body lines vs Word's
+  // 17.94pt. Without a grid every rule degrades to the shared semantics
+  // (identity at pitch 0), so non-grid sections are profile-invariant.
+  if (opts?.gridCompat === 'lo') {
+    const snappedNat = pitchPx > 0 ? Math.ceil(naturalLineH / pitchPx) * pitchPx : naturalLineH
+    if (lineRule === 'exact' && lineRawTwips !== undefined) {
+      return lineRawTwips * TWIPS_TO_PX
+    }
+    if (lineRule === 'atLeast' && lineRawTwips !== undefined) {
+      return Math.max(lineRawTwips * TWIPS_TO_PX, snappedNat)
+    }
+    if (lineRule === 'auto' && lineRawTwips !== undefined) {
+      return snappedNat * (lineRawTwips / 240)
+    }
+    return snappedNat
+  }
+
   // typed line grid (Word probe 2026-08-22, 15 cases): an auto multiple scales
   // the PITCH (the product does not re-snap: 1.5 x 15.6pt grid = 23.4pt), and
   // no non-exact line is shorter than its grid-snapped single height —
   // max(rule value, snapped single). Holds for mult < 1 and atLeast; exact
   // never snaps; w:snapToGrid=0 opts a paragraph out (pitch 0 here).
-  const pitchPx =
-    docGrid && (docGrid.type === 'lines' || docGrid.type === 'linesAndChars') && docGrid.linePitch
-      ? docGrid.linePitch * TWIPS_TO_PX
-      : 0
   // word profile: under a typed grid the single-height floor snaps the raw em
   // box (PAR-109 phase A); without a grid (and for box-less callers) the
   // natural line height stays the height and the snap base
   const snapped =
-    pitchPx > 0
-      ? snapLineToPitch(opts?.emBoxPx ?? naturalLineH, pitchPx)
-      : naturalLineH
+    pitchPx > 0 ? snapLineToPitch(opts?.emBoxPx ?? naturalLineH, pitchPx) : naturalLineH
 
   if (lineRule === 'exact' && lineRawTwips !== undefined) {
     // fixed line height: use the specified value regardless of font size
@@ -1381,7 +1425,9 @@ export function cssAutoLineMult(
 
 /**
  * Space-before/space-after in px. Word keeps paragraph spacing at face value
- * even under a typed grid (probe 2026-08-13), so no grid quantization.
+ * even under a typed grid (probe 2026-08-13), and so does LibreOffice (LO
+ * render of corpus doc 02: the 8pt after-spacing stays 8pt between 2-cell
+ * grid lines), so no grid quantization in either profile.
  */
 export function snapSpacingToGrid(spacingTwips: number, _docGrid: DocGrid | undefined): number {
   return spacingTwips * TWIPS_TO_PX
@@ -1887,6 +1933,8 @@ export interface LineMetricsInput {
   tableCellMode?: boolean
   /** CJK line-height factor override (e.g. tuned against the baseline layout engine); defaults to tableCellMode/font-family behavior */
   cjkFactor?: number
+  /** grid compatibility profile (PAR-109 phase B); 'word' (default) = Word for Mac, 'lo' = LibreOffice 24.2 */
+  gridCompat?: GridCompat
 }
 
 export interface LineMetricsResult {
@@ -1955,7 +2003,14 @@ export function computeLineMetrics(input: LineMetricsInput): LineMetricsResultEx
   const defaultFontSizePx = defaultFontSizePt * (96 / 72)
   // table cells disable the extra CJK line-height boost (cjkFactor=1.0, relying on HeuristicMetrics' font-level line height)
   // body paragraphs use the font-level cjkLineHFactor (PMingLiU→1.0, others→1.3), triggered via NaN
-  const cjkFactor = input.cjkFactor ?? (tableCellMode ? 1.0 : CJK_LINE_HEIGHT_FACTOR)
+  // the LO profile pins the substituted CJK factor (LO_CJK_LINE_FACTOR) for paragraphs with
+  // CJK ink — body and table-cell lines alike (LO renders them through its taller
+  // substitute); pure-Latin paragraphs keep the font-level factors
+  const loCjkPin =
+    input.gridCompat === 'lo' && runs.some((r) => textHasCjk(r.text))
+      ? LO_CJK_LINE_FACTOR
+      : undefined
+  const cjkFactor = input.cjkFactor ?? loCjkPin ?? (tableCellMode ? 1.0 : CJK_LINE_HEIGHT_FACTOR)
 
   // an empty paragraph still occupies one line sized by its paragraph mark's
   // font/size (Word rule); whitespace-only runs carry that style, defaults
@@ -1972,11 +2027,7 @@ export function computeLineMetrics(input: LineMetricsInput): LineMetricsResultEx
   const emptyEmBoxH =
     markSizes.length > 0
       ? Math.max(...markSizes.map((m) => gridBoxOf(m.sizePx * m.factor, m.sizePx, m.factor)))
-      : gridBoxOf(
-          emptyNaturalH,
-          defaultFontSizePx,
-          lineHeightFactor(defaultFontFamily),
-        )
+      : gridBoxOf(emptyNaturalH, defaultFontSizePx, lineHeightFactor(defaultFontFamily))
 
   // simulate line breaking
   const lines =
@@ -1986,7 +2037,10 @@ export function computeLineMetrics(input: LineMetricsInput): LineMetricsResultEx
 
   // apply the line-height rule per line (emBoxH: the word-profile grid snap base)
   const lineHeights = lines.map((ln) =>
-    computeLineHeight(ln.naturalLineH, lineRule, lineRawTwips, docGrid, { emBoxPx: ln.emBoxH }),
+    computeLineHeight(ln.naturalLineH, lineRule, lineRawTwips, docGrid, {
+      emBoxPx: ln.emBoxH,
+      gridCompat: input.gridCompat,
+    }),
   )
 
   // space before/after
@@ -2260,6 +2314,7 @@ export function estimateFootnoteHeight(
   metrics?: FontMetricsProvider,
   style?: NoteStyleOpts,
   richParas?: NoteRunMetrics[][],
+  gridCompat: GridCompat = 'word',
 ): number {
   const paras: NoteRunMetrics[][] =
     richParas && richParas.length > 0
@@ -2281,6 +2336,7 @@ export function estimateFootnoteHeight(
       ...(style?.spaceBeforeTwips ? { spaceBefore: style.spaceBeforeTwips } : {}),
       ...(style?.spaceAfterTwips ? { spaceAfter: style.spaceAfterTwips } : {}),
       ...(metrics ? { metrics } : {}),
+      ...(gridCompat !== 'word' ? { gridCompat } : {}),
       isEmpty: nonEmpty.every((r) => !r.text.trim()),
     }).totalHeight
   }
