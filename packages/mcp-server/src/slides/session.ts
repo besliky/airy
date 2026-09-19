@@ -50,6 +50,17 @@ import { assertWorkspaceRootExists, resolveConfined, workspaceRoot } from '../do
 // ---- limits (mirror the docx session, scaled to the MCP 30k answer budget) ----
 
 const CONTEXT_MAX_CHARS = 30_000
+// Test seam: tripping the absolute 30k overview budget needs a ~500-slide
+// fixture whose duplicateSlide/save round-trip costs seconds of honest CPU
+// (PERF-1101). The budget ladder is linear in slide count, so tests scale
+// the budget down against a proportionally smaller deck instead; production
+// always runs the 30k default (null restores it).
+let contextMaxChars = CONTEXT_MAX_CHARS
+
+/** Test-only: scale the deck-overview budget (null restores the 30k default). */
+export function _setDeckOverviewBudgetForTests(maxChars: number | null): void {
+  contextMaxChars = maxChars ?? CONTEXT_MAX_CHARS
+}
 const PREVIEW_MAX_CHARS = 60
 const PREVIEW_TIGHT_CHARS = 20
 const READ_MAX_CHARS = 30_000
@@ -288,10 +299,10 @@ export class SlidesSession {
       `${String(meta.charCount)} characters of slide text.`
     let body = render(PREVIEW_MAX_CHARS)
     let out = [header, ...body, stats].join('\n')
-    if (out.length > CONTEXT_MAX_CHARS) {
+    if (out.length > contextMaxChars) {
       body = render(PREVIEW_TIGHT_CHARS)
       out = [header, ...body, stats].join('\n')
-      if (out.length > CONTEXT_MAX_CHARS) {
+      if (out.length > contextMaxChars) {
         const dropStart = Math.floor(body.length / 3)
         const dropEnd = body.length - Math.floor(body.length / 3)
         out = [
