@@ -806,9 +806,12 @@ async function urlToBase64(url: string): Promise<string> {
 /** Table border weight picker (the old <select> was uncontrolled; the picked value lives here). */
 function BorderWeightDropdown({
   tip,
+  ariaLabel,
   onPick,
 }: {
   readonly tip?: string
+  /** Field name for screen readers — without it the control is announced as its current value («1pt») */
+  readonly ariaLabel?: string
   readonly onPick: (pt: number) => void
 }) {
   const [val, setVal] = useState('1')
@@ -817,6 +820,7 @@ function BorderWeightDropdown({
       className="rb-border-weight-dd"
       value={val}
       tip={tip}
+      ariaLabel={ariaLabel}
       options={['0.5', '1', '1.5', '2.25', '3'].map((v) => ({ value: v, label: `${v}pt` }))}
       onPick={(v) => {
         setVal(v)
@@ -2499,6 +2503,7 @@ export function Ribbon({
                     disabled={!timingAnim}
                     value={timingAnim?.trigger ?? 'onClick'}
                     tip={t('ribbonAnimTriggerTip')}
+                    ariaLabel={t('ribbonAnimStart')}
                     options={(
                       [
                         ['onClick', t('ribbonAnimOnClick')],
@@ -2989,6 +2994,7 @@ export function Ribbon({
                 <span className="rb-label">{t('ribbonBorderWeightLabel')}</span>
                 <BorderWeightDropdown
                   tip={t('ribbonBorderWeightTip')}
+                  ariaLabel={t('ribbonBorderWeightLabel')}
                   onPick={(pt) => onEditTableStyle?.({ borderWidthPt: pt })}
                 />
               </div>

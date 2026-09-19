@@ -41,6 +41,7 @@ export const ms = {
     'Rakaman dibuat dalam masa nyata: video 2 minit mengambil masa kira-kira 2 minit.',
   appExportVideoDone: 'Video dieksport: {path}',
   appExportVideoFailed: 'Gagal mengeksport video: {error}',
+  appExportVideoCancelling: 'Membatalkan…',
   appStatusBgAppliedAll: 'Warna latar belakang digunakan pada semua slaid',
   appStatusThemeApplied: 'Tema "{name}" digunakan',
   appStatusThemeApplyFailed: 'Gagal menggunakan tema: {error}',

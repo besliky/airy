@@ -41,6 +41,7 @@ export const nl = {
     'De opname verloopt in realtime: een video van 2 minuten duurt ongeveer 2 minuten.',
   appExportVideoDone: 'Video geëxporteerd: {path}',
   appExportVideoFailed: 'Video-export mislukt: {error}',
+  appExportVideoCancelling: 'Annuleren…',
   appStatusBgAppliedAll: "Achtergrondkleur toegepast op alle dia's",
   appStatusThemeApplied: 'Thema "{name}" toegepast',
   appStatusThemeApplyFailed: 'Thema toepassen mislukt: {error}',

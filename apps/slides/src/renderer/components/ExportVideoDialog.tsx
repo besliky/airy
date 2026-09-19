@@ -6,9 +6,14 @@
  *
  * While exporting, the dialog shows the pipeline progress (render slides →
  * record frames) and offers Cancel; on completion (or cancel) it closes —
- * the result surfaces through the status bar like the other exports.
+ * failures stay open with their reason in an in-dialog alert (the status
+ * bar sits behind the dimming). The options view carries the duration
+ * estimate plus the real-time note up front. The action buttons stay
+ * mounted across phases (Export disables instead of unmounting) and focus
+ * rides the Cancel button for the whole run, so the modal's focus trap
+ * keeps an anchor while the recording is under way.
  */
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useModalDialog } from '@airy-office/ui'
 import { useI18n } from '../i18n/locale'
 import type { TransitionSpec } from '../../shared/ipc'
@@ -46,12 +51,15 @@ export function ExportVideoDialog({
   const [includeTransitions, setIncludeTransitions] = useState(true)
   const [phase, setPhase] = useState<'idle' | VideoExportPhase>('idle')
   const [progress, setProgress] = useState({ done: 0, total: 0 })
-  // failure reason of the last run (encoder errors and the like — BUG-1208);
-  // cleared when a new run starts, shown next to the options
-  const [error, setError] = useState<string | null>(null)
+  /** Cancel requested mid-run: the button shows it and waits for the pipeline */
+  const [cancelling, setCancelling] = useState(false)
+  /** UX-1205: failure reason for the dialog's own alert line (null = clean) */
+  const [failReason, setFailReason] = useState<string | null>(null)
   const cancelBox = useRef({ current: false }).current
   // mirrors `phase` for the hook's close callback (Escape must not orphan a run)
   const exportingRef = useRef(false)
+  // the recording's only focusable control: focus rides here for the whole run
+  const cancelBtnRef = useRef<HTMLButtonElement | null>(null)
   const dialog = useModalDialog(() => {
     if (!exportingRef.current) onClose()
   })
@@ -81,8 +89,10 @@ export function ExportVideoDialog({
     setPhase('render')
     exportingRef.current = true
     setProgress({ done: 0, total: 0 })
-    setError(null)
+    setFailReason(null)
     cancelBox.current = false
+    setCancelling(false)
+    setFailReason(null)
     const r = await onExport(
       { fps, heightPreset, useTimings: effectiveUseTimings, secondsPerSlide, includeTransitions },
       (p, done, total) => {
@@ -91,18 +101,40 @@ export function ExportVideoDialog({
       },
       cancelBox,
     )
-    // close on completion and cancel alike; failures keep the dialog open and
-    // show the reason (a silent status-bar message would hide behind the modal)
+    // close on completion and cancel alike; failures stay in the dialog with
+    // their reason in-body (UX-1205) — the status bar sits behind the dimming
     if (r.ok || cancelBox.current) onClose()
     else {
       exportingRef.current = false
       setPhase('idle')
-      if (r.error) setError(r.error)
+      setFailReason(r.error ?? null)
     }
   }
 
   const exporting = phase !== 'idle'
   const percent = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
+  // UX-1203: the progressbar is named by the visible phase label, and the
+  // label itself is a polite live region — a recording runs for minutes, and
+  // screen readers must hear the phase (render → record) and its progress
+  const phaseLabelId = useId()
+
+  // UX-1201: the Export trigger disables itself when the run starts, which
+  // would drop focus to <body> for the whole (minutes-long) recording — the
+  // dialog's Tab trap only sees keys bubbling through the backdrop, so with
+  // focus outside it the "modal" would be a lie. Hand focus to Cancel the
+  // moment exporting begins.
+  useEffect(() => {
+    if (exporting) cancelBtnRef.current?.focus()
+  }, [exporting])
+
+  // Focus sentinel for the run: any focus that leaves the dialog box (a
+  // control disabling/unmounting mid-export) comes back to Cancel, keeping
+  // the trap honest until the dialog closes.
+  const rescueFocus = (e: React.FocusEvent<HTMLDivElement>) => {
+    const next = e.relatedTarget
+    if (next instanceof Node && e.currentTarget.contains(next)) return
+    cancelBtnRef.current?.focus()
+  }
 
   return (
     // backdrop click does nothing mid-export: the run is cancelled via the
@@ -112,25 +144,39 @@ export function ExportVideoDialog({
       {...dialog.backdropProps}
       onClick={exporting ? undefined : onClose}
     >
-      <div className="modal" {...dialog.dialogProps} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal"
+        {...dialog.dialogProps}
+        onClick={(e) => e.stopPropagation()}
+        onBlur={exporting ? rescueFocus : undefined}
+      >
         <h2 {...dialog.titleProps}>{t('ribbonFileExportVideo')}</h2>
         {exporting ? (
           <div className="video-export-progress">
-            <div className="video-export-progress-label">
-              {phase === 'render'
-                ? t('appExportVideoRendering', { done: progress.done, total: progress.total })
-                : t('appExportVideoRecording', { percent })}
+            {/* empty until the first slide lands: the native save dialog is
+                still up when the run starts, and "Rendering 0/0" would lie */}
+            <div
+              id={phaseLabelId}
+              className="video-export-progress-label"
+              role="status"
+              aria-live="polite"
+            >
+              {progress.total > 0
+                ? phase === 'render'
+                  ? t('appExportVideoRendering', { done: progress.done, total: progress.total })
+                  : t('appExportVideoRecording', { percent })
+                : ''}
             </div>
             <div
               className="video-export-bar"
               role="progressbar"
+              aria-labelledby={phaseLabelId}
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={percent}
             >
               <div style={{ width: `${percent}%` }} />
             </div>
-            <div className="video-export-note">{t('appExportVideoRealtimeNote')}</div>
           </div>
         ) : (
           <>
@@ -228,25 +274,47 @@ export function ExportVideoDialog({
                     })
                   : t('appExportNoSlides')}
               </div>
-              {error ? <div className="video-export-error">{error}</div> : null}
+              {/* UX-1204: the real-time cost belongs next to the estimate,
+                  BEFORE the run is committed — not only after it starts */}
+              <div className="video-export-note">{t('appExportVideoRealtimeNote')}</div>
             </div>
+            {/* UX-1205: failures explain themselves in the dialog body — the
+                status bar's copy sits behind the modal's dimming and the user
+                would only meet it after closing */}
+            {failReason && (
+              <div className="video-export-error" role="alert">
+                {t('appExportVideoFailed', { error: failReason })}
+              </div>
+            )}
           </>
         )}
+        {/* UX-1201: the buttons never unmount across phases — disabling the
+            Export trigger keeps the DOM (and the focus trap's anchor list)
+            stable for the whole recording instead of dropping focus to body.
+            UX-1202: Cancel is cooperative in BOTH phases (the render loop
+            checks it between slides) and acknowledges the request instead
+            of leaving a dead button on screen. */}
         <div className="modal-actions">
-          {exporting ? (
-            <button onClick={() => (cancelBox.current = true)}>{t('appSettingsCancel')}</button>
-          ) : (
-            <>
-              <button onClick={onClose}>{t('appSettingsCancel')}</button>
-              <button
-                className="primary"
-                disabled={visibleCount === 0 || !mime}
-                onClick={() => void start()}
-              >
-                {t('ribbonFileExportVideo')}
-              </button>
-            </>
-          )}
+          <button
+            ref={cancelBtnRef}
+            disabled={cancelling}
+            onClick={() => {
+              if (!exporting) onClose()
+              else {
+                cancelBox.current = true
+                setCancelling(true)
+              }
+            }}
+          >
+            {cancelling ? t('appExportVideoCancelling') : t('appSettingsCancel')}
+          </button>
+          <button
+            className="primary"
+            disabled={exporting || visibleCount === 0 || !mime}
+            onClick={() => void start()}
+          >
+            {t('ribbonFileExportVideo')}
+          </button>
         </div>
       </div>
     </div>

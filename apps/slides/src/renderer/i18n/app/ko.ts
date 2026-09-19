@@ -39,6 +39,7 @@ export const ko = {
   appExportVideoRealtimeNote: '녹화는 실시간으로 진행됩니다: 2분 영상은 약 2분이 걸립니다.',
   appExportVideoDone: '동영상을 내보냈습니다: {path}',
   appExportVideoFailed: '동영상 내보내기 실패: {error}',
+  appExportVideoCancelling: '취소 중…',
   appStatusBgAppliedAll: '배경색을 모든 슬라이드에 적용했습니다',
   appStatusThemeApplied: '테마 "{name}"을(를) 적용했습니다',
   appStatusThemeApplyFailed: '테마 적용 실패: {error}',

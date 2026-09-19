@@ -39,6 +39,7 @@ export const ja = {
   appExportVideoRealtimeNote: '録画はリアルタイムで行われます：2 分の動画には約 2 分かかります。',
   appExportVideoDone: '動画をエクスポートしました：{path}',
   appExportVideoFailed: '動画のエクスポートに失敗しました：{error}',
+  appExportVideoCancelling: 'キャンセル中…',
   appStatusBgAppliedAll: '背景色をすべてのスライドに適用しました',
   appStatusThemeApplied: 'テーマ「{name}」を適用しました',
   appStatusThemeApplyFailed: 'テーマの適用に失敗しました：{error}',

@@ -41,6 +41,7 @@ export const en = {
     'Recording runs in real time: a 2-minute video takes about 2 minutes.',
   appExportVideoDone: 'Video exported: {path}',
   appExportVideoFailed: 'Video export failed: {error}',
+  appExportVideoCancelling: 'Cancelling…',
   appStatusBgAppliedAll: 'Background color applied to all slides',
   appStatusThemeApplied: 'Applied theme "{name}"',
   appStatusThemeApplyFailed: 'Failed to apply theme: {error}',

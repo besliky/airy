@@ -39,6 +39,7 @@ export const hi = {
   appExportVideoRealtimeNote: 'रिकॉर्डिंग रीयल-टाइम चलती है: 2 मिनट का वीडियो लगभग 2 मिनट लेता है।',
   appExportVideoDone: 'वीडियो निर्यात हुआ: {path}',
   appExportVideoFailed: 'वीडियो निर्यात विफल: {error}',
+  appExportVideoCancelling: 'रद्द किया जा रहा है…',
   appStatusBgAppliedAll: 'पृष्ठभूमि रंग सभी स्लाइड पर लागू किया गया',
   appStatusThemeApplied: 'थीम "{name}" लागू की गई',
   appStatusThemeApplyFailed: 'थीम लागू करने में विफल: {error}',

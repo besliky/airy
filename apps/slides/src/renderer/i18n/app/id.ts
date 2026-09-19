@@ -40,6 +40,7 @@ export const id = {
   appExportVideoRealtimeNote: 'Perekaman berjalan real-time: video 2 menit butuh sekitar 2 menit.',
   appExportVideoDone: 'Video diekspor: {path}',
   appExportVideoFailed: 'Gagal mengekspor video: {error}',
+  appExportVideoCancelling: 'Membatalkan…',
   appStatusBgAppliedAll: 'Warna latar belakang diterapkan ke semua slide',
   appStatusThemeApplied: 'Tema "{name}" diterapkan',
   appStatusThemeApplyFailed: 'Gagal menerapkan tema: {error}',

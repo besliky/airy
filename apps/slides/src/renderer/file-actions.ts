@@ -238,14 +238,19 @@ export interface VideoExportSettings {
 export type VideoExportPhase = 'render' | 'record'
 
 /**
- * Result of a video export run. ok=false without error = aborted without a
- * failure worth reporting (canceled save pick / cooperative cancel); ok=false
- * with error carries the failure reason (the dialog shows it — BUG-1208).
+ * Terminal outcome for the video-export dialog. Failures carry a localized
+ * reason for the dialog's in-body alert line (UX-1205: the status bar sits
+ * behind the modal's dimming, invisible until the dialog closes); user
+ * aborts (save-dialog dismiss, Cancel) report no reason — they are not
+ * errors.
  */
 export interface VideoExportOutcome {
   ok: boolean
+  /** Localized failure reason (absent on success and user aborts) */
   error?: string
 }
+
+/** Blob → base64 (chunked to avoid call stack overflow — same as screen recording). */
 
 /**
  * Export the deck as a video: slides render to PNGs through the images-export
@@ -253,9 +258,9 @@ export interface VideoExportOutcome {
  * dwell) with transitions as crossfades, and an offscreen canvas records the
  * frames through MediaRecorder (mp4 when the Chromium build muxes it, else
  * WebM). Recording is real-time paced — MediaRecorder timestamps frames by
- * the wall clock — so export duration ≈ video duration. Encoder failures
- * throw out of the recorder and surface here as a failed outcome with the
- * reason (never a silently truncated file).
+ * the wall clock — so export duration ≈ video duration. Failures return a
+ * localized reason for the dialog's alert line; user aborts return ok:false
+ * without one.
  */
 export async function exportVideo(
   ctx: ActionCtx,
@@ -266,7 +271,7 @@ export async function exportVideo(
   const visible = ctx.slides.filter((s) => !s.hidden)
   if (visible.length === 0) {
     ctx.setStatus(t('appExportNoSlides'))
-    return { ok: false }
+    return { ok: false, error: t('appExportNoSlides') }
   }
   if (typeof MediaRecorder === 'undefined') {
     ctx.setStatus(t('appExportVideoFailed', { error: t('appExportVideoNoEncoder') }))
@@ -294,19 +299,24 @@ export async function exportVideo(
     `${exportBaseName(ctx)}.${mime.container}`,
     mime.container,
   )
-  if (!target) return { ok: false }
+  if (!target) return { ok: false } // save dialog dismissed — back to options, no error
   // recording is wall-clock paced: suspend background timer throttling for the
   // run (a minimized window would otherwise clamp frame timers to 1s)
   await window.slidesApi.setVideoExportActive(true)
   try {
-    // Mixed slide sizes aspect-fit into the frame (letterbox/pillarbox) instead
-    // of stretching to the first slide's shape (BUG-1211): each slide renders
-    // at its own fit scale so no PNG is over- or under-sampled for its box
-    const scales = visible.map((s) => Math.min(dims.width / s.widthPx, dims.height / s.heightPx))
-    const pngs = await renderSlidesToPngBase64(visible, ctx.images, scales, (done, total) =>
-      onProgress?.('render', done, total),
+    const pngs = await renderSlidesToPngBase64(
+      visible,
+      ctx.images,
+      dims.width / first.widthPx,
+      (done, total) => onProgress?.('render', done, total),
+      // UX-1202: the render phase is cooperative too — Cancel between slides
+      // stops the loop and no file is ever written (the write is the atomic
+      // last step, so a cancelled run leaves no partial file behind)
+      cancel,
     )
+    if (cancel?.current) return { ok: false }
     const images = await decodePngImages(pngs)
+    if (cancel?.current) return { ok: false }
     const blob = await recordVideoTimeline({
       timeline,
       fps: settings.fps,
@@ -318,7 +328,14 @@ export async function exportVideo(
       onProgress: (done, total) => onProgress?.('record', done, total),
       ...(cancel ? { cancel } : {}),
     })
-    if (!blob) return { ok: false } // canceled (or nothing recorded)
+    if (!blob || blob.size === 0) {
+      if (cancel?.current) return { ok: false }
+      // nothing recorded and nobody cancelled: an encoder that produced zero
+      // chunks — surface it instead of silently dropping back to options
+      const error = t('appUnknownError')
+      ctx.setStatus(t('appExportVideoFailed', { error }))
+      return { ok: false, error }
+    }
     const r = await window.slidesApi.exportVideo({
       filePath: target,
       // binary over structured clone — no base64 string ever materializes
@@ -326,14 +343,15 @@ export async function exportVideo(
       bytes: new Uint8Array(await blob.arrayBuffer()),
       mimeType: mime.mimeType,
     })
-    ctx.setStatus(
-      r.ok
-        ? t('appExportVideoDone', { path: r.path ?? '' })
-        : t('appExportVideoFailed', { error: r.error ?? t('appUnknownError') }),
-    )
-    return r.ok ? { ok: true } : { ok: false, error: r.error ?? t('appUnknownError') }
+    if (r.ok) {
+      ctx.setStatus(t('appExportVideoDone', { path: r.path ?? '' }))
+      return { ok: true }
+    }
+    const error = r.error ?? t('appUnknownError')
+    ctx.setStatus(t('appExportVideoFailed', { error }))
+    return { ok: false, error }
   } catch (err) {
-    const error = err instanceof Error ? err.message : String(err)
+    const error = String(err)
     ctx.setStatus(t('appExportVideoFailed', { error }))
     return { ok: false, error }
   } finally {

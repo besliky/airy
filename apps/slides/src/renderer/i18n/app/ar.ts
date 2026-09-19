@@ -39,6 +39,7 @@ export const ar = {
   appExportVideoRealtimeNote: 'يتم التسجيل في الوقت الفعلي: فيديو مدته دقيقتان يستغرق نحو دقيقتين.',
   appExportVideoDone: 'تم تصدير الفيديو: {path}',
   appExportVideoFailed: 'فشل تصدير الفيديو: {error}',
+  appExportVideoCancelling: 'جارٍ الإلغاء…',
   appStatusBgAppliedAll: 'تم تطبيق لون الخلفية على جميع الشرائح',
   appStatusThemeApplied: 'تم تطبيق النسق «{name}»',
   appStatusThemeApplyFailed: 'فشل تطبيق النسق: {error}',
