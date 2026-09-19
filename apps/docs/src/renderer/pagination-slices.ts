@@ -362,11 +362,14 @@ export function computeSectionedSlicesF2(
     openRegion(y, section, headerH, headerTop)
     // BUG-1108: the spilled note continuation from the previous page grows
     // this page's footnote area into the body, like Word's does; clamped to a
-    // fraction of the page so a pathological note can never zero it out
-    pageNoteSepPx =
-      (curBlockNotes ? FOOTNOTE_SEPARATOR_H : 0) +
-      Math.min(pendingSpillPx, contentH * NOTE_SPILL_MAX_FRAC)
-    pendingSpillPx = 0
+    // fraction of the page so a pathological note can never zero it out.
+    // BUG-1211: a note longer than the clamp continues past this page too —
+    // Word carries the remainder onto every following page until the note
+    // ends, so the uncharged overflow stays pending instead of evaporating
+    const spillCharged = Math.min(pendingSpillPx, contentH * NOTE_SPILL_MAX_FRAC)
+    pageNoteSepPx = (curBlockNotes ? FOOTNOTE_SEPARATOR_H : 0) + spillCharged
+    pendingSpillPx = Math.max(pendingSpillPx - spillCharged, 0)
+    if (pendingSpillPx < 0.5) pendingSpillPx = 0
     pageFloatBottom = 0
   }
   // advance on overflow: change column if not the last, turn the page on the last (headerH/headerTop: table header repeated at column top after a table break)
@@ -507,7 +510,12 @@ export function computeSectionedSlicesF2(
     const block = blocks[bi]
     curBi = bi
     curBlockNotes = (block.footnoteExtraPx ?? 0) > 0
-    if (curBlockNotes) pageNoteSepPx = FOOTNOTE_SEPARATOR_H
+    // BUG-1210: charge, never overwrite — a note-bearing block arriving on a
+    // page that opened with a spill charge used to wipe the continuation
+    // budget (plain assignment of the separator height), handing body room
+    // back that Word's grown footnote area had already eaten. The separator
+    // strip is subsumed by a larger spill charge (max), never the reverse.
+    if (curBlockNotes) pageNoteSepPx = Math.max(pageNoteSepPx, FOOTNOTE_SEPARATOR_H)
 
     // section change
     const bSection = block.section ?? curSection
@@ -1270,7 +1278,8 @@ function _placeParaBlock(
   // while its 12th paragraph stays; the spilled strip only eats the next
   // page's note area, which that page's own separator already reserves).
   // Per-line banded notes keep riding their lines (a mid-paragraph note
-  // follows its reference line, Word semantics)
+  // follows its reference line, Word semantics) — their spill twin is the
+  // last-band branch in the line-level placement below
   if (
     noteExtra > 0 &&
     !(block.noteBands && block.noteBands.length > 0) &&
@@ -1306,6 +1315,22 @@ function _placeParaBlock(
   // line-level placement
   const nLines = lineBoxes.length
   const bandH = noteBandHeights(block, lineBoxes)
+
+  // BUG-1212: banded twin of the end-charged spill above — the product path
+  // resolves per-reference noteBands (applyBlockMeta), so the guard above
+  // kept the whole spill budget unreachable outside the parity harness: a
+  // paragraph whose text fits but whose last-line band does not dragged the
+  // paragraph and its note to the next page. Word keeps the reference line
+  // on the page and continues the note in the next page's footnote area
+  // (same recorded baselines), so place the text whole and spill the part of
+  // the last band the leftover room cannot host
+  const lastBand = bandH?.[nLines - 1] ?? 0
+  if (lastBand > 0 && noteSpill && fits(totalH - spaceAfterPx - lastBand)) {
+    const left = roomLeft?.() ?? 0
+    place(totalH - lastBand)
+    noteSpill(Math.max(lastBand - Math.max(left - (totalH - lastBand), 0), 0))
+    return
+  }
 
   if (totalH > contentH) {
     // paragraph exceeds one page: hard line-level cut

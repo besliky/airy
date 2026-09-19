@@ -45,11 +45,20 @@ const BUILT_IN_PARA_DEFAULTS: Pick<
 > = { spaceAfterTwips: 160, lineRawTwips: 276, lineRule: 'auto', lineSpacing: 1.15 }
 
 /** Word built-in style names/ids beyond what headingLevel already detects,
- * lowercased with spaces stripped (matches both "List Paragraph" and
- * "ListParagraph"). A definition without w:customStyle="1" whose name or id
+ * lowercased with spaces stripped (matches both "List Bullet" and
+ * "ListBullet"). A definition without w:customStyle="1" whose name or id
  * matches one of these is built-in, so a Modify-style upsert must not mark
  * it w:customStyle (BUG-1022: Title/Subtitle/Quote/ListParagraph/TOC1-9/…
- * used to flip to custom on modify). */
+ * used to flip to custom on modify).
+ *
+ * BUG-1215: the table now covers the full Word built-in inventory (the
+ * latent-styles list ECMA-376 Annex A encodes; entry names cross-checked
+ * against the WdBuiltinStyle enumeration): the List Bullet/Number/Continue
+ * families (the most user-modified after headings), character emphasis
+ * (Strong/Emphasis/PageNumber/BalloonText/…), envelope/salutation, index and
+ * TOA families, the HTML-legacy set, and the base table-style gallery names.
+ * Word reserves built-in names — a style matching one of these without the
+ * customStyle marker IS the built-in, whatever its styleId spelling. */
 const BUILTIN_STYLE_KEYS = new Set([
   'normal',
   'title',
@@ -74,10 +83,98 @@ const BUILTIN_STYLE_KEYS = new Set([
   'endnotereference',
   'hyperlink',
   'followedhyperlink',
+  // list families
+  'list',
+  'listbullet',
+  'listnumber',
+  'listcontinue',
+  // body-text variants
+  'bodytext2',
+  'bodytext3',
+  'bodytextfirstindent',
+  'bodytextfirstindent2',
+  'bodytextindent2',
+  'bodytextindent3',
+  'blocktext',
+  // character emphasis and reference marks
+  'strong',
+  'emphasis',
+  'subtleemphasis',
+  'intenseemphasis',
+  'subtlereference',
+  'intensereference',
+  'booktitle',
+  'plaintext',
+  'macrotext',
+  'date',
+  'balloontext',
+  'bibliography',
+  'pagenumber',
+  'linenumber',
+  'noteheading',
+  'defaultparagraphfont',
+  'nolist',
+  // envelope / correspondence
+  'envelopeaddress',
+  'envelopereturn',
+  'salutation',
+  'signature',
+  'closing',
+  'messageheader',
+  // comments (legacy annotation names included)
+  'commentreference',
+  'commenttext',
+  'annotationreference',
+  'annotationtext',
+  // index / TOA / TOF
+  'indexheading',
+  'indextitle',
+  'toaheading',
+  'tableofauthorities',
+  'tableoffigures',
+  // HTML legacy set
+  'htmlacronym',
+  'htmladdress',
+  'htmlcite',
+  'htmlcode',
+  'htmldfn',
+  'htmlkbd',
+  'htmlpre',
+  'htmlsamp',
+  'htmltt',
+  'htmlvar',
+  // misc paragraph
+  'normalindent',
+  'documentmap',
+  // base table-style gallery (accent variants keep their hyphenated ids,
+  // e.g. LightShading-Accent1, which space-stripping cannot derive)
+  'normaltable',
+  'tablegrid',
+  'lightshading',
+  'lightlist',
+  'lightgrid',
+  'mediumshading1',
+  'mediumshading2',
+  'mediumlist1',
+  'mediumlist2',
+  'mediumgrid1',
+  'mediumgrid2',
+  'mediumgrid3',
+  'darklist',
+  'colorfulshading',
+  'colorfullist',
+  'colorfulgrid',
 ])
 for (let i = 1; i <= 9; i++) {
   BUILTIN_STYLE_KEYS.add(`heading${i}`)
   BUILTIN_STYLE_KEYS.add(`toc${i}`)
+  BUILTIN_STYLE_KEYS.add(`index${i}`)
+}
+for (let i = 2; i <= 5; i++) {
+  BUILTIN_STYLE_KEYS.add(`list${i}`)
+  BUILTIN_STYLE_KEYS.add(`listbullet${i}`)
+  BUILTIN_STYLE_KEYS.add(`listnumber${i}`)
+  BUILTIN_STYLE_KEYS.add(`listcontinue${i}`)
 }
 
 export async function parseStyles(

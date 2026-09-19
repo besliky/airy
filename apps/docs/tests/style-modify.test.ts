@@ -236,6 +236,69 @@ describe('BUG-1022: built-in detection beyond Normal|HeadingN', () => {
   })
 })
 
+describe('BUG-1215: built-in detection covers the full Word inventory', () => {
+  // built-ins Word writes WITHOUT w:customStyle, across the families the old
+  // table missed: list styles, character emphasis, envelope, index, date
+  const EXTENDED_BUILTIN_STYLES =
+    '<w:style w:type="paragraph" w:styleId="ListBullet"><w:name w:val="List Bullet"/></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="ListNumber5"><w:name w:val="List Number 5"/></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="BalloonText"><w:name w:val="Balloon Text"/></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="Date"><w:name w:val="Date"/></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="EnvelopeReturn"><w:name w:val="Envelope Return"/></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="Index3"><w:name w:val="Index 3"/></w:style>' +
+    '<w:style w:type="character" w:styleId="PageNumber"><w:name w:val="Page Number"/></w:style>' +
+    '<w:style w:type="character" w:styleId="Strong"><w:name w:val="Strong"/></w:style>'
+
+  async function openExtendedDoc() {
+    return parseDocx(
+      await buildDocx({
+        bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+        extraStylesXml: EXTENDED_BUILTIN_STYLES,
+      }),
+    )
+  }
+
+  it('parses every family as built-in (name or id form, both style types)', async () => {
+    const parsed = await openExtendedDoc()
+    for (const id of [
+      'ListBullet',
+      'ListNumber5',
+      'BalloonText',
+      'Date',
+      'EnvelopeReturn',
+      'Index3',
+      'PageNumber',
+      'Strong',
+    ]) {
+      expect(parsed.styles.get(id)!.builtin, id).toBe(true)
+    }
+    // the id form alone also matches when the name is localized or absent
+    const idOnly = await parseDocx(
+      await buildDocx({
+        bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+        extraStylesXml:
+          '<w:style w:type="paragraph" w:styleId="ListBullet2"><w:name w:val="Liste puce 2"/></w:style>',
+      }),
+    )
+    expect(idOnly.styles.get('ListBullet2')!.builtin).toBe(true)
+  })
+
+  it('a List Bullet modify keeps the built-in marker (regression: it used to flip to custom)', async () => {
+    const parsed = await openExtendedDoc()
+    const info = parsed.styles.get('ListBullet')!
+    const { upsert } = styleUpsertFromEdits(info, { ...styleEditsFromInfo(info), bold: true })
+    expect(upsert.builtin).toBe(true)
+    const blocks = parsed.blocks
+      .filter((b) => !b.hidden && b.docxIndex !== null)
+      .map((b) => ({ kind: 'original' as const, docxIndex: b.docxIndex! }))
+    const saved = await saveDocx(parsed, blocks, { styleUpserts: [upsert] })
+    const stylesXml = await (await JSZip.loadAsync(saved)).file('word/styles.xml')!.async('string')
+    const bullet = /<w:style [^>]*w:styleId="ListBullet"[\s\S]*?<\/w:style>/.exec(stylesXml)![0]
+    expect(bullet).not.toContain('w:customStyle')
+    expect(bullet).toContain('<w:b/>')
+  })
+})
+
 describe('live display update', () => {
   it('the swapped style definition reaches the regenerated document style CSS', async () => {
     const parsed = await openDoc()
