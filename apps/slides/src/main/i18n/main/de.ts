@@ -18,6 +18,7 @@ export const de = {
   dlgPickExportDir: 'Exportordner auswählen',
   btnExport: 'Exportieren',
   dlgExportPdf: 'Als PDF exportieren',
+  dlgExportVideo: 'Als Video exportieren',
   errExportDestNotPicked:
     'Das Exportziel wurde in diesem Fenster nicht gewählt; wählen Sie es erneut im Exportdialog.',
   dlgAddAttachment: 'Anlagen hinzufügen',
@@ -106,6 +107,7 @@ export const de = {
   menuSaveAs: 'Speichern unter…',
   menuExportPdf: 'Als PDF exportieren…',
   menuExportImages: 'Als Bilder exportieren…',
+  menuExportVideo: 'Als Video exportieren…',
   menuPrint: 'Drucken…',
   menuClose: 'Schließen',
   menuQuit: 'Beenden',

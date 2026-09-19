@@ -18,6 +18,7 @@ export const it = {
   dlgPickExportDir: 'Scegli la cartella di esportazione',
   btnExport: 'Esporta',
   dlgExportPdf: 'Esporta come PDF',
+  dlgExportVideo: 'Esporta come video',
   errExportDestNotPicked:
     'La destinazione di esportazione non è stata scelta in questa finestra; sceglierla di nuovo nella finestra di esportazione.',
   dlgAddAttachment: 'Aggiungi allegati',
@@ -107,6 +108,7 @@ export const it = {
   menuSaveAs: 'Salva con nome…',
   menuExportPdf: 'Esporta come PDF…',
   menuExportImages: 'Esporta come immagini…',
+  menuExportVideo: 'Esporta come video…',
   menuPrint: 'Stampa…',
   menuClose: 'Chiudi',
   menuQuit: 'Esci',

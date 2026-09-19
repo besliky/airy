@@ -18,6 +18,7 @@ export const en = {
   dlgPickExportDir: 'Choose Export Folder',
   btnExport: 'Export',
   dlgExportPdf: 'Export as PDF',
+  dlgExportVideo: 'Export as Video',
   errExportDestNotPicked:
     'The export destination was not picked in this window; choose it again with the export dialog.',
   dlgAddAttachment: 'Add Attachments',
@@ -101,6 +102,7 @@ export const en = {
   menuSaveAs: 'Save As…',
   menuExportPdf: 'Export as PDF…',
   menuExportImages: 'Export as Images…',
+  menuExportVideo: 'Export as Video…',
   menuPrint: 'Print…',
   menuClose: 'Close',
   menuQuit: 'Quit',

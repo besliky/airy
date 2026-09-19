@@ -9082,6 +9082,85 @@ body.show-curtain::after {
   text-align: right;
 }
 
+/* Export Video dialog (File > Export Video): option groups + record progress */
+.video-export-fieldset {
+  margin: 0 0 10px;
+  padding: 8px 10px 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.video-export-fieldset legend {
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.video-export-fieldset .dlg-radio {
+  margin: 0 0 6px;
+}
+
+.video-export-fieldset .dlg-check {
+  margin: 0 0 8px;
+}
+
+.video-export-seconds-row {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.video-export-seconds {
+  display: inline-block;
+  width: 70px;
+  height: 26px;
+  margin: 0;
+  padding: 0 6px;
+  font-size: 12px;
+}
+
+.video-export-summary {
+  margin-top: 4px;
+  padding: 2px 2px 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+.video-export-error {
+  color: var(--slides-error);
+}
+
+.video-export-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 2px;
+}
+
+.video-export-progress-label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.video-export-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hover);
+  overflow: hidden;
+}
+
+.video-export-bar > div {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 200ms linear;
+}
+
+.video-export-note {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 /* Sliding AI dock: one persistent wrapper animates between the panel width and
  * the 34px collapsed rail (Excel-parity 180ms ease); --ai-panel-width tracks
  * the panel's drag-resizer */

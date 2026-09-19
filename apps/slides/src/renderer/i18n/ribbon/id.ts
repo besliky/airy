@@ -37,6 +37,7 @@ export const id = {
   ribbonFileExportPdf: 'Ekspor sebagai PDF…',
   ribbonFilePrint: 'Cetak…',
   ribbonFileExportImages: 'Ekspor sebagai Gambar…',
+  ribbonFileExportVideo: 'Ekspor sebagai Video…',
   ribbonUnsavedSuffix: ' — Belum disimpan',
   ribbonSaveTip: 'Simpan (⌘S)',
   ribbonAutoSave: 'Simpan Otomatis',

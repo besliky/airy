@@ -59,6 +59,7 @@ import { IconNotes, IconPlayBoxed } from './components/icons'
 import { PresenterView } from './components/PresenterView'
 import { CustomShowDialog } from './components/CustomShowDialog'
 import { PdfExportDialog } from './components/PdfExportDialog'
+import { ExportVideoDialog } from './components/ExportVideoDialog'
 import { PrintDialog } from './components/PrintDialog'
 import { FindReplaceDialog } from './components/FindReplaceDialog'
 import { formatClock, type CustomShow } from './slideshow-utils'
@@ -956,11 +957,33 @@ export function App() {
       fileActions.exportPdf(ctxRef.current, layout),
     [],
   )
+  const exportVideo = useCallback(
+    (
+      settings: Parameters<typeof fileActions.exportVideo>[1],
+      onProgress: Parameters<typeof fileActions.exportVideo>[2],
+      cancel: Parameters<typeof fileActions.exportVideo>[3],
+    ) => fileActions.exportVideo(ctxRef.current, settings, onProgress, cancel),
+    [],
+  )
   /// File > Export as PDF: layout chooser (full pages / notes / handouts)
   const [pdfDlgOpen, setPdfDlgOpen] = useState(false)
+  /// File > Export as Video: options dialog (fetches deck timings/transitions once on open)
+  const [videoDlg, setVideoDlg] = useState<{
+    advanceMs: Array<number | null>
+    transitions: TransitionSpec[]
+  } | null>(null)
   const [printDlgOpen, setPrintDlgOpen] = useState(false)
   /// Help > Keyboard Shortcuts reference dialog.
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+
+  /** Open the Export Video dialog, fetching the deck facts its estimate needs (auto-advance times + transitions). */
+  const openVideoExport = useCallback(() => {
+    const slides = ctxRef.current.slides
+    void Promise.all([
+      window.slidesApi.getAdvanceTimes(),
+      Promise.all(slides.map((_, i) => window.slidesApi.getTransition(i))),
+    ]).then(([advanceMs, transitions]) => setVideoDlg({ advanceMs, transitions }))
+  }, [])
 
   /** Whether focus is in a text input (input/textarea/contentEditable) — these cases use native undo/delete */
   const inTextField = () => {
@@ -2138,6 +2161,7 @@ export function App() {
       // macOS has no File ribbon tab, so these only exist in the menu
       else if (cmd === 'export-pdf') setPdfDlgOpen(true)
       else if (cmd === 'export-images') void exportImages()
+      else if (cmd === 'export-video') openVideoExport()
       else if (cmd === 'print') setPrintDlgOpen(true)
       else if (cmd === 'shortcuts') setShortcutsOpen(true)
       // Through the preview path so the zoom pivots on the viewport center, not the scroll origin
@@ -2165,6 +2189,7 @@ export function App() {
     saveAs,
     exportPdf,
     exportImages,
+    openVideoExport,
     undo,
     redo,
     editing,
@@ -2898,6 +2923,7 @@ export function App() {
         onExportPdf={() => setPdfDlgOpen(true)}
         onPrint={() => setPrintDlgOpen(true)}
         onExportImages={() => void exportImages()}
+        onExportVideo={openVideoExport}
         onFormat={onFormat}
         zoom={zoom}
         onZoom={previewZoom}
@@ -4181,6 +4207,16 @@ export function App() {
             void exportPdf(layout)
           }}
           onClose={() => setPdfDlgOpen(false)}
+        />
+      )}
+
+      {videoDlg && (
+        <ExportVideoDialog
+          slides={slides}
+          advanceMs={videoDlg.advanceMs}
+          transitions={videoDlg.transitions}
+          onExport={exportVideo}
+          onClose={() => setVideoDlg(null)}
         />
       )}
 

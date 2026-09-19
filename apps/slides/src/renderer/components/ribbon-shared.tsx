@@ -347,6 +347,8 @@ export interface Props {
   onPrint: () => void
   /** Export as images (one PNG per page, hidden slides skipped) */
   onExportImages: () => void
+  /** Export as video (mp4/WebM; hidden slides skipped) */
+  onExportVideo: () => void
   onFormat: (cmd: FormatCmd) => void
   zoom: number
   onZoom: (z: number | ((current: number) => number)) => void

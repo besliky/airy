@@ -18,6 +18,7 @@ export const pt = {
   dlgPickExportDir: 'Escolher Pasta de Exportação',
   btnExport: 'Exportar',
   dlgExportPdf: 'Exportar como PDF',
+  dlgExportVideo: 'Exportar como Vídeo',
   errExportDestNotPicked:
     'O destino de exportação não foi escolhido nesta janela; escolha-o novamente na caixa de diálogo de exportação.',
   dlgAddAttachment: 'Adicionar Anexos',
@@ -106,6 +107,7 @@ export const pt = {
   menuSaveAs: 'Salvar Como…',
   menuExportPdf: 'Exportar como PDF…',
   menuExportImages: 'Exportar como imagens…',
+  menuExportVideo: 'Exportar como Vídeo…',
   menuPrint: 'Imprimir…',
   menuClose: 'Fechar',
   menuQuit: 'Sair',

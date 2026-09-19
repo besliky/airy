@@ -35,6 +35,7 @@ export const cs = {
   ribbonFileExportPdf: 'Exportovat do PDF…',
   ribbonFilePrint: 'Tisk…',
   ribbonFileExportImages: 'Exportovat jako obrázky…',
+  ribbonFileExportVideo: 'Exportovat jako video…',
   ribbonUnsavedSuffix: ' — Neuloženo',
   ribbonSaveTip: 'Uložit (⌘S)',
   ribbonAutoSave: 'Automatické ukládání',

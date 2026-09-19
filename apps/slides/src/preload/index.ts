@@ -79,6 +79,7 @@ import type {
   MasterDeleteElementOp,
   ExportImagesOp,
   ExportPdfOp,
+  ExportVideoOp,
   PrintSlidesOp,
   MenuCommand,
   OpenResult,
@@ -317,6 +318,12 @@ const api: SlidesApi = {
   pickExportPdfPath: (defaultName: string) =>
     ipcRenderer.invoke('slides:pick-export-pdf-path', defaultName),
   exportPdf: (op: ExportPdfOp) => ipcRenderer.invoke('slides:export-pdf', op),
+  pickExportVideoPath: (defaultName: string, container: 'mp4' | 'webm') =>
+    ipcRenderer.invoke('slides:pick-export-video-path', defaultName, container),
+  exportVideo: (op: ExportVideoOp) => ipcRenderer.invoke('slides:export-video', op),
+  getAdvanceTimes: () => ipcRenderer.invoke('slides:get-advance-times'),
+  setVideoExportActive: (active: boolean) =>
+    ipcRenderer.invoke('slides:set-video-export-active', active),
   printSlides: (op: PrintSlidesOp) => ipcRenderer.invoke('slides:print', op),
   save: () => ipcRenderer.invoke('slides:save'),
   saveAs: (defaultName: string) => ipcRenderer.invoke('slides:save-as', defaultName),

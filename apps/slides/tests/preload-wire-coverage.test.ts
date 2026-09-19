@@ -125,6 +125,7 @@ const PINNED_API_MEMBERS = `
   endHistoryBatch
   exportImages
   exportPdf
+  exportVideo
   findReplace
   flipElements
   fontCatalog
@@ -132,6 +133,7 @@ const PINNED_API_MEMBERS = `
   fontInstallLocal
   fontMissing
   generateImage
+  getAdvanceTimes
   getAiPanelPrefs
   getAiSettings
   getAnimations
@@ -200,8 +202,8 @@ const PINNED_API_MEMBERS = `
   pasteSlide
   pickExportDir
   pickExportPdfPath
-  pickPictureFile
-  presenterEnd
+  pickExportVideoPath
+  pickPictureFile  presenterEnd
   presenterInk
   presenterStart
   presenterSwap
@@ -237,6 +239,7 @@ const PINNED_API_MEMBERS = `
   setShowFullScreen
   setSlideHidden
   setSlideLayout
+  setVideoExportActive
   setSlideSize
   setTableCellAnchor
   setTableColWidth

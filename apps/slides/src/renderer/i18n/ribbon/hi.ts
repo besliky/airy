@@ -34,6 +34,7 @@ export const hi = {
   ribbonFileExportPdf: 'PDF के रूप में निर्यात करें…',
   ribbonFilePrint: 'प्रिंट करें…',
   ribbonFileExportImages: 'छवियों के रूप में निर्यात करें…',
+  ribbonFileExportVideo: 'वीडियो के रूप में निर्यात करें…',
   ribbonUnsavedSuffix: ' — सहेजा नहीं गया',
   ribbonSaveTip: 'सहेजें (⌘S)',
   ribbonAutoSave: 'स्वतः सहेजें',

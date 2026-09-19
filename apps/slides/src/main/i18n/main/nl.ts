@@ -18,6 +18,7 @@ export const nl = {
   dlgPickExportDir: 'Exportmap kiezen',
   btnExport: 'Exporteren',
   dlgExportPdf: 'Exporteren als PDF',
+  dlgExportVideo: 'Exporteren als video',
   errExportDestNotPicked:
     'De exportbestemming is niet gekozen in dit venster; kies deze opnieuw in het exportdialoogvenster.',
   dlgAddAttachment: 'Bijlagen toevoegen',
@@ -105,6 +106,7 @@ export const nl = {
   menuSaveAs: 'Opslaan als…',
   menuExportPdf: 'Exporteren als PDF…',
   menuExportImages: 'Exporteren als afbeeldingen…',
+  menuExportVideo: 'Exporteren als video…',
   menuPrint: 'Afdrukken…',
   menuClose: 'Sluiten',
   menuQuit: 'Stoppen',

@@ -18,6 +18,7 @@ export const hi = {
   dlgPickExportDir: 'निर्यात फ़ोल्डर चुनें',
   btnExport: 'निर्यात करें',
   dlgExportPdf: 'PDF के रूप में निर्यात करें',
+  dlgExportVideo: 'वीडियो के रूप में निर्यात करें',
   errExportDestNotPicked:
     'निर्यात गंतव्य इस विंडो में नहीं चुना गया; इसे निर्यात संवाद से फिर से चुनें।',
   dlgAddAttachment: 'अनुलग्नक जोड़ें',
@@ -104,6 +105,7 @@ export const hi = {
   menuSaveAs: 'इस रूप में सहेजें…',
   menuExportPdf: 'PDF के रूप में निर्यात करें…',
   menuExportImages: 'छवियों के रूप में निर्यात…',
+  menuExportVideo: 'वीडियो के रूप में निर्यात करें…',
   menuPrint: 'प्रिंट करें…',
   menuClose: 'बंद करें',
   menuQuit: 'बाहर निकलें',

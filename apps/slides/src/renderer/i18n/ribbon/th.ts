@@ -36,6 +36,7 @@ export const th = {
   ribbonFileExportPdf: 'ส่งออกเป็น PDF…',
   ribbonFilePrint: 'พิมพ์…',
   ribbonFileExportImages: 'ส่งออกเป็นรูปภาพ…',
+  ribbonFileExportVideo: 'ส่งออกเป็นวิดีโอ…',
   ribbonUnsavedSuffix: ' — ยังไม่ได้บันทึก',
   ribbonSaveTip: 'บันทึก (⌘S)',
   ribbonAutoSave: 'บันทึกอัตโนมัติ',

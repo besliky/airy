@@ -35,6 +35,7 @@ export const pl = {
   ribbonFileExportPdf: 'Eksportuj jako PDF…',
   ribbonFilePrint: 'Drukuj…',
   ribbonFileExportImages: 'Eksportuj jako obrazy…',
+  ribbonFileExportVideo: 'Eksportuj jako wideo…',
   ribbonUnsavedSuffix: ' — Niezapisane',
   ribbonSaveTip: 'Zapisz (⌘S)',
   ribbonAutoSave: 'Autozapis',
