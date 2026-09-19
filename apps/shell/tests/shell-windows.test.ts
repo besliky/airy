@@ -87,4 +87,40 @@ describe('ShellWindowRegistry', () => {
     expect(registry.list()).toEqual([])
     expect(registry.focused()).toBeUndefined()
   })
+
+  /** entry whose fake manager hosts one editor view webContents (wcId) */
+  function makeEntryWithTab(id: number, homeWebContentsId: number, wcId: number) {
+    const entry = makeEntry(id, homeWebContentsId)
+    const manager = { tabIdForWebContents: (wc: number) => (wc === wcId ? `t${id}` : undefined) }
+    return Object.assign(entry, { manager }) as ShellWindowEntry & { manager: typeof manager }
+  }
+
+  it('managerForWebContents finds the strip hosting the editor view', () => {
+    const registry = new ShellWindowRegistry()
+    const primary = makeEntryWithTab(1, 10, 101)
+    const secondary = makeEntryWithTab(2, 20, 202)
+    registry.add(primary)
+    registry.add(secondary)
+
+    expect(registry.managerForWebContents(101)).toBe(primary.manager)
+    expect(registry.managerForWebContents(202)).toBe(secondary.manager)
+    expect(registry.managerForWebContents(999)).toBeNull()
+  })
+
+  it('managerForSender answers in the sender window, not the focused one (BUG-1107)', () => {
+    const registry = new ShellWindowRegistry()
+    const primary = makeEntryWithTab(1, 10, 101)
+    const secondary = makeEntryWithTab(2, 20, 202)
+    registry.add(primary)
+    registry.add(secondary)
+    // window 1 holds focus while a background tab of window 2 asks
+    registry.notifyFocused(primary.win)
+
+    // a background tab of the UNFOCUSED window gets its own manager...
+    expect(registry.managerForSender(202)).toBe(secondary.manager)
+    // ...an unknown sender falls back to the focused window...
+    expect(registry.managerForSender(999)).toBe(primary.manager)
+    // ...and menu-driven calls (no sender) also resolve by focus
+    expect(registry.managerForSender(undefined)).toBe(primary.manager)
+  })
 })
