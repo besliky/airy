@@ -1626,7 +1626,9 @@ export function pmDocToSavePlan(doc: PmNode, originalBlocks: Block[]): SavePlan 
             : null
         const imageReplace =
           original.type === 'image'
-            ? (node.attrs?.imageReplace as { base64: string; mime: string } | null)
+            ? (node.attrs?.imageReplace as
+                | { base64: string; mime: string; keepCrop?: boolean }
+                | null)
             : null
         if ((imagePatch || imageReplace) && original.originalXml) {
           changedCount++

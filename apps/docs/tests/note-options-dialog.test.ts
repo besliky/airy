@@ -4,17 +4,18 @@
  * initially selected kind meant OK silently overwrote the other kind's
  * options (e.g. endnote lowerRoman/start 3) with values the user never saw.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import type { NoteNumbering } from '@airy-office/docx-engine'
 import { NoteOptionsDialog } from '../src/renderer/components/NoteOptionsDialog'
 import { t } from '../src/renderer/i18n/locale'
 
 describe('NoteOptionsDialog kind switching (BUG-1005)', () => {
   let container: HTMLElement
   let root: Root
-  let onApply: ReturnType<typeof vi.fn>
-  let onConvert: ReturnType<typeof vi.fn>
+  let onApply: Mock<(next: { footnotes?: NoteNumbering; endnotes?: NoteNumbering }) => void>
+  let onConvert: Mock<(from: 'footnote' | 'endnote', which: 'all' | 'current') => void>
 
   beforeEach(() => {
     container = document.createElement('div')
@@ -29,7 +30,7 @@ describe('NoteOptionsDialog kind switching (BUG-1005)', () => {
     container.remove()
   })
 
-  const mount = (value: { footnotes?: never; endnotes?: never } | Record<string, unknown>) =>
+  const mount = (value: { footnotes?: NoteNumbering; endnotes?: NoteNumbering }) =>
     act(() =>
       root.render(
         createElement(NoteOptionsDialog, {
