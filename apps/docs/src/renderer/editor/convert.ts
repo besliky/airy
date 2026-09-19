@@ -12,6 +12,8 @@ import {
   type CellParaPatch,
   type CellTextsPatch,
   patchDrawingExtent,
+  patchDrawingDocPr,
+  patchTableAltText,
   patchTextboxSizes,
   patchShapeStyles,
   type ShapeStylePatch,
@@ -37,6 +39,7 @@ import {
   type SaveBlock,
   type SdtShell,
   type SectionInfo,
+  type ShadowEffect,
   type TableCell,
   type TableModel,
   type TableParagraph,
@@ -596,6 +599,9 @@ function blockToPmNode(
           imageFlipH: block.imageFlipH ?? false,
           imageFlipV: block.imageFlipV ?? false,
           imageBorder: block.imageBorder ?? null,
+          imageShadow: block.imageShadow ?? null,
+          imageAltTitle: block.imageAltTitle ?? null,
+          imageAltText: block.imageAltText ?? null,
           table: displayTable(block.table ?? null, rowCapTwips, budget),
           fieldDisplay: block.fieldDisplay ?? null,
           diagramDisplay: block.diagramDisplay ?? null,
@@ -763,6 +769,8 @@ export function tableModelToPmNode(
       tblLook: model.tableLook ?? null,
       tblLookEdited: false,
       bidiVisual: model.bidiVisual ?? false,
+      altTitle: model.altTitle ?? null,
+      altText: model.altText ?? null,
       originalStructure: null,
       originalFormatting: null,
     },
@@ -1169,6 +1177,10 @@ export function pmTableToModel(table: PmNode): TableModel {
     ...(tablePropsEdited('tblLookEdited') && table.attrs?.tblLook
       ? { tableLook: table.attrs.tblLook as NonNullable<TableModel['tableLook']> }
       : {}),
+    // alt text: non-null attr (parsed or authored) re-writes; '' removes.
+    // undefined leaves the original tblPr bytes alone on rebuilds
+    ...(table.attrs?.altTitle != null ? { altTitle: String(table.attrs.altTitle) } : {}),
+    ...(table.attrs?.altText != null ? { altText: String(table.attrs.altText) } : {}),
   }
 }
 
@@ -1533,11 +1545,28 @@ export function pmDocToSavePlan(doc: PmNode, originalBlocks: Block[]): SavePlan 
           structurallyUnchanged && formattingUnchanged
             ? tableTextsPatchFromModel(model, original)
             : null
-        if (structurallyUnchanged && formattingUnchanged && tableTexts && original.originalXml) {
-          changedCount++
-          pushBlock({ kind: 'xml', xml: patchTableCellTexts(original.originalXml, tableTexts) })
-        } else if (structurallyUnchanged && formattingUnchanged) {
-          pushBlock({ kind: 'original', docxIndex: idx! })
+        // alt text diff against the parsed table: surgical patch on untouched
+        // tables, model field on rebuilds (generateTableModelXml re-writes it)
+        const tableAltChanged =
+          (typeof node.attrs?.altTitle === 'string' ? node.attrs.altTitle : null) !==
+            (original.table?.altTitle ?? null) ||
+          (typeof node.attrs?.altText === 'string' ? node.attrs.altText : null) !==
+            (original.table?.altText ?? null)
+        if (structurallyUnchanged && formattingUnchanged && original.originalXml) {
+          if (tableTexts || tableAltChanged) {
+            changedCount++
+            let xml = original.originalXml
+            if (tableTexts) xml = patchTableCellTexts(xml, tableTexts)
+            if (tableAltChanged) {
+              xml = patchTableAltText(xml, {
+                title: (node.attrs?.altTitle as string | null) ?? null,
+                descr: (node.attrs?.altText as string | null) ?? null,
+              })
+            }
+            pushBlock({ kind: 'xml', xml })
+          } else {
+            pushBlock({ kind: 'original', docxIndex: idx! })
+          }
         } else {
           changedCount++
           pushBlock({
@@ -1567,6 +1596,7 @@ export function pmDocToSavePlan(doc: PmNode, originalBlocks: Block[]): SavePlan 
         const textboxTexts = textboxParasPatch(node, original)
         const textboxSizes = textboxSizesPatch(node, original)
         const textboxStyles = textboxStylesPatch(node, original)
+        const textboxAlt = textboxAltPatch(node, original)
         const textboxOffsetX =
           node.attrs?.imageOffsetXEmu != null ? Number(node.attrs.imageOffsetXEmu) : undefined
         const textboxOffsetY =
@@ -1662,7 +1692,7 @@ export function pmDocToSavePlan(doc: PmNode, originalBlocks: Block[]): SavePlan 
           changedCount++
           pushBlock({ kind: 'xml', xml: patchTableCellTexts(original.originalXml, tableTexts) })
         } else if (
-          (textboxTexts || textboxSizes || textboxStyles || textboxPositionChanged) &&
+          (textboxTexts || textboxSizes || textboxStyles || textboxAlt || textboxPositionChanged) &&
           original.originalXml
         ) {
           changedCount++
@@ -1670,6 +1700,11 @@ export function pmDocToSavePlan(doc: PmNode, originalBlocks: Block[]): SavePlan 
           if (textboxTexts) xml = patchTextboxParas(xml, textboxTexts)
           if (textboxSizes) xml = patchTextboxSizes(xml, textboxSizes)
           if (textboxStyles) xml = patchShapeStyles(xml, textboxStyles)
+          if (textboxAlt)
+            xml = patchDrawingDocPr(xml, {
+              title: textboxAlt.title ?? null,
+              descr: textboxAlt.descr ?? null,
+            })
           if (textboxPositionChanged) {
             const wrap =
               (node.attrs?.imageWrap as ImageWrap | null) ?? original.imageWrap ?? 'square-left'
@@ -1796,6 +1831,14 @@ export function pmDocToSavePlan(doc: PmNode, originalBlocks: Block[]): SavePlan 
         if (node.attrs.imageRotDeg) image.rotDeg = Number(node.attrs.imageRotDeg)
         if (node.attrs.imageFlipH) image.flipH = true
         if (node.attrs.imageFlipV) image.flipV = true
+        if (typeof node.attrs.imageAltTitle === 'string' && node.attrs.imageAltTitle)
+          image.altTitle = node.attrs.imageAltTitle
+        if (typeof node.attrs.imageAltText === 'string' && node.attrs.imageAltText)
+          image.altText = node.attrs.imageAltText
+        const genShadow = node.attrs.imageShadow as ShadowEffect | null
+        if (genShadow) image.shadow = genShadow
+        const genBorder = node.attrs.imageBorder as { color: string; widthPt: number } | null
+        if (genBorder) image.border = genBorder
         pushBlock({ kind: 'image', image })
       } else if (node.attrs?.genChart) {
         // in-place edits live in chartDisplay; the saved part reflects them
@@ -1994,6 +2037,14 @@ function imageFromProtectedAttrs(node: PmNode): NewImage | null {
   if (node.attrs?.imageRotDeg) image.rotDeg = Number(node.attrs.imageRotDeg)
   if (node.attrs?.imageFlipH) image.flipH = true
   if (node.attrs?.imageFlipV) image.flipV = true
+  if (typeof node.attrs?.imageAltTitle === 'string' && node.attrs.imageAltTitle)
+    image.altTitle = node.attrs.imageAltTitle
+  if (typeof node.attrs?.imageAltText === 'string' && node.attrs.imageAltText)
+    image.altText = node.attrs.imageAltText
+  const shadow = node.attrs?.imageShadow as ShadowEffect | null
+  if (shadow) image.shadow = shadow
+  const border = node.attrs?.imageBorder as { color: string; widthPt: number } | null
+  if (border) image.border = border
   return image
 }
 
@@ -2071,7 +2122,35 @@ interface ImageBlockPatch {
   rotDeg?: number
   flipH?: boolean
   flipV?: boolean
+  /** alt text (wp:docPr title/descr); '' removes; undefined = keep */
+  altTitle?: string
+  altDescr?: string
+  /** picture shadow (a:effectLst); null removes; undefined = keep */
+  shadow?: ShadowEffect | null
+  /** picture outline (a:ln); null = explicit no outline; undefined = keep */
+  border?: { color: string; widthPt: number } | null
 }
+
+/** structural equality for the shadow/border models (attrs may be re-created by copies) */
+const shadowEq = (
+  a: ShadowEffect | null | undefined,
+  b: ShadowEffect | null | undefined,
+): boolean =>
+  (a ?? null) === (b ?? null) ||
+  (!!a &&
+    !!b &&
+    a.blurRadEmu === b.blurRadEmu &&
+    a.distEmu === b.distEmu &&
+    a.dirEmu === b.dirEmu &&
+    a.color === b.color &&
+    (a.alphaPct ?? 100) === (b.alphaPct ?? 100) &&
+    !!a.inner === !!b.inner)
+
+const borderEq = (
+  a: { color: string; widthPt: number } | null | undefined,
+  b: { color: string; widthPt: number } | null | undefined,
+): boolean =>
+  (a ?? null) === (b ?? null) || (!!a && !!b && a.color === b.color && a.widthPt === b.widthPt)
 
 /** size/align/wrap changes on an original image block; null when untouched */
 function imagePatchOf(node: PmNode, original: Block): ImageBlockPatch | null {
@@ -2112,6 +2191,15 @@ function imagePatchOf(node: PmNode, original: Block): ImageBlockPatch | null {
   const flipV = !!node.attrs?.imageFlipV
   if (flipH !== (original.imageFlipH ?? false)) patch.flipH = flipH
   if (flipV !== (original.imageFlipV ?? false)) patch.flipV = flipV
+  // alt text, shadow and outline: authored attrs vs the parsed original
+  const altTitle = typeof node.attrs?.imageAltTitle === 'string' ? node.attrs.imageAltTitle : null
+  if (altTitle !== (original.imageAltTitle ?? null)) patch.altTitle = altTitle ?? ''
+  const altDescr = typeof node.attrs?.imageAltText === 'string' ? node.attrs.imageAltText : null
+  if (altDescr !== (original.imageAltText ?? null)) patch.altDescr = altDescr ?? ''
+  const shadow = (node.attrs?.imageShadow as ShadowEffect | null) ?? null
+  if (!shadowEq(shadow, original.imageShadow)) patch.shadow = shadow
+  const border = (node.attrs?.imageBorder as { color: string; widthPt: number } | null) ?? null
+  if (!borderEq(border, original.imageBorder)) patch.border = border
   const posH = (node.attrs?.imagePosH as ImageBlockPatch['posH'] | null) ?? null
   const posV = (node.attrs?.imagePosV as ImageBlockPatch['posV'] | null) ?? null
   if (
@@ -2319,11 +2407,27 @@ function textboxStylesPatch(node: PmNode, original: Block): (ShapeStylePatch | n
       (box.borderColor ?? null) !== (initial[index].borderColor ?? null)
         ? (box.borderColor ?? null)
         : undefined
-    if (fillHex === undefined && borderHex === undefined) return null
+    // shadow diff: undefined keeps the authored/parsed effectLst bytes
+    const shadow = shadowEq(box.shadow, initial[index].shadow)
+      ? undefined
+      : ((box.shadow ?? null) as ShapeStylePatch['shadow'])
+    if (fillHex === undefined && borderHex === undefined && shadow === undefined) return null
     changed = true
-    return { fillHex, borderHex }
+    return { fillHex, borderHex, shadow }
   })
   return changed ? styles : null
+}
+
+/** alt text change (wp:docPr title/descr) on a shape-anchored protected block */
+function textboxAltPatch(
+  node: PmNode,
+  original: Block,
+): { title: string | null; descr: string | null } | null {
+  const title = typeof node.attrs?.imageAltTitle === 'string' ? node.attrs.imageAltTitle : null
+  const descr = typeof node.attrs?.imageAltText === 'string' ? node.attrs.imageAltText : null
+  if (title === (original.imageAltTitle ?? null) && descr === (original.imageAltText ?? null))
+    return null
+  return { title, descr }
 }
 
 function fieldTextPatch(node: PmNode, original: Block): FieldTextPatch | null {

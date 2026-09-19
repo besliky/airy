@@ -63,6 +63,7 @@ import {
   type NumberingDef,
   type NumberingLevel,
   type Run,
+  type ShadowEffect,
   type StrayIndent,
   type StyleDisplay,
   type StyleInfo,
@@ -71,6 +72,7 @@ import {
   type TextboxDisplay,
   type TextboxListMarker,
 } from '@airy-office/docx-engine'
+import { shadowCss } from './shadow-effects'
 import {
   bulletMarkerScale,
   computeListMarkerInfos,
@@ -2332,6 +2334,10 @@ export const DocTable = Node.create({
       sdtShell: { default: null as string | null },
       /** RTL table (tblPr w:bidiVisual): columns right to left */
       bidiVisual: { default: false },
+      /** alt text title (tblPr w:tblCaption) */
+      altTitle: { default: null as string | null },
+      /** alt text description (tblPr w:tblDescription) */
+      altText: { default: null as string | null },
       originalStructure: { default: null as string | null },
       originalFormatting: { default: null as string | null },
       blockRevision: { default: null as Record<string, string> | null },
@@ -3113,6 +3119,12 @@ export const DocProtected = Node.create({
       imageFlipV: { default: false },
       /** picture outline (pic:spPr a:ln solid fill, display-only) */
       imageBorder: { default: null as { color: string; widthPt: number } | null },
+      /** picture/shape shadow (a:effectLst outer/innerShdw), rendered as CSS approximation */
+      imageShadow: { default: null as ShadowEffect | null },
+      /** alt text title (wp:docPr title) of the image or shape drawing */
+      imageAltTitle: { default: null as string | null },
+      /** alt text description (wp:docPr descr) of the image or shape drawing */
+      imageAltText: { default: null as string | null },
       /** replacement bytes for an original image (crop/background removal/replace):
        *  the drawing XML — and with it docxIndex, wrap and position — survives */
       imageReplace: { default: null as { base64: string; mime: string } | null },
@@ -3854,6 +3866,9 @@ function protectedDomSpec(node: PmNode): DomSpec {
     const borderCss = ib
       ? `border:${((ib.widthPt * 96) / 72).toFixed(1)}px solid #${String(ib.color).replace(/[^0-9A-Fa-f]/g, '')}`
       : ''
+    // picture shadow (a:effectLst) as a CSS approximation on the wrap span so
+    // it follows crop windows, rotation and transparent silhouettes
+    const shadowDecl = shadowCss(node.attrs.imageShadow as ShadowEffect | null)
     const xf = pictureTransformFns(imageRotDeg, node.attrs.imageFlipH, node.attrs.imageFlipV)
     // in-flow pictures reserve the quarter-turned bounding box (Word turns the
     // extent box about its centre); overlays keep their zero footprint
@@ -3910,7 +3925,7 @@ function protectedDomSpec(node: PmNode): DomSpec {
           'span',
           {
             class: 'doc-img-wrap doc-img-crop',
-            style: `position:${imgFloatPos ? `absolute;${imgFloatPos}` : 'relative'};display:inline-block;width:${W}px;height:${H}px${wrapXf.length ? `;transform:${wrapXf.join(' ')}` : ''}${cropWrapMargins ? `;${cropWrapMargins}` : ''}${borderCss ? `;${borderCss}` : ''}`,
+            style: `position:${imgFloatPos ? `absolute;${imgFloatPos}` : 'relative'};display:inline-block;width:${W}px;height:${H}px${wrapXf.length ? `;transform:${wrapXf.join(' ')}` : ''}${cropWrapMargins ? `;${cropWrapMargins}` : ''}${borderCss ? `;${borderCss}` : ''}${shadowDecl ? `;${shadowDecl}` : ''}`,
           },
           [
             'span',
@@ -3927,6 +3942,11 @@ function protectedDomSpec(node: PmNode): DomSpec {
     if (xf.length) {
       imgAttrs['style'] =
         `${imgAttrs['style'] ? `${imgAttrs['style']};` : ''}transform:${xf.join(' ')}`
+    }
+    // plain (uncropped) picture: the shadow sits on the img itself so the
+    // silhouette follows rotation/flips and the selection handles stay clean
+    if (shadowDecl) {
+      imgAttrs['style'] = `${imgAttrs['style'] ? `${imgAttrs['style']};` : ''}${shadowDecl}`
     }
     if (borderCss) {
       imgAttrs['style'] = `${imgAttrs['style'] ? `${imgAttrs['style']};` : ''}${borderCss}`

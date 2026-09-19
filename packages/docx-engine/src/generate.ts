@@ -5,6 +5,7 @@ import type {
   ParaFormat,
   ParaFrame,
   Run,
+  ShadowEffect,
   TabStop,
   TableCell,
   TableModel,
@@ -22,6 +23,90 @@ export interface GenerateContext {
 
 const EMU_PER_PX = 9525
 const EMU_PER_PT = 12700
+
+/** a:effectLst XML for one shadow (outer or inner); empty string = no effects */
+export function shadowEffectLstXml(shadow: ShadowEffect | null | undefined): string {
+  if (!shadow) return ''
+  const alpha =
+    shadow.alphaPct !== undefined && shadow.alphaPct < 100
+      ? `<a:alpha val="${Math.round(shadow.alphaPct * 1000)}"/>`
+      : ''
+  const color = `<a:srgbClr val="${shadow.color}">${alpha}</a:srgbClr>`
+  const attrs =
+    ` blurRad="${Math.max(0, Math.round(shadow.blurRadEmu))}"` +
+    ` dist="${Math.max(0, Math.round(shadow.distEmu))}"` +
+    ` dir="${Math.round(shadow.dirEmu)}"`
+  const shdw = shadow.inner
+    ? `<a:innerShdw${attrs}>${color}</a:innerShdw>`
+    : `<a:outerShdw${attrs} rotWithShape="0">${color}</a:outerShdw>`
+  return `<a:effectLst>${shdw}</a:effectLst>`
+}
+
+/** border-box padding (EMU) a shadow spills past the drawing extent */
+function shadowExtentPad(shadow: ShadowEffect): { l: number; t: number; r: number; b: number } {
+  const rad = (shadow.dirEmu / 60000) * (Math.PI / 180)
+  const dx = shadow.distEmu * Math.cos(rad)
+  const dy = shadow.distEmu * Math.sin(rad)
+  const blur = shadow.blurRadEmu
+  const ceil = (v: number) => Math.max(0, Math.ceil(v))
+  // inner shadows stay inside the shape: no spill
+  if (shadow.inner) return { l: 0, t: 0, r: 0, b: 0 }
+  return { l: ceil(blur - dx), t: ceil(blur - dy), r: ceil(blur + dx), b: ceil(blur + dy) }
+}
+
+/**
+ * Replace the a:effectLst inside one shape-properties slice (pic:spPr /
+ * wps:spPr). The insertion point respects the CT_ShapeProperties order:
+ * effectLst sits after a:ln and before a:effectDag/a:scene3d/a:sp3d/a:extLst.
+ */
+function replaceEffectLst(spPr: string, effectLst: string): string {
+  const out = spPr.replace(/<a:effectLst\s*\/>|<a:effectLst\b[^>]*>[\s\S]*?<\/a:effectLst>/, '')
+  if (!effectLst) return out
+  const anchor =
+    /<a:(?:effectDag|scene3d|sp3d|extLst)[\s>]/.exec(out)?.index ?? out.lastIndexOf('</')
+  return out.slice(0, anchor) + effectLst + out.slice(anchor)
+}
+
+/**
+ * Replace (or create) the a:ln outline inside one shape-properties slice.
+ * `null` writes an explicit a:noFill line (Word's "no outline" on a picture).
+ */
+function replaceOutline(spPr: string, border: { color: string; widthPt: number } | null): string {
+  const ln =
+    border === null
+      ? '<a:ln><a:noFill/></a:ln>'
+      : `<a:ln w="${Math.max(1, Math.round(border.widthPt * EMU_PER_PT))}">` +
+        `<a:solidFill><a:srgbClr val="${border.color}"/></a:solidFill></a:ln>`
+  const existing = /<a:ln\s*\/>|<a:ln\b[^>]*>[\s\S]*?<\/a:ln>/.exec(spPr)
+  if (existing)
+    return spPr.slice(0, existing.index) + ln + spPr.slice(existing.index + existing[0].length)
+  // no outline yet: a:ln goes after the geometry/fill, before the effects
+  const anchor =
+    /<a:(?:effectLst|effectDag|scene3d|sp3d|extLst)[\s>]/.exec(spPr)?.index ??
+    spPr.lastIndexOf('</')
+  return spPr.slice(0, anchor) + ln + spPr.slice(anchor)
+}
+
+/** set/remove one attribute on the first wp:docPr tag (alt text lives there) */
+function patchDocPrAttr(xml: string, name: 'title' | 'descr', value: string | null): string {
+  const tag = /<wp:docPr\b[^>]*\/?>/.exec(xml)
+  if (!tag) return xml
+  let open = tag[0]
+  const withAttr = new RegExp(`\\s${name}="[^"]*"`).test(open)
+  if (value === null || value === '') {
+    if (!withAttr) return xml
+    open = open.replace(new RegExp(`\\s${name}="[^"]*"`), '')
+  } else if (withAttr) {
+    open = open.replace(new RegExp(`\\s${name}="[^"]*"`), ` ${name}="${escapeXmlAttr(value)}"`)
+  } else {
+    open = open.replace(/\s*\/?>$/, (tail) =>
+      tail.startsWith('/')
+        ? ` ${name}="${escapeXmlAttr(value)}"/>`
+        : ` ${name}="${escapeXmlAttr(value)}">`,
+    )
+  }
+  return xml.slice(0, tag.index) + open + xml.slice(tag.index + tag[0].length)
+}
 
 export interface ImagePatch {
   /** new display size in CSS px; rewrites wp:extent and pic a:ext */
@@ -41,6 +126,14 @@ export interface ImagePatch {
   /** mirror flips; false removes the attribute; undefined keeps */
   flipH?: boolean
   flipV?: boolean
+  /** alt text title (wp:docPr title); null/'' removes, undefined keeps as-is */
+  altTitle?: string | null
+  /** alt text description (wp:docPr descr); null/'' removes, undefined keeps as-is */
+  altDescr?: string | null
+  /** picture shadow (pic:spPr a:effectLst); null removes, undefined keeps as-is */
+  shadow?: ShadowEffect | null
+  /** picture outline (pic:spPr a:ln); null = explicit no outline, undefined keeps */
+  border?: { color: string; widthPt: number } | null
 }
 
 /**
@@ -85,19 +178,45 @@ export function patchImageParagraphXml(xml: string, patch: ImagePatch): string {
     const extM = /<wp:extent[^>]*?\bcx="(\d+)"[^>]*?\bcy="(\d+)"/.exec(out)
     const touchRot = patch.rotDeg !== undefined
     const touchSize = !!(patch.widthPx && patch.heightPx)
-    if (extM && (touchRot || (touchSize && rotM))) {
+    const touchShadow = patch.shadow !== undefined
+    if (extM && (touchRot || touchShadow || (touchSize && rotM))) {
       const rad = (((rotM ? Number(rotM[1]) : 0) / 60000) * Math.PI) / 180
       const cx = Number(extM[1])
       const cy = Number(extM[2])
       const bw = Math.abs(cx * Math.cos(rad)) + Math.abs(cy * Math.sin(rad))
       const bh = Math.abs(cx * Math.sin(rad)) + Math.abs(cy * Math.cos(rad))
-      const dx = Math.max(0, Math.round((bw - cx) / 2))
-      const dy = Math.max(0, Math.round((bh - cy) / 2))
-      const ee = `<wp:effectExtent l="${dx}" t="${dy}" r="${dx}" b="${dy}"/>`
+      // an authored shadow spills past the extent the same way: pad each side
+      // by its own blur+distance reach (element-wise with the rotation box,
+      // both in EMU — rotation is symmetric, shadows are directional)
+      let l = Math.max(0, Math.round((bw - cx) / 2))
+      let t = Math.max(0, Math.round((bh - cy) / 2))
+      let r = l
+      let b = t
+      if (touchShadow && patch.shadow) {
+        const sp = shadowExtentPad(patch.shadow)
+        l = Math.max(l, sp.l)
+        t = Math.max(t, sp.t)
+        r = Math.max(r, sp.r)
+        b = Math.max(b, sp.b)
+      }
+      const ee = `<wp:effectExtent l="${l}" t="${t}" r="${r}" b="${b}"/>`
       if (/<wp:effectExtent\b[^>]*\/>/.test(out))
         out = out.replace(/<wp:effectExtent\b[^>]*\/>/, ee)
       else out = out.replace(/(<wp:extent\b[^>]*\/?>)/, `$1${ee}`)
     }
+  }
+  // alt text (wp:docPr title/descr) — the picture's own docPr, never a sibling's
+  if (patch.altTitle !== undefined) out = patchDocPrAttr(out, 'title', patch.altTitle ?? null)
+  if (patch.altDescr !== undefined) out = patchDocPrAttr(out, 'descr', patch.altDescr ?? null)
+  // picture outline (pic:spPr a:ln) and shadow (pic:spPr a:effectLst)
+  if (patch.border !== undefined || patch.shadow !== undefined) {
+    out = out.replace(/<pic:spPr\b[^>]*>[\s\S]*?<\/pic:spPr>/, (spPr) => {
+      let next = spPr
+      if (patch.border !== undefined) next = replaceOutline(next, patch.border ?? null)
+      if (patch.shadow !== undefined)
+        next = replaceEffectLst(next, shadowEffectLstXml(patch.shadow ?? null))
+      return next
+    })
   }
   if (patch.align !== undefined) {
     out = out.replace(/<w:jc w:val="[^"]*"\/>/, '')
@@ -906,6 +1025,8 @@ export interface ShapeStylePatch {
   fillHex?: string | null
   /** outline color hex without '#'; null = no outline; undefined = keep */
   borderHex?: string | null
+  /** shadow (a:effectLst); null removes the effectLst; undefined keeps */
+  shadow?: ShadowEffect | null
 }
 
 /** Replace the first fill slot (a:solidFill/a:noFill) inside an XML slice. */
@@ -923,7 +1044,13 @@ export function patchShapeStyles(
   paragraphXml: string,
   styles: ReadonlyArray<ShapeStylePatch | null | undefined>,
 ): string {
-  if (styles.every((s) => s == null || (s.fillHex === undefined && s.borderHex === undefined)))
+  if (
+    styles.every(
+      (s) =>
+        s == null ||
+        (s.fillHex === undefined && s.borderHex === undefined && s.shadow === undefined),
+    )
+  )
     return paragraphXml
   const drawings = xmlSegments(paragraphXml, 'w:drawing', 0, paragraphXml.length)
   let out = ''
@@ -934,7 +1061,11 @@ export function patchShapeStyles(
     if (!isBoxDrawing(drawingXml)) continue
     boxIndex++
     const style = styles[boxIndex]
-    if (!style || (style.fillHex === undefined && style.borderHex === undefined)) continue
+    if (
+      !style ||
+      (style.fillHex === undefined && style.borderHex === undefined && style.shadow === undefined)
+    )
+      continue
     const spPrMatch = /<wps:spPr>[\s\S]*?<\/wps:spPr>/.exec(drawingXml)
     if (spPrMatch) {
       let spPr = spPrMatch[0]
@@ -956,6 +1087,8 @@ export function patchShapeStyles(
           )
         }
       }
+      if (style.shadow !== undefined)
+        spPr = replaceEffectLst(spPr, shadowEffectLstXml(style.shadow ?? null))
       drawingXml = drawingXml.replace(spPrMatch[0], spPr)
     }
     out += paragraphXml.slice(cursor, drawing.start) + drawingXml
@@ -973,6 +1106,70 @@ export function patchDrawingExtent(paragraphXml: string, wPx: number, hPx: numbe
     .replace(/(<wp:extent\b[^>]*\bcy=")\d+(")/, `$1${cy}$2`)
     .replace(/(<a:ext\b[^>]*\bcx=")\d+(")/, `$1${cx}$2`)
     .replace(/(<a:ext\b[^>]*\bcy=")\d+(")/, `$1${cy}$2`)
+}
+
+export interface DrawingAltPatch {
+  /** wp:docPr title; null/'' removes, undefined keeps */
+  title?: string | null
+  /** wp:docPr descr; null/'' removes, undefined keeps */
+  descr?: string | null
+}
+
+/**
+ * Rewrite alt text (wp:docPr title/descr) of the first shape drawing in a
+ * protected paragraph — the drawing holding the first editable box, the same
+ * one patchShapeStyles addresses. Pictures and other non-shape siblings keep
+ * their own docPr bytes.
+ */
+export function patchDrawingDocPr(paragraphXml: string, patch: DrawingAltPatch): string {
+  if (patch.title === undefined && patch.descr === undefined) return paragraphXml
+  for (const drawing of xmlSegments(paragraphXml, 'w:drawing', 0, paragraphXml.length)) {
+    const slice = paragraphXml.slice(drawing.start, drawing.end)
+    if (!slice.includes('<wps:wsp')) continue
+    let patched = slice
+    if (patch.title !== undefined) patched = patchDocPrAttr(patched, 'title', patch.title ?? null)
+    if (patch.descr !== undefined) patched = patchDocPrAttr(patched, 'descr', patch.descr ?? null)
+    return paragraphXml.slice(0, drawing.start) + patched + paragraphXml.slice(drawing.end)
+  }
+  return paragraphXml
+}
+
+export interface TableAltPatch {
+  /** w:tblCaption w:val (alt text title); null/'' removes, undefined keeps */
+  title?: string | null
+  /** w:tblDescription w:val (alt text description); null/'' removes, undefined keeps */
+  descr?: string | null
+}
+
+/**
+ * Rewrite alt text (w:tblPr w:tblCaption / w:tblDescription) of a table XML
+ * slice. New elements land at the tblPr tail next to w:tblLook, matching the
+ * CT_TblPr child order Word writes.
+ */
+export function patchTableAltText(xml: string, patch: TableAltPatch): string {
+  if (patch.title === undefined && patch.descr === undefined) return xml
+  const tblPr = /<w:tblPr\b[^>]*>[\s\S]*?<\/w:tblPr>|<w:tblPr\b[^>]*\/>/.exec(xml)
+  if (!tblPr || !tblPr[0].endsWith('</w:tblPr>')) return xml
+  let inner = tblPr[0]
+  const rewrite = (tag: 'w:tblCaption' | 'w:tblDescription', value: string | null): void => {
+    const el = new RegExp(`<${tag}\\s[^>]*\\/>|<${tag}\\s[^>]*>[\\s\\S]*?<\\/${tag}>`).exec(inner)
+    if (value === null || value === '') {
+      if (el) inner = inner.slice(0, el.index) + inner.slice(el.index + el[0].length)
+      return
+    }
+    const next = `<${tag} w:val="${escapeXmlAttr(value)}"/>`
+    if (el) {
+      inner = inner.slice(0, el.index) + next + inner.slice(el.index + el[0].length)
+    } else {
+      const anchor = inner.lastIndexOf('</w:tblPr>')
+      inner = inner.slice(0, anchor) + next + inner.slice(anchor)
+    }
+  }
+  if (patch.title !== undefined) rewrite('w:tblCaption', patch.title ?? null)
+  if (patch.descr !== undefined) rewrite('w:tblDescription', patch.descr ?? null)
+  return inner === tblPr[0]
+    ? xml
+    : xml.slice(0, tblPr.index) + inner + xml.slice(tblPr.index + tblPr[0].length)
 }
 
 /** Insertable line/connector kinds: stroke-only wps:wsp with optional arrow ends */
@@ -1853,6 +2050,8 @@ const TBL_PR_ORDER = [
   'w:shd',
   'w:tblLayout',
   'w:tblCellMar',
+  'w:tblCaption',
+  'w:tblDescription',
   'w:tblLook',
 ] as const
 
@@ -2016,6 +2215,22 @@ export function generateTableModelXml(model: TableModel, originalTableXml?: stri
       tblPr,
       'w:tblStyle',
       model.tblStyleId === '' ? null : `<w:tblStyle w:val="${escapeXmlAttr(model.tblStyleId)}"/>`,
+    )
+  }
+  // Alt text (w:tblCaption/w:tblDescription): '' removes; undefined keeps the
+  // original tblPr bytes
+  if (model.altTitle !== undefined) {
+    tblPr = setTblPrChild(
+      tblPr,
+      'w:tblCaption',
+      model.altTitle ? `<w:tblCaption w:val="${escapeXmlAttr(model.altTitle)}"/>` : null,
+    )
+  }
+  if (model.altText !== undefined) {
+    tblPr = setTblPrChild(
+      tblPr,
+      'w:tblDescription',
+      model.altText ? `<w:tblDescription w:val="${escapeXmlAttr(model.altText)}"/>` : null,
     )
   }
   // Floating positioning + wrapping. null explicitly returns the table to the

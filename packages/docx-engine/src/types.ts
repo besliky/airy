@@ -1124,6 +1124,10 @@ export interface TableModel {
   tableLook?: TableLook
   /** RTL table (tblPr w:bidiVisual): columns display right to left */
   bidiVisual?: boolean
+  /** alt text title (w:tblPr/w:tblCaption) */
+  altTitle?: string
+  /** alt text description (w:tblPr/w:tblDescription) */
+  altText?: string
 }
 
 /**
@@ -1182,6 +1186,27 @@ export type ImageWrap =
   | 'behind'
   | 'front'
 
+/**
+ * Picture/shape shadow authored through the ribbon preset gallery and written
+ * to a:effectLst (outerShdw, or innerShdw when `inner`). Values mirror the
+ * DrawingML attributes 1:1 so a round-trip needs no unit guessing; the editor
+ * converts them to a CSS approximation for display.
+ */
+export interface ShadowEffect {
+  /** a:blurRad in EMU */
+  blurRadEmu: number
+  /** a:dist in EMU */
+  distEmu: number
+  /** a:dir in 60000ths of a degree, clockwise from the +x axis */
+  dirEmu: number
+  /** hex without '#' (a:srgbClr val) */
+  color: string
+  /** a:alpha as percent 0-100; absent = fully opaque */
+  alphaPct?: number
+  /** a:innerShdw instead of a:outerShdw */
+  inner?: boolean
+}
+
 /** A new image to embed at save time (becomes word/media/... + relationship). */
 export interface NewImage {
   /** raw image bytes, base64 encoded */
@@ -1222,6 +1247,14 @@ export interface NewImage {
   /** mirror flips (a:xfrm flipH/flipV) */
   flipH?: boolean
   flipV?: boolean
+  /** alt text written to wp:docPr title (the Title box of Word's alt text pane) */
+  altTitle?: string
+  /** alt text written to wp:docPr descr (the Description box of Word's alt text pane) */
+  altText?: string
+  /** picture shadow written into pic:spPr a:effectLst; null = no effectLst */
+  shadow?: ShadowEffect | null
+  /** picture outline written into pic:spPr a:ln; null = no outline */
+  border?: { color: string; widthPt: number } | null
 }
 
 export type BlockType = 'paragraph' | 'heading' | 'listItem' | 'table' | 'image' | 'passthrough'
@@ -1346,6 +1379,12 @@ export interface Block {
   imageFlipV?: boolean
   /** picture outline (pic:spPr a:ln solid fill; display-only, like crop) */
   imageBorder?: { color: string; widthPt: number }
+  /** picture shadow (pic:spPr a:effectLst outer/innerShdw); display-only until re-authored */
+  imageShadow?: ShadowEffect
+  /** alt text title (wp:docPr title) of an image or shape-anchored drawing */
+  imageAltTitle?: string
+  /** alt text description (wp:docPr descr) of an image or shape-anchored drawing */
+  imageAltText?: string
   /** editable structure (type === 'table'); untouched original XML still saves byte-identically */
   table?: TableModel
   /** display-only rendering for field passthrough paragraphs (TOC lines etc.) */
@@ -1574,6 +1613,8 @@ export interface TextboxDisplay {
   /** a:xfrm flipH/flipV (connector direction) */
   flipH?: boolean
   flipV?: boolean
+  /** shape shadow (wps:spPr a:effectLst), rendered as a CSS approximation */
+  shadow?: ShadowEffect
 }
 
 /** Final body content decided by the editor at save time. */
