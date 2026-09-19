@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path'
 
 import JSZip from 'jszip'
 
-import { renameDurably } from '@airy-office/electron-utils'
+import { renameDurably } from '@airy-office/electron-utils/atomic-write'
 
 import type {
   CellState,

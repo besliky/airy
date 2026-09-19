@@ -6,7 +6,7 @@ import { basename, dirname, extname, join } from 'node:path'
 
 import { z } from 'zod'
 
-import { renameDurably } from '@airy-office/electron-utils'
+import { renameDurably } from '@airy-office/electron-utils/atomic-write'
 
 import { MAX_PATCH_ENTRY_BYTES } from '../shared/desktop-api'
 import type { WorkbookChartEdit, WorkbookVisualEdit } from '../shared/desktop-api'
