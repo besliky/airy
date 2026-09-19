@@ -68,7 +68,10 @@ describe('references to style-only cells', () => {
         },
       },
     })
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    // one settle window for the engine's debounced calculation cycles (the
+    // debounce is 100 ms; 700 ms keeps a 7x margin over it for this
+    // 20-cell workbook — PERF-1101, was a flat 2 s wait)
+    await new Promise((resolve) => setTimeout(resolve, 700))
     const instanceService = injector.get(IUniverInstanceService)
     const workbook = instanceService.getUnit('wb1') as unknown as {
       getSheetBySheetId(id: string): { getCellRaw(row: number, column: number): { v?: unknown } }
