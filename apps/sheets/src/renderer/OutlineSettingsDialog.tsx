@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useModalDialog } from '@airy-office/ui'
 import { useI18n } from './i18n/locale'
 
 /// Data → Outline → Settings: the sheet's summary placement (sheetPr
@@ -21,19 +22,19 @@ export function OutlineSettingsDialog({
   readonly onClose: () => void
 }): React.JSX.Element {
   const { t } = useI18n()
+  const dialog = useModalDialog(onClose)
   const [summaryBelow, setSummaryBelow] = useState(initial.summaryBelow)
   const [summaryRight, setSummaryRight] = useState(initial.summaryRight)
   const [error, setError] = useState<string | null>(null)
 
   return (
-    <div className="dialog-backdrop" onClick={onClose}>
+    <div className="dialog-backdrop" {...dialog.backdropProps} onClick={onClose}>
       <div
         className="format-cells-dialog"
-        role="dialog"
-        aria-label={t('dlgOutlineSettingsTitle')}
+        {...dialog.dialogProps}
         onClick={(event) => event.stopPropagation()}
       >
-        <header>{t('dlgOutlineSettingsTitle')}</header>
+        <header {...dialog.titleProps}>{t('dlgOutlineSettingsTitle')}</header>
         <div className="dialog-grid">
           <fieldset className="t2c-fieldset">
             <legend>{t('dlgOutlineRows')}</legend>

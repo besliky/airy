@@ -444,6 +444,10 @@ export const pt = {
   appOutlineNeedsFile:
     'Abra primeiro um arquivo XLSX — os grupos de estrutura de tópicos são gravados no arquivo.',
   appOutlineSelectFirst: 'Selecione primeiro as linhas ou colunas a agrupar.',
+  appOutlineGutterCollapseRows: 'Recolher grupo de linhas, nível {n}.',
+  appOutlineGutterExpandRows: 'Expandir grupo de linhas, nível {n}.',
+  appOutlineGutterCollapseCols: 'Recolher grupo de colunas, nível {n}.',
+  appOutlineGutterExpandCols: 'Expandir grupo de colunas, nível {n}.',
   appDetailHidden: 'Detalhes ocultos — salve com ⌘S.',
   appDetailShown: 'Detalhes exibidos — salve com ⌘S.',
   appOutlineMaxLevel: 'Já está no nível mais profundo da estrutura de tópicos (7).',

@@ -438,6 +438,10 @@ export const nl = {
   appOutlineNeedsFile:
     'Open eerst een XLSX-bestand — overzichtsgroepen worden in het bestand geschreven.',
   appOutlineSelectFirst: 'Selecteer eerst de rijen of kolommen die u wilt groeperen.',
+  appOutlineGutterCollapseRows: 'Rijengroep samenvouwen, niveau {n}.',
+  appOutlineGutterExpandRows: 'Rijengroep uitvouwen, niveau {n}.',
+  appOutlineGutterCollapseCols: 'Kolomgroep samenvouwen, niveau {n}.',
+  appOutlineGutterExpandCols: 'Kolomgroep uitvouwen, niveau {n}.',
   appDetailHidden: 'Details verborgen — sla op met ⌘S.',
   appDetailShown: 'Details weergegeven — sla op met ⌘S.',
   appOutlineMaxLevel: 'Dit is al het diepste overzichtsniveau (7).',

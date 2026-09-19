@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useModalDialog } from '@airy-office/ui'
 import { useI18n } from './i18n/locale'
 import {
   activeDelimiterChars,
@@ -36,6 +37,7 @@ export function TextToColumnsDialog({
   readonly onClose: () => void
 }): React.JSX.Element {
   const { t } = useI18n()
+  const dialog = useModalDialog(onClose)
   const [mode, setMode] = useState<TextToColumnsMode>('delimited')
   const [delimiters, setDelimiters] = useState<TextToColumnsDelimiters>(DEFAULT_DELIMITERS)
   const [breaksText, setBreaksText] = useState('')
@@ -93,14 +95,13 @@ export function TextToColumnsDialog({
   )
 
   return (
-    <div className="dialog-backdrop" onClick={onClose}>
+    <div className="dialog-backdrop" {...dialog.backdropProps} onClick={onClose}>
       <div
         className="format-cells-dialog"
-        role="dialog"
-        aria-label={t('dlgT2cTitle')}
+        {...dialog.dialogProps}
         onClick={(event) => event.stopPropagation()}
       >
-        <header>{t('dlgT2cTitle')}</header>
+        <header {...dialog.titleProps}>{t('dlgT2cTitle')}</header>
         <div className="dialog-grid">
           <fieldset className="t2c-fieldset">
             <legend>{t('dlgT2cMode')}</legend>

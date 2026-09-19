@@ -1776,6 +1776,8 @@ export function Ribbon({
           <div className="file-tab-wrap">
             <button
               className={`ribbon-tab ribbon-tab-file ${fileOpen ? 'open' : ''}`}
+              aria-haspopup="menu"
+              aria-expanded={fileOpen}
               onMouseDown={(e) => {
                 e.stopPropagation()
                 closeSiblingPanels(e, closePanels, 'file')
@@ -2149,6 +2151,8 @@ export function Ribbon({
                 <button
                   className={`rb-big ${slideSizeOpen ? 'active' : ''}`}
                   disabled={!hasDoc}
+                  aria-haspopup="menu"
+                  aria-expanded={slideSizeOpen}
                   onMouseDown={(e) => {
                     e.stopPropagation()
                     closeSiblingPanels(e, closePanels, 'slideSize')
@@ -2209,6 +2213,8 @@ export function Ribbon({
                 <button
                   className={`rb-big ${transOptionsOpen ? 'active' : ''}`}
                   disabled={!hasDoc || transition.kind === 'none'}
+                  aria-haspopup="menu"
+                  aria-expanded={transOptionsOpen}
                   onMouseDown={(e) => {
                     e.stopPropagation()
                     closeSiblingPanels(e, closePanels, 'transOptions')
@@ -2653,6 +2659,8 @@ export function Ribbon({
                   className={`rb-big ${translateOpen ? 'active' : ''}`}
                   disabled={!hasDoc}
                   data-tip={`${t('ribbonTranslateTip')} — ${t('ribbonAiCreditNote')}`}
+                  aria-haspopup="menu"
+                  aria-expanded={translateOpen}
                   onMouseDown={(e) => {
                     e.stopPropagation()
                     closeSiblingPanels(e, closePanels, 'translate')
@@ -3240,6 +3248,8 @@ export function Ribbon({
                 <button
                   className={`rb-big ${transparencyOpen ? 'active' : ''}`}
                   disabled={!onPictureOpacity || contextElementType !== 'picture'}
+                  aria-haspopup="menu"
+                  aria-expanded={transparencyOpen}
                   onMouseDown={(e) => {
                     e.stopPropagation()
                     closeSiblingPanels(e, closePanels, 'transparency')
@@ -3279,6 +3289,8 @@ export function Ribbon({
                 <button
                   className={`rb-big ${pictureBorderOpen ? 'active' : ''}`}
                   disabled={!onPictureStroke}
+                  aria-haspopup="menu"
+                  aria-expanded={pictureBorderOpen}
                   onMouseDown={(e) => {
                     e.stopPropagation()
                     closeSiblingPanels(e, closePanels, 'pictureBorder')
@@ -3404,6 +3416,8 @@ export function Ribbon({
                   className={`rb-big ${changeShapeOpen ? 'active' : ''}`}
                   disabled={!onChangeShape}
                   data-tip={t('ribbonChangeShape')}
+                  aria-haspopup="menu"
+                  aria-expanded={changeShapeOpen}
                   onMouseDown={(e) => {
                     e.stopPropagation()
                     closeSiblingPanels(e, closePanels, 'changeShape')
@@ -3435,6 +3449,8 @@ export function Ribbon({
                   className={`rb-big ${shapeStyleOpen ? 'active' : ''}`}
                   disabled={!onShapeStyle}
                   data-tip={t('ribbonShapeStyleTip')}
+                  aria-haspopup="menu"
+                  aria-expanded={shapeStyleOpen}
                   onMouseDown={(e) => {
                     e.stopPropagation()
                     closeSiblingPanels(e, closePanels, 'shapeStyle')
@@ -3479,6 +3495,8 @@ export function Ribbon({
                   className={`rb-big ${shapeFillOpen ? 'active' : ''}`}
                   disabled={!onShapeFill}
                   data-tip={t('paneFormatFill')}
+                  aria-haspopup="menu"
+                  aria-expanded={shapeFillOpen}
                   onMouseDown={(e) => {
                     e.stopPropagation()
                     closeSiblingPanels(e, closePanels, 'shapeFill')
@@ -3510,6 +3528,8 @@ export function Ribbon({
                 <button
                   className={`rb-big ${pictureBorderOpen ? 'active' : ''}`}
                   disabled={!onPictureStroke}
+                  aria-haspopup="menu"
+                  aria-expanded={pictureBorderOpen}
                   onMouseDown={(e) => {
                     e.stopPropagation()
                     closeSiblingPanels(e, closePanels, 'pictureBorder')
