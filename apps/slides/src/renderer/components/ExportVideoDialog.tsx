@@ -11,7 +11,7 @@
  * unmounting) and focus rides the Cancel button for the whole run, so the
  * modal's focus trap keeps an anchor while the recording is under way.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useModalDialog } from '@airy-office/ui'
 import { useI18n } from '../i18n/locale'
 import type { TransitionSpec } from '../../shared/ipc'
@@ -105,6 +105,10 @@ export function ExportVideoDialog({
 
   const exporting = phase !== 'idle'
   const percent = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
+  // UX-1203: the progressbar is named by the visible phase label, and the
+  // label itself is a polite live region — a recording runs for minutes, and
+  // screen readers must hear the phase (render → record) and its progress
+  const phaseLabelId = useId()
 
   // UX-1201: the Export trigger disables itself when the run starts, which
   // would drop focus to <body> for the whole (minutes-long) recording — the
@@ -143,7 +147,12 @@ export function ExportVideoDialog({
           <div className="video-export-progress">
             {/* empty until the first slide lands: the native save dialog is
                 still up when the run starts, and "Rendering 0/0" would lie */}
-            <div className="video-export-progress-label">
+            <div
+              id={phaseLabelId}
+              className="video-export-progress-label"
+              role="status"
+              aria-live="polite"
+            >
               {progress.total > 0
                 ? phase === 'render'
                   ? t('appExportVideoRendering', { done: progress.done, total: progress.total })
@@ -153,6 +162,7 @@ export function ExportVideoDialog({
             <div
               className="video-export-bar"
               role="progressbar"
+              aria-labelledby={phaseLabelId}
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={percent}

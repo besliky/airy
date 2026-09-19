@@ -186,3 +186,56 @@ describe('ExportVideoDialog cancel acknowledgement (UX-1202)', () => {
     unmount()
   })
 })
+
+describe('ExportVideoDialog progress semantics (UX-1203)', () => {
+  /** Export control the test drives through the progress callback. */
+  function scriptedExport(): { fn: ExportFn; report: Progress } {
+    let report: Progress = () => undefined
+    const fn: ExportFn = (_settings, onProgress) => {
+      report = onProgress
+      return new Promise<boolean>(() => undefined)
+    }
+    return { fn, report: (p, d, t) => report(p, d, t) }
+  }
+
+  it('names the progressbar by the phase label and mirrors the percent', () => {
+    const { fn, report } = scriptedExport()
+    const { container, unmount } = renderDialog(fn)
+    const exportBtn = container.querySelectorAll<HTMLButtonElement>(
+      '.modal-actions button.primary',
+    )[0]!
+    act(() => exportBtn.click())
+    const bar = container.querySelector<HTMLElement>('.video-export-bar')!
+    const label = container.querySelector<HTMLElement>('.video-export-progress-label')!
+    expect(bar.getAttribute('role')).toBe('progressbar')
+    expect(bar.getAttribute('aria-valuemin')).toBe('0')
+    expect(bar.getAttribute('aria-valuemax')).toBe('100')
+    expect(bar.getAttribute('aria-valuenow')).toBe('0')
+    // the bar is named by the visible phase text, not announced bare
+    expect(bar.getAttribute('aria-labelledby')).toBe(label.id)
+    act(() => report('render', 2, 8))
+    expect(bar.getAttribute('aria-valuenow')).toBe('25')
+    expect(label.textContent).toBe(t('appExportVideoRendering', { done: 2, total: 8 }))
+    act(() => report('record', 45, 90))
+    expect(bar.getAttribute('aria-valuenow')).toBe('50')
+    expect(label.textContent).toBe(t('appExportVideoRecording', { percent: 50 }))
+    unmount()
+  })
+
+  it('announces the phase politely and keeps the label empty before the run', () => {
+    const { fn, report } = scriptedExport()
+    const { container, unmount } = renderDialog(fn)
+    const exportBtn = container.querySelectorAll<HTMLButtonElement>(
+      '.modal-actions button.primary',
+    )[0]!
+    act(() => exportBtn.click())
+    const label = container.querySelector<HTMLElement>('.video-export-progress-label')!
+    expect(label.getAttribute('role')).toBe('status')
+    expect(label.getAttribute('aria-live')).toBe('polite')
+    // native save dialog still up: no lying "Rendering 0/0"
+    expect(label.textContent).toBe('')
+    act(() => report('render', 1, 8)) // first announcement fires when work starts
+    expect(label.textContent).not.toBe('')
+    unmount()
+  })
+})
