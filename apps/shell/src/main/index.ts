@@ -250,6 +250,7 @@ import { isSameFile, isValidRenameName } from './rename-validation'
 import { TabManager } from './tab-manager'
 import type { DetachedTab } from './tab-manager'
 import { createQuitFlow } from './quit-flow'
+import { createShutdownEffects } from './shutdown-effects'
 import { ShellWindowRegistry, type ShellWindowEntry } from './shell-windows'
 import { startShellBridge, stopShellBridge } from './bridge/shell-bridge'
 import { initUpdater, updaterMenuItems } from './updater'
@@ -1122,6 +1123,19 @@ function createShellWindow(options: CreateShellWindowOptions = {}): ShellWindowE
  *  their per-window semantics (BUG-1104). */
 const quitFlow = createQuitFlow()
 
+/** before-quit's process-wide effects (sheets no-prompt close mode, sidecar,
+ *  live bridge, pdf workers) and their rollback for a cancelled quit
+ *  (BUG-1216: they used to stay armed forever after one aborted quit) */
+const shutdownEffects = createShutdownEffects({
+  setSheetsShuttingDown: markSheetsShuttingDown,
+  stopSidecar: stopSheetsSidecar,
+  disposePdfWorkers: disposePdfConversionWorkers,
+  bridgeEnabled: liveBridgeEnabled,
+  stopBridge: stopShellBridge,
+  startBridge: startLiveBridge,
+  log: (message, err) => console.error(message, err),
+})
+
 /**
  * Bookkeeping when a window's close is really going through (both the clean
  * path and the post-guard path): its never-saved untitled tabs die with it —
@@ -1150,10 +1164,15 @@ function finishWindowClose(entry: ShellWindowEntry): void {
  * keep running). Unwind the quit bookkeeping — and if a quit-time session
  * write already landed, re-serialize from the live windows so the aborted
  * quit leaves session state as if it never happened (BUG-1104: the armed
- * flag used to turn every later close into a skipped write).
+ * flag used to turn every later close into a skipped write). The quit's
+ * before-quit effects unwind with it (BUG-1216): sheets close prompts come
+ * back and the live bridge restarts when its setting says so.
  */
 function abortAppQuit(): void {
-  if (quitFlow.cancel()) persistSessionState(false)
+  if (!quitFlow.quitting) return
+  const restoreSession = quitFlow.cancel()
+  shutdownEffects.rollback()
+  if (restoreSession) persistSessionState(false)
 }
 
 /** point the editor modules' dialog parents at this window (focus follows the shell) */
@@ -1682,6 +1701,15 @@ function liveBridgeEnabled(): boolean {
   return effectiveLiveBridgeEnabled(readAppSettings(APP_SETTINGS_PATH()).liveBridge)
 }
 
+/** start (or return the running) live bridge server — startup, the Settings
+ *  toggle, and the rollback after an aborted quit (BUG-1216) share this */
+function startLiveBridge() {
+  return startShellBridge({
+    userDataDir: app.getPath('userData'),
+    getTabManager: () => focusedManager(),
+  })
+}
+
 /** serialized toggle: transition the server first, persist only on success
  *  (see live-bridge-toggle.ts); a failed start rejects the IPC result and
  *  leaves the previous stored value in place */
@@ -1690,10 +1718,7 @@ const setLiveBridgeEnabled = createLiveBridgeToggle({
   toggleAllowed: () => liveBridgeToggleAllowed(),
   persist: (on) => writeAppSetting(APP_SETTINGS_PATH(), 'liveBridge', on),
   start: async () => {
-    await startShellBridge({
-      userDataDir: app.getPath('userData'),
-      getTabManager: () => focusedManager(),
-    })
+    await startLiveBridge()
   },
   stop: () => stopShellBridge(),
 })
@@ -3451,10 +3476,7 @@ app.whenReady().then(async () => {
   // Settings → General or AIRY_DISABLE_BRIDGE=1 (agents keep working unless
   // the user explicitly opts out, so the default stays on)
   if (liveBridgeEnabled()) {
-    void startShellBridge({
-      userDataDir: app.getPath('userData'),
-      getTabManager: () => focusedManager(),
-    }).catch((err: unknown) => {
+    void startLiveBridge().catch((err: unknown) => {
       console.error('bridge server failed to start:', err)
     })
   }
@@ -3502,11 +3524,8 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   quitFlow.begin()
-  // No close prompt may fall through to "Save" during shutdown
-  markSheetsShuttingDown()
-  stopSheetsSidecar()
-  // close the live bridge socket and remove the token file (best-effort)
-  void stopShellBridge()
-  // kill in-flight pdf->docx conversion workers (best-effort)
-  disposePdfConversionWorkers()
+  // no close prompt may fall through to "Save" during shutdown, the sidecar
+  // and pdf workers stop, and the live bridge closes its socket — the whole
+  // set rolls back if a cancelled dirty-guard aborts the quit (BUG-1216)
+  shutdownEffects.arm()
 })

@@ -2449,14 +2449,21 @@ export function sheetsPendingEditCount(webContentsId: number): number {
  * prompt, and a dialog raised during shutdown resolves to its default button, which
  * silently overwrote the user's original file. Unsaved work is covered
  * by the 30s recovery copy instead — the next launch offers to restore it.
+ *
+ * BUG-1216: a cancelled quit calls this with false — the app keeps running,
+ * so the guard must behave exactly like one that never started quitting
+ * (the flag used to stay up forever, silently closing dirty tabs with no
+ * prompt after one aborted quit).
  */
 let appShuttingDown = false
 
-export function markSheetsShuttingDown(): void {
-  appShuttingDown = true
+export function markSheetsShuttingDown(shuttingDown = true): void {
+  appShuttingDown = shuttingDown
 }
 
-app.on('before-quit', markSheetsShuttingDown)
+// wrapped: the bare listener would pass the before-quit event object as the
+// flag value
+app.on('before-quit', () => markSheetsShuttingDown())
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
     appShuttingDown = true
