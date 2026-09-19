@@ -323,7 +323,10 @@ function applyTrHeight(
  * Compute the table's tableRowBoxes (for F2 row-level splitting) + per-row text (for page-start
  * line location). Cell line heights share the body-text source (measured on the real-Word
  * baseline: 18pt line + 8pt space-after = 26.4pt/row, no cell-specific factor; the former
- * CELL_CJK_FACTOR=1.44 was an LO tuning artifact, now removed).
+ * CELL_CJK_FACTOR=1.44 was an LO tuning artifact, now removed). The 'lo' profile instead runs
+ * cells in tableCellMode: LO_CJK-cell substitute factor + the additive proportional increment
+ * (PAR-109 phase C; the LO 24.2 corpus brackets the no-grid row step at 26.84–27.92pt and the
+ * grid tables of doc 15 at 41.75pt = snap 31.2 + 2.05 + 8 + 0.5).
  */
 function computeTableRows(
   block: {
@@ -356,6 +359,8 @@ function computeTableRows(
   const rows = block.table?.rows
   const rowFlags = parseTableRowFlags(tableXml)
   const defaults = parsed.docDefaults
+  // LO-profile cell rule (phase C); the word profile keeps the body-source policy above
+  const cellMode = gridCompat === 'lo' ? { tableCellMode: true } : {}
 
   if (!rows || rows.length === 0) {
     // Fallback: count w:tr in the XML; estimate row height as an empty cell
@@ -371,6 +376,7 @@ function computeTableRows(
       metrics,
       isEmpty: true,
       ...(gridCompat !== 'word' ? { gridCompat } : {}),
+      ...cellMode,
     }).totalHeight
     return {
       rows: Array.from({ length: rowCount }, (_, i) => ({
@@ -440,6 +446,7 @@ function computeTableRows(
             metrics,
             isEmpty: para.runs.length === 0,
             ...(gridCompat !== 'word' ? { gridCompat } : {}),
+            ...cellMode,
           }).totalHeight
         }
       } else {
@@ -455,6 +462,7 @@ function computeTableRows(
             metrics,
             isEmpty: !paraText,
             ...(gridCompat !== 'word' ? { gridCompat } : {}),
+            ...cellMode,
           }).totalHeight
         }
       }

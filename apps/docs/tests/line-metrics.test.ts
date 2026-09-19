@@ -22,6 +22,8 @@ import {
   cssGridLineExpr,
   gridBoxFactor,
   LO_CJK_LINE_FACTOR,
+  LO_CELL_CJK_LINE_FACTOR,
+  LO_CELL_PROP_INC_EM,
   snapLineToPitch,
   estimateFootnoteHeight,
   footnoteLineHeightPx,
@@ -347,6 +349,34 @@ describe("grid compat profile 'lo' (LibreOffice)", () => {
       gridCompat: 'lo',
     })
     for (const h of r.lineHeights) expect(h).toBeCloseTo(pt(35.88), 2)
+  })
+
+  it('table cells add the constant increment (phase C row step)', () => {
+    // no-grid: natural + 0.15 x LO_CELL_PROP_INC_EM x size (doc 05/19's 24.2
+    // baselines bracket the row step at 27.26-27.92pt = line 18.8-19.4 + 8.5)
+    const noGrid = computeLineMetrics({
+      runs: [{ text: zh.repeat(2), sizeHalfPoints: 24 }],
+      availWidthPx: 1000,
+      lineRule: 'auto',
+      lineRawTwips: 276,
+      gridCompat: 'lo',
+      tableCellMode: true,
+    })
+    for (const h of noGrid.lineHeights)
+      expect(h).toBeCloseTo(pt(12 * LO_CELL_CJK_LINE_FACTOR + 0.15 * 12 * LO_CELL_PROP_INC_EM), 2)
+    // grid (doc 15): snapUp(1.42em) = 2 cells = 31.2 + 2.05 = 33.25pt + 8.5
+    // spacing/border = the measured 41.75pt row
+    const grid = computeLineMetrics({
+      runs: [{ text: zh.repeat(2), sizeHalfPoints: 24 }],
+      availWidthPx: 1000,
+      lineRule: 'auto',
+      lineRawTwips: 276,
+      docGrid,
+      gridCompat: 'lo',
+      tableCellMode: true,
+    })
+    for (const h of grid.lineHeights)
+      expect(h).toBeCloseTo(pt(31.2 + 0.15 * 12 * LO_CELL_PROP_INC_EM), 2)
   })
 
   it('strict cell boundary: a natural height a hair past the pitch takes 2 cells', () => {
