@@ -2235,3 +2235,122 @@ describe('range move save integration', () => {
     ).rejects.toThrow(StructuralShiftError)
   })
 })
+
+describe('mixed structural journals (move-range + move-cols)', () => {
+  // BUG-1005/1205: applyStructuralOps replays ops strictly sequentially, but
+  // no test ever fed it a mixed [axis-op, range-move] journal — every replay
+  // used homogeneous arrays. The two compositions below pin the contract:
+  // the later op must see the sheet state the earlier op left behind.
+  const area = (startRow: number, startColumn: number, endRow: number, endColumn: number) => ({
+    startRow,
+    startColumn,
+    endRow,
+    endColumn,
+  })
+  const cols = (index: number, count: number, before: number) => ({
+    kind: 'move-cols' as const,
+    index,
+    count,
+    before,
+  })
+
+  async function buildMixedFixture(worksheet: string): Promise<Buffer> {
+    const zip = await JSZip.loadAsync(await buildStructureFixture())
+    zip.file('xl/worksheets/sheet1.xml', worksheet, { createFolders: false })
+    return zip.generateAsync({ type: 'nodebuffer' })
+  }
+
+  /// Three columns of cells plus an allow-edit range pinned to column A.
+  const protectedWorksheet =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<dimension ref="A1:G9"/>' +
+    '<sheetData>' +
+    '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1"><v>3</v></c></row>' +
+    '<row r="2"><c r="A2"><v>4</v></c><c r="B2"><v>5</v></c><c r="C2"><v>6</v></c></row>' +
+    '</sheetData>' +
+    '<protectedRanges><protectedRange password="x" sqref="A1:A2" name="r1"/></protectedRanges>' +
+    '</worksheet>'
+
+  it('[move-cols, move-range]: the range preflight sees the remapped allow-edit sqref', async () => {
+    // Column A moves before C ([A,B,C] → [B,A,C]), so the allow-edit range
+    // remaps A1:A2 → B1:B2 — inside the B1:C2 rectangle the subsequent range
+    // move wants to cut. The preflight must run against the remapped sqref
+    // and refuse; against the stale A1:A2 it would not overlap at all.
+    const solo = await applyCellEditsToXlsx(await buildMixedFixture(protectedWorksheet), [], [
+      { sheetName: SHEET, ops: [cols(0, 1, 2)] },
+    ])
+    const soloSheet = await JSZip.loadAsync(solo.buffer)
+    expect(await soloSheet.file('xl/worksheets/sheet1.xml')?.async('text')).toContain(
+      'sqref="B1:B2"',
+    )
+
+    await expect(
+      applyCellEditsToXlsx(await buildMixedFixture(protectedWorksheet), [], [
+        {
+          sheetName: SHEET,
+          ops: [
+            cols(0, 1, 2),
+            { kind: 'move-range', from: area(0, 1, 1, 2), to: area(4, 4, 5, 5) },
+          ],
+        },
+      ]),
+    ).rejects.toThrow(/allow-edit/)
+  })
+
+  /// B2:C3 moves to E5:F6, then columns E-F swing to the front
+  /// ([A,B,C,D,E,F] → [E,F,A,B,C,D]): every ranged feature below must compose
+  /// both remaps (rectangle first, column swap second).
+  const composedWorksheet =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<dimension ref="A1:F9"/>' +
+    '<sheetData>' +
+    '<row r="1"><c r="B1"><f>SUM(B2:C3)</f><v>0</v></c></row>' +
+    '<row r="2"><c r="B2"><v>1</v></c><c r="C2"><v>2</v></c></row>' +
+    '<row r="3"><c r="B3"><v>3</v></c><c r="C3"><v>4</v></c></row>' +
+    '<row r="5"><c r="E5"><v>99</v></c></row>' +
+    '</sheetData>' +
+    '<sortState ref="D8:D9"><sortCondition ref="D8:D9" descending="1"/></sortState>' +
+    '<mergeCells count="1"><mergeCell ref="B2:C3"/></mergeCells>' +
+    '<conditionalFormatting sqref="B2:C3"><cfRule type="expression" priority="1"><formula>B2&gt;1</formula></cfRule></conditionalFormatting>' +
+    '<hyperlinks><hyperlink ref="C2" location="https://example.com"/></hyperlinks>' +
+    '</worksheet>'
+
+  it('[move-range, move-cols]: composes the remap of cells, formulas, merge, CF, hyperlink, and sortState', async () => {
+    const mutation = await applyCellEditsToXlsx(
+      await buildMixedFixture(composedWorksheet),
+      [],
+      [
+        {
+          sheetName: SHEET,
+          ops: [
+            { kind: 'move-range', from: area(1, 1, 2, 2), to: area(4, 4, 5, 5) },
+            cols(4, 2, 0),
+          ],
+        },
+      ],
+    )
+    expect(() => assertOnlyTouchedEntriesChanged(mutation)).not.toThrow()
+    const zip = await JSZip.loadAsync(mutation.buffer)
+    const sheet = await zip.file('xl/worksheets/sheet1.xml')?.async('text')
+    // Step 1 moved B2:C3 onto E5:F6 (killing the old E5), step 2 swung E-F
+    // to A-B: the moved cells land at A5:B6, the vacated rows vanish.
+    expect(sheet).not.toContain('<row r="2"')
+    expect(sheet).not.toContain('<row r="3"')
+    expect(sheet).not.toContain('<v>99</v>')
+    expect(sheet).toContain('<row r="5"><c r="A5"><v>1</v></c><c r="B5"><v>2</v></c></row>')
+    expect(sheet).toContain('<row r="6"><c r="A6"><v>3</v></c><c r="B6"><v>4</v></c></row>')
+    // The observer formula moved B1 → D1 while its tokens followed the
+    // rectangle (SUM(B2:C3) → SUM(E5:F6)) and then the column swing
+    // (SUM(E5:F6) → SUM(A5:B6)) — both remaps composed, in order.
+    expect(sheet).toContain('<c r="D1"><f>SUM(A5:B6)</f>')
+    expect(sheet).toContain('<mergeCell ref="A5:B6"/>')
+    expect(sheet).toContain('<conditionalFormatting sqref="A5:B6">')
+    expect(sheet).toContain('<formula>A5&gt;1</formula>')
+    expect(sheet).toContain('<hyperlink ref="B5"')
+    // The sortState never touched the moved rectangle; only the column swing
+    // remapped it (D → F after E-F left the middle).
+    expect(sheet).toContain('<sortState ref="F8:F9"><sortCondition ref="F8:F9" descending="1"/>')
+  })
+})
