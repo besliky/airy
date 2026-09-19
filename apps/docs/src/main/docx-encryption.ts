@@ -35,6 +35,22 @@ export class DocxDecryptError extends Error {
   }
 }
 
+// Test seam: the vendored officecrypto-tool hardcodes the ECMA-376 Agile
+// password key setup at 100000 hash iterations (~0.5s of CPU per encrypt or
+// decrypt), which is honest production work but dwarfs every suite that
+// exercises this module's routing and state machine. Tests may substitute a
+// cheaper stand-in backend through _setDocxCryptoBackendForTests; production
+// always runs the real library (the default below) and its output is
+// unaffected because the seam only chooses which module the wrappers call.
+let cryptoBackend: Pick<typeof officeCrypto, 'encrypt' | 'decrypt'> = officeCrypto
+
+/** Test-only: substitute the crypto backend (null restores the real library). */
+export function _setDocxCryptoBackendForTests(
+  backend: Pick<typeof officeCrypto, 'encrypt' | 'decrypt'> | null,
+): void {
+  cryptoBackend = backend ?? officeCrypto
+}
+
 /**
  * Decrypt an encrypted docx into plain zip bytes. Throws DocxDecryptError with
  * reason 'wrong-password' (verifier mismatch — reprompt) or 'unsupported'
@@ -42,7 +58,7 @@ export class DocxDecryptError extends Error {
  */
 export async function decryptDocx(bytes: Buffer, password: string): Promise<Buffer> {
   try {
-    return await officeCrypto.decrypt(bytes, { password })
+    return await cryptoBackend.decrypt(bytes, { password })
   } catch (err) {
     const message = String((err as Error)?.message ?? err)
     if (message.includes('password is incorrect')) {
@@ -54,7 +70,7 @@ export async function decryptDocx(bytes: Buffer, password: string): Promise<Buff
 
 /** Re-encrypt plain docx zip bytes with ECMA-376 Agile (Word 2013+ default). */
 export function encryptDocx(bytes: Buffer, password: string): Buffer {
-  return officeCrypto.encrypt(bytes, { password })
+  return cryptoBackend.encrypt(bytes, { password })
 }
 
 // ── In-memory password state, keyed per renderer + file path.

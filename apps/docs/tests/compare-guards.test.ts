@@ -1,9 +1,13 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { Editor } from '@tiptap/core'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { compareWithFile, type ReviewContext } from '../src/renderer/review-actions'
 import { t, setModuleLang } from '../src/renderer/i18n/locale'
+import { en as reviewEn } from '../src/renderer/i18n/review/en'
+import { en as ribbonEn } from '../src/renderer/i18n/ribbon/en'
 import type { DocState } from '../src/renderer/doc-state'
 import type { PmNode } from '../src/renderer/editor/convert'
 
@@ -142,5 +146,30 @@ describe('compareWithFile guards (BUG-915 pending revisions, UX-903 read-only ed
     await compareWithFile(ctx, 'panel')
     expect(ctx.setCompareResult).toHaveBeenCalledTimes(1)
     expect(status.at(-1)).toBe(t('reviewCompareDegraded'))
+  })
+})
+
+describe('Compare split-button copy (UX-905)', () => {
+  // After the split-button change the tooltip must still describe BOTH
+  // outcomes (merge as tracked changes / differences pane), and the two menu
+  // items must keep the two-line label + description layout. Pinned at the
+  // source level like split-button-a11y: mounting the whole Review tab for
+  // static copy is not worth the fixture.
+  const SRC = readFileSync(join(__dirname, '../src/renderer/components/ribbon-tabs.tsx'), 'utf8')
+
+  it('the trigger tooltip names both compare outcomes', () => {
+    const tip = ribbonEn.ribbonCompareTip
+    expect(tip).toMatch(/tracked changes/i)
+    expect(tip).toMatch(/pane/i)
+  })
+
+  it('both menu items render a bold label plus its description span', () => {
+    for (const key of ['reviewCompareMerge', 'reviewComparePanel'] as const) {
+      expect(SRC).toContain(`<b>{t('${key}')}</b>`)
+      expect(SRC).toContain(`<span>{t('${key}Desc')}</span>`)
+    }
+    // the descriptions are real copy, not stubs (zh defines the key set)
+    expect(reviewEn.reviewCompareMergeDesc.length).toBeGreaterThan(10)
+    expect(reviewEn.reviewComparePanelDesc.length).toBeGreaterThan(10)
   })
 })
