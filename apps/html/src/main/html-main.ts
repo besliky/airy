@@ -936,12 +936,9 @@ export function setHtmlProvisionalTitleHook(hook: (wc: WebContents, title: strin
 let docxExportedHook: ((path: string, senderWcId?: number) => void) | null = null
 /** Before the .docx is written: the shell closes a docs tab already showing that path
  * (its unsaved-changes prompt applies); false = the user kept it, so the export is dropped */
-let docxExportPrepareHook: ((path: string, senderWcId?: number) => Promise<boolean>) | null =
-  null
+let docxExportPrepareHook: ((path: string, senderWcId?: number) => Promise<boolean>) | null = null
 
-export function setHtmlDocxExportedHook(
-  hook: (path: string, senderWcId?: number) => void,
-): void {
+export function setHtmlDocxExportedHook(hook: (path: string, senderWcId?: number) => void): void {
   docxExportedHook = hook
 }
 
@@ -1682,10 +1679,7 @@ function registerHtmlIpc(): void {
         e.sender.id,
       )
       if (picked.canceled || !picked.filePath) return { ok: true, canceled: true }
-      if (
-        docxExportPrepareHook &&
-        !(await docxExportPrepareHook(picked.filePath, e.sender.id))
-      ) {
+      if (docxExportPrepareHook && !(await docxExportPrepareHook(picked.filePath, e.sender.id))) {
         return { ok: true, canceled: true }
       }
       const workDir = await mkdtemp(join(tmpdir(), 'airy-html-docx-'))

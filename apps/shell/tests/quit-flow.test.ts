@@ -13,7 +13,11 @@ describe('createQuitFlow', () => {
   it('starts in ordinary-close mode', () => {
     const flow = createQuitFlow()
     expect(flow.quitting).toBe(false)
-    expect(flow.closeDecision(1)).toEqual({ persist: true, skipStaged: true, excludeClosing: false })
+    expect(flow.closeDecision(1)).toEqual({
+      persist: true,
+      skipStaged: true,
+      excludeClosing: false,
+    })
   })
 
   it('an ordinary close of one of several windows excludes the closing window', () => {
@@ -34,9 +38,17 @@ describe('createQuitFlow', () => {
     // never-saved tabs restorable in case the quit is cancelled or the app
     // crashes mid-quit; the confirming window's staged files are already
     // deleted and simply prune away on the next restore
-    expect(flow.closeDecision(3)).toEqual({ persist: true, skipStaged: false, excludeClosing: false })
+    expect(flow.closeDecision(3)).toEqual({
+      persist: true,
+      skipStaged: false,
+      excludeClosing: false,
+    })
     // ...later confirmed closes must not shrink it (their windows are gone)
-    expect(flow.closeDecision(2)).toEqual({ persist: false, skipStaged: false, excludeClosing: false })
+    expect(flow.closeDecision(2)).toEqual({
+      persist: false,
+      skipStaged: false,
+      excludeClosing: false,
+    })
   })
 
   it('begin() re-arms a quit after the previous one finished', () => {
@@ -55,7 +67,11 @@ describe('createQuitFlow', () => {
     expect(flow.quitting).toBe(false)
     // the very next ordinary close must take the per-window branch, not the
     // quit branch (the original bug: these stayed quit-closes forever)
-    expect(flow.closeDecision(2)).toEqual({ persist: true, skipStaged: false, excludeClosing: true })
+    expect(flow.closeDecision(2)).toEqual({
+      persist: true,
+      skipStaged: false,
+      excludeClosing: true,
+    })
   })
 
   it('a cancel after the quit snapshot landed asks for a live re-serialize', () => {
@@ -66,7 +82,11 @@ describe('createQuitFlow', () => {
     // the quit-time write must be replaced from the surviving windows
     expect(flow.cancel()).toBe(true)
     expect(flow.quitting).toBe(false)
-    expect(flow.closeDecision(1)).toEqual({ persist: true, skipStaged: true, excludeClosing: false })
+    expect(flow.closeDecision(1)).toEqual({
+      persist: true,
+      skipStaged: true,
+      excludeClosing: false,
+    })
   })
 
   it('cancel() on a flow that never quit is a no-op', () => {

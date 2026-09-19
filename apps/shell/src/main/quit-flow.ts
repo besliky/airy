@@ -66,7 +66,8 @@ export function createQuitFlow(): QuitFlow {
         // files of windows that DO confirm are deleted by their own close
         // before this write runs, and restore prunes nonexistent paths
         // anyway.
-        if (quitSessionPersisted) return { persist: false, skipStaged: false, excludeClosing: false }
+        if (quitSessionPersisted)
+          return { persist: false, skipStaged: false, excludeClosing: false }
         quitSessionPersisted = true
         return { persist: true, skipStaged: false, excludeClosing: false }
       }

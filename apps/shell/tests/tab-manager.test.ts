@@ -790,7 +790,11 @@ describe('view watcher teardown across window moves (BUG-1106)', () => {
 
   function makeManagerWithWindow() {
     const window = makeShellWindow()
-    const mgr = new TabManager(window as never, () => {}, (kind) => applyMenuFor(kind))
+    const mgr = new TabManager(
+      window as never,
+      () => {},
+      (kind) => applyMenuFor(kind),
+    )
     return { window, mgr }
   }
 

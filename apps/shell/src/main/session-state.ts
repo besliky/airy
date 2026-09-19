@@ -119,8 +119,7 @@ export function parseSession(raw: unknown): SessionState {
     const activePath = (rawWindow as Record<string, unknown>).activePath
     windows.push({
       tabs,
-      activePath:
-        typeof activePath === 'string' && windowSeen.has(activePath) ? activePath : null,
+      activePath: typeof activePath === 'string' && windowSeen.has(activePath) ? activePath : null,
     })
     total += tabs.length
   }
