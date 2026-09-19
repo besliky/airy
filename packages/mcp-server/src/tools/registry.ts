@@ -201,7 +201,7 @@ export function registerTools(server: McpServer): void {
       title: 'Read document',
       description:
         'Read an open text document (.docx, markdown, or html sessions, or read-only text ' +
-        'sessions from legacy .doc). By default returns the block overview ("index|type|content ' +
+        'sessions from .pdf / legacy .doc). By default returns the block overview ("index|type|content ' +
         'preview" one line per block, plus full-text word/character stats). Pass blocks (indexes) ' +
         'or range ({start,end}) to get the full content of those blocks as restricted HTML (p, ' +
         'h1-h6, ul/ol/li, strong/em/u/s, a, br, table). Block indexes are the addressing scheme ' +
@@ -211,7 +211,9 @@ export function registerTools(server: McpServer): void {
         'truncated at 30k characters — narrow with blocks/range, which address LINES. HTML ' +
         'sessions: the default read adds the title and a parse5 structure summary — headings ' +
         '"ordinal|line|level|text" and links "ordinal|line|text -> href" with line positions ' +
-        '(both capped at 200 entries, counted toward the 30k budget). ' +
+        '(both capped at 200 entries, counted toward the 30k budget). Read-only text sessions ' +
+        '(pdf / legacy .doc) have no block or line model: blocks/range are rejected there — the ' +
+        'read always returns the extracted text truncated at 30k characters. ' +
         'For workbook (.xlsx) sessions use ' +
         'read_workbook instead.',
       inputSchema: {
@@ -244,6 +246,17 @@ export function registerTools(server: McpServer): void {
         throw new Error('This handle is a slides session; use read_deck (slide) instead.')
       }
       if (session instanceof TextSession) {
+        // blocks/range address block or line models; a text-extraction
+        // session has neither, and silently ignoring the selection used to
+        // leave the agent with a truncated read it believed was a selection
+        // (audit BUG-1112)
+        if (blocks !== undefined || range !== undefined) {
+          throw new Error(
+            'blocks/range selection does not apply to read-only text sessions (.pdf / legacy ' +
+              '.doc extraction): the read always returns the extracted text, truncated at ' +
+              '30,000 characters.',
+          )
+        }
         return { content: [{ type: 'text' as const, text: session.readDocument() }] }
       }
       if (session instanceof MarkdownSession || session instanceof HtmlSession) {

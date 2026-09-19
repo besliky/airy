@@ -328,7 +328,9 @@ byte-identical and a zero-edit save writes the original bytes back verbatim.
 PDF reading (`.pdf`) is extraction-only: the document opens read-only
 (`editable: false`) with text extracted by pdfjs through the file-parse
 package (pages separated by blank lines; scanned/image-only pages extract no
-text). `read_document` shows the text, saving is refused — headless PDF
+text). `read_document` shows the text and rejects `blocks`/`range` — an
+extraction session has no block or line model, so the read is always the
+whole text truncated at 30k characters; saving is refused — headless PDF
 editing is out of scope.
 
 ## Live mode
