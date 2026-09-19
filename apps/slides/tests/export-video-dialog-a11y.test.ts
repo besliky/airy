@@ -4,7 +4,11 @@ import { createRoot, type Root } from 'react-dom/client'
 
 import { LocaleProvider, setModuleLang, t } from '../src/renderer/i18n/locale'
 import { ExportVideoDialog } from '../src/renderer/components/ExportVideoDialog'
-import type { VideoExportPhase, VideoExportSettings } from '../src/renderer/file-actions'
+import type {
+  VideoExportOutcome,
+  VideoExportPhase,
+  VideoExportSettings,
+} from '../src/renderer/file-actions'
 
 /**
  * UX-1201 focus retention: starting the export used to unmount the Export
@@ -18,6 +22,15 @@ import type { VideoExportPhase, VideoExportSettings } from '../src/renderer/file
  * cooperative box (honored by BOTH the render and record loops) and shows a
  * disabled "Cancelling…" state until the pipeline unwinds and the dialog
  * closes — no dead button on a minutes-long run.
+ *
+ * UX-1203 progress semantics: the progressbar is named by the phase label,
+ * which is itself a polite live region (render → record switches and
+ * progress are spoken), and the label stays empty until real work starts.
+ *
+ * UX-1204/1205: the real-time cost note sits in the options summary before
+ * the run is committed, and a failed run reopens the options view with a
+ * role=alert line in the dialog body (the status bar copy hides behind the
+ * modal's dimming).
  */
 beforeAll(() => {
   ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
@@ -41,7 +54,7 @@ type ExportFn = (
   settings: VideoExportSettings,
   onProgress: Progress,
   cancel: { current: boolean },
-) => Promise<boolean>
+) => Promise<VideoExportOutcome>
 
 function renderDialog(onExport: ExportFn): {
   container: HTMLElement
@@ -81,7 +94,7 @@ function renderDialog(onExport: ExportFn): {
 
 /** Export control that never resolves (the run is "under way"). */
 function pendingExport(): ExportFn {
-  return () => new Promise<boolean>(() => undefined)
+  return () => new Promise<VideoExportOutcome>(() => undefined)
 }
 
 /** The mid-run buttons: [Cancel, Export]. */
@@ -154,7 +167,7 @@ describe('ExportVideoDialog cancel acknowledgement (UX-1202)', () => {
     let box: { current: boolean } | undefined
     const onExport: ExportFn = (_settings, _onProgress, cancel) => {
       box = cancel
-      return new Promise<boolean>(() => undefined)
+      return new Promise<VideoExportOutcome>(() => undefined)
     }
     const { container, unmount } = renderDialog(onExport)
     const [, exportBtn] = runButtons(container)
@@ -168,9 +181,9 @@ describe('ExportVideoDialog cancel acknowledgement (UX-1202)', () => {
   })
 
   it('closes the dialog once the cancelled run unwinds', async () => {
-    let release: (ok: boolean) => void = () => undefined
+    let release: (r: VideoExportOutcome) => void = () => undefined
     const onExport: ExportFn = () =>
-      new Promise<boolean>((resolve) => {
+      new Promise<VideoExportOutcome>((resolve) => {
         release = resolve
       })
     const { container, onClose, unmount } = renderDialog(onExport)
@@ -180,7 +193,7 @@ describe('ExportVideoDialog cancel acknowledgement (UX-1202)', () => {
     act(() => cancelBtn.click())
     expect(onClose).not.toHaveBeenCalled()
     await act(async () => {
-      release(false) // cancelled pipelines report failure — cancel closes anyway
+      release({ ok: false }) // cancelled pipelines report ok:false — cancel closes anyway
     })
     expect(onClose).toHaveBeenCalledTimes(1)
     unmount()
@@ -193,7 +206,7 @@ describe('ExportVideoDialog progress semantics (UX-1203)', () => {
     let report: Progress = () => undefined
     const fn: ExportFn = (_settings, onProgress) => {
       report = onProgress
-      return new Promise<boolean>(() => undefined)
+      return new Promise<VideoExportOutcome>(() => undefined)
     }
     return { fn, report: (p, d, t) => report(p, d, t) }
   }
@@ -236,6 +249,61 @@ describe('ExportVideoDialog progress semantics (UX-1203)', () => {
     expect(label.textContent).toBe('')
     act(() => report('render', 1, 8)) // first announcement fires when work starts
     expect(label.textContent).not.toBe('')
+    unmount()
+  })
+})
+
+describe('ExportVideoDialog estimate and failure surfaces (UX-1204/1205)', () => {
+  it('shows the real-time note in the options view before the run starts', () => {
+    const { container, unmount } = renderDialog(pendingExport())
+    const note = container.querySelector<HTMLElement>('.video-export-note')!
+    expect(note.textContent).toBe(t('appExportVideoRealtimeNote'))
+    // next to the estimate (summary), not only in the progress branch
+    expect(note.closest('.video-export-summary')).not.toBeNull()
+    unmount()
+  })
+
+  it('keeps a failed run open with an in-dialog alert explaining it', async () => {
+    let release: (r: VideoExportOutcome) => void = () => undefined
+    const onExport: ExportFn = () =>
+      new Promise<VideoExportOutcome>((resolve) => {
+        release = resolve
+      })
+    const { container, onClose, unmount } = renderDialog(onExport)
+    const exportBtn = container.querySelectorAll<HTMLButtonElement>(
+      '.modal-actions button.primary',
+    )[0]!
+    act(() => exportBtn.click())
+    await act(async () => {
+      release({ ok: false, error: 'disk on fire' })
+    })
+    expect(onClose).not.toHaveBeenCalled() // the dialog stays for the user
+    const alert = container.querySelector<HTMLElement>('.video-export-error[role="alert"]')!
+    expect(alert.textContent).toBe(t('appExportVideoFailed', { error: 'disk on fire' }))
+    // the options view is back and the Export button works again
+    const exportAgain = container.querySelectorAll<HTMLButtonElement>(
+      '.modal-actions button.primary',
+    )[0]!
+    expect(exportAgain.disabled).toBe(false)
+    unmount()
+  })
+
+  it('closes without an alert when the run succeeds', async () => {
+    let release: (r: VideoExportOutcome) => void = () => undefined
+    const onExport: ExportFn = () =>
+      new Promise<VideoExportOutcome>((resolve) => {
+        release = resolve
+      })
+    const { container, onClose, unmount } = renderDialog(onExport)
+    const exportBtn = container.querySelectorAll<HTMLButtonElement>(
+      '.modal-actions button.primary',
+    )[0]!
+    act(() => exportBtn.click())
+    await act(async () => {
+      release({ ok: true })
+    })
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(container.querySelector('.video-export-error[role="alert"]')).toBeNull()
     unmount()
   })
 })

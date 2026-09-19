@@ -6,16 +6,18 @@
  *
  * While exporting, the dialog shows the pipeline progress (render slides →
  * record frames) and offers Cancel; on completion (or cancel) it closes —
- * the result surfaces through the status bar like the other exports. The
- * action buttons stay mounted across phases (Export disables instead of
- * unmounting) and focus rides the Cancel button for the whole run, so the
- * modal's focus trap keeps an anchor while the recording is under way.
+ * failures stay open with their reason in an in-dialog alert (the status
+ * bar sits behind the dimming). The options view carries the duration
+ * estimate plus the real-time note up front. The action buttons stay
+ * mounted across phases (Export disables instead of unmounting) and focus
+ * rides the Cancel button for the whole run, so the modal's focus trap
+ * keeps an anchor while the recording is under way.
  */
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useModalDialog } from '@airy-office/ui'
 import { useI18n } from '../i18n/locale'
 import type { TransitionSpec } from '../../shared/ipc'
-import type { VideoExportPhase, VideoExportSettings } from '../file-actions'
+import type { VideoExportOutcome, VideoExportPhase, VideoExportSettings } from '../file-actions'
 import { buildVideoTimeline, hasRehearseTimings, type VideoPlanSlide } from '../video-plan'
 import { pickRecorderMime } from '../video-export'
 import { formatClock } from '../slideshow-utils'
@@ -37,7 +39,7 @@ export function ExportVideoDialog({
     settings: VideoExportSettings,
     onProgress: (phase: VideoExportPhase, done: number, total: number) => void,
     cancel: { current: boolean },
-  ) => Promise<boolean>
+  ) => Promise<VideoExportOutcome>
   onClose: () => void
 }): React.JSX.Element {
   const { t } = useI18n()
@@ -51,6 +53,8 @@ export function ExportVideoDialog({
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   /** Cancel requested mid-run: the button shows it and waits for the pipeline */
   const [cancelling, setCancelling] = useState(false)
+  /** UX-1205: failure reason for the dialog's own alert line (null = clean) */
+  const [failReason, setFailReason] = useState<string | null>(null)
   const cancelBox = useRef({ current: false }).current
   // mirrors `phase` for the hook's close callback (Escape must not orphan a run)
   const exportingRef = useRef(false)
@@ -87,7 +91,8 @@ export function ExportVideoDialog({
     setProgress({ done: 0, total: 0 })
     cancelBox.current = false
     setCancelling(false)
-    const ok = await onExport(
+    setFailReason(null)
+    const r = await onExport(
       { fps, heightPreset, useTimings: effectiveUseTimings, secondsPerSlide, includeTransitions },
       (p, done, total) => {
         setPhase(p)
@@ -95,11 +100,13 @@ export function ExportVideoDialog({
       },
       cancelBox,
     )
-    // close on completion and cancel alike; failures keep the status bar message
-    if (ok || cancelBox.current) onClose()
+    // close on completion and cancel alike; failures stay in the dialog with
+    // their reason in-body (UX-1205) — the status bar sits behind the dimming
+    if (r.ok || cancelBox.current) onClose()
     else {
       exportingRef.current = false
       setPhase('idle')
+      setFailReason(r.error ?? null)
     }
   }
 
@@ -169,7 +176,6 @@ export function ExportVideoDialog({
             >
               <div style={{ width: `${percent}%` }} />
             </div>
-            <div className="video-export-note">{t('appExportVideoRealtimeNote')}</div>
           </div>
         ) : (
           <>
@@ -267,7 +273,18 @@ export function ExportVideoDialog({
                     })
                   : t('appExportNoSlides')}
               </div>
+              {/* UX-1204: the real-time cost belongs next to the estimate,
+                  BEFORE the run is committed — not only after it starts */}
+              <div className="video-export-note">{t('appExportVideoRealtimeNote')}</div>
             </div>
+            {/* UX-1205: failures explain themselves in the dialog body — the
+                status bar's copy sits behind the modal's dimming and the user
+                would only meet it after closing */}
+            {failReason && (
+              <div className="video-export-error" role="alert">
+                {t('appExportVideoFailed', { error: failReason })}
+              </div>
+            )}
           </>
         )}
         {/* UX-1201: the buttons never unmount across phases — disabling the

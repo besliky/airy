@@ -9127,6 +9127,7 @@ body.show-curtain::after {
 }
 
 .video-export-error {
+  margin: 6px 2px 0;
   color: var(--slides-error);
 }
 
