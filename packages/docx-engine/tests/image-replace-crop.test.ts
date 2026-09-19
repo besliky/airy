@@ -19,9 +19,11 @@ const CROPPED_IMAGE_XML =
   '<a:stretch><a:fillRect l="10000" t="0" r="0" b="10000"/></a:stretch></pic:blipFill>' +
   '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>'
 
-async function savedDocumentXml(
-  replaceImage: { base64: string; mime: 'image/png'; keepCrop?: boolean },
-): Promise<string> {
+async function savedDocumentXml(replaceImage: {
+  base64: string
+  mime: 'image/png'
+  keepCrop?: boolean
+}): Promise<string> {
   const parsed = await parseDocx(await buildDocx({ bodyXml: CROPPED_IMAGE_XML, withImage: true }))
   const image = parsed.blocks.find((block) => block.type === 'image')!
   const bytes = await saveDocx(parsed, [

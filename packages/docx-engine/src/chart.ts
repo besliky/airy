@@ -1083,9 +1083,7 @@ export async function patchChartWorkbookXlsxBase64(
       const existing = existingRows.get(row)?.cells.find((c) => c.col === col)
       if (value === null) return null // point removed: the old cell goes too
       const style =
-        existing && /\bs="\d+"/.test(existing.xml)
-          ? ` ${/\bs="\d+"/.exec(existing.xml)![0]}`
-          : ''
+        existing && /\bs="\d+"/.test(existing.xml) ? ` ${/\bs="\d+"/.exec(existing.xml)![0]}` : ''
       const ref = `${xlsxColLetters(col)}${row}`
       const formula = existing
         ? /<f\b[^>]*>[\s\S]*?<\/f>|<f\b[^>]*\/>/.exec(existing.xml)?.[0]
@@ -1103,9 +1101,7 @@ export async function patchChartWorkbookXlsxBase64(
       return {
         col,
         xml:
-          typeof value === 'number'
-            ? numCell(ref, value, style)
-            : inlineStrCell(ref, value, style),
+          typeof value === 'number' ? numCell(ref, value, style) : inlineStrCell(ref, value, style),
       }
     }
 
@@ -1135,7 +1131,9 @@ export async function patchChartWorkbookXlsxBase64(
       }
       cells.sort((a, b) => a.col - b.col)
       if (cells.length === 0 && !existing) continue
-      rowsXml.push(`${existing ? existing.open : `<row r="${r}">`}${cells.map((c) => c.xml).join('')}</row>`)
+      rowsXml.push(
+        `${existing ? existing.open : `<row r="${r}">`}${cells.map((c) => c.xml).join('')}</row>`,
+      )
     }
     const newSheetData = `<sheetData>${rowsXml.join('')}</sheetData>`
 

@@ -247,7 +247,10 @@ describe('note options: conversion + navigation (review-actions)', () => {
     ]
     const endnotes: NoteInfo[] = [{ id: '2', text: 'two' }]
     // an undoable edit BEFORE the conversion: undo must revert it, not the conversion
-    editor.commands.insertContentAt(0, { type: 'docParagraph', content: [{ type: 'text', text: 'pre' }] } as never)
+    editor.commands.insertContentAt(0, {
+      type: 'docParagraph',
+      content: [{ type: 'text', text: 'pre' }],
+    } as never)
     convertNotes(reviewCtx(editor, footnotes, endnotes), 'footnote', 'all')
     editor.commands.undo()
     // the pre-edit paragraph is gone…

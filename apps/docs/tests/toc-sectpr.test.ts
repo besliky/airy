@@ -67,9 +67,9 @@ function planBodyXml(
 describe('updateTocField keeps the region trailing section break (BUG-1003)', () => {
   it('re-attaches the last paragraph sectPr to the regenerated last entry', async () => {
     const { editor, parsed } = await openTocDoc()
-    expect(
-      updateTocField(editor, parsed.blocks, undefined, undefined, { silent: true }),
-    ).toBe('updated')
+    expect(updateTocField(editor, parsed.blocks, undefined, undefined, { silent: true })).toBe(
+      'updated',
+    )
     const lines = tocLineXmls(editor)
     expect(lines).toHaveLength(2) // stale entries replaced by the real headings
     expect(lines[0]).toContain('Chapter One')
@@ -83,7 +83,10 @@ describe('updateTocField keeps the region trailing section break (BUG-1003)', ()
   it('the preserved sectPr reaches the saved body (no section loss on save)', async () => {
     const { editor, parsed } = await openTocDoc()
     updateTocField(editor, parsed.blocks, undefined, undefined, { silent: true })
-    const body = planBodyXml(pmDocToSavePlan(editor.getJSON() as PmNode, parsed.blocks), parsed.blocks)
+    const body = planBodyXml(
+      pmDocToSavePlan(editor.getJSON() as PmNode, parsed.blocks),
+      parsed.blocks,
+    )
     expect(body).toContain('<w:footerReference r:id="rId9" w:type="default"/>')
     // exactly one paragraph-level sectPr in the plan body: the trailing
     // body-level sectPr is a hidden block the save pipeline appends on its own

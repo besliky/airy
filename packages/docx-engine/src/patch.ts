@@ -1159,7 +1159,11 @@ export async function saveDocx(
       xml = fb.xml
       fbDocxIndex = fb.docxIndex
       if (fb.replaceImage)
-        xml = retargetImageBlip(xml, embedImageMedia(fb.replaceImage), fb.replaceImage.keepCrop === true)
+        xml = retargetImageBlip(
+          xml,
+          embedImageMedia(fb.replaceImage),
+          fb.replaceImage.keepCrop === true,
+        )
     } else if (fb.kind === 'chart') {
       xml = await embedChart(fb.chart, fb.extentPx)
     } else if (fb.kind === 'diagram') {

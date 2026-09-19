@@ -264,32 +264,26 @@ describe('saveDocx kind:chart — new kinds round-trip', () => {
     // start from a real generated workbook, then enrich Sheet1 the way an
     // Excel-authored chart workbook looks: a formula in the series column,
     // styled row attrs, and helper cells right of / below the data rectangle
-    const base64 = await buildChartWorkbookXlsxBase64(['Q1', 'Q2'], [
-      { name: 'S', values: [1, 2] },
-    ])
+    const base64 = await buildChartWorkbookXlsxBase64(['Q1', 'Q2'], [{ name: 'S', values: [1, 2] }])
     const xlsx = await JSZip.loadAsync(Buffer.from(base64, 'base64'))
     let sheet = await xlsx.file('xl/worksheets/sheet1.xml')!.async('string')
     sheet = sheet
-      .replace(
-        '<c r="B2"><v>1</v></c>',
-        '<c r="B2" s="3"><f>Sheet2!A1*2</f><v>1</v></c>',
-      )
+      .replace('<c r="B2"><v>1</v></c>', '<c r="B2" s="3"><f>Sheet2!A1*2</f><v>1</v></c>')
       .replace('<row r="2">', '<row r="2" ht="18" customHeight="1">')
       .replace(
         '</sheetData>',
         '<row r="5"><c r="D5"><f>SUM(B2:B3)</f><v>3</v></c>' +
           '<c r="E5" t="inlineStr"><is><t>note</t></is></c></row></sheetData>',
       )
-      .replace(
-        '<sheetData>',
-        '<dimension ref="A1:E5"/><sheetData>',
-      )
+      .replace('<sheetData>', '<dimension ref="A1:E5"/><sheetData>')
     xlsx.file('xl/worksheets/sheet1.xml', sheet)
     const enriched = await xlsx.generateAsync({ type: 'base64' })
 
-    const patched = await patchChartWorkbookXlsxBase64(enriched, ['Q1', 'Q2'], [
-      { name: 'S', values: [10, 20] },
-    ])
+    const patched = await patchChartWorkbookXlsxBase64(
+      enriched,
+      ['Q1', 'Q2'],
+      [{ name: 'S', values: [10, 20] }],
+    )
     expect(patched).toBeTruthy()
     const out = await (
       await JSZip.loadAsync(Buffer.from(patched!, 'base64'))
