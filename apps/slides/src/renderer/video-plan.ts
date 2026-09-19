@@ -165,6 +165,24 @@ export function videoFrameDimensions(
   return { width: even((widthPx / heightPx) * height), height }
 }
 
+/**
+ * Aspect-fit a slide into the output frame: uniform min-scale, centered — a
+ * deck with mixed slide sizes (a 4:3 slide among 16:9) letterbox/pillarboxes
+ * each slide into the frame instead of stretching it to the first slide's
+ * shape (BUG-1211). A matching aspect fills the whole frame.
+ */
+export function fitIntoFrame(
+  slideW: number,
+  slideH: number,
+  frameW: number,
+  frameH: number,
+): { dx: number; dy: number; dw: number; dh: number } {
+  const scale = Math.min(frameW / slideW, frameH / slideH)
+  const dw = slideW * scale
+  const dh = slideH * scale
+  return { dx: Math.floor((frameW - dw) / 2), dy: Math.floor((frameH - dh) / 2), dw, dh }
+}
+
 /** True when at least one slide carries a rehearsed auto-advance time. */
 export function hasRehearseTimings(advanceMs: ReadonlyArray<number | null>): boolean {
   return advanceMs.some((ms) => ms != null && ms > 0)

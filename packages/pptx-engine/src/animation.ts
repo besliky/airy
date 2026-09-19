@@ -420,12 +420,15 @@ function effectBehaviorsXml(gen: IdGen, a: SlideAnimation): string {
     case 'fade':
       return show + animEffectFilterXml(gen, target, dur, 'in', 'fade')
     case 'flyIn': {
-      // Both axes always animate (identity formula on the still axis), matching the default shape
+      // Both axes always animate with an identity formula on the still axis,
+      // matching PowerPoint's own fly-in writes. The still axis must be the
+      // identity '#ppt_y'/'#ppt_x' — a bottom-edge formula there turns a pure
+      // From Left/Right entrance into a diagonal one in PowerPoint (BUG-1206).
       const off = flyOffsets(dir)
       return (
         show +
         moveAnimXml(gen, target, dur, 'ppt_x', off.x ?? '#ppt_x', '#ppt_x') +
-        moveAnimXml(gen, target, dur, 'ppt_y', off.y ?? '1+#ppt_h/2', '#ppt_y')
+        moveAnimXml(gen, target, dur, 'ppt_y', off.y ?? '#ppt_y', '#ppt_y')
       )
     }
     case 'wipe':
@@ -451,14 +454,18 @@ function effectBehaviorsXml(gen: IdGen, a: SlideAnimation): string {
         )
       )
     case 'splitIn': {
+      // Legal filter tokens are axis-first (ECMA-376 / MS-OE376 dictionary:
+      // split(horizontalIn|horizontalOut|verticalIn|verticalOut)); the older
+      // axis-last order (inHorizontal…) is not a legal token, so PowerPoint
+      // ignored the effect's direction entirely (BUG-1207)
       const filter =
         dir === 'horzOut'
-          ? 'split(outHorizontal)'
+          ? 'split(horizontalOut)'
           : dir === 'vertIn'
-            ? 'split(inVertical)'
+            ? 'split(verticalIn)'
             : dir === 'vertOut'
-              ? 'split(outVertical)'
-              : 'split(inHorizontal)'
+              ? 'split(verticalOut)'
+              : 'split(horizontalIn)'
       return show + animEffectFilterXml(gen, target, dur, 'in', filter)
     }
     case 'bounce':
@@ -523,10 +530,12 @@ function effectBehaviorsXml(gen: IdGen, a: SlideAnimation): string {
     case 'fadeOut':
       return animEffectFilterXml(gen, target, dur, 'out', 'fade') + hideAtEnd
     case 'flyOut': {
+      // Same still-axis identity discipline as flyIn (BUG-1206): flying out
+      // toward a pure left/right edge must not dip below the slide first.
       const off = flyOffsets(dir)
       return (
         moveAnimXml(gen, target, dur, 'ppt_x', '#ppt_x', off.x ?? '#ppt_x') +
-        moveAnimXml(gen, target, dur, 'ppt_y', '#ppt_y', off.y ?? '1+#ppt_h/2') +
+        moveAnimXml(gen, target, dur, 'ppt_y', '#ppt_y', off.y ?? '#ppt_y') +
         hideAtEnd
       )
     }
@@ -874,10 +883,17 @@ function refineDirection(
       return dir && dir !== def ? { effect: kind, direction: dir } : { effect: kind }
     }
     case 'splitIn': {
-      const v = /^split\((in|out)(Horizontal|Vertical)\)$/.exec(filter ?? '')
-      if (!v) return { effect }
-      const dir =
-        `${v[2] === 'Horizontal' ? 'horz' : 'vert'}${v[1] === 'in' ? 'In' : 'Out'}` as AnimDirection
+      // Legal axis-first tokens (split(horizontalIn)…) from PowerPoint/foreign
+      // decks AND the legacy axis-last tokens (split(inHorizontal)) older Airy
+      // builds wrote must both read back with their direction (BUG-1207)
+      const token = /^split\((\w+)\)$/.exec(filter ?? '')?.[1]
+      const legal = token != null ? /^(horizontal|vertical)(In|Out)$/.exec(token) : null
+      const legacy = token != null ? /^(in|out)(Horizontal|Vertical)$/.exec(token) : null
+      if (!legal && !legacy) return { effect }
+      // legacy tokens carry the axis capitalized (inHorizontal); lowercase unifies
+      const axis = (legal ? legal[1]! : legacy![2]!).toLowerCase()
+      const io = legal ? legal[2]! : legacy![1] === 'in' ? 'In' : 'Out'
+      const dir = `${axis === 'horizontal' ? 'horz' : 'vert'}${io}` as AnimDirection
       return dir === 'horzIn' ? { effect } : { effect, direction: dir }
     }
     case 'zoom':

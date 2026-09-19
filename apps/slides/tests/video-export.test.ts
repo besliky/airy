@@ -22,9 +22,21 @@ interface FakeHostState {
   requestedFrames: number
   chunks: Blob[]
   recorderCalls: string[]
+  /** drawImage target boxes (x, y, w, h) — filled when a test passes slideSizes */
+  drawBoxes?: Array<[number, number, number, number]>
 }
 
-function fakeHost(state: FakeHostState): RecorderHost {
+/** Failure injections for the recorder host (BUG-1208 paths). */
+interface FakeHostBehavior {
+  /** fire onerror with this cause right after start (runtime encoder crash) */
+  errorAfterStart?: Error
+  /** swallow stop(): never fire onstop (encoder hangs the export) */
+  hangOnStop?: boolean
+  /** fire onstop but produce no chunks (empty recording) */
+  noData?: boolean
+}
+
+function fakeHost(state: FakeHostState, behavior?: FakeHostBehavior): RecorderHost {
   return {
     createCanvas(width, height) {
       const ctx = {
@@ -32,8 +44,9 @@ function fakeHost(state: FakeHostState): RecorderHost {
         fillStyle: '#000',
         globalAlpha: 1,
         fillRect() {},
-        drawImage(img: { tag: string }, _x?: number, _y?: number, _w?: number, _h?: number) {
+        drawImage(img: { tag: string }, x?: number, y?: number, w?: number, h?: number) {
           state.draws.push({ tag: img.tag, alpha: this.globalAlpha })
+          state.drawBoxes?.push([x ?? 0, y ?? 0, w ?? 0, h ?? 0])
         },
       }
       return {
@@ -52,17 +65,35 @@ function fakeHost(state: FakeHostState): RecorderHost {
       }
     },
     createRecorder(_stream, recOpts) {
+      let errorHandler: ((e: { error?: unknown }) => void) | null = null
+      let stopHandler: (() => void) | null = null
+      let dataHandler: ((e: { data: Blob }) => void) | null = null
       return {
         start() {
           state.recorderCalls.push(`start:${recOpts.mimeType}`)
+          if (behavior?.errorAfterStart)
+            queueMicrotask(() => errorHandler?.({ error: behavior.errorAfterStart }))
         },
         stop() {
           state.recorderCalls.push('stop')
-          state.chunks.push(new Blob([new Uint8Array([1])], { type: recOpts.mimeType }))
+          if (behavior?.hangOnStop) return
+          if (!behavior?.noData) {
+            // a real MediaRecorder flushes its buffer as a dataavailable just
+            // before onstop — the pipeline collects chunks through that handler
+            const chunk = new Blob([new Uint8Array([1])], { type: recOpts.mimeType })
+            state.chunks.push(chunk)
+            queueMicrotask(() => dataHandler?.({ data: chunk }))
+          }
+          queueMicrotask(() => stopHandler?.())
         },
-        ondataavailable() {},
+        ondataavailable(handler) {
+          dataHandler = handler
+        },
         onstop(handler) {
-          handler()
+          stopHandler = handler
+        },
+        onerror(handler) {
+          errorHandler = handler
         },
       }
     },
@@ -203,5 +234,146 @@ describe('recordVideoTimeline', () => {
     expect(cancelled).toBeNull()
     expect(state.requestedFrames).toBe(0)
     expect(state.recorderCalls).toEqual(['start:video/webm', 'stop'])
+  })
+
+  it('fails with the encoder error instead of returning a truncated blob', async () => {
+    // BUG-1208: a runtime MediaRecorder error after start must surface as a
+    // thrown failure — not a silent "successful" truncated recording
+    const state: FakeHostState = {
+      draws: [],
+      requestedFrames: 0,
+      chunks: [],
+      recorderCalls: [],
+    }
+    const cause = new Error('encoder exploded')
+    const p = recordVideoTimeline(
+      {
+        timeline: twoSlideTimeline(),
+        fps: 10,
+        width: 320,
+        height: 180,
+        slideImages: [image('s0'), image('s1')],
+        mimeType: 'video/mp4',
+      },
+      fakeHost(state, { errorAfterStart: cause }),
+    )
+    await expect(p).rejects.toThrow('video recording failed: encoder exploded')
+    // the recorder is still torn down, and no frames land after the error
+    expect(state.recorderCalls).toEqual(['start:video/mp4', 'stop'])
+    expect(state.requestedFrames).toBe(0)
+  })
+
+  it('fails when stop() never settles (encoder hang) instead of awaiting forever', async () => {
+    const state: FakeHostState = {
+      draws: [],
+      requestedFrames: 0,
+      chunks: [],
+      recorderCalls: [],
+    }
+    const p = recordVideoTimeline(
+      {
+        timeline: twoSlideTimeline(),
+        fps: 10,
+        width: 320,
+        height: 180,
+        slideImages: [image('s0'), image('s1')],
+        mimeType: 'video/webm',
+      },
+      fakeHost(state, { hangOnStop: true }),
+    )
+    // the collapsed fake timers fire the stop-timeout guard on a microtask
+    await expect(p).rejects.toThrow('video recorder did not finish (encoder hang)')
+    expect(state.recorderCalls).toEqual(['start:video/webm', 'stop'])
+  })
+
+  it('fails when the recorder stops cleanly but produced no data', async () => {
+    const state: FakeHostState = {
+      draws: [],
+      requestedFrames: 0,
+      chunks: [],
+      recorderCalls: [],
+    }
+    const p = recordVideoTimeline(
+      {
+        timeline: twoSlideTimeline(),
+        fps: 10,
+        width: 320,
+        height: 180,
+        slideImages: [image('s0'), image('s1')],
+        mimeType: 'video/webm',
+      },
+      fakeHost(state, { noData: true }),
+    )
+    await expect(p).rejects.toThrow('video recorder produced no data')
+  })
+
+  it('still resolves null on cooperative cancel even with no data', async () => {
+    const state: FakeHostState = {
+      draws: [],
+      requestedFrames: 0,
+      chunks: [],
+      recorderCalls: [],
+    }
+    const cancelled = await recordVideoTimeline(
+      {
+        timeline: twoSlideTimeline(),
+        fps: 10,
+        width: 320,
+        height: 180,
+        slideImages: [image('s0'), image('s1')],
+        mimeType: 'video/webm',
+        cancel: { current: true },
+      },
+      fakeHost(state, { noData: true }),
+    )
+    expect(cancelled).toBeNull() // cancel is not a failure — no error thrown
+  })
+
+  it('aspect-fits each slide into the frame when slideSizes is provided', async () => {
+    // BUG-1211: a 4:3 slide among 16:9 ones must pillarbox into the 16:9 frame
+    // (240x180 centered) instead of stretching to 320x180. Hard cuts (no
+    // transitions) keep exactly one draw per frame.
+    const timeline = buildVideoTimeline(
+      {
+        slides: [{}, {}],
+        advanceMs: [500, 500],
+        transitions: [
+          { kind: 'none', durationMs: null },
+          { kind: 'none', durationMs: null },
+        ],
+        options: { fps: 10, useTimings: true, secondsPerSlide: 5, includeTransitions: true },
+      },
+      never,
+    )
+    const state: FakeHostState = {
+      draws: [],
+      requestedFrames: 0,
+      chunks: [],
+      recorderCalls: [],
+      drawBoxes: [],
+    }
+    const blob = await recordVideoTimeline(
+      {
+        timeline,
+        fps: 10,
+        width: 320,
+        height: 180,
+        slideImages: [image('s0'), image('s1')],
+        slideSizes: [
+          { width: 1600, height: 900 }, // 16:9 — fills the frame
+          { width: 1280, height: 960 }, // 4:3 — pillarboxed
+        ],
+        mimeType: 'video/webm',
+      },
+      fakeHost(state),
+    )
+    expect(blob).not.toBeNull()
+    expect(state.drawBoxes!.length).toBe(10) // 1s of content at 10fps
+    // frames 0..4 hold the 16:9 slide full-frame
+    expect(state.drawBoxes![0]).toEqual([0, 0, 320, 180])
+    expect(state.drawBoxes![4]).toEqual([0, 0, 320, 180])
+    // frames 5..9 hold the 4:3 slide pillarboxed with black side bars
+    expect(state.drawBoxes![5]).toEqual([40, 0, 240, 180])
+    expect(state.drawBoxes![9]).toEqual([40, 0, 240, 180])
   })
 })

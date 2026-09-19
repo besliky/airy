@@ -17,11 +17,13 @@ const EXPORT_PIXEL_RATIO = 2
  * Reuse a single offscreen root page by page, grabbing each page as it's drawn, so the whole
  * deck never sits in memory at once.
  * pixelRatio 1 is enough for AI-vision screenshots (half the tokens of the 2x export default).
+ * An array picks a per-slide ratio (the video export renders mixed-size decks
+ * at each slide's own aspect-fit scale).
  */
 export async function renderSlidesToPngBase64(
   slides: RenderSlide[],
   images: Map<string, HTMLImageElement>,
-  pixelRatio: number = EXPORT_PIXEL_RATIO,
+  pixelRatio: number | ReadonlyArray<number> = EXPORT_PIXEL_RATIO,
   onProgress?: (done: number, total: number) => void,
 ): Promise<string[]> {
   // Offscreen container: mounted outside the body viewport (display:none would give the Konva canvas zero size, unusable)
@@ -44,7 +46,11 @@ export async function renderSlidesToPngBase64(
       })
       // Wait one frame for Konva to finish batchDraw, then capture
       await new Promise((r) => requestAnimationFrame(r))
-      const dataUrl = stage.toDataURL({ mimeType: 'image/png', pixelRatio })
+      const ratio =
+        typeof pixelRatio === 'number'
+          ? pixelRatio
+          : (pixelRatio[out.length] ?? pixelRatio[0] ?? EXPORT_PIXEL_RATIO)
+      const dataUrl = stage.toDataURL({ mimeType: 'image/png', pixelRatio: ratio })
       out.push(dataUrl.replace(/^data:image\/png;base64,/, ''))
       onProgress?.(out.length, slides.length)
     }

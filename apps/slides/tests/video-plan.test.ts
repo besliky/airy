@@ -3,6 +3,7 @@ import type { TransitionKind } from '../src/shared/ipc'
 import {
   VIDEO_TRANSITION_DEFAULT_MS,
   buildVideoTimeline,
+  fitIntoFrame,
   hasRehearseTimings,
   sampleTimeline,
   videoFrameCount,
@@ -240,5 +241,17 @@ describe('videoFrameCount / videoFrameDimensions / hasRehearseTimings', () => {
   it('detects any recorded timing', () => {
     expect(hasRehearseTimings([null, 0, 5000])).toBe(true)
     expect(hasRehearseTimings([null, 0])).toBe(false)
+  })
+
+  it('aspect-fits a slide into the frame (matching aspects fill it)', () => {
+    // BUG-1211: mixed-size decks letterbox/pillarbox each slide instead of
+    // stretching it to the first slide's shape
+    expect(fitIntoFrame(1600, 900, 320, 180)).toEqual({ dx: 0, dy: 0, dw: 320, dh: 180 })
+    // 4:3 slide in a 16:9 frame: pillarboxed, centered, black side bars
+    expect(fitIntoFrame(1280, 960, 320, 180)).toEqual({ dx: 40, dy: 0, dw: 240, dh: 180 })
+    // 16:9 slide in a 4:3 frame: letterboxed top/bottom
+    expect(fitIntoFrame(1600, 900, 240, 180)).toEqual({ dx: 0, dy: 22, dw: 240, dh: 135 })
+    // uniform scale: the fit never enlarges one axis past the frame
+    expect(fitIntoFrame(100, 100, 320, 180)).toEqual({ dx: 70, dy: 0, dw: 180, dh: 180 })
   })
 })
