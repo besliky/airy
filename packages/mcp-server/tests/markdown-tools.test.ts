@@ -678,4 +678,30 @@ describe('markdown tools over MCP', () => {
       await close()
     }
   })
+
+  it('case-insensitive findReplace survives the length-changing İ fold (BUG-1101)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // audit live repro: toLowerCase maps İ (U+0130) to "i" + U+0307, so
+      // lowered indices after it shift by one and the replacement used to
+      // land mid-word ("İstanbul kWORDnot") with the tail eaten
+      const handle = await openFixture(
+        client,
+        'turkish.md',
+        Buffer.from('İstanbul kelime not\n', 'utf8'),
+      )
+      const ops = await call(client, 'apply_ops', {
+        handle,
+        ops: [{ op: 'findReplace', find: 'kelime', replace: 'WORD', matchCase: false }],
+      })
+      expect(ops.isError).toBeFalsy()
+      expect(String(ops.structuredContent?.summary)).toContain('findReplace: matched 1')
+      await call(client, 'save_document', { handle })
+      expect((await readFile(join(root, 'turkish.md'))).toString('utf8')).toBe(
+        'İstanbul WORD not\n',
+      )
+    } finally {
+      await close()
+    }
+  })
 })

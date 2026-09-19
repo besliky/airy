@@ -307,6 +307,30 @@ describe('apply_ops', () => {
     expect(session.readDocument({ blocks: [1] })).toContain('Profit grew by')
   })
 
+  it('case-insensitive findReplace and setMatchedFont survive the İ fold (BUG-1101)', async () => {
+    const session = await openSession()
+    // audit repro: İ (U+0130) lowercases to two code units, so lowered-index
+    // slicing corrupted every run with Turkish text before it ("İstanbul
+    // kXi" — tail eaten, replacement mid-word)
+    session.insertContent('<p>İstanbul kelimesi ve not</p>')
+    const { results } = session.applyOps([
+      { op: 'findReplace', find: 'kelimesi', replace: 'sözcük', matchCase: false },
+    ])
+    expect(String(results[0]?.detail)).toContain('1 replacement(s)')
+    expect(session.readDocument({ blocks: [7] })).toContain('İstanbul sözcük ve not')
+
+    // occurrence styling slices runs on the same fold-safe ranges: the text
+    // survives and only the occurrence run carries the style
+    session.insertContent('<p>İstanbul kelimesi</p>')
+    const styled = session.applyOps([
+      { op: 'setMatchedFont', text: 'kelimesi', matchCase: false, bold: true },
+    ])
+    expect(String(styled.results[0]?.detail)).toContain('1 occurrence(s) styled')
+    const html = session.readDocument({ blocks: [8] })
+    expect(html).toContain('İstanbul <strong>kelimesi</strong>')
+    expect(html).not.toContain('k<strong>')
+  })
+
   it('setFont styles whole blocks; setMatchedFont styles occurrences only', async () => {
     const session = await openSession()
     session.applyOps([

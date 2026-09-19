@@ -600,6 +600,31 @@ describe('html tools over MCP', () => {
     }
   })
 
+  it('case-insensitive findReplace survives the length-changing İ fold (BUG-1101)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // audit repro on the html surface: İ (U+0130) folds to two code
+      // units, which used to shift lowered indices and corrupt the tail
+      const handle = await openFixture(
+        client,
+        'turkish.html',
+        Buffer.from('<p>İstanbul kelime not</p>\n', 'utf8'),
+      )
+      const ops = await call(client, 'apply_ops', {
+        handle,
+        ops: [{ op: 'findReplace', find: 'kelime', replace: 'WORD', matchCase: false }],
+      })
+      expect(ops.isError).toBeFalsy()
+      expect(String(ops.structuredContent?.summary)).toContain('findReplace: matched 1')
+      await call(client, 'save_document', { handle })
+      expect((await readFile(join(root, 'turkish.html'))).toString('utf8')).toBe(
+        '<p>İstanbul WORD not</p>\n',
+      )
+    } finally {
+      await close()
+    }
+  })
+
   it('confines saves to the workspace root captured at open, not a later one', async () => {
     const { client, close } = await connectSession()
     try {

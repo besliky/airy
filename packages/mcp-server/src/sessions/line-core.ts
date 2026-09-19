@@ -23,6 +23,7 @@ import { dirname, basename, join } from 'node:path'
 
 import { assertSaveTargetFree, FencingError, promoteNewFileExclusively } from '../docx/session.js'
 import { resolveConfined, workspaceRoot } from '../docx/paths.js'
+import { replaceCaseInsensitive } from '../case-fold.js'
 
 // ---- limits (mirror the docx session, scaled to the MCP 30k answer budget) ----
 
@@ -702,33 +703,23 @@ export class LineDocument {
           const from = op.from === undefined ? 0 : op.from
           const to = op.to === undefined ? lineCount() - 1 : op.to
           checkRange(name, from, to)
-          const needle = matchCase ? find : find.toLowerCase()
           let occurrences = 0
           let changedLines = 0
           for (let i = from as number; i <= (to as number); i++) {
             const hay = work[i]!
-            const subject = matchCase ? hay.text : hay.text.toLowerCase()
-            if (!subject.includes(needle)) continue
-            let replaced: string
             if (matchCase) {
+              if (!hay.text.includes(find)) continue
               occurrences += hay.text.split(find).length - 1
-              replaced = hay.text.split(find).join(replace)
+              work[i] = { ...hay, text: hay.text.split(find).join(replace) }
             } else {
-              // rebuild case-insensitively: walk the lowered subject
-              let out = ''
-              let rest = hay.text
-              let restLower = subject
-              for (;;) {
-                const at = restLower.indexOf(needle)
-                if (at === -1) break
-                out += rest.slice(0, at) + replace
-                rest = rest.slice(at + needle.length)
-                restLower = restLower.slice(at + needle.length)
-                occurrences += 1
-              }
-              replaced = out + rest
+              // the shared fold-safe replace: lowered indices cannot slice
+              // the original, where İ (U+0130) shifts every position after
+              // it by expanding to two code units (BUG-1101)
+              const outcome = replaceCaseInsensitive(hay.text, find, replace)
+              if (outcome.count === 0) continue
+              occurrences += outcome.count
+              work[i] = { ...hay, text: outcome.text }
             }
-            work[i] = { ...hay, text: replaced }
             changedLines += 1
           }
           results.push({
