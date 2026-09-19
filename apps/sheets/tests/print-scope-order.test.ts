@@ -48,6 +48,7 @@ function gridWorksheet(
   const rowHeight = options.rowHeight ?? 20
   const columnWidth = options.columnWidth ?? 100
   return {
+    getSheetName: () => 'Grid',
     getLastRow: () => options.lastRow ?? grid.length - 1,
     getLastColumn: () => options.lastColumn ?? Math.max(...grid.map((row) => row.length - 1), 0),
     getRowHeight: () => rowHeight,
@@ -144,6 +145,88 @@ describe('buildSheetsPrintPayload', () => {
     expect(tables[1]).not.toContain('r1c1')
     expect(tables[2]).toContain('r2c1')
     expect(tables[3]).toContain('r2c8')
+  })
+
+  it('resolves &A per sheet on workbook jobs (per-sheet template sets)', () => {
+    const alpha = { ...gridWorksheet([['a1']]), getSheetName: () => 'Alpha' }
+    const beta = { ...gridWorksheet([['b1']]), getSheetName: () => 'Beta' }
+    const jobs = [
+      { worksheet: alpha, printAreas: [] as string[], printTitles: null },
+      { worksheet: beta, printAreas: [] as string[], printTitles: null },
+    ]
+    const payload = buildSheetsPrintPayload(
+      jobs,
+      payloadSetup({ header: { center: '&A' } }),
+      'Book.pdf',
+      'Alpha',
+    )
+    // each sheet carries its own template set: &A names the page's owner
+    expect(payload.sheets).toHaveLength(2)
+    expect(payload.sheets![0]!.headerTemplate).toContain('Alpha')
+    expect(payload.sheets![0]!.headerTemplate).not.toContain('Beta')
+    expect(payload.sheets![1]!.headerTemplate).toContain('Beta')
+    expect(payload.sheets![1]!.headerTemplate).not.toContain('Alpha')
+    expect(payload.sheets!.map((s) => s.pages)).toEqual([1, 1])
+    // the job-level templates stay the active sheet's (single-pass jobs)
+    expect(payload.headerTemplate).toContain('Alpha')
+
+    // variants resolve per sheet too (differentFirst / differentOddEven)
+    const varied = buildSheetsPrintPayload(
+      jobs,
+      payloadSetup({
+        header: { center: '&A' },
+        firstPage: { header: { left: 'First &A' }, footer: null },
+        evenPages: { header: { right: 'Even &A' }, footer: null },
+      }),
+      'Book.pdf',
+      'Alpha',
+    )
+    expect(varied.sheets![1]!.firstPage!.headerTemplate).toContain('Beta')
+    expect(varied.sheets![1]!.evenPages!.headerTemplate).toContain('Beta')
+    expect(varied.sheets![0]!.firstPage!.headerTemplate).toContain('Alpha')
+  })
+
+  it("counts each sheet's pages from the tile pagination", () => {
+    // 2 rows at 375pt on a 733.68pt printable height = 2 pages; then 1 row
+    const tall = {
+      ...gridWorksheet([['a'], ['b']], { rowHeight: 500 }),
+      getSheetName: () => 'Tall',
+    }
+    const short = { ...gridWorksheet([['c']]), getSheetName: () => 'Short' }
+    const payload = buildSheetsPrintPayload(
+      [
+        { worksheet: tall, printAreas: [], printTitles: null },
+        { worksheet: short, printAreas: [], printTitles: null },
+      ],
+      payloadSetup({ header: { center: '&A' } }),
+      'Book.pdf',
+      'Tall',
+    )
+    expect(payload.sheets!.map((s) => s.pages)).toEqual([2, 1])
+  })
+
+  it('omits the per-sheet sets without &A or with a single sheet', () => {
+    const alpha = { ...gridWorksheet([['a1']]), getSheetName: () => 'Alpha' }
+    const beta = { ...gridWorksheet([['b1']]), getSheetName: () => 'Beta' }
+    const noCode = buildSheetsPrintPayload(
+      [
+        { worksheet: alpha, printAreas: [], printTitles: null },
+        { worksheet: beta, printAreas: [], printTitles: null },
+      ],
+      payloadSetup({ header: { center: 'Page &P of &N' } }),
+      'Book.pdf',
+      'Alpha',
+    )
+    expect(noCode.sheets).toBeUndefined()
+
+    const single = buildSheetsPrintPayload(
+      [{ worksheet: alpha, printAreas: [], printTitles: null }],
+      payloadSetup({ header: { center: '&A' } }),
+      'Book.pdf',
+      'Alpha',
+    )
+    expect(single.sheets).toBeUndefined()
+    expect(single.headerTemplate).toContain('Alpha')
   })
 
   it('fills merge continuation cells so nothing shifts into the wrong stripe', () => {

@@ -10,6 +10,7 @@ import { columnIndex, columnLabel } from '../domain/cell-address'
 import type { WorkbookExportPdfRequest } from '../shared/desktop-api'
 import type { HeaderFooterParts } from './edit-journal'
 import {
+  countPages,
   fitToPageScale,
   MAX_PRINT_SCALE,
   MIN_PRINT_SCALE,
@@ -75,6 +76,7 @@ export type PrintPageOrder = 'down-then-over' | 'over-then-down'
 /// The slice of the Univer facade the layout needs (structural, so the
 /// caller passes the FWorksheet through a cast).
 export interface PrintWorksheet {
+  getSheetName(): string
   getLastRow(): number
   getLastColumn(): number
   getRowHeight(row: number): number
@@ -257,10 +259,19 @@ export function buildSheetsPrintPayload(
   const scale = computeScale(setup, pageSize, landscape, margins, maxContentWidthPt, areaHeights)
   const printable = printableSizePt(pageSize, landscape, margins)
   const tables: string[] = []
+  // Per-sheet page counts of the assembled document (each tile is a table
+  // that starts a new page) — what the per-sheet header/footer sets below
+  // are keyed by, so the main process can print one ranged pass per sheet.
+  const sheetPages: number[] = []
   for (const sheetLayouts of layouts) {
+    let pages = 0
     for (const area of sheetLayouts) {
-      tables.push(...emitAreaTables(area, printable, scale, rowHeaderPt, headings, pageOrder))
+      for (const tile of areaTiles(area, printable, scale, rowHeaderPt, pageOrder)) {
+        tables.push(emitTable(area, tile, headings))
+        pages += tilePageCount(area, tile, printable.heightPt / scale)
+      }
     }
+    sheetPages.push(pages)
   }
 
   const html =
@@ -280,14 +291,14 @@ th.hd { background: #f1f1f1; border: 0.5pt solid #b7b7b7; color: #444;
   // Excel's "scale with document" (the default) shrinks the header/footer
   // text and pictures by the same factor as the sheet.
   const templateScale = setup.headerFooterScaleWithDoc ? scale : 1
-  const templates = (pair: HeaderFooterPair, variant: PageVariant) => {
+  const templates = (pair: HeaderFooterPair, variant: PageVariant, name: string) => {
     const headerTemplate = pair.header
       ? buildHeaderFooterTemplate(
           pair.header,
           'header',
           margins,
           baseName,
-          sheetName,
+          name,
           now,
           sectionPictures(pictures, 'header', variant),
           templateScale,
@@ -299,7 +310,7 @@ th.hd { background: #f1f1f1; border: 0.5pt solid #b7b7b7; color: #444;
           'footer',
           margins,
           baseName,
-          sheetName,
+          name,
           now,
           sectionPictures(pictures, 'footer', variant),
           templateScale,
@@ -310,6 +321,28 @@ th.hd { background: #f1f1f1; border: 0.5pt solid #b7b7b7; color: #444;
       ...(footerTemplate === undefined ? {} : { footerTemplate }),
     }
   }
+  // Entire-workbook jobs resolve &A per sheet: Chromium prints one template
+  // pair per pass, so the payload carries one template set per sheet (the
+  // active sheet's header/footer bodies with each owner's name) and the
+  // main process prints a ranged pass per sheet × page variant (BUG-1105).
+  const variantsUseSheetName =
+    partsUseSheetName(setup.header) ||
+    partsUseSheetName(setup.footer) ||
+    pairUseSheetName(setup.firstPage) ||
+    pairUseSheetName(setup.evenPages)
+  const sheetTemplateSets =
+    resolved.length > 1 && variantsUseSheetName
+      ? resolved.map(({ job }, index) => ({
+          pages: sheetPages[index] ?? 1,
+          ...templates({ header: setup.header, footer: setup.footer }, 'odd', nameOf(job)),
+          ...(setup.firstPage === null
+            ? {}
+            : { firstPage: templates(setup.firstPage, 'first', nameOf(job)) }),
+          ...(setup.evenPages === null
+            ? {}
+            : { evenPages: templates(setup.evenPages, 'even', nameOf(job)) }),
+        }))
+      : undefined
   return {
     fileName,
     html,
@@ -317,10 +350,40 @@ th.hd { background: #f1f1f1; border: 0.5pt solid #b7b7b7; color: #444;
     pageSize,
     margins: { top: margins.top, bottom: margins.bottom, left: margins.left, right: margins.right },
     scale,
-    ...templates({ header: setup.header, footer: setup.footer }, 'odd'),
-    ...(setup.firstPage === null ? {} : { firstPage: templates(setup.firstPage, 'first') }),
-    ...(setup.evenPages === null ? {} : { evenPages: templates(setup.evenPages, 'even') }),
+    ...templates({ header: setup.header, footer: setup.footer }, 'odd', sheetName),
+    ...(setup.firstPage === null
+      ? {}
+      : { firstPage: templates(setup.firstPage, 'first', sheetName) }),
+    ...(setup.evenPages === null
+      ? {}
+      : { evenPages: templates(setup.evenPages, 'even', sheetName) }),
+    ...(sheetTemplateSets === undefined ? {} : { sheets: sheetTemplateSets }),
   }
+}
+
+/// A header/footer body that prints the sheet-name code (&A): the only code
+/// that depends on which sheet owns the page, and the only reason the
+/// payload grows per-sheet template sets. ('&&A' matches too — resolving it
+/// per sheet is harmless, it just prints the literal.)
+function partsUseSheetName(parts: HeaderFooterParts | null): boolean {
+  return (
+    parts !== null &&
+    [parts.left, parts.center, parts.right].some(
+      (text) => text !== undefined && text.includes('&A'),
+    )
+  )
+}
+
+function pairUseSheetName(pair: HeaderFooterPair | null): boolean {
+  return (
+    partsUseSheetName(pair === null ? null : pair.header) ||
+    partsUseSheetName(pair === null ? null : pair.footer)
+  )
+}
+
+/// A job's sheet name for &A (the worksheet carries its real tab name).
+function nameOf(job: PrintSheetJob): string {
+  return job.worksheet.getSheetName()
 }
 
 /// A laid-out print area: rows with their cells built once, then tiled into
@@ -456,31 +519,39 @@ interface AreaTile {
   readonly colEnd: number
 }
 
-/// Emits one area as page-sized tables in the requested page order. A sheet
-/// no wider than one page tiles into a single table (Chromium paginates its
-/// rows); anything wider is sliced into column stripes that each fit the
-/// printable width, and over-then-down additionally slices the rows so the
-/// tiles can be ordered across first.
-function emitAreaTables(
+/// The area's page tiles (a row band × a column stripe each) in print order —
+/// shared by the table emitter and the per-sheet page counter so both agree
+/// on the pagination.
+function areaTiles(
   area: LayoutArea,
   printable: { widthPt: number; heightPt: number },
   scale: number,
   rowHeaderPt: number,
-  headings: boolean,
   pageOrder: PrintPageOrder,
-): string[] {
+): AreaTile[] {
   const columnStripes = columnStripesOf(area, printable.widthPt / scale, rowHeaderPt)
   const rowBands =
     pageOrder === 'over-then-down' && columnStripes.length > 1
       ? rowBandsOf(area, printable.heightPt / scale)
       : [{ rowStart: area.startRow, rowEnd: area.endRow }]
-  const tables: string[] = []
+  const tiles: AreaTile[] = []
   for (const band of rowBands) {
     for (const stripe of columnStripes) {
-      tables.push(emitTable(area, { ...band, ...stripe }, headings))
+      tiles.push({ ...band, ...stripe })
     }
   }
-  return tables
+  return tiles
+}
+
+/// Pages one tile of the area occupies when printed: every tile is its own
+/// table starting a new page, rows never split, and the repeated header
+/// (heading strip + title rows) takes its share of every page — the same
+/// simulation fit-to-page and over-then-down banding use (print-scale).
+function tilePageCount(area: LayoutArea, tile: AreaTile, capacityPt: number): number {
+  const rowHeightsPt = area.bodyRows
+    .filter((row) => row.row >= tile.rowStart && row.row <= tile.rowEnd)
+    .map((row) => row.printedHeightPt)
+  return countPages([{ repeatedHeightPt: area.repeatedHeightPt, rowHeightsPt }], capacityPt)
 }
 
 /// Column stripes of an area at the effective scale: each stripe's columns

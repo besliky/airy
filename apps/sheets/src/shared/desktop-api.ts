@@ -2654,6 +2654,29 @@ export const workbookExportPdfRequestSchema = z
     /// printToPDF passes and stitches the pages together.
     firstPage: pdfPageVariantSchema.optional(),
     evenPages: pdfPageVariantSchema.optional(),
+    /// Entire-workbook jobs whose headers/footers print &A: one template
+    /// set per sheet in print order, each resolving the sheet-name code to
+    /// its owning sheet (Chromium takes one template pair per pass, so the
+    /// main process prints a ranged pass per sheet × page variant and
+    /// stitches). `pages` is the sheet's page count in the document per the
+    /// renderer's pagination model; pages beyond the counted total fall
+    /// back to the base pass. Omitted (the fields above stay authoritative)
+    /// for single-sheet jobs and jobs without &A.
+    sheets: z
+      .array(
+        z
+          .object({
+            pages: z.number().int().positive().max(100_000),
+            headerTemplate: z.string().min(1).max(MAX_PDF_TEMPLATE_CHARS).optional(),
+            footerTemplate: z.string().min(1).max(MAX_PDF_TEMPLATE_CHARS).optional(),
+            firstPage: pdfPageVariantSchema.optional(),
+            evenPages: pdfPageVariantSchema.optional(),
+          })
+          .strict(),
+      )
+      .min(2)
+      .max(500)
+      .optional(),
   })
   .strict()
 
