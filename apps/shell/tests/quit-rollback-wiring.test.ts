@@ -40,4 +40,12 @@ describe('quit rollback wiring (BUG-1216)', () => {
     expect(sheetsMain).toContain('export function markSheetsShuttingDown(shuttingDown = true)')
     expect(sheetsMain).toContain("app.on('before-quit', () => markSheetsShuttingDown())")
   })
+
+  it("every shell window's close event runs through the extracted guard (BUG-1217)", () => {
+    // the window wiring delegates to the latch-guarded state machine instead
+    // of an inline handler that a repeat close event could re-enter
+    expect(shellMain).toContain("win.on(\n    'close',\n    createWindowCloseGuard({")
+    expect(shellMain).toContain('tagGuardTabs(')
+    expect(shellMain).not.toContain('let closeConfirmed = false')
+  })
 })
