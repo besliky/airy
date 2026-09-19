@@ -138,11 +138,13 @@ function attachSectPr(xml: string, sectPr: string): string {
 }
 
 /**
- * Find the TOC/TOF field region (field begin ... matching end, tracked by
- * fldChar depth across top-level blocks) and replace it with a regenerated
- * dirty field. The authored instruction is parsed first, so an update keeps
- * the chosen switches (level range, \n, \t styles) and rebuilds a table of
- * figures (\c label) from SEQ captions instead of headings.
+ * Find every TOC/TOF field region (field begin ... matching end, tracked by
+ * fldChar depth across top-level blocks) and replace ALL of them with
+ * regenerated dirty fields in one transaction (BUG-1011: documents can carry
+ * a TOC and a table of figures — only the first used to update). Each
+ * authored instruction is parsed first, so an update keeps the chosen
+ * switches (level range, \n, \t styles) and rebuilds a table of figures
+ * (\c label) from SEQ captions instead of headings.
  */
 export function updateTocField(
   editor: Editor,
@@ -151,16 +153,21 @@ export function updateTocField(
   anchorPage?: (pos: number) => number | null,
   opts: { silent?: boolean } = {},
 ): TocUpdateResult {
+  // every TOC/TOF field region (begin ... matching end, tracked by fldChar
+  // depth across top-level blocks) — an update rebuilds ALL of them, like
+  // Word's update-fields pass, instead of only the first (BUG-1011)
   const doc = editor.state.doc
+  const regions: Array<{
+    from: number
+    to: number
+    instr: string
+    keepPageBreak: boolean
+    keepSectPr: string
+  }> = []
   let from = -1
-  let to = -1
   let instr = ''
-  let keepPageBreak = false
-  let keepSectPr = ''
   let depth = 0
-  let found = false
   doc.forEach((node, offset) => {
-    if (found) return
     const xml = xmlOfNode(node as never, blocks)
     if (from === -1) {
       const joined = instrTextOf(xml)
@@ -172,60 +179,82 @@ export function updateTocField(
     depth += (xml.match(/w:fldCharType="begin"/g) ?? []).length
     depth -= (xml.match(/w:fldCharType="end"/g) ?? []).length
     if (depth <= 0) {
-      to = offset + node.nodeSize
-      keepPageBreak = /<w:br\s[^>]*w:type="page"/.test(xml)
-      keepSectPr = SECT_PR_RE.exec(xml)?.[0] ?? ''
-      found = true
+      regions.push({
+        from,
+        to: offset + node.nodeSize,
+        instr,
+        keepPageBreak: /<w:br\s[^>]*w:type="page"/.test(xml),
+        keepSectPr: SECT_PR_RE.exec(xml)?.[0] ?? '',
+      })
+      from = -1
     }
   })
 
-  if (from === -1 || !found) {
+  if (regions.length === 0) {
     if (!opts.silent) window.alert(t('ribbonTocNotFound'))
     return 'missing'
   }
 
-  const options = parseTocInstruction(instr)
-  const entries = options.seqIdentifier
-    ? collectTofEntries(editor, blocks, options.seqIdentifier, anchorPage)
-    : collectTocEntriesWithPages(editor, headingPages).filter(
-        (e) => options.levels === undefined || e.level <= options.levels,
-      )
-  if (entries.length === 0) {
+  // plan every region against the same doc snapshot, then apply the
+  // replacements back-to-front in ONE transaction (positions of earlier
+  // regions stay valid; one undo step for the whole update)
+  let updated = 0
+  const planned: Array<{
+    region: (typeof regions)[number]
+    nodes: ReturnType<typeof tocFieldNodes>
+  }> = []
+  for (const region of regions) {
+    const options = parseTocInstruction(region.instr)
+    const entries = options.seqIdentifier
+      ? collectTofEntries(editor, blocks, options.seqIdentifier, anchorPage)
+      : collectTocEntriesWithPages(editor, headingPages).filter(
+          (e) => options.levels === undefined || e.level <= options.levels,
+        )
+    if (entries.length === 0) {
+      continue // empty field: skipped, reported in the aggregate below
+    }
+    const nodes = tocFieldNodes(
+      entries,
+      options,
+      t(options.seqIdentifier ? 'refsTofFieldLabel' : 'ribbonTocFieldLabel'),
+    )
+    if (region.keepPageBreak) {
+      nodes.push({
+        type: 'docProtected',
+        attrs: {
+          docxIndex: null,
+          blockType: 'passthrough',
+          label: t('ribbonPageBreak'),
+          genXml: PAGE_BREAK_PARAGRAPH_XML,
+          fieldDisplay: { kind: 'pageBreak' },
+        },
+      })
+    }
+    // the region's trailing section break (in the deleted last paragraph's
+    // pPr) moves onto the last regenerated paragraph, keeping the section
+    if (region.keepSectPr && nodes.length > 0) {
+      const last = nodes[nodes.length - 1] as { attrs: Record<string, unknown> }
+      last.attrs.genXml = attachSectPr(String(last.attrs.genXml), region.keepSectPr)
+    }
+    planned.push({ region, nodes })
+    updated += 1
+  }
+
+  if (updated === 0) {
+    const first = parseTocInstruction(regions[0].instr)
     if (!opts.silent)
-      window.alert(t(options.seqIdentifier ? 'refsTofNoCaptions' : 'ribbonTocNoHeadings'))
+      window.alert(t(first.seqIdentifier ? 'refsTofNoCaptions' : 'ribbonTocNoHeadings'))
     return 'no-entries'
   }
 
-  const nodes = tocFieldNodes(
-    entries,
-    options,
-    t(options.seqIdentifier ? 'refsTofFieldLabel' : 'ribbonTocFieldLabel'),
-  )
-  if (keepPageBreak) {
-    nodes.push({
-      type: 'docProtected',
-      attrs: {
-        docxIndex: null,
-        blockType: 'passthrough',
-        label: t('ribbonPageBreak'),
-        genXml: PAGE_BREAK_PARAGRAPH_XML,
-        fieldDisplay: { kind: 'pageBreak' },
-      },
-    })
+  const chain = editor.chain().focus()
+  for (let i = planned.length - 1; i >= 0; i--) {
+    const { region, nodes } = planned[i]
+    chain
+      .deleteRange({ from: region.from, to: region.to })
+      .insertContentAt(region.from, nodes as never)
   }
-  // the region's trailing section break (in the deleted last paragraph's pPr)
-  // moves onto the last regenerated paragraph, keeping the section's layout
-  if (keepSectPr && nodes.length > 0) {
-    const last = nodes[nodes.length - 1] as { attrs: Record<string, unknown> }
-    last.attrs.genXml = attachSectPr(String(last.attrs.genXml), keepSectPr)
-  }
-
-  editor
-    .chain()
-    .focus()
-    .deleteRange({ from, to })
-    .insertContentAt(from, nodes as never)
-    .run()
+  chain.run()
   return 'updated'
 }
 

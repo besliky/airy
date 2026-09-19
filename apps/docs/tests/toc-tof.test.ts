@@ -267,4 +267,53 @@ describe('TOC options update', () => {
     expect(lines).toHaveLength(1)
     expect(lines[0]).toMatchObject({ left: 'Chapter', noPage: true })
   })
+
+  it('updates every TOC/TOF field, not just the first (BUG-1011)', async () => {
+    const { editor, parsed } = await openDoc('<w:p><w:r><w:t>Body</w:t></w:r></w:p>')
+    // real headings the heading-TOC collects, then a caption set for the ToF
+    editor.commands.insertContentAt(editor.state.doc.content.size, [
+      headingNode('Chapter', 1),
+      headingNode('Appendix', 1),
+    ] as never)
+    // a heading TOC up front, a figure ToF behind it — the audit scenario
+    editor.commands.insertContentAt(
+      0,
+      fieldNodes(
+        [
+          { level: 1, text: 'Chapter' },
+          { level: 1, text: 'Appendix' },
+        ],
+        { levels: 1 },
+      ) as never,
+    )
+    editor.commands.insertContentAt(editor.state.doc.content.size, [
+      captionNode('Figure', 1, 'Architecture', '_Ref111111111'),
+      captionNode('Figure', 2, 'Data flow', '_Ref222222222'),
+    ] as never)
+    editor.commands.insertContentAt(
+      editor.state.doc.content.size,
+      fieldNodes(
+        [
+          { level: 1, text: 'Figure 1 Architecture' },
+          { level: 1, text: 'Figure 2 Data flow' },
+        ],
+        { seqIdentifier: 'Figure' },
+      ) as never,
+    )
+    // new content both fields must pick up
+    editor.commands.insertContentAt(editor.state.doc.content.size, [
+      headingNode('Epilogue', 1),
+      captionNode('Figure', 3, 'Timeline', '_Ref333333333'),
+    ] as never)
+
+    expect(updateTocField(editor, parsed.blocks)).toBe('updated')
+    const instrs = fieldInstructions(editor)
+    expect(instrs).toEqual(['TOC \\o "1-1" \\h \\z \\u', 'TOC \\h \\z \\c "Figure"'])
+    const lines = tocLines(editor)
+    expect(lines).toHaveLength(6) // 3 headings + 3 captions across both fields
+    expect(lines[0]).toMatchObject({ left: 'Chapter' })
+    expect(lines[2]).toMatchObject({ left: 'Epilogue' })
+    expect(lines[3]).toMatchObject({ left: 'Figure 1 Architecture' })
+    expect(lines[5]).toMatchObject({ left: 'Figure 3 Timeline' })
+  })
 })
