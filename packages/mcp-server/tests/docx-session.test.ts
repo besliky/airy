@@ -1,8 +1,8 @@
 // Unit tests for the headless docx session: parse model, read formats,
 // insert_content, apply_ops semantics (validation-forward, atomicity),
 // byte-preservation, mtime fencing and path confinement.
-import { mkdtemp, readFile, writeFile, rm, mkdir, stat } from 'node:fs/promises'
-import { readdirSync, symlinkSync } from 'node:fs'
+import { mkdtemp, readFile, writeFile, rm, mkdir, stat, rename } from 'node:fs/promises'
+import { existsSync, readdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -502,6 +502,25 @@ describe('save: byte preservation and fencing', () => {
     await session.save()
     session.insertContent('<p>two</p>', 0)
     await expect(session.save()).resolves.toMatchObject({ path: docPath })
+  })
+
+  it('refuses to save when the pinned workspace root was renamed away (BUG-1103)', async () => {
+    // the session pins the root at open; renaming that directory mid-session
+    // must fail the save clearly instead of mkdir-resurrecting the dead root
+    const ws = join(root, 'ws')
+    await mkdir(ws, { recursive: true })
+    const wsDoc = join(ws, 'report.docx')
+    await writeFile(wsDoc, await buildFixtureDocx())
+    const session = await DocxSession.open(wsDoc, ws)
+    session.insertContent('<p>edit</p>', 0)
+    await rename(ws, join(root, 'ws2'))
+    await expect(session.save(join('out.docx'))).rejects.toThrow(/no longer exists/)
+    await expect(session.save(join('out.docx'))).rejects.toThrow(/Reopen the document/)
+    // in-place save: the same stale-root refusal, not a drift fence error
+    await expect(session.save()).rejects.toThrow(/no longer exists/)
+    // the renamed-away directory was not resurrected
+    expect(existsSync(ws)).toBe(false)
+    expect(existsSync(join(root, 'ws2', 'out.docx'))).toBe(false)
   })
 })
 

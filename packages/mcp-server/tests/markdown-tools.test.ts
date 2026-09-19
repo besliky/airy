@@ -4,7 +4,7 @@
 // (BOM, EOLs, untouched lines), the failure paths (missing file, outside the
 // workspace root, invalid UTF-8, binary, size caps) and the save fences.
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -781,6 +781,43 @@ describe('markdown tools over MCP', () => {
       expect(ops.isError).toBeFalsy()
       await call(client, 'save_document', { handle: handle3 })
       expect((await readFile(join(root, 'empty3.md'))).toString('utf8')).toBe('hello\n')
+    } finally {
+      await close()
+    }
+  })
+
+  it('refuses saves when the pinned workspace root was renamed away (BUG-1103)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // the session pins the root at open: make a subdirectory BE the root,
+      // open inside it, then rename the directory out from under the session
+      const ws = join(root, 'ws')
+      await mkdir(ws, { recursive: true })
+      process.env[WORKSPACE_ROOT_ENV] = ws
+      await writeFile(join(ws, 'doc.md'), 'body\n', 'utf8')
+      const opened = await call(client, 'open_document', { path: 'doc.md' })
+      expect(opened.isError).toBeFalsy()
+      const handle = String(opened.structuredContent?.handle)
+      await call(client, 'insert_content', { handle, text: 'edit' })
+      // the operator renames the workspace directory mid-session
+      await rename(ws, join(root, 'ws2'))
+      try {
+        const saveAs = await call(client, 'save_document', { handle, path: 'out.md' })
+        expect(saveAs.isError).toBe(true)
+        expect(text(saveAs)).toContain('no longer exists')
+        expect(text(saveAs)).toContain('moved or renamed')
+        expect(text(saveAs)).toContain('Reopen the document')
+        // the in-place save gets the same clear refusal (not a drift fence
+        // error about the file itself)
+        const inPlace = await call(client, 'save_document', { handle })
+        expect(inPlace.isError).toBe(true)
+        expect(text(inPlace)).toContain('no longer exists')
+      } finally {
+        process.env[WORKSPACE_ROOT_ENV] = root
+      }
+      // the dead root must not be resurrected by the save's mkdir
+      expect(existsSync(ws)).toBe(false)
+      expect(existsSync(join(root, 'ws2', 'out.md'))).toBe(false)
     } finally {
       await close()
     }

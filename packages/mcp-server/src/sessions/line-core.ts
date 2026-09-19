@@ -14,7 +14,8 @@
 // (insertLines/replaceLines/deleteLines/findReplace with atomic batch
 // validation), the insert-position resolver, the read-selection skeleton, and
 // the atomic save with the docx session's fences (drift refusal, save-target
-// ownership, tmp + rename). The sessions stay owners of their true
+// ownership, tmp + rename, stale-root refusal when the pinned workspace root
+// was renamed away — BUG-1103). The sessions stay owners of their true
 // divergence points, declared as LineSessionHooks: the charset decode policy,
 // the structure summary the read renders, and a couple of kind-specific error
 // phrasings.
@@ -24,7 +25,7 @@ import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname, basename, join } from 'node:path'
 
 import { assertSaveTargetFree, FencingError, promoteNewFileExclusively } from '../docx/session.js'
-import { resolveConfined, workspaceRoot } from '../docx/paths.js'
+import { assertWorkspaceRootExists, resolveConfined, workspaceRoot } from '../docx/paths.js'
 import { replaceCaseInsensitive } from '../case-fold.js'
 
 // ---- limits (mirror the docx session, scaled to the MCP 30k answer budget) ----
@@ -807,6 +808,9 @@ export class LineDocument {
    * a legacy charset declaration via its beforeEncode hook).
    */
   async save(rawPath?: string, options: { overwrite?: boolean } = {}): Promise<LineSaveResult> {
+    // a pinned root that vanished (moved/renamed workspace directory) must
+    // fail here, before confinement + mkdir silently resurrect it (BUG-1103)
+    await assertWorkspaceRootExists(this.root)
     // the root captured at open, not the live one: a drifted
     // AIRY_WORKSPACE_ROOT/cwd between open and save must not re-confine the
     // session (the docx session has the same pinned-root semantics)
