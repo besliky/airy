@@ -533,6 +533,7 @@ function chartNodeAtSelection(editor: Editor): { pos: number; node: PmNode } | n
  *  charts patch the cached texts/numbers — and the save pipeline syncs the embedded workbook ("Edit Data" numbers). */
 export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose: () => void }) {
   const { t } = useI18n()
+  const dialog = useModalDialog(onClose)
   // a chart selected on open switches the dialog to edit mode
   const [target] = useState(() => chartNodeAtSelection(editor))
   const targetDisplay = target ? (target.node.attrs.chartDisplay as ChartDisplay | null) : null
@@ -698,9 +699,15 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
   const singleSeries = kind === 'pie' || kind === 'doughnut'
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal modal-chart">
-        <h2>{source ? t('ribbonChartEditTitle') : t('ribbonChartInsertTitle')}</h2>
+    <div
+      className="modal-backdrop"
+      {...dialog.backdropProps}
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="modal modal-chart" {...dialog.dialogProps}>
+        <h2 {...dialog.titleProps}>
+          {source ? t('ribbonChartEditTitle') : t('ribbonChartInsertTitle')}
+        </h2>
         <div className="modal-row">
           {(
             [
