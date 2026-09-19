@@ -431,8 +431,9 @@ documents above 1M characters skip the parse5 structure scan.
   later `AIRY_WORKSPACE_ROOT`/cwd change never re-confines a live session.
   When that pinned root itself disappears mid-session (the workspace
   directory was moved or renamed), saves are refused with a stale-root error
-  naming the root instead of silently re-creating the dead directory —
-  reopen the document from its new location and re-apply your edits.
+  naming the root instead of silently re-creating the dead directory — for
+  every session kind alike (docx, workbook, slides, markdown/html) — reopen
+  the document from its new location and re-apply your edits.
   Symlinks are resolved
   for both the root and the candidate before the check, so a link that lives
   inside the root but points outside cannot smuggle paths out (links that

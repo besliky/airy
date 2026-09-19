@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 
 import { saveTargetExistsError, FencingError, assertSaveTargetFree } from '../docx/session.js'
-import { resolveConfined, workspaceRoot } from '../docx/paths.js'
+import { assertWorkspaceRootExists, resolveConfined, workspaceRoot } from '../docx/paths.js'
 import {
   convertViaSoffice,
   findSoffice,
@@ -518,6 +518,11 @@ export class XlsxSession {
    * entry patches, the sidecar reassembles the archive (untouched entries
    * raw-copied byte-identical) and the result lands atomically.
    *
+   * Stale-root refusal: when the pinned workspace root has been moved/renamed
+   * since open, the save fails with StaleWorkspaceRootError (BUG-1103) — the
+   * same guard the docx/line/slides sessions run, so a renamed root yields
+   * the documented refusal instead of a raw ENOENT from the gateway.
+   *
    * Default target: the opened .xlsx; for imported .xls/.ods books a fresh
    * sibling .xlsx next to the original (true legacy output is not supported;
    * format 'origin' refuses for .xls and exports .ods via LibreOffice). A
@@ -530,6 +535,9 @@ export class XlsxSession {
     format: 'xlsx' | 'origin' = 'xlsx',
     options: { overwrite?: boolean } = {},
   ): Promise<XlsxSaveResult> {
+    // a pinned root that vanished (moved/renamed workspace directory) must
+    // fail here, before confinement lets the gateway write anywhere (BUG-1103)
+    await assertWorkspaceRootExists(this.root)
     if (format === 'origin') return this.saveToOrigin()
     const target = resolveConfined(rawPath ?? this.defaultTarget(), this.root)
     await assertSaveTargetFree(target, [this.backingPath, ...this.savedTargets], options.overwrite)
