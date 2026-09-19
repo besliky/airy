@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-19
+
+### Added
+
+- Docs: Compare documents as tracked changes (legal blackline) with run-level
+  diffing, budgeted matching, and read-only gating; the differences pane remains.
+- Docs: cross-reference types (text / page number / heading number) with F9 cache
+  refresh and robust SEQ caption labels.
+- Docs: section line numbers with Word restart semantics, paper-ink canvas overlay,
+  and print parity.
+- Docs: TOC options dialog (levels, page numbers, styles, hyperlinks) and Table of
+  Figures authoring from SEQ captions.
+- Docs: full styles gallery (Heading 1–9 + custom document styles) with Modify Style.
+- Docs: footnote/endnote options (numbering formats, custom marks, conversion,
+  navigation), hyphenation authoring, and the unequal-columns dialog with separators.
+- Docs: area, scatter, bubble, and doughnut charts with chart edit mode and embedded
+  workbook sync; alt text for pictures/shapes/tables; picture/shape shadow effects
+  and borders; Compress Pictures.
+- Docs: SmartArt insert (four presets) as real OOXML diagram parts.
+- Sheets: range moves on imported workbooks (2D rectangle moves with full reference
+  remapping and fail-closed guards) completing column/row move parity.
+- Pagination: a grid compatibility profile — Word parity lifted to 95.9% page-start
+  matches (page counts 25/25) and a LibreOffice profile reaching 86.0%.
+- MCP: headless markdown and HTML sessions land in 0.11.0 tooling; this release
+  hardens them (size/line caps, pinned workspace roots, deterministic fixtures).
+
+### Fixed
+
+- Bridge/MCP: requests are no longer dispatched after a connection closes; dribbled
+  chunks coalesce without quadratic copying; oversized answers return a typed error
+  instead of dropping the connection.
+- Docs: wildcard search hardened (no catastrophic backtracking, placeholder nodes
+  untouched); compare refuses to run over pending revisions; read-only documents are
+  no longer mutated by anchors/links/compare.
+- Sheets: whole-column refs in conditional formatting/validation/protected ranges
+  remap on moves; structural replay remaps sortState; move ops are bounded by the
+  sheet edges.
+- UX: WCAG-compliant focus rings in sheets/slides; modal dialog semantics (focus
+  trap, Escape) across new dialogs; busy states for compare and PDF page inserts;
+  split-button and toggle screen-reader announcements.
+
+### Changed
+
+- Sheets renderer bundle split into layer chunks (largest 3.4 MB, eager −12% after
+  lazy locale dictionaries); docs renderer entry −43% with lazy locale dictionaries.
+- html2docx tests run browser domains in parallel; e2e waits are deterministic
+  (44 fixed sleeps → 6 justified); byte-deterministic MCP fixtures.
+
 ## [0.11.0] - 2026-09-18
 
 ### Added
@@ -214,7 +262,8 @@ agent-driven document work.
 - The `gsk` CLI search backend and the `@genspark/cli` dependency.
 - The Genspark AI provider — AI in the app is bring-your-own-key only.
 
-[Unreleased]: https://github.com/besliky/airy/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/besliky/airy/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/besliky/airy/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/besliky/airy/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/besliky/airy/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/besliky/airy/compare/v0.9.2...v0.9.3
