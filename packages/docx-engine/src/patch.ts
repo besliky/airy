@@ -85,7 +85,7 @@ export type SaveBlock = (
       kind: 'xml'
       xml: string
       docxIndex?: number
-      replaceImage?: { base64: string; mime: NewImage['mime'] }
+      replaceImage?: { base64: string; mime: NewImage['mime']; keepCrop?: boolean }
     }
   /** a new inline image; bytes become word/media/... + relationship */
   | { kind: 'image'; image: NewImage }
@@ -1158,7 +1158,8 @@ export async function saveDocx(
     } else if (fb.kind === 'xml') {
       xml = fb.xml
       fbDocxIndex = fb.docxIndex
-      if (fb.replaceImage) xml = retargetImageBlip(xml, embedImageMedia(fb.replaceImage))
+      if (fb.replaceImage)
+        xml = retargetImageBlip(xml, embedImageMedia(fb.replaceImage), fb.replaceImage.keepCrop === true)
     } else if (fb.kind === 'chart') {
       xml = await embedChart(fb.chart, fb.extentPx)
     } else if (fb.kind === 'diagram') {
@@ -2143,9 +2144,12 @@ function nextImageSeq(zip: JSZip): number {
  * Re-point a drawing paragraph's first <a:blip> at a new image relationship
  * (external r:link becomes embedded) and drop a stale <a:srcRect> crop — the
  * editor shows the full image, so a Word-authored crop window applied to the
- * swapped bytes would show an arbitrary region.
+ * swapped bytes would show an arbitrary region. `keepCrop` (Compress Pictures
+ * without "delete cropped areas") keeps the crop/fill window instead: the
+ * compressed bytes cover the same full frame, and the fractional srcRect
+ * coordinates remain valid after the resample (BUG-1006).
  */
-function retargetImageBlip(xml: string, rId: string): string {
+function retargetImageBlip(xml: string, rId: string, keepCrop = false): string {
   const blip = /<a:blip\b[^>]*\/?>/.exec(xml)
   if (!blip) return xml
   let tag = blip[0]
@@ -2155,15 +2159,17 @@ function retargetImageBlip(xml: string, rId: string): string {
     tag = tag.replace(/r:embed="[^"]*"/, `r:embed="${rId}"`).replace(/\s+r:link="[^"]*"/, '')
   else if (/r:link="/.test(tag)) tag = tag.replace(/r:link="[^"]*"/, `r:embed="${rId}"`)
   else tag = tag.replace(/<a:blip\b/, `<a:blip r:embed="${rId}"`)
-  return (
-    (xml.slice(0, blip.index) + tag + xml.slice(blip.index + blip[0].length))
+  let out = xml.slice(0, blip.index) + tag + xml.slice(blip.index + blip[0].length)
+  if (!keepCrop) {
+    out = out
       .replace(/<a:srcRect\b[^>]*\/>/, '')
       // A non-default fill window would clip the swapped bytes the same way a
       // crop would — reset it (the editor clears its imageFillRect in step)
       .replace(/<a:fillRect\b[^>]+\/>/, '<a:fillRect/>')
-      // The replacement is always raster and Word prefers a leftover Office-2016
-      // <asvg:svgBlip> extension over the retargeted r:embed — drop the extension
-      .replace(/<a:ext\b[^>]*>\s*<\w+:svgBlip\b[\s\S]*?<\/a:ext>/, '')
-      .replace(/<a:extLst>\s*<\/a:extLst>/, '')
-  )
+  }
+  // The replacement is always raster and Word prefers a leftover Office-2016
+  // <asvg:svgBlip> extension over the retargeted r:embed — drop the extension
+  return out
+    .replace(/<a:ext\b[^>]*>\s*<\w+:svgBlip\b[\s\S]*?<\/a:ext>/, '')
+    .replace(/<a:extLst>\s*<\/a:extLst>/, '')
 }

@@ -1684,6 +1684,7 @@ export function pmDocToSavePlan(doc: PmNode, originalBlocks: Block[]): SavePlan 
                   replaceImage: {
                     base64: imageReplace.base64,
                     mime: imageReplace.mime as NewImage['mime'],
+                    ...(imageReplace.keepCrop === true ? { keepCrop: true } : {}),
                   },
                 }
               : {}),
