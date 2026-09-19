@@ -17,6 +17,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   removeBackground,
   sampleBackgroundColors,
+  useModalDialog,
   type PixelImage,
   type RGB,
 } from '@airy-office/ui'
@@ -57,6 +58,7 @@ interface CutoutProps {
 
 export function CutoutDialog({ dataUrl, onApply, onCancel }: CutoutProps) {
   const { t } = useI18n()
+  const dialog = useModalDialog(onCancel)
   const [tolerance, setTolerance] = useState(DEFAULT_TOLERANCE)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<StringKey | null>(null)
@@ -142,16 +144,8 @@ export function CutoutDialog({ dataUrl, onApply, onCancel }: CutoutProps) {
     [],
   )
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onCancel()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onCancel])
+  // Escape comes from useModalDialog: stopped there, so app-global Escape
+  // listeners (read mode and friends) never see the key while this is open
 
   const apply = () => {
     const full = fullRef.current
@@ -174,13 +168,14 @@ export function CutoutDialog({ dataUrl, onApply, onCancel }: CutoutProps) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={onCancel}>
+    <div className="modal-backdrop" {...dialog.backdropProps} onClick={onCancel}>
       <div
         className="modal"
+        {...dialog.dialogProps}
         style={{ maxWidth: PREVIEW_MAX + 48 }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2>{t('ribbonRemoveBg')}</h2>
+        <h2 {...dialog.titleProps}>{t('ribbonRemoveBg')}</h2>
         <div
           style={{
             ...CHECKERBOARD,
@@ -272,6 +267,7 @@ interface CropProps {
 
 export function CropDialog({ dataUrl, onApply, onCancel }: CropProps) {
   const { t } = useI18n()
+  const dialog = useModalDialog(onCancel)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<StringKey | null>(null)
   const [crop, setCrop] = useState<CropRect>({ l: 0, t: 0, r: 1, b: 1 })
@@ -348,20 +344,18 @@ export function CropDialog({ dataUrl, onApply, onCancel }: CropProps) {
     }
   }, [crop, dataUrl, onApply])
 
-  // Esc cancels / Enter applies
+  // Enter applies; Escape comes from useModalDialog (stopped there, so
+  // app-global Escape listeners never see the key while this is open)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onCancel()
-      } else if (e.key === 'Enter' && loaded && !error) {
+      if (e.key === 'Enter' && loaded && !error) {
         e.preventDefault()
         apply()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onCancel, apply, loaded, error])
+  }, [apply, loaded, error])
 
   const startDrag = (handle: CropHandle) => (e: React.MouseEvent) => {
     e.preventDefault()
@@ -447,9 +441,10 @@ export function CropDialog({ dataUrl, onApply, onCancel }: CropProps) {
   const HANDLES: CropHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
 
   return (
-    <div className="modal-backdrop" onClick={onCancel}>
+    <div className="modal-backdrop" {...dialog.backdropProps} onClick={onCancel}>
       <div
         className="modal crop-modal"
+        {...dialog.dialogProps}
         style={{
           width: PREVIEW_MAX + 48 + CROP_HANDLE_GUTTER * 2,
           maxWidth: 'calc(100vw - 32px)',
@@ -459,7 +454,7 @@ export function CropDialog({ dataUrl, onApply, onCancel }: CropProps) {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2>{t('ribbonCrop')}</h2>
+        <h2 {...dialog.titleProps}>{t('ribbonCrop')}</h2>
         <div
           style={{
             ...CHECKERBOARD,
@@ -614,6 +609,7 @@ export function CompressPicturesDialog({
   onCancel,
 }: CompressProps) {
   const { t } = useI18n()
+  const dialog = useModalDialog(onCancel)
   const [ppi, setPpi] = useState<96 | 150 | 220>(150)
   const [deleteCropped, setDeleteCropped] = useState(!!crop)
   const [natural, setNatural] = useState<{ widthPx: number; heightPx: number } | null>(null)
@@ -659,9 +655,17 @@ export function CompressPicturesDialog({
   }
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
-      <div className="modal compress-modal" style={{ width: 380, maxWidth: 'calc(100vw - 32px)' }}>
-        <h2>{t('ribbonCompressPictures')}</h2>
+    <div
+      className="modal-backdrop"
+      {...dialog.backdropProps}
+      onMouseDown={(e) => e.target === e.currentTarget && onCancel()}
+    >
+      <div
+        className="modal compress-modal"
+        style={{ width: 380, maxWidth: 'calc(100vw - 32px)' }}
+        {...dialog.dialogProps}
+      >
+        <h2 {...dialog.titleProps}>{t('ribbonCompressPictures')}</h2>
         <div className="compress-resolution">
           {COMPRESS_PPI_OPTIONS.map((opt) => (
             <label key={opt.ppi}>
