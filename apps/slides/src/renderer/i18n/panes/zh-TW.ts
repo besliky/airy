@@ -299,4 +299,11 @@ export const zhTW = {
   paneShowEnded: '放映結束。',
   paneShowRehearseTip: '排練計時：目前頁停留 / 總時長',
   paneShowRehearseTotal: '總時長 {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: '替代文字',
+  paneAltTextTitle: '標題',
+  paneAltTextDescription: '描述',
+  paneAltTextHint: '為無法看到該物件的使用者描述其內容。',
+  paneAltTextLocked: '此物件不支援替代文字（描述欄位儲存了編輯器資料）。',
 } satisfies Record<keyof typeof zh, string>

@@ -301,4 +301,12 @@ export const ja = {
   paneShowEnded: 'スライドショーの最後です。',
   paneShowRehearseTip: 'リハーサル：現在のスライドの時間 / 合計時間',
   paneShowRehearseTotal: '合計 {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: '代替テキスト',
+  paneAltTextTitle: 'タイトル',
+  paneAltTextDescription: '説明',
+  paneAltTextHint: 'オブジェクトを見られない人のために説明を入力してください。',
+  paneAltTextLocked:
+    'このオブジェクトでは代替テキストを使用できません（説明欄にエディターのデータが保存されています）。',
 } satisfies Record<keyof typeof zh, string>

@@ -300,4 +300,11 @@ export const ar = {
   paneShowEnded: 'انتهى عرض الشرائح.',
   paneShowRehearseTip: 'التمرن على التوقيت: الوقت على هذه الشريحة / الوقت الإجمالي',
   paneShowRehearseTotal: 'الإجمالي {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: 'نص بديل',
+  paneAltTextTitle: 'العنوان',
+  paneAltTextDescription: 'الوصف',
+  paneAltTextHint: 'صِف الكائن للأشخاص الذين لا يمكنهم رؤيته.',
+  paneAltTextLocked: 'النص البديل غير متاح لهذا الكائن (يخزّن حقل الوصف بيانات المحرر).',
 } satisfies Record<keyof typeof zh, string>

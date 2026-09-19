@@ -2956,8 +2956,8 @@ export function registerSlidesIpc(): void {
     const elIdx = slide.elements.findIndex((el) => matchesElementRef(el, op.sourceId))
     // Confirm before the first edit of a chart from an imported file: editing rebuilds it from the template,
     // and unmodeled fine-grained formatting (number formats/trendlines/error bars/per-point styles) is lost
-    const chartEl = slide.elements[elIdx] as { type?: string; descr?: string } | undefined
-    if (chartEl?.type === 'chart' && chartEl.descr !== 'aislides-chart') {
+    const chartEl = slide.elements[elIdx] as { type?: string; appCreated?: boolean } | undefined
+    if (chartEl?.type === 'chart' && !chartEl.appCreated) {
       const parent = dialogParent()
       const options = {
         type: 'warning' as const,
@@ -3111,6 +3111,25 @@ export function registerSlidesIpc(): void {
             anchor: op.anchor,
           },
         ],
+      })
+      return r ? rebuildSlide(session, op.slideIndex) : null
+    },
+  )
+
+  ipcMain.handle(
+    'slides:set-alt-text',
+    (
+      e,
+      op: {
+        slideIndex: number
+        sourceId: string
+        alt: { title?: string | null; descr?: string | null }
+      },
+    ) => {
+      const session = sessions.get(e.sender.id)
+      if (!session) return null
+      const r = sessionTxn(session, {
+        ops: [{ op: 'setAltText', target: { slide: op.slideIndex, el: op.sourceId }, alt: op.alt }],
       })
       return r ? rebuildSlide(session, op.slideIndex) : null
     },

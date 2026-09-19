@@ -199,6 +199,11 @@ const api: SlidesApi = {
   }) => ipcRenderer.invoke('slides:set-text-body-props', op),
   setEffects: (op: { slideIndex: number; sourceId: string; effects: SetEffectsPatch }) =>
     ipcRenderer.invoke('slides:set-effects', op),
+  setAltText: (op: {
+    slideIndex: number
+    sourceId: string
+    alt: { title?: string | null; descr?: string | null }
+  }) => ipcRenderer.invoke('slides:set-alt-text', op),
   clipboardExternal: () => ipcRenderer.invoke('slides:clipboard-external'),
   groupElements: (op: GroupElementsOp) => ipcRenderer.invoke('slides:group-elements', op),
   ungroupElement: (op: UngroupElementOp) => ipcRenderer.invoke('slides:ungroup-element', op),

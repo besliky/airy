@@ -302,4 +302,12 @@ export const pl = {
   paneShowEnded: 'Koniec pokazu slajdów.',
   paneShowRehearseTip: 'Próba tempa: czas na tym slajdzie / czas łączny',
   paneShowRehearseTotal: 'Łącznie {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: 'Tekst alternatywny',
+  paneAltTextTitle: 'Tytuł',
+  paneAltTextDescription: 'Opis',
+  paneAltTextHint: 'Opisz obiekt dla osób, które nie mogą go zobaczyć.',
+  paneAltTextLocked:
+    'Tekst alternatywny nie jest dostępny dla tego obiektu (w polu opisu przechowywane są dane edytora).',
 } satisfies Record<keyof typeof zh, string>

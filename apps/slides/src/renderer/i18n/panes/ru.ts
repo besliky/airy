@@ -301,4 +301,12 @@ export const ru = {
   paneShowEnded: 'Показ завершен.',
   paneShowRehearseTip: 'Настройка времени: время на этом слайде / общее время',
   paneShowRehearseTotal: 'Всего {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: 'Замещающий текст',
+  paneAltTextTitle: 'Заголовок',
+  paneAltTextDescription: 'Описание',
+  paneAltTextHint: 'Опишите объект для тех, кто не может его увидеть.',
+  paneAltTextLocked:
+    'Замещающий текст недоступен для этого объекта (в поле описания хранятся данные редактора).',
 } satisfies Record<keyof typeof zh, string>

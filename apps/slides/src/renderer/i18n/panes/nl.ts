@@ -305,4 +305,12 @@ export const nl = {
   paneShowEnded: 'Einde van de diavoorstelling.',
   paneShowRehearseTip: 'Try-out: tijd op deze dia / totale tijd',
   paneShowRehearseTotal: 'Totaal {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: 'Alternatieve tekst',
+  paneAltTextTitle: 'Titel',
+  paneAltTextDescription: 'Beschrijving',
+  paneAltTextHint: 'Beschrijf het object voor mensen die het niet kunnen zien.',
+  paneAltTextLocked:
+    'Alternatieve tekst is niet beschikbaar voor dit object (in het beschrijvingsveld worden editorgegevens bewaard).',
 } satisfies Record<keyof typeof zh, string>

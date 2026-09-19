@@ -299,4 +299,11 @@ export const he = {
   paneShowEnded: 'סוף הצגת השקופיות.',
   paneShowRehearseTip: 'חזרה על תזמונים: זמן בשקופית זו / זמן כולל',
   paneShowRehearseTotal: 'סה״כ {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: 'טקסט חלופי',
+  paneAltTextTitle: 'כותרת',
+  paneAltTextDescription: 'תיאור',
+  paneAltTextHint: 'תארו את האובייקט עבור מי שאינו יכול לראות אותו.',
+  paneAltTextLocked: 'טקסט חלופי אינו זמין עבור אובייקט זה (שדה התיאור מאחסן נתוני עורך).',
 } satisfies Record<keyof typeof zh, string>

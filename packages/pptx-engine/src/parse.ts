@@ -18,6 +18,7 @@ import {
   themeWithOverride,
 } from './theme'
 import { resolveColorNode as resolveColorNodeShared } from './color'
+import { APP_CHART_MARKER_URI } from './xml-utils'
 import {
   resolvePlaceholderPresetGeom,
   resolvePlaceholderTransform,
@@ -362,6 +363,8 @@ function parseSpShape(
   const phType = ph?.['@_type']
   const phIdx = ph?.['@_idx'] != null ? String(ph['@_idx']) : undefined
   const name = nv?.['p:cNvPr']?.['@_name']
+  const title = nv?.['p:cNvPr']?.['@_title']
+  const descr = nv?.['p:cNvPr']?.['@_descr']
 
   let transform = parseXfrm(spPr['a:xfrm'])
   // Phase 2 fix: when a placeholder omits <a:xfrm>, geometry is backfilled from layout/master inheritance.
@@ -507,6 +510,8 @@ function parseSpShape(
     placeholder: ph ? (phType ?? 'body') : undefined,
     ...(nv?.['p:cNvSpPr']?.['@_txBox'] === '1' ? { txBox: true } : {}),
     name,
+    ...(title ? { title } : {}),
+    ...(descr ? { descr } : {}),
     presetGeometry,
     ...(adjust ? { adjust } : {}),
     ...(customGeometry ? { customGeometry } : {}),
@@ -612,6 +617,8 @@ function parseConnector(node: any, anchor: ByteAnchor, ctx: ParseContext): TextE
   const spPr = node['p:spPr'] ?? {}
   const nvCxn = node['p:nvCxnSpPr']
   const name = nvCxn?.['p:cNvPr']?.['@_name']
+  const title = nvCxn?.['p:cNvPr']?.['@_title']
+  const descr = nvCxn?.['p:cNvPr']?.['@_descr']
   const prstGeom = spPr['a:prstGeom']
   // Stroke priority: explicit <a:ln> (when it has no fill, complete the color from the lnRef reference color/dk1, keeping arrows and dashes)
   // -> lnRef theme template -> dk1 solid-line fallback (a connector without a stroke is effectively invisible)
@@ -648,6 +655,8 @@ function parseConnector(node: any, anchor: ByteAnchor, ctx: ParseContext): TextE
     anchor,
     transform: parseXfrm(spPr['a:xfrm']),
     name,
+    ...(title ? { title } : {}),
+    ...(descr ? { descr } : {}),
     presetGeometry: prstGeom?.['@_prst'] ?? 'line',
     ...(parseAvLst(prstGeom?.['a:avLst']) ? { adjust: parseAvLst(prstGeom?.['a:avLst']) } : {}),
     ...(connection ? { connection } : {}),
@@ -763,6 +772,8 @@ function parseGroup(
   const xfrm = grpSpPr['a:xfrm']
   const transform = parseXfrm(xfrm)
   const name = node['p:nvGrpSpPr']?.['p:cNvPr']?.['@_name']
+  const title = node['p:nvGrpSpPr']?.['p:cNvPr']?.['@_title']
+  const descr = node['p:nvGrpSpPr']?.['p:cNvPr']?.['@_descr']
   // grpSpPr fill: children with <a:grpFill/> inherit it (a nested grpFill defers to the outer group)
   const groupFill =
     'a:grpFill' in grpSpPr ? ctx.groupFill : (parseFill(grpSpPr, ctx) ?? ctx.groupFill)
@@ -809,6 +820,8 @@ function parseGroup(
     anchor,
     transform,
     name,
+    ...(title ? { title } : {}),
+    ...(descr ? { descr } : {}),
     children,
     ...(childOffset ? { childOffset } : {}),
   }
@@ -959,6 +972,7 @@ function parsePicture(
   const mediaRef = (embedId && ctx.mediaRels?.get(embedId)) || ''
   const name = node['p:nvPicPr']?.['p:cNvPr']?.['@_name']
   const descr = node['p:nvPicPr']?.['p:cNvPr']?.['@_descr']
+  const title = node['p:nvPicPr']?.['p:cNvPr']?.['@_title']
   const srcRect = parseSrcRect(blipFill?.['a:srcRect'])
   // picture styles outline geometry (ellipse avatars/rounded-corner frames etc.); rect is the default and not recorded
   let picGeom = spPr['a:prstGeom']?.['@_prst']
@@ -1015,6 +1029,7 @@ function parsePicture(
     anchor,
     transform,
     name,
+    ...(title ? { title } : {}),
     ...(descr ? { descr } : {}),
     mediaRef,
     ...(srcRect ? { srcRect } : {}),
@@ -1047,6 +1062,22 @@ function parseSrcRect(sr: any): PictureElement['srcRect'] | undefined {
 }
 
 // ── p:graphicFrame (table / chart / smartart / ole) kind detection ───
+
+/**
+ * Legacy app-chart marker: versions before PAR-304 wrote descr="aislides-chart"
+ * into the chart frame's cNvPr. Still recognized on read (the marker moves to a
+ * cNvPr extLst ext); writing it stopped with PAR-304.
+ */
+const LEGACY_APP_CHART_DESCR = 'aislides-chart'
+
+/** True when a parsed cNvPr node's <a:extLst> carries an <a:ext> with the given uri. */
+function cnvPrHasExt(cNvPr: any, uri: string): boolean {
+  const exts = cNvPr?.['a:extLst']?.['a:ext']
+  for (const ext of Array.isArray(exts) ? exts : exts ? [exts] : []) {
+    if (ext?.['@_uri'] === uri) return true
+  }
+  return false
+}
 
 /**
  * chartUserShapes overlays, straight lines only (cdr:relSizeAnchor from/to are
@@ -1144,13 +1175,21 @@ function graphicFramePassthrough(node: any, anchor: ByteAnchor, ctx: ParseContex
     if (model) {
       const cNvPr = node['p:nvGraphicFramePr']?.['p:cNvPr']
       const descr: string | undefined = cNvPr?.['@_descr'] || undefined
+      // App-chart marker: the cNvPr extLst ext (current) or, for files saved by
+      // older versions, descr="aislides-chart" — the descr slot now belongs to
+      // the user's alt text, so a legacy marker is consumed, not surfaced
+      const hasMarkerExt = cnvPrHasExt(cNvPr, APP_CHART_MARKER_URI)
+      const legacyMarker = descr === LEGACY_APP_CHART_DESCR
+      const title = cNvPr?.['@_title']
       return {
         id: uid('chart'),
         type: 'chart',
         anchor,
         transform: parseXfrm(node['p:xfrm']),
         name: cNvPr?.['@_name'],
-        ...(descr ? { descr } : {}),
+        ...(title ? { title } : {}),
+        ...(hasMarkerExt || legacyMarker ? { appCreated: true } : {}),
+        ...(descr && !(legacyMarker && !hasMarkerExt) ? { descr } : {}),
         chart: model,
       } satisfies ChartElement
     }
@@ -2736,12 +2775,17 @@ function parseTable(
     })
   })
 
+  const gfCnvPr = node['p:nvGraphicFramePr']?.['p:cNvPr']
+  const title = gfCnvPr?.['@_title']
+  const descr = gfCnvPr?.['@_descr']
   return {
     id: uid('tbl'),
     type: 'table',
     anchor,
     transform: parseXfrm(node['p:xfrm']),
-    name: node['p:nvGraphicFramePr']?.['p:cNvPr']?.['@_name'],
+    name: gfCnvPr?.['@_name'],
+    ...(title ? { title } : {}),
+    ...(descr ? { descr } : {}),
     colWidths,
     rowHeights,
     rows,

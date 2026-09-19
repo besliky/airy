@@ -436,9 +436,15 @@ interface ElementBase {
   txBox?: boolean
   name?: string
   /**
-   * <p:cNvPr descr="…">: editor-owned metadata payload (e.g. vector points of
-   * freehand ink), written back verbatim with originalXml on save so the editable
-   * state can be restored on reopen.
+   * <p:cNvPr title>: the object's alt-text title (pure user data, shown in the
+   * Alt Text pane; never used for editor bookkeeping).
+   */
+  title?: string
+  /**
+   * <p:cNvPr descr="…">: for most elements this is the user's alt-text
+   * description; a few picture flavors store an editor-owned payload there
+   * instead (freehand-ink vector points, "aislides-3d:" model refs), which the
+   * Alt Text UI must not touch. Written back verbatim with originalXml on save.
    */
   descr?: string
   /**
@@ -623,6 +629,12 @@ export interface TableElement extends ElementBase {
 
 export interface ChartElement extends ElementBase {
   type: 'chart'
+  /**
+   * Created/claimed by this app (the cNvPr extLst app-chart marker; legacy
+   * files used descr="aislides-chart", still recognized on read): chart
+   * editing (rebuild from the template) is enabled; foreign charts lack it.
+   */
+  appCreated?: boolean
   /** Parsed chart data model (see chart.ts) */
   chart: import('./chart').ChartModel
 }

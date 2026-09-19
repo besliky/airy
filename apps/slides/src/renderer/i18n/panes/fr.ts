@@ -305,4 +305,12 @@ export const fr = {
   paneShowEnded: 'Fin du diaporama.',
   paneShowRehearseTip: 'Vérification du minutage : temps sur cette diapositive / temps total',
   paneShowRehearseTotal: 'Total {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: 'Texte de remplacement',
+  paneAltTextTitle: 'Titre',
+  paneAltTextDescription: 'Description',
+  paneAltTextHint: "Décrivez l'objet pour les personnes qui ne peuvent pas le voir.",
+  paneAltTextLocked:
+    "Le texte de remplacement n'est pas disponible pour cet objet (son champ description contient des données de l'éditeur).",
 } satisfies Record<keyof typeof zh, string>

@@ -302,4 +302,12 @@ export const hi = {
   paneShowEnded: 'स्लाइड शो समाप्त।',
   paneShowRehearseTip: 'समय का पूर्वाभ्यास: इस स्लाइड पर समय / कुल समय',
   paneShowRehearseTotal: 'कुल {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: 'ऑल्ट टेक्स्ट',
+  paneAltTextTitle: 'शीर्षक',
+  paneAltTextDescription: 'विवरण',
+  paneAltTextHint: 'जो लोग ऑब्जेक्ट नहीं देख सकते, उनके लिए इसका वर्णन करें।',
+  paneAltTextLocked:
+    'इस ऑब्जेक्ट के लिए ऑल्ट टेक्स्ट उपलब्ध नहीं है (इसके विवरण फ़ील्ड में एडिटर डेटा संग्रहीत है)।',
 } satisfies Record<keyof typeof zh, string>

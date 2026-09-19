@@ -16,6 +16,7 @@ import {
   setElementConnection,
   setElementImageFill,
   setElementLink,
+  setElementAltText,
   setElementTextAnchor,
   setElementTextBodyProps,
   type TextBodyPropsPatch,
@@ -599,6 +600,44 @@ register({
       throw new GuidedError(`op "setLink": element "${el.id}" does not accept links.`)
     }
     return { op, after: op.link }
+  },
+})
+
+// ── setAltText ──────────────────────────────────────────────────────────
+// cNvPr title/description (the object's alt text): undefined fields stay
+// untouched, null (or '') removes the attribute. Ink strokes and 3D posters
+// keep an editor payload in the descr slot and reject the descr half.
+register({
+  name: 'setAltText',
+  validate(op, ctx) {
+    resolveElement(ctx, op)
+    const alt = op.alt as { title?: unknown; descr?: unknown } | undefined
+    if (!alt || (alt.title === undefined && alt.descr === undefined)) {
+      throw new GuidedError(
+        'op "setAltText" needs "alt" with at least one of title/descr (string, or null to clear).',
+      )
+    }
+    for (const k of ['title', 'descr'] as const) {
+      const v = alt[k]
+      if (v != null && typeof v !== 'string') {
+        throw new GuidedError(
+          `op "setAltText": "alt.${k}" must be a string or null (got ${typeof v}).`,
+        )
+      }
+    }
+  },
+  apply(op, ctx): OpRecord {
+    const { slide, el } = resolveElement(ctx, op)
+    const before = {
+      title: (el as { title?: string }).title ?? null,
+      descr: (el as { descr?: string }).descr ?? null,
+    }
+    if (!setElementAltText(slide, el.id, op.alt as Parameters<typeof setElementAltText>[2])) {
+      throw new GuidedError(
+        `op "setAltText": element "${el.id}" does not support alt text (ink strokes and 3D posters keep editor data in the descr slot).`,
+      )
+    }
+    return { op, before, after: op.alt }
   },
 })
 

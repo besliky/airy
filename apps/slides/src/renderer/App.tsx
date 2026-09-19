@@ -3991,6 +3991,11 @@ export function App() {
                     onChartPointColor={(si, pi, color) =>
                       void onEditChart({ pointColors: { [si]: { [pi]: color } } })
                     }
+                    onAltText={(id, alt) =>
+                      void window.slidesApi
+                        .setAltText({ slideIndex: current, sourceId: id, alt })
+                        .then((r) => r && applySlide(current, r))
+                    }
                   />
                 ) : showAnimPane ? (
                   <AnimationPane

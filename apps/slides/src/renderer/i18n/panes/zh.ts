@@ -298,4 +298,11 @@ export const zh = {
   paneShowEnded: '放映结束。',
   paneShowRehearseTip: '排练计时：当前页停留 / 总时长',
   paneShowRehearseTotal: '总时长 {time}',
+
+  // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section
+  paneAltTextSection: '替换文字',
+  paneAltTextTitle: '标题',
+  paneAltTextDescription: '说明',
+  paneAltTextHint: '为无法看到该对象的用户描述其内容。',
+  paneAltTextLocked: '此对象不支持替换文字（说明字段存储了编辑器数据）。',
 }

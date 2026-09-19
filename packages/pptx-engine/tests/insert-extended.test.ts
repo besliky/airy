@@ -12,6 +12,7 @@ import {
   savePptx,
   addElement,
   addChart,
+  appChartMarkerExtXml,
   editChartElement,
   markChartEditable,
   buildChartSpaceXml,
@@ -331,11 +332,15 @@ describe('editChartElement style edits and preservation', () => {
       series: [{ name: 's', values: [1] }],
       offset: { ...OFF },
     })!
-    // Simulate a foreign chart: strip the descr marker
+    // Simulate a foreign chart: strip the extLst marker and flush through a save
     let reopened = await openPptx(await savePptx(opened))
     let el = reopened.deck.slides[0]!.elements.at(-1) as ChartElement
-    el.anchor.originalXml = el.anchor.originalXml.replace(' descr="aislides-chart"', '')
-    delete el.descr
+    el.anchor.originalXml = el.anchor.originalXml.replace(appChartMarkerExtXml(), '')
+    delete el.appCreated
+    reopened.deck.slides[0]!.structureDirty = true
+    reopened = await openPptx(await savePptx(reopened))
+    el = reopened.deck.slides[0]!.elements.at(-1) as ChartElement
+    expect(el.appCreated).toBeUndefined()
     expect(editChartElement(reopened, 0, el.id, { gridlines: true })).toBe(false)
 
     expect(markChartEditable(reopened.deck.slides[0]!, el.id)).toBe(true)
@@ -343,7 +348,7 @@ describe('editChartElement style edits and preservation', () => {
 
     reopened = await openPptx(await savePptx(reopened))
     el = reopened.deck.slides[0]!.elements.at(-1) as ChartElement
-    expect(el.descr).toBe('aislides-chart')
+    expect(el.appCreated).toBe(true)
     expect(el.chart.valAxis?.gridColor).toBeTruthy()
     void r
   })

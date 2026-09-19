@@ -51,7 +51,7 @@ import {
   type NewTableOptions,
 } from './insert'
 import { BLANK_SLIDE_XML } from './blank'
-import { escapeXmlAttr } from './xml-utils'
+import { escapeXmlAttr, appChartMarkerExtXml, APP_CHART_MARKER_URI } from './xml-utils'
 import { elementSpid } from './animation'
 import { stripEmbeddedFonts } from './embedded-fonts'
 import { ensureCreationId, matchesElementRef } from './identity'
@@ -198,7 +198,12 @@ export {
   remapDeckColors,
   type ThemeSpec,
 } from './theme-apply'
-export { escapeXmlText, escapeXmlAttr } from './xml-utils'
+export {
+  escapeXmlText,
+  escapeXmlAttr,
+  appChartMarkerExtXml,
+  APP_CHART_MARKER_URI,
+} from './xml-utils'
 export {
   extractFormat,
   applyFormat,
@@ -2696,7 +2701,7 @@ export function editChartElement(
   const el = slide.elements.find((e) => e.id === elementId)
   if (!el || el.type !== 'chart') return false
   const chartEl = el as ChartElement
-  if (chartEl.descr !== 'aislides-chart') return false // only charts created by this app are editable
+  if (!chartEl.appCreated) return false // only charts created/claimed by this app are editable
 
   // Find the chart part path (looked up from the slide rels)
   const { archive } = opened
@@ -2822,25 +2827,115 @@ export function editChartElement(
 }
 
 /**
- * Mark a chart not created by this app as editable (cNvPr descr="aislides-chart"):
- * only tags it without rewriting the chart part (the conversion itself is
- * lossless); subsequent edits go through editChartElement's rebuild template, and
- * fine-grained formatting beyond the parsed model (number formats/per-point
- * styles etc.) is dropped at that point.
+ * Mark a chart not created by this app as editable (the app-chart marker ext in
+ * the frame's <p:cNvPr> extLst): only tags it without rewriting the chart part
+ * (the conversion itself is lossless); subsequent edits go through
+ * editChartElement's rebuild template, and fine-grained formatting beyond the
+ * parsed model (number formats/per-point styles etc.) is dropped at that point.
  */
 export function markChartEditable(slide: Slide, elementId: string): boolean {
   const el = slide.elements.find((e) => e.id === elementId)
   if (!el || el.type !== 'chart') return false
   const chartEl = el as ChartElement
-  if (chartEl.descr === 'aislides-chart') return true
+  if (chartEl.appCreated) return true
+  if (!ensureAppChartMarker(el)) return false
+  chartEl.appCreated = true
+  slide.structureDirty = true
+  return true
+}
+
+/**
+ * Insert the app-chart marker ext into the element's own <p:cNvPr> (idempotent):
+ * merge into an existing <a:extLst> (maxOccurs=1), expand a self-closing tag,
+ * or append a fresh extLst before the close tag — extLst is cNvPr's last child,
+ * so schema order survives any hlinkClick/hlinkHover. Returns false when no
+ * cNvPr can be located.
+ */
+function ensureAppChartMarker(el: SlideElement): boolean {
+  const xml = el.anchor?.originalXml
+  if (!xml) return false
+  const open = /<p:cNvPr\b[^>]*?(\/?)>/.exec(xml)
+  if (!open) return false
+  if (new RegExp(`<a:ext\\b[^>]*\\buri="${escapeRegex(APP_CHART_MARKER_URI)}"`).test(xml)) {
+    // Marker already present anywhere in this element's slice — the frame's own
+    // cNvPr is the only cNvPr a top-level chart has, so no scoping is needed
+    return true
+  }
+  const marker = appChartMarkerExtXml()
+  if (open[1] === '/') {
+    // Self-closing: expand into a tag pair carrying the extLst
+    el.anchor.originalXml =
+      xml.slice(0, open.index + open[0].length - 2) +
+      `><a:extLst>${marker}</a:extLst></p:cNvPr>` +
+      xml.slice(open.index + open[0].length)
+    return true
+  }
+  const close = xml.indexOf('</p:cNvPr>', open.index)
+  if (close < 0) return false
+  const own = xml.slice(open.index, close)
+  // Merge into the cNvPr's own extLst (its LAST child); an earlier </a:extLst>
+  // belongs to a nested hlink extension list and must not receive the marker
+  const extLstClose = own.lastIndexOf('</a:extLst>')
+  if (extLstClose >= 0 && own.slice(extLstClose + '</a:extLst>'.length).trim() === '') {
+    const at = open.index + extLstClose
+    el.anchor.originalXml = xml.slice(0, at) + marker + xml.slice(at)
+    return true
+  }
+  el.anchor.originalXml = xml.slice(0, close) + `<a:extLst>${marker}</a:extLst>` + xml.slice(close)
+  return true
+}
+
+/** Name prefix of renderer-created freehand-ink pictures: their cNvPr descr holds the vector payload, not alt text. */
+const INK_NAME_PREFIX = 'aislides-ink'
+/** cNvPr descr prefix of an embedded 3D-model picture: a media part reference, not alt text. */
+const MODEL3D_DESCR_PREFIX = 'aislides-3d:'
+
+/**
+ * Set an element's alt text — the cNvPr title/description attributes — via XML
+ * surgery on the element's anchor bytes. Works for every top-level element kind
+ * (shape/text/picture/table/chart/group; the first cNvPr in the slice is always
+ * the element's own). Field semantics: undefined = leave untouched, '' or null
+ * = remove the attribute, any other string = write (entity-escaped). The model
+ * fields are synced so a render rebuild sees the change without a reparse.
+ *
+ * Refuses pictures whose descr slot carries an editor payload (freehand-ink
+ * vector points, 3D-model refs) — overwriting it would break the eraser/3D
+ * association, so their alt text is not editable. A chart still carrying the
+ * legacy descr marker is migrated to the extLst marker as its descr is replaced,
+ * keeping "app-created" recognition alive.
+ */
+export function setElementAltText(
+  slide: Slide,
+  elementId: string,
+  alt: { title?: string | null; descr?: string | null },
+): boolean {
+  const el = slide.elements.find((e) => e.id === elementId)
+  if (!el) return false
+  if (el.type === 'picture') {
+    if (el.name?.startsWith(INK_NAME_PREFIX) || el.descr?.startsWith(MODEL3D_DESCR_PREFIX)) {
+      return false
+    }
+  }
   const xml = el.anchor.originalXml
   const m = /<p:cNvPr\b[^>]*\/?>/.exec(xml)
   if (!m) return false
-  const tag = m[0].includes('descr="')
-    ? m[0].replace(/descr="[^"]*"/, 'descr="aislides-chart"')
-    : m[0].replace(/(\/?>)$/, ' descr="aislides-chart"$1')
+  let tag = m[0]
+  const setAttr = (attr: 'title' | 'descr', value: string | null | undefined): void => {
+    if (value === undefined) return
+    const attrRe = new RegExp(`\\s${attr}="[^"]*"`)
+    if (value === null || value === '') tag = tag.replace(attrRe, '')
+    else if (attrRe.test(tag)) tag = tag.replace(attrRe, ` ${attr}="${escapeXmlAttr(value)}"`)
+    else tag = tag.replace(/(\/?>)$/, ` ${attr}="${escapeXmlAttr(value)}"$1`)
+  }
+  const legacyMarker = / descr="aislides-chart"/.test(tag)
+  setAttr('title', alt.title)
+  setAttr('descr', alt.descr)
   el.anchor.originalXml = xml.slice(0, m.index) + tag + xml.slice(m.index + m[0].length)
-  chartEl.descr = 'aislides-chart'
+  // Lazy legacy migration: replacing/removing the descr marker would strip the
+  // chart's "app-created" tag — mint the extLst marker so recognition survives
+  if (el.type === 'chart' && legacyMarker && alt.descr !== undefined) ensureAppChartMarker(el)
+  if (alt.title !== undefined) el.title = alt.title || undefined
+  if (alt.descr !== undefined) el.descr = alt.descr || undefined
   slide.structureDirty = true
   return true
 }

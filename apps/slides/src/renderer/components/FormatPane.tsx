@@ -695,6 +695,8 @@ interface Props {
     pointColors: Array<Array<string | undefined> | undefined>
   } | null
   onChartPointColor?: (seriesIdx: number, pointIdx: number, color: string) => void
+  /** Object alt text (cNvPr title/description); present only when the pane supports it */
+  onAltText?: (sourceId: string, alt: { title?: string | null; descr?: string | null }) => void
 }
 
 const TRANSFORMABLE = new Set(['shape', 'text', 'picture', 'group', 'table', 'chart'])
@@ -970,6 +972,7 @@ export function FormatPane({
   pictureCanCutout,
   chartData,
   onChartPointColor,
+  onAltText,
 }: Props) {
   const { t } = useI18n()
   // The color picker fires change repeatedly while dragging; debounce before IPC
@@ -1003,6 +1006,7 @@ export function FormatPane({
   const [posFromV, setPosFromV] = useState<'tl' | 'center'>('tl')
   const [picOpen, setPicOpen] = useState(true)
   const [txtOpen, setTxtOpen] = useState(true)
+  const [altOpen, setAltOpen] = useState(true)
   const [effShadowOpen, setEffShadowOpen] = useState(true)
   const [effReflOpen, setEffReflOpen] = useState(true)
   const [effGlowOpen, setEffGlowOpen] = useState(true)
@@ -1373,6 +1377,15 @@ export function FormatPane({
       rotationDeg: box.rotationDeg,
       ...patch,
     })
+  }
+
+  /** Alt text field commit (blur/Enter): unchanged values stay silent, empty clears (null). */
+  const altCommit = (field: 'title' | 'descr', raw: string) => {
+    if (!onAltText || !node) return
+    const cur = field === 'title' ? node.altText?.title : node.altText?.descr
+    const value = raw ?? ''
+    if ((cur ?? '') === value) return
+    onAltText(node.sourceId, { [field]: value === '' ? null : value })
   }
 
   /** PPT-style collapsible section header (chevron + label over a divider) */
@@ -1855,6 +1868,49 @@ export function FormatPane({
                   >
                     {t('paneCutoutTitle')}
                   </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Alt text (cNvPr title/description) — PowerPoint parks it at the bottom of
+              Size & Properties; present on every alt-text-bearing node kind */}
+          {effTab === 'shape' && shapeSub === 'size' && (node.altText || node.altTextLocked) && (
+            <>
+              {secHeader(t('paneAltTextSection'), altOpen, () => setAltOpen((v) => !v))}
+              {altOpen && (
+                <div className="fp-alttext">
+                  {node.altTextLocked ? (
+                    <p className="fp-alt-locked">{t('paneAltTextLocked')}</p>
+                  ) : (
+                    <>
+                      <label className="fp-alt-field">
+                        <span>{t('paneAltTextTitle')}</span>
+                        <input
+                          key={`alt-title:${node.sourceId}:${node.altText?.title ?? ''}`}
+                          type="text"
+                          defaultValue={node.altText?.title ?? ''}
+                          maxLength={255}
+                          aria-label={t('paneAltTextTitle')}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                          }}
+                          onBlur={(e) => altCommit('title', e.target.value)}
+                        />
+                      </label>
+                      <label className="fp-alt-field">
+                        <span>{t('paneAltTextDescription')}</span>
+                        <textarea
+                          key={`alt-descr:${node.sourceId}:${node.altText?.descr ?? ''}`}
+                          rows={3}
+                          defaultValue={node.altText?.descr ?? ''}
+                          aria-label={t('paneAltTextDescription')}
+                          onBlur={(e) => altCommit('descr', e.target.value)}
+                        />
+                      </label>
+                      <p className="fp-alt-hint">{t('paneAltTextHint')}</p>
+                    </>
+                  )}
                 </div>
               )}
             </>
