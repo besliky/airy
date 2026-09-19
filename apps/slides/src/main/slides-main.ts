@@ -3132,6 +3132,8 @@ export function registerSlidesIpc(): void {
           numCol?: number
           /** Column gap (EMU) */
           spcCol?: number
+          /** WordArt text warp preset; null removes it */
+          warp?: { prst: string; adj?: Record<string, number> } | null
         }
       },
     ) => {

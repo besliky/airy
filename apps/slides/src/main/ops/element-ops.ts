@@ -505,10 +505,11 @@ register({
         !props.insets &&
         props.wrap === undefined &&
         props.numCol === undefined &&
-        props.spcCol === undefined)
+        props.spcCol === undefined &&
+        props.warp === undefined)
     ) {
       throw new GuidedError(
-        'op "setTextBodyProps" needs "props" with at least one of vert/autofit/insets/wrap/numCol/spcCol.',
+        'op "setTextBodyProps" needs "props" with at least one of vert/autofit/insets/wrap/numCol/spcCol/warp.',
       )
     }
     if (props.vert && !['horz', 'eaVert', 'vert', 'vert270', 'wordArtVert'].includes(props.vert)) {
@@ -534,6 +535,20 @@ register({
       throw new GuidedError(
         'op "setTextBodyProps": "spcCol" must be a column gap in EMU (0..51206400).',
       )
+    }
+    if (props.warp !== undefined && props.warp !== null) {
+      if (typeof props.warp.prst !== 'string' || !/^text[A-Za-z0-9]*$/.test(props.warp.prst)) {
+        throw new GuidedError(
+          'op "setTextBodyProps": "warp.prst" must be an OOXML prstTxWarp preset name (textArchUp, textCircle, ...).',
+        )
+      }
+      for (const v of Object.values(props.warp.adj ?? {})) {
+        if (!Number.isFinite(v) || v < 0 || v > 100000000) {
+          throw new GuidedError(
+            'op "setTextBodyProps": "warp.adj" values must be finite numbers (OOXML 1/100000 units).',
+          )
+        }
+      }
     }
   },
   apply(op, ctx): OpRecord {

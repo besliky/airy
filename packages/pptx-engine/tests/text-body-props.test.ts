@@ -120,6 +120,50 @@ describe('setElementTextBodyProps', () => {
     expect(xml).toMatch(/<a:normAutofit\/>/)
   })
 
+  it('warp writes/replaces/removes <a:prstTxWarp> in schema position', async () => {
+    const { slide, el } = await textboxSlide()
+    expect(setElementTextBodyProps(slide, el.id, { warp: { prst: 'textArchUp' } })).toBe(true)
+    expect(el.anchor.originalXml).toMatch(
+      /<a:bodyPr[^>]*><a:prstTxWarp prst="textArchUp"><a:avLst\/><\/a:prstTxWarp>/,
+    )
+    expect(el.text!.txWarp).toEqual({ prst: 'textArchUp' })
+    // replacing keeps one element; adj values land in avLst
+    expect(
+      setElementTextBodyProps(slide, el.id, {
+        warp: { prst: 'textCircle', adj: { adj: 25000 } },
+      }),
+    ).toBe(true)
+    expect(el.anchor.originalXml).toMatch(
+      /<a:prstTxWarp prst="textCircle"><a:avLst><a:gd name="adj" fmla="val 25000"\/><\/a:avLst><\/a:prstTxWarp>/,
+    )
+    expect((el.anchor.originalXml.match(/<a:prstTxWarp/g) ?? []).length).toBe(1)
+    expect(el.text!.txWarp).toEqual({ prst: 'textCircle', adj: { adj: 25000 } })
+    // autofit lands after the warp (schema order)
+    expect(setElementTextBodyProps(slide, el.id, { autofit: 'shrink' })).toBe(true)
+    expect(el.anchor.originalXml).toMatch(/prstTxWarp><a:normAutofit\/>/)
+    expect(setElementTextBodyProps(slide, el.id, { warp: null })).toBe(true)
+    expect(el.anchor.originalXml).not.toMatch(/prstTxWarp/)
+    expect(el.text!.txWarp).toBeUndefined()
+  })
+
+  it('warp survives a save/reopen round-trip', async () => {
+    const opened = await openPptx(await createBlankPptx())
+    const slide = opened.deck.slides[0]!
+    const el = addElement(slide, {
+      kind: 'textbox',
+      offset: { x: 0, y: 0, cx: 1000, cy: 1000 },
+      paragraphs: [{ runs: [{ text: 'x' }] }],
+    }) as TextElement
+    expect(
+      setElementTextBodyProps(slide, el.id, {
+        warp: { prst: 'textButton', adj: { adj: 12500 } },
+      }),
+    ).toBe(true)
+    const reopened = await openPptx(await savePptx(opened))
+    const rel = reopened.deck.slides[0]!.elements[0] as TextElement
+    expect(rel.text!.txWarp).toEqual({ prst: 'textButton', adj: { adj: 12500 } })
+  })
+
   it('rejects elements without a text body', async () => {
     const opened = await openPptx(await createBlankPptx())
     const slide = opened.deck.slides[0]!

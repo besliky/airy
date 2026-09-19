@@ -10,6 +10,8 @@ import type { GradientFillSpec, SetEffectsPatch } from '../../shared/ipc'
 import { Dropdown, useDismissablePopover } from '@airy-office/ui'
 import { useI18n } from '../i18n/locale'
 import { pathGradientCanvas } from '../konva-adapter'
+import type { GlyphDraw } from '../konva-adapter'
+import { warpGlyphs } from '../text-warp'
 import { ColorWell } from './ColorWell'
 import { IconSidebarCollapse } from './icons'
 
@@ -410,6 +412,163 @@ function ReflectionPresetPicker({
 
 type TextVert = 'horz' | 'eaVert' | 'vert' | 'vert270' | 'wordArtVert'
 
+/** WordArt Transform gallery, PowerPoint's two groups (prstTxWarp preset names). */
+const WARP_FOLLOW_PATH = ['textArchUp', 'textArchDown', 'textCircle', 'textButton'] as const
+const WARP_WARP = [
+  'textCanUp',
+  'textCanDown',
+  'textInflate',
+  'textDeflate',
+  'textTriangle',
+  'textTriangleInverted',
+  'textWave1',
+] as const
+const WARP_LABELS: Record<string, string> = {
+  textArchUp: 'paneWarpArchUp',
+  textArchDown: 'paneWarpArchDown',
+  textCircle: 'paneWarpCircle',
+  textButton: 'paneWarpButton',
+  textCanUp: 'paneWarpCanUp',
+  textCanDown: 'paneWarpCanDown',
+  textInflate: 'paneWarpInflate',
+  textDeflate: 'paneWarpDeflate',
+  textTriangle: 'paneWarpTriangle',
+  textTriangleInverted: 'paneWarpTriangleInverted',
+  textWave1: 'paneWarpWave',
+}
+
+/** Deterministic tile metrics: wide glyphs get an em, Latin ~0.62em (no canvas needed). */
+const tileMeasure = (text: string, g: GlyphDraw): number =>
+  [...text].reduce(
+    (w, ch) => w + (/[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/.test(ch) ? 1 : 0.62) * g.fontSize,
+    0,
+  )
+
+/** Gallery tile art: three preview glyphs run through the production warp pass, so the
+ * tile always shows what the canvas will draw (unsupported presets fall back straight). */
+function WarpTileArt({ prst, char }: { prst: string | null; char: string }): React.JSX.Element {
+  const F = 8
+  const W = 40
+  const H = 14
+  const glyphs: GlyphDraw[] = [0, 1, 2].map((i) => ({
+    text: char,
+    x: i * F,
+    y: 0,
+    fontSize: F,
+    fontFamily: 'sans-serif',
+    fill: 'currentColor',
+    fontStyle: 'normal',
+    textDecoration: '',
+  }))
+  const warped = prst ? warpGlyphs(glyphs, W, H, { prst }, tileMeasure) : null
+  return (
+    <svg
+      width={W}
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      fill="currentColor"
+      aria-hidden="true"
+      style={{ display: 'block', overflow: 'visible' }}
+    >
+      {warped ? (
+        warped.map((g, i) => (
+          <text
+            key={i}
+            x="0"
+            y={(0.2 * g.fontSize).toFixed(1)}
+            textAnchor="middle"
+            fontFamily={g.fontFamily}
+            fontSize={g.fontSize}
+            transform={`translate(${g.x.toFixed(1)} ${g.y.toFixed(1)})${
+              g.rotation ? ` rotate(${g.rotation.toFixed(1)})` : ''
+            }${
+              g.scaleX != null || g.scaleY != null
+                ? ` scale(${(g.scaleX ?? 1).toFixed(2)} ${(g.scaleY ?? 1).toFixed(2)})`
+                : ''
+            }`}
+          >
+            {g.text}
+          </text>
+        ))
+      ) : (
+        <text x={W / 2} y={0.8 * F} textAnchor="middle" fontSize={F} fontFamily="sans-serif">
+          {char + char + char}
+        </text>
+      )}
+    </svg>
+  )
+}
+
+/** PPT-style WordArt Transform picker: trigger previews the current warp, the gallery
+ * groups Follow Path / Warp like PowerPoint's Text Effects > Transform. */
+function WarpPresetPicker({
+  current,
+  onPick,
+}: {
+  readonly current: string | null
+  readonly onPick: (prst: string | null) => void
+}): React.JSX.Element {
+  const { t } = useI18n()
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLSpanElement>(null)
+  useDismissablePopover(open, () => setOpen(false), { inside: () => [wrapRef.current] })
+  const label = (prst: string | null) =>
+    prst ? t((WARP_LABELS[prst] ?? 'paneWarpNone') as Parameters<typeof t>[0]) : t('paneWarpNone')
+  const tile = (prst: string | null) => (
+    <button
+      key={prst ?? 'none'}
+      type="button"
+      role="option"
+      aria-selected={current === prst || (!current && !prst)}
+      aria-label={label(prst)}
+      title={label(prst)}
+      className={`fp-galopt${current === prst ? ' selected' : ''}`}
+      onClick={() => {
+        setOpen(false)
+        onPick(prst)
+      }}
+    >
+      <WarpTileArt prst={prst} char={t('ribbonWordArtPreviewChar')} />
+    </button>
+  )
+  return (
+    <span ref={wrapRef} className="fp-shadowgal">
+      <button
+        type="button"
+        className="fp-shadowgal-btn"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={t('paneWarpTransform')}
+        title={label(current)}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <WarpTileArt prst={current} char={t('ribbonWordArtPreviewChar')} />
+        <span className="gs-dd-caret" aria-hidden="true">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M5.5 9.25 12 15.75l6.5-6.5"
+              stroke="currentColor"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      </button>
+      {open && (
+        <div className="fp-shadowgal-pop" role="listbox" aria-label={t('paneWarpTransform')}>
+          <div className="fp-shadowgal-group">{t('paneWarpNone')}</div>
+          {tile(null)}
+          <div className="fp-shadowgal-group">{t('paneWarpGroupFollowPath')}</div>
+          <div className="fp-shadowgal-grid">{WARP_FOLLOW_PATH.map((p) => tile(p))}</div>
+          <div className="fp-shadowgal-group">{t('paneWarpGroupWarp')}</div>
+          <div className="fp-shadowgal-grid">{WARP_WARP.map((p) => tile(p))}</div>
+        </div>
+      )}
+    </span>
+  )
+}
+
 /** PPT-style text-direction glyph: a CJK sample word + ABC laid out the way the
  * option lays out text. Icon art (like WordArt previews), so the glyph text is fixed. */
 function TextDirIcon({ kind }: { readonly kind: TextVert }): React.JSX.Element {
@@ -502,6 +661,8 @@ interface Props {
       numCol?: number
       /** Column gap (EMU) */
       spcCol?: number
+      /** WordArt text warp preset; null removes it */
+      warp?: { prst: string; adj?: Record<string, number> } | null
     },
   ) => void
   /** Shape/picture effects (shadow / glow / soft edge); null clears an effect */
@@ -846,6 +1007,7 @@ export function FormatPane({
   const [effReflOpen, setEffReflOpen] = useState(true)
   const [effGlowOpen, setEffGlowOpen] = useState(true)
   const [effSoftOpen, setEffSoftOpen] = useState(true)
+  const [effWarpOpen, setEffWarpOpen] = useState(true)
   // Width-limit balloon (shown while a keystroke tries to exceed MAX_LINE_PT)
   const [widthLimitTip, setWidthLimitTip] = useState(false)
   const widthTipTimer = useRef<number | null>(null)
@@ -2786,10 +2948,29 @@ export function FormatPane({
             </>
           )}
 
+          {/* Text Effects tab: the WordArt Transform gallery writes <a:prstTxWarp> */}
+          {effTab === 'text' && textSub === 'effects' && shape?.text && onTextBodyProps && (
+            <>
+              {secHeader(t('paneWarpTransform'), effWarpOpen, () => setEffWarpOpen((v) => !v))}
+              {effWarpOpen && (
+                <div className="fp-prow">
+                  <span>{t('paneEffPreset')}</span>
+                  <WarpPresetPicker
+                    current={shape.text.txWarp?.prst ?? null}
+                    onPick={(prst) =>
+                      onTextBodyProps(node.sourceId, { warp: prst ? { prst } : null })
+                    }
+                  />
+                </div>
+              )}
+            </>
+          )}
+
           {/* Sub-tabs whose options aren't editable yet (text fill; fill&line for e.g. groups) */}
           {((effTab === 'shape' && shapeSub === 'effects' && !(effTarget && onEffects)) ||
             (effTab === 'shape' && shapeSub === 'fill' && !fillHasContent) ||
-            (effTab === 'text' && (textSub === 'fill' || textSub === 'effects'))) && (
+            (effTab === 'text' && textSub === 'fill') ||
+            (effTab === 'text' && textSub === 'effects' && !(shape?.text && onTextBodyProps))) && (
             <div className="fp-empty">{t('paneSubNone')}</div>
           )}
         </div>

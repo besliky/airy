@@ -1332,6 +1332,8 @@ export interface SlidesApi {
       numCol?: number
       /** Column gap (EMU) */
       spcCol?: number
+      /** WordArt text warp preset; null removes it */
+      warp?: { prst: string; adj?: Record<string, number> } | null
     }
   }) => Promise<RenderSlide | null>
   /** External clipboard content probe (internal/slide = last copy came from this app) */

@@ -77,8 +77,18 @@ const WARPS: Record<string, WarpSpec> = {
   // Triangles: one flat edge, the other a V/Λ
   textTriangle: { envelope: (u) => [0.6 - 0.6 * vee(u), 1], defAdj: 50000 },
   textTriangleInverted: { envelope: (u) => [0, 0.4 + 0.6 * vee(u)], defAdj: 50000 },
-  // Rings/circle: not yet — the per-character ellipse walk needs its own calibration
-  // pass; a straight fallback reads far better than a wrong ring.
+  // Circle (PowerPoint's Transform > Follow Path > Circle): characters march around an
+  // ellipse upright over the top (the unflipped ring walk; short text arcs over the top)
+  textCircle: { ring: 'in', defAdj: 12500 },
+  // Button: characters fill a stadium silhouette — full height mid-box, rounded ends
+  textButton: {
+    envelope: (u) => {
+      const c = Math.max(0, (vee(u) - 0.6) / 0.4) // corner curvature over the outer 20% each side
+      const h = Math.sqrt(Math.max(1 - c * c, 0.02))
+      return [0.5 - h / 2, 0.5 + h / 2]
+    },
+    defAdj: 12500,
+  },
 }
 
 /**

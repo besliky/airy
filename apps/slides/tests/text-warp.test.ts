@@ -45,4 +45,32 @@ describe('warpGlyphs', () => {
     expect(out.map((g) => g.text)).toEqual(['a', 'b'])
     expect(out[1]!.x).toBeGreaterThan(out[0]!.x + 10) // the swallowed space keeps its advance
   })
+
+  it('circle marches the characters around an ellipse, upright over the top', () => {
+    const out = warpGlyphs([glyph('abcde', 0)], 100, 80, { prst: 'textCircle' }, measure)!
+    // all characters land on the ellipse path (inside the box, touching the em-inset ring)
+    for (const g of out) {
+      expect(g.x).toBeGreaterThanOrEqual(10)
+      expect(g.x).toBeLessThanOrEqual(90)
+      expect(g.y).toBeGreaterThanOrEqual(10)
+      expect(g.y).toBeLessThanOrEqual(70)
+    }
+    // clockwise over the top: left → top (char 1 is the highest) → right edge
+    expect(out[1]!.y).toBeLessThan(out[0]!.y)
+    expect(out[2]!.x).toBeGreaterThan(out[1]!.x)
+    expect(out[2]!.x).toBeGreaterThan(out[0]!.x)
+    // the top character is upright and scaled to cover the circumference
+    expect(Math.abs(out[1]!.rotation ?? 0)).toBeLessThan(90)
+    expect(out[1]!.scaleX!).toBeGreaterThan(1)
+    // the walk continues down the far side: the last char is below the first
+    expect(out[4]!.y).toBeGreaterThan(out[0]!.y)
+  })
+
+  it('button keeps the middle full height and squeezes the rounded ends', () => {
+    const out = warpGlyphs([glyph('abcde', 0)], 200, 40, { prst: 'textButton' }, measure)!
+    expect(out[2]!.scaleY!).toBeGreaterThan(out[0]!.scaleY!)
+    expect(out[2]!.scaleY!).toBeGreaterThan(out[4]!.scaleY!)
+    // vertical centers stay on the box midline (symmetric envelope)
+    for (const g of out) expect(Math.abs(g.y - 20)).toBeLessThan(0.001)
+  })
 })

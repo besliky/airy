@@ -313,10 +313,10 @@ Vertical alignment of the text inside its box.
 
 ### setTextBodyProps
 
-`{props:{vert?:"horz"|"eaVert"|"vert"|"vert270"|"wordArtVert",autofit?:"none"|"shrink"|"resize",insets?:{l?,t?,r?,b?} (EMU),wrap?:boolean,numCol?:1-13,spcCol?:EMU}}`
+`{props:{vert?:"horz"|"eaVert"|"vert"|"vert270"|"wordArtVert",autofit?:"none"|"shrink"|"resize",insets?:{l?,t?,r?,b?} (EMU),wrap?:boolean,numCol?:1-13,spcCol?:EMU,warp?:{prst,adj?}|null}}`
 
 Text-body properties: writing direction, autofit behavior, internal margins,
-word wrap and text columns. Pass at least one property.
+word wrap, text columns and the WordArt warp. Pass at least one property.
 
 | Field         | Type                                                             | Notes                                                           |
 | ------------- | ---------------------------------------------------------------- | --------------------------------------------------------------- |
@@ -326,6 +326,7 @@ word wrap and text columns. Pass at least one property.
 | props.wrap    | boolean                                                          | `false` lets a line overflow instead of wrapping                |
 | props.numCol  | integer 1-13                                                     | Body text flows across N columns; `1` removes numCol/spcCol     |
 | props.spcCol  | EMU                                                              | Gap between the columns (PowerPoint's presets use 457200)       |
+| props.warp    | `{prst, adj?}` or `null`                                         | WordArt text warp (textArchUp, textCircle, ...); `null` clears  |
 
 ```json
 {
