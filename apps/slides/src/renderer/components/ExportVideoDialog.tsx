@@ -6,9 +6,12 @@
  *
  * While exporting, the dialog shows the pipeline progress (render slides →
  * record frames) and offers Cancel; on completion (or cancel) it closes —
- * the result surfaces through the status bar like the other exports.
+ * the result surfaces through the status bar like the other exports. The
+ * action buttons stay mounted across phases (Export disables instead of
+ * unmounting) and focus rides the Cancel button for the whole run, so the
+ * modal's focus trap keeps an anchor while the recording is under way.
  */
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useModalDialog } from '@airy-office/ui'
 import { useI18n } from '../i18n/locale'
 import type { TransitionSpec } from '../../shared/ipc'
@@ -49,6 +52,8 @@ export function ExportVideoDialog({
   const cancelBox = useRef({ current: false }).current
   // mirrors `phase` for the hook's close callback (Escape must not orphan a run)
   const exportingRef = useRef(false)
+  // the recording's only focusable control: focus rides here for the whole run
+  const cancelBtnRef = useRef<HTMLButtonElement | null>(null)
   const dialog = useModalDialog(() => {
     if (!exportingRef.current) onClose()
   })
@@ -98,6 +103,24 @@ export function ExportVideoDialog({
   const exporting = phase !== 'idle'
   const percent = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
 
+  // UX-1201: the Export trigger disables itself when the run starts, which
+  // would drop focus to <body> for the whole (minutes-long) recording — the
+  // dialog's Tab trap only sees keys bubbling through the backdrop, so with
+  // focus outside it the "modal" would be a lie. Hand focus to Cancel the
+  // moment exporting begins.
+  useEffect(() => {
+    if (exporting) cancelBtnRef.current?.focus()
+  }, [exporting])
+
+  // Focus sentinel for the run: any focus that leaves the dialog box (a
+  // control disabling/unmounting mid-export) comes back to Cancel, keeping
+  // the trap honest until the dialog closes.
+  const rescueFocus = (e: React.FocusEvent<HTMLDivElement>) => {
+    const next = e.relatedTarget
+    if (next instanceof Node && e.currentTarget.contains(next)) return
+    cancelBtnRef.current?.focus()
+  }
+
   return (
     // backdrop click does nothing mid-export: the run is cancelled via the
     // Cancel button, not by orphaning the recording behind a closed dialog
@@ -106,7 +129,12 @@ export function ExportVideoDialog({
       {...dialog.backdropProps}
       onClick={exporting ? undefined : onClose}
     >
-      <div className="modal" {...dialog.dialogProps} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal"
+        {...dialog.dialogProps}
+        onClick={(e) => e.stopPropagation()}
+        onBlur={exporting ? rescueFocus : undefined}
+      >
         <h2 {...dialog.titleProps}>{t('ribbonFileExportVideo')}</h2>
         {exporting ? (
           <div className="video-export-progress">
@@ -225,21 +253,23 @@ export function ExportVideoDialog({
             </div>
           </>
         )}
+        {/* UX-1201: the buttons never unmount across phases — disabling the
+            Export trigger keeps the DOM (and the focus trap's anchor list)
+            stable for the whole recording instead of dropping focus to body */}
         <div className="modal-actions">
-          {exporting ? (
-            <button onClick={() => (cancelBox.current = true)}>{t('appSettingsCancel')}</button>
-          ) : (
-            <>
-              <button onClick={onClose}>{t('appSettingsCancel')}</button>
-              <button
-                className="primary"
-                disabled={visibleCount === 0 || !mime}
-                onClick={() => void start()}
-              >
-                {t('ribbonFileExportVideo')}
-              </button>
-            </>
-          )}
+          <button
+            ref={cancelBtnRef}
+            onClick={() => (exporting ? (cancelBox.current = true) : onClose())}
+          >
+            {t('appSettingsCancel')}
+          </button>
+          <button
+            className="primary"
+            disabled={exporting || visibleCount === 0 || !mime}
+            onClick={() => void start()}
+          >
+            {t('ribbonFileExportVideo')}
+          </button>
         </div>
       </div>
     </div>
