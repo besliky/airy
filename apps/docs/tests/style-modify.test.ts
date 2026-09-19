@@ -168,6 +168,74 @@ describe('styleUpserts save round-trip (engine)', () => {
   })
 })
 
+describe('BUG-1022: built-in detection beyond Normal|HeadingN', () => {
+  // a built-in named style (no w:customStyle) plus a custom one (marker set)
+  const BUILTIN_STYLES =
+    '<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/>' +
+    '<w:pPr><w:spacing w:after="120"/></w:pPr>' +
+    '<w:rPr><w:sz w:val="56"/></w:rPr></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/>' +
+    '<w:rPr><w:sz w:val="22"/></w:rPr></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="MyNote" w:customStyle="1"><w:name w:val="My Note"/>' +
+    '<w:rPr><w:sz w:val="20"/></w:rPr></w:style>'
+
+  async function openBuiltinDoc() {
+    return parseDocx(
+      await buildDocx({
+        bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+        extraStylesXml: BUILTIN_STYLES,
+      }),
+    )
+  }
+
+  it('parses the built-in marker from the definition (name table + no customStyle)', async () => {
+    const parsed = await openBuiltinDoc()
+    expect(parsed.styles.get('Title')!.builtin).toBe(true)
+    expect(parsed.styles.get('ListParagraph')!.builtin).toBe(true)
+    expect(parsed.styles.get('MyNote')!.builtin).toBeUndefined()
+    // an explicitly marked style never counts as built-in, whatever its name
+    const marked = await parseDocx(
+      await buildDocx({
+        bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+        extraStylesXml:
+          '<w:style w:type="paragraph" w:styleId="Title2" w:customStyle="1">' +
+          '<w:name w:val="Title"/></w:style>',
+      }),
+    )
+    expect(marked.styles.get('Title2')!.builtin).toBeUndefined()
+  })
+
+  it('a Title modify keeps the built-in marker instead of flipping to custom', async () => {
+    const parsed = await openBuiltinDoc()
+    const info = parsed.styles.get('Title')!
+    const { upsert } = styleUpsertFromEdits(info, { ...styleEditsFromInfo(info), bold: true })
+    expect(upsert.builtin).toBe(true)
+    const blocks = parsed.blocks
+      .filter((b) => !b.hidden && b.docxIndex !== null)
+      .map((b) => ({ kind: 'original' as const, docxIndex: b.docxIndex! }))
+    const saved = await saveDocx(parsed, blocks, { styleUpserts: [upsert] })
+    const stylesXml = await (await JSZip.loadAsync(saved)).file('word/styles.xml')!.async('string')
+    const title = /<w:style [^>]*w:styleId="Title"[\s\S]*?<\/w:style>/.exec(stylesXml)![0]
+    // the regression: the modify used to add w:customStyle="1" here
+    expect(title).not.toContain('w:customStyle')
+    expect(title).toContain('<w:b/>')
+  })
+
+  it('a custom style modify still gets the marker added', async () => {
+    const parsed = await openBuiltinDoc()
+    const info = parsed.styles.get('MyNote')!
+    const { upsert } = styleUpsertFromEdits(info, { ...styleEditsFromInfo(info), bold: true })
+    expect(upsert.builtin).toBeUndefined()
+    const blocks = parsed.blocks
+      .filter((b) => !b.hidden && b.docxIndex !== null)
+      .map((b) => ({ kind: 'original' as const, docxIndex: b.docxIndex! }))
+    const saved = await saveDocx(parsed, blocks, { styleUpserts: [upsert] })
+    const stylesXml = await (await JSZip.loadAsync(saved)).file('word/styles.xml')!.async('string')
+    const note = /<w:style [^>]*w:styleId="MyNote"[\s\S]*?<\/w:style>/.exec(stylesXml)![0]
+    expect(note).toContain('w:customStyle="1"')
+  })
+})
+
 describe('live display update', () => {
   it('the swapped style definition reaches the regenerated document style CSS', async () => {
     const parsed = await openDoc()

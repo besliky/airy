@@ -123,18 +123,85 @@ function instrTextOf(xml: string): string {
 export type TocUpdateResult = 'updated' | 'missing' | 'no-entries'
 
 /**
- * The section break riding in the last region paragraph's pPr, if any. A
- * section's properties live in the pPr of its last paragraph, which for a
- * TOC/ToF region is the last field entry — deleting the region without
- * re-attaching it would silently drop the section (BUG-1003).
+ * The identifiers a ToF update may collect for an authored `\c` identifier:
+ * the identifier itself plus — when it is (or aliases) a known caption label —
+ * the canonical id and the current locale's word for it. Legacy documents
+ * authored before UX-1011 stored the translated word in their SEQ
+ * instructions; without the aliases the F9/Update path would rebuild a table
+ * of figures from nothing while Insert Table of Figures finds the captions
+ * (BUG-1110), and mixed old/new captions would split into two independent
+ * SEQ series.
  */
-const SECT_PR_RE = /<w:sectPr\b[^>]*\/>|<w:sectPr\b[^>]*>[\s\S]*?<\/w:sectPr>/
+function tofLabelAliases(id: string): string[] {
+  const out = new Set([id])
+  for (const { id: canonical, key } of CAPTION_LABELS) {
+    const translated = t(key)
+    if (id === canonical || id === translated) {
+      out.add(canonical)
+      if (translated && translated !== canonical) out.add(translated)
+    }
+  }
+  return [...out]
+}
+
+/**
+ * The section properties riding inside the TOC/ToF region's paragraphs. A
+ * section's properties live in the pPr of its last paragraph: the trailing
+ * one on the region's last field entry (BUG-1003), plus any CONTINUOUS breaks
+ * inside the region — a multi-column TOC is a chain of sections, one per
+ * column. Deleting the region without re-emitting them destroyed every
+ * mid-region section (BUG-1107); ALL of them are collected here, in document
+ * order, and re-attached by attachRegionSectPrs.
+ */
+const SECT_PR_ALL_RE = /<w:sectPr\b[^>]*\/>|<w:sectPr\b[^>]*>[\s\S]*?<\/w:sectPr>/g
 
 /** inject a sectPr fragment into a generated paragraph's pPr (CT_PPr order: after rPr, at the end) */
 function attachSectPr(xml: string, sectPr: string): string {
   return xml.includes('</w:pPr>')
     ? xml.replace('</w:pPr>', `${sectPr}</w:pPr>`)
     : xml.replace(/^<w:p(\s[^>]*)?>/, (open) => `${open}<w:pPr>${sectPr}</w:pPr>`)
+}
+
+/** an empty paragraph carrying a sectPr — a Word section break paragraph
+ *  (the parser labels content-less sectPr paragraphs the same way) */
+function sectionBreakNode(sectPr: string): Record<string, unknown> {
+  return {
+    type: 'docProtected',
+    attrs: {
+      docxIndex: null,
+      blockType: 'passthrough',
+      label: 'Section break paragraph',
+      genXml: `<w:p><w:pPr>${sectPr}</w:pPr></w:p>`,
+    },
+  }
+}
+
+/**
+ * Re-emit the region's collected sectPr fragments onto the regenerated
+ * paragraphs (BUG-1107). Each break ends a section, so they keep their
+ * document order and the trailing one stays on the last paragraph
+ * (BUG-1003); earlier ones spread over intermediate paragraphs — a
+ * multi-column TOC keeps its column boundaries. More breaks than
+ * regenerated paragraphs (the degenerate empty-sections case) keep their
+ * own break paragraphs, in order, after the paragraph holding the
+ * previous break.
+ */
+function attachRegionSectPrs(nodes: Array<Record<string, unknown>>, sectPrs: string[]): void {
+  if (sectPrs.length === 0 || nodes.length === 0) return
+  const n = nodes.length
+  let lastIdx = -1
+  const surplus: Array<{ afterIdx: number; sectPr: string }> = []
+  for (let i = 0; i < sectPrs.length; i++) {
+    const target = Math.max(lastIdx + 1, Math.floor(((i + 1) * n) / sectPrs.length) - 1)
+    if (target <= n - 1) {
+      lastIdx = target
+      const node = nodes[target] as { attrs: Record<string, unknown> }
+      node.attrs.genXml = attachSectPr(String(node.attrs.genXml), sectPrs[i])
+    } else surplus.push({ afterIdx: lastIdx, sectPr: sectPrs[i] })
+  }
+  for (let s = surplus.length - 1; s >= 0; s--) {
+    nodes.splice(surplus[s].afterIdx + 1, 0, sectionBreakNode(surplus[s].sectPr))
+  }
 }
 
 /**
@@ -162,11 +229,12 @@ export function updateTocField(
     to: number
     instr: string
     keepPageBreak: boolean
-    keepSectPr: string
+    sectPrs: string[]
   }> = []
   let from = -1
   let instr = ''
   let depth = 0
+  let regionSectPrs: string[] = []
   doc.forEach((node, offset) => {
     const xml = xmlOfNode(node as never, blocks)
     if (from === -1) {
@@ -175,7 +243,11 @@ export function updateTocField(
       from = offset
       instr = joined
       depth = 0
+      regionSectPrs = []
     }
+    // harvest EVERY sectPr of the region's nodes in document order: the
+    // trailing one plus mid-region continuous breaks (BUG-1107)
+    regionSectPrs.push(...(xml.match(SECT_PR_ALL_RE) ?? []))
     depth += (xml.match(/w:fldCharType="begin"/g) ?? []).length
     depth -= (xml.match(/w:fldCharType="end"/g) ?? []).length
     if (depth <= 0) {
@@ -184,7 +256,7 @@ export function updateTocField(
         to: offset + node.nodeSize,
         instr,
         keepPageBreak: /<w:br\s[^>]*w:type="page"/.test(xml),
-        keepSectPr: SECT_PR_RE.exec(xml)?.[0] ?? '',
+        sectPrs: regionSectPrs,
       })
       from = -1
     }
@@ -205,8 +277,10 @@ export function updateTocField(
   }> = []
   for (const region of regions) {
     const options = parseTocInstruction(region.instr)
+    // BUG-1110: the update path collects ToF entries under the same
+    // canonical+locale alias set the Insert dialog uses (seqAliases/UX-1011)
     const entries = options.seqIdentifier
-      ? collectTofEntries(editor, blocks, options.seqIdentifier, anchorPage)
+      ? collectTofEntries(editor, blocks, tofLabelAliases(options.seqIdentifier), anchorPage)
       : collectTocEntriesWithPages(editor, headingPages).filter(
           (e) => options.levels === undefined || e.level <= options.levels,
         )
@@ -230,12 +304,10 @@ export function updateTocField(
         },
       })
     }
-    // the region's trailing section break (in the deleted last paragraph's
-    // pPr) moves onto the last regenerated paragraph, keeping the section
-    if (region.keepSectPr && nodes.length > 0) {
-      const last = nodes[nodes.length - 1] as { attrs: Record<string, unknown> }
-      last.attrs.genXml = attachSectPr(String(last.attrs.genXml), region.keepSectPr)
-    }
+    // the region's section breaks move back onto the regenerated paragraphs:
+    // the trailing one onto the last entry (BUG-1003), continuous mid-region
+    // breaks onto intermediate entries in document order (BUG-1107)
+    attachRegionSectPrs(nodes, region.sectPrs)
     planned.push({ region, nodes })
     updated += 1
   }

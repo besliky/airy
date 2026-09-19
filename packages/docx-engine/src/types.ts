@@ -1799,6 +1799,10 @@ export interface StyleInfo {
   numPr?: { numId: string; ilvl: number } | 'none'
   /** w:default="1" — Word applies this style to every paragraph without a w:pStyle */
   isDefault?: boolean
+  /** BUG-1022: built-in beyond the Normal|HeadingN id pattern (Title/Subtitle/
+   * Quote/ListParagraph/TOC1-9/…) — no w:customStyle on a name/id Word knows;
+   * a Modify upsert must not mark it w:customStyle */
+  builtin?: boolean
 }
 
 /** document-wide defaults from styles.xml w:docDefaults (display-only) */

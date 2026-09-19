@@ -86,6 +86,12 @@ export function markTableSeamSlices(slices: PageSlice[], blocks: BlockBox[]): vo
  *  with less, the anchor itself moves to the next page like any line */
 const BAND_KEEP_MIN_H = 14
 
+/** how much of a spilled footnote's continuation the next page may charge
+ *  against its body (fraction of the page's content height): Word's footnote
+ *  area can grow arbitrarily, the model keeps a floor of body room so a
+ *  pathological note never zeroes a page out (BUG-1108) */
+const NOTE_SPILL_MAX_FRAC = 0.5
+
 export function computePageSlices(
   blocks: BlockBox[],
   contentHeight: number,
@@ -272,6 +278,11 @@ export function computeSectionedSlicesF2(
   // the first footnote-bearing block on a page shrinks the page's usable height
   // by the separator; carried to the next page when that block turns the page
   let pageNoteSepPx = 0
+  // BUG-1108: footnote-spill remainder — the part of an end-charged note that
+  // the reference page's leftover room cannot host. Word continues it in the
+  // NEXT page's footnote area, whose growth eats that page's body from below;
+  // consumed (clamped) by the next startPage
+  let pendingSpillPx = 0
   // flow-coord bottom of the current page's floated blocks: floats consume no
   // column height, but a section/page break right after one must not cut into
   // its band — the closing page keeps the float visible and the next page
@@ -349,7 +360,13 @@ export function computeSectionedSlicesF2(
     contentH = Math.max((firstOfSection ? g.firstContentHeight : undefined) ?? g.contentHeight, 1)
     pages.push({ section, regions: [] })
     openRegion(y, section, headerH, headerTop)
-    pageNoteSepPx = curBlockNotes ? FOOTNOTE_SEPARATOR_H : 0
+    // BUG-1108: the spilled note continuation from the previous page grows
+    // this page's footnote area into the body, like Word's does; clamped to a
+    // fraction of the page so a pathological note can never zero it out
+    pageNoteSepPx =
+      (curBlockNotes ? FOOTNOTE_SEPARATOR_H : 0) +
+      Math.min(pendingSpillPx, contentH * NOTE_SPILL_MAX_FRAC)
+    pendingSpillPx = 0
     pageFloatBottom = 0
   }
   // advance on overflow: change column if not the last, turn the page on the last (headerH/headerTop: table header repeated at column top after a table break)
@@ -463,6 +480,12 @@ export function computeSectionedSlicesF2(
   const place = (h: number) => {
     usedInCol += h
     anyContent = true
+  }
+  // BUG-1108: leftover capacity of the current column, and the sink a
+  // footnote-spill reports its continuation height to (charged by startPage)
+  const roomLeft = () => Math.max(capColH() - usedInCol, 0)
+  const noteSpill = (px: number) => {
+    pendingSpillPx += px
   }
 
   startPage(0, initSection)
@@ -850,6 +873,8 @@ export function computeSectionedSlicesF2(
           curSection,
           colCount > 1,
           (y, section) => startPage(breakY(y), section),
+          roomLeft,
+          noteSpill,
         )
         if (block.breakAfter) {
           pendingBreak = true
@@ -921,6 +946,8 @@ export function computeSectionedSlicesF2(
       curSection,
       colCount > 1,
       (y, section) => startPage(breakY(y), section),
+      roomLeft,
+      noteSpill,
     )
     if (block.breakAfter) {
       pendingBreak = true
@@ -1199,6 +1226,8 @@ function _placeParaBlock(
   curSection: number,
   multiCol = false,
   forcePage?: (y: number, section: number) => void,
+  roomLeft?: () => number,
+  noteSpill?: (px: number) => void,
 ) {
   if (
     block.innerBreaks?.length &&
@@ -1217,6 +1246,8 @@ function _placeParaBlock(
       curSection,
       multiCol,
       forcePage,
+      roomLeft,
+      noteSpill,
     )
   )
     return
@@ -1245,7 +1276,11 @@ function _placeParaBlock(
     !(block.noteBands && block.noteBands.length > 0) &&
     fits(totalH - spaceAfterPx - noteExtra)
   ) {
+    // the continuation height (BUG-1108): what the leftover room below the
+    // placed text cannot host spills, and the next page's body pays for it
+    const left = roomLeft?.() ?? 0
     place(totalH - noteExtra)
+    noteSpill?.(Math.max(noteExtra - Math.max(left - (totalH - noteExtra), 0), 0))
     return
   }
 
@@ -1396,6 +1431,8 @@ function _placeBrokenPara(
   curSection: number,
   multiCol: boolean,
   forcePage: (y: number, section: number) => void,
+  roomLeft?: () => number,
+  noteSpill?: (px: number) => void,
 ): boolean {
   const footnoteExtra = block.footnoteExtraPx ?? 0
   const textH = block.height - spaceBeforePx - spaceAfterPx - footnoteExtra
@@ -1449,6 +1486,9 @@ function _placeBrokenPara(
       newPage,
       curSection,
       multiCol,
+      undefined,
+      roomLeft,
+      noteSpill,
     )
     segStart = segEnd
   })

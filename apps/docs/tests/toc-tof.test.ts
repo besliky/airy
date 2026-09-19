@@ -3,12 +3,13 @@
  * SEQ captions of one label, an update rebuilds the field from its authored
  * instruction (switches survive), and the flow round-trips through a save.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeAll, afterAll } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { generateCaptionXml, generateTocFieldXml, parseDocx } from '@airy-office/docx-engine'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from '../src/renderer/editor/convert'
 import { editorExtensions } from '../src/renderer/editor/extensions'
+import { loadLocale, setModuleLang } from '../src/renderer/i18n/locale'
 import { collectTofEntries, updateTocField } from '../src/renderer/components/ribbon-references-tab'
 
 async function openDoc(bodyXml: string) {
@@ -244,6 +245,60 @@ describe('table of figures authoring', () => {
     const entries = collectTofEntries(editor, parsed.blocks, ['Figure', 'Abbildung'])
     expect(entries).toHaveLength(1)
     expect(entries[0]).toMatchObject({ text: 'Abbildung 1 Architektur' })
+  })
+})
+
+describe('ToF update alias compatibility (BUG-1110)', () => {
+  // the module-level t() drives the update path's alias resolution; its
+  // dictionary loads on demand (PERF-904)
+  beforeAll(async () => {
+    setModuleLang('de')
+    await loadLocale('de')
+  })
+  afterAll(() => setModuleLang('en'))
+
+  it('F9/update collects legacy captions through the canonical+locale alias set', async () => {
+    const { editor, parsed } = await openDoc('<w:p><w:r><w:t>Body</w:t></w:r></w:p>')
+    // legacy caption: SEQ carries the translated word (pre-UX-1011 authoring)
+    editor.commands.insertContentAt(editor.state.doc.content.size, [
+      captionNode('Abbildung', 1, 'Architektur', '_Ref111111111'),
+    ] as never)
+    // the field instruction is canonical (\c "Figure"): Insert ToF finds the
+    // caption via seqAliases — the update path must too
+    editor.commands.insertContentAt(
+      0,
+      fieldNodes([{ level: 1, text: 'Abbildung 1 Architektur' }], {
+        seqIdentifier: 'Figure',
+      }) as never,
+    )
+    expect(updateTocField(editor, parsed.blocks, undefined, undefined, { silent: true })).toBe(
+      'updated',
+    )
+    const lines = tocLines(editor)
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toMatchObject({ left: 'Abbildung 1 Architektur', anchor: '_Ref111111111' })
+  })
+
+  it('a legacy \\c instruction still collects canonical captions (mixed documents)', async () => {
+    const { editor, parsed } = await openDoc('<w:p><w:r><w:t>Body</w:t></w:r></w:p>')
+    // canonical caption (UX-1011): SEQ carries the id, display keeps the locale word
+    editor.commands.insertContentAt(editor.state.doc.content.size, [
+      captionNodeLocalized('Figure', 1, 'Architektur', '_Ref111111111', 'Abbildung'),
+    ] as never)
+    // the field instruction is legacy (\c "Abbildung"): the alias set must
+    // bridge it back to the canonical id instead of splitting the series
+    editor.commands.insertContentAt(
+      0,
+      fieldNodes([{ level: 1, text: 'Abbildung 1 Architektur' }], {
+        seqIdentifier: 'Abbildung',
+      }) as never,
+    )
+    expect(updateTocField(editor, parsed.blocks, undefined, undefined, { silent: true })).toBe(
+      'updated',
+    )
+    expect(tocLines(editor)[0]).toMatchObject({ left: 'Abbildung 1 Architektur' })
+    // the regenerated instruction keeps the authored identifier byte-for-byte
+    expect(fieldInstructions(editor)).toEqual(['TOC \\h \\z \\c "Abbildung"'])
   })
 })
 
