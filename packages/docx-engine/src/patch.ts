@@ -4,6 +4,7 @@ import {
   generateParagraphXml,
   inlineRunsXml,
   mergePPrFormat,
+  shadowEffectLstXml,
   splitXmlChildren,
 } from './generate'
 import {
@@ -593,18 +594,29 @@ export async function saveDocx(
     const spacing = spacingAttrs.length > 0 ? `<w:spacing ${spacingAttrs.join(' ')}/>` : ''
     const jc = image.align && image.align !== 'left' ? `<w:jc w:val="${image.align}"/>` : ''
     const pPr = spacing || jc ? `<w:pPr>${spacing}${jc}</w:pPr>` : ''
+    // alt text (Word's alt text pane: Title → title, Description → descr)
+    const altAttrs =
+      (image.altTitle ? ` title="${escapeXmlAttr(image.altTitle)}"` : '') +
+      (image.altText ? ` descr="${escapeXmlAttr(image.altText)}"` : '')
+    // picture outline (a:ln) and shadow (a:effectLst) in spPr schema order
+    const ln =
+      image.border === undefined || image.border === null
+        ? ''
+        : `<a:ln w="${Math.max(1, Math.round(image.border.widthPt * 12700))}">` +
+          `<a:solidFill><a:srgbClr val="${image.border.color}"/></a:solidFill></a:ln>`
+    const effectLst = image.shadow ? shadowEffectLstXml(image.shadow) : ''
     const xml =
       `<w:p>${pPr}<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">` +
       `<wp:extent cx="${cx}" cy="${cy}"/>` +
       `<wp:effectExtent l="${eeX}" t="${eeY}" r="${eeX}" b="${eeY}"/>` +
-      `<wp:docPr id="${docPrId}" name="Picture ${docPrId}"/>` +
+      `<wp:docPr id="${docPrId}" name="Picture ${docPrId}"${altAttrs}/>` +
       '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
       '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
       '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
       `<pic:nvPicPr><pic:cNvPr id="${docPrId}" name="Picture ${docPrId}"/><pic:cNvPicPr/></pic:nvPicPr>` +
       `<pic:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
       `<pic:spPr><a:xfrm${rot ? ` rot="${rot * 60000}"` : ''}${image.flipH ? ' flipH="1"' : ''}${image.flipV ? ' flipV="1"' : ''}><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>` +
-      '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>' +
+      `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${ln}${effectLst}</pic:spPr>` +
       '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>'
     return image.wrap
       ? applyImageWrap(xml, image.wrap, image.posOffsetEmu, undefined, image.zOrder)

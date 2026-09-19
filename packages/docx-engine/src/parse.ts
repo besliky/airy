@@ -42,6 +42,7 @@ import type {
   RevisionInfo,
   Run,
   SectionSettings,
+  ShadowEffect,
   SourceInfo,
   StrayIndent,
   StyleInfo,
@@ -917,6 +918,8 @@ async function buildBlock(
         // host paragraph jc only — a jc inside nested txbxContent must not
         // decide the outer block alignment
         const jc = /<w:jc w:val="([^"]+)"/.exec(stripTextboxes(detect))?.[1]
+        // alt text of the first shape drawing feeds the Shape Format pane
+        const boxAlt = drawingAltOf(detect)
         return {
           ...base,
           type: 'passthrough',
@@ -926,6 +929,8 @@ async function buildBlock(
             ...textboxes.flatMap((t) => t.paras.map((p) => p.runs.map((r) => r.text).join(''))),
           ].join('\n'),
           textboxes,
+          ...(boxAlt.title !== undefined ? { imageAltTitle: boxAlt.title } : {}),
+          ...(boxAlt.descr !== undefined ? { imageAltText: boxAlt.descr } : {}),
           ...(hostPageBreak(detect) ? { fieldDisplay: { kind: 'pageBreak' as const } } : {}),
           ...(jc === 'center'
             ? { imageAlign: 'center' as const }
@@ -2044,6 +2049,32 @@ function extractTextboxes(
         }
         const dash = attrsOf(findChild(ln, 'a:prstDash') ?? {})['val']
         if (dash) box.borderDash = /dot/i.test(dash) ? 'dotted' : 'dashed'
+      }
+      // shape shadow (a:effectLst): srgbClr shadows render (same tradeoff as
+      // the outline), schemeClr ones keep their bytes but stay unrendered
+      const effectLst = findChild(spPr, 'a:effectLst')
+      if (effectLst && childrenOf(effectLst).length > 0) {
+        const innerShdw = findChild(effectLst, 'a:innerShdw')
+        const shdw = innerShdw ?? findChild(effectLst, 'a:outerShdw')
+        if (shdw) {
+          const a = attrsOf(shdw)
+          const hex = attrsOf(findChild(shdw, 'a:srgbClr') ?? {})['val']
+          if (hex && /^[0-9A-Fa-f]{6}$/.test(hex)) {
+            const alpha = parseInt(
+              attrsOf(findChild(findChild(shdw, 'a:srgbClr') ?? {}, 'a:alpha') ?? {})['val'] ?? '',
+              10,
+            )
+            const shadow: ShadowEffect = {
+              blurRadEmu: parseInt(a['blurRad'] ?? '0', 10) || 0,
+              distEmu: parseInt(a['dist'] ?? '0', 10) || 0,
+              dirEmu: parseInt(a['dir'] ?? '0', 10) || 0,
+              color: hex.toUpperCase(),
+            }
+            if (Number.isFinite(alpha)) shadow.alphaPct = Math.round(alpha / 1000)
+            if (innerShdw) shadow.inner = true
+            box.shadow = shadow
+          }
+        }
       }
       // shape-style references (wps:style): theme fill/line for shapes whose
       // spPr declares no explicit color (Word gallery shapes)
@@ -3985,6 +4016,15 @@ function extractTableModel(
   if (tblStyle) model.tblStyleId = tblStyle
   model.tableLook = tableLookOf(tblPrNode)
   if (tblPrNode && boolProp(tblPrNode, 'w:bidiVisual')) model.bidiVisual = true
+  // alt text (w:tblCaption / w:tblDescription)
+  const tblAlt = (name: 'w:tblCaption' | 'w:tblDescription'): string | undefined => {
+    const val = attrsOf(findChild(tblPrNode ?? {}, name) ?? {})['w:val']
+    return val !== undefined ? decodeNumericCharRefs(val) : undefined
+  }
+  const altTitle = tblAlt('w:tblCaption')
+  const altText = tblAlt('w:tblDescription')
+  if (altTitle) model.altTitle = altTitle
+  if (altText) model.altText = altText
   if (rowHeightsTwips.some((h) => h !== null)) {
     model.rowHeightsTwips = rowHeightsTwips
     model.rowHeightRules = rowHeightRules
@@ -5503,6 +5543,9 @@ type ImageMeta = Pick<
   | 'imageCrop'
   | 'imageFillRect'
   | 'imageBorder'
+  | 'imageShadow'
+  | 'imageAltTitle'
+  | 'imageAltText'
 > & {
   /** wp:anchor allowOverlap="0": Word displaces the object out of a colliding anchor's box */
   imageNoOverlap?: boolean
@@ -5531,6 +5574,52 @@ function picBorderOf(xml: string): { color: string; widthPt: number } | undefine
   return {
     color: color.toUpperCase(),
     widthPt: Number.isFinite(w) && w > 0 ? w / EMU_PER_PT : 0.75,
+  }
+}
+
+/**
+ * Picture shadow (a:outerShdw/a:innerShdw in the pic's own spPr effectLst),
+ * the same slot the ribbon preset gallery authors. srgbClr shadows only —
+ * schemeClr shadows stay unrendered but round-trip byte-identically.
+ */
+function picShadowOf(xml: string): ShadowEffect | undefined {
+  const picSpPr = /<pic:spPr[^>]*>([\s\S]*?)<\/pic:spPr>/.exec(xml)?.[1]
+  if (!picSpPr) return undefined
+  const effectLst = /<a:effectLst\b[^>]*>([\s\S]*?)<\/a:effectLst>/.exec(picSpPr)?.[1]
+  if (!effectLst) return undefined
+  const inner = /<a:innerShdw\b/.test(effectLst)
+  const shdw = inner
+    ? /<a:innerShdw\b([^>]*)>([\s\S]*?)<\/a:innerShdw>/.exec(effectLst)
+    : /<a:outerShdw\b([^>]*)>([\s\S]*?)<\/a:outerShdw>/.exec(effectLst)
+  if (!shdw) return undefined
+  const attrs = shdw[1]
+  const body = shdw[2]
+  const color = /<a:srgbClr val="([0-9A-Fa-f]{6})"/.exec(body)?.[1]
+  if (!color) return undefined
+  const alphaPct = Number(/<a:alpha val="(\d+)"/.exec(body)?.[1] ?? NaN)
+  const shadow: ShadowEffect = {
+    blurRadEmu: parseInt(/\bblurRad="(\d+)"/.exec(attrs)?.[1] ?? '0', 10) || 0,
+    distEmu: parseInt(/\bdist="(\d+)"/.exec(attrs)?.[1] ?? '0', 10) || 0,
+    dirEmu: parseInt(/\bdir="(-?\d+)"/.exec(attrs)?.[1] ?? '0', 10) || 0,
+    color: color.toUpperCase(),
+  }
+  if (Number.isFinite(alphaPct)) shadow.alphaPct = Math.round(alphaPct / 1000)
+  if (inner) shadow.inner = true
+  return shadow
+}
+
+/**
+ * Alt text (wp:docPr title/descr) of a drawing paragraph. Ink drawings carry
+ * their stroke payload in descr, so those keep it as their own data.
+ */
+function drawingAltOf(xml: string): { title?: string; descr?: string } {
+  const docPr = /<wp:docPr\b[^>]*\/?>/.exec(xml)?.[0]
+  if (!docPr || /name="aidocs-ink/.test(docPr)) return {}
+  const title = /title="([^"]*)"/.exec(docPr)?.[1]
+  const descr = /descr="([^"]*)"/.exec(docPr)?.[1]
+  return {
+    ...(title !== undefined ? { title: decodeEntities(title) } : {}),
+    ...(descr !== undefined ? { descr: decodeEntities(descr) } : {}),
   }
 }
 
@@ -5606,6 +5695,11 @@ function imageMeta(xml: string): ImageMeta {
   if (xf.flipV) meta.imageFlipV = true
   const border = picBorderOf(xml)
   if (border) meta.imageBorder = border
+  const shadow = picShadowOf(xml)
+  if (shadow) meta.imageShadow = shadow
+  const alt = drawingAltOf(xml)
+  if (alt.title !== undefined) meta.imageAltTitle = alt.title
+  if (alt.descr !== undefined) meta.imageAltText = alt.descr
   // source crop (a:srcRect) and fill placement (a:stretch/a:fillRect): applied
   // by the renderer as an overflow-hidden window over a scaled/offset image
   const srcRect = /<a:srcRect\s[^>]*\/>/.exec(xml)?.[0]
