@@ -555,6 +555,14 @@ function numCacheXml(values: (number | null)[], f: string): string {
   )
 }
 
+/** numeric category text → cell number; non-numeric labels stay text cells */
+const catNum = (v: string): number | null => {
+  const t = v.trim()
+  if (t === '') return null
+  const n = Number(t)
+  return Number.isFinite(n) ? n : null
+}
+
 /**
  * Build a complete chart part (word/charts/chartN.xml) from data. The chart
  * references an embedded workbook via c:externalData so Word's "Edit Data" works.
@@ -563,12 +571,33 @@ function numCacheXml(values: (number | null)[], f: string): string {
  */
 export function buildChartPartXml(chart: NewChart, externalDataRId?: string): string {
   const rows = chart.categories.length
+  const scatterLike = chart.kind === 'scatter' || chart.kind === 'bubble'
+  const xOf = (ser: NewChart['series'][number]): (number | null)[] =>
+    ser.xValues ?? chart.categories.map(catNum)
   const sers = chart.series
     .map((ser, i) => {
       const col = colLetter(i)
+      const tx = `<c:tx>${strCacheXml([ser.name], `Sheet1!$${col}$1`)}</c:tx>`
+      if (scatterLike) {
+        // scatter/bubble series carry x/y pairs (and sizes) instead of category/value caches
+        return (
+          `<c:ser><c:idx val="${i}"/><c:order val="${i}"/>` +
+          tx +
+          `<c:xVal>${numCacheXml(xOf(ser).slice(0, rows), `Sheet1!$A$2:$A$${rows + 1}`)}</c:xVal>` +
+          `<c:yVal>${numCacheXml(ser.values.slice(0, rows), `Sheet1!$${col}$2:$${col}$${rows + 1}`)}</c:yVal>` +
+          (chart.kind === 'bubble'
+            ? `<c:bubbleSize>${numCacheXml(
+                (ser.sizes ?? ser.values.map(() => 100)).slice(0, rows),
+                `Sheet1!$${col}$2:$${col}$${rows + 1}`,
+              )}</c:bubbleSize>`
+            : '') +
+          (chart.kind === 'scatter' ? '<c:smooth val="0"/>' : '') +
+          '</c:ser>'
+        )
+      }
       return (
         `<c:ser><c:idx val="${i}"/><c:order val="${i}"/>` +
-        `<c:tx>${strCacheXml([ser.name], `Sheet1!$${col}$1`)}</c:tx>` +
+        tx +
         `<c:cat>${strCacheXml(chart.categories, `Sheet1!$A$2:$A$${rows + 1}`)}</c:cat>` +
         `<c:val>${numCacheXml(ser.values.slice(0, rows), `Sheet1!$${col}$2:$${col}$${rows + 1}`)}</c:val>` +
         '</c:ser>'
@@ -576,22 +605,50 @@ export function buildChartPartXml(chart: NewChart, externalDataRId?: string): st
     })
     .join('')
 
+  // catAx + valAx pair (bar/line/area); scatter/bubble plot against two value axes
+  const catAx =
+    '<c:catAx><c:axId val="111111111"/><c:scaling><c:orientation val="minMax"/></c:scaling>' +
+    '<c:delete val="0"/><c:axPos val="b"/><c:crossAx val="222222222"/></c:catAx>'
+  const valAxOf = (id: string, crossId: string, pos: 'b' | 'l') =>
+    `<c:valAx><c:axId val="${id}"/><c:scaling><c:orientation val="minMax"/></c:scaling>` +
+    `<c:delete val="0"/><c:axPos val="${pos}"/><c:crossAx val="${crossId}"/></c:valAx>`
+  const catValAxes = catAx + valAxOf('222222222', '111111111', 'l')
+  const valValAxes = valAxOf('111111111', '222222222', 'b') + valAxOf('222222222', '111111111', 'l')
+
   let plot: string
-  if (chart.kind === 'pie') {
-    plot = `<c:pieChart><c:varyColors val="1"/>${sers}<c:firstSliceAng val="0"/></c:pieChart>`
-  } else {
-    const axes =
-      '<c:catAx><c:axId val="111111111"/><c:scaling><c:orientation val="minMax"/></c:scaling>' +
-      '<c:delete val="0"/><c:axPos val="b"/><c:crossAx val="222222222"/></c:catAx>' +
-      '<c:valAx><c:axId val="222222222"/><c:scaling><c:orientation val="minMax"/></c:scaling>' +
-      '<c:delete val="0"/><c:axPos val="l"/><c:crossAx val="111111111"/></c:valAx>'
-    const inner =
-      chart.kind === 'bar'
-        ? `<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>${sers}` +
-          '<c:axId val="111111111"/><c:axId val="222222222"/></c:barChart>'
-        : `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${sers}<c:marker val="1"/>` +
-          '<c:axId val="111111111"/><c:axId val="222222222"/></c:lineChart>'
-    plot = inner + axes
+  switch (chart.kind) {
+    case 'pie':
+      plot = `<c:pieChart><c:varyColors val="1"/>${sers}<c:firstSliceAng val="0"/></c:pieChart>`
+      break
+    case 'doughnut':
+      plot =
+        `<c:doughnutChart><c:varyColors val="1"/>${sers}` +
+        '<c:firstSliceAng val="0"/><c:holeSize val="50"/></c:doughnutChart>'
+      break
+    case 'scatter':
+      plot =
+        `<c:scatterChart><c:scatterStyle val="marker"/><c:varyColors val="0"/>${sers}` +
+        `<c:axId val="111111111"/><c:axId val="222222222"/></c:scatterChart>${valValAxes}`
+      break
+    case 'bubble':
+      plot =
+        `<c:bubbleChart><c:varyColors val="0"/>${sers}<c:bubbleScale val="100"/>` +
+        `<c:axId val="111111111"/><c:axId val="222222222"/></c:bubbleChart>${valValAxes}`
+      break
+    case 'area':
+      plot =
+        `<c:areaChart><c:grouping val="standard"/><c:varyColors val="0"/>${sers}` +
+        `<c:axId val="111111111"/><c:axId val="222222222"/></c:areaChart>${catValAxes}`
+      break
+    case 'bar':
+      plot =
+        `<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>${sers}` +
+        `<c:axId val="111111111"/><c:axId val="222222222"/></c:barChart>${catValAxes}`
+      break
+    default:
+      plot =
+        `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${sers}<c:marker val="1"/>` +
+        `<c:axId val="111111111"/><c:axId val="222222222"/></c:lineChart>${catValAxes}`
   }
 
   const title = chart.title
@@ -632,8 +689,8 @@ export interface ChartPatch {
  * Patch cached texts/numbers of a chart part while keeping the structure —
  * data references (c:f), styling, layout — byte-identical. Anything the
  * patch cannot anchor (missing title, missing cache point) is left as-is.
- * The embedded workbook is intentionally not touched: Word renders from
- * these caches, but "Edit Data" will show the original sheet numbers.
+ * The part itself is not the whole story for Word: callers pair this with
+ * patchChartWorkbookXlsxBase64 so "Edit Data" shows the edited numbers.
  */
 export function patchChartPartXml(xml: string, patch: ChartPatch): string {
   // a text-less title (auto title / strRef with no rich body) has no a:t to
@@ -695,7 +752,9 @@ export function patchChartPartXml(xml: string, patch: ChartPatch): string {
       }
     }
     if (serPatch?.values) {
-      const val = tagRange(xml, 'c:val', ser.start, ser.end)
+      // scatter/bubble series keep values in c:yVal; classic charts in c:val
+      const val =
+        tagRange(xml, 'c:val', ser.start, ser.end) ?? tagRange(xml, 'c:yVal', ser.start, ser.end)
       if (val)
         pushPointEdits(
           xml,
@@ -704,9 +763,11 @@ export function patchChartPartXml(xml: string, patch: ChartPatch): string {
           edits,
         )
     }
-    // categories are cached per series; every copy must agree
+    // categories are cached per series; every copy must agree (c:xVal for
+    // scatter/bubble — numeric x caches, patched as number text)
     if (patch.categories) {
-      const cat = tagRange(xml, 'c:cat', ser.start, ser.end)
+      const cat =
+        tagRange(xml, 'c:cat', ser.start, ser.end) ?? tagRange(xml, 'c:xVal', ser.start, ser.end)
       if (cat) pushPointEdits(xml, cat, patch.categories, edits)
     }
   })
@@ -835,7 +896,13 @@ export async function buildChartWorkbookXlsxBase64(
   for (let i = 0; i < rows; i++) {
     const rowNum = i + 2
     const cells: string[] = []
-    cells.push(`<c r="A${rowNum}" t="s"><v>${si(categories[i])}</v></c>`)
+    // numeric categories (scatter x values, numeric labels) become number cells
+    const xNum = catNum(categories[i])
+    cells.push(
+      xNum !== null
+        ? `<c r="A${rowNum}"><v>${xNum}</v></c>`
+        : `<c r="A${rowNum}" t="s"><v>${si(categories[i])}</v></c>`,
+    )
     for (let j = 0; j < serCount; j++) {
       const val = series[j].values[i]
       if (val !== null && val !== undefined) {
@@ -943,7 +1010,13 @@ export async function patchChartWorkbookXlsxBase64(
     const dataRows: string[] = []
     for (let i = 0; i < categories.length; i++) {
       const rowNum = i + 2
-      const cells = [inlineStr(`A${rowNum}`, categories[i])]
+      // numeric categories (scatter x values) become number cells
+      const xNum = catNum(categories[i])
+      const cells = [
+        xNum !== null
+          ? `<c r="A${rowNum}"><v>${xNum}</v></c>`
+          : inlineStr(`A${rowNum}`, categories[i]),
+      ]
       for (let j = 0; j < series.length; j++) {
         const val = series[j].values[i]
         if (val !== null && val !== undefined) {

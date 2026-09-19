@@ -1808,6 +1808,10 @@ export function pmDocToSavePlan(doc: PmNode, originalBlocks: Block[]): SavePlan 
           spec.series = display.series.map((s, i) => ({
             name: s.name ?? spec.series[i]?.name ?? t('editorChartSeries', { num: i + 1 }),
             values: s.values,
+            // scatter/bubble caches travel per series; keep them so a resave
+            // does not collapse x values onto the categories or sizes to the default
+            ...(s.xValues ? { xValues: s.xValues } : {}),
+            ...(s.sizes ? { sizes: s.sizes } : {}),
           }))
         }
         pushBlock({

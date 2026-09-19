@@ -2,6 +2,8 @@ import { useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { getMarkRange } from '@tiptap/core'
 import type { Editor } from '@tiptap/core'
+import type { Node as PmNode } from '@tiptap/pm/model'
+import { NodeSelection } from '@tiptap/pm/state'
 import {
   Dropdown,
   ShapePreview,
@@ -19,6 +21,7 @@ import type {
   NewDiagramPreset,
 } from '@airy-office/docx-engine'
 import { buildDiagramDisplay } from '@airy-office/docx-engine'
+import { chartEditSource, displayFromSpec } from '../editor/chart'
 import {
   CROSS_REF_TYPES,
   collectCrossRefSources,
@@ -497,18 +500,95 @@ export function CrossRefModal({
   )
 }
 
-/** Word's Insert Chart: pick a type + data grid; after inserting, the data table below the chart is still editable in place */
+/** parse a grid cell into a chart number; blank/invalid cells become cache gaps */
+const cellNumber = (v: string): number | null => {
+  const n = Number(v.trim().replace(/,/g, ''))
+  return v.trim() !== '' && Number.isFinite(n) ? n : null
+}
+
+/** one row of the modal's data grid (string cells; sizes ride along for bubbles) */
+type ChartGridSeries = { name: string; values: string[]; sizes?: (number | null)[] }
+
+/** deterministic default bubble sizes per column (20/30/40 cycling) */
+const defaultBubbleSizes = (cols: number): (number | null)[] =>
+  Array.from({ length: cols }, (_, c) => 20 + (c % 3) * 10)
+
+/** the docProtected chart node the modal reopens as an editor, when selected */
+function chartNodeAtSelection(editor: Editor): { pos: number; node: PmNode } | null {
+  const sel = editor.state.selection
+  const candidates: Array<{ pos: number; node: PmNode }> = []
+  if (sel instanceof NodeSelection) candidates.push({ pos: sel.from, node: sel.node })
+  const { $from } = sel
+  for (let d = $from.depth; d >= 1; d--)
+    candidates.push({ pos: $from.before(d), node: $from.node(d) })
+  return (
+    candidates.find(
+      ({ node }) => node.type.name === 'docProtected' && node.attrs.blockType === 'chart',
+    ) ?? null
+  )
+}
+
+/** Word's Insert Chart: pick a type + data grid; after inserting, the data table below the chart is still editable in place.
+ *  Reopened with a chart selected it edits in place: generated charts rewrite their spec (part rebuilt on save), native
+ *  charts patch the cached texts/numbers — and the save pipeline syncs the embedded workbook ("Edit Data" numbers). */
 export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose: () => void }) {
   const { t } = useI18n()
-  const [kind, setKind] = useState<NewChart['kind']>('bar')
-  const [title, setTitle] = useState(() => t('ribbonChartTitlePh'))
-  const [categories, setCategories] = useState(() =>
-    [1, 2, 3].map((n) => t('ribbonCategoryN', { n })),
+  // a chart selected on open switches the dialog to edit mode
+  const [target] = useState(() => chartNodeAtSelection(editor))
+  const targetDisplay = target ? (target.node.attrs.chartDisplay as ChartDisplay | null) : null
+  const targetGen = target ? (target.node.attrs.genChart as NewChart | null) : null
+  const native = target != null && target.node.attrs.docxIndex != null && !targetGen
+  const source = target ? chartEditSource(targetDisplay, targetGen) : null
+
+  const defaults = (k: NewChart['kind']) => {
+    const ser = (n: number, values: string[]): ChartGridSeries => ({
+      name: t('ribbonSeriesN', { n }),
+      values: [...values],
+      sizes: undefined,
+    })
+    const one = [ser(1, ['4', '6', '5'])]
+    const two = [...one, ser(2, ['2', '5', '7'])]
+    if (k === 'scatter' || k === 'bubble') {
+      // scatter/bubble x axis is numeric: plain numbers, not localized labels
+      return {
+        kind: k,
+        title: t('ribbonChartTitlePh'),
+        categories: ['1', '2', '3'],
+        series: k === 'bubble' ? one : two,
+      }
+    }
+    return {
+      kind: k,
+      title: t('ribbonChartTitlePh'),
+      categories: [1, 2, 3].map((n) => t('ribbonCategoryN', { n })),
+      series: k === 'pie' || k === 'doughnut' ? one : two,
+    }
+  }
+  const initial = source ?? defaults('bar')
+  const [kind, setKind] = useState<NewChart['kind']>(initial.kind)
+  const [title, setTitle] = useState(initial.title || t('ribbonChartTitlePh'))
+  const [categories, setCategories] = useState<string[]>(() => [...initial.categories])
+  const [series, setSeries] = useState<ChartGridSeries[]>(() =>
+    initial.series.map((s) => ({
+      name: s.name,
+      values: s.values.map((v) => (v == null ? '' : String(v))),
+      sizes: s.sizes,
+    })),
   )
-  const [series, setSeries] = useState(() => [
-    { name: t('ribbonSeriesN', { n: 1 }), values: ['4', '6', '5'] },
-    { name: t('ribbonSeriesN', { n: 2 }), values: ['2', '5', '7'] },
-  ])
+
+  const pickKind = (k: NewChart['kind']) => {
+    if (native) return // the chart part structure is fixed; only its caches are editable
+    setKind(k)
+    const shapeShift =
+      (k === 'scatter' || k === 'bubble') !== (kind === 'scatter' || kind === 'bubble')
+    if (!source || shapeShift) {
+      // fresh insert, or a switch between category and x/y data shapes: restart from the kind's defaults
+      const d = defaults(k)
+      setTitle(d.title)
+      setCategories(d.categories)
+      setSeries(d.series)
+    }
+  }
 
   const setCat = (i: number, v: string) =>
     setCategories((prev) => prev.map((c, j) => (j === i ? v : c)))
@@ -521,34 +601,86 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
       ),
     )
   const addCategory = () => {
-    setCategories((prev) => [...prev, t('ribbonCategoryN', { n: prev.length + 1 })])
+    setCategories((prev) =>
+      kind === 'scatter' || kind === 'bubble'
+        ? [...prev, String(prev.length + 1)]
+        : [...prev, t('ribbonCategoryN', { n: prev.length + 1 })],
+    )
     setSeries((prev) => prev.map((s) => ({ ...s, values: [...s.values, ''] })))
   }
   const addSeries = () =>
     setSeries((prev) => [
       ...prev,
-      { name: t('ribbonSeriesN', { n: prev.length + 1 }), values: categories.map(() => '') },
+      {
+        name: t('ribbonSeriesN', { n: prev.length + 1 }),
+        values: categories.map(() => ''),
+        sizes: undefined,
+      },
     ])
 
-  const insert = () => {
+  const gridSeries = () =>
+    series.map((s) => ({
+      name: s.name,
+      values: s.values.map(cellNumber),
+      sizes: kind === 'bubble' ? (s.sizes ?? defaultBubbleSizes(s.values.length)) : undefined,
+    }))
+
+  const commit = () => {
     const spec: NewChart = {
       kind,
       title: title.trim() || t('ribbonChartTitlePh'),
       categories,
-      series: series.map((s) => ({
-        name: s.name,
-        values: s.values.map((v) => {
-          const n = Number(v.trim().replace(/,/g, ''))
-          return v.trim() !== '' && Number.isFinite(n) ? n : null
-        }),
-      })),
+      series: gridSeries(),
     }
-    const display: ChartDisplay = {
-      partPath: '',
-      kind: spec.kind,
-      title: spec.title,
-      categories: spec.categories,
-      series: spec.series,
+    if (target && native) {
+      // native chart edited in place: the save pipeline turns chartDisplay diffs
+      // into part cache patches + embedded workbook sync (applyChartEdits)
+      const current = target.node.attrs.chartDisplay as ChartDisplay | null
+      if (!current) return
+      const scatter = current.kind === 'scatter' || current.kind === 'bubble'
+      const next: ChartDisplay = {
+        ...current,
+        ...(current.title !== undefined ? { title: title.trim() || current.title } : {}),
+        categories: [...categories],
+        series: current.series.map((s, i) => {
+          const edited = spec.series[i]
+          if (!edited) return s
+          return {
+            ...s,
+            name: edited.name,
+            values: edited.values,
+            // scatter x caches track the (numeric) category column; blank = gap
+            ...(scatter ? { xValues: categories.map((c) => cellNumber(c)) } : {}),
+            ...(current.kind === 'bubble' && edited.sizes ? { sizes: edited.sizes } : {}),
+          }
+        }),
+      }
+      editor.view.dispatch(
+        editor.view.state.tr.setNodeMarkup(target.pos, undefined, {
+          ...target.node.attrs,
+          chartDisplay: next,
+        }),
+      )
+      onClose()
+      return
+    }
+    if (target) {
+      // generated chart re-edited in the same session: refresh spec + display;
+      // the part (and its workbook) is rebuilt from the spec on save
+      const fresh = displayFromSpec(spec)
+      const size =
+        targetDisplay?.widthPx && targetDisplay.heightPx
+          ? { widthPx: targetDisplay.widthPx, heightPx: targetDisplay.heightPx }
+          : {}
+      editor.view.dispatch(
+        editor.view.state.tr.setNodeMarkup(target.pos, undefined, {
+          ...target.node.attrs,
+          genChart: spec,
+          chartDisplay: { ...fresh, ...size },
+        }),
+      )
+      onClose()
+      return
     }
     const inserted = insertTopLevelBlockAtSelection(editor, {
       type: 'docProtected',
@@ -557,28 +689,35 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
         blockType: 'chart',
         label: t('ribbonChart'),
         genChart: spec,
-        chartDisplay: display,
+        chartDisplay: displayFromSpec(spec),
       },
     })
     if (inserted) onClose()
   }
 
+  const singleSeries = kind === 'pie' || kind === 'doughnut'
+
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal modal-chart">
-        <h2>{t('ribbonChartInsertTitle')}</h2>
+        <h2>{source ? t('ribbonChartEditTitle') : t('ribbonChartInsertTitle')}</h2>
         <div className="modal-row">
           {(
             [
               ['bar', t('ribbonChartBar')],
               ['line', t('ribbonChartLine')],
               ['pie', t('ribbonChartPie')],
+              ['area', t('ribbonChartArea')],
+              ['scatter', t('ribbonChartScatter')],
+              ['bubble', t('ribbonChartBubble')],
+              ['doughnut', t('ribbonChartDoughnut')],
             ] as const
           ).map(([value, label]) => (
             <button
               key={value}
               className={kind === value ? 'btn-primary' : ''}
-              onClick={() => setKind(value)}
+              disabled={native}
+              onClick={() => pickKind(value)}
             >
               {label}
             </button>
@@ -597,7 +736,11 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
               <th />
               {categories.map((c, i) => (
                 <th key={i}>
-                  <input value={c} onChange={(e) => setCat(i, e.target.value)} />
+                  <input
+                    value={c}
+                    inputMode={kind === 'scatter' || kind === 'bubble' ? 'decimal' : undefined}
+                    onChange={(e) => setCat(i, e.target.value)}
+                  />
                 </th>
               ))}
             </tr>
@@ -622,14 +765,16 @@ export function ChartInsertModal({ editor, onClose }: { editor: Editor; onClose:
           </tbody>
         </table>
         <div className="modal-row">
-          <button onClick={addCategory}>{t('ribbonChartAddCategory')}</button>
-          <button onClick={addSeries} disabled={kind === 'pie'}>
+          <button onClick={addCategory} disabled={native}>
+            {t('ribbonChartAddCategory')}
+          </button>
+          <button onClick={addSeries} disabled={native || singleSeries}>
             {t('ribbonChartAddSeries')}
           </button>
         </div>
         <div className="modal-actions">
-          <button className="btn-primary" onClick={insert}>
-            {t('ribbonInsert')}
+          <button className="btn-primary" onClick={commit}>
+            {source ? t('ribbonChartUpdate') : t('ribbonInsert')}
           </button>
           <button onClick={onClose}>{t('ribbonCancel')}</button>
         </div>
