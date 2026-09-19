@@ -16,6 +16,10 @@ export interface ShellWindowEntry {
   /** Home renderer crashed and awaits its Reload decision (dedupe guard) */
   homeRendererCrashed: boolean
   primary: boolean
+  /** this window's close finished its bookkeeping and 'closed' is imminent:
+   *  any LATER session write must leave it out (BUG-1218 — the recovery
+   *  rewrite after an aborted quit used to resurrect it) */
+  closingConfirmed?: boolean
 }
 
 /**
@@ -45,6 +49,16 @@ export class ShellWindowRegistry {
 
   list(): readonly ShellWindowEntry[] {
     return this.entries
+  }
+
+  /** entries a session write serializes: creation order, minus a window its
+   *  own ordinary close excludes and windows whose close already went
+   *  through ('closed' is imminent, but between the confirmed close and that
+   *  asynchronous event any write would re-serialize them back into the
+   *  session and resurrect them on the next launch — BUG-1218). The registry
+   *  itself keeps them listed until 'closed' removes them. */
+  persistableEntries(exclude?: ShellWindowEntry): readonly ShellWindowEntry[] {
+    return this.entries.filter((e) => e !== exclude && !e.closingConfirmed)
   }
 
   forWindow(win: BrowserWindow): ShellWindowEntry | undefined {

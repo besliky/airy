@@ -48,4 +48,17 @@ describe('quit rollback wiring (BUG-1216)', () => {
     expect(shellMain).toContain('tagGuardTabs(')
     expect(shellMain).not.toContain('let closeConfirmed = false')
   })
+
+  it('a confirmed-closing window is marked only after its own snapshot write (BUG-1218)', () => {
+    // session writes serialize the registry's persistable entries...
+    expect(shellMain).toContain('shellWindows.persistableEntries(exclude)')
+    // ...and finishWindowClose marks the closer AFTER the persist block: the
+    // quit snapshot and the last-window close legitimately include the
+    // closer, every LATER write (recovery rewrite, a sibling's ordinary
+    // close) must not resurrect it
+    const persistAt = shellMain.indexOf('else persistSessionState(decision.skipStaged)')
+    const markAt = shellMain.indexOf('entry.closingConfirmed = true')
+    expect(persistAt).toBeGreaterThan(-1)
+    expect(markAt).toBeGreaterThan(persistAt)
+  })
 })

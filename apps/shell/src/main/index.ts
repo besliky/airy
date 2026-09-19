@@ -765,9 +765,10 @@ function sessionRestoreEnabled(): boolean {
 let sessionSaveTimer: ReturnType<typeof setTimeout> | null = null
 
 /** write the live windows' session in window order (skipStaged drops
- *  untitled-staged tabs — quit only; exclude leaves a closing window out) */
+ *  untitled-staged tabs — quit only; exclude leaves a closing window out;
+ *  windows whose close already went through never serialize — BUG-1218) */
 function persistSessionState(skipStaged = false, exclude?: ShellWindowEntry): void {
-  const entries = shellEntries().filter((e) => e !== exclude)
+  const entries = shellWindows.persistableEntries(exclude)
   if (entries.length === 0) return
   try {
     const stagingDir = skipStaged ? UNTITLED_STAGING_DIR() : null
@@ -1127,9 +1128,18 @@ function finishWindowClose(entry: ShellWindowEntry): void {
       removeStagedTabFile(tab.filePath)
   }
   const decision = quitFlow.closeDecision(shellEntries().length)
-  if (!decision.persist) return
-  if (decision.excludeClosing) persistSessionState(false, entry)
-  else persistSessionState(decision.skipStaged)
+  if (decision.persist) {
+    if (decision.excludeClosing) persistSessionState(false, entry)
+    else persistSessionState(decision.skipStaged)
+  }
+  // mark only AFTER this window's own snapshot write (the quit snapshot and
+  // the last-window ordinary close legitimately include the closer): every
+  // write from here on — another window's ordinary close, the recovery
+  // rewrite when a later guard cancels the quit — must leave this window
+  // out; 'closed' removes it from the registry moments later (BUG-1218: the
+  // recovery rewrite used to resurrect a window whose confirmed close had
+  // not yet received its asynchronous 'closed' event)
+  entry.closingConfirmed = true
 }
 
 /**

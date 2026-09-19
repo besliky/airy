@@ -124,3 +124,45 @@ describe('ShellWindowRegistry', () => {
     expect(registry.managerForSender(undefined)).toBe(primary.manager)
   })
 })
+
+describe('persistableEntries (session write source)', () => {
+  it('serializes every registered window in creation order', () => {
+    const registry = new ShellWindowRegistry()
+    const primary = makeEntry(1, 10)
+    const secondary = makeEntry(2, 20)
+    registry.add(primary)
+    registry.add(secondary)
+    expect(registry.persistableEntries()).toEqual([primary, secondary])
+  })
+
+  it('leaves out the window its own ordinary close excludes', () => {
+    const registry = new ShellWindowRegistry()
+    const primary = makeEntry(1, 10)
+    const secondary = makeEntry(2, 20)
+    registry.add(primary)
+    registry.add(secondary)
+    expect(registry.persistableEntries(secondary)).toEqual([primary])
+  })
+
+  it('leaves out a confirmed-closing window until its closed event lands (BUG-1218)', () => {
+    const registry = new ShellWindowRegistry()
+    const confirming = makeEntry(1, 10)
+    const surviving = makeEntry(2, 20)
+    const lateGuard = makeEntry(3, 30)
+    registry.add(confirming)
+    registry.add(surviving)
+    registry.add(lateGuard)
+    // finishWindowClose marked the closer; its asynchronous 'closed' event
+    // has not fired yet, so it is still registered and listed...
+    confirming.closingConfirmed = true
+    expect(registry.list()).toEqual([confirming, surviving, lateGuard])
+    // ...but no session write may resurrect it: the recovery rewrite after
+    // another window cancels the quit, and any ordinary close that lands in
+    // the same gap, serialize the survivors only
+    expect(registry.persistableEntries()).toEqual([surviving, lateGuard])
+    expect(registry.persistableEntries(lateGuard)).toEqual([surviving])
+    // once 'closed' arrives the registry forgets it entirely, flag or not
+    registry.remove(confirming.win)
+    expect(registry.persistableEntries()).toEqual([surviving, lateGuard])
+  })
+})
