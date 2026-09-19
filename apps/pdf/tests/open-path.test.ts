@@ -133,7 +133,8 @@ describe('pdf create-document IPC', () => {
     )
 
     expect(result).toEqual({ ok: true, path: '/tmp/Summary.pdf' })
-    expect(createDocument).toHaveBeenCalledWith(request)
+    // the sender's webContents id rides along so the tab opens in the asking window (BUG-1107)
+    expect(createDocument).toHaveBeenCalledWith(request, lastWebContents.id)
   })
 
   it('rejects unregistered or destroyed senders', async () => {
