@@ -979,9 +979,48 @@ async function zipToBase64(zip: JSZip): Promise<string> {
   return btoa(binary)
 }
 
+/** column letters (A, B, … AA) → 1-based column index */
+function xlsxColIndex(letters: string): number {
+  let n = 0
+  for (const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64)
+  return n
+}
+
+/** 1-based column index → letters (A, B, … AA) */
+function xlsxColLetters(col1: number): string {
+  let s = ''
+  let n = col1
+  while (n > 0) {
+    s = String.fromCharCode(65 + ((n - 1) % 26)) + s
+    n = Math.floor((n - 1) / 26)
+  }
+  return s || 'A'
+}
+
+/** one worksheet cell as raw XML plus its 1-based column index */
+interface SheetCell {
+  col: number
+  xml: string
+}
+
+function parseSheetCells(cellsXml: string): SheetCell[] {
+  const out: SheetCell[] = []
+  const re = /<c\b[^>]*\/>|<c\b[^>]*>[\s\S]*?<\/c>/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(cellsXml)) !== null) {
+    const letters = /\br="([A-Z]+)\d+"/.exec(m[0])?.[1]
+    out.push({ col: letters ? xlsxColIndex(letters) : 0, xml: m[0] })
+  }
+  return out
+}
+
 /**
- * Patch the Sheet1 sheetData inside an embedded xlsx file (base64).
- * Rewrites category column A and each series column with the provided values.
+ * Patch the Sheet1 data rectangle inside an embedded xlsx (base64): rewrite
+ * only the cells of A1:last (header + category column + series columns) and
+ * leave every other cell of the sheet untouched, so Excel-authored helpers,
+ * notes and formulas outside the chart range survive (BUG-1008). Inside the
+ * rectangle a cell that carried a <f> formula keeps it — only its cached <v>
+ * updates, the way Word refreshes a workbook on data edits.
  * Returns the updated base64, or null on failure.
  */
 export async function patchChartWorkbookXlsxBase64(
@@ -997,43 +1036,122 @@ export async function patchChartWorkbookXlsxBase64(
     const zip = await JSZip.loadAsync(bytes)
     const sheetFile = zip.file('xl/worksheets/sheet1.xml')
     if (!sheetFile) return null
-
-    // Replace only Sheet1's sheetData in place, using inline strings so
-    // sharedStrings.xml (and every other part: styles, extra sheets, defined
-    // names) survives untouched.
-    const inlineStr = (ref: string, text: string) =>
-      `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${escapeXmlText(text)}</t></is></c>`
-    const headerCells = [inlineStr('A1', '')]
-    for (let j = 0; j < series.length; j++) {
-      headerCells.push(inlineStr(`${xlsxColLetter(j + 1)}1`, series[j].name))
-    }
-    const dataRows: string[] = []
-    for (let i = 0; i < categories.length; i++) {
-      const rowNum = i + 2
-      // numeric categories (scatter x values) become number cells
-      const xNum = catNum(categories[i])
-      const cells = [
-        xNum !== null
-          ? `<c r="A${rowNum}"><v>${xNum}</v></c>`
-          : inlineStr(`A${rowNum}`, categories[i]),
-      ]
-      for (let j = 0; j < series.length; j++) {
-        const val = series[j].values[i]
-        if (val !== null && val !== undefined) {
-          cells.push(`<c r="${xlsxColLetter(j + 1)}${rowNum}"><v>${val}</v></c>`)
-        }
-      }
-      dataRows.push(`<row r="${rowNum}">${cells.join('')}</row>`)
-    }
-    const newSheetData = `<sheetData><row r="1">${headerCells.join('')}</row>${dataRows.join('')}</sheetData>`
-
     const sheetXml = await sheetFile.async('string')
     if (!/<sheetData\/>|<sheetData[\s>]/.test(sheetXml)) return null
+
+    // Inline strings keep sharedStrings.xml (and every other part: styles,
+    // extra sheets, defined names) valid without touching it.
+    const esc = escapeXmlText
+    const inlineStrCell = (ref: string, text: string, style = '') =>
+      `<c r="${ref}"${style} t="inlineStr"><is><t xml:space="preserve">${esc(text)}</t></is></c>`
+    const numCell = (ref: string, val: number, style = '') =>
+      `<c r="${ref}"${style}><v>${val}</v></c>`
+
+    // existing rows by number, verbatim xml + parsed cells
+    const existingRows = new Map<number, { xml: string; open: string; cells: SheetCell[] }>()
+    const rowRe = /<row\b[^>]*\/>|<row\b[^>]*>[\s\S]*?<\/row>/g
+    let maxExistingRow = 0
+    let maxExistingCol = 0
+    let rm: RegExpExecArray | null
+    while ((rm = rowRe.exec(sheetXml)) !== null) {
+      const rowXml = rm[0]
+      const rNum = Number(/\br="(\d+)"/.exec(rowXml)?.[1] ?? 0)
+      if (!rNum) continue
+      const selfClosing = /\/>$/.test(rowXml)
+      const open = selfClosing
+        ? rowXml.slice(0, -2) + '>'
+        : rowXml.slice(0, rowXml.indexOf('>') + 1)
+      const cells = parseSheetCells(
+        selfClosing ? '' : rowXml.slice(open.length, rowXml.length - '</row>'.length),
+      )
+      for (const c of cells) {
+        maxExistingCol = Math.max(maxExistingCol, c.col)
+        maxExistingRow = Math.max(maxExistingRow, rNum)
+      }
+      existingRows.set(rNum, { xml: rowXml, open, cells })
+    }
+
+    const lastCol = series.length + 1 // A (categories) + one column per series
+    const lastDataRow = categories.length + 1
+
+    /** new rectangle cell for one position, merging with the existing cell */
+    const mergedCell = (
+      col: number,
+      row: number,
+      value: string | number | null,
+    ): { col: number; xml: string } | null => {
+      const existing = existingRows.get(row)?.cells.find((c) => c.col === col)
+      if (value === null) return null // point removed: the old cell goes too
+      const style =
+        existing && /\bs="\d+"/.test(existing.xml)
+          ? ` ${/\bs="\d+"/.exec(existing.xml)![0]}`
+          : ''
+      const ref = `${xlsxColLetters(col)}${row}`
+      const formula = existing
+        ? /<f\b[^>]*>[\s\S]*?<\/f>|<f\b[^>]*\/>/.exec(existing.xml)?.[0]
+        : undefined
+      if (formula !== undefined) {
+        // keep the authored formula, refresh only its cached value
+        return {
+          col,
+          xml:
+            typeof value === 'number'
+              ? `<c r="${ref}"${style}>${formula}<v>${value}</v></c>`
+              : `<c r="${ref}"${style} t="str">${formula}<v>${esc(value)}</v></c>`,
+        }
+      }
+      return {
+        col,
+        xml:
+          typeof value === 'number'
+            ? numCell(ref, value, style)
+            : inlineStrCell(ref, value, style),
+      }
+    }
+
+    const rowsXml: string[] = []
+    for (let r = 1; r <= Math.max(lastDataRow, maxExistingRow); r++) {
+      const existing = existingRows.get(r)
+      if (r > lastDataRow) {
+        if (existing) rowsXml.push(existing.xml) // outside the rectangle: byte-identical
+        continue
+      }
+      // rectangle row: header first, then category + series values
+      const values: Array<string | number | null> =
+        r === 1
+          ? ['', ...series.map((s) => s.name)]
+          : [
+              catNum(categories[r - 2]) ?? categories[r - 2],
+              ...series.map((s) => s.values[r - 2] ?? null),
+            ]
+      const cells: Array<{ col: number; xml: string }> = []
+      for (let col = 1; col <= lastCol; col++) {
+        const cell = mergedCell(col, r, values[col - 1] ?? null)
+        if (cell) cells.push(cell)
+      }
+      // cells right of the data rectangle survive (helper columns, notes)
+      for (const cell of existing?.cells ?? []) {
+        if (cell.col > lastCol) cells.push(cell)
+      }
+      cells.sort((a, b) => a.col - b.col)
+      if (cells.length === 0 && !existing) continue
+      rowsXml.push(`${existing ? existing.open : `<row r="${r}">`}${cells.map((c) => c.xml).join('')}</row>`)
+    }
+    const newSheetData = `<sheetData>${rowsXml.join('')}</sheetData>`
+
     let updatedSheet = sheetXml.replace(
       /<sheetData\/>|<sheetData[^>]*>[\s\S]*?<\/sheetData>/,
       newSheetData,
     )
-    const lastRef = `${xlsxColLetter(series.length)}${categories.length + 1}`
+    // dimension covers the union of the old extent and the new data rectangle
+    const dim = /<dimension ref="A1:([A-Z]+)(\d+)"\s*\/>/.exec(sheetXml)
+    const dimCol = dim ? xlsxColIndex(dim[1]) : 1
+    const dimRow = dim ? Number(dim[2]) : 1
+    const lastRef = `${xlsxColLetters(Math.max(lastCol, dimCol, maxExistingCol))}${Math.max(
+      lastDataRow,
+      dimRow,
+      maxExistingRow,
+    )}`
     updatedSheet = updatedSheet.replace(/<dimension[^>]*\/>/, `<dimension ref="A1:${lastRef}"/>`)
 
     zip.file('xl/worksheets/sheet1.xml', updatedSheet)
