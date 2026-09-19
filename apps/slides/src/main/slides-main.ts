@@ -4353,8 +4353,10 @@ export function registerSlidesIpc(): void {
       }
       try {
         // atomic (temp + rename): a crash mid-write can only damage the
-        // dot-prefixed temp, never a previous export at the same path
-        await atomicWriteFile(op.filePath, Buffer.from(op.bytesBase64, 'base64'))
+        // dot-prefixed temp, never a previous export at the same path. The
+        // bytes arrive as a structured-cloned Uint8Array (BUG-1209) —
+        // atomicWriteFile takes it directly, no base64 decode copy
+        await atomicWriteFile(op.filePath, op.bytes)
         shell.showItemInFolder(op.filePath)
         return { ok: true, path: op.filePath }
       } catch (err) {

@@ -247,16 +247,6 @@ export interface VideoExportOutcome {
   error?: string
 }
 
-/** Blob → base64 (chunked to avoid call stack overflow — same as screen recording). */
-async function blobToBase64(blob: Blob): Promise<string> {
-  const buf = new Uint8Array(await blob.arrayBuffer())
-  let bin = ''
-  for (let i = 0; i < buf.length; i += 0x8000) {
-    bin += String.fromCharCode(...buf.subarray(i, i + 0x8000))
-  }
-  return btoa(bin)
-}
-
 /**
  * Export the deck as a video: slides render to PNGs through the images-export
  * path, the pure timeline paces them by rehearsed timings (or the fallback
@@ -331,7 +321,9 @@ export async function exportVideo(
     if (!blob) return { ok: false } // canceled (or nothing recorded)
     const r = await window.slidesApi.exportVideo({
       filePath: target,
-      bytesBase64: await blobToBase64(blob),
+      // binary over structured clone — no base64 string ever materializes
+      // (BUG-1209); the Uint8Array is a zero-copy view over the ArrayBuffer
+      bytes: new Uint8Array(await blob.arrayBuffer()),
       mimeType: mime.mimeType,
     })
     ctx.setStatus(
