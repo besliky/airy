@@ -3533,6 +3533,18 @@ th.cell-rev-del {
   margin: 0 0 8pt;
 }
 
+/* Word sums adjacent paragraph spacing (space-after + space-before); CSS
+   collapses sibling margins to the max, packing intra-page content 8–10.7px
+   tighter than Word (BUG-1401). A zero-height flow-root box cannot
+   self-collapse, so both margins around it apply in full — the same effect
+   the page-gap widget already has at page boundaries. Inserted as widget
+   decorations between DOM-adjacent blocks that declare spacing on both
+   sides (SpacingSeamsExtension); measurement/preview clones keep it. */
+.doc-spacing-seam {
+  display: flow-root;
+  height: 0;
+}
+
 /* M4 always-on pagination in the canvas: page gap = previous page's bottom margin (white) + inter-page band (gray) + next page's top margin (white) */
 .page-gap {
   position: relative;
@@ -3768,13 +3780,17 @@ th.cell-rev-del {
   user-select: none;
 }
 
-/* when a page gap is right next to a page-break indicator, hide the duplicate dashed marker (keep placeholder height) */
-.page-gap + .page-break-before {
+/* when a page gap is right next to a page-break indicator, hide the duplicate dashed marker (keep placeholder height);
+   a spacing seam may sit between the two (seam renders ahead of the gap widget, but match both orders) */
+.page-gap + .page-break-before,
+.page-gap + .doc-spacing-seam + .page-break-before {
   border-top-color: transparent;
 }
 
 .page-gap + .page-break-before:where(:not(.doc-li))::before,
-.page-gap + .doc-li.page-break-before::after {
+.page-gap + .doc-li.page-break-before::after,
+.page-gap + .doc-spacing-seam + .page-break-before:where(:not(.doc-li))::before,
+.page-gap + .doc-spacing-seam + .doc-li.page-break-before::after {
   display: none;
 }
 

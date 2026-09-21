@@ -125,6 +125,7 @@ import {
   suppressPageLeadMargin,
   type PageGapSpec,
 } from './editor/pagination-gaps'
+import { syncSpacingSeams } from './editor/spacing-seams'
 import { syncLineNumberOverlays } from './line-numbers'
 import { setColumnLayout } from './editor/column-layout'
 import {
@@ -2919,6 +2920,9 @@ export function App() {
       // consecutive anchor-paragraph runs collapse onto their band union before
       // measurement (layout-affecting, idempotent)
       syncAnchorBands(pm, factor)
+      // Word-like adjacent-spacing seams first (BUG-1401): they un-collapse
+      // sibling margins, so measurement must read the DOM with them in place
+      if (editor) syncSpacingSeams(editor.view)
       // a columned canvas measures + slices in the single-flow measuring state (fillLineBoxes
       // also reads the DOM for line sampling, so it must share the state); display-state DOM
       // reads like gap positioning happen outside the measuring state
@@ -3942,6 +3946,14 @@ export function App() {
     let lines = 0
     if (pm) {
       for (const el of Array.from(pm.children) as HTMLElement[]) {
+        // pagination plumbing (page gaps, float hosts, spacing seams) has no
+        // text: counting its height as lines inflated the estimate
+        if (
+          el.classList.contains('page-gap') ||
+          el.classList.contains('page-float-host') ||
+          el.classList.contains('doc-spacing-seam')
+        )
+          continue
         const cs = getComputedStyle(el)
         let lh = parseFloat(cs.lineHeight)
         if (!Number.isFinite(lh) || lh <= 0) lh = (parseFloat(cs.fontSize) || 15) * 1.2

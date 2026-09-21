@@ -14,6 +14,7 @@ const SKIP_CLASSES = new Set([
   'page-gap',
   'page-gap-cut',
   'page-gap-table-fill',
+  'doc-spacing-seam',
   'page-cut-overlays',
   'page-break-lead',
   'page-hf',
