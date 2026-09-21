@@ -56,9 +56,20 @@ describe('quit rollback wiring (BUG-1216)', () => {
     // quit snapshot and the last-window close legitimately include the
     // closer, every LATER write (recovery rewrite, a sibling's ordinary
     // close) must not resurrect it
-    const persistAt = shellMain.indexOf('else persistSessionState(decision.skipStaged)')
+    const persistAt = shellMain.indexOf(': persistSessionState(decision.skipStaged)')
     const markAt = shellMain.indexOf('entry.closingConfirmed = true')
     expect(persistAt).toBeGreaterThan(-1)
     expect(markAt).toBeGreaterThan(persistAt)
+  })
+})
+
+describe('quit snapshot write failure re-arm (BUG-1224)', () => {
+  it('finishWindowClose resets persist-once when the snapshot write fails', () => {
+    // persistSessionState reports whether the write landed (it still logs
+    // and never throws); a failed quit-time write must disarm persist-once
+    // so the NEXT confirmed close retries instead of leaving a stale
+    // session that resurrects already-closed windows
+    expect(shellMain).toContain('const written = decision.excludeClosing')
+    expect(shellMain).toContain('if (!written) quitFlow.markSnapshotWriteFailed()')
   })
 })

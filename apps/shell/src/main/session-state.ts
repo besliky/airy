@@ -41,7 +41,13 @@ const RESTORABLE_KINDS: ReadonlySet<string> = new Set([
   'html',
 ])
 
-/** cap against runaway/corrupt files opening thousands of tabs on launch */
+/**
+ * Cap against runaway/corrupt files opening thousands of tabs on launch — a
+ * GLOBAL total across windows: each window's parse receives only the
+ * remaining budget, so the sum cannot exceed the cap (BUG-1109 audit tail:
+ * the per-window parser used to add up to MAX_TABS of its own on top of an
+ * almost-full total, drifting the declared 64 to 127).
+ */
 const MAX_TABS = 64
 
 /** serialize one window's tab list (strip order preserved, file-backed only) */
@@ -79,12 +85,18 @@ export function serializeSession(
 /** Parse one window's raw entry list (shared by the v2 and legacy shapes).
  *  `seen` is per-window: opening the same file in two windows is a supported
  *  layout (runtime dedupe is per window), so only repeats INSIDE one window
- *  drop (BUG-1108). */
-function parseWindowTabs(raw: unknown, seen: Set<string>): SessionTabEntry[] {
+ *  drop (BUG-1108). `budget` bounds how many entries this window may add to
+ *  the caller's global MAX_TABS total (defaults to the full cap for the
+ *  single-window legacy shape). */
+function parseWindowTabs(
+  raw: unknown,
+  seen: Set<string>,
+  budget: number = MAX_TABS,
+): SessionTabEntry[] {
   if (!Array.isArray(raw)) return []
   const tabs: SessionTabEntry[] = []
   for (const entry of raw) {
-    if (tabs.length >= MAX_TABS) break
+    if (tabs.length >= budget) break
     if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) continue
     const { kind, path } = entry as Record<string, unknown>
     if (typeof kind !== 'string' || !RESTORABLE_KINDS.has(kind) || typeof path !== 'string')
@@ -105,16 +117,28 @@ export function parseSession(raw: unknown): SessionState {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw))
     return { windows: [], focusedWindow: 0 }
   const record = raw as Record<string, unknown>
-  // legacy single-window shape: { tabs, activePath } → one focused window
-  if (Array.isArray(record.tabs)) return { windows: [parseLegacyWindow(record)], focusedWindow: 0 }
-  if (!Array.isArray(record.windows)) return { windows: [], focusedWindow: 0 }
+  // the v2 multi-window shape wins when a (corrupt or hand-made) file carries
+  // both keys (BUG-1224): the legacy branch used to run first and silently
+  // discarded the `windows` array — the v2 writer never emits `tabs`, so the
+  // multi-window layout is the richer reading of the file
+  if (!Array.isArray(record.windows)) {
+    // legacy single-window shape: { tabs, activePath } → one focused window
+    if (Array.isArray(record.tabs))
+      return { windows: [parseLegacyWindow(record)], focusedWindow: 0 }
+    return { windows: [], focusedWindow: 0 }
+  }
   const windows: SessionWindowState[] = []
   let total = 0
   for (const rawWindow of record.windows) {
     if (total >= MAX_TABS) break
     if (rawWindow === null || typeof rawWindow !== 'object' || Array.isArray(rawWindow)) continue
     const windowSeen = new Set<string>()
-    const tabs = parseWindowTabs((rawWindow as Record<string, unknown>).tabs, windowSeen)
+    // only the REMAINING global budget may land in this window
+    const tabs = parseWindowTabs(
+      (rawWindow as Record<string, unknown>).tabs,
+      windowSeen,
+      MAX_TABS - total,
+    )
     if (tabs.length === 0) continue
     const activePath = (rawWindow as Record<string, unknown>).activePath
     windows.push({

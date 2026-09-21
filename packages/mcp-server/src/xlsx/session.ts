@@ -28,6 +28,7 @@ import {
   SOFFICE_FILTERS,
   sofficeMissingError,
 } from '../import/soffice.js'
+import { assertWithinOpenCap } from '../sessions/size-fence.js'
 import {
   SaveTargetExistsError,
   saveWorkbookViaSidecar,
@@ -276,6 +277,18 @@ export class XlsxSession {
           '(expected .xlsx, .xlsm, .xls or .ods).',
       )
     }
+    // SEC-1102 raw-size fence for parity with the docx/slides opens. The
+    // workbook bytes themselves never transit Node — the Rust sidecar reads
+    // the file — so this refuses runaway inputs before spawning any work;
+    // the declared-uncompressed (zip-bomb) budget for .xlsx is the sidecar's
+    // domain, not observable from Node without reading the bytes back in
+    let rawSize = 0
+    try {
+      rawSize = (await stat(path)).size
+    } catch {
+      // a missing/unreadable file reports through the open/conversion paths
+    }
+    assertWithinOpenCap(path, rawSize, 'xlsx')
     const client = io ?? (await defaultIo())
     let backingPath = path
     let tempDir: string | null = null

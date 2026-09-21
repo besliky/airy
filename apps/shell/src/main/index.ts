@@ -766,10 +766,13 @@ let sessionSaveTimer: ReturnType<typeof setTimeout> | null = null
 
 /** write the live windows' session in window order (skipStaged drops
  *  untitled-staged tabs — quit only; exclude leaves a closing window out;
- *  windows whose close already went through never serialize — BUG-1218) */
-function persistSessionState(skipStaged = false, exclude?: ShellWindowEntry): void {
+ *  windows whose close already went through never serialize — BUG-1218).
+ *  Returns whether the snapshot landed (the failure is logged here and must
+ *  never break tab operations — BUG-1224: callers with persist-once
+ *  bookkeeping re-arm their retry on a false return). */
+function persistSessionState(skipStaged = false, exclude?: ShellWindowEntry): boolean {
   const entries = shellWindows.persistableEntries(exclude)
-  if (entries.length === 0) return
+  if (entries.length === 0) return true
   try {
     const stagingDir = skipStaged ? UNTITLED_STAGING_DIR() : null
     const focusedIndex = (() => {
@@ -798,7 +801,9 @@ function persistSessionState(skipStaged = false, exclude?: ShellWindowEntry): vo
   } catch (err) {
     // session persistence must never break tab operations
     console.warn('[shell] session state save failed:', err)
+    return false
   }
+  return true
 }
 
 /** Persist the open-tab set (debounced — every open/close/reorder/activation fires this).
@@ -818,7 +823,9 @@ function scheduleSessionSave(): void {
 /**
  * Reopen the file-backed tabs from the previous run (quit or crash), window by
  * window in the saved order: the first saved window reuses the primary shell
- * window, every later one with surviving tabs gets its own window. Files that
+ * window, every later one with surviving tabs gets its own window, cascaded
+ * from the previously restored one (BUG-1223: they used to all anchor at the
+ * primary's bounds and open exactly on top of each other). Files that
  * no longer exist are skipped silently; restored tabs go through the same
  * routing as a manual open (recents, dedupe, renderer read grants). Returns
  * how many tabs were restored.
@@ -829,11 +836,19 @@ function restorePreviousSession(): number {
   if (!saved || saved.windows.length === 0) return 0
   const live = pruneSession(saved, (path) => existsSync(path))
   let opened = 0
+  // the cascade source walks with the windows actually created (BUG-1223):
+  // anchoring every secondary window at the primary's bounds opened them
+  // exactly on top of each other; each new window cascades from the previous
+  // one, like the "Move to New Window" path
+  let cascadeFrom = primaryBounds()
   live.windows.forEach((window, index) => {
     if (window.tabs.length === 0) return
-    const entry =
-      index === 0 ? shellEntries()[0] : createShellWindow({ cascadeFrom: primaryBounds() })
+    const entry = index === 0 ? shellEntries()[0] : createShellWindow({ cascadeFrom })
     if (!entry) return
+    if (!entry.win.isDestroyed()) {
+      const bounds = entry.win.getNormalBounds()
+      if (bounds.width > 0 && bounds.height > 0) cascadeFrom = bounds
+    }
     for (const tab of window.tabs) {
       if (routeDocumentPath(tab.path, entry.manager)) opened++
     }
@@ -1129,8 +1144,15 @@ function finishWindowClose(entry: ShellWindowEntry): void {
   }
   const decision = quitFlow.closeDecision(shellEntries().length)
   if (decision.persist) {
-    if (decision.excludeClosing) persistSessionState(false, entry)
-    else persistSessionState(decision.skipStaged)
+    const written = decision.excludeClosing
+      ? persistSessionState(false, entry)
+      : persistSessionState(decision.skipStaged)
+    // a failed quit-time snapshot write must not count as the one write
+    // (BUG-1224): quitSessionPersisted is already true, so without the
+    // re-arm every later confirmed close would skip its retry and the next
+    // launch would resurrect windows closed before the failure (disk full,
+    // userData gone read-only, …) from the stale snapshot
+    if (!written) quitFlow.markSnapshotWriteFailed()
   }
   // mark only AFTER this window's own snapshot write (the quit snapshot and
   // the last-window ordinary close legitimately include the closer): every
