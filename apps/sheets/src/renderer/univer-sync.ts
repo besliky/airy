@@ -142,6 +142,12 @@ import {
 } from './WorkbookVisuals'
 import { VISUAL_UNDO_COMMAND_ID } from './undo-carry'
 import {
+  nextVisualUndoToken,
+  pruneVisualUndoRegistry,
+  visualUndoRegistry,
+  type VisualUndoStep,
+} from './visual-undo-registry'
+import {
   BORDER_COMMAND_TYPES,
   CLOSURE_MAX_CELLS,
   journalSuppression,
@@ -163,10 +169,14 @@ export const MINIMUM_SHEET_ROW_COUNT = 1000
 /// without this reset a reopened workbook inherits the previous session's undo
 /// steps and ⌘Z replays stale mutations onto the fresh content.
 function clearUnitUndoHistory(runtime: UniverRuntime, unitId: string): void {
-  ;(runtime.univer as unknown as { __getInjector(): { get<T>(token: unknown): T } })
-    .__getInjector()
-    .get<{ clearUndoRedo(unitId: string): void }>(IUndoRedoService)
-    .clearUndoRedo(unitId)
+  const service = (
+    runtime.univer as unknown as { __getInjector(): { get<T>(token: unknown): T } }
+  ).__getInjector().get<{ clearUndoRedo(unitId: string): void }>(IUndoRedoService)
+  service.clearUndoRedo(unitId)
+  // The cleared stacks were the only reference to their visual-undo steps —
+  // release the closures now instead of retaining them all session
+  // (BUG-1109; undo-carry never replays visual steps across a swap).
+  pruneVisualUndoRegistry(service)
 }
 export const MINIMUM_SHEET_COLUMN_COUNT = 26
 
@@ -1810,16 +1820,12 @@ export async function readSheetRangeMapped(
 /// Reads a single-row/column vector for chart data-range edits. In lazy mode
 /// the range may lie outside the loaded window, so values come from the file
 /// (screen-mapped, journal edits overlaid) instead of the Univer model.
-interface VisualUndoStep {
-  undo(): void
-  redo(): void
-}
 
-// The command id lives in undo-carry.ts: cross-save carrying must truncate
+// The visual-undo steps themselves live in visual-undo-registry.ts: the
+// command id lives in undo-carry.ts because cross-save carrying must truncate
 // at these steps (their params are registry tokens resolving to closures
 // over the pre-save session state).
-const visualUndoRegistry = new Map<number, VisualUndoStep>()
-let visualUndoSequence = 0
+// visualUndoRuntimes guards the one-time mutation registration per runtime.
 const visualUndoRuntimes = new WeakSet<object>()
 
 /// Appends a registry step to the undo entry a Univer command just pushed, so
@@ -1860,8 +1866,7 @@ export function attachVisualUndoToLastStep(
     }
   ).__getInjector()
   ensureVisualUndoCommand(injector, runtime)
-  const token = ++visualUndoSequence
-  visualUndoRegistry.set(token, step)
+  const token = nextVisualUndoToken(step)
   const mutation = (direction: 'undo' | 'redo') => ({
     id: VISUAL_UNDO_COMMAND_ID,
     params: { token, direction },
@@ -1933,8 +1938,7 @@ export function pushVisualUndo(runtime: UniverRuntime, step: VisualUndoStep): vo
     }
   ).__getInjector()
   ensureVisualUndoCommand(injector, runtime)
-  const token = ++visualUndoSequence
-  visualUndoRegistry.set(token, step)
+  const token = nextVisualUndoToken(step)
   injector
     .get<{
       pushUndoRedo(item: {
