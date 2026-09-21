@@ -5,7 +5,10 @@
 // entries). Raw stat-first caps now refuse oversized files before a byte is
 // read (docx/slides/xlsx), and the slides open additionally walks the zip
 // central directory's declared uncompressed sizes against the same budget
-// the docx-engine fence uses.
+// the docx-engine fence uses. For workbooks the zip budget runs inside the
+// Rust sidecar (SEC-1103); the test at the bottom pins that its refusals
+// surface through the session open unchanged, and xlsx-integration.test.ts
+// drives the real binary against a forged bomb.
 import { mkdtemp, open, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,6 +21,8 @@ import { SlidesSession } from '../src/slides/session.js'
 import { XlsxSession } from '../src/xlsx/session.js'
 import type { XlsxIo } from '../src/xlsx/sidecar-client.js'
 import { buildFixturePptx } from './helpers/pptx-fixture.js'
+import { makeStubIo } from './helpers/stub-sidecar.js'
+import { patchCentralSizes } from './helpers/zip-bomb.js'
 
 let root: string
 
@@ -28,18 +33,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
-
-/** overwrite the declared uncompressed size of every central-directory record */
-function patchCentralSizes(bytes: Uint8Array, size: number): Uint8Array {
-  const out = bytes.slice()
-  const dv = new DataView(out.buffer, out.byteOffset, out.byteLength)
-  for (let i = 0; i + 28 <= out.length; i++) {
-    if (out[i] === 0x50 && out[i + 1] === 0x4b && out[i + 2] === 0x01 && out[i + 3] === 0x02) {
-      dv.setUint32(i + 24, size, true)
-    }
-  }
-  return out
-}
 
 /** a file whose stat size is huge but that occupies no real space (sparse) */
 async function writeSparseHuge(path: string, size: number): Promise<void> {
@@ -80,6 +73,26 @@ describe('open size fences (SEC-1102)', () => {
     await expect(XlsxSession.open(huge, root, io)).rejects.toThrow(
       /xlsx sessions cap open size at 536870912 bytes/,
     )
+  })
+
+  it('xlsx surface the sidecar zip-bomb refusal unchanged (the budget lives in the sidecar)', async () => {
+    // SEC-1103: workbook bytes never transit Node, so the declared-size
+    // budget runs inside the Rust sidecar and reaches this session as the
+    // open reply's error. The stub replays the exact refusal message the
+    // sidecar emits; the session must pass it through untouched — any
+    // generic "Cannot read" wrap here would hide the fence from the agent.
+    const book = join(root, 'bomb.xlsx')
+    await writeFile(book, 'stub-xlsx-bytes')
+    const io = makeStubIo({
+      openError: new Error(
+        'Workbook declares 2147483648 uncompressed bytes across its ZIP entries, ' +
+          'above the 1610612736 byte (1.5 GiB) open budget — the file may be a zip bomb.',
+      ),
+    })
+    await expect(XlsxSession.open(book, root, io)).rejects.toThrow(
+      /Workbook declares \d+ uncompressed bytes.*open budget/,
+    )
+    expect(io.calls.open).toEqual([book])
   })
 
   it('slides refuse a zip bomb declared in the central directory (per part)', async () => {

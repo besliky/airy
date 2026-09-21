@@ -13,6 +13,7 @@ import { beforeAll, afterAll, describe, expect, it } from 'vitest'
 
 import { csvToXlsxBuffer, buildWorksheetXml } from '../../../apps/sheets/src/gateway/csv-import.js'
 import { buildOdsFixture } from './helpers/odf-fixture.js'
+import { patchCentralSizes } from './helpers/zip-bomb.js'
 import { findSidecarBinary, sidecarMissingError } from '../src/xlsx/discovery.js'
 import { XlsxSession } from '../src/xlsx/session.js'
 import { XlsxSidecarClient } from '../src/xlsx/sidecar-client.js'
@@ -107,6 +108,20 @@ describeWithBinary(
         ).toBe(0)
       }
       await session.close()
+    })
+
+    it('refuses a zip bomb declared in the central directory (sidecar budget, SEC-1103)', async () => {
+      // A real workbook of a few KiB whose central directory declares
+      // gigabytes: the Rust sidecar must refuse it at open — from the
+      // declared sizes alone, before decompressing a single entry — and the
+      // refusal must reach the session caller unchanged (the Node wrapper
+      // adds no generic wrap around sidecar open errors).
+      const bombPath = join(root, 'bomb.xlsx')
+      const bomb = patchCentralSizes(await csvToXlsxBuffer('A,B\n1,2\n', 'S'), 600 * 1024 * 1024)
+      await writeFile(bombPath, bomb)
+      await expect(XlsxSession.open(bombPath, root, client!)).rejects.toThrow(
+        /Workbook declares \d+ uncompressed bytes across its ZIP entries, .*open budget/,
+      )
     })
 
     it('editing one sheet keeps every untouched zip entry byte-identical', async () => {

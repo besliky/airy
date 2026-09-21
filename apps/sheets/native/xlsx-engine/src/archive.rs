@@ -15,9 +15,18 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 use crate::SidecarError;
 
 const MAX_ENTRY_COUNT: usize = 10_000;
+/// Total uncompressed bytes the package's ZIP entries may declare, read
+/// from the central directory before a single entry is decompressed
+/// (SEC-1103 zip-bomb fence; 1.5 GiB for parity with the docx-engine and
+/// pptx open fences of PR #89 / SEC-1102). Unlike those engines no per-part
+/// cap applies here: worksheet reads stream in bounded chunks and real
+/// densely styled sheets already measure hundreds of MiB, so only the
+/// aggregate is fenced. The patch path keeps its own stricter per-entry
+/// limit (MAX_EXTRACTED_ENTRY_BYTES) for entries it must hold in memory.
+const MAX_TOTAL_UNCOMPRESSED_BYTES: u64 = 1610612736;
 /// Cap on a single decompressed entry handed to the patching layer. The
-/// archive itself has no size limit — only entries the gateway edits must
-/// fit in memory.
+/// archive itself has no size limit beyond MAX_TOTAL_UNCOMPRESSED_BYTES —
+/// only entries the gateway edits must fit in memory.
 // Densely styled worksheets can exceed 256 MiB as XML while remaining
 // ordinary workbooks on disk (the 88k-row suppliers fixture is ~307 MiB).
 // Keep a finite anti-bomb / memory bound, but allow that real-world case.
@@ -324,14 +333,67 @@ pub(crate) fn validate_entries(archive: &mut ZipArchive<File>) -> Result<(), Sid
             "Workbook contains too many ZIP entries.".into(),
         ));
     }
+    // Declared sizes come straight from the central-directory records
+    // (by_index_raw never inflates), so a zip bomb is refused before any
+    // decompression work exists to burn memory or CPU.
+    let mut declared_total: u64 = 0;
     for index in 0..archive.len() {
-        if canonical_entry_name(archive.by_index_raw(index)?.name()).is_none() {
+        let entry = archive.by_index_raw(index)?;
+        let declared_size = entry.size();
+        if canonical_entry_name(entry.name()).is_none() {
             return Err(SidecarError::Workbook(
                 "Workbook contains an unsafe ZIP path.".into(),
             ));
         }
+        declared_total = declared_total.saturating_add(declared_size);
+    }
+    if declared_total > MAX_TOTAL_UNCOMPRESSED_BYTES {
+        return Err(SidecarError::Workbook(format!(
+            "Workbook declares {declared_total} uncompressed bytes across its ZIP entries, \
+             above the {MAX_TOTAL_UNCOMPRESSED_BYTES} byte (1.5 GiB) open budget — the file \
+             may be a zip bomb."
+        )));
     }
     Ok(())
+}
+
+/// Rewrite the declared uncompressed size (central-directory field at
+/// offset 24) of each record whose name ends with `suffix`, walking the
+/// records sequentially from the end-of-central-directory pointer so a
+/// `PK\x01\x02` byte run inside compressed data can never be mistaken for
+/// a record header. Returns how many records were patched — callers assert
+/// it to pin the fixture shape. This forges a zip bomb: tiny real bytes,
+/// giant declared ones.
+#[cfg(test)]
+pub(crate) fn forge_declared_size(path: &Path, suffix: &str, declared: u32) -> usize {
+    fn read_u16(bytes: &[u8], at: usize) -> usize {
+        u16::from_le_bytes([bytes[at], bytes[at + 1]]) as usize
+    }
+    fn read_u32(bytes: &[u8], at: usize) -> u32 {
+        u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])
+    }
+    let mut bytes = fs::read(path).expect("read zip fixture");
+    let eocd = bytes
+        .windows(4)
+        .rposition(|window| window == b"PK\x05\x06")
+        .expect("fixture has an end-of-central-directory record");
+    let mut record = read_u32(&bytes, eocd + 16) as usize; // central-directory offset
+    let mut patched = 0;
+    for _ in 0..read_u16(&bytes, eocd + 10) {
+        assert_eq!(&bytes[record..record + 4], b"PK\x01\x02", "fixture record walk");
+        let name_len = read_u16(&bytes, record + 28);
+        let extra_len = read_u16(&bytes, record + 30);
+        let comment_len = read_u16(&bytes, record + 32);
+        let name =
+            String::from_utf8_lossy(&bytes[record + 46..record + 46 + name_len]).into_owned();
+        if name.ends_with(suffix) {
+            bytes[record + 24..record + 28].copy_from_slice(&declared.to_le_bytes());
+            patched += 1;
+        }
+        record += 46 + name_len + extra_len + comment_len;
+    }
+    fs::write(path, bytes).expect("write forged zip fixture");
+    patched
 }
 
 fn open_validated(path: &Path) -> Result<ZipArchive<File>, SidecarError> {
@@ -557,6 +619,27 @@ mod tests {
 
         let error = read_entries_to_dir(&source, &["missing.xml".into()], &output_dir).unwrap_err();
         assert!(error.to_string().contains("missing"));
+    }
+
+    /// SEC-1103: the session-less archive commands walk the same central
+    /// directory fence — a declared bomb is refused before any entry is
+    /// read, scanned, or copied into a save.
+    #[test]
+    fn archive_commands_refuse_a_declared_zip_bomb() {
+        let dir = tempdir();
+        let source = build_fixture(&dir);
+        assert_eq!(forge_declared_size(&source, ".xml", 600 * 1024 * 1024), 3);
+        let error = archive_manifest(&source).unwrap_err();
+        let message = error.to_string();
+        assert!(
+            message.contains("uncompressed bytes") && message.contains("open budget"),
+            "unexpected refusal: {message}"
+        );
+        assert!(scan_entries_for_text(&source, &["keep/a.xml".into()], "a").is_err());
+        assert!(read_entries_to_dir(&source, &["keep/a.xml".into()], &dir).is_err());
+        let target = dir.join("saved.zip");
+        assert!(save_archive(&source, &target, &[], &[], &[]).is_err());
+        assert!(!target.exists());
     }
 
     fn read_entry(archive: &mut ZipArchive<File>, name: &str) -> String {
