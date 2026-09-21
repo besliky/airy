@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
 import { AgentLoop, type AgentStreamCallbacks, type AgentTransport } from '@airy-office/agent-core'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { createDocsSkill } from '../src/renderer/ai/docs-skill'
 import { buildDocContext, countWords } from '../src/renderer/ai/protocol'
@@ -39,23 +40,17 @@ const para = (t: string): JsonNode => ({
   content: [text(t)],
 })
 
-/** Editors created during the current test; destroyed in afterEach so ProseMirror's
- * DOMObserver timers can't fire after the JSDOM environment is torn down. */
-const liveEditors: Editor[] = []
-
+/** Mounted editors are registered with the tracked-editor helper; the
+ * afterEach drain destroys them (and settles ProseMirror's DOMObserver)
+ * before the JSDOM environment is torn down. */
 function createEditor(content: JsonNode[]): Editor {
-  const editor = new Editor({
-    element: document.createElement('div'),
+  return createTrackedEditor({
     extensions: editorExtensions,
     content: { type: 'doc', content },
   })
-  liveEditors.push(editor)
-  return editor
 }
 
-afterEach(() => {
-  for (const editor of liveEditors.splice(0)) editor.destroy()
-})
+afterEach(() => drainTrackedEditors())
 
 /** 0 h1 | 1 p | 2 h2 | 3 p */
 const fixture = () => [

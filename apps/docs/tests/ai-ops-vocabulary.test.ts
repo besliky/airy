@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
 
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { createBridgeCommandHandler } from '../src/renderer/ai/bridge-commands'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { setModuleLang } from '../src/renderer/i18n/locale'
@@ -17,15 +18,10 @@ import { setModuleLang } from '../src/renderer/i18n/locale'
 
 setModuleLang('en')
 
-const editors: Editor[] = []
-
-afterEach(() => {
-  for (const editor of editors.splice(0)) editor.destroy()
-})
+afterEach(() => drainTrackedEditors())
 
 function makeEditor(): Editor {
-  const editor = new Editor({
-    element: document.createElement('div'),
+  return createTrackedEditor({
     extensions: editorExtensions,
     content: {
       type: 'doc',
@@ -48,8 +44,6 @@ function makeEditor(): Editor {
       ],
     },
   })
-  editors.push(editor)
-  return editor
 }
 
 function makeHandler(editor: Editor) {

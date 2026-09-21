@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { executeOps } from '../src/renderer/ai/ops'
 import { loadLocale, setModuleLang } from '../src/renderer/i18n/locale'
@@ -55,21 +56,13 @@ const protectedTable = (attrs: Record<string, unknown> = {}): JsonNode => ({
   },
 })
 
-const editors = new Set<Editor>()
-
-afterEach(() => {
-  for (const editor of editors) editor.destroy()
-  editors.clear()
-})
+afterEach(() => drainTrackedEditors())
 
 function createEditor(content: JsonNode[]): Editor {
-  const editor = new Editor({
-    element: document.createElement('div'),
+  return createTrackedEditor({
     extensions: editorExtensions,
     content: { type: 'doc', content },
   })
-  editors.add(editor)
-  return editor
 }
 
 /** standard fixture: 0 h1 | 1 p | 2 h2 | 3 p | 4 li | 5 protected table */

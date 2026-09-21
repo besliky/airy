@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
 import type { CommentInfo } from '@airy-office/docx-engine'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import {
   addCommentToSelection,
@@ -25,20 +26,13 @@ const para = (t: string): JsonNode => ({
   content: [text(t)],
 })
 
-const editors = new Set<Editor>()
-afterEach(() => {
-  for (const editor of editors) editor.destroy()
-  editors.clear()
-})
+afterEach(() => drainTrackedEditors())
 
 function createEditor(content: JsonNode[]): Editor {
-  const editor = new Editor({
-    element: document.createElement('div'),
+  return createTrackedEditor({
     extensions: editorExtensions,
     content: { type: 'doc', content },
   })
-  editors.add(editor)
-  return editor
 }
 
 const NUM_IDS = { bullet: null, ordered: null }

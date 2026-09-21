@@ -1,17 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
 import { Markdown } from '@airy-office/ui'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { DOC_NAV_SCHEME, navigateToBlock, parseDocNavHref } from '../src/renderer/ai/doc-nav'
 import { AGENT_SYSTEM_PROMPT } from '../src/renderer/ai/protocol'
 
-const editors = new Set<Editor>()
-afterEach(() => {
-  for (const editor of editors) editor.destroy()
-  editors.clear()
-})
+afterEach(() => drainTrackedEditors())
 
 describe('doc-nav href parsing', () => {
   it('accepts docnav block hrefs and rejects everything else', () => {
@@ -52,13 +49,10 @@ describe('Markdown nav links', () => {
 
 describe('navigateToBlock', () => {
   function createEditor(content: unknown[]): Editor {
-    const editor = new Editor({
-      element: document.createElement('div'),
+    return createTrackedEditor({
       extensions: editorExtensions,
       content: { type: 'doc', content } as never,
     })
-    editors.add(editor)
-    return editor
   }
   const para = (t: string) => ({
     type: 'docParagraph',

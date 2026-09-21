@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { buildRevisionsContext } from '../src/renderer/ai/protocol'
 import { executeTool } from '../src/renderer/ai/tools'
@@ -23,20 +24,13 @@ const para = (content: JsonNode[]): JsonNode => ({
   content,
 })
 
-const editors = new Set<Editor>()
-afterEach(() => {
-  for (const editor of editors) editor.destroy()
-  editors.clear()
-})
+afterEach(() => drainTrackedEditors())
 
 function createEditor(content: JsonNode[]): Editor {
-  const editor = new Editor({
-    element: document.createElement('div'),
+  return createTrackedEditor({
     extensions: editorExtensions,
     content: { type: 'doc', content },
   })
-  editors.add(editor)
-  return editor
 }
 
 const NUM_IDS = { bullet: null, ordered: null }

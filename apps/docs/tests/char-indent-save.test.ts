@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
 import { parseDocx, saveDocx } from '@airy-office/docx-engine'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from '../src/renderer/editor/convert'
 import { executeTool } from '../src/renderer/ai/tools'
 
@@ -29,19 +30,12 @@ const BODY =
   '<w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:t>justified body paragraph</w:t></w:r></w:p>'
 const NUM_IDS = { bullet: null, ordered: null }
 
-const editors: Editor[] = []
-afterEach(() => {
-  for (const editor of editors.splice(0)) editor.destroy()
-})
+afterEach(() => drainTrackedEditors())
 
 async function openEditor() {
   const { editorExtensions } = await import('../src/renderer/editor/extensions')
   const parsed = await parseDocx(await buildDocx({ bodyXml: BODY, stylesXml: STYLES }))
-  const editor = new Editor({
-    element: document.createElement('div'),
-    extensions: editorExtensions,
-  })
-  editors.push(editor)
+  const editor = createTrackedEditor({ extensions: editorExtensions })
   editor.commands.setContent(blocksToPmDoc(parsed.blocks) as never)
   return { editor, parsed }
 }

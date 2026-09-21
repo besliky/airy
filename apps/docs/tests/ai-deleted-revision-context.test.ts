@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { buildDocumentContext, countWords } from '../src/renderer/ai/protocol'
 import { executeTool } from '../src/renderer/ai/tools'
@@ -35,16 +36,11 @@ const para = (...content: JsonNode[]): JsonNode => ({
   content,
 })
 
-const liveEditors: Editor[] = []
-
-afterEach(() => {
-  for (const editor of liveEditors.splice(0)) editor.destroy()
-})
+afterEach(() => drainTrackedEditors())
 
 /** 0 live | 1 fully del-marked | 2 live + del tail | 3 blockRevision del */
 function createEditor(): Editor {
-  const editor = new Editor({
-    element: document.createElement('div'),
+  return createTrackedEditor({
     extensions: editorExtensions,
     content: {
       type: 'doc',
@@ -59,8 +55,6 @@ function createEditor(): Editor {
       ],
     },
   })
-  liveEditors.push(editor)
-  return editor
 }
 
 describe('document snapshot vs tracked deletions', () => {
@@ -103,8 +97,7 @@ describe('document snapshot vs tracked deletions', () => {
       attrs: { omml: '', mathml: '', latex: 'E=mc^2', text: 'E = mc 2' },
       ...(marks ? { marks } : {}),
     })
-    const editor = new Editor({
-      element: document.createElement('div'),
+    const editor = createTrackedEditor({
       extensions: editorExtensions,
       content: {
         type: 'doc',
@@ -115,7 +108,6 @@ describe('document snapshot vs tracked deletions', () => {
         ],
       },
     })
-    liveEditors.push(editor)
     const context = buildDocumentContext(editor)
     // live formula (alone or next to a deleted run) stays live content
     expect(context).toContain('0|p|')
@@ -136,15 +128,13 @@ describe('document snapshot vs tracked deletions', () => {
         ...(deleted ? { blockRevision: { kind: 'del', ...REV } } : {}),
       },
     })
-    const editor = new Editor({
-      element: document.createElement('div'),
+    const editor = createTrackedEditor({
       extensions: editorExtensions,
       content: {
         type: 'doc',
         content: [protectedBlock('Old figure', true), protectedBlock('New figure', false)],
       },
     })
-    liveEditors.push(editor)
     const context = buildDocumentContext(editor)
     expect(context).toContain('0|Old figure|[tracked deletion] Old figure preview')
     expect(context).toContain('1|New figure|New figure preview')
@@ -164,12 +154,10 @@ describe('document snapshot vs tracked deletions', () => {
       attrs: { docxIndex: null, kind: 'bullet', numId: null, ilvl: 0 },
       content: [text(t)],
     })
-    const editor = new Editor({
-      element: document.createElement('div'),
+    const editor = createTrackedEditor({
       extensions: editorExtensions,
       content: { type: 'doc', content: [li('alpha'), para(delText('gone')), li('beta')] },
     })
-    liveEditors.push(editor)
     const r = await executeTool(
       editor,
       { id: 't', name: 'read_blocks', input: { startBlockIndex: 0, endBlockIndex: 2 } },
@@ -180,12 +168,10 @@ describe('document snapshot vs tracked deletions', () => {
   })
 
   it('a clean document gets no tracked-changes notice', () => {
-    const editor = new Editor({
-      element: document.createElement('div'),
+    const editor = createTrackedEditor({
       extensions: editorExtensions,
       content: { type: 'doc', content: [para(text('Plain paragraph.'))] },
     })
-    liveEditors.push(editor)
     const context = buildDocumentContext(editor)
     expect(context).not.toContain('[tracked deletion]')
     expect(context).not.toContain('Tracked changes:')
