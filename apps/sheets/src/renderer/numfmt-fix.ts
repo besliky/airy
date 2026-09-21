@@ -10,6 +10,8 @@
  *  - `*x` fill is dropped; re-render it as the run that fills the cell width
  *  - General is left at stripErrorMargin's 12 significant digits instead of
  *    Excel's "at most 11, shrunk to what the column width can hold"
+ *  - time patterns round the displayed unit up where Excel truncates down
+ *    (h:mm shows 14:29 for 14:29:59.997, numfmt prints 14:30)
  *
  * Registered just below Univer's NUMFMT interceptor (priority 10) so its
  * color handling and render cache still run first; this pass only fixes up
@@ -143,6 +145,47 @@ export function decimalRoundForPattern(pattern: string, value: number): number |
   const step = (scaled < 0 ? -1 : 1) * 10 ** -decimals
   const rounded = digit >= 5 ? truncated + step : truncated
   return rounded / (info.scale || 1)
+}
+
+/**
+ * Excel truncates a time's display DOWN to the least significant unit the
+ * pattern shows — `h:mm` renders 14:29:59.997 as 14:29, while numfmt rounds
+ * the seconds away and prints 14:30. Returns the serial floored to that
+ * unit, or null when the pattern shows no time placeholder or the value
+ * needs no cut. Applies to grid and print alike (the print layout reads the
+ * intercepted display values).
+ */
+export function truncateTimeForPattern(pattern: string, value: number): number | null {
+  if (!Number.isFinite(value) || value < 0) return null
+  const type = patternType(pattern)
+  if (type !== 'time' && type !== 'datetime') return null
+  const unit = timeDisplayUnit(pattern)
+  if (unit === null) return null
+  const truncated = Math.floor(value * unit) / unit
+  return truncated === value ? null : truncated
+}
+
+/// Units-per-day of the pattern's least significant displayed time unit:
+/// fractional seconds -> 86400 x 10^digits, seconds -> 86400, minutes ->
+/// 1440, hours -> 24. Quoted literals, `\x` escapes, meridiem tokens and
+/// non-elapsed bracket blocks ([Red], [$-409], conditions) are opaque;
+/// [h]/[m]/[s] overflow blocks stay placeholders. A bare `m` counts as
+/// minutes: flooring within the minute never crosses an hour, so a date
+/// section's months are never disturbed.
+function timeDisplayUnit(pattern: string): number | null {
+  const bare = pattern
+    .replace(/AM\/PM|A\/P/gi, '')
+    .replace(/\[[^\]]*\]/g, (block) =>
+      /^[hms]+$/i.test(block.slice(1, -1)) ? block.slice(1, -1) : '',
+    )
+    .replace(/"[^"]*"/g, '')
+    .replace(/\\./g, '')
+  const fraction = /s\.([0#]+)/i.exec(bare)
+  if (fraction) return 86400 * 10 ** Math.min(fraction[1]!.length, 6)
+  if (/s/i.test(bare)) return 86400
+  if (/m/i.test(bare)) return 1440
+  if (/h/i.test(bare)) return 24
+  return null
 }
 
 /// Splits a format pattern on the `;` section separators outside quotes.
@@ -615,6 +658,17 @@ export function fixFormattedValue(
   const repaired = exponentialDecimalRepair(pattern, raw)
   if (repaired !== null) {
     return repaired === String(displayed ?? '') ? null : repaired
+  }
+  // Time truncation: Excel floors the display to the pattern's least
+  // significant unit where numfmt rounds (14:29:59.997 under h:mm). Runs
+  // before the fixes below for the same reason as the decimal round — a
+  // truncated digit change matters more than NBSP fidelity.
+  const timeTruncated = truncateTimeForPattern(pattern, raw)
+  if (timeTruncated !== null) {
+    const truncatedText = safeFormat(pattern, timeTruncated)
+    if (truncatedText !== null && truncatedText !== '' && truncatedText !== text) {
+      return truncatedText
+    }
   }
   // Padding upgrade: only override when the outputs differ by NBSP alone, so
   // any locale-specific rendering Univer did stays untouched.
