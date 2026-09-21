@@ -463,6 +463,9 @@ export const de = {
   dlgT2cTypeDateYmd: 'Datum (JJJJ.MM.TT)',
   dlgT2cNeedDelimiter: 'Aktivieren Sie mindestens ein Trennzeichen.',
   dlgT2cBadBreaks: 'Trennpositionen sind durch Kommas getrennte positive Zahlen.',
+  dlgT2cOverwriteNote:
+    'Die Zielzellen enthalten Daten. Wählen Sie Überschreiben, um sie zu ersetzen, oder ändern Sie den Zielbereich.',
+  dlgT2cOverwriteConfirm: 'Überschreiben',
   dlgOutlineSettingsTitle: 'Gliederungseinstellungen',
   dlgOutlineRows: 'Zeilen',
   dlgOutlineSummaryBelow: 'Summenzeilen unter den Details',

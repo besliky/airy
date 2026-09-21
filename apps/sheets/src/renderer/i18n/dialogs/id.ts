@@ -460,6 +460,9 @@ export const id = {
   dlgT2cTypeDateYmd: 'Tanggal (TBH)',
   dlgT2cNeedDelimiter: 'Centang minimal satu pemisah.',
   dlgT2cBadBreaks: 'Posisi pemisahan adalah angka positif dipisah koma.',
+  dlgT2cOverwriteNote:
+    'Sel tujuan berisi data. Pilih Timpa untuk menggantinya, atau ubah tujuannya.',
+  dlgT2cOverwriteConfirm: 'Timpa',
   dlgOutlineSettingsTitle: 'Pengaturan Kerangka',
   dlgOutlineRows: 'Baris',
   dlgOutlineSummaryBelow: 'Baris ringkasan di bawah detail',

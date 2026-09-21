@@ -265,6 +265,7 @@ import {
   listDefinedNames as listDefinedNamesImpl,
   outlinePlacement,
   readTextToColumnsSource as readTextToColumnsSourceImpl,
+  textToColumnsDestinationOverwrites,
   toggleOutlineGroup,
   type DataToolsContext,
 } from './data-tools-actions'
@@ -4396,6 +4397,9 @@ export function App(): React.JSX.Element {
         onCreateSubtotal={(config) => handleCreateSubtotalImpl(dataToolsContext(), config)}
         onGetT2cSource={() => readTextToColumnsSourceImpl(dataToolsContext())}
         onApplyTextToColumns={(config) => handleTextToColumnsImpl(dataToolsContext(), config)}
+        onT2cDestinationOverwrites={(config) =>
+          textToColumnsDestinationOverwrites(dataToolsContext(), config)
+        }
         onGetOutlineSettings={() => {
           const state = lazyWorkbookRef.current
           const sheetId = univerRef.current?.univerAPI

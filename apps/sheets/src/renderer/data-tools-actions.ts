@@ -836,28 +836,37 @@ export function readTextToColumnsSource(ctx: DataToolsContext): TextToColumnsSou
   }
 }
 
-/// The wizard's Finish: splits the selected column per the parsed config
-/// and lands the fields at the destination through the normal journaled
-/// write channel. Date-typed columns additionally carry a date number
-/// format. Returns null on success or a user-facing error message.
-export function handleTextToColumns(
-  ctx: DataToolsContext,
-  config: TextToColumnsConfig,
-): string | null {
+/// The wizard's shared geometry — the validated source, the split fields,
+/// the output width, and the parsed destination — behind both the apply and
+/// the overwrite probe, so the two can never disagree about what would be
+/// written where.
+type TextToColumnsPlan =
+  | { kind: 'error'; message: string }
+  | {
+      kind: 'plan'
+      worksheet: UniverWorksheet
+      fields: string[][]
+      width: number
+      destination: { row: number; column: number }
+      startRow: number
+      startColumn: number
+    }
+
+function textToColumnsPlan(ctx: DataToolsContext, config: TextToColumnsConfig): TextToColumnsPlan {
   const runtime = ctx.univerRef.current
-  if (!runtime) return t('appWorkbookNotReady')
+  if (!runtime) return { kind: 'error', message: t('appWorkbookNotReady') }
   const workbook = runtime.univerAPI.getActiveWorkbook()
   const worksheet = workbook?.getActiveSheet()
   const range = workbook?.getActiveRange()
-  if (!workbook || !worksheet || !range) return t('appSelectCellFirst')
-  if (range.getWidth() !== 1) return t('appTextToColsSelectOne')
+  if (!workbook || !worksheet || !range) return { kind: 'error', message: t('appSelectCellFirst') }
+  if (range.getWidth() !== 1) return { kind: 'error', message: t('appTextToColsSelectOne') }
   const source = readTextToColumnsSource(ctx)
-  if (source.kind === 'error') return source.message
-  if (source.rows.length === 0) return t('appTextToColsEmpty')
+  if (source.kind === 'error') return { kind: 'error', message: source.message }
+  if (source.rows.length === 0) return { kind: 'error', message: t('appTextToColsEmpty') }
 
   const delimiters = activeDelimiterChars(config.delimiters)
   if (config.mode === 'delimited' && delimiters.length === 0) {
-    return t('appTextToColsNeedDelimiter')
+    return { kind: 'error', message: t('appTextToColsNeedDelimiter') }
   }
   const split = (text: string): string[] =>
     config.mode === 'fixed-width'
@@ -866,11 +875,73 @@ export function handleTextToColumns(
 
   const fields = source.rows.map(split)
   const width = fields.reduce((max, row) => Math.max(max, row.length), 0)
-  if (width === 0) return t('appTextToColsEmpty')
+  if (width === 0) return { kind: 'error', message: t('appTextToColsEmpty') }
   const destination = config.destination
     ? parseDestinationCell(config.destination)
     : { row: source.startRow, column: source.startColumn }
-  if (!destination) return t('appTextToColsBadDestination', { ref: config.destination ?? '' })
+  if (!destination) {
+    return {
+      kind: 'error',
+      message: t('appTextToColsBadDestination', { ref: config.destination ?? '' }),
+    }
+  }
+  return {
+    kind: 'plan',
+    worksheet,
+    fields,
+    width,
+    destination,
+    startRow: source.startRow,
+    startColumn: source.startColumn,
+  }
+}
+
+/// Text to Columns: would the apply overwrite any non-empty cell OUTSIDE
+/// the source column being split? Overwriting the source column itself is
+/// the point of the default destination and never counts — Excel asks the
+/// same way, only when the fields would land on unrelated data. Returns
+/// false on any validation problem (the apply surfaces the real message).
+export function textToColumnsDestinationOverwrites(
+  ctx: DataToolsContext,
+  config: TextToColumnsConfig,
+): boolean {
+  const plan = textToColumnsPlan(ctx, config)
+  if (plan.kind === 'error') return false
+  const { worksheet, fields, width, destination, startRow, startColumn } = plan
+  try {
+    const grid = worksheet
+      .getRange(destination.row, destination.column, fields.length, width)
+      .getDisplayValues()
+    for (let row = 0; row < fields.length; row += 1) {
+      const cells = grid[row] ?? []
+      for (let column = 0; column < width; column += 1) {
+        const inSourceColumn =
+          destination.column + column === startColumn &&
+          destination.row + row >= startRow &&
+          destination.row + row < startRow + fields.length
+        if (inSourceColumn) continue
+        if (String(cells[column] ?? '') !== '') return true
+      }
+    }
+  } catch {
+    // A destination past the sheet's edge and similar failures are the
+    // apply's business; the probe only answers a well-formed question.
+    return false
+  }
+  return false
+}
+
+/// The wizard's Finish: splits the selected column per the parsed config
+/// and lands the fields at the destination through the normal journaled
+/// write channel. Date-typed columns additionally carry a date number
+/// format. Returns null on success or a user-facing error message.
+export function handleTextToColumns(
+  ctx: DataToolsContext,
+  config: TextToColumnsConfig,
+): string | null {
+  const plan = textToColumnsPlan(ctx, config)
+  if (plan.kind === 'error') return plan.message
+  const { worksheet, fields, width, destination } = plan
 
   const values = fields.map((row) =>
     Array.from({ length: width }, (_, column) => {

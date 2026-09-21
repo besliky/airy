@@ -460,6 +460,9 @@ export const pt = {
   dlgT2cTypeDateYmd: 'Data (AMD)',
   dlgT2cNeedDelimiter: 'Marque pelo menos um delimitador.',
   dlgT2cBadBreaks: 'As posições de divisão são números positivos separados por vírgulas.',
+  dlgT2cOverwriteNote:
+    'As células de destino contêm dados. Escolha Substituir para substituí-las ou altere o destino.',
+  dlgT2cOverwriteConfirm: 'Substituir',
   dlgOutlineSettingsTitle: 'Configurações da estrutura de tópicos',
   dlgOutlineRows: 'Linhas',
   dlgOutlineSummaryBelow: 'Linhas de totais abaixo do detalhe',

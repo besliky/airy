@@ -461,6 +461,9 @@ export const pl = {
   dlgT2cTypeDateYmd: 'Data (RMD)',
   dlgT2cNeedDelimiter: 'Zaznacz co najmniej jeden separator.',
   dlgT2cBadBreaks: 'Pozycje podziału to dodatnie liczby rozdzielone przecinkami.',
+  dlgT2cOverwriteNote:
+    'Komórki docelowe zawierają dane. Wybierz Zastąp, aby je nadpisać, lub zmień obszar docelowy.',
+  dlgT2cOverwriteConfirm: 'Zastąp',
   dlgOutlineSettingsTitle: 'Ustawienia konspektu',
   dlgOutlineRows: 'Wiersze',
   dlgOutlineSummaryBelow: 'Wiersze sum pod szczegółami',

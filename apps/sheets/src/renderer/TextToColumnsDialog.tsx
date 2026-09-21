@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useModalDialog } from '@airy-office/ui'
 import { useI18n } from './i18n/locale'
 import {
@@ -29,11 +29,15 @@ export interface TextToColumnsSource {
 export function TextToColumnsDialog({
   source,
   onApply,
+  onDestinationOverwrites,
   onClose,
 }: {
   readonly source: TextToColumnsSource
   /// Returns an error message, or null on success.
   readonly onApply: (config: TextToColumnsConfig) => string | null
+  /// Whether the config's destination rectangle would overwrite non-empty
+  /// cells outside the split column — the wizard asks before that apply.
+  readonly onDestinationOverwrites?: (config: TextToColumnsConfig) => boolean
   readonly onClose: () => void
 }): React.JSX.Element {
   const { t } = useI18n()
@@ -44,6 +48,13 @@ export function TextToColumnsDialog({
   const [columnTypes, setColumnTypes] = useState<TextToColumnType[]>(['general'])
   const [destination, setDestination] = useState('')
   const [error, setError] = useState<string | null>(null)
+  /// Armed by the first OK/Enter when the destination would overwrite
+  /// unrelated data; the second one applies. Any config edit disarms it.
+  const [confirmOverwrite, setConfirmOverwrite] = useState(false)
+
+  useEffect(() => {
+    setConfirmOverwrite(false)
+  }, [mode, delimiters, breaksText, columnTypes, destination])
 
   const breaks = useMemo(() => parseBreakPositions(breaksText), [breaksText])
   const activeDelimiters = useMemo(() => activeDelimiterChars(delimiters), [delimiters])
@@ -69,15 +80,32 @@ export function TextToColumnsDialog({
         : null
 
   const apply = (): void => {
-    const failure = onApply({
+    if (modeError !== null || width === 0) return
+    const config: TextToColumnsConfig = {
       mode,
       delimiters,
       breaks: breaks ?? [],
       columnTypes: Array.from({ length: width }, (_, column) => typeAt(column)),
       destination: destination.trim() === '' ? null : destination.trim(),
-    })
+    }
+    // Excel asks before the fields replace unrelated destination cells: the
+    // first OK/Enter arms a visible confirm instead of applying, the second
+    // one goes through (a config edit disarms it again).
+    if (!confirmOverwrite && onDestinationOverwrites?.(config)) {
+      setConfirmOverwrite(true)
+      return
+    }
+    const failure = onApply(config)
     setError(failure)
     if (failure === null) onClose()
+  }
+
+  /// Enter in any of the wizard's text fields commits, like the neighboring
+  /// sheets one-liner dialogs (the modal hook owns Escape, not Enter).
+  const commitOnEnter = (event: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+    apply()
   }
 
   const checkbox = (
@@ -138,6 +166,7 @@ export function TextToColumnsDialog({
                   className="print-range-input t2c-other-input"
                   value={delimiters.custom}
                   onChange={(event) => setDelimiters({ ...delimiters, custom: event.target.value })}
+                  onKeyDown={commitOnEnter}
                 />
               </label>
               <label className="print-radio">
@@ -162,6 +191,7 @@ export function TextToColumnsDialog({
                   placeholder="5, 12, 20"
                   value={breaksText}
                   onChange={(event) => setBreaksText(event.target.value)}
+                  onKeyDown={commitOnEnter}
                 />
               </label>
               <p className="dialog-note">{t('dlgT2cBreaksNote')}</p>
@@ -175,6 +205,7 @@ export function TextToColumnsDialog({
               placeholder={source.destinationLabel}
               value={destination}
               onChange={(event) => setDestination(event.target.value)}
+              onKeyDown={commitOnEnter}
             />
           </label>
         </div>
@@ -219,6 +250,11 @@ export function TextToColumnsDialog({
             </table>
           </div>
         )}
+        {confirmOverwrite && (
+          <p className="dialog-note" role="alert">
+            {t('dlgT2cOverwriteNote')}
+          </p>
+        )}
         {(error ?? modeError) && (
           <p className="dialog-note" role="alert">
             {error ?? modeError}
@@ -233,7 +269,7 @@ export function TextToColumnsDialog({
             disabled={modeError !== null || width === 0}
             onClick={apply}
           >
-            {t('dlgOk')}
+            {confirmOverwrite ? t('dlgT2cOverwriteConfirm') : t('dlgOk')}
           </button>
         </div>
       </div>

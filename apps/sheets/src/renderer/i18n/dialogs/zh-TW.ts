@@ -446,6 +446,8 @@ export const zhTW = {
   dlgT2cTypeDateYmd: '日期（年/月/日）',
   dlgT2cNeedDelimiter: '請至少勾選一個分隔符號。',
   dlgT2cBadBreaks: '分割位置必須是逗號分隔的正數。',
+  dlgT2cOverwriteNote: '目標儲存格包含資料。選擇「覆寫」將取代這些儲存格，或變更目標區域。',
+  dlgT2cOverwriteConfirm: '覆寫',
   dlgOutlineSettingsTitle: '大綱設定',
   dlgOutlineRows: '列',
   dlgOutlineSummaryBelow: '摘要列在詳細資料下方',

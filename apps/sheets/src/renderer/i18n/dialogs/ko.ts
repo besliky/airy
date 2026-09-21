@@ -454,6 +454,8 @@ export const ko = {
   dlgT2cTypeDateYmd: '날짜(연/월/일)',
   dlgT2cNeedDelimiter: '구분 기호를 하나 이상 선택하세요.',
   dlgT2cBadBreaks: '분리 위치는 쉼표로 구분된 양수여야 합니다.',
+  dlgT2cOverwriteNote: '대상 셀에 데이터가 있습니다. 덮어쓰기로 바꾸거나 대상을 변경하세요.',
+  dlgT2cOverwriteConfirm: '덮어쓰기',
   dlgOutlineSettingsTitle: '윤곽 설정',
   dlgOutlineRows: '행',
   dlgOutlineSummaryBelow: '요약 행을 세부 행 아래에',

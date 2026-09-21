@@ -460,6 +460,8 @@ export const cs = {
   dlgT2cTypeDateYmd: 'Datum (RMD)',
   dlgT2cNeedDelimiter: 'Zaškrtněte alespoň jeden oddělovač.',
   dlgT2cBadBreaks: 'Pozice rozdělení jsou kladná čísla oddělená čárkami.',
+  dlgT2cOverwriteNote: 'Cílové buňky obsahují data. Zvolte Přepsat a nahraďte je, nebo změňte cíl.',
+  dlgT2cOverwriteConfirm: 'Přepsat',
   dlgOutlineSettingsTitle: 'Nastavení osnovy',
   dlgOutlineRows: 'Řádky',
   dlgOutlineSummaryBelow: 'Řádky souhrnů pod podrobnostmi',

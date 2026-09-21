@@ -322,6 +322,9 @@ interface ExcelShellProps {
   readonly onGetT2cSource: () => TextToColumnsSourceResult
   /// Text to Columns Finish; returns an error message, or null on success.
   readonly onApplyTextToColumns: (config: TextToColumnsConfig) => string | null
+  /// Whether the wizard's destination would overwrite non-empty cells
+  /// outside the split column (drives the confirm-before-replace ask).
+  readonly onT2cDestinationOverwrites: (config: TextToColumnsConfig) => boolean
   /// The active sheet's outline summary placement (Outline Settings seed).
   readonly onGetOutlineSettings: () => OutlineSettingsValue
   /// Outline Settings OK; returns an error message, or null on success.
@@ -409,6 +412,7 @@ export function ExcelShell({
   onGetConsolidateDefault,
   onGetT2cSource,
   onApplyTextToColumns,
+  onT2cDestinationOverwrites,
   onGetOutlineSettings,
   onApplyOutlineSettings,
   onApplyHeaderFooter,
@@ -1025,6 +1029,7 @@ export function ExcelShell({
         <TextToColumnsDialog
           source={t2cSource}
           onApply={onApplyTextToColumns}
+          onDestinationOverwrites={onT2cDestinationOverwrites}
           onClose={() => setT2cSource(null)}
         />
       )}

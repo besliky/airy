@@ -16,7 +16,11 @@ import {
   splitFixedWidth,
   type TextToColumnsConfig,
 } from '../src/renderer/text-to-columns'
-import { handleTextToColumns, type DataToolsContext } from '../src/renderer/data-tools-actions'
+import {
+  handleTextToColumns,
+  textToColumnsDestinationOverwrites,
+  type DataToolsContext,
+} from '../src/renderer/data-tools-actions'
 
 describe('splitDelimited', () => {
   it('splits by any checked delimiter character', () => {
@@ -349,5 +353,55 @@ describe('handleTextToColumns', () => {
     // count alone.
     expect(reads).toEqual([])
     expect(written).toHaveLength(0)
+  })
+})
+
+describe('textToColumnsDestinationOverwrites (UX-1108)', () => {
+  it('a clean in-place split over empty neighbors does not ask', () => {
+    const { ctx } = makeContext([['a,b'], ['c,d']])
+    expect(textToColumnsDestinationOverwrites(ctx, BASE_CONFIG)).toBe(false)
+  })
+
+  it('fields landing on non-empty cells outside the source column ask', () => {
+    const { ctx } = makeContext([
+      ['a,b', 'x'],
+      ['c,d', 'y'],
+    ])
+    expect(textToColumnsDestinationOverwrites(ctx, BASE_CONFIG)).toBe(true)
+  })
+
+  it('overwriting only the source column itself never asks', () => {
+    // fixed-width without breaks keeps width 1: the output is the source
+    // column alone, which is the whole point of the default destination
+    const { ctx } = makeContext([['a,b'], ['c,d']])
+    expect(
+      textToColumnsDestinationOverwrites(ctx, { ...BASE_CONFIG, mode: 'fixed-width', breaks: [] }),
+    ).toBe(false)
+  })
+
+  it('an explicit destination is probed at its own rectangle', () => {
+    const { ctx } = makeContext([
+      ['a,b', '', 'occupied'],
+      ['c,d', '', 'occupied'],
+    ])
+    expect(textToColumnsDestinationOverwrites(ctx, { ...BASE_CONFIG, destination: 'E1' })).toBe(
+      false,
+    )
+    expect(textToColumnsDestinationOverwrites(ctx, { ...BASE_CONFIG, destination: 'C1' })).toBe(
+      true,
+    )
+  })
+
+  it('a config that would not apply never asks (the apply reports instead)', () => {
+    const { ctx } = makeContext([['a,b']])
+    expect(
+      textToColumnsDestinationOverwrites(ctx, { ...BASE_CONFIG, destination: 'not-a-cell' }),
+    ).toBe(false)
+    expect(
+      textToColumnsDestinationOverwrites(ctx, {
+        ...BASE_CONFIG,
+        delimiters: { ...BASE_CONFIG.delimiters, comma: false },
+      }),
+    ).toBe(false)
   })
 })
