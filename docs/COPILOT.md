@@ -445,8 +445,13 @@ than 10,000 parts, a part over 512 MiB uncompressed, or a total over
 1.5 GiB uncompressed (the zip-bomb budget — the docx engine runs it inside
 `parseDocx`, the slides session in front of `openPptx`). Workbook bytes
 never transit the Node server (the Rust sidecar reads the file itself), so
-for workbooks the declared-uncompressed budget is the sidecar's domain and
-only the raw cap is enforced server-side.
+server-side workbooks get only the raw cap; the sidecar itself enforces the
+zip-bomb budget on open (SEC-1103): a workbook whose central directory
+declares more than 10,000 entries or over 1.5 GiB total uncompressed is
+refused before a single entry is decompressed. There is deliberately no
+per-part cap for workbooks — worksheet reads stream in bounded chunks, so
+one large sheet stays openable — and the refusal names the declared total
+and the budget.
 
 ## Security model
 

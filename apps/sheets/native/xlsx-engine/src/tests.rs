@@ -814,6 +814,68 @@ fn rejects_entries_escaping_the_package() {
     assert!(error.to_string().contains("unsafe ZIP path"));
 }
 
+/// The minimal readable workbook shared by the zip-bomb tests below.
+fn bomb_fixture_entries() -> Vec<(&'static str, &'static str)> {
+    vec![
+        (
+            "xl/workbook.xml",
+            r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>"#,
+        ),
+        (
+            "xl/_rels/workbook.xml.rels",
+            r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#,
+        ),
+        (
+            "xl/worksheets/sheet1.xml",
+            r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>"#,
+        ),
+        ("junk/pad.bin", "x"),
+    ]
+}
+
+/// SEC-1103: a workbook of a few hundred bytes whose central directory
+/// declares gigabytes must be refused at open, before any entry is
+/// decompressed. A single oversized declaration trips the total budget.
+#[test]
+fn refuses_a_single_entry_declaring_gigabytes() {
+    let (_dir, path) = open_fixture(&bomb_fixture_entries());
+    assert_eq!(
+        archive::forge_declared_size(&path, "sheet1.xml", 2 * 1024 * 1024 * 1024),
+        1
+    );
+    let error = WorkbookSessions::new().open(&path).unwrap_err();
+    let message = error.to_string();
+    assert!(
+        message.contains("uncompressed bytes") && message.contains("open budget"),
+        "unexpected refusal: {message}"
+    );
+}
+
+/// SEC-1103: the fence reads the SUM of the declared sizes — four modest
+/// 450 MiB entries (each under the per-part caps the docx/pptx fences use)
+/// total 1.8 GiB and must be refused just the same.
+#[test]
+fn refuses_the_combined_declared_total_across_modest_entries() {
+    let (_dir, path) = open_fixture(&bomb_fixture_entries());
+    assert_eq!(archive::forge_declared_size(&path, "", 450 * 1024 * 1024), 4);
+    assert!(WorkbookSessions::new().open(&path).unwrap_err().to_string().contains("uncompressed"));
+}
+
+/// SEC-1103: a declared total under the 1.5 GiB budget still opens — here
+/// only the never-read junk entry carries an inflated 1.4 GiB declaration,
+/// and the honest workbook parts keep the sum below the line. The fence
+/// refuses bombs, not big-looking metadata per se.
+#[test]
+fn opens_when_the_declared_total_stays_under_the_budget() {
+    let (_dir, path) = open_fixture(&bomb_fixture_entries());
+    assert_eq!(
+        archive::forge_declared_size(&path, "pad.bin", 1400 * 1024 * 1024),
+        1
+    );
+    let metadata = WorkbookSessions::new().open(&path).unwrap();
+    assert_eq!(metadata.sheets[0].name, "S");
+}
+
 /// Theme substitution keeps rendering on the theme latin face, but the
 /// literal cached Normal-font name and the theme's minor <a:ea> face
 /// still reach the wire — the renderer needs them for the column MDW.
