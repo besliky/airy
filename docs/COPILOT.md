@@ -438,10 +438,13 @@ HTML sessions add an 8 MiB / 2,000,000-line open cap (larger files are
 refused with a clear error, by stat before the content is read); HTML
 documents above 1M characters skip the parse5 structure scan.
 
-Opens are size-fenced against hostile inputs (SEC-1102): every binary
-document session (`.docx` / `.pptx` / `.xlsx` / `.xlsm` / `.xls` / `.ods`)
-refuses a raw file over 512 MiB by stat before a byte is read, and the zip
-formats additionally refuse packages whose central directory declares more
+Opens are size-fenced against hostile inputs (SEC-1102/SEC-1302): every
+binary document session (`.docx` / `.pptx` / `.xlsx` / `.xlsm` / `.xls` /
+`.ods`) refuses a raw file over 512 MiB by stat before a byte is read, and
+the same raw cap covers the read-only `.pdf` / `.doc` text-extraction opens
+and the original handed to the `.doc` / `.odt` LibreOffice conversion
+(refused before the soffice subprocess is spawned). The zip formats
+additionally refuse packages whose central directory declares more
 than 10,000 parts, a part over 512 MiB uncompressed, or a total over
 1.5 GiB uncompressed (the zip-bomb budget — the docx engine runs it inside
 `parseDocx`, the slides session in front of `openPptx`). Workbook bytes

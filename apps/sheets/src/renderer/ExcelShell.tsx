@@ -324,8 +324,10 @@ interface ExcelShellProps {
   /// Text to Columns Finish; returns an error message, or null on success.
   readonly onApplyTextToColumns: (config: TextToColumnsConfig) => string | null
   /// Whether the wizard's destination would overwrite non-empty cells
-  /// outside the split column (drives the confirm-before-replace ask).
-  readonly onT2cDestinationOverwrites: (config: TextToColumnsConfig) => boolean
+  /// outside the split column (drives the confirm-before-replace ask). The
+  /// probe reads streamed workbooks' file floor through the sidecar, so the
+  /// answer is asynchronous.
+  readonly onT2cDestinationOverwrites: (config: TextToColumnsConfig) => Promise<boolean>
   /// The active sheet's outline summary placement (Outline Settings seed).
   readonly onGetOutlineSettings: () => OutlineSettingsValue
   /// Outline Settings OK; returns an error message, or null on success.

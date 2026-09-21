@@ -4,7 +4,7 @@
  * break-position and destination parsing, and the apply path writing
  * journaled values through the worksheet range.
  */
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   activeDelimiterChars,
@@ -131,7 +131,8 @@ describe('parseDestinationCell', () => {
 /// `options.height` overrides the selection height (a whole-column
 /// selection is 1 048 576 rows), `options.startRow` where it starts,
 /// `options.lastRow` the Univer used range, `options.rowCount` the
-/// file-side used-range floor.
+/// file-side used-range floor, `options.lazyState` replaces the whole lazy
+/// workbook state (the streamed-probe fixture below fills it in).
 function makeContext(
   displayGrid: string[][],
   options: {
@@ -139,6 +140,7 @@ function makeContext(
     startRow?: number
     lastRow?: number
     rowCount?: number
+    lazyState?: unknown
   } = {},
 ) {
   const written: { row: number; column: number; rows: number; columns: number; values: unknown }[] =
@@ -180,9 +182,11 @@ function makeContext(
       univerRef: { current: { univerAPI: { getActiveWorkbook: () => workbook } } },
       lazyWorkbookRef: {
         current:
-          options.rowCount === undefined
-            ? null
-            : { file: { sheets: [{ id: 'sheet-1', rowCount: options.rowCount }] } },
+          options.lazyState !== undefined
+            ? options.lazyState
+            : options.rowCount === undefined
+              ? null
+              : { file: { sheets: [{ id: 'sheet-1', rowCount: options.rowCount }] } },
       },
       setMessage: () => {},
       setPendingEdits: () => {},
@@ -357,51 +361,259 @@ describe('handleTextToColumns', () => {
 })
 
 describe('textToColumnsDestinationOverwrites (UX-1108)', () => {
-  it('a clean in-place split over empty neighbors does not ask', () => {
+  it('a clean in-place split over empty neighbors does not ask', async () => {
     const { ctx } = makeContext([['a,b'], ['c,d']])
-    expect(textToColumnsDestinationOverwrites(ctx, BASE_CONFIG)).toBe(false)
+    await expect(textToColumnsDestinationOverwrites(ctx, BASE_CONFIG)).resolves.toBe(false)
   })
 
-  it('fields landing on non-empty cells outside the source column ask', () => {
+  it('fields landing on non-empty cells outside the source column ask', async () => {
     const { ctx } = makeContext([
       ['a,b', 'x'],
       ['c,d', 'y'],
     ])
-    expect(textToColumnsDestinationOverwrites(ctx, BASE_CONFIG)).toBe(true)
+    await expect(textToColumnsDestinationOverwrites(ctx, BASE_CONFIG)).resolves.toBe(true)
   })
 
-  it('overwriting only the source column itself never asks', () => {
+  it('overwriting only the source column itself never asks', async () => {
     // fixed-width without breaks keeps width 1: the output is the source
     // column alone, which is the whole point of the default destination
     const { ctx } = makeContext([['a,b'], ['c,d']])
-    expect(
+    await expect(
       textToColumnsDestinationOverwrites(ctx, { ...BASE_CONFIG, mode: 'fixed-width', breaks: [] }),
-    ).toBe(false)
+    ).resolves.toBe(false)
   })
 
-  it('an explicit destination is probed at its own rectangle', () => {
+  it('an explicit destination is probed at its own rectangle', async () => {
     const { ctx } = makeContext([
       ['a,b', '', 'occupied'],
       ['c,d', '', 'occupied'],
     ])
-    expect(textToColumnsDestinationOverwrites(ctx, { ...BASE_CONFIG, destination: 'E1' })).toBe(
-      false,
-    )
-    expect(textToColumnsDestinationOverwrites(ctx, { ...BASE_CONFIG, destination: 'C1' })).toBe(
-      true,
-    )
+    await expect(
+      textToColumnsDestinationOverwrites(ctx, { ...BASE_CONFIG, destination: 'E1' }),
+    ).resolves.toBe(false)
+    await expect(
+      textToColumnsDestinationOverwrites(ctx, { ...BASE_CONFIG, destination: 'C1' }),
+    ).resolves.toBe(true)
   })
 
-  it('a config that would not apply never asks (the apply reports instead)', () => {
+  it('a config that would not apply never asks (the apply reports instead)', async () => {
     const { ctx } = makeContext([['a,b']])
-    expect(
+    await expect(
       textToColumnsDestinationOverwrites(ctx, { ...BASE_CONFIG, destination: 'not-a-cell' }),
-    ).toBe(false)
-    expect(
+    ).resolves.toBe(false)
+    await expect(
       textToColumnsDestinationOverwrites(ctx, {
         ...BASE_CONFIG,
         delimiters: { ...BASE_CONFIG.delimiters, comma: false },
       }),
-    ).toBe(false)
+    ).resolves.toBe(false)
+  })
+})
+
+/// A streamed-workbook fixture for the overwrite probe (BUG-1312): the
+/// Univer grid only knows the loaded window (here: the source column), the
+/// sidecar answers file cells for whatever rectangle the probe asks, and
+/// the journal holds this session's edits.
+function makeStreamedState(options: {
+  /// File cells the sidecar returns, in screen coordinates.
+  fileCells?: { row: number; column: number; value: string | number | boolean | null }[]
+  /// Journaled edits ({ value: null } = cleared this session).
+  journalCells?: {
+    row: number
+    column: number
+    hasValue: boolean
+    value: unknown
+    formula?: string
+  }[]
+  /// What readWorkbookRange resolves with (overrides fileCells).
+  reply?: {
+    cells?: unknown[]
+    indexedThroughRow?: number | null
+    indexingComplete?: boolean
+  }
+  /// When readWorkbookRange should reject.
+  readError?: Error
+  /// Fully preloaded workbook (no streaming, no sidecar reads).
+  preloadComplete?: boolean
+}) {
+  const calls: { range: Record<string, number> }[] = []
+  const journalCells = new Map<string, unknown>()
+  for (const entry of options.journalCells ?? []) {
+    journalCells.set(`${entry.row}:${entry.column}`, entry)
+  }
+  const state = {
+    file: {
+      sessionId: 'session-1',
+      sheets: [{ id: 'sheet-1', name: 'Sheet1', rowCount: 500_000, columnCount: 100 }],
+    },
+    editJournal: { cells: new Map([['sheet-1', journalCells]]), structuralOps: new Map() },
+    flags: { preloadComplete: options.preloadComplete ?? false, preloadRunning: false },
+  }
+  const readWorkbookRange = vi.fn(async (call: { range: Record<string, number> }) => {
+    calls.push(call)
+    if (options.readError) throw options.readError
+    if (options.reply) {
+      return {
+        cells: options.reply.cells ?? [],
+        rows: [],
+        merges: [],
+        hyperlinks: [],
+        indexedThroughRow:
+          options.reply.indexedThroughRow === undefined
+            ? call.range.endRow
+            : options.reply.indexedThroughRow,
+        indexingComplete: options.reply.indexingComplete ?? true,
+      }
+    }
+    return {
+      cells: options.fileCells ?? [],
+      rows: [],
+      merges: [],
+      hyperlinks: [],
+      indexedThroughRow: call.range.endRow,
+      indexingComplete: true,
+    }
+  })
+  return {
+    state,
+    calls,
+    readWorkbookRange,
+    install() {
+      vi.stubGlobal('window', { desktopApi: { readWorkbookRange } })
+    },
+  }
+}
+
+describe('textToColumnsDestinationOverwrites on streamed workbooks (BUG-1312)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  /// The regression shape: a destination far below the loaded window where
+  /// the Univer model reads every cell as empty, but the file has data.
+  const FAR_GRID = [['a,b'], ['c,d']]
+  const farDestination = { ...BASE_CONFIG, destination: 'C5000' }
+
+  it('asks when file cells occupy the destination outside the loaded window', async () => {
+    const streamed = makeStreamedState({
+      fileCells: [
+        { row: 4_999, column: 2, value: 'file-owned' },
+        { row: 5_000, column: 2, value: 42 },
+      ],
+    })
+    streamed.install()
+    const { ctx } = makeContext(FAR_GRID, { lazyState: streamed.state })
+    await expect(textToColumnsDestinationOverwrites(ctx, farDestination)).resolves.toBe(true)
+    // the probe read the file floor at the destination rectangle, not the grid
+    expect(streamed.calls[0]?.range).toMatchObject({ startRow: 4_999, endRow: 5_000 })
+  })
+
+  it('does not ask when the file floor proves the destination empty', async () => {
+    const streamed = makeStreamedState({ fileCells: [] })
+    streamed.install()
+    const { ctx } = makeContext(FAR_GRID, { lazyState: streamed.state })
+    await expect(textToColumnsDestinationOverwrites(ctx, farDestination)).resolves.toBe(false)
+  })
+
+  it('a formula-only file cell still counts as occupied (fail-safe direction)', async () => {
+    // value null + formula set is a cached-missing formula cell: it renders
+    // empty but is real content, so the probe must not let it be overwritten
+    // without the ask
+    const streamed = makeStreamedState({})
+    streamed.readWorkbookRange.mockImplementationOnce(
+      async (call: { range: Record<string, number> }) => ({
+        cells: [{ row: 4_999, column: 2, value: null, formula: '=A1' }],
+        rows: [],
+        merges: [],
+        hyperlinks: [],
+        indexedThroughRow: call.range.endRow,
+        indexingComplete: true,
+      }),
+    )
+    streamed.install()
+    const { ctx } = makeContext(FAR_GRID, { lazyState: streamed.state })
+    await expect(textToColumnsDestinationOverwrites(ctx, farDestination)).resolves.toBe(true)
+  })
+
+  it('journaled edits shadow the file floor: edits arm the ask, clears disarm it', async () => {
+    const edited = makeStreamedState({
+      fileCells: [],
+      journalCells: [{ row: 4_999, column: 2, hasValue: true, value: 'typed' }],
+    })
+    edited.install()
+    const { ctx: editedCtx } = makeContext(FAR_GRID, { lazyState: edited.state })
+    await expect(textToColumnsDestinationOverwrites(editedCtx, farDestination)).resolves.toBe(true)
+
+    const cleared = makeStreamedState({
+      fileCells: [{ row: 4_999, column: 2, value: 'file-owned' }],
+      journalCells: [{ row: 5_000, column: 2, hasValue: true, value: null }],
+    })
+    cleared.install()
+    const { ctx: clearedCtx } = makeContext(FAR_GRID, { lazyState: cleared.state })
+    // row 5000 was cleared this session; row 4999 still holds file data
+    await expect(textToColumnsDestinationOverwrites(clearedCtx, farDestination)).resolves.toBe(true)
+    const clearedBoth = makeStreamedState({
+      // column 50 is outside the destination rectangle: must stay invisible
+      fileCells: [{ row: 4_999, column: 50, value: 'outside rect' }],
+      journalCells: [
+        { row: 4_999, column: 2, hasValue: true, value: null },
+        { row: 5_000, column: 2, hasValue: true, value: null },
+      ],
+    })
+    clearedBoth.install()
+    const { ctx: clearedBothCtx } = makeContext(FAR_GRID, { lazyState: clearedBoth.state })
+    await expect(textToColumnsDestinationOverwrites(clearedBothCtx, farDestination)).resolves.toBe(
+      false,
+    )
+  })
+
+  it('style-only journal entries leave the file verdict untouched', async () => {
+    const streamed = makeStreamedState({
+      fileCells: [],
+      journalCells: [{ row: 4_999, column: 2, hasValue: false, value: null }],
+    })
+    streamed.install()
+    const { ctx } = makeContext(FAR_GRID, { lazyState: streamed.state })
+    await expect(textToColumnsDestinationOverwrites(ctx, farDestination)).resolves.toBe(false)
+  })
+
+  it('asks when the sidecar read fails (the floor is unknown, not empty)', async () => {
+    const streamed = makeStreamedState({ readError: new Error('sidecar down') })
+    streamed.install()
+    const { ctx } = makeContext(FAR_GRID, { lazyState: streamed.state })
+    await expect(textToColumnsDestinationOverwrites(ctx, farDestination)).resolves.toBe(true)
+  })
+
+  it('asks when background indexing has not reached the destination rows', async () => {
+    const streamed = makeStreamedState({
+      reply: { cells: [], indexedThroughRow: 1_000, indexingComplete: false },
+    })
+    streamed.install()
+    const { ctx } = makeContext(FAR_GRID, { lazyState: streamed.state })
+    await expect(textToColumnsDestinationOverwrites(ctx, farDestination)).resolves.toBe(true)
+  })
+
+  it('the source column stays exempt in the file-floor probe', async () => {
+    // default destination = the source column itself: file cells in it must
+    // not arm the ask even though the probe sees them
+    const streamed = makeStreamedState({
+      fileCells: [
+        { row: 0, column: 0, value: 'a,b' },
+        { row: 1, column: 0, value: 'c,d' },
+      ],
+    })
+    streamed.install()
+    const { ctx } = makeContext(FAR_GRID, { lazyState: streamed.state })
+    await expect(textToColumnsDestinationOverwrites(ctx, BASE_CONFIG)).resolves.toBe(false)
+  })
+
+  it('preloaded workbooks probe the grid alone (no sidecar round-trip)', async () => {
+    const streamed = makeStreamedState({ preloadComplete: true, fileCells: [] })
+    streamed.install()
+    const { ctx } = makeContext([['a,b', '', 'occupied']], { lazyState: streamed.state })
+    await expect(
+      textToColumnsDestinationOverwrites(ctx, { ...BASE_CONFIG, destination: 'C1' }),
+    ).resolves.toBe(true)
+    expect(streamed.calls).toEqual([])
   })
 })
