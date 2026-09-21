@@ -41,7 +41,8 @@
     "dist:linux": "npm run notices && npm run build:all && npm run dist:linux -w @airy-office/shell",
     "release:win": "npm run notices && npm run build:all && npm run release:win -w @airy-office/shell -- --publish always",
     "release:linux": "npm run notices && npm run build:all && npm run release:linux -w @airy-office/shell -- --publish always",
-    "release:mac": "npm run notices && npm run build:all && npm run native:build:universal -w @airy-office/sheets && npm run release:mac -w @airy-office/shell -- --publish always"
+    "release:mac": "npm run notices && npm run build:all && npm run native:build:universal -w @airy-office/sheets && npm run release:mac -w @airy-office/shell -- --publish always",
+    "test:e2e:xvfb": "xvfb-run -a npm run test:e2e"
   },
   "dependencies": {
     "ws": "^8.21.1"
