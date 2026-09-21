@@ -36,8 +36,10 @@ export function TextToColumnsDialog({
   /// Returns an error message, or null on success.
   readonly onApply: (config: TextToColumnsConfig) => string | null
   /// Whether the config's destination rectangle would overwrite non-empty
-  /// cells outside the split column — the wizard asks before that apply.
-  readonly onDestinationOverwrites?: (config: TextToColumnsConfig) => boolean
+  /// cells outside the split column — the wizard asks before that apply. On
+  /// streamed workbooks the probe reads the file floor through the sidecar
+  /// (BUG-1312), so the answer can arrive as a promise.
+  readonly onDestinationOverwrites?: (config: TextToColumnsConfig) => boolean | Promise<boolean>
   readonly onClose: () => void
 }): React.JSX.Element {
   const { t } = useI18n()
@@ -51,6 +53,9 @@ export function TextToColumnsDialog({
   /// Armed by the first OK/Enter when the destination would overwrite
   /// unrelated data; the second one applies. Any config edit disarms it.
   const [confirmOverwrite, setConfirmOverwrite] = useState(false)
+  /// True while an async overwrite probe is in flight — a second OK/Enter
+  /// must not start a competing apply before the probe has answered.
+  const [probing, setProbing] = useState(false)
 
   useEffect(() => {
     setConfirmOverwrite(false)
@@ -79,8 +84,20 @@ export function TextToColumnsDialog({
         ? t('dlgT2cBadBreaks')
         : null
 
+  const commitApply = (config: TextToColumnsConfig): void => {
+    const failure = onApply(config)
+    setError(failure)
+    if (failure !== null) {
+      // A failed apply disarms the confirm: the retry re-runs the overwrite
+      // probe instead of sailing through on the stale go-ahead.
+      setConfirmOverwrite(false)
+      return
+    }
+    onClose()
+  }
+
   const apply = (): void => {
-    if (modeError !== null || width === 0) return
+    if (modeError !== null || width === 0 || probing) return
     const config: TextToColumnsConfig = {
       mode,
       delimiters,
@@ -91,13 +108,27 @@ export function TextToColumnsDialog({
     // Excel asks before the fields replace unrelated destination cells: the
     // first OK/Enter arms a visible confirm instead of applying, the second
     // one goes through (a config edit disarms it again).
-    if (!confirmOverwrite && onDestinationOverwrites?.(config)) {
+    const asks = !confirmOverwrite ? onDestinationOverwrites?.(config) : undefined
+    if (asks !== undefined && typeof asks !== 'boolean') {
+      // Streamed workbooks probe through the file floor (a sidecar read), so
+      // the answer is asynchronous; double commits stay blocked meanwhile.
+      setProbing(true)
+      void asks
+        .then((overwrites) => {
+          if (overwrites) {
+            setConfirmOverwrite(true)
+            return
+          }
+          commitApply(config)
+        })
+        .finally(() => setProbing(false))
+      return
+    }
+    if (asks === true) {
       setConfirmOverwrite(true)
       return
     }
-    const failure = onApply(config)
-    setError(failure)
-    if (failure === null) onClose()
+    commitApply(config)
   }
 
   /// Enter in any of the wizard's text fields commits, like the neighboring
@@ -266,7 +297,7 @@ export function TextToColumnsDialog({
           </button>
           <button
             className="primary-action"
-            disabled={modeError !== null || width === 0}
+            disabled={modeError !== null || width === 0 || probing}
             onClick={apply}
           >
             {confirmOverwrite ? t('dlgT2cOverwriteConfirm') : t('dlgOk')}

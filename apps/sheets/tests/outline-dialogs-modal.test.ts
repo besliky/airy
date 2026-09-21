@@ -181,6 +181,72 @@ describe('Text to Columns: Enter applies, overwriting asks first (UX-1108)', () 
     expect(onApply).not.toHaveBeenCalled()
     unmount()
   })
+
+  it('a promise probe (streamed file floor) arms the confirm, then applies', async () => {
+    // BUG-1312: the probe reads the destination through the sidecar on
+    // streamed workbooks, so its answer arrives asynchronously
+    const onApply = vi.fn().mockReturnValue(null)
+    const onClose = vi.fn()
+    let resolveProbe: (asks: boolean) => void = () => {}
+    const onDestinationOverwrites = () =>
+      new Promise<boolean>((resolve) => {
+        resolveProbe = resolve
+      })
+    const { container, unmount } = render(
+      createElement(TextToColumnsDialog, {
+        source: { rows: ['a,b', 'c,d'], destinationLabel: 'A1' },
+        onApply,
+        onDestinationOverwrites,
+        onClose,
+      }),
+    )
+    const destination = destinationInput(container)
+    key(destination, 'Enter')
+    // while the probe is in flight the commit button is blocked
+    const ok = [...container.querySelectorAll('button')].find((button) =>
+      button.className.includes('primary-action'),
+    ) as HTMLButtonElement
+    expect(ok.disabled).toBe(true)
+    expect(onApply).not.toHaveBeenCalled()
+    await act(async () => {
+      resolveProbe(true)
+    })
+    expect(onApply).not.toHaveBeenCalled()
+    expect(container.textContent).toContain(t('dlgT2cOverwriteNote'))
+    expect(ok.disabled).toBe(false)
+    // the armed confirm skips the probe: the second commit applies directly
+    act(() => ok.click())
+    expect(onApply).toHaveBeenCalledTimes(1)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    unmount()
+  })
+
+  it('a failed apply disarms the confirm so the retry re-runs the probe', () => {
+    const onApply = vi.fn().mockReturnValueOnce('boom').mockReturnValue(null)
+    const onDestinationOverwrites = vi.fn(() => true)
+    const { container, unmount } = render(
+      createElement(TextToColumnsDialog, {
+        source: { rows: ['a,b', 'c,d'], destinationLabel: 'A1' },
+        onApply,
+        onDestinationOverwrites,
+        onClose: () => {},
+      }),
+    )
+    const destination = destinationInput(container)
+    key(destination, 'Enter')
+    expect(container.textContent).toContain(t('dlgT2cOverwriteNote'))
+    key(destination, 'Enter')
+    expect(onApply).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('boom')
+    // the confirm is gone: the next Enter probes again instead of applying
+    expect(container.textContent).not.toContain(t('dlgT2cOverwriteNote'))
+    key(destination, 'Enter')
+    expect(onApply).toHaveBeenCalledTimes(1)
+    // probe #1 armed the confirm, the armed commit skipped it, the retry
+    // after the failure ran it again
+    expect(onDestinationOverwrites).toHaveBeenCalledTimes(2)
+    unmount()
+  })
 })
 
 describe('OutlineSettingsDialog modal semantics (UX-1101)', () => {

@@ -39,9 +39,11 @@ import {
   applyFilterCriteria,
   columnLetter,
   loadVisibleRange,
+  readSheetRangeMapped,
   sheetOutline,
   univerDefinedNames,
   revealCellBelowFreeze,
+  type MappedRangeRead,
 } from './univer-sync'
 import { pushVisualUndo } from './univer-sync'
 import { outlineUndoGate } from './univer-state'
@@ -896,37 +898,137 @@ function textToColumnsPlan(ctx: DataToolsContext, config: TextToColumnsConfig): 
   }
 }
 
-/// Text to Columns: would the apply overwrite any non-empty cell OUTSIDE
-/// the source column being split? Overwriting the source column itself is
-/// the point of the default destination and never counts — Excel asks the
-/// same way, only when the fields would land on unrelated data. Returns
-/// false on any validation problem (the apply surfaces the real message).
-export function textToColumnsDestinationOverwrites(
-  ctx: DataToolsContext,
-  config: TextToColumnsConfig,
-): boolean {
-  const plan = textToColumnsPlan(ctx, config)
-  if (plan.kind === 'error') return false
-  const { worksheet, fields, width, destination, startRow, startColumn } = plan
+/// A destination cell counts as occupied when it holds a value or a formula.
+/// File-floor cells have no display formatting, so the test runs on content,
+/// not the rendered string — and a formula whose result renders empty still
+/// counts: the probe's failure direction is asking, never a silent overwrite.
+function destinationCellOccupied(value: unknown, formula: string | undefined): boolean {
+  if (value !== null && value !== undefined && value !== '') return true
+  return formula !== undefined && formula !== ''
+}
+
+/// The probe's view of the destination rectangle: which cells hold content.
+type DestinationFloor = {
+  readonly occupied: (row: number, column: number) => boolean
+  /// True when the floor could not prove the rectangle empty — the sidecar
+  /// read failed, or background indexing has not reached the rows yet. The
+  /// caller arms the confirm instead of betting file cells on "looks empty".
+  readonly uncertain: boolean
+}
+
+/// The destination rectangle as the grid sees it — the whole truth for
+/// non-lazy workbooks, preloaded ones, and regions inserted this session.
+function gridDestinationFloor(
+  worksheet: UniverWorksheet,
+  rect: { startRow: number; endRow: number; startColumn: number; endColumn: number },
+): DestinationFloor {
+  const occupied = new Set<string>()
   try {
     const grid = worksheet
-      .getRange(destination.row, destination.column, fields.length, width)
+      .getRange(
+        rect.startRow,
+        rect.startColumn,
+        rect.endRow - rect.startRow + 1,
+        rect.endColumn - rect.startColumn + 1,
+      )
       .getDisplayValues()
-    for (let row = 0; row < fields.length; row += 1) {
+    for (let row = 0; row < grid.length; row += 1) {
       const cells = grid[row] ?? []
-      for (let column = 0; column < width; column += 1) {
-        const inSourceColumn =
-          destination.column + column === startColumn &&
-          destination.row + row >= startRow &&
-          destination.row + row < startRow + fields.length
-        if (inSourceColumn) continue
-        if (String(cells[column] ?? '') !== '') return true
+      for (let column = 0; column < cells.length; column += 1) {
+        if (String(cells[column] ?? '') !== '') {
+          occupied.add(`${rect.startRow + row}:${rect.startColumn + column}`)
+        }
       }
     }
   } catch {
     // A destination past the sheet's edge and similar failures are the
     // apply's business; the probe only answers a well-formed question.
-    return false
+  }
+  return { occupied: (row, column) => occupied.has(`${row}:${column}`), uncertain: false }
+}
+
+/// Reads the destination rectangle through the file floor on streamed
+/// workbooks (BUG-1312): outside the loaded window the Univer model reads
+/// every cell as empty, so an unchecked apply would silently overwrite file
+/// data. The sidecar read (journal structural ops mapped to screen
+/// coordinates) is overlaid with this session's journaled cell edits — the
+/// same merge the lazy find and formula audit read through.
+async function destinationFloor(
+  ctx: DataToolsContext,
+  worksheet: UniverWorksheet,
+  rect: { startRow: number; endRow: number; startColumn: number; endColumn: number },
+): Promise<DestinationFloor> {
+  const state = ctx.lazyWorkbookRef.current
+  const sheetId = worksheet.getSheetId()
+  const fileSheet = state?.file.sheets.find((sheet) => sheet.id === sheetId)
+  if (!state || !fileSheet || state.flags.preloadComplete) {
+    return gridDestinationFloor(worksheet, rect)
+  }
+  let mapped: MappedRangeRead | null
+  try {
+    mapped = await readSheetRangeMapped(state, sheetId, rect, fileSheet)
+  } catch {
+    return { occupied: () => false, uncertain: true }
+  }
+  if (!mapped) {
+    // Entirely journal-owned (rows/columns inserted this session): the grid
+    // holds those cells for real.
+    return gridDestinationFloor(worksheet, rect)
+  }
+  if (
+    !mapped.raw.indexingComplete &&
+    (mapped.indexedThroughScreen === null || mapped.indexedThroughScreen < rect.endRow)
+  ) {
+    return { occupied: () => false, uncertain: true }
+  }
+  const occupied = new Set<string>()
+  for (const cell of mapped.screen.cells) {
+    if (destinationCellOccupied(cell.value, cell.formula)) {
+      occupied.add(`${cell.row}:${cell.column}`)
+    }
+  }
+  for (const entry of state.editJournal.cells.get(sheetId)?.values() ?? []) {
+    if (entry.row < rect.startRow || entry.row > rect.endRow) continue
+    if (entry.column < rect.startColumn || entry.column > rect.endColumn) continue
+    const key = `${entry.row}:${entry.column}`
+    // Journal entries (post-operation coordinates, like the rectangle) shadow
+    // the file cell at the same address — including clearing it.
+    if (entry.hasValue && destinationCellOccupied(entry.value, entry.formula)) occupied.add(key)
+    else if (entry.hasValue) occupied.delete(key)
+  }
+  return { occupied: (row, column) => occupied.has(`${row}:${column}`), uncertain: false }
+}
+
+/// Text to Columns: would the apply overwrite any non-empty cell OUTSIDE
+/// the source column being split? Overwriting the source column itself is
+/// the point of the default destination and never counts — Excel asks the
+/// same way, only when the fields would land on unrelated data. Returns
+/// false on any validation problem (the apply surfaces the real message).
+/// Streamed workbooks consult the file floor, so the answer can cost a
+/// sidecar round-trip and arrives as a promise.
+export async function textToColumnsDestinationOverwrites(
+  ctx: DataToolsContext,
+  config: TextToColumnsConfig,
+): Promise<boolean> {
+  const plan = textToColumnsPlan(ctx, config)
+  if (plan.kind === 'error') return false
+  const { worksheet, fields, width, destination, startRow, startColumn } = plan
+  const floor = await destinationFloor(ctx, worksheet, {
+    startRow: destination.row,
+    endRow: destination.row + fields.length - 1,
+    startColumn: destination.column,
+    endColumn: destination.column + width - 1,
+  })
+  if (floor.uncertain) return true
+  for (let row = 0; row < fields.length; row += 1) {
+    for (let column = 0; column < width; column += 1) {
+      const inSourceColumn =
+        destination.column + column === startColumn &&
+        destination.row + row >= startRow &&
+        destination.row + row < startRow + fields.length
+      if (inSourceColumn) continue
+      if (floor.occupied(destination.row + row, destination.column + column)) return true
+    }
   }
   return false
 }
