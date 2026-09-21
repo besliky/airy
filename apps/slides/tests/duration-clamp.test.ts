@@ -39,9 +39,14 @@ describe('the transition input follows the morph ceiling (UX-11s2)', () => {
   })
 
   it('feeds the ceiling to the max attribute, the clamp and the range hint', () => {
-    const panel = src.slice(src.indexOf('ribbonTransDurationRange') - 2500, src.indexOf('ribbonTransDurationRange'))
+    const panel = src.slice(
+      src.indexOf('ribbonTransDurationRange') - 2500,
+      src.indexOf('ribbonTransDurationRange'),
+    )
     expect(panel).toContain('max={ceiling}')
     expect(panel).toContain('clampDurationSeconds(v, 0.1, ceiling)')
-    expect(src).toContain("'ribbonTransDurationRange',\n                              { max: ceiling }")
+    expect(src).toContain(
+      "'ribbonTransDurationRange',\n                              { max: ceiling }",
+    )
   })
 })

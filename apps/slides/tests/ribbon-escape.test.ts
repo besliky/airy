@@ -50,7 +50,9 @@ describe('ribbonEscapeDeferred (UX-11s2)', () => {
   })
 
   it('defers to an editable ribbon field cancelling its draft (font combobox)', () => {
-    const input = inWidget('<div class="rb-font-btn"><input data-probe class="rb-font-input" /></div>')
+    const input = inWidget(
+      '<div class="rb-font-btn"><input data-probe class="rb-font-input" /></div>',
+    )
     expect(ribbonEscapeDeferred(input)).toBe(true)
   })
 
@@ -67,9 +69,7 @@ describe('ribbonEscapeDeferred (UX-11s2)', () => {
   })
 
   it('claims the press from a collapsed shared Dropdown trigger', () => {
-    const item = inWidget(
-      '<span class="gs-dd"><button aria-expanded="false" data-probe /></span>',
-    )
+    const item = inWidget('<span class="gs-dd"><button aria-expanded="false" data-probe /></span>')
     expect(ribbonEscapeDeferred(item)).toBe(false)
   })
 

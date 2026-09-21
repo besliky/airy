@@ -309,7 +309,8 @@ export const fr = {
   ribbonTransApplyAllTip: 'Appliquer la transition de cette diapositive à toutes les diapositives',
   ribbonEffectOptions: 'Options des effets',
   ribbonEffectOptionsTip: 'Direction et durée de la transition actuelle',
-  ribbonEffectOptionsNoneTip: "Choisissez d'abord une transition — les Options d'effet en exigent une",
+  ribbonEffectOptionsNoneTip:
+    "Choisissez d'abord une transition — les Options d'effet en exigent une",
   ribbonEffectOptionsDirection: 'Direction',
   ribbonTransDuration: 'Durée',
   ribbonTransDurationDefault: 'Par défaut',

@@ -80,11 +80,8 @@ describe('every split caret is keyboard-reachable (source contract)', () => {
     expect(new Set(carets.map((c) => c.file)).size).toBeGreaterThanOrEqual(2)
   })
 
-  it.each(carets.map((c, i) => [c.file, i] as const))(
-    '%s caret #%d opens on arrows',
-    (file, i) => {
-      expect(carets[i as number]!.tag).toContain('onKeyDown={splitCaretKeyDown(')
-      expect(file).toBeTruthy()
-    },
-  )
+  it.each(carets.map((c, i) => [c.file, i] as const))('%s caret #%d opens on arrows', (file, i) => {
+    expect(carets[i as number]!.tag).toContain('onKeyDown={splitCaretKeyDown(')
+    expect(file).toBeTruthy()
+  })
 })

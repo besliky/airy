@@ -204,10 +204,7 @@ describe('escape layering (UX-11s2)', () => {
     const setBrushMode = vi.fn()
     const e = keydown('Escape', { metaKey: false })
     e.preventDefault()
-    handleGlobalKeydown(
-      makeCtx({ brushMode: { format: {} }, setBrushMode, setStatus: vi.fn() }),
-      e,
-    )
+    handleGlobalKeydown(makeCtx({ brushMode: { format: {} }, setBrushMode, setStatus: vi.fn() }), e)
     expect(setBrushMode).not.toHaveBeenCalled()
   })
 
@@ -257,7 +254,12 @@ describe('canvas keys stay canvas-scoped (UX-11s2)', () => {
       left,
     )
     expect(left.defaultPrevented).toBe(true)
-    expect(onTransform).toHaveBeenCalledWith('s1', expect.objectContaining({ x: 9 }), undefined, undefined)
+    expect(onTransform).toHaveBeenCalledWith(
+      's1',
+      expect.objectContaining({ x: 9 }),
+      undefined,
+      undefined,
+    )
   })
 
   it('does not nudge through a focused chrome button', () => {
