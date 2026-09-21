@@ -779,6 +779,30 @@ export function Home() {
     }
   }, [])
 
+  useEffect(() => {
+    // Opening/saving a document updates recents on disk (main's recordRecentFile
+    // hooks fire on those moments), but switching tabs inside the window raises
+    // no focus event — the list stayed stale until the next alt-tab (BUG-1531).
+    // The tab strip broadcasts every open/close/activate, so reload whenever a
+    // broadcast leaves Home the visible tab (covers returning to Home after an
+    // open, and changes while Home is showing). The trailing debounce collapses
+    // session-restore bursts and covers editor-opened files, whose recent entry
+    // lands just after the tab broadcast that announced them.
+    let timer: number | undefined
+    const unsubscribe = window.aiOfficeTabs.onChanged((tabs) => {
+      if (!tabs.some((tab) => tab.id === 'home' && tab.active)) return
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        reloadRef.current(true)
+        setProjectTick((n) => n + 1)
+      }, 150)
+    })
+    return () => {
+      unsubscribe()
+      window.clearTimeout(timer)
+    }
+  }, [])
+
   const hasMore = entries.length < listTotal
 
   // unified dismissal: outside press, window blur, chrome press (tab strip / window drag)
