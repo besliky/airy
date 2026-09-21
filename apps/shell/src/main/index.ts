@@ -818,7 +818,9 @@ function scheduleSessionSave(): void {
 /**
  * Reopen the file-backed tabs from the previous run (quit or crash), window by
  * window in the saved order: the first saved window reuses the primary shell
- * window, every later one with surviving tabs gets its own window. Files that
+ * window, every later one with surviving tabs gets its own window, cascaded
+ * from the previously restored one (BUG-1223: they used to all anchor at the
+ * primary's bounds and open exactly on top of each other). Files that
  * no longer exist are skipped silently; restored tabs go through the same
  * routing as a manual open (recents, dedupe, renderer read grants). Returns
  * how many tabs were restored.
@@ -829,11 +831,19 @@ function restorePreviousSession(): number {
   if (!saved || saved.windows.length === 0) return 0
   const live = pruneSession(saved, (path) => existsSync(path))
   let opened = 0
+  // the cascade source walks with the windows actually created (BUG-1223):
+  // anchoring every secondary window at the primary's bounds opened them
+  // exactly on top of each other; each new window cascades from the previous
+  // one, like the "Move to New Window" path
+  let cascadeFrom = primaryBounds()
   live.windows.forEach((window, index) => {
     if (window.tabs.length === 0) return
-    const entry =
-      index === 0 ? shellEntries()[0] : createShellWindow({ cascadeFrom: primaryBounds() })
+    const entry = index === 0 ? shellEntries()[0] : createShellWindow({ cascadeFrom })
     if (!entry) return
+    if (!entry.win.isDestroyed()) {
+      const bounds = entry.win.getNormalBounds()
+      if (bounds.width > 0 && bounds.height > 0) cascadeFrom = bounds
+    }
     for (const tab of window.tabs) {
       if (routeDocumentPath(tab.path, entry.manager)) opened++
     }
