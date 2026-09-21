@@ -105,9 +105,15 @@ export function parseSession(raw: unknown): SessionState {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw))
     return { windows: [], focusedWindow: 0 }
   const record = raw as Record<string, unknown>
-  // legacy single-window shape: { tabs, activePath } → one focused window
-  if (Array.isArray(record.tabs)) return { windows: [parseLegacyWindow(record)], focusedWindow: 0 }
-  if (!Array.isArray(record.windows)) return { windows: [], focusedWindow: 0 }
+  // the v2 multi-window shape wins when a (corrupt or hand-made) file carries
+  // both keys (BUG-1224): the legacy branch used to run first and silently
+  // discarded the `windows` array — the v2 writer never emits `tabs`, so the
+  // multi-window layout is the richer reading of the file
+  if (!Array.isArray(record.windows)) {
+    // legacy single-window shape: { tabs, activePath } → one focused window
+    if (Array.isArray(record.tabs)) return { windows: [parseLegacyWindow(record)], focusedWindow: 0 }
+    return { windows: [], focusedWindow: 0 }
+  }
   const windows: SessionWindowState[] = []
   let total = 0
   for (const rawWindow of record.windows) {

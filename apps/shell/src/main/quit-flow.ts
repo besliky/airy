@@ -36,6 +36,11 @@ export interface QuitFlow {
    *  liveWindows counts every registered shell window including the closing
    *  one (it runs before the window leaves the registry). */
   closeDecision(liveWindows: number): WindowClosePersistDecision
+  /** the quit snapshot write failed after closeDecision already armed
+   *  persist-once (BUG-1224): disarm it so the NEXT confirmed close retries
+   *  the write instead of skipping it and leaving a stale session that
+   *  resurrects windows closed before the failure. */
+  markSnapshotWriteFailed(): void
 }
 
 export function createQuitFlow(): QuitFlow {
@@ -63,6 +68,11 @@ export function createQuitFlow(): QuitFlow {
       quitting = false
       quitSessionPersisted = false
       return persistedDuringQuit
+    },
+    markSnapshotWriteFailed() {
+      // no-op outside a quit: an ordinary-close write failure is retried by
+      // the debounced save anyway, and there is no persist-once to re-arm
+      if (quitting) quitSessionPersisted = false
     },
     closeDecision(liveWindows) {
       if (quitting) {

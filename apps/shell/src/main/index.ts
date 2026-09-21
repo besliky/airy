@@ -766,10 +766,13 @@ let sessionSaveTimer: ReturnType<typeof setTimeout> | null = null
 
 /** write the live windows' session in window order (skipStaged drops
  *  untitled-staged tabs — quit only; exclude leaves a closing window out;
- *  windows whose close already went through never serialize — BUG-1218) */
-function persistSessionState(skipStaged = false, exclude?: ShellWindowEntry): void {
+ *  windows whose close already went through never serialize — BUG-1218).
+ *  Returns whether the snapshot landed (the failure is logged here and must
+ *  never break tab operations — BUG-1224: callers with persist-once
+ *  bookkeeping re-arm their retry on a false return). */
+function persistSessionState(skipStaged = false, exclude?: ShellWindowEntry): boolean {
   const entries = shellWindows.persistableEntries(exclude)
-  if (entries.length === 0) return
+  if (entries.length === 0) return true
   try {
     const stagingDir = skipStaged ? UNTITLED_STAGING_DIR() : null
     const focusedIndex = (() => {
@@ -798,7 +801,9 @@ function persistSessionState(skipStaged = false, exclude?: ShellWindowEntry): vo
   } catch (err) {
     // session persistence must never break tab operations
     console.warn('[shell] session state save failed:', err)
+    return false
   }
+  return true
 }
 
 /** Persist the open-tab set (debounced — every open/close/reorder/activation fires this).
@@ -1139,8 +1144,15 @@ function finishWindowClose(entry: ShellWindowEntry): void {
   }
   const decision = quitFlow.closeDecision(shellEntries().length)
   if (decision.persist) {
-    if (decision.excludeClosing) persistSessionState(false, entry)
-    else persistSessionState(decision.skipStaged)
+    const written = decision.excludeClosing
+      ? persistSessionState(false, entry)
+      : persistSessionState(decision.skipStaged)
+    // a failed quit-time snapshot write must not count as the one write
+    // (BUG-1224): quitSessionPersisted is already true, so without the
+    // re-arm every later confirmed close would skip its retry and the next
+    // launch would resurrect windows closed before the failure (disk full,
+    // userData gone read-only, …) from the stale snapshot
+    if (!written) quitFlow.markSnapshotWriteFailed()
   }
   // mark only AFTER this window's own snapshot write (the quit snapshot and
   // the last-window ordinary close legitimately include the closer): every
