@@ -109,3 +109,67 @@ export async function buildFixtureDocx(): Promise<Uint8Array> {
   )
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
 }
+
+// BUG-1502 fixture: the list numbering lives on the ListBullet/ListNumber
+// styles (w:numPr inside the style's w:pPr), and the body paragraphs carry
+// only the pStyle — no direct w:numPr. This is how Word writes documents
+// where the author picked "List Bullet" from the style gallery.
+const STYLE_LIST_STYLES_XML =
+  XML_DECL +
+  '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+  '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+  '<w:style w:type="paragraph" w:styleId="ListBullet"><w:name w:val="List Bullet"/><w:basedOn w:val="Normal"/>' +
+  '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr></w:style>' +
+  '<w:style w:type="paragraph" w:styleId="ListNumber"><w:name w:val="List Number"/><w:basedOn w:val="Normal"/>' +
+  '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr></w:style>' +
+  '</w:styles>'
+
+const STYLE_LIST_BODY_XML = [
+  '<w:p><w:r><w:t>Intro paragraph.</w:t></w:r></w:p>',
+  '<w:p><w:pPr><w:pStyle w:val="ListBullet"/></w:pPr><w:r><w:t>Styled bullet one</w:t></w:r></w:p>',
+  '<w:p><w:pPr><w:pStyle w:val="ListBullet"/></w:pPr><w:r><w:t>Styled bullet two</w:t></w:r></w:p>',
+  '<w:p><w:pPr><w:pStyle w:val="ListNumber"/></w:pPr><w:r><w:t>Styled numbered step</w:t></w:r></w:p>',
+  '<w:p><w:r><w:t>Outro paragraph.</w:t></w:r></w:p>',
+].join('')
+
+/** variant with style-driven lists (numbering via pStyle, no direct numPr) */
+export async function buildStyleListDocx(): Promise<Uint8Array> {
+  const zip = new JSZip()
+  addPinned(
+    zip,
+    '[Content_Types].xml',
+    `${XML_DECL}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+      '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>' +
+      '</Types>',
+  )
+  addPinned(
+    zip,
+    '_rels/.rels',
+    `${XML_DECL}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '</Relationships>',
+  )
+  addPinned(
+    zip,
+    'word/_rels/document.xml.rels',
+    `${XML_DECL}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>' +
+      '</Relationships>',
+  )
+  addPinned(zip, 'word/styles.xml', STYLE_LIST_STYLES_XML)
+  addPinned(zip, 'word/numbering.xml', NUMBERING_XML)
+  addPinned(
+    zip,
+    'word/document.xml',
+    `${XML_DECL}<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${STYLE_LIST_BODY_XML}` +
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
+      '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>' +
+      '</w:body></w:document>',
+  )
+  return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
+}

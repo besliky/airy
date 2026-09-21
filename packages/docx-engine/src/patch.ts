@@ -964,9 +964,19 @@ export async function saveDocx(
     return rId
   }
 
+  // styleIds whose style pPr carries w:numPr: a regenerated paragraph that
+  // keeps such a pStyle needs the explicit numId="0" override to stay unlisted
+  // (BUG-1502). 'none' (an explicit w:numId 0 on the style) cancels numbering,
+  // so those styles are excluded — same rule the parse-side listRefOf applies.
+  const numberedStyleIds = new Set<string>()
+  for (const [styleId, info] of parsed.styles) {
+    if (info.numPr && info.numPr !== 'none') numberedStyleIds.add(styleId)
+  }
+
   const genCtx = {
     headingStyleIds: parsed.headingStyleIds,
     listParagraphStyleId: parsed.listParagraphStyleId,
+    numberedStyleIds,
     allocateHyperlinkRel,
   }
 
