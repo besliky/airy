@@ -425,6 +425,11 @@ interface LayoutArea extends AreaBounds {
   readonly bodyRows: readonly LayoutRow[]
   /// Merge-shadowed cell 'row:column' → its anchor cell.
   readonly covered: ReadonlyMap<string, AreaPoint>
+  /// Merge anchor 'row:column' → the anchor cell's css. Continuation
+  /// tiles (the stripe or band past a merge's anchor) paint their filler
+  /// cells with this, so a merge's fill and the gridline net survive the
+  /// page boundary instead of the fillers printing unstyled.
+  readonly anchorCss: ReadonlyMap<string, string>
 }
 
 interface AreaPoint {
@@ -499,6 +504,26 @@ function layoutPrintArea(
     if (titles && row >= titles.start && row <= titles.end) continue
     bodyRows.push(buildRow(row))
   }
+  const anchorCss = new Map<string, string>()
+  for (const row of [...titleRows, ...bodyRows]) {
+    for (const cell of row.cells) {
+      if (cell.rowspan > 1 || cell.colspan > 1) {
+        anchorCss.set(`${row.row}:${cell.column}`, cell.css)
+      }
+    }
+  }
+  // Merges anchored above the print area (and its title rows) still shadow
+  // area cells; style their fillers from the anchor cell directly, the same
+  // read buildRow does for out-of-area title rows.
+  for (const key of merges.anchors.keys()) {
+    if (anchorCss.has(key)) continue
+    const [row, column] = key.split(':').map(Number)
+    if (row === undefined || column === undefined) continue
+    anchorCss.set(
+      key,
+      cellCss(worksheet.getRange(row, column).getCellStyleData(), undefined, gridlines),
+    )
+  }
   return {
     ...area,
     columnWidthsPt,
@@ -508,6 +533,7 @@ function layoutPrintArea(
     titleRows,
     bodyRows,
     covered: merges.covered,
+    anchorCss,
   }
 }
 
@@ -662,7 +688,12 @@ function emitTable(area: LayoutArea, tile: AreaTile, headings: boolean): string 
         column += 1
         continue
       }
-      cells.push('<td></td>')
+      // A merge continuing from outside this tile (another stripe/band, or
+      // an anchor above the print area): the filler keeps the column slot
+      // and inherits the anchor's style, so the merge's fill and the
+      // gridline net carry onto the continuation page like Excel's.
+      const css = anchor ? area.anchorCss.get(`${anchor.row}:${anchor.column}`) : undefined
+      cells.push(css === undefined ? '<td></td>' : `<td style="${css}"></td>`)
       column += 1
     }
     return `<tr style="height:${round(layoutRow.heightPt)}pt">${cells.join('')}</tr>`
