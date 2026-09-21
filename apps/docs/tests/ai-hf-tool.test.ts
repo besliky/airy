@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { buildDocContext, buildDocumentContext, type AiHfState } from '../src/renderer/ai/protocol'
 import {
@@ -21,20 +22,13 @@ const para = (t: string): JsonNode => ({
   content: [{ type: 'text', text: t }],
 })
 
-const editors = new Set<Editor>()
-afterEach(() => {
-  for (const editor of editors) editor.destroy()
-  editors.clear()
-})
+afterEach(() => drainTrackedEditors())
 
 function createEditor(): Editor {
-  const editor = new Editor({
-    element: document.createElement('div'),
+  return createTrackedEditor({
     extensions: editorExtensions,
     content: { type: 'doc', content: [para('Body paragraph.')] },
   })
-  editors.add(editor)
-  return editor
 }
 
 const NUM_IDS = { bullet: null, ordered: null }
@@ -139,12 +133,10 @@ describe('header/footer context', () => {
   })
 
   it('keeps headers/footers visible on a blank document', () => {
-    const blank = new Editor({
-      element: document.createElement('div'),
+    const blank = createTrackedEditor({
       extensions: editorExtensions,
       content: { type: 'doc', content: [{ type: 'docParagraph', attrs: { docxIndex: null } }] },
     })
-    editors.add(blank)
     const ctx = buildDocContext(blank, undefined, undefined, emptyState({ header: 'Kept header' }))
     expect(ctx).toContain('The document is currently blank.')
     expect(ctx).toContain('- header: "Kept header" | footer: (empty)')

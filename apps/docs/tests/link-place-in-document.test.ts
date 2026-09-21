@@ -10,11 +10,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
 import type { Node as PmDocNode } from '@tiptap/pm/model'
 import { parseDocx, saveDocx } from '@airy-office/docx-engine'
 import JSZip from 'jszip'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from '../src/renderer/editor/convert'
 import {
   editorExtensions,
@@ -32,12 +33,7 @@ import { Ribbon } from '../src/renderer/components/Ribbon'
 import { t } from '../src/renderer/i18n/locale'
 import { ribbonProps } from './helpers/ribbon-props'
 
-const editors = new Set<Editor>()
-
-afterEach(() => {
-  for (const editor of editors) editor.destroy()
-  editors.clear()
-})
+afterEach(() => drainTrackedEditors())
 
 const DOC_CONTENT = {
   type: 'doc',
@@ -61,15 +57,11 @@ const DOC_CONTENT = {
   ],
 }
 
-const makeEditor = (content: object = DOC_CONTENT) => {
-  const editor = new Editor({
-    element: document.createElement('div'),
+const makeEditor = (content: object = DOC_CONTENT) =>
+  createTrackedEditor({
     extensions: editorExtensions,
     content: content as never,
   })
-  editors.add(editor)
-  return editor
-}
 
 /** all link mark hrefs in the doc */
 const linkHrefsIn = (doc: PmDocNode): string[] => {
@@ -164,12 +156,10 @@ describe('internal hyperlink save round-trip (w:anchor)', () => {
   async function openDoc() {
     const source = await buildDocx({ bodyXml: BODY, extraRels: RELS })
     const parsed = await parseDocx(source)
-    const editor = new Editor({
-      element: document.createElement('div'),
+    const editor = createTrackedEditor({
       extensions: editorExtensions,
       content: blocksToPmDoc(parsed.blocks) as never,
     })
-    editors.add(editor)
     return { source, parsed, editor }
   }
 
@@ -209,12 +199,10 @@ describe('internal hyperlink save round-trip (w:anchor)', () => {
     expect(xml).toContain(`w:name="${anchor}"`)
     // round-trip: re-opened document keeps href="#anchor" and the heading bookmark
     const reparsed = await parseDocx(await saveDocx(parsed, plan.saveBlocks))
-    const reopened = new Editor({
-      element: document.createElement('div'),
+    const reopened = createTrackedEditor({
       extensions: editorExtensions,
       content: blocksToPmDoc(reparsed.blocks) as never,
     })
-    editors.add(reopened)
     expect(linkHrefsIn(reopened.state.doc)).toContain(`#${anchor}`)
     expect(
       (reopened.state.doc.firstChild?.attrs.hiddenBookmarks as string[]).includes(anchor),
@@ -259,12 +247,10 @@ describe('internal hyperlink save round-trip (w:anchor)', () => {
       '<w:r><w:t>Target</w:t></w:r></w:p>' +
       '<w:p><w:hyperlink w:anchor="_Toc555"><w:r><w:t>jump</w:t></w:r></w:hyperlink></w:p>'
     const parsed = await parseDocx(await buildDocx({ bodyXml: body }))
-    const editor = new Editor({
-      element: document.createElement('div'),
+    const editor = createTrackedEditor({
       extensions: editorExtensions,
       content: blocksToPmDoc(parsed.blocks) as never,
     })
-    editors.add(editor)
     expect(linkHrefsIn(editor.state.doc)).toContain('#_Toc555')
     // editing the docx without touching this paragraph keeps the anchor byte-identical
     const plan = pmDocToSavePlan(editor.getJSON() as PmNode, parsed.blocks)

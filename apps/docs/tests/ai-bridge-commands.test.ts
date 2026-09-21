@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
 
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { createBridgeCommandHandler } from '../src/renderer/ai/bridge-commands'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 
@@ -11,15 +12,10 @@ import { editorExtensions } from '../src/renderer/editor/extensions'
  * turn semantics (exactly one turn, refused when the user edited since).
  */
 
-const liveEditors: Editor[] = []
-
-afterEach(() => {
-  for (const editor of liveEditors.splice(0)) editor.destroy()
-})
+afterEach(() => drainTrackedEditors())
 
 function makeEditor(): Editor {
-  const editor = new Editor({
-    element: document.createElement('div'),
+  return createTrackedEditor({
     extensions: editorExtensions,
     content: {
       type: 'doc',
@@ -32,8 +28,6 @@ function makeEditor(): Editor {
       ],
     },
   })
-  liveEditors.push(editor)
-  return editor
 }
 
 function makeHandler(editor: Editor, withDoc = true) {
@@ -77,8 +71,7 @@ describe('bridge command handler', () => {
     // two blocks with the selection in the first: the bridge contract
     // (live_apply_ops documents "html inserted at the end") must win over
     // the embedded pipeline's cursor default
-    const editor = new Editor({
-      element: document.createElement('div'),
+    const editor = createTrackedEditor({
       extensions: editorExtensions,
       content: {
         type: 'doc',
@@ -96,7 +89,6 @@ describe('bridge command handler', () => {
         ],
       },
     })
-    liveEditors.push(editor)
     const handler = makeHandler(editor)
     const reply = await handler('insert_content', { html: '<p>Inserted by bridge</p>' })
     expect(reply.ok).toBe(true)

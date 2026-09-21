@@ -1,15 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
 import type { StyleInfo } from '@airy-office/docx-engine'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { effectiveSizeHalfPoints } from '../src/renderer/editor/text-style-resolve'
 
-const editors: Editor[] = []
-
-afterEach(() => {
-  for (const editor of editors) editor.destroy()
-  editors.length = 0
-})
+afterEach(() => drainTrackedEditors())
 
 function createEditor(options?: {
   paragraphStyleId?: string
@@ -28,8 +24,7 @@ function createEditor(options?: {
           },
         ]
       : undefined
-  const editor = new Editor({
-    element: document.createElement('div'),
+  const editor = createTrackedEditor({
     extensions: editorExtensions,
     content: {
       type: 'doc',
@@ -43,7 +38,6 @@ function createEditor(options?: {
     },
   })
   editor.commands.setTextSelection(2)
-  editors.push(editor)
   return editor
 }
 
