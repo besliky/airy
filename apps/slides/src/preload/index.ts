@@ -79,7 +79,6 @@ import type {
   MasterDeleteElementOp,
   ExportImagesOp,
   ExportPdfOp,
-  ExportVideoOp,
   PrintSlidesOp,
   MenuCommand,
   OpenResult,
@@ -320,7 +319,16 @@ const api: SlidesApi = {
   exportPdf: (op: ExportPdfOp) => ipcRenderer.invoke('slides:export-pdf', op),
   pickExportVideoPath: (defaultName: string, container: 'mp4' | 'webm') =>
     ipcRenderer.invoke('slides:pick-export-video-path', defaultName, container),
-  exportVideo: (op: ExportVideoOp) => ipcRenderer.invoke('slides:export-video', op),
+  // Streaming video export (BUG-1300): chunks are appended to main's temp
+  // file as the recorder flushes them — the container never materializes in
+  // the renderer (chunk blob + arrayBuffer copy + structured clone used to
+  // peak at ~3x the file size and OOM long decks)
+  beginVideoFileStream: (filePath: string) =>
+    ipcRenderer.invoke('slides:video-file-stream-begin', filePath),
+  appendVideoFileStream: (token: number, bytes: Uint8Array) =>
+    ipcRenderer.invoke('slides:video-file-stream-append', token, bytes),
+  finishVideoFileStream: (token: number, commit: boolean) =>
+    ipcRenderer.invoke('slides:video-file-stream-finish', token, commit),
   getAdvanceTimes: () => ipcRenderer.invoke('slides:get-advance-times'),
   setVideoExportActive: (active: boolean) =>
     ipcRenderer.invoke('slides:set-video-export-active', active),

@@ -21,7 +21,8 @@ import {
 import type { WebContents } from 'electron'
 import { execFile } from 'node:child_process'
 import { readFile, writeFile, rm, stat, mkdir, open } from 'node:fs/promises'
-import { createHash, randomUUID } from 'node:crypto'
+import type { FileHandle } from 'node:fs/promises'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, realpathSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -37,7 +38,6 @@ import {
   ALL_OPEN_EXTENSIONS,
   OPEN_EXTENSION_GROUPS,
   appMenuLabels,
-  atomicWriteFile,
   configuredAuthorName,
   configuredDefaultSaveDir,
   contextMenuLabels,
@@ -51,6 +51,7 @@ import {
   forgetWitnessedDrops,
   openHelpUrl,
   rendererMayReadPath,
+  renameDurably,
   safeExternalUrl,
   saveAsSuggestion,
   showOpenDialogWithMemory,
@@ -183,8 +184,9 @@ import type {
   ExportImagesResult,
   ExportPdfOp,
   ExportPdfResult,
-  ExportVideoOp,
-  ExportVideoResult,
+  VideoFileStreamBeginResult,
+  VideoFileStreamAppendResult,
+  VideoFileStreamFinishResult,
   OpenResult,
   PasteElementsOp,
   DuplicateElementsOp,
@@ -4305,8 +4307,120 @@ export function registerSlidesIpc(): void {
     })
   })
 
-  // ── Export video: the renderer records the container bytes (canvas + MediaRecorder,
-  // slides/video-export.ts); the main process owns the save dialog and the atomic write ──
+  // ── Export video: the renderer records the container (canvas + MediaRecorder,
+  // slides/video-export.ts) in ~1s timeslice chunks; main streams them into a
+  // dot-prefixed temp next to the picked target and commits atomically at the
+  // end (BUG-1300 — the renderer never holds the whole file) ──
+
+  /**
+   * Open streamed video exports (slides:video-file-stream-*). A token is
+   * bound to the exporting webContents: another tab cannot append to or
+   * commit someone else's stream, and a renderer that dies mid-stream (crash,
+   * teardown — its settle never runs) has its temp file closed and unlinked
+   * from main, same ownership discipline as videoExportSuspendByWc.
+   */
+  interface VideoFileStreamState {
+    wcId: number
+    handle: FileHandle
+    tmp: string
+    target: string
+    detach: () => void
+  }
+  const videoFileStreamByToken = new Map<number, VideoFileStreamState>()
+  let nextVideoFileStreamToken = 1
+
+  ipcMain.handle(
+    'slides:video-file-stream-begin',
+    async (e, filePath: string): Promise<VideoFileStreamBeginResult> => {
+      // the video must land exactly on the file the user picked for this tab,
+      // physically re-resolved (a symlink swap after the pick must not pass)
+      const pickedFile = exportPicksByWc.get(e.sender.id)?.videoPath
+      if (!pickedFile || !exportFileMatchesPick(pickedFile, filePath, (p) => realpathSync(p))) {
+        return { ok: false, error: tm('errExportDestNotPicked') }
+      }
+      try {
+        const tmp = join(
+          dirname(filePath),
+          `.${basename(filePath)}.${randomBytes(6).toString('hex')}.tmp`,
+        )
+        const handle = await open(tmp, 'w')
+        const token = nextVideoFileStreamToken++
+        // renderer death must not leak the temp (BUG-1220 ownership pattern)
+        let detach: () => void = () => undefined
+        const cleanup = () => {
+          if (videoFileStreamByToken.get(token)?.handle !== handle) return // already finished
+          videoFileStreamByToken.delete(token)
+          detach()
+          void handle.close().catch(() => undefined)
+          void rm(tmp, { force: true }).catch(() => undefined)
+        }
+        detach = () => {
+          e.sender.removeListener('render-process-gone', cleanup)
+          e.sender.removeListener('destroyed', cleanup)
+        }
+        e.sender.on('render-process-gone', cleanup)
+        e.sender.on('destroyed', cleanup)
+        videoFileStreamByToken.set(token, {
+          wcId: e.sender.id,
+          handle,
+          tmp,
+          target: filePath,
+          detach,
+        })
+        return { ok: true, token }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    },
+  )
+
+  ipcMain.handle(
+    'slides:video-file-stream-append',
+    async (e, token: number, bytes: Uint8Array): Promise<VideoFileStreamAppendResult> => {
+      const s = videoFileStreamByToken.get(token)
+      if (!s || s.wcId !== e.sender.id) return { ok: false, error: 'unknown video stream' }
+      try {
+        await s.handle.writeFile(bytes)
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    },
+  )
+
+  ipcMain.handle(
+    'slides:video-file-stream-finish',
+    async (e, token: number, commit: boolean): Promise<VideoFileStreamFinishResult> => {
+      const s = videoFileStreamByToken.get(token)
+      if (!s || s.wcId !== e.sender.id) return { ok: false, error: 'unknown video stream' }
+      videoFileStreamByToken.delete(token)
+      s.detach()
+      try {
+        if (!commit) {
+          await s.handle.close()
+          await rm(s.tmp, { force: true }).catch(() => undefined)
+          return { ok: true }
+        }
+        // atomic finish (temp + rename), same durability as atomicWriteFile:
+        // a crash mid-write can only damage the dot-prefixed temp, never a
+        // previous export at the same path. atomicWriteFile's
+        // locked-rename→in-place-write fallback is deliberately NOT taken
+        // here: re-materializing the file would need the whole container in
+        // memory, exactly what streaming avoids (BUG-1300) — renameDurably's
+        // retry ladder rides out transient locks, a persistent one fails the
+        // export with the error surfaced
+        await s.handle.sync()
+        await s.handle.close()
+        await renameDurably(s.tmp, s.target)
+        shell.showItemInFolder(s.target)
+        return { ok: true, path: s.target }
+      } catch (err) {
+        await s.handle.close().catch(() => undefined)
+        await rm(s.tmp, { force: true }).catch(() => undefined)
+        return { ok: false, error: String(err) }
+      }
+    },
+  )
 
   ipcMain.handle(
     'slides:pick-export-video-path',
@@ -4339,29 +4453,6 @@ export function registerSlidesIpc(): void {
       }
       exportPicksByWc.set(e.sender.id, picks)
       return picked
-    },
-  )
-
-  ipcMain.handle(
-    'slides:export-video',
-    async (e, op: ExportVideoOp): Promise<ExportVideoResult> => {
-      // the video must land exactly on the file the user picked for this tab,
-      // physically re-resolved (a symlink swap after the pick must not pass)
-      const pickedFile = exportPicksByWc.get(e.sender.id)?.videoPath
-      if (!pickedFile || !exportFileMatchesPick(pickedFile, op.filePath, (p) => realpathSync(p))) {
-        return { ok: false, error: tm('errExportDestNotPicked') }
-      }
-      try {
-        // atomic (temp + rename): a crash mid-write can only damage the
-        // dot-prefixed temp, never a previous export at the same path. The
-        // bytes arrive as a structured-cloned Uint8Array (BUG-1209) —
-        // atomicWriteFile takes it directly, no base64 decode copy
-        await atomicWriteFile(op.filePath, op.bytes)
-        shell.showItemInFolder(op.filePath)
-        return { ok: true, path: op.filePath }
-      } catch (err) {
-        return { ok: false, error: String(err) }
-      }
     },
   )
 
