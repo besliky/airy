@@ -4,7 +4,13 @@
  * extracted tab components.
  */
 import { useId } from 'react'
-import type { Dispatch, MouseEvent as ReactMouseEvent, ReactNode, SetStateAction } from 'react'
+import type {
+  Dispatch,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+  SetStateAction,
+} from 'react'
 import type {
   AnimDirection,
   AnimEffectKind,
@@ -297,6 +303,25 @@ export function ribbonEscapeDeferred(el: Element | null): boolean {
   )
     return true
   return el.closest('.gs-dd [aria-expanded="true"]') != null
+}
+
+/** Keyboard path into a split button's caret menu (UX-11s2). The caret hit
+ *  zone is a nested span — a real <button> cannot nest inside the main-action
+ *  button — so it cannot take focus; instead the enclosing focusable button
+ *  opens the menu on ArrowDown/ArrowUp (Alt+arrows included, the native
+ *  combobox chord; Enter/Space keep the main action), the same keys the
+ *  shared Dropdown uses. The claimed key never reaches the window listeners,
+ *  so it cannot nudge the canvas selection either. */
+export function splitCaretKeyDown(
+  open: () => void,
+): (e: ReactKeyboardEvent<HTMLButtonElement>) => void {
+  return (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    if (e.ctrlKey || e.metaKey) return
+    e.preventDefault()
+    e.stopPropagation()
+    open()
+  }
 }
 
 export function Group({
