@@ -33,6 +33,7 @@ function fakeWorksheet(): PrintWorksheet {
     getLastColumn: () => 1,
     getRowHeight: () => 20,
     getColumnWidth: () => 100,
+    getSheet: () => ({ getRowVisible: () => true, getColVisible: () => true }),
     getMergedRanges: () => [],
     getRange: ((row: number, column: number, numRows?: number, numColumns?: number) => ({
       getDisplayValues: () =>
