@@ -169,9 +169,9 @@ export const MINIMUM_SHEET_ROW_COUNT = 1000
 /// without this reset a reopened workbook inherits the previous session's undo
 /// steps and ⌘Z replays stale mutations onto the fresh content.
 function clearUnitUndoHistory(runtime: UniverRuntime, unitId: string): void {
-  const service = (
-    runtime.univer as unknown as { __getInjector(): { get<T>(token: unknown): T } }
-  ).__getInjector().get<{ clearUndoRedo(unitId: string): void }>(IUndoRedoService)
+  const service = (runtime.univer as unknown as { __getInjector(): { get<T>(token: unknown): T } })
+    .__getInjector()
+    .get<{ clearUndoRedo(unitId: string): void }>(IUndoRedoService)
   service.clearUndoRedo(unitId)
   // The cleared stacks were the only reference to their visual-undo steps —
   // release the closures now instead of retaining them all session

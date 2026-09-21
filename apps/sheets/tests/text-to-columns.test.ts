@@ -150,7 +150,9 @@ function makeContext(
     getRange: (row: number, column: number, rows: number, columns: number) => ({
       getDisplayValues: () => {
         if (columns === 1) reads.push({ row, rows })
-        return displayGrid.slice(row, row + rows).map((cells) => cells.slice(column, column + columns))
+        return displayGrid
+          .slice(row, row + rows)
+          .map((cells) => cells.slice(column, column + columns))
       },
       setValues: (values: unknown) => {
         written.push({ row, column, rows, columns, values })

@@ -1347,7 +1347,8 @@ export const en = {
   scUnhideColumns: 'Unhide columns',
   appPrintSelectionMissing: 'There is nothing selected to print.',
   appTextToColsEmpty: 'The selected column has no content to split.',
-  appTextToColsTooManyRows: 'Text to Columns supports up to {count} rows — the selection has {rows}. Select a smaller range.',
+  appTextToColsTooManyRows:
+    'Text to Columns supports up to {count} rows — the selection has {rows}. Select a smaller range.',
   appTextToColsNeedDelimiter: 'Pick at least one delimiter.',
   appTextToColsBadDestination: '“{ref}” is not a cell reference on this sheet.',
   appOutlineSettings: 'Settings',

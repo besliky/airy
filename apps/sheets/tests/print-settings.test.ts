@@ -132,9 +132,9 @@ describe('resolveEffectivePageSetup', () => {
       null,
     )
     expect(journaled.pageOrder).toBe('down-then-over')
-    expect(
-      resolveEffectivePageSetup({ pageOrder: 'over-then-down' }, null, null).pageOrder,
-    ).toBe('over-then-down')
+    expect(resolveEffectivePageSetup({ pageOrder: 'over-then-down' }, null, null).pageOrder).toBe(
+      'over-then-down',
+    )
   })
 
   it('applies the saved file settings when the session touched nothing', () => {

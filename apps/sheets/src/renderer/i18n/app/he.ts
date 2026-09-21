@@ -1313,7 +1313,8 @@ export const he = {
   scUnhideColumns: 'הצגת עמודות',
   appPrintSelectionMissing: 'אין בחירה להדפסה.',
   appTextToColsEmpty: 'אין תוכן לפיצול בעמודה שנבחרה.',
-  appTextToColsTooManyRows: '«טקסט לעמודות» תומך עד {count} שורות — הבחירה מכילה {rows}. בחרו טווח קטן יותר.',
+  appTextToColsTooManyRows:
+    '«טקסט לעמודות» תומך עד {count} שורות — הבחירה מכילה {rows}. בחרו טווח קטן יותר.',
   appTextToColsNeedDelimiter: 'בחרו לפחות מפריד אחד.',
   appTextToColsBadDestination: '„{ref}” אינו הפניה לתא בגיליון זה.',
   appOutlineSettings: 'הגדרות',

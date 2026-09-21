@@ -1416,7 +1416,8 @@ export const ja = {
   scUnhideColumns: '列の再表示',
   appPrintSelectionMissing: '印刷する選択範囲がありません。',
   appTextToColsEmpty: '選択した列には分割する内容がありません。',
-  appTextToColsTooManyRows: '区切り位置では最大 {count} 行まで処理できます（選択範囲は {rows} 行）。範囲を狭くしてください。',
+  appTextToColsTooManyRows:
+    '区切り位置では最大 {count} 行まで処理できます（選択範囲は {rows} 行）。範囲を狭くしてください。',
   appTextToColsNeedDelimiter: '区切り記号を少なくとも 1 つ選んでください。',
   appTextToColsBadDestination: '「{ref}」はこのシートのセル参照ではありません。',
   appOutlineSettings: '設定',

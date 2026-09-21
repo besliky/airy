@@ -188,7 +188,9 @@ export function handlePageLayoutCommand(ctx: PageLayoutContext, rest: string): v
       // breaks and print titles.
       recordDirect(
         { pageOrder: value },
-        value === 'down-then-over' ? t('dlgPrintOrderDownThenOver') : t('dlgPrintOrderOverThenDown'),
+        value === 'down-then-over'
+          ? t('dlgPrintOrderDownThenOver')
+          : t('dlgPrintOrderOverThenDown'),
       )
       return
     case 'print-headings':

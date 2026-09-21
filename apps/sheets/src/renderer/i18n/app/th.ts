@@ -1334,7 +1334,8 @@ export const th = {
   scUnhideColumns: 'แสดงคอลัมน์',
   appPrintSelectionMissing: 'ไม่มีส่วนที่เลือกไว้สำหรับพิมพ์',
   appTextToColsEmpty: 'คอลัมน์ที่เลือกไม่มีเนื้อหาให้แยก',
-  appTextToColsTooManyRows: 'ข้อความเป็นคอลัมน์รองรับสูงสุด {count} แถว — ช่วงที่เลือกมี {rows} แถว โปรดเลือกช่วงที่เล็กกว่า',
+  appTextToColsTooManyRows:
+    'ข้อความเป็นคอลัมน์รองรับสูงสุด {count} แถว — ช่วงที่เลือกมี {rows} แถว โปรดเลือกช่วงที่เล็กกว่า',
   appTextToColsNeedDelimiter: 'เลือกตัวคั่นอย่างน้อยหนึ่งตัว',
   appTextToColsBadDestination: '“{ref}” ไม่ใช่การอ้างอิงเซลล์ในชีตนี้',
   appOutlineSettings: 'การตั้งค่า',
