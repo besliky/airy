@@ -1402,6 +1402,7 @@ export const nl = {
   scUnhideColumns: 'Kolommen weergeven',
   appPrintSelectionMissing: 'Er is niets geselecteerd om af te drukken.',
   appTextToColsEmpty: 'De geselecteerde kolom bevat geen tekst om te splitsen.',
+  appTextToColsTooManyRows: 'Tekst naar kolommen ondersteunt maximaal {count} rijen — de selectie heeft er {rows}. Kies een kleiner bereik.',
   appTextToColsNeedDelimiter: 'Kies minstens één scheidingsteken.',
   appTextToColsBadDestination: '„{ref}” is geen celverwijzing op dit blad.',
   appOutlineSettings: 'Instellingen',

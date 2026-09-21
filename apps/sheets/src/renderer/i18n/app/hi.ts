@@ -1364,6 +1364,7 @@ export const hi = {
   scUnhideColumns: 'कॉलम दिखाएँ',
   appPrintSelectionMissing: 'प्रिंट करने के लिए कुछ भी चयनित नहीं है।',
   appTextToColsEmpty: 'चयनित कॉलम में विभाजित करने की सामग्री नहीं है।',
+  appTextToColsTooManyRows: 'टेक्स्ट से कॉलम अधिकतम {count} पंक्तियों तक काम करता है — चयन में {rows} पंक्तियाँ हैं। छोटी श्रेणी चुनें।',
   appTextToColsNeedDelimiter: 'कम से कम एक पृथक्कारक चुनें।',
   appTextToColsBadDestination: '“{ref}” इस शीट का सेल संदर्भ नहीं है।',
   appOutlineSettings: 'सेटिंग्स',

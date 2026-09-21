@@ -1311,6 +1311,7 @@ export const zh = {
   scUnhideColumns: '取消隐藏列',
   appPrintSelectionMissing: '没有可打印的选定区域。',
   appTextToColsEmpty: '所选列没有可拆分的内容。',
+  appTextToColsTooManyRows: '分列最多支持 {count} 行——选定区域有 {rows} 行，请选择较小的范围。',
   appTextToColsNeedDelimiter: '请至少选择一个分隔符号。',
   appTextToColsBadDestination: '“{ref}”不是本工作表中的单元格引用。',
   appOutlineSettings: '设置',

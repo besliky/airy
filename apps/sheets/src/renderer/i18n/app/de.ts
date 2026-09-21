@@ -1417,6 +1417,7 @@ export const de = {
   scUnhideColumns: 'Spalten einblenden',
   appPrintSelectionMissing: 'Es gibt nichts Ausgewähltes zum Drucken.',
   appTextToColsEmpty: 'Die ausgewählte Spalte hat keinen Inhalt zum Aufteilen.',
+  appTextToColsTooManyRows: 'Text in Spalten unterstützt bis zu {count} Zeilen — die Auswahl umfasst {rows}. Wähle einen kleineren Bereich.',
   appTextToColsNeedDelimiter: 'Wählen Sie mindestens ein Trennzeichen.',
   appTextToColsBadDestination: '„{ref}“ ist kein Zellbezug auf diesem Blatt.',
   appOutlineSettings: 'Einstellungen',

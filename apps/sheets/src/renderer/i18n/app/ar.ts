@@ -1333,6 +1333,7 @@ export const ar = {
   scUnhideColumns: 'إظهار الأعمدة',
   appPrintSelectionMissing: 'لا يوجد تحديد للطباعة.',
   appTextToColsEmpty: 'لا يوجد محتوى لتقسيمه في العمود المحدد.',
+  appTextToColsTooManyRows: 'يدعم «نص إلى أعمدة» حتى {count} صفًا — التحديد يحتوي على {rows}. اختر نطاقًا أصغر.',
   appTextToColsNeedDelimiter: 'اختر محرف فاصل واحدًا على الأقل.',
   appTextToColsBadDestination: '«{ref}» ليس مرجع خلية في هذه الورقة.',
   appOutlineSettings: 'الإعدادات',

@@ -1385,6 +1385,7 @@ export const ru = {
   scUnhideColumns: 'Показать столбцы',
   appPrintSelectionMissing: 'Нет выделенной области для печати.',
   appTextToColsEmpty: 'В выбранном столбце нет содержимого для разделения.',
+  appTextToColsTooManyRows: '«Текст по столбцам» поддерживает до {count} строк — в выделении {rows}. Выберите меньший диапазон.',
   appTextToColsNeedDelimiter: 'Выберите хотя бы один разделитель.',
   appTextToColsBadDestination: '«{ref}» — не ссылка на ячейку этого листа.',
   appOutlineSettings: 'Параметры структуры',

@@ -1367,6 +1367,7 @@ export const id = {
   scUnhideColumns: 'Tampilkan kolom',
   appPrintSelectionMissing: 'Tidak ada yang dipilih untuk dicetak.',
   appTextToColsEmpty: 'Kolom yang dipilih tidak memiliki konten untuk dipisah.',
+  appTextToColsTooManyRows: 'Teks ke Kolom mendukung hingga {count} baris — pilihan berisi {rows}. Pilih rentang yang lebih kecil.',
   appTextToColsNeedDelimiter: 'Pilih minimal satu pemisah.',
   appTextToColsBadDestination: '“{ref}” bukan referensi sel pada sheet ini.',
   appOutlineSettings: 'Pengaturan',

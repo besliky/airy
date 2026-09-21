@@ -1368,6 +1368,7 @@ export const ms = {
   scUnhideColumns: 'Tunjuk lajur',
   appPrintSelectionMissing: 'Tiada pemilihan untuk dicetak.',
   appTextToColsEmpty: 'Lajur yang dipilih tiada kandungan untuk dipecahkan.',
+  appTextToColsTooManyRows: 'Teks ke Lajur menyokong sehingga {count} baris — pemilihan mempunyai {rows}. Pilih julat yang lebih kecil.',
   appTextToColsNeedDelimiter: 'Pilih sekurang-kurangnya satu pemisah.',
   appTextToColsBadDestination: '“{ref}” bukan rujukan sel pada helaian ini.',
   appOutlineSettings: 'Tetapan',

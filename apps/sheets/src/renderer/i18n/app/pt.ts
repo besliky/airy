@@ -1407,6 +1407,7 @@ export const pt = {
   scUnhideColumns: 'Mostrar colunas',
   appPrintSelectionMissing: 'Não há nada selecionado para imprimir.',
   appTextToColsEmpty: 'A coluna selecionada não tem conteúdo para dividir.',
+  appTextToColsTooManyRows: 'Texto para Colunas suporta até {count} linhas — a seleção tem {rows}. Selecione um intervalo menor.',
   appTextToColsNeedDelimiter: 'Escolha pelo menos um delimitador.',
   appTextToColsBadDestination: '“{ref}” não é uma referência de célula desta planilha.',
   appOutlineSettings: 'Configurações',

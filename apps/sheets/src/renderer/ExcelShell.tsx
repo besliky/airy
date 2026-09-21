@@ -59,6 +59,7 @@ import { InsertFunctionDialog } from './InsertFunctionDialog'
 import { PrintDialog } from './PrintDialog'
 import { TextToColumnsDialog, type TextToColumnsSource } from './TextToColumnsDialog'
 import type { TextToColumnsConfig } from './text-to-columns'
+import type { TextToColumnsSourceResult } from './data-tools-actions'
 import { OutlineSettingsDialog, type OutlineSettingsValue } from './OutlineSettingsDialog'
 import type { PrintSetupOverrides } from './page-layout-actions'
 import type { WorkbookExportPdfRequest } from '../shared/desktop-api'
@@ -315,8 +316,9 @@ interface ExcelShellProps {
   /// Prefill for the Consolidate reference input (current multi-cell selection).
   readonly onGetConsolidateDefault: () => string
   /// Text to Columns: reads the single selected column for the wizard's
-  /// preview (null when the selection is not one column).
-  readonly onGetT2cSource: () => TextToColumnsSource | null
+  /// preview; an error result explains (not one column, or too large) and
+  /// the wizard stays closed.
+  readonly onGetT2cSource: () => TextToColumnsSourceResult
   /// Text to Columns Finish; returns an error message, or null on success.
   readonly onApplyTextToColumns: (config: TextToColumnsConfig) => string | null
   /// The active sheet's outline summary placement (Outline Settings seed).
@@ -790,9 +792,9 @@ export function ExcelShell({
             else if (command === 'subtotal-open') setShowSubtotalDialog(true)
             else if (command === 'consolidate-open') setShowConsolidateDialog(true)
             else if (command === 'text-to-columns-open') {
-              const source = onGetT2cSource()
-              if (source) setT2cSource(source)
-              else onSetStatusMessage(t('appTextToColsSelectOne'))
+              const result = onGetT2cSource()
+              if (result.kind === 'source') setT2cSource(result)
+              else onSetStatusMessage(result.message)
             } else if (command === 'outline-settings-open') setShowOutlineSettings(true)
             else if (command === 'goto-open') setShowGoTo(true)
             else if (command === 'header-footer-open') setShowHeaderFooter(true)

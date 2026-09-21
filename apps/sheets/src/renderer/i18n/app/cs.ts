@@ -1371,6 +1371,7 @@ export const cs = {
   scUnhideColumns: 'Zobrazit sloupce',
   appPrintSelectionMissing: 'Není vybráno nic k tisku.',
   appTextToColsEmpty: 'Vybraný sloupec nemá obsah k rozdělení.',
+  appTextToColsTooManyRows: 'Text na sloupce podporuje nejvýše {count} řádků — výběr jich má {rows}. Vyberte menší oblast.',
   appTextToColsNeedDelimiter: 'Vyberte alespoň jeden oddělovač.',
   appTextToColsBadDestination: '„{ref}“ není odkaz na buňku tohoto listu.',
   appOutlineSettings: 'Nastavení',

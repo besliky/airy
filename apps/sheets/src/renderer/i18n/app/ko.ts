@@ -1389,6 +1389,7 @@ export const ko = {
   scUnhideColumns: '열 표시',
   appPrintSelectionMissing: '인쇄할 선택 영역이 없습니다.',
   appTextToColsEmpty: '선택한 열에 나눌 내용이 없습니다.',
+  appTextToColsTooManyRows: '텍스트 나누기는 최대 {count}행까지 지원합니다(선택 영역은 {rows}행). 더 작은 범위를 선택하세요.',
   appTextToColsNeedDelimiter: '구분 기호를 하나 이상 선택하세요.',
   appTextToColsBadDestination: '“{ref}”은(는) 이 시트의 셀 참조가 아닙니다.',
   appOutlineSettings: '설정',

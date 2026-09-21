@@ -124,16 +124,34 @@ describe('parseDestinationCell', () => {
 })
 
 /// A fake active sheet capturing the written matrix and number formats.
-function makeContext(displayGrid: string[][]) {
+/// `options.height` overrides the selection height (a whole-column
+/// selection is 1 048 576 rows), `options.startRow` where it starts,
+/// `options.lastRow` the Univer used range, `options.rowCount` the
+/// file-side used-range floor.
+function makeContext(
+  displayGrid: string[][],
+  options: {
+    height?: number
+    startRow?: number
+    lastRow?: number
+    rowCount?: number
+  } = {},
+) {
   const written: { row: number; column: number; rows: number; columns: number; values: unknown }[] =
     []
   const formats: { row: number; column: number; rows: number; columns: number; pattern: string }[] =
     []
+  /// Every getDisplayValues read request (row, rows) — the cell ceiling must
+  /// clamp these before Univer materializes the matrix.
+  const reads: { row: number; rows: number }[] = []
   const worksheet = {
     getSheetId: () => 'sheet-1',
+    getLastRow: () => options.lastRow ?? displayGrid.length - 1,
     getRange: (row: number, column: number, rows: number, columns: number) => ({
-      getDisplayValues: () =>
-        displayGrid.slice(row, row + rows).map((cells) => cells.slice(column, column + columns)),
+      getDisplayValues: () => {
+        if (columns === 1) reads.push({ row, rows })
+        return displayGrid.slice(row, row + rows).map((cells) => cells.slice(column, column + columns))
+      },
       setValues: (values: unknown) => {
         written.push({ row, column, rows, columns, values })
       },
@@ -145,22 +163,28 @@ function makeContext(displayGrid: string[][]) {
   const workbook = {
     getActiveSheet: () => worksheet,
     getActiveRange: () => ({
-      getRow: () => 0,
+      getRow: () => options.startRow ?? 0,
       getColumn: () => 0,
       getWidth: () => 1,
-      getHeight: () => 3,
+      getHeight: () => options.height ?? 3,
     }),
   }
   return {
     ctx: {
       univerRef: { current: { univerAPI: { getActiveWorkbook: () => workbook } } },
-      lazyWorkbookRef: { current: null },
+      lazyWorkbookRef: {
+        current:
+          options.rowCount === undefined
+            ? null
+            : { file: { sheets: [{ id: 'sheet-1', rowCount: options.rowCount }] } },
+      },
       setMessage: () => {},
       setPendingEdits: () => {},
       setAdvancedFilterColumns: () => {},
     } as unknown as DataToolsContext,
     written,
     formats,
+    reads,
   }
 }
 
@@ -275,5 +299,53 @@ describe('handleTextToColumns', () => {
     const error = handleTextToColumns(wideRange, BASE_CONFIG)
     expect(error).toBeTruthy()
     expect(ctx).toBeDefined()
+  })
+
+  it('clamps a whole-column selection to the used range instead of reading a million rows', () => {
+    const { ctx, written, reads } = makeContext([['a,1'], ['b,2']], {
+      height: 1_048_576,
+      lastRow: 1,
+    })
+    const error = handleTextToColumns(ctx, BASE_CONFIG)
+    expect(error).toBeNull()
+    // The display read (and the write below) covers the used range only.
+    expect(reads).toEqual([{ row: 0, rows: 2 }])
+    expect(written[0]).toMatchObject({ row: 0, column: 0, rows: 2, columns: 2 })
+  })
+
+  it('uses the file-side used range as the floor when Univer has streamed nothing', () => {
+    const { ctx, reads } = makeContext([['a,1'], ['b,2'], ['c,3']], {
+      height: 1_048_576,
+      lastRow: -1,
+      rowCount: 3,
+    })
+    const error = handleTextToColumns(ctx, BASE_CONFIG)
+    expect(error).toBeNull()
+    expect(reads).toEqual([{ row: 0, rows: 3 }])
+  })
+
+  it('refuses a selection entirely below the used range', () => {
+    const { ctx, written, reads } = makeContext([['a,1']], {
+      startRow: 5,
+      height: 10,
+      lastRow: 0,
+    })
+    const error = handleTextToColumns(ctx, BASE_CONFIG)
+    expect(error).toBeTruthy()
+    expect(reads).toEqual([])
+    expect(written).toHaveLength(0)
+  })
+
+  it('refuses a selection beyond the cell ceiling before reading anything', () => {
+    const { ctx, written, reads } = makeContext([['a,1']], {
+      height: 1_048_576,
+      lastRow: 60_000,
+    })
+    const error = handleTextToColumns(ctx, BASE_CONFIG)
+    expect(error).toBeTruthy()
+    // No display-values read, no setValues: the refusal happens on the row
+    // count alone.
+    expect(reads).toEqual([])
+    expect(written).toHaveLength(0)
   })
 })

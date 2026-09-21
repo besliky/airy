@@ -64,6 +64,13 @@ export interface DataToolsContext {
 /// undoable; larger files should open as their own workbook instead.
 const CSV_IMPORT_MAX_CELLS = 50_000
 
+/// Text to Columns reads the selection into one display-string matrix and
+/// writes the split fields back through one setValues command; beyond this
+/// many rows the single command freezes the renderer (a whole-column
+/// selection used to read all 1 048 576 rows before any split happened —
+/// the read itself is clamped to the used range first, like Excel).
+export const TEXT_TO_COLUMNS_MAX_ROWS = CSV_IMPORT_MAX_CELLS
+
 /// PERF-902: the CSV pipeline drags jszip in for its xlsx-conversion output
 /// (~144 kB, the only eager jszip importer). It is needed solely on an
 /// explicit Data → From Text/CSV action, so it loads on demand instead of
@@ -770,26 +777,58 @@ export function handleOutline(
   )
 }
 
+/// Text to Columns: what the wizard-open probe produced — the single
+/// selected column's text plus where it sits, or a localized refusal (not
+/// one column, nothing to split, or a selection too large to split).
+export type TextToColumnsSourceResult =
+  | {
+      kind: 'source'
+      rows: readonly string[]
+      startRow: number
+      startColumn: number
+      destinationLabel: string
+    }
+  | { kind: 'error'; message: string }
+
 /// Text to Columns: the raw material for the wizard's preview — the single
-/// selected column's text, plus where it sits. null when the selection is
-/// not exactly one column (the caller explains instead of opening).
-export function readTextToColumnsSource(ctx: DataToolsContext): {
-  rows: readonly string[]
-  startRow: number
-  startColumn: number
-  destinationLabel: string
-} | null {
+/// selected column's text, plus where it sits. A whole-column selection
+/// (the ordinary gesture before Data → Text to Columns) is clamped to the
+/// used range like Excel instead of reading a million empty display cells;
+/// a selection past the ceiling refuses with a message instead of freezing
+/// the renderer on one giant setValues command.
+export function readTextToColumnsSource(ctx: DataToolsContext): TextToColumnsSourceResult {
   const workbook = ctx.univerRef.current?.univerAPI.getActiveWorkbook()
   const worksheet = workbook?.getActiveSheet()
   const range = workbook?.getActiveRange()
-  if (!worksheet || !range || range.getWidth() !== 1) return null
+  if (!worksheet || !range || range.getWidth() !== 1) {
+    return { kind: 'error', message: t('appTextToColsSelectOne') }
+  }
   const startRow = range.getRow()
   const startColumn = range.getColumn()
+  // File cells stream into Univer lazily, so getLastRow alone can
+  // undercount; the file's used range is the floor (same clamp as the
+  // Create-from-Selection label walk).
+  const fileSheet = ctx.lazyWorkbookRef.current?.file.sheets.find(
+    (sheet) => sheet.id === worksheet.getSheetId(),
+  )
+  const usedEndRow = Math.max(worksheet.getLastRow(), (fileSheet?.rowCount ?? 0) - 1)
+  const height = Math.min(range.getHeight(), usedEndRow - startRow + 1)
+  if (height <= 0) return { kind: 'error', message: t('appTextToColsEmpty') }
+  if (height > TEXT_TO_COLUMNS_MAX_ROWS) {
+    return {
+      kind: 'error',
+      message: t('appTextToColsTooManyRows', {
+        count: TEXT_TO_COLUMNS_MAX_ROWS,
+        rows: height,
+      }),
+    }
+  }
   const text = worksheet
-    .getRange(startRow, startColumn, range.getHeight(), 1)
+    .getRange(startRow, startColumn, height, 1)
     .getDisplayValues()
     .map((row) => String(row[0] ?? ''))
   return {
+    kind: 'source',
     rows: text,
     startRow,
     startColumn,
@@ -813,7 +852,7 @@ export function handleTextToColumns(
   if (!workbook || !worksheet || !range) return t('appSelectCellFirst')
   if (range.getWidth() !== 1) return t('appTextToColsSelectOne')
   const source = readTextToColumnsSource(ctx)
-  if (!source) return t('appTextToColsSelectOne')
+  if (source.kind === 'error') return source.message
   if (source.rows.length === 0) return t('appTextToColsEmpty')
 
   const delimiters = activeDelimiterChars(config.delimiters)
