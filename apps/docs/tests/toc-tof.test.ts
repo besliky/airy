@@ -426,12 +426,10 @@ describe('TOC \\t source styles (BUG-1012)', () => {
           '<w:style w:type="paragraph" w:styleId="Appx"><w:name w:val="Appendix"/></w:style>',
       }),
     )
-    const editor = new Editor({
-      element: document.createElement('div'),
+    const editor = createTrackedEditor({
       extensions: editorExtensions,
       content: blocksToPmDoc(parsed.blocks) as never,
     })
-    openEditors.push(editor)
     return { editor, parsed }
   }
 
