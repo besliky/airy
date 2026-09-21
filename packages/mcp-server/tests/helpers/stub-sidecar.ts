@@ -30,6 +30,8 @@ export interface StubIoOptions {
 export interface StubIo extends XlsxIo {
   /** calls per session id: open -> readRange/close counts for assertions */
   readonly calls: { open: string[]; readRange: string[]; close: string[]; convert: string[] }
+  /** every read_range request's range as "r0..r1 x c0..c1" (0-based, inclusive) */
+  readonly readRanges: string[]
 }
 
 export function makeStubIo(options: StubIoOptions = {}): StubIo {
@@ -43,9 +45,11 @@ export function makeStubIo(options: StubIoOptions = {}): StubIo {
     close: [] as string[],
     convert: [] as string[],
   }
+  const readRanges: string[] = []
   let sessionCounter = 0
   const io: StubIo = {
     calls,
+    readRanges,
     async open(path: string) {
       calls.open.push(path)
       if (options.openError) throw options.openError
@@ -58,8 +62,16 @@ export function makeStubIo(options: StubIoOptions = {}): StubIo {
         activeTab: 0,
       }
     },
-    async readRange(input: { sessionId: string; sheetId: string }) {
+    async readRange(input: {
+      sessionId: string
+      sheetId: string
+      range: { startRow: number; endRow: number; startColumn: number; endColumn: number }
+    }) {
       calls.readRange.push(`${input.sessionId}:${input.sheetId}`)
+      readRanges.push(
+        `${String(input.range.startRow)}..${String(input.range.endRow)}` +
+          ` x ${String(input.range.startColumn)}..${String(input.range.endColumn)}`,
+      )
       const knownSheet = sheets.some((candidate) => candidate.id === input.sheetId)
       return {
         cells: knownSheet ? [...(options.cells ?? [])] : [],
