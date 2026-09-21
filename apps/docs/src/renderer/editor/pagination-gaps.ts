@@ -224,6 +224,33 @@ export interface GapMetrics {
   sectionMarginTop?: number
 }
 
+/**
+ * Word renders a page-leader's space-before only when a page-type section start
+ * opened the page; every page top the flow itself opened starts flush:
+ *   - automatic (soft) breaks drop the lead spacing — LO/Word corpus render
+ *     2026-09-18: docs 04 p3 / 10 p4 / 13 p3 headings sit at content-top +0pt
+ *     (probe: a 10pt space-before renders 0pt below it);
+ *   - an explicit w:br page break drops it too (patched probe on doc 07: lead
+ *     paragraph flush at the content top);
+ *   - a pageBreakBefore leader keeps it (patched probe on doc 18: +12pt) but the
+ *     canvas keeps zeroing it as a deliberate deviation (BUG-1400 fix kept the
+ *     pre-existing behavior rather than flip two rules at once);
+ *   - a page-type section start (nextPage/evenPage/oddPage) keeps it — doc 08's
+ *     landscape section renders its heading 12pt below the content top.
+ * Tables are exempt: their 2px canvas margin is TABLE_SEAM_PX seam bookkeeping,
+ * not paragraph spacing.
+ */
+export function suppressPageLeadMargin(opts: {
+  leadIsTable?: boolean
+  /** page opened by a page-type section start (nextPage/evenPage/oddPage) */
+  sectionPageStart?: boolean
+  /** leader carries pageBreakBefore, or the previous block ended with a w:br page */
+  forced?: boolean
+}): boolean {
+  if (opts.leadIsTable) return false
+  return !!opts.forced || !opts.sectionPageStart
+}
+
 /** height of the gray inter-page band inside a page gap */
 export const GAP_BAND = 28
 
@@ -298,8 +325,9 @@ export type PageGapSpec = {
    *  (the slicing engine already reserved their height on the new page) */
   repeatHeaderEls?: HTMLElement[]
   repeatHeaderKey?: string
-  /** page forced by an explicit break (w:br page / pageBreakBefore): Word drops the
-   *  lead block's space-before, so a node decoration zeroes its margin-top */
+  /** page top the flow opened (automatic break, w:br page, pageBreakBefore): Word
+   *  drops the lead block's space-before, so a node decoration zeroes its margin-top
+   *  (a section's own page start keeps the spacing; App.tsx computes the flag) */
   suppressLeadMt?: boolean
   /** mixed-column page above: pull the gap (and everything below) up over the
    *  vacated stacked-column space (negative margin-top, neutralized while measuring) */
