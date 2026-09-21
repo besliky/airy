@@ -1,5 +1,6 @@
 /// Lays the active sheet out as print HTML from the live Univer model —
-/// display strings (number formats applied), cell styles, merges, and the
+/// display strings (number formats applied), cell styles, conditional-
+/// formatting visuals (fills, font colors, data bars), merges, and the
 /// sheet's effective page setup (print areas, repeated title rows, gridlines,
 /// headings, header/footer). The main process turns the HTML into a PDF.
 
@@ -97,10 +98,40 @@ export interface PrintWorksheet {
     getValues(): unknown[][]
   }
   getRange(row: number, column: number): { getCellStyleData(): PrintCellStyle | null }
+  /// Conditional-formatting visuals for one cell, composed the way the grid's
+  /// CF engine composes them (matched rules' dxf merged, stopIfTrue honored):
+  /// the style fields the rules define plus data-bar render parameters.
+  /// Optional — hand-built test fixtures and harnesses without the CF plugin
+  /// keep compiling; the caller wires the live service in page-layout-actions.
+  getConditionalFormatStyle?(row: number, column: number): PrintConditionalFormatStyle | null
+}
+
+/// One cell's conditional-formatting result: the merged dxf style (fields
+/// present override the static cell style, like Excel layers CF) and the
+/// data-bar bar geometry. Icon sets have no HTML twin here — the grid draws
+/// them as canvas bitmaps from its own image map — and stay deferred.
+export interface PrintConditionalFormatStyle {
+  readonly style?: PrintCellStyle | undefined
+  readonly dataBar?: PrintDataBar | undefined
+  /// The data-bar rule's "Show Bar Only" switch; false hides the cell's text.
+  readonly showValue?: boolean | undefined
+}
+
+/// A data bar's geometry, mirroring the render parameters Univer's canvas
+/// extension draws (all values in percent of the cell).
+export interface PrintDataBar {
+  readonly color: string
+  /// Bar length as a percent of the value span, signed: negative bars grow
+  /// left from the axis.
+  readonly value: number
+  /// The zero axis position (50 by default, 0/100 for all-positive or
+  /// all-negative ranges).
+  readonly startPoint: number
+  readonly isGradient: boolean
 }
 
 /// The IStyleData fields the layout reads (all optional in Univer).
-interface PrintCellStyle {
+export interface PrintCellStyle {
   readonly bl?: number
   readonly it?: number
   readonly ul?: { s?: number } | null
@@ -481,9 +512,15 @@ function layoutPrintArea(
       const anchor = merges.anchors.get(key)
       if (merges.covered.has(key) && !anchor) continue
       const inArea = row >= area.startRow && row <= area.endRow
-      const text = inArea
-        ? (display[row - area.startRow]?.[column - area.startColumn] ?? '')
-        : cellDisplay(worksheet, row, column)
+      // A data-bar rule with "Show Bar Only" prints the bar alone (Excel
+      // hides the value); every other CF rule keeps the cell's text.
+      const conditional = worksheet.getConditionalFormatStyle?.(row, column) ?? null
+      const barOnly = conditional?.dataBar !== undefined && conditional.showValue === false
+      const text = !inArea
+        ? cellDisplay(worksheet, row, column)
+        : barOnly
+          ? ''
+          : (display[row - area.startRow]?.[column - area.startColumn] ?? '')
       const rawValue = inArea ? raw[row - area.startRow]?.[column - area.startColumn] : undefined
       const style = worksheet.getRange(row, column).getCellStyleData()
       if (text !== '' && !anchor) {
@@ -497,7 +534,7 @@ function layoutPrintArea(
         rowspan: anchor ? anchor.rows : 1,
         colspan: anchor ? anchor.columns : 1,
         text,
-        css: cellCss(style, rawValue, gridlines),
+        css: cellCss(style, rawValue, gridlines, conditional),
       })
     }
     const heightPt = Math.max(worksheet.getRowHeight(row) * 0.75, 10)
@@ -536,7 +573,12 @@ function layoutPrintArea(
     if (row === undefined || column === undefined) continue
     anchorCss.set(
       key,
-      cellCss(worksheet.getRange(row, column).getCellStyleData(), undefined, gridlines),
+      cellCss(
+        worksheet.getRange(row, column).getCellStyleData(),
+        undefined,
+        gridlines,
+        worksheet.getConditionalFormatStyle?.(row, column) ?? null,
+      ),
     )
   }
   return {
@@ -1011,7 +1053,15 @@ function cellDisplay(worksheet: PrintWorksheet, row: number, column: number): st
   return worksheet.getRange(row, column, 1, 1).getDisplayValues()[0]?.[0] ?? ''
 }
 
-function cellCss(style: PrintCellStyle | null, rawValue: unknown, gridlines: boolean): string {
+function cellCss(
+  style: PrintCellStyle | null,
+  rawValue: unknown,
+  gridlines: boolean,
+  conditional: PrintConditionalFormatStyle | null = null,
+): string {
+  // A matched CF rule's dxf replaces the static style's fill and font fields
+  // (borders per edge) like Excel layers conditional formatting on print.
+  if (conditional?.style) style = mergeConditionalStyle(style, conditional.style)
   const rules: string[] = []
   if (style?.bl === 1) rules.push('font-weight:700')
   if (style?.it === 1) rules.push('font-style:italic')
@@ -1064,7 +1114,63 @@ function cellCss(style: PrintCellStyle | null, rawValue: unknown, gridlines: boo
       }`,
     )
   }
+  // The data-bar gradient goes after every `background` shorthand so its
+  // image layer stays on top of the fill (the shorthand would reset it).
+  if (conditional?.dataBar) rules.push(dataBarCss(conditional.dataBar))
   return rules.join(';')
+}
+
+/// Excel layers a matched CF rule's dxf over the static cell style: the
+/// fields the dxf defines replace the cell's own (fills and font colors are
+/// the visual core; borders override per edge), undefined fields keep the
+/// cell's formatting.
+function mergeConditionalStyle(style: PrintCellStyle | null, cf: PrintCellStyle): PrintCellStyle {
+  const merged: {
+    -readonly [K in keyof PrintCellStyle]: PrintCellStyle[K]
+  } = { ...style }
+  const override = <K extends keyof PrintCellStyle>(key: K): void => {
+    if (cf[key] !== undefined) merged[key] = cf[key]
+  }
+  override('bl')
+  override('it')
+  override('ul')
+  override('st')
+  override('fs')
+  override('ff')
+  override('cl')
+  override('bg')
+  if (cf.bd) {
+    const borders: NonNullable<PrintCellStyle['bd']> = { ...merged.bd }
+    for (const edge of ['t', 'b', 'l', 'r'] as const) {
+      if (cf.bd[edge] !== undefined) borders[edge] = cf.bd[edge]
+    }
+    merged.bd = borders
+  }
+  return merged
+}
+
+/// A data bar as a CSS gradient over the cell: the bar grows from the axis
+/// (startPoint, percent of the cell) toward the value's side, its length a
+/// percent of the remaining span, fading to white on gradient bars — the
+/// same geometry Univer's canvas extension draws. The rounded corners and
+/// the 2px inset stay approximated; a zero-width bar shows nothing.
+function dataBarCss(bar: PrintDataBar): string {
+  const color = cssColor(bar.color)
+  const axis = clamp(bar.startPoint, 0, 100)
+  const positive = bar.value >= 0
+  const extent = (clamp(Math.abs(bar.value), 0, 100) * (positive ? 100 - axis : axis)) / 100
+  const from = round(positive ? axis : axis - extent)
+  const to = round(positive ? axis + extent : axis)
+  if (to <= from) return `background-image:linear-gradient(90deg,${color} ${from}%)`
+  const stops = bar.isGradient
+    ? positive
+      ? `${color} ${from}%,#fff ${to}%`
+      : `#fff ${from}%,${color} ${to}%`
+    : `${color} ${from}%,${color} ${to}%`
+  return (
+    `background-image:linear-gradient(90deg,rgba(0,0,0,0) ${from}%,` +
+    `${stops},rgba(0,0,0,0) ${to}%)`
+  )
 }
 
 function cssColor(rgb: string): string {

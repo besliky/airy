@@ -9,6 +9,8 @@ import type { WorkbookExportPdfRequest } from '../shared/desktop-api'
 import type { WorkbookOperation } from '../domain/workbook-dsl'
 import type { ApplyOutcome } from '../domain/workbook.types'
 
+import { ConditionalFormattingService } from '@univerjs/preset-sheets-conditional-formatting'
+
 import { columnLabel } from '../domain/cell-address'
 import {
   isSheetRemoved,
@@ -27,6 +29,8 @@ import {
   buildSheetsPrintPayload,
   PrintError,
   type HeaderFooterPictureImage,
+  type PrintCellStyle,
+  type PrintConditionalFormatStyle,
   type PrintSheetJob,
   type PrintWorksheet,
 } from './print-html'
@@ -377,6 +381,63 @@ export interface PrintSetupOverrides {
   readonly collate?: boolean | undefined
 }
 
+/// The CF service narrowed to the one call the print layout needs.
+interface ComposeCfStyle {
+  composeStyle(
+    unitId: string,
+    subUnitId: string,
+    row: number,
+    col: number,
+  ): {
+    style?: unknown
+    dataBar?: PrintConditionalFormatStyle['dataBar']
+    isShowValue?: boolean
+  } | null
+}
+
+/// Wires the live conditional-formatting engine into a job's worksheet so
+/// the print layout paints CF fills, font colors and data bars like the grid
+/// does (BUG-1502: the static getCellStyleData read cannot see them). The
+/// wrapper delegates to the worksheet through its prototype, so Univer's
+/// class methods keep working; without a live injector (test harnesses) or
+/// when a cell errors the worksheet passes through untouched.
+function withConditionalFormatStyle(
+  runtime: UniverRuntime,
+  unitId: string,
+  subUnitId: string,
+  worksheet: PrintWorksheet,
+): PrintWorksheet {
+  if (worksheet.getConditionalFormatStyle !== undefined) return worksheet
+  let service: ComposeCfStyle | null = null
+  try {
+    const injector = (
+      runtime.univer as { __getInjector?: () => { get(token: unknown): unknown } } | undefined
+    )?.__getInjector?.()
+    const composed = injector?.get(ConditionalFormattingService)
+    service = (composed as ComposeCfStyle | undefined) ?? null
+  } catch {
+    service = null
+  }
+  if (service === null) return worksheet
+  const wrapped = Object.create(worksheet) as PrintWorksheet & {
+    getConditionalFormatStyle: NonNullable<PrintWorksheet['getConditionalFormatStyle']>
+  }
+  wrapped.getConditionalFormatStyle = (row, column) => {
+    try {
+      const composed = service!.composeStyle(unitId, subUnitId, row, column)
+      if (composed === null) return null
+      return {
+        ...(composed.style === undefined ? {} : { style: composed.style as PrintCellStyle }),
+        ...(composed.dataBar === undefined ? {} : { dataBar: composed.dataBar }),
+        ...(composed.isShowValue === undefined ? {} : { showValue: composed.isShowValue }),
+      }
+    } catch {
+      return null
+    }
+  }
+  return wrapped
+}
+
 /// The per-sheet print geometry of one job candidate: the sheet's own areas
 /// and title rows resolved into screen space (journal print areas win over
 /// the file's print names, like the active-sheet flow).
@@ -429,6 +490,8 @@ export async function buildPrintRequest(
   const state = ctx.lazyWorkbookRef.current
   if (state && !state.flags.preloadComplete) throw new PrintError(t('appPdfNeedsFullLoad'))
   const sheetId = worksheet.getSheetId()
+  // Fakes in harnesses may omit getId; the CF reader falls back to no CF.
+  const unitId = (workbook as { getId?: () => string }).getId?.() ?? ''
   const setup = resolveEffectivePageSetup(
     state?.editJournal.pageSetup.get(sheetId) ?? {},
     state?.sheetFilePageSetups.get(sheetId) ?? null,
@@ -462,7 +525,12 @@ export async function buildPrintRequest(
         continue
       if (state !== null && isSheetRemoved(state.editJournal, sheet.getSheetId())) continue
       jobs.push({
-        worksheet: sheet as unknown as PrintWorksheet,
+        worksheet: withConditionalFormatStyle(
+          runtime,
+          unitId,
+          sheet.getSheetId(),
+          sheet as unknown as PrintWorksheet,
+        ),
         ...(state
           ? sheetPrintGeometry(state, sheet.getSheetId())
           : { printAreas: [], printTitles: null }),
@@ -476,7 +544,12 @@ export async function buildPrintRequest(
     const startColumn = range.getColumn()
     const startRow = range.getRow()
     jobs.push({
-      worksheet: worksheet as unknown as PrintWorksheet,
+      worksheet: withConditionalFormatStyle(
+        runtime,
+        unitId,
+        sheetId,
+        worksheet as unknown as PrintWorksheet,
+      ),
       printAreas: [
         `${columnLabel(startColumn)}${startRow + 1}` +
           `:${columnLabel(startColumn + range.getWidth() - 1)}${startRow + range.getHeight()}`,
@@ -485,7 +558,12 @@ export async function buildPrintRequest(
     })
   } else {
     jobs.push({
-      worksheet: worksheet as unknown as PrintWorksheet,
+      worksheet: withConditionalFormatStyle(
+        runtime,
+        unitId,
+        sheetId,
+        worksheet as unknown as PrintWorksheet,
+      ),
       printAreas: effective.printAreas,
       printTitles: setup.printTitles,
     })
