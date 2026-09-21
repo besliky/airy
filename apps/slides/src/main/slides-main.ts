@@ -33,7 +33,7 @@ import {
   realPathOrDeepestExisting,
   resolveExportImagePaths,
 } from './export-targets'
-import { exportSlidesPdf } from './pdf-export'
+import { exportSlidesPdf, svgFontFamilies } from './pdf-export'
 import {
   ALL_OPEN_EXTENSIONS,
   OPEN_EXTENSION_GROUPS,
@@ -252,7 +252,7 @@ import {
 } from './session-state'
 import { registerAiIpc, registerSlidesOnlyAiIpc } from './ai-ipc'
 import { trackSlidesRenderer, untrackSlidesRenderer, isSlidesRenderer } from './slides-renderers'
-import { listPrivateFontFaces, getPrivateFontData, registerEmbeddedFonts } from './fonts'
+import { exportFontFaces, listPrivateFontFaces, getPrivateFontData, registerEmbeddedFonts } from './fonts'
 import { listMetafileFonts } from './metafile-fonts'
 import {
   downloadFontFamily,
@@ -4296,6 +4296,10 @@ export function registerSlidesIpc(): void {
     }
     return exportSlidesPdf({
       ...op,
+      // the sandboxed export window has none of the renderer's font
+      // registrations: faces it cannot resolve by name (bundled Carlito,
+      // Office-private faces) ride along as inline @font-face data (BUG-1506)
+      fontFaces: exportFontFaces(svgFontFamilies(op.pages)),
       createWindow: () =>
         new BrowserWindow({
           show: false,

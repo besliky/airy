@@ -5,7 +5,14 @@ import { basename, dirname, join } from 'node:path'
 import { PNG } from 'pngjs'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { buildPdfExportHtml, exportSlidesPdf, type PdfExportWindow } from '../src/main/pdf-export'
+import {
+  buildPdfExportHtml,
+  exportSlidesPdf,
+  fontFaceCss,
+  svgFontFamilies,
+  type EmbeddedFontFace,
+  type PdfExportWindow,
+} from '../src/main/pdf-export'
 import { renderSlideSvg } from '../src/renderer/slide-svg'
 import type { RenderNode, RenderSlide, ShapeRenderNode } from '@airy-office/pptx-render'
 
@@ -299,5 +306,84 @@ describe('slides PDF export', () => {
     // the raster fallback page keeps its bitmap slot
     expect(win.loadedHtml).toContain(`data:image/png;base64,${singlePixelPngBase64()}`)
     expect(win.loadedHtml).toContain('@page { size: 8.27in 11.69in; margin: 0; }')
+  })
+
+  it('collects the distinct font-family names the vector pages reference', () => {
+    const stackSlide =
+      `<svg xmlns="http://www.w3.org/2000/svg"><text font-family="Calibri, 'Carlito GO', Arial, sans-serif">a</text>` +
+      `<text font-family="'Carlito GO'">b</text></svg>`
+    expect(svgFontFamilies([{ svg: stackSlide }, { pngBase64: singlePixelPngBase64() }])).toEqual([
+      'Calibri',
+      'Carlito GO',
+    ])
+    expect(svgFontFamilies([])).toEqual([])
+  })
+
+  it('fontFaceCss inlines faces as data: @font-face rules with style descriptors', () => {
+    // TrueType sfnt magic 0x00010000 -> font/ttf + format('truetype')
+    const ttf: EmbeddedFontFace = {
+      family: "O'Brian Test",
+      bold: true,
+      italic: false,
+      bytes: new Uint8Array([0x00, 0x01, 0x00, 0x00, 0xaa, 0xbb]),
+    }
+    // CFF sfnt ('OTTO') -> font/otf + format('opentype')
+    const otf: EmbeddedFontFace = {
+      family: 'Cff Face',
+      bold: false,
+      italic: true,
+      bytes: new Uint8Array([0x4f, 0x54, 0x54, 0x4f, 0x01]),
+    }
+    const css = fontFaceCss([ttf, otf])
+    const rules = css.split('\n')
+    expect(rules).toHaveLength(2)
+    // the family name is escaped for a CSS string
+    expect(rules[0]).toContain(`font-family: 'O\\'Brian Test';`)
+    expect(rules[0]).toContain('src: url(data:font/ttf;base64,')
+    expect(rules[0]).toContain("format('truetype')")
+    expect(rules[0]).toContain('font-weight: bold;')
+    expect(rules[0]).toContain('font-style: normal;')
+    expect(rules[0]).toContain(Buffer.from(ttf.bytes).toString('base64'))
+    expect(rules[1]).toContain('src: url(data:font/otf;base64,')
+    expect(rules[1]).toContain("format('opentype')")
+    expect(rules[1]).toContain('font-weight: normal;')
+    expect(rules[1]).toContain('font-style: italic;')
+    expect(fontFaceCss([])).toBe('')
+  })
+
+  it('embeds the requested font faces in the export HTML (full and print layouts)', async () => {
+    // BUG-1506: the sandboxed export window has no app stylesheet and no
+    // FontFace registrations — faces it cannot resolve by name ride along
+    const faces: EmbeddedFontFace[] = [
+      {
+        family: 'Carlito GO',
+        bold: false,
+        italic: false,
+        bytes: new Uint8Array([0x00, 0x01, 0x00, 0x00, 0x11, 0x22, 0x33]),
+      },
+    ]
+    const html = buildPdfExportHtml([{ svg: vectorSlide('x') }], 13.333, 7.5, fontFaceCss(faces))
+    expect(html).toContain(`font-family: 'Carlito GO';`)
+    expect(html.indexOf(`font-family: 'Carlito GO';`)).toBeLessThan(html.indexOf('@page'))
+
+    const win = new TestPdfWindow()
+    await exportSlidesPdf({
+      pages: [{ svg: vectorSlide('a') }],
+      widthPx: 1600,
+      heightPx: 900,
+      filePath: await outputPath(),
+      layout: 'handout2',
+      fontFaces: faces,
+      createWindow: () => win,
+      openExportedPdf: () => {},
+    })
+    expect(win.loadedHtml).toContain(`font-family: 'Carlito GO';`)
+    expect(win.loadedHtml.indexOf(`font-family: 'Carlito GO';`)).toBeLessThan(
+      win.loadedHtml.indexOf('@page'),
+    )
+
+    // no faces -> byte-identical HTML shape as before the fix (no empty rules)
+    const bare = buildPdfExportHtml([{ svg: vectorSlide('x') }], 13.333, 7.5)
+    expect(bare).not.toContain('@font-face')
   })
 })

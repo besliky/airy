@@ -41,12 +41,23 @@ import carlitoBold from '@airy-office/ui/fonts/Carlito-Bold.ttf?asset'
 import carlitoItalic from '@airy-office/ui/fonts/Carlito-Italic.ttf?asset'
 import carlitoBoldItalic from '@airy-office/ui/fonts/Carlito-BoldItalic.ttf?asset'
 
+/**
+ * Normalize a bundled-font asset path to a real filesystem path. Electron
+ * builds resolve `?asset` to the absolute file path; under vitest's dev
+ * server the same import surfaces as "/@fs/abs/path?asset" — strip that
+ * wrapper so reads work in both environments (a no-op for real paths).
+ */
+function bundledFontFile(path: string): string {
+  const m = /^\/@fs(.+?)(?:\?.*)?$/.exec(path)
+  return m?.[1] ?? path
+}
+
 /** Fonts shipped with the app (metric substitutes for fonts most decks assume, e.g. Calibri→Carlito). */
 const BUNDLED_FONTS: Record<string, string> = {
-  'Carlito-Regular': carlitoRegular,
-  'Carlito-Bold': carlitoBold,
-  'Carlito-Italic': carlitoItalic,
-  'Carlito-BoldItalic': carlitoBoldItalic,
+  'Carlito-Regular': bundledFontFile(carlitoRegular),
+  'Carlito-Bold': bundledFontFile(carlitoBold),
+  'Carlito-Italic': bundledFontFile(carlitoItalic),
+  'Carlito-BoldItalic': bundledFontFile(carlitoBoldItalic),
 }
 
 /**
@@ -1053,6 +1064,121 @@ export function getPrivateFontData(id: string): ArrayBuffer | null {
   } catch {
     return null
   }
+}
+
+/**
+ * A font face a PDF/print export window must receive inline (@font-face with
+ * a data: URL, BUG-1506): those windows are bare sandboxed BrowserWindows —
+ * none of the renderer's registrations (bundled Carlito via the app
+ * stylesheet, private faces via document FontFaces) exist there, so text
+ * laid out with such faces would rasterize with an OS fallback serif.
+ */
+export interface ExportFontFace {
+  readonly family: string
+  readonly bold: boolean
+  readonly italic: boolean
+  readonly bytes: Uint8Array
+}
+
+/** the bundled substitute's style variants, in style order */
+const BUNDLED_VARIANTS: ReadonlyArray<{ path: string; bold: boolean; italic: boolean }> = [
+  { path: BUNDLED_FONTS['Carlito-Regular']!, bold: false, italic: false },
+  { path: BUNDLED_FONTS['Carlito-Bold']!, bold: true, italic: false },
+  { path: BUNDLED_FONTS['Carlito-Italic']!, bold: false, italic: true },
+  { path: BUNDLED_FONTS['Carlito-BoldItalic']!, bold: true, italic: true },
+]
+
+/** family keys the bundled files declare in their name tables ('carlito go'), cached */
+let bundledFamilyKeys: Set<string> | null = null
+function bundledFaceKeys(): Set<string> {
+  if (bundledFamilyKeys) return bundledFamilyKeys
+  const keys = new Set(['carlito'])
+  for (const variant of BUNDLED_VARIANTS) {
+    try {
+      for (const face of readFaceDir(readFileSync(variant.path)))
+        for (const key of face.famKeys) keys.add(key)
+    } catch {
+      /* unreadable file: the plain 'carlito' key still matches */
+    }
+  }
+  bundledFamilyKeys = keys
+  return keys
+}
+
+/**
+ * Faces to inline for the families the export pages reference (as spelled —
+ * @font-face declares the CSS name, so the bytes answer to whatever the SVG
+ * says, regardless of the font's internal name table):
+ *
+ *  - private faces of the open deck (Office DFonts / cloud fonts / user
+ *    store / document embeds): Chromium cannot see those files at all;
+ *  - the bundled metric substitute (Carlito, referenced directly as the
+ *    drawing family 'Carlito GO' or reached through the alias chain when a
+ *    deck's raw 'Calibri' met no system font — the same substitution the
+ *    layout measured with).
+ *
+ * Families that resolve to a normal installed font are omitted: the export
+ * window resolves them by name, and inlining system fonts would bloat the
+ * HTML by megabytes for no fidelity gain.
+ */
+export function exportFontFaces(families: readonly string[]): ExportFontFace[] {
+  const out: ExportFontFace[] = []
+  const seen = new Set<string>()
+  const emit = (face: ExportFontFace): void => {
+    const key = `${norm(face.family)}|${face.bold ? 'b' : ''}${face.italic ? 'i' : ''}`
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push(face)
+  }
+  for (const family of families) {
+    const key = norm(family)
+    if (!key) continue
+    // private faces registered while laying out the deck: same bytes the
+    // renderer's doc-fonts FontFaces load
+    for (const info of privateFaces.values()) {
+      if (norm(info.family) !== key) continue
+      try {
+        const bytes = new Uint8Array(extractFace(readFileSync(info.path), info.offset))
+        if (bytes.length > 0) emit({ family, bold: info.bold, italic: info.italic, bytes })
+      } catch {
+        /* unreadable face: the export falls back, as before the fix */
+      }
+    }
+    // bundled substitute: the name itself (Carlito / Carlito GO) or an alias
+    // chain landing on a bundled file (raw Calibri without a system Calibri).
+    // Substituted hits (an absent family's same-script stand-in) do NOT
+    // count: the layout never drew the missing family with the substitute's
+    // name, and inlining it under the absent name would ship a font the
+    // pages never reference.
+    let resolvesToBundled = false
+    try {
+      const hit = getRegistry().resolve({
+        fontFamily: family,
+        fontSizePx: 100,
+        bold: false,
+        italic: false,
+      })
+      resolvesToBundled =
+        !!hit && hit.substituted !== true && BUNDLED_VARIANTS.some((v) => v.path === hit.path)
+    } catch {
+      resolvesToBundled = false
+    }
+    if (bundledFaceKeys().has(key) || resolvesToBundled) {
+      for (const variant of BUNDLED_VARIANTS) {
+        try {
+          emit({
+            family,
+            bold: variant.bold,
+            italic: variant.italic,
+            bytes: new Uint8Array(readFileSync(variant.path)),
+          })
+        } catch {
+          /* missing bundled file (exotic build): fall back like before */
+        }
+      }
+    }
+  }
+  return out
 }
 
 /** Process-wide registry; reset after the user font store changes so new files get indexed. */

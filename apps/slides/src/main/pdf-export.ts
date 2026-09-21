@@ -11,6 +11,87 @@ export interface PdfExportWindow {
   destroy(): void
 }
 
+/**
+ * A font face the export HTML must embed as a data: @font-face. The export
+ * window is a bare sandboxed BrowserWindow: it gets none of the interactive
+ * renderer's font registrations (bundled Carlito via the app stylesheet,
+ * Office-private faces via document FontFaces), so text laid out with those
+ * faces would rasterize with an OS fallback (BUG-1506). `family` must be
+ * spelled exactly like the SVG pages' font-family attribute — @font-face
+ * declares the CSS name, which is what Chromium matches on; the font's
+ * internal name table is never consulted.
+ */
+export interface EmbeddedFontFace {
+  family: string
+  bold: boolean
+  italic: boolean
+  bytes: Uint8Array
+}
+
+/** families that never need an @font-face: CSS generics plus the system UI
+ *  stacks slide-svg's chrome text uses (those render with the OS default) */
+const GENERIC_FAMILIES = new Set([
+  'serif',
+  'sans-serif',
+  'monospace',
+  'cursive',
+  'fantasy',
+  'system-ui',
+  'ui-serif',
+  'ui-sans-serif',
+  'ui-monospace',
+  'ui-rounded',
+  'math',
+  '-apple-system',
+  'segoe ui',
+  'arial',
+])
+
+/**
+ * Distinct font-family names referenced by the vector pages. The SVG text
+ * elements carry single drawing families (occasionally a CSS stack); stacks
+ * split on commas, quotes strip, generics drop.
+ */
+export function svgFontFamilies(pages: Array<{ svg?: string; pngBase64?: string }>): string[] {
+  const names = new Set<string>()
+  for (const page of pages) {
+    if (!page.svg) continue
+    for (const match of page.svg.matchAll(/font-family="([^"]*)"/g)) {
+      for (const raw of match[1]!.split(',')) {
+        const name = raw.trim().replace(/^['"]|['"]$/g, '').trim()
+        if (name && !GENERIC_FAMILIES.has(name.toLowerCase())) names.add(name)
+      }
+    }
+  }
+  return [...names]
+}
+
+/** @font-face rules inlining the faces as data: URLs (self-contained export HTML) */
+export function fontFaceCss(faces: readonly EmbeddedFontFace[]): string {
+  if (faces.length === 0) return ''
+  return faces
+    .map((face) => {
+      // sniff the sfnt flavor: CFF opens with 'OTTO', TrueType outlines with 0x00010000
+      const cff =
+        face.bytes.length > 4 &&
+        face.bytes[0] === 0x4f &&
+        face.bytes[1] === 0x54 &&
+        face.bytes[2] === 0x54 &&
+        face.bytes[3] === 0x4f
+      const mime = cff ? 'font/otf' : 'font/ttf'
+      const format = cff ? 'opentype' : 'truetype'
+      const family = face.family.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+      const base64 = Buffer.from(face.bytes.buffer, face.bytes.byteOffset, face.bytes.byteLength)
+      return (
+        `@font-face { font-family: '${family}'; ` +
+        `src: url(data:${mime};base64,${base64.toString('base64')}) format('${format}'); ` +
+        `font-weight: ${face.bold ? 'bold' : 'normal'}; ` +
+        `font-style: ${face.italic ? 'italic' : 'normal'}; }`
+      )
+    })
+    .join('\n')
+}
+
 export interface ExportSlidesPdfOptions {
   /** one entry per exported slide: inline vector SVG (preferred) or raster PNG fallback */
   pages: Array<{ svg?: string; pngBase64?: string }>
@@ -24,6 +105,12 @@ export interface ExportSlidesPdfOptions {
   layout?: 'full' | 'notes' | 'handout2' | 'handout3'
   /** Per-slide speaker notes for the 'notes' layout (same order as pages) */
   notes?: string[]
+  /**
+   * Font faces to inline as data: @font-face rules (faces the export window
+   * cannot resolve by name — see EmbeddedFontFace). Omitted / empty keeps
+   * the HTML byte-identical to the previous behavior.
+   */
+  fontFaces?: readonly EmbeddedFontFace[]
   createWindow(): PdfExportWindow
   openExportedPdf(path: string): void
 }
@@ -44,8 +131,10 @@ export function buildPdfExportHtml(
   pages: Array<{ svg?: string; pngBase64?: string }>,
   widthIn: number,
   heightIn: number,
+  fontFacesCss = '',
 ): string {
   return `<!doctype html><html><head><meta charset="utf-8"><style>
+${fontFacesCss}
 @page { size: ${widthIn}in ${heightIn}in; margin: 0; }
 html, body { margin: 0; padding: 0; }
 .page { width: ${widthIn}in; height: ${heightIn}in; overflow: hidden; page-break-after: always; }
@@ -65,6 +154,7 @@ export async function exportSlidesPdf({
   filePath,
   layout = 'full',
   notes,
+  fontFaces,
   createWindow,
   openExportedPdf,
 }: ExportSlidesPdfOptions): Promise<ExportSlidesPdfResult> {
@@ -73,9 +163,10 @@ export async function exportSlidesPdf({
   const heightIn = layout === 'full' ? 7.5 : 11.69
   const widthIn =
     layout === 'full' ? Math.round((widthPx / heightPx) * heightIn * 1000) / 1000 : 8.27
+  const facesCss = fontFaceCss(fontFaces ?? [])
   const html =
     layout === 'full'
-      ? buildPdfExportHtml(pages, widthIn, heightIn)
+      ? buildPdfExportHtml(pages, widthIn, heightIn, facesCss)
       : // same assembly the print preview/print job use, with the vector slides
         // inlined where the preview puts its bitmap thumbnails
         buildPrintDocumentHtml({
@@ -83,6 +174,7 @@ export async function exportSlidesPdf({
           svgs: pages.map((p) => p.svg),
           ratio: widthPx / heightPx,
           layout,
+          ...(facesCss ? { fontFacesCss: facesCss } : {}),
           ...(layout === 'notes' ? { notes: notes ?? [] } : {}),
         })
   const win = createWindow()
