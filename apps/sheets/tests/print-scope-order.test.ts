@@ -145,6 +145,46 @@ describe('buildSheetsPrintPayload', () => {
     expect(tables[1]).not.toContain('r1c1')
     expect(tables[2]).toContain('r2c1')
     expect(tables[3]).toContain('r2c8')
+    // Each tile carries ONLY its band's rows — the band bounds must survive
+    // composition with the stripe (a spread clobbered them with the stripe's
+    // full row range and every tile re-printed the whole sheet).
+    expect(tables[0]).not.toContain('r2c1')
+    expect(tables[2]).not.toContain('r1c1')
+    for (const table of tables) expect((table.match(/<tr /g) ?? []).length).toBe(1)
+  })
+
+  it('bounds every over-then-down tile to its band rows and counts their pages', () => {
+    // 75pt rows → bands of 9, 9, then 2 rows; 12 columns → two stripes of 6:
+    // six tiles, each printed exactly once (no band/stripe duplication).
+    const grid = Array.from({ length: 20 }, (_, row) =>
+      Array.from({ length: 12 }, (_, column) => `r${row + 1}c${column + 1}`),
+    )
+    const wide = { ...gridWorksheet(grid, { rowHeight: 100 }), getSheetName: () => 'Wide' }
+    const tiny = { ...gridWorksheet([['x']]), getSheetName: () => 'Tiny' }
+    const payload = buildSheetsPrintPayload(
+      [
+        { worksheet: wide, printAreas: [], printTitles: null },
+        { worksheet: tiny, printAreas: [], printTitles: null },
+      ],
+      payloadSetup({ header: { center: '&A' } }),
+      'Book.pdf',
+      'Wide',
+      undefined,
+      'over-then-down',
+    )
+    const tables = tablesOf(payload.html)
+    // Six Wide tiles plus Tiny's own single-page table.
+    expect(tables).toHaveLength(7)
+    const rowCounts = tables.map((table) => (table.match(/<tr /g) ?? []).length)
+    expect(rowCounts).toEqual([9, 9, 9, 9, 2, 2, 1])
+    // Band-major order: tiles 0–1 are band 1 (rows 1–9), tiles 4–5 band 3.
+    expect(tables[0]).toContain('r1c1')
+    expect(tables[0]).not.toContain('r10c1')
+    expect(tables[4]).toContain('r19c1')
+    expect(tables[4]).not.toContain('r18c1')
+    // The per-sheet page counts the &A ranged passes plan from agree: six
+    // tiles of one page each for Wide, one page for Tiny.
+    expect(payload.sheets!.map((s) => s.pages)).toEqual([6, 1])
   })
 
   it('resolves &A per sheet on workbook jobs (per-sheet template sets)', () => {

@@ -408,6 +408,17 @@ interface LayoutRow {
   /// value, so declaring it on the <tr> keeps Chromium's own pagination
   /// (rows never split) in step with the planned bands instead of letting
   /// a text-boosted row silently overflow its band's page.
+  /// Known residual (BUG-1214 recheck, headless Chromium): the model counts
+  /// ONE text line at 1.25 x font size, but a rendered row still grows past
+  /// the declared height when (a) wrap-text cells (`tb: 3`, or embedded
+  /// newlines under `white-space: pre`) lay out on several lines, or (b) the
+  /// resolved font's line box tops 1.25 x (CJK fallback stacks measure
+  /// ~1.4 x, e.g. 17.75pt rendered vs 15.75pt declared for 11pt CJK) —
+  /// `overflow: hidden` does not stop table rows from growing. Chromium then
+  /// paginates past the simulated count (measured: a 50-row wrap-text sheet
+  /// printed 5 pages against a predicted 2). Excel clips such rows at the
+  /// saved height; matching that means pinning the row's content height,
+  /// which changes what wrapped prints look like and is left as follow-up.
   readonly printedHeightPt: number
   /// The row's cells (merge anchors included), ascending by column.
   readonly cells: readonly LayoutCell[]
@@ -567,7 +578,18 @@ function areaTiles(
   const tiles: AreaTile[] = []
   for (const band of rowBands) {
     for (const stripe of columnStripes) {
-      tiles.push({ ...band, ...stripe })
+      // Compose the tile axis by axis: both shapes carry the OTHER axis's
+      // full range (stripes span every row, bands span every column), so a
+      // spread like { ...band, ...stripe } silently clobbers the band's row
+      // bounds with the stripe's full range — every tile then re-prints the
+      // whole sheet and over-then-down duplicates every page (found by the
+      // BUG-1214 recheck headless-print harness).
+      tiles.push({
+        rowStart: band.rowStart,
+        rowEnd: band.rowEnd,
+        colStart: stripe.colStart,
+        colEnd: stripe.colEnd,
+      })
     }
   }
   return tiles
@@ -625,7 +647,10 @@ function columnStripesOf(area: LayoutArea, capacityPt: number, rowHeaderPt: numb
 
 /// Row bands of an area at the effective scale, mirroring Chromium's own
 /// pagination (rows never split, the repeated header takes its share of
-/// every page). Used for over-then-down ordering only.
+/// every page). Used for over-then-down ordering only. The mirror holds only
+/// while every <tr> renders at its declared printedHeightPt — see the
+/// printedHeightPt doc for the wrap-text / tall-font residuals that can
+/// still shift Chromium's page breaks off the simulated ones.
 function rowBandsOf(area: LayoutArea, capacityPt: number): AreaTile[] {
   const bands: AreaTile[] = []
   let start = area.startRow
