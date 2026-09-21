@@ -434,6 +434,8 @@ export const ru = {
   appDetailHidden: 'Детали скрыты — сохраните с помощью ⌘S.',
   appDetailShown: 'Детали показаны — сохраните с помощью ⌘S.',
   appOutlineMaxLevel: 'Уже достигнут самый глубокий уровень структуры (7).',
+  appOutlineSymbolsShown: 'Символы структуры отображаются.',
+  appOutlineSymbolsHidden: 'Символы структуры скрыты; Ctrl+8 снова их покажет.',
   appNothingToUngroup: 'В выделении нечего разгруппировывать.',
   appRowsGrouped:
     'Строки сгруппированы — сохраните с помощью ⌘S. Сворачивайте через «Скрыть детали».',
@@ -1383,6 +1385,9 @@ export const ru = {
   scUnhideRows: 'Показать строки',
   scHideColumns: 'Скрыть столбцы',
   scUnhideColumns: 'Показать столбцы',
+  scOutlineGroup: 'Группировать строки или столбцы (структура)',
+  scOutlineUngroup: 'Разгруппировать строки или столбцы',
+  scOutlineSymbols: 'Показать/скрыть символы структуры',
   appPrintSelectionMissing: 'Нет выделенной области для печати.',
   appTextToColsEmpty: 'В выбранном столбце нет содержимого для разделения.',
   appTextToColsTooManyRows:

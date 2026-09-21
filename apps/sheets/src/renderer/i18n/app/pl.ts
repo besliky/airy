@@ -440,6 +440,8 @@ export const pl = {
   appDetailHidden: 'Szczegóły ukryte — zapisz za pomocą ⌘S.',
   appDetailShown: 'Szczegóły pokazane — zapisz za pomocą ⌘S.',
   appOutlineMaxLevel: 'To już najgłębszy poziom konspektu (7).',
+  appOutlineSymbolsShown: 'Symbole konspektu są widoczne.',
+  appOutlineSymbolsHidden: 'Symbole konspektu są ukryte; Ctrl+8 pokaże je ponownie.',
   appNothingToUngroup: 'W zaznaczeniu nie ma nic do rozgrupowania.',
   appRowsGrouped: 'Wiersze zgrupowane — zapisz za pomocą ⌘S. Zwiń je poleceniem Ukryj szczegóły.',
   appColsGrouped: 'Kolumny zgrupowane — zapisz za pomocą ⌘S. Zwiń je poleceniem Ukryj szczegóły.',
@@ -1393,6 +1395,9 @@ export const pl = {
   scUnhideRows: 'Pokaż wiersze',
   scHideColumns: 'Ukryj kolumny',
   scUnhideColumns: 'Pokaż kolumny',
+  scOutlineGroup: 'Grupuj wiersze lub kolumny (konspekt)',
+  scOutlineUngroup: 'Rozgrupuj wiersze lub kolumny',
+  scOutlineSymbols: 'Pokaż/ukryj symbole konspektu',
   appPrintSelectionMissing: 'Nie ma nic zaznaczonego do wydrukowania.',
   appTextToColsEmpty: 'Zaznaczona kolumna nie ma treści do podzielenia.',
   appTextToColsTooManyRows:

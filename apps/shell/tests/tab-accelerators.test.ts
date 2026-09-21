@@ -63,9 +63,10 @@ describe('switchDigitFromInput', () => {
 })
 
 describe('reserved digits', () => {
-  it('docs keeps Word line spacing and marks; sheets keeps Excel hide rows', () => {
+  it('docs keeps Word line spacing and marks; sheets keeps Excel chords', () => {
     expect([...RESERVED_TAB_DIGITS.docs!].sort()).toEqual([1, 2, 5, 8])
-    expect([...RESERVED_TAB_DIGITS.sheets!]).toEqual([9])
+    // Ctrl+1 Format Cells, Ctrl+8 outline symbols, Ctrl+9 hide rows
+    expect([...RESERVED_TAB_DIGITS.sheets!].sort()).toEqual([1, 8, 9])
   })
 
   it('other kinds reserve nothing', () => {
@@ -76,7 +77,7 @@ describe('reserved digits', () => {
 
   it('switchable digits exclude the reserved ones', () => {
     expect(switchableDigitsForKind('docs')).toEqual([3, 4, 6, 7, 9])
-    expect(switchableDigitsForKind('sheets')).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(switchableDigitsForKind('sheets')).toEqual([2, 3, 4, 5, 6, 7])
     expect(switchableDigitsForKind('home')).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
   })
 })
@@ -109,8 +110,15 @@ describe('tabSwitchTargetForInput', () => {
     // docs is active and reserves Ctrl+1/2/5/8 (Word line spacing, marks)
     expect(tabSwitchTargetForInput(key('Digit1'), docsActive)).toBeNull()
     expect(tabSwitchTargetForInput(key('Digit5'), docsActive)).toBeNull()
-    // sheets-only Ctrl+9 reservation does not apply while docs is active
+    // sheets-only Ctrl+1/8/9 reservations do not apply while docs is active
     expect(tabSwitchTargetForInput(key('Digit9'), docsActive)).toBe('t2')
+
+    // sheets is active: Excel's Ctrl+1 (Format Cells) and Ctrl+8 (outline
+    // symbols) reach the editor instead of switching tabs
+    const sheetsActive = tabs.map((t) => ({ ...t, active: t.id === 't2' }))
+    expect(tabSwitchTargetForInput(key('Digit1'), sheetsActive)).toBeNull()
+    expect(tabSwitchTargetForInput(key('Digit8'), sheetsActive)).toBeNull()
+    expect(tabSwitchTargetForInput(key('Digit2'), sheetsActive)).toBe('t1')
   })
 
   it('returns null beyond the strip, for non-switch chords, and without tabs', () => {

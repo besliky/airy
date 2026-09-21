@@ -3,7 +3,7 @@
  * Ctrl+Home/End, Home, whole row/column selection (#airy-6 task #1).
  */
 import { describe, expect, it } from 'vitest'
-import { Styles, Worksheet } from '@univerjs/core'
+import { RANGE_TYPE, Styles, Worksheet } from '@univerjs/core'
 import type { IWorksheetData } from '@univerjs/core'
 import { _shortcutInternals } from '../src/renderer/excel-shortcuts'
 
@@ -73,5 +73,24 @@ describe('unfrozenOrigin skips hidden lines', () => {
     }
     const sheet = new Worksheet('unit', snapshot as IWorksheetData, new Styles())
     expect(unfrozenOrigin(sheet)).toEqual({ row: 2, column: 0 })
+  })
+})
+
+describe('outline chords (UX-1102 tail)', () => {
+  const { outlineAxisOfSelection, OUTLINE_GROUP_ID, OUTLINE_SYMBOLS_ID } = _shortcutInternals
+
+  it('derives the outline axis from the selection shape like Excel', () => {
+    // whole-column selections act on columns…
+    expect(outlineAxisOfSelection({ range: { rangeType: RANGE_TYPE.COLUMN } })).toBe('cols')
+    // …plain ranges and whole-row selections act on rows
+    expect(outlineAxisOfSelection({ range: { rangeType: RANGE_TYPE.ROW } })).toBe('rows')
+    expect(outlineAxisOfSelection({ range: { rangeType: RANGE_TYPE.NORMAL } })).toBe('rows')
+    expect(outlineAxisOfSelection({ range: {} })).toBe('rows')
+  })
+
+  it('names the outline commands in the airy namespace', () => {
+    expect(OUTLINE_GROUP_ID).toBe('airy.command.outline-group')
+    expect(_shortcutInternals.OUTLINE_UNGROUP_ID).toBe('airy.command.outline-ungroup')
+    expect(OUTLINE_SYMBOLS_ID).toBe('airy.command.outline-symbols')
   })
 })

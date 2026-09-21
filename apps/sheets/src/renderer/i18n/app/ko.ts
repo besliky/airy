@@ -428,6 +428,8 @@ export const ko = {
   appDetailHidden: '하위 수준을 숨겼습니다 — ⌘S로 저장합니다.',
   appDetailShown: '하위 수준을 표시했습니다 — ⌘S로 저장합니다.',
   appOutlineMaxLevel: '이미 가장 깊은 개요 수준(7)입니다.',
+  appOutlineSymbolsShown: '윤곽 기호가 표시되었습니다.',
+  appOutlineSymbolsHidden: '윤곽 기호를 숨겼습니다. Ctrl+8 키로 다시 표시할 수 있습니다.',
   appNothingToUngroup: '선택 영역에 그룹 해제할 항목이 없습니다.',
   appRowsGrouped: '행을 그룹화했습니다 — ⌘S로 저장합니다. 하위 수준 숨기기로 접을 수 있습니다.',
   appColsGrouped: '열을 그룹화했습니다 — ⌘S로 저장합니다. 하위 수준 숨기기로 접을 수 있습니다.',
@@ -1387,6 +1389,9 @@ export const ko = {
   scUnhideRows: '행 표시',
   scHideColumns: '열 숨기기',
   scUnhideColumns: '열 표시',
+  scOutlineGroup: '행 또는 열 그룹화(윤곽)',
+  scOutlineUngroup: '행 또는 열 그룹 해제',
+  scOutlineSymbols: '윤곽 기호 표시/숨기기',
   appPrintSelectionMissing: '인쇄할 선택 영역이 없습니다.',
   appTextToColsEmpty: '선택한 열에 나눌 내용이 없습니다.',
   appTextToColsTooManyRows:

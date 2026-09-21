@@ -421,6 +421,8 @@ export const ms = {
   appDetailHidden: 'Perincian disembunyikan — simpan dengan ⌘S.',
   appDetailShown: 'Perincian ditunjukkan — simpan dengan ⌘S.',
   appOutlineMaxLevel: 'Sudah berada pada aras rangka paling dalam (7).',
+  appOutlineSymbolsShown: 'Simbol rangka ditunjukkan.',
+  appOutlineSymbolsHidden: 'Simbol rangka disembunyikan; tekan Ctrl+8 untuk menunjukkannya semula.',
   appNothingToUngroup: 'Tiada apa untuk dinyahkumpul dalam pilihan.',
   appRowsGrouped: 'Baris dikumpulkan — simpan dengan ⌘S. Runtuhkan dengan Sembunyikan Perincian.',
   appColsGrouped: 'Lajur dikumpulkan — simpan dengan ⌘S. Runtuhkan dengan Sembunyikan Perincian.',
@@ -1366,6 +1368,9 @@ export const ms = {
   scUnhideRows: 'Tunjuk baris',
   scHideColumns: 'Sembunyi lajur',
   scUnhideColumns: 'Tunjuk lajur',
+  scOutlineGroup: 'Kumpulkan baris atau lajur (rangka)',
+  scOutlineUngroup: 'Nyahkumpulkan baris atau lajur',
+  scOutlineSymbols: 'Tunjuk/sembunyi simbol rangka',
   appPrintSelectionMissing: 'Tiada pemilihan untuk dicetak.',
   appTextToColsEmpty: 'Lajur yang dipilih tiada kandungan untuk dipecahkan.',
   appTextToColsTooManyRows:

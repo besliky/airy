@@ -359,3 +359,27 @@ function headerStrip(surface: DOMRect, axis: 'rows' | 'cols'): DOMRect | null {
   }
   return best
 }
+
+const SYMBOLS_STORAGE_KEY = 'ai-sheets-outline-symbols'
+
+/**
+ * Excel's Ctrl+8 toggle (show/hide outline symbols) persists across
+ * sessions like the cross-highlight preference; symbols are on until the
+ * user hides them (also headless-safe).
+ */
+export function loadOutlineSymbolsPreference(): boolean {
+  try {
+    return window.localStorage.getItem(SYMBOLS_STORAGE_KEY) !== '0'
+  } catch {
+    // No localStorage (tests, blocked storage): the safe default is on.
+    return true
+  }
+}
+
+export function storeOutlineSymbolsPreference(visible: boolean): void {
+  try {
+    window.localStorage.setItem(SYMBOLS_STORAGE_KEY, visible ? '1' : '0')
+  } catch {
+    // Preference stays session-only when storage is unavailable.
+  }
+}

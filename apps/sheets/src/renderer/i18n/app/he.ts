@@ -386,6 +386,8 @@ export const he = {
   appDetailHidden: 'פרטים הוסתרו — שמור עם ⌘S.',
   appDetailShown: 'פרטים מוצגים — שמור עם ⌘S.',
   appOutlineMaxLevel: 'זו כבר הרמה העמוקה ביותר של החלוקה לרמות (7).',
+  appOutlineSymbolsShown: 'סמלי המתאר מוצגים.',
+  appOutlineSymbolsHidden: 'סמלי המתאר מוסתרים; Ctrl+8 יציג אותם שוב.',
   appNothingToUngroup: 'אין מה לבטל את קיבוצו בבחירה.',
   appRowsGrouped: 'השורות קובצו — שמור עם ⌘S. כווץ אותן עם הסתר פרטים.',
   appColsGrouped: 'העמודות קובצו — שמור עם ⌘S. כווץ אותן עם הסתר פרטים.',
@@ -1311,6 +1313,9 @@ export const he = {
   scUnhideRows: 'הצגת שורות',
   scHideColumns: 'הסתרת עמודות',
   scUnhideColumns: 'הצגת עמודות',
+  scOutlineGroup: 'קיבוץ שורות או עמודות (מתאר)',
+  scOutlineUngroup: 'ביטול קיבוץ שורות או עמודות',
+  scOutlineSymbols: 'הצגה/הסתרת סמלי מתאר',
   appPrintSelectionMissing: 'אין בחירה להדפסה.',
   appTextToColsEmpty: 'אין תוכן לפיצול בעמודה שנבחרה.',
   appTextToColsTooManyRows:

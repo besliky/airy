@@ -56,6 +56,10 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
   { id: 'unhide-rows', group: 'selection', labelKey: 'scUnhideRows', keys: '⇧⌘9' },
   { id: 'hide-cols', group: 'selection', labelKey: 'scHideColumns', keys: '⌘0' },
   { id: 'unhide-cols', group: 'selection', labelKey: 'scUnhideColumns', keys: '⇧⌘0' },
+  // Excel's Data ▸ Outline chords (the +/- gutter)
+  { id: 'outline-group', group: 'selection', labelKey: 'scOutlineGroup', keys: '⌥⇧→' },
+  { id: 'outline-ungroup', group: 'selection', labelKey: 'scOutlineUngroup', keys: '⌥⇧←' },
+  { id: 'outline-symbols', group: 'selection', labelKey: 'scOutlineSymbols', keys: '⌘8' },
 ]
 
 /** platformShortcuts is the identity on macOS and rewrites the notation elsewhere */

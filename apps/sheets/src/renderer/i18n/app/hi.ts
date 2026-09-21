@@ -421,6 +421,8 @@ export const hi = {
   appDetailHidden: 'विवरण छिपाया गया — ⌘S से सहेजें।',
   appDetailShown: 'विवरण दिखाया गया — ⌘S से सहेजें।',
   appOutlineMaxLevel: 'पहले से ही सबसे गहरे बाह्यरेखा स्तर (7) पर हैं।',
+  appOutlineSymbolsShown: 'आउटलाइन प्रतीक दिख रहे हैं।',
+  appOutlineSymbolsHidden: 'आउटलाइन प्रतीक छिपा दिए गए हैं; फिर से दिखाने के लिए Ctrl+8 दबाएँ।',
   appNothingToUngroup: 'चयन में समूह रद्द करने के लिए कुछ नहीं है।',
   appRowsGrouped: 'पंक्तियाँ समूहित की गईं — ⌘S से सहेजें। विवरण छिपाएँ से संक्षिप्त करें।',
   appColsGrouped: 'स्तंभ समूहित किए गए — ⌘S से सहेजें। विवरण छिपाएँ से संक्षिप्त करें।',
@@ -1362,6 +1364,9 @@ export const hi = {
   scUnhideRows: 'पंक्तियाँ दिखाएँ',
   scHideColumns: 'कॉलम छिपाएँ',
   scUnhideColumns: 'कॉलम दिखाएँ',
+  scOutlineGroup: 'पंक्तियाँ या कॉलम समूहित करें (आउटलाइन)',
+  scOutlineUngroup: 'पंक्तियों या कॉलम का समूहन हटाएँ',
+  scOutlineSymbols: 'आउटलाइन प्रतीक दिखाएँ/छिपाएँ',
   appPrintSelectionMissing: 'प्रिंट करने के लिए कुछ भी चयनित नहीं है।',
   appTextToColsEmpty: 'चयनित कॉलम में विभाजित करने की सामग्री नहीं है।',
   appTextToColsTooManyRows:

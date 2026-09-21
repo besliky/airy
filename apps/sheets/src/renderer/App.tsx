@@ -260,6 +260,7 @@ import {
   handleCreateConsolidate as handleCreateConsolidateImpl,
   handleCreateSubtotal as handleCreateSubtotalImpl,
   handleInsertSymbol as handleInsertSymbolImpl,
+  handleOutline as handleOutlineImpl,
   handleOutlineSettings as handleOutlineSettingsImpl,
   handleTextToColumns as handleTextToColumnsImpl,
   listDefinedNames as listDefinedNamesImpl,
@@ -269,7 +270,12 @@ import {
   toggleOutlineGroup,
   type DataToolsContext,
 } from './data-tools-actions'
-import { installOutlineGutter, type OutlineGutterHandle } from './outline-gutter'
+import {
+  installOutlineGutter,
+  loadOutlineSymbolsPreference,
+  storeOutlineSymbolsPreference,
+  type OutlineGutterHandle,
+} from './outline-gutter'
 import { installTsvClipboardFix } from './clipboard-tsv'
 import { installFilteredCopyHook } from './filtered-copy'
 import { installFilterRangeOutlineSuppression } from './filter-range-outline'
@@ -488,6 +494,12 @@ export function App(): React.JSX.Element {
   /// The outline +/- gutter overlay; reinstalled per workbook session (the
   /// scroll observer binds the session's render unit).
   const outlineGutterRef = useRef<OutlineGutterHandle | null>(null)
+  /// Excel's Ctrl+8: outline symbols (the gutter overlay) visibility,
+  /// persisted like the cross-highlight preference. The ref mirror lets the
+  /// mount-once shortcut wiring flip it without re-registering.
+  const [outlineSymbolsVisible, setOutlineSymbolsVisible] = useState(loadOutlineSymbolsPreference)
+  const outlineSymbolsRef = useRef(outlineSymbolsVisible)
+  outlineSymbolsRef.current = outlineSymbolsVisible
   const visualViewportKeyRef = useRef('')
   const demoVisualDisposablesRef = useRef<{ dispose(): void }[]>([])
   const demoVisualInstallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -524,10 +536,12 @@ export function App(): React.JSX.Element {
   }, [workbookFile, recomputeSheetContent])
   // The outline +/- gutter: one overlay per workbook session (its scroll
   // observer binds the session's render unit). Demo workbooks without a
-  // streamed state simply have no outline to show.
+  // streamed state simply have no outline to show. Ctrl+8 (Excel's outline
+  // symbols toggle) installs/disposes the overlay through this effect.
   useEffect(() => {
     const runtime = univerRef.current
     if (!runtime || !runtime.univerAPI.getActiveWorkbook()) return
+    if (!outlineSymbolsVisible) return
     outlineGutterRef.current = installOutlineGutter(runtime, lazyWorkbookRef, {
       placement: () => {
         const state = lazyWorkbookRef.current
@@ -543,7 +557,7 @@ export function App(): React.JSX.Element {
       outlineGutterRef.current?.dispose()
       outlineGutterRef.current = null
     }
-  }, [workbookFile?.sessionId])
+  }, [workbookFile?.sessionId, outlineSymbolsVisible])
   // The close guard lives in the main process; keep it fed with the badge count.
   useEffect(() => {
     window.desktopApi?.notifyPendingEdits?.(pendingEdits)
@@ -1639,18 +1653,38 @@ export function App(): React.JSX.Element {
     // Excel-standard keys Univer doesn't ship: worksheet-tab switching,
     // Ctrl+Home/End, Home, whole row/column selection. The used-end hint
     // covers streamed workbooks whose cell matrix is a loaded window.
-    registerExcelShortcuts(runtime, (subUnitId) => {
-      const state = lazyWorkbookRef.current
-      if (!state) return null
-      const sheet = state.file.sheets.find((candidate) => candidate.id === subUnitId)
-      if (!sheet || sheet.rowCount <= 0 || sheet.columnCount <= 0) return null
-      // positional mapping: an insert/delete moves the used end only when it
-      // sits at or before it — a distant insert in the empty grid does not
-      const ops = state.editJournal.structuralOps.get(subUnitId) ?? []
-      const row = lastSurvivingScreenLine(ops, 'row', sheet.rowCount - 1)
-      const column = lastSurvivingScreenLine(ops, 'column', sheet.columnCount - 1)
-      return row !== null && column !== null ? { row, column } : null
-    })
+    // The outline chords (Alt+Shift+arrows, Ctrl+8) route into the
+    // journaled data-tools channel and the gutter-visibility state; the
+    // state flip goes through the ref mirror so this mount-once effect's
+    // closure never goes stale.
+    registerExcelShortcuts(
+      runtime,
+      (subUnitId) => {
+        const state = lazyWorkbookRef.current
+        if (!state) return null
+        const sheet = state.file.sheets.find((candidate) => candidate.id === subUnitId)
+        if (!sheet || sheet.rowCount <= 0 || sheet.columnCount <= 0) return null
+        // positional mapping: an insert/delete moves the used end only when it
+        // sits at or before it — a distant insert in the empty grid does not
+        const ops = state.editJournal.structuralOps.get(subUnitId) ?? []
+        const row = lastSurvivingScreenLine(ops, 'row', sheet.rowCount - 1)
+        const column = lastSurvivingScreenLine(ops, 'column', sheet.columnCount - 1)
+        return row !== null && column !== null ? { row, column } : null
+      },
+      {
+        group: (axis) => handleOutlineImpl(dataToolsContext(), 'group', axis),
+        ungroup: (axis) => handleOutlineImpl(dataToolsContext(), 'ungroup', axis),
+        toggleSymbols: () => {
+          const next = !outlineSymbolsRef.current
+          outlineSymbolsRef.current = next
+          storeOutlineSymbolsPreference(next)
+          setOutlineSymbolsVisible(next)
+          dataToolsContext().setMessage(
+            t(next ? 'appOutlineSymbolsShown' : 'appOutlineSymbolsHidden'),
+          )
+        },
+      },
+    )
     // Wide expression CF rules register folded/windowed formula ranges so
     // the engine stops rebuilding millions of per-cell dependency trees on
     // every stream-in recalculation (genspark-ai/genoffice#158).

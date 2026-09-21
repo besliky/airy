@@ -424,6 +424,8 @@ export const cs = {
   appDetailHidden: 'Podrobnosti skryty — uložte pomocí ⌘S.',
   appDetailShown: 'Podrobnosti zobrazeny — uložte pomocí ⌘S.',
   appOutlineMaxLevel: 'Už jste na nejhlubší úrovni přehledu (7).',
+  appOutlineSymbolsShown: 'Symboly osnovy jsou zobrazené.',
+  appOutlineSymbolsHidden: 'Symboly osnovy jsou skryté; Ctrl+8 je zobrazí znovu.',
   appNothingToUngroup: 'Ve výběru není co oddělit.',
   appRowsGrouped: 'Řádky seskupeny — uložte pomocí ⌘S. Sbalte je pomocí Skrýt podrobnosti.',
   appColsGrouped: 'Sloupce seskupeny — uložte pomocí ⌘S. Sbalte je pomocí Skrýt podrobnosti.',
@@ -1369,6 +1371,9 @@ export const cs = {
   scUnhideRows: 'Zobrazit řádky',
   scHideColumns: 'Skrýt sloupce',
   scUnhideColumns: 'Zobrazit sloupce',
+  scOutlineGroup: 'Seskupit řádky nebo sloupce (osnova)',
+  scOutlineUngroup: 'Zrušit seskupení řádků nebo sloupců',
+  scOutlineSymbols: 'Zobrazit/skrýt symboly osnovy',
   appPrintSelectionMissing: 'Není vybráno nic k tisku.',
   appTextToColsEmpty: 'Vybraný sloupec nemá obsah k rozdělení.',
   appTextToColsTooManyRows:

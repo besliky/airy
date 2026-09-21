@@ -451,6 +451,9 @@ export const pt = {
   appDetailHidden: 'Detalhes ocultos — salve com ⌘S.',
   appDetailShown: 'Detalhes exibidos — salve com ⌘S.',
   appOutlineMaxLevel: 'Já está no nível mais profundo da estrutura de tópicos (7).',
+  appOutlineSymbolsShown: 'Os símbolos de estrutura de tópico estão visíveis.',
+  appOutlineSymbolsHidden:
+    'Os símbolos de estrutura de tópico estão ocultos; Ctrl+8 os mostra de novo.',
   appNothingToUngroup: 'Nada para desagrupar na seleção.',
   appRowsGrouped: 'Linhas agrupadas — salve com ⌘S. Recolha-as com Ocultar Detalhes.',
   appColsGrouped: 'Colunas agrupadas — salve com ⌘S. Recolha-as com Ocultar Detalhes.',
@@ -1405,6 +1408,9 @@ export const pt = {
   scUnhideRows: 'Mostrar linhas',
   scHideColumns: 'Ocultar colunas',
   scUnhideColumns: 'Mostrar colunas',
+  scOutlineGroup: 'Agrupar linhas ou colunas (estrutura de tópico)',
+  scOutlineUngroup: 'Desagrupar linhas ou colunas',
+  scOutlineSymbols: 'Mostrar/ocultar os símbolos de estrutura de tópico',
   appPrintSelectionMissing: 'Não há nada selecionado para imprimir.',
   appTextToColsEmpty: 'A coluna selecionada não tem conteúdo para dividir.',
   appTextToColsTooManyRows:

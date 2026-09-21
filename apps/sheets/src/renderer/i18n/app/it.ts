@@ -451,6 +451,8 @@ export const it = {
   appDetailHidden: 'Dettaglio nascosto — salva con ⌘S.',
   appDetailShown: 'Dettaglio visualizzato — salva con ⌘S.',
   appOutlineMaxLevel: 'Sei già al livello più profondo della struttura (7).',
+  appOutlineSymbolsShown: 'I simboli di struttura sono visibili.',
+  appOutlineSymbolsHidden: 'I simboli di struttura sono nascosti; Ctrl+8 li mostra di nuovo.',
   appNothingToUngroup: 'Niente da separare nella selezione.',
   appRowsGrouped: 'Righe raggruppate — salva con ⌘S. Comprimile con Nascondi dettaglio.',
   appColsGrouped: 'Colonne raggruppate — salva con ⌘S. Comprimile con Nascondi dettaglio.',
@@ -1404,6 +1406,9 @@ export const it = {
   scUnhideRows: 'Mostra righe',
   scHideColumns: 'Nascondi colonne',
   scUnhideColumns: 'Mostra colonne',
+  scOutlineGroup: 'Raggruppa righe o colonne (struttura)',
+  scOutlineUngroup: 'Separa righe o colonne',
+  scOutlineSymbols: 'Mostra/nascondi i simboli di struttura',
   appPrintSelectionMissing: 'Non c’è nulla di selezionato da stampare.',
   appTextToColsEmpty: 'La colonna selezionata non ha contenuti da dividere.',
   appTextToColsTooManyRows:
