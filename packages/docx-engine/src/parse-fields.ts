@@ -65,8 +65,14 @@ export function parseTocInstruction(instr: string): TocFieldOptions {
     const upper = parseInt(range[2] ?? range[4] ?? range[6]!, 10)
     options.levels = Math.min(Math.max(upper || 1, 1), 9)
   }
-  // a digit can follow \n without a space (`\n2-4`): still "hide page numbers"
-  if (/\\n(?=[\s\d]|$)/.test(instr)) options.hidePageNumbers = true
+  // \n takes an optional level range (`\n 2-4`, spaced or packed): page
+  // numbers are hidden only for those levels, and the range round-trips
+  // instead of widening to a full \n (BUG-1012); a bare \n hides them all
+  const hidRange = /\\n\s*(\d+)\s*-\s*(\d+)/.exec(instr)
+  if (hidRange) {
+    options.hidePageNumbersFrom = parseInt(hidRange[1], 10)
+    options.hidePageNumbersTo = parseInt(hidRange[2], 10)
+  } else if (/\\n(?=[\s\\]|$)/.test(instr)) options.hidePageNumbers = true
   options.hyperlinks = /\\h(?=[\s\\]|$)/.test(instr)
   return options
 }

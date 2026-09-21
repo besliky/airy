@@ -10,7 +10,11 @@ import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-doc
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from '../src/renderer/editor/convert'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { loadLocale, setModuleLang } from '../src/renderer/i18n/locale'
-import { collectTofEntries, updateTocField } from '../src/renderer/components/ribbon-references-tab'
+import {
+  collectTofEntries,
+  parseTocStyleSpec,
+  updateTocField,
+} from '../src/renderer/components/ribbon-references-tab'
 
 /** editors created by these tests; destroyed in afterEach so the ProseMirror
  *  DOMObserver polling timer never outlives the jsdom environment (an
@@ -210,9 +214,9 @@ describe('table of figures authoring', () => {
       editor.state.doc.content.size,
       captionNode('Figure', 3, 'Failure modes', '_Ref444444444') as never,
     )
-    expect(updateTocField(editor, parsed.blocks, undefined, undefined, { silent: true })).toBe(
-      'updated',
-    )
+    expect(
+      updateTocField(editor, parsed.blocks, undefined, undefined, undefined, { silent: true }),
+    ).toBe('updated')
     expect(fieldInstructions(editor)).toEqual(['TOC \\h \\z \\c "Figure"'])
     const lines = tocLines(editor)
     expect(lines).toHaveLength(3)
@@ -221,9 +225,9 @@ describe('table of figures authoring', () => {
 
   it('update reports missing when no TOC field exists (F9 stays quiet)', async () => {
     const { editor, parsed } = await openDoc('<w:p><w:r><w:t>Body</w:t></w:r></w:p>')
-    expect(updateTocField(editor, parsed.blocks, undefined, undefined, { silent: true })).toBe(
-      'missing',
-    )
+    expect(
+      updateTocField(editor, parsed.blocks, undefined, undefined, undefined, { silent: true }),
+    ).toBe('missing')
   })
 
   it('stores a canonical SEQ id while showing the translated word (UX-1011)', async () => {
@@ -283,9 +287,9 @@ describe('ToF update alias compatibility (BUG-1110)', () => {
         seqIdentifier: 'Figure',
       }) as never,
     )
-    expect(updateTocField(editor, parsed.blocks, undefined, undefined, { silent: true })).toBe(
-      'updated',
-    )
+    expect(
+      updateTocField(editor, parsed.blocks, undefined, undefined, undefined, { silent: true }),
+    ).toBe('updated')
     const lines = tocLines(editor)
     expect(lines).toHaveLength(1)
     expect(lines[0]).toMatchObject({ left: 'Abbildung 1 Architektur', anchor: '_Ref111111111' })
@@ -305,9 +309,9 @@ describe('ToF update alias compatibility (BUG-1110)', () => {
         seqIdentifier: 'Abbildung',
       }) as never,
     )
-    expect(updateTocField(editor, parsed.blocks, undefined, undefined, { silent: true })).toBe(
-      'updated',
-    )
+    expect(
+      updateTocField(editor, parsed.blocks, undefined, undefined, undefined, { silent: true }),
+    ).toBe('updated')
     expect(tocLines(editor)[0]).toMatchObject({ left: 'Abbildung 1 Architektur' })
     // the regenerated instruction keeps the authored identifier byte-for-byte
     expect(fieldInstructions(editor)).toEqual(['TOC \\h \\z \\c "Abbildung"'])
@@ -333,6 +337,35 @@ describe('TOC options update', () => {
     const lines = tocLines(editor)
     expect(lines).toHaveLength(1)
     expect(lines[0]).toMatchObject({ left: 'Chapter', noPage: true })
+  })
+
+  it('keeps a ranged \\n per level across an update: levels 2-4 lose pages, level 1 keeps them (BUG-1012)', async () => {
+    const { editor, parsed } = await openDoc('<w:p><w:r><w:t>Body</w:t></w:r></w:p>')
+    editor.commands.insertContentAt(0, [
+      headingNode('Chapter', 1),
+      headingNode('Section', 2),
+      headingNode('Deep', 3),
+    ] as never)
+    editor.commands.insertContentAt(
+      0,
+      fieldNodes(
+        [
+          { level: 1, text: 'Chapter' },
+          { level: 2, text: 'Section' },
+          { level: 3, text: 'Deep' },
+        ],
+        { levels: 3, hidePageNumbersFrom: 2, hidePageNumbersTo: 4 },
+      ) as never,
+    )
+    expect(updateTocField(editor, parsed.blocks)).toBe('updated')
+    // the range round-trips instead of widening to a full \n
+    expect(fieldInstructions(editor)).toEqual(['TOC \\o "1-3" \\n 2-4 \\h \\z \\u'])
+    const lines = tocLines(editor)
+    expect(lines).toHaveLength(3)
+    expect(lines[0]).toMatchObject({ left: 'Chapter', level: 1 })
+    expect(lines[0].noPage).toBeUndefined()
+    expect(lines[1]).toMatchObject({ left: 'Section', level: 2, noPage: true })
+    expect(lines[2]).toMatchObject({ left: 'Deep', level: 3, noPage: true })
   })
 
   it('updates every TOC/TOF field, not just the first (BUG-1011)', async () => {
@@ -382,5 +415,103 @@ describe('TOC options update', () => {
     expect(lines[2]).toMatchObject({ left: 'Epilogue' })
     expect(lines[3]).toMatchObject({ left: 'Figure 1 Architecture' })
     expect(lines[5]).toMatchObject({ left: 'Figure 3 Timeline' })
+  })
+})
+
+describe('TOC \\t source styles (BUG-1012)', () => {
+  // custom paragraph styles whose NAME differs from their styleId: the \t
+  // spec carries names, paragraphs carry ids — the parsed styles map bridges
+  const CUSTOM_STYLE_DOC =
+    '<w:p><w:pPr><w:pStyle w:val="ChapterTitle"/></w:pPr><w:r><w:t>Opening</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t>plain body</w:t></w:r></w:p>' +
+    '<w:p><w:pPr><w:pStyle w:val="Appx"/></w:pPr><w:r><w:t>Appendix A</w:t></w:r></w:p>'
+
+  async function openStyledDoc() {
+    const parsed = await parseDocx(
+      await buildDocx({
+        bodyXml: CUSTOM_STYLE_DOC,
+        extraStylesXml:
+          '<w:style w:type="paragraph" w:styleId="ChapterTitle"><w:name w:val="Chapter Title"/></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="Appx"><w:name w:val="Appendix"/></w:style>',
+      }),
+    )
+    const editor = new Editor({
+      element: document.createElement('div'),
+      extensions: editorExtensions,
+      content: blocksToPmDoc(parsed.blocks) as never,
+    })
+    openEditors.push(editor)
+    return { editor, parsed }
+  }
+
+  it('update collects entries by style NAME via the parsed styles map, with page numbers', async () => {
+    const { editor, parsed } = await openStyledDoc()
+    editor.commands.insertContentAt(
+      0,
+      fieldNodes(
+        [
+          { level: 1, text: 'Opening' },
+          { level: 2, text: 'Appendix A' },
+        ],
+        { styles: 'Chapter Title,1,Appendix,2' },
+      ) as never,
+    )
+    // the styles map is what makes name↔styleId matching work (BUG-1012);
+    // anchorPage supplies the styled paragraphs' real page numbers
+    expect(updateTocField(editor, parsed.blocks, undefined, () => 7, parsed.styles)).toBe('updated')
+    expect(fieldInstructions(editor)).toEqual(['TOC \\h \\z \\t "Chapter Title,1,Appendix,2"'])
+    const lines = tocLines(editor)
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toMatchObject({ left: 'Opening', level: 1, right: '7' })
+    expect(lines[1]).toMatchObject({ left: 'Appendix A', level: 2, right: '7' })
+  })
+
+  it('without the styles map the update degrades to no-entries instead of rebuilding from headings', async () => {
+    const { editor, parsed } = await openStyledDoc()
+    editor.commands.insertContentAt(
+      0,
+      fieldNodes([{ level: 1, text: 'Opening' }], { styles: 'Chapter Title,1' }) as never,
+    )
+    // names cannot resolve to styleIds: the field is left untouched
+    expect(
+      updateTocField(editor, parsed.blocks, undefined, undefined, undefined, { silent: true }),
+    ).toBe('no-entries')
+    expect(tocLines(editor)).toHaveLength(1)
+    expect(fieldInstructions(editor)).toEqual(['TOC \\h \\z \\t "Chapter Title,1"'])
+  })
+
+  it('\\o + \\t collect the union: headings within the range plus style-mapped paragraphs', async () => {
+    const { editor, parsed } = await openStyledDoc()
+    // a real heading AFTER the styled paragraphs: document order decides the
+    // merged entry order
+    editor.commands.insertContentAt(editor.state.doc.content.size, [
+      headingNode('Summary', 2),
+    ] as never)
+    editor.commands.insertContentAt(
+      0,
+      fieldNodes([{ level: 2, text: 'Summary' }], {
+        levels: 2,
+        styles: 'Chapter Title,1',
+      }) as never,
+    )
+    expect(updateTocField(editor, parsed.blocks, undefined, undefined, parsed.styles)).toBe(
+      'updated',
+    )
+    // both sources survive the regeneration (canonical order: \o then \t)
+    expect(fieldInstructions(editor)).toEqual(['TOC \\o "1-2" \\h \\z \\t "Chapter Title,1"'])
+    const lines = tocLines(editor)
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toMatchObject({ left: 'Opening', level: 1 })
+    expect(lines[1]).toMatchObject({ left: 'Summary', level: 2 })
+  })
+
+  it('collectStyledTocEntries matches the spec levels and skips empty paragraphs', () => {
+    // direct unit check of the spec parser: malformed pairs drop out silently
+    expect(parseTocStyleSpec('Chapter Title,1,Appendix,2')).toEqual([
+      { name: 'Chapter Title', level: 1 },
+      { name: 'Appendix', level: 2 },
+    ])
+    // levels outside 1-9 and non-numeric levels drop out silently
+    expect(parseTocStyleSpec('NoLevel,9,x,0,Bad,abc')).toEqual([{ name: 'NoLevel', level: 9 }])
   })
 })
