@@ -1,8 +1,8 @@
 /**
- * CJK-Latin autospace pads: Chromium's text-autospace delivers 1/8em of Word's
- * ~1/4em autoSpaceDE/DN gap; the character after each boundary is wrapped in a
- * .doc-autospace-pad span whose start margin supplies the rest, and the pads
- * must follow live edits.
+ * CJK-Latin autospace pads: the character after each boundary is wrapped in a
+ * .doc-autospace-pad span whose start margin carries the full ~1/4em Word
+ * autoSpaceDE/DN gap (Chromium's native text-autospace never applies across
+ * the span, BUG-1542), and the pads must follow live edits.
  */
 import { Editor } from '@tiptap/core'
 import { describe, expect, it } from 'vitest'
