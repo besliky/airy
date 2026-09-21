@@ -47,6 +47,11 @@ import {
   withSaveTmpCleanup,
 } from '../docx/session.js'
 import { assertWorkspaceRootExists, resolveConfined, workspaceRoot } from '../docx/paths.js'
+import {
+  assertPptxWithinZipBudget,
+  assertWithinOpenCap,
+  OpenSizeError,
+} from '../sessions/size-fence.js'
 
 // ---- limits (mirror the docx session, scaled to the MCP 30k answer budget) ----
 
@@ -234,14 +239,24 @@ export class SlidesSession {
     let bytes: Uint8Array
     let stamp: FileStamp
     try {
-      bytes = new Uint8Array(await readFile(path))
+      // SEC-1102: refuse runaway/bomb inputs before reading a byte, then
+      // re-check the read length (the file may grow between stat and read)
       const info = await stat(path)
+      assertWithinOpenCap(path, info.size, 'slides')
+      bytes = new Uint8Array(await readFile(path))
+      assertWithinOpenCap(path, bytes.byteLength, 'slides')
       stamp = { mtimeMs: info.mtimeMs, size: info.size }
     } catch (e) {
+      if (e instanceof OpenSizeError) throw e
       throw new Error(`Cannot read "${path}": ${e instanceof Error ? e.message : String(e)}`, {
         cause: e,
       })
     }
+    // zip-bomb fence before any entry is inflated (SEC-1102): the pptx engine
+    // materializes every part, so a few KiB declaring gigabytes of
+    // uncompressed XML must be refused up front — same numbers as the
+    // docx-engine fence, keeping .pptx and .docx opens consistent
+    await assertPptxWithinZipBudget(bytes)
     let opened: OpenedPptx
     try {
       opened = await openPptx(bytes)
