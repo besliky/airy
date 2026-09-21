@@ -40,6 +40,7 @@ import {
   printAreasFromFormula,
   printTitleRowsFromFormula,
   resolveEffectivePageSetup,
+  resolveSheetPageBreaks,
   type HeaderFooterPictureSlot,
 } from './print-settings'
 import type { LazyWorkbookState, UniverRuntime } from './univer-state'
@@ -438,13 +439,18 @@ function withConditionalFormatStyle(
   return wrapped
 }
 
-/// The per-sheet print geometry of one job candidate: the sheet's own areas
-/// and title rows resolved into screen space (journal print areas win over
-/// the file's print names, like the active-sheet flow).
+/// The per-sheet print geometry of one job candidate: the sheet's own areas,
+/// title rows and manual page breaks resolved into screen space (journal
+/// sets win over the file's, like the active-sheet flow).
 function sheetPrintGeometry(
   state: LazyWorkbookState,
   sheetId: string,
-): { printAreas: string[]; printTitles: string | null } {
+): {
+  printAreas: string[]
+  printTitles: string | null
+  rowBreaks: number[]
+  colBreaks: number[]
+} {
   const journal = state.editJournal.pageSetup.get(sheetId) ?? {}
   const fileSheet = state.file.sheets.find((sheet) => sheet.id === sheetId)
   const ops = state.editJournal.structuralOps.get(sheetId) ?? []
@@ -459,6 +465,7 @@ function sheetPrintGeometry(
       journal.printTitles !== undefined
         ? journal.printTitles
         : mapTitleRowsToScreen(printTitleRowsFromFormula(fileSheet?.printTitles), ops),
+    ...resolveSheetPageBreaks(journal, state.sheetPageBreaks?.get(sheetId) ?? null, ops),
   }
 }
 
@@ -503,6 +510,7 @@ export async function buildPrintRequest(
       }
     })(),
     state?.editJournal.structuralOps.get(sheetId) ?? [],
+    state?.sheetPageBreaks?.get(sheetId) ?? null,
   )
   const effective = {
     ...setup,
@@ -533,7 +541,7 @@ export async function buildPrintRequest(
         ),
         ...(state
           ? sheetPrintGeometry(state, sheet.getSheetId())
-          : { printAreas: [], printTitles: null }),
+          : { printAreas: [], printTitles: null, rowBreaks: [], colBreaks: [] }),
         skipWhenEmpty: sheet.getSheetId() !== sheetId,
       })
     }

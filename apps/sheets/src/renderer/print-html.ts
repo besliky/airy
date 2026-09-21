@@ -195,7 +195,15 @@ export function buildSheetPrintPayload(
   pageOrder: PrintPageOrder = 'down-then-over',
 ): WorkbookExportPdfRequest {
   return buildSheetsPrintPayload(
-    [{ worksheet, printAreas: setup.printAreas, printTitles: setup.printTitles }],
+    [
+      {
+        worksheet,
+        printAreas: setup.printAreas,
+        printTitles: setup.printTitles,
+        rowBreaks: setup.rowBreaks,
+        colBreaks: setup.colBreaks,
+      },
+    ],
     setup,
     fileName,
     sheetName,
@@ -213,6 +221,12 @@ export interface PrintSheetJob {
   readonly printAreas: readonly string[]
   /// Rows repeated at the top of every page ("1:2"), or null.
   readonly printTitles: string | null
+  /// This sheet's manual page breaks (screen indices; the break sits above
+  /// the index). Absent = the shared setup's (the active sheet's set, which
+  /// is the same sheet for active-sheet and selection jobs; workbook jobs
+  /// resolve each sheet's own).
+  readonly rowBreaks?: readonly number[] | undefined
+  readonly colBreaks?: readonly number[] | undefined
   /// Entire-workbook jobs skip a sheet whose used range is empty (Excel
   /// prints nothing for a blank sheet); explicit areas always print.
   readonly skipWhenEmpty?: boolean
@@ -294,16 +308,27 @@ export function buildSheetsPrintPayload(
   // that starts a new page) — what the per-sheet header/footer sets below
   // are keyed by, so the main process can print one ranged pass per sheet.
   const sheetPages: number[] = []
-  for (const sheetLayouts of layouts) {
+  layouts.forEach((sheetLayouts, index) => {
+    const job = resolved[index]!.job
+    // The sheet's manual breaks for pagination: the job's own (per sheet on
+    // workbook jobs) or the setup's (the active sheet's). Excel honours
+    // manual breaks only at a fixed print scale — fit-to-page jobs ignore
+    // them entirely, and the fit scale search never sees them either.
+    const breaks = setup.fitToPage
+      ? { rowBreaks: [] as const, colBreaks: [] as const }
+      : {
+          rowBreaks: job.rowBreaks ?? setup.rowBreaks ?? [],
+          colBreaks: job.colBreaks ?? setup.colBreaks ?? [],
+        }
     let pages = 0
     for (const area of sheetLayouts) {
-      for (const tile of areaTiles(area, printable, scale, rowHeaderPt, pageOrder)) {
+      for (const tile of areaTiles(area, printable, scale, rowHeaderPt, pageOrder, breaks)) {
         tables.push(emitTable(area, tile, headings))
         pages += tilePageCount(area, tile, printable.heightPt / scale)
       }
     }
     sheetPages.push(pages)
-  }
+  })
 
   const html =
     `<!doctype html><html lang="${htmlLang(getLang())}"><head><meta charset="utf-8"><style>
@@ -602,37 +627,73 @@ interface AreaTile {
   readonly colEnd: number
 }
 
+/// The manual breaks that fall strictly inside an area's body rows: a break
+/// at or before the first body row would cut a titles-only segment, and the
+/// caller's fit-to-page jobs pass [] anyway (Excel ignores manual breaks
+/// there). Breaks landing inside the repeated title rows are dropped — the
+/// titles re-print whole on every page regardless.
+function bodyRowBreaks(area: LayoutArea, rowBreaks: readonly number[]): Set<number> {
+  const first = area.bodyRows[0]?.row
+  if (first === undefined) return new Set()
+  return new Set(rowBreaks.filter((index) => index > first && index <= area.endRow))
+}
+
 /// The area's page tiles (a row band × a column stripe each) in print order —
 /// shared by the table emitter and the per-sheet page counter so both agree
-/// on the pagination.
+/// on the pagination. Manual row breaks force band edges (Excel honours them
+/// at a fixed scale): down-then-over jobs only cut segments at the breaks and
+/// let Chromium flow rows between them, while over-then-down jobs keep their
+/// capacity-simulated bands with the breaks cut in as hard edges.
 function areaTiles(
   area: LayoutArea,
   printable: { widthPt: number; heightPt: number },
   scale: number,
   rowHeaderPt: number,
   pageOrder: PrintPageOrder,
+  breaks: { rowBreaks: readonly number[]; colBreaks: readonly number[] } = {
+    rowBreaks: [],
+    colBreaks: [],
+  },
 ): AreaTile[] {
-  const columnStripes = columnStripesOf(area, printable.widthPt / scale, rowHeaderPt)
+  const columnStripes = columnStripesOf(
+    area,
+    printable.widthPt / scale,
+    rowHeaderPt,
+    breaks.colBreaks,
+  )
+  const wholeBand: AreaTile = {
+    rowStart: area.startRow,
+    rowEnd: area.endRow,
+    colStart: area.startColumn,
+    colEnd: area.endColumn,
+  }
   const rowBands =
     pageOrder === 'over-then-down' && columnStripes.length > 1
-      ? rowBandsOf(area, printable.heightPt / scale)
-      : [{ rowStart: area.startRow, rowEnd: area.endRow }]
+      ? rowBandsOf(area, printable.heightPt / scale, breaks.rowBreaks)
+      : breaks.rowBreaks.length > 0
+        ? rowBandsOf(area, Number.POSITIVE_INFINITY, breaks.rowBreaks)
+        : [wholeBand]
   const tiles: AreaTile[] = []
-  for (const band of rowBands) {
-    for (const stripe of columnStripes) {
-      // Compose the tile axis by axis: both shapes carry the OTHER axis's
-      // full range (stripes span every row, bands span every column), so a
-      // spread like { ...band, ...stripe } silently clobbers the band's row
-      // bounds with the stripe's full range — every tile then re-prints the
-      // whole sheet and over-then-down duplicates every page (found by the
-      // BUG-1214 recheck headless-print harness).
-      tiles.push({
-        rowStart: band.rowStart,
-        rowEnd: band.rowEnd,
-        colStart: stripe.colStart,
-        colEnd: stripe.colEnd,
-      })
-    }
+  // Down-then-over walks every row page of a stripe before the next stripe;
+  // over-then-down walks every stripe of a band before the next band.
+  const push = (band: AreaTile, stripe: AreaTile): void => {
+    // Compose the tile axis by axis: both shapes carry the OTHER axis's
+    // full range (stripes span every row, bands span every column), so a
+    // spread like { ...band, ...stripe } silently clobbers the band's row
+    // bounds with the stripe's full range — every tile then re-prints the
+    // whole sheet and over-then-down duplicates every page (found by the
+    // BUG-1214 recheck headless-print harness).
+    tiles.push({
+      rowStart: band.rowStart,
+      rowEnd: band.rowEnd,
+      colStart: stripe.colStart,
+      colEnd: stripe.colEnd,
+    })
+  }
+  if (pageOrder === 'over-then-down') {
+    for (const band of rowBands) for (const stripe of columnStripes) push(band, stripe)
+  } else {
+    for (const stripe of columnStripes) for (const band of rowBands) push(band, stripe)
   }
   return tiles
 }
@@ -650,8 +711,14 @@ function tilePageCount(area: LayoutArea, tile: AreaTile, capacityPt: number): nu
 
 /// Column stripes of an area at the effective scale: each stripe's columns
 /// (plus the row-heading strip, which prints on every page) fit one page
-/// across. A single over-wide column always gets its own stripe.
-function columnStripesOf(area: LayoutArea, capacityPt: number, rowHeaderPt: number): AreaTile[] {
+/// across, with manual column breaks forced as stripe edges. A single
+/// over-wide column always gets its own stripe.
+function columnStripesOf(
+  area: LayoutArea,
+  capacityPt: number,
+  rowHeaderPt: number,
+  colBreaks: readonly number[] = [],
+): AreaTile[] {
   if (capacityPt <= 0)
     return [
       {
@@ -661,12 +728,18 @@ function columnStripesOf(area: LayoutArea, capacityPt: number, rowHeaderPt: numb
         colEnd: area.endColumn,
       },
     ]
+  const breakSet = new Set(
+    colBreaks.filter((index) => index > area.startColumn && index <= area.endColumn),
+  )
   const stripes: AreaTile[] = []
   let start = area.startColumn
   let used = rowHeaderPt
   for (let column = area.startColumn; column <= area.endColumn; column += 1) {
     const width = area.columnWidthsPt[column - area.startColumn] ?? 0
-    if (used > rowHeaderPt && used + width > capacityPt) {
+    if (
+      (used > rowHeaderPt && used + width > capacityPt) ||
+      (breakSet.has(column) && column > start)
+    ) {
       stripes.push({
         rowStart: area.startRow,
         rowEnd: area.endRow,
@@ -689,16 +762,26 @@ function columnStripesOf(area: LayoutArea, capacityPt: number, rowHeaderPt: numb
 
 /// Row bands of an area at the effective scale, mirroring Chromium's own
 /// pagination (rows never split, the repeated header takes its share of
-/// every page). Used for over-then-down ordering only. The mirror holds only
-/// while every <tr> renders at its declared printedHeightPt — see the
-/// printedHeightPt doc for the wrap-text / tall-font residuals that can
-/// still shift Chromium's page breaks off the simulated ones.
-function rowBandsOf(area: LayoutArea, capacityPt: number): AreaTile[] {
+/// every page) with manual row breaks cut in as hard edges. Used for
+/// over-then-down ordering, and for down-then-over jobs that carry manual
+/// breaks (with an infinite capacity, so ONLY the manual edges cut — rows
+/// between two breaks stay one flowing table Chromium paginates itself).
+/// The mirror holds only while every <tr> renders at its declared
+/// printedHeightPt — see the printedHeightPt doc for the wrap-text /
+/// tall-font residuals that can still shift Chromium's page breaks off the
+/// simulated ones.
+function rowBandsOf(
+  area: LayoutArea,
+  capacityPt: number,
+  rowBreaks: readonly number[] = [],
+): AreaTile[] {
+  const breakSet = bodyRowBreaks(area, rowBreaks)
   const bands: AreaTile[] = []
   let start = area.startRow
   let used = area.repeatedHeightPt
   for (const row of area.bodyRows) {
-    if (used + row.printedHeightPt > capacityPt && used > area.repeatedHeightPt) {
+    const manual = breakSet.has(row.row) && row.row > start
+    if (manual || (used + row.printedHeightPt > capacityPt && used > area.repeatedHeightPt)) {
       bands.push({
         rowStart: start,
         rowEnd: row.row - 1,
