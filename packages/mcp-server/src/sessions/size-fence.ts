@@ -1,14 +1,20 @@
 /**
- * Open-time size fences for the binary document sessions (SEC-1102): the
- * text sessions (markdown/html, and pdf via file-parse) always opened with a
- * byte cap, but .docx/.pptx/.xlsx read whatever is on disk. A hostile file
- * pulled into an agent's workspace could then balloon the headless server's
- * memory either directly (a multi-gigabyte raw file) or as a zip bomb (a few
- * KiB whose entries declare gigabytes of uncompressed bytes).
+ * Open-time size fences for the binary document sessions (SEC-1102) and the
+ * text-extraction opens (SEC-1302): .docx/.pptx/.xlsx read whatever is on
+ * disk, the .pdf/.doc text fallbacks fed whole unsized buffers to pdfjs and
+ * word-extractor, and the .doc/.odt conversion handed files of any length to
+ * the soffice subprocess before the (converted-file) docx fence ever ran. A
+ * hostile file pulled into an agent's workspace could then balloon the
+ * headless server's memory either directly (a multi-gigabyte raw file) or as
+ * a zip bomb (a few KiB whose entries declare gigabytes of uncompressed
+ * bytes). The markdown/html line sessions carry their own smaller byte cap
+ * (sessions/line-core).
  *
  * Two fences, cheapest first:
  *
- * 1. stat-first raw cap — refuse before reading a byte into memory.
+ * 1. stat-first raw cap — refuse before reading a byte into memory. The
+ *    text-extraction sessions and the soffice conversion input get this one
+ *    only: their extractors take a plain byte buffer, not a zip.
  * 2. declared-uncompressed budget for the zip-based formats — walk the
  *    central-directory metadata (JSZip keeps the declared sizes lazily, no
  *    inflation happens) and refuse when one part or their total exceeds the

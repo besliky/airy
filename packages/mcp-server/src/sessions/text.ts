@@ -9,6 +9,7 @@ import { basename } from 'node:path'
 
 import { countWords } from '../docx/session.js'
 import { resolveConfined } from '../docx/paths.js'
+import { assertWithinOpenCap, OpenSizeError } from './size-fence.js'
 
 export interface TextSessionMeta {
   readonly handle: string
@@ -54,9 +55,16 @@ export class TextSession {
     const path = resolveConfined(rawPath, root)
     let bytes: Uint8Array
     try {
+      // SEC-1302: pdfjs/word-extractor parse the whole buffer, so the raw
+      // cap must refuse a runaway file before a byte is read — stat first,
+      // then re-check the read length against stat→read growth (the same
+      // double fence the binary sessions use).
+      const info = await stat(path)
+      assertWithinOpenCap(path, info.size, options.format)
       bytes = new Uint8Array(await readFile(path))
-      await stat(path)
+      assertWithinOpenCap(path, bytes.byteLength, options.format)
     } catch (e) {
+      if (e instanceof OpenSizeError) throw e
       throw new Error(`Cannot read "${path}": ${e instanceof Error ? e.message : String(e)}`, {
         cause: e,
       })

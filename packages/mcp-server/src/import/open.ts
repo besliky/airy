@@ -33,6 +33,7 @@ import { resolveConfined } from '../docx/paths.js'
 import { HtmlSession } from '../html/session.js'
 import { MarkdownSession } from '../markdown/session.js'
 import { SlidesSession } from '../slides/session.js'
+import { assertWithinOpenCap } from '../sessions/size-fence.js'
 import { TextSession } from '../sessions/text.js'
 import { XlsxSession } from '../xlsx/session.js'
 import { convertViaSoffice, findSoffice, SOFFICE_FILTERS, sofficeMissingError } from './soffice.js'
@@ -155,6 +156,11 @@ async function openConvertedWordDocument(
   if (!stamp) {
     throw new Error(`Cannot read "${path}": file does not exist.`)
   }
+  // SEC-1302: the raw cap runs on the ORIGINAL, before soffice is spawned —
+  // the DocxSession fence below only sees the server-controlled temp .docx,
+  // so without this an oversized hostile file would spend host memory/CPU in
+  // the conversion subprocess first.
+  assertWithinOpenCap(path, stamp.size, format)
   const tempDir = await mkdtemp(join(tmpdir(), 'airy-import-'))
   try {
     const converted = await convertViaSoffice(tool, path, {
