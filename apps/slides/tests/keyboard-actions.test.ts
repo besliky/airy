@@ -177,3 +177,113 @@ describe('copy shortcuts with a DOM text selection', () => {
     expect(slideActions.cutSlideAt).not.toHaveBeenCalled()
   })
 })
+
+describe('escape layering (UX-11s2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    document.body.innerHTML = ''
+  })
+
+  it('drops the ink tool on a plain Escape', () => {
+    const setInkTool = vi.fn()
+    const e = keydown('Escape', { metaKey: false })
+    handleGlobalKeydown(makeCtx({ inkTool: 'pen', setInkTool }), e)
+    expect(e.defaultPrevented).toBe(true)
+    expect(setInkTool).toHaveBeenCalledWith('select')
+  })
+
+  it('keeps the ink tool when an overlay layer already consumed the Escape', () => {
+    const setInkTool = vi.fn()
+    const e = keydown('Escape', { metaKey: false })
+    e.preventDefault() // capture-phase claim: reading view, media overlay, ribbon popup
+    handleGlobalKeydown(makeCtx({ inkTool: 'pen', setInkTool }), e)
+    expect(setInkTool).not.toHaveBeenCalled()
+  })
+
+  it('keeps format-brush mode when the Escape was consumed', () => {
+    const setBrushMode = vi.fn()
+    const e = keydown('Escape', { metaKey: false })
+    e.preventDefault()
+    handleGlobalKeydown(makeCtx({ brushMode: { format: {} }, setBrushMode, setStatus: vi.fn() }), e)
+    expect(setBrushMode).not.toHaveBeenCalled()
+  })
+
+  it('stays inside the group when the Escape was consumed', () => {
+    const setSelectedIds = vi.fn()
+    const setEnteredGroupId = vi.fn()
+    const e = keydown('Escape', { metaKey: false })
+    e.preventDefault()
+    handleGlobalKeydown(
+      makeCtx({ enteredGroupId: 'g1', selectedIds: ['g1'], setSelectedIds, setEnteredGroupId }),
+      e,
+    )
+    expect(setEnteredGroupId).not.toHaveBeenCalled()
+    expect(setSelectedIds).not.toHaveBeenCalled()
+  })
+})
+
+describe('canvas keys stay canvas-scoped (UX-11s2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    document.body.innerHTML = ''
+  })
+
+  it('deletes the selection when the canvas owns focus', () => {
+    const del = new KeyboardEvent('keydown', { key: 'Delete', cancelable: true })
+    handleGlobalKeydown(makeCtx({ selectedIds: ['s1'] }), del)
+    expect(del.defaultPrevented).toBe(true)
+    expect(clipboardActions.deleteSelected).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not delete through a focused chrome button', () => {
+    const btn = document.createElement('button')
+    document.body.appendChild(btn)
+    btn.focus()
+    const del = new KeyboardEvent('keydown', { key: 'Backspace', cancelable: true })
+    handleGlobalKeydown(makeCtx({ selectedIds: ['s1'] }), del)
+    expect(del.defaultPrevented).toBe(false)
+    expect(clipboardActions.deleteSelected).not.toHaveBeenCalled()
+  })
+
+  it('nudges the selection when the canvas owns focus', () => {
+    const onTransform = vi.fn()
+    const node = { sourceId: 's1', box: { x: 10, y: 10, w: 5, h: 5, rotationDeg: 0 } }
+    const left = new KeyboardEvent('keydown', { key: 'ArrowLeft', cancelable: true })
+    handleGlobalKeydown(
+      makeCtx({ selectedIds: ['s1'], onTransform, findNodeCtx: () => ({ node }) }),
+      left,
+    )
+    expect(left.defaultPrevented).toBe(true)
+    expect(onTransform).toHaveBeenCalledWith(
+      's1',
+      expect.objectContaining({ x: 9 }),
+      undefined,
+      undefined,
+    )
+  })
+
+  it('does not nudge through a focused chrome button', () => {
+    const btn = document.createElement('button')
+    document.body.appendChild(btn)
+    btn.focus()
+    const onTransform = vi.fn()
+    const left = new KeyboardEvent('keydown', { key: 'ArrowLeft', cancelable: true })
+    handleGlobalKeydown(
+      makeCtx({ selectedIds: ['s1'], onTransform, findNodeCtx: () => ({ node: {} }) }),
+      left,
+    )
+    expect(left.defaultPrevented).toBe(false)
+    expect(onTransform).not.toHaveBeenCalled()
+  })
+
+  it('does not nudge when the reading view claimed the arrows', () => {
+    const onTransform = vi.fn()
+    const left = new KeyboardEvent('keydown', { key: 'ArrowRight', cancelable: true })
+    left.preventDefault() // reading view's capture handler page-turns and claims
+    handleGlobalKeydown(
+      makeCtx({ selectedIds: ['s1'], onTransform, findNodeCtx: () => ({ node: {} }) }),
+      left,
+    )
+    expect(onTransform).not.toHaveBeenCalled()
+  })
+})

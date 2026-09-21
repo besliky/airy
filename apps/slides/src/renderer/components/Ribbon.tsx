@@ -127,6 +127,7 @@ import {
   RIBBON_SHAPE_STYLES,
   clampDurationSeconds,
   closeSiblingPanels,
+  ribbonEscapeDeferred,
   type Props,
   type RibbonPanelKey,
   type RibbonTabCtx,
@@ -1426,6 +1427,25 @@ export function Ribbon({
   // the shell app:chrome-pressed relay; panels survive via stopPropagation.
   useDismissablePopover(anyPanelOpen, closePanels)
 
+  // Escape closes the open popup — keyboard parity with the outside press
+  // (sheets' ribbon had it via useEscapeClose; slides' dismissal trio didn't).
+  // Capture + claim: the app-global Esc actions respect defaultPrevented, so
+  // one press closes only the popup. Layers that own their Escape (modal
+  // dialogs stacked on top, editable fields cancelling a draft, an expanded
+  // shared Dropdown list) keep it — see ribbonEscapeDeferred.
+  useEffect(() => {
+    if (!anyPanelOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.isComposing) return
+      if (ribbonEscapeDeferred(e.target as Element | null)) return
+      e.preventDefault()
+      e.stopPropagation()
+      closePanels()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [anyPanelOpen, closePanels])
+
   // ── Responsive collapse (PowerPoint model): the collapsed set is a pure
   // function of the current width, never of resize history — pick the fewest
   // COLLAPSE_ORDER groups whose folding lets the full inline layout fit.
@@ -2235,7 +2255,13 @@ export function Ribbon({
                     closeSiblingPanels(e, closePanels, 'transOptions')
                   }}
                   onClick={() => setTransOptionsOpen((v) => !v)}
-                  data-tip={t('ribbonEffectOptionsTip')}
+                  data-tip={
+                    // screentips render on disabled buttons too (pointerover),
+                    // so the none-transition state names its reason
+                    hasDoc && transition.kind === 'none'
+                      ? t('ribbonEffectOptionsNoneTip')
+                      : t('ribbonEffectOptionsTip')
+                  }
                 >
                   <span className="rb-big-icon">
                     <IconTransWipe size={BIG} />
@@ -2285,36 +2311,45 @@ export function Ribbon({
                     ) : null}
                     <label>
                       {t('ribbonTransDuration')}
-                      <input
-                        key={`trans-dur-${transition.kind}-${transition.durationMs ?? ''}`}
-                        type="number"
-                        min={0.1}
-                        max={60}
-                        step={0.05}
-                        defaultValue={
-                          transition.durationMs != null
-                            ? (transition.durationMs / 1000).toFixed(2)
-                            : ''
-                        }
-                        placeholder={t('ribbonTransDurationDefault')}
-                        onBlur={(e) => {
-                          const v = parseFloat(e.target.value)
-                          onTransition(
-                            {
-                              ...transition,
-                              durationMs:
-                                Number.isFinite(v) && v > 0
-                                  ? Math.round(clampDurationSeconds(v, 0.1, 60) * 1000)
-                                  : null,
-                            },
-                            false,
-                          )
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-                        }}
-                        title={`${t('ribbonTransDurationTip')} — ${t('ribbonTransDurationRange')}`}
-                      />
+                      {/* PowerPoint caps morph at 59 s, every other transition at 60 */}
+                      {(() => {
+                        const ceiling = transition.kind === 'morph' ? 59 : 60
+                        return (
+                          <input
+                            key={`trans-dur-${transition.kind}-${transition.durationMs ?? ''}`}
+                            type="number"
+                            min={0.1}
+                            max={ceiling}
+                            step={0.05}
+                            defaultValue={
+                              transition.durationMs != null
+                                ? (transition.durationMs / 1000).toFixed(2)
+                                : ''
+                            }
+                            placeholder={t('ribbonTransDurationDefault')}
+                            onBlur={(e) => {
+                              const v = parseFloat(e.target.value)
+                              onTransition(
+                                {
+                                  ...transition,
+                                  durationMs:
+                                    Number.isFinite(v) && v > 0
+                                      ? Math.round(clampDurationSeconds(v, 0.1, ceiling) * 1000)
+                                      : null,
+                                },
+                                false,
+                              )
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                            }}
+                            title={`${t('ribbonTransDurationTip')} — ${t(
+                              'ribbonTransDurationRange',
+                              { max: ceiling },
+                            )}`}
+                          />
+                        )
+                      })()}
                       {t('ribbonSecondsUnit')}
                     </label>
                   </div>

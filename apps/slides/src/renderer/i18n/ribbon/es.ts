@@ -310,11 +310,12 @@ export const es = {
   ribbonTransApplyAllTip: 'Aplicar la transición de esta diapositiva a todas las diapositivas',
   ribbonEffectOptions: 'Opciones de efectos',
   ribbonEffectOptionsTip: 'Dirección y duración de la transición actual',
+  ribbonEffectOptionsNoneTip: 'Elige primero una transición: las Opciones de efecto requieren una',
   ribbonEffectOptionsDirection: 'Dirección',
   ribbonTransDuration: 'Duración',
   ribbonTransDurationDefault: 'Predeterminado',
   ribbonTransDurationTip: 'Duración de la transición en segundos (vacío = valor predeterminado)',
-  ribbonTransDurationRange: 'Rango permitido: 0,1 a 60 segundos',
+  ribbonTransDurationRange: 'Rango permitido: 0,1 a {max} segundos',
   ribbonAnimDirectionTip: 'Variante de dirección del efecto de animación seleccionado',
   ribbonPreview: 'Vista previa',
   ribbonAnimPreviewTip:

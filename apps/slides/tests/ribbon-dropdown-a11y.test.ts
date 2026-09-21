@@ -93,6 +93,27 @@ describe('direction dropdowns name themselves by field, not value (UX-1104)', ()
   )
 })
 
+describe('the disabled Effect Options names its reason (UX-1104 nit)', () => {
+  const src = readFileSync(join(SRC_DIR, 'Ribbon.tsx'), 'utf8')
+
+  it('swaps the screentip for the none-transition reason', () => {
+    const call = 'setTransOptionsOpen((v) => !v)'
+    const tag = triggerTag(src, call, src.indexOf(call))
+    expect(tag).toContain('ribbonEffectOptionsNoneTip')
+    // the generic description stays for the enabled / no-document states
+    expect(tag).toContain('ribbonEffectOptionsTip')
+  })
+
+  it('ships the reason in every ribbon locale shard', () => {
+    const shards = readdirSync(join(__dirname, '../src/renderer/i18n/ribbon'))
+    expect(shards.length).toBe(20)
+    for (const shard of shards) {
+      const s = readFileSync(join(__dirname, '../src/renderer/i18n/ribbon', shard), 'utf8')
+      expect(s, shard).toContain('ribbonEffectOptionsNoneTip')
+    }
+  })
+})
+
 describe('every dropdown names itself by field, not current value (UX-1206)', () => {
   const RENDERER = join(__dirname, '../src/renderer')
 

@@ -301,11 +301,12 @@ export const ko = {
   ribbonTransApplyAllTip: '현재 슬라이드의 화면 전환 효과를 모든 슬라이드에 적용',
   ribbonEffectOptions: '효과 옵션',
   ribbonEffectOptionsTip: '현재 전환의 방향 및 지속 시간',
+  ribbonEffectOptionsNoneTip: '먼저 전환을 선택하세요. 효과 옵션에는 전환이 필요합니다',
   ribbonEffectOptionsDirection: '방향',
   ribbonTransDuration: '지속 시간',
   ribbonTransDurationDefault: '기본값',
   ribbonTransDurationTip: '전환 지속 시간(초), 비워 두면 기본값',
-  ribbonTransDurationRange: '허용 범위: 0.1~60초',
+  ribbonTransDurationRange: '허용 범위: 0.1~{max}초',
   ribbonAnimDirectionTip: '선택한 애니메이션 효과의 방향 옵션',
   // Animations
   ribbonPreview: '미리 보기',
