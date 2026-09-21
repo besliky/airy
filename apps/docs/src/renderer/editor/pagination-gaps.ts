@@ -983,7 +983,8 @@ export function syncAnchorBands(pm: HTMLElement, factor: number): void {
     if (
       el.classList.contains('page-gap') ||
       el.classList.contains('page-float-host') ||
-      el.classList.contains('page-repeat-header')
+      el.classList.contains('page-repeat-header') ||
+      el.classList.contains('doc-spacing-seam')
     ) {
       continue
     }

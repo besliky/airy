@@ -97,6 +97,7 @@ import {
   PaginationGapsExtension,
   RowFillsExtension,
 } from './pagination-gaps'
+import { SpacingSeamsExtension } from './spacing-seams'
 import { CaretMarksMemory, FORMAT_MARKS, firstTextMarksIn, serializeMarks } from './caret-marks'
 import { insertPageBreak } from './page-break'
 import { ColumnLayoutExtension } from './column-layout'
@@ -5653,6 +5654,9 @@ export const editorExtensions = [
   LineFactorExtension,
   ListNumberingExtension,
   AnchorLineExtension,
+  // before PaginationGaps: at a shared boundary its seam widget must render
+  // ahead of the page-gap widget, keeping `.page-gap + …` selectors adjacent
+  SpacingSeamsExtension,
   PaginationGapsExtension,
   RowFillsExtension,
   FloatVShiftsExtension,
