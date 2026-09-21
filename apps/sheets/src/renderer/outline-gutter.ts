@@ -1,6 +1,9 @@
 /// The outline +/- gutter: a DOM overlay pinned over the row- and
 /// column-header strips, showing one collapse/expand button per outline
 /// group (level lanes 1-7, deeper levels further from the header numbers).
+/// Lanes that would leave the strip clamp to its edge, and a clamped level
+/// overlapping the previous level's lane on the same summary line is not
+/// drawn (BUG-1311: clamped duplicates used to stack on one spot).
 /// Clicks route through the shared outline toggle (hidden pipeline +
 /// collapsed flag + visual undo). The overlay repositions on scroll, zoom,
 /// and any command (row sizes, sheet switches) and hides itself whenever
@@ -153,6 +156,10 @@ export function installOutlineGutter(
     ): boolean => {
       if (!strip || maxOutlineLevel(entries) === 0) return false
       const groups = computeOutlineGroups(entries, axis, summaryAfter, extentLines - 1)
+      /// the lane already drawn on each summary line this pass. Group order
+      /// is level-major, so a line's buttons arrive shallowest-first and
+      /// lanes only shrink (natural lanes step outward, then clamp).
+      const laneOfLine = new Map<number, number>()
       let placed = 0
       for (const group of groups) {
         const origin = cellOrigin(
@@ -169,6 +176,28 @@ export function installOutlineGutter(
         const stripEnd = axis === 'rows' ? surface.y + surface.height : surface.x + surface.width
         // Summary lines fully off-screen draw nothing.
         if (leading + size < stripStart || leading > stripEnd) continue
+        // UX-1106: deeper level lanes must stay ON the header strip — the
+        // gutter is a fixed layer above the app chrome, and lanes reaching
+        // past the strip's outer edge drew the level 2+ buttons over the
+        // formula bar / Name Box. A lane that does not fit clamps to the
+        // strip edge.
+        const lane =
+          axis === 'rows'
+            ? Math.max(strip.left, surface.x - 3 - group.level * LANE_PX)
+            : Math.max(strip.top, surface.y - 3 - group.level * LANE_PX)
+        // BUG-1311: a nested run shares one summary line across its levels,
+        // and every clamped level used to collapse onto the same strip-edge
+        // coordinate — burying the last fitting lane under an 11 px overlap
+        // (a level-7 run stacked four buttons on one spot, only the deepest
+        // clickable). A clamped level whose lane would sit within BUTTON_PX
+        // of the lane already drawn on its line is suppressed instead: at
+        // most one clamped button per summary line, never an overlap. The
+        // suppressed duplicates act on the same run as the drawn ones (the
+        // click handler resolves the group by summary line), and regular
+        // nesting — one level per summary line — is never suppressed.
+        const drawnLane = laneOfLine.get(group.summary)
+        if (drawnLane !== undefined && drawnLane - lane < BUTTON_PX) continue
+        laneOfLine.set(group.summary, lane)
         if (placed >= MAX_BUTTONS_PER_AXIS) break
         placed += 1
         const key = `${axis}:${group.summary}:${group.level}`
@@ -198,16 +227,6 @@ export function installOutlineGutter(
         const collapsed = entries.get(group.summary)?.collapsed ?? false
         button.textContent = collapsed ? '+' : '−'
         button.className = 'outline-gutter-button'
-        // UX-1106: deeper level lanes must stay ON the header strip — the
-        // gutter is a fixed layer above the app chrome, and lanes reaching
-        // past the strip's outer edge drew the level 2+ buttons over the
-        // formula bar / Name Box. A lane that does not fit clamps to the
-        // strip edge instead; every button keeps its own summary line, so
-        // clamped buttons never stack on top of each other.
-        const lane =
-          axis === 'rows'
-            ? Math.max(strip.left, surface.x - 3 - group.level * LANE_PX)
-            : Math.max(strip.top, surface.y - 3 - group.level * LANE_PX)
         if (axis === 'rows') {
           button.style.left = `${lane}px`
           button.style.top = `${leading + Math.max((size - BUTTON_PX) / 2, 0)}px`

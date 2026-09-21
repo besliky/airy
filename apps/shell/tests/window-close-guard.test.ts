@@ -151,4 +151,28 @@ describe('createWindowCloseGuard', () => {
     guard(closeEvent())
     expect(deps.requestClose).toHaveBeenCalledTimes(2)
   })
+
+  it('a throwing prompt round-trip unwinds an in-flight quit like a Cancel (BUG-1310)', async () => {
+    // the failure path is not a user decision, but its aftermath must match
+    // the Cancel path: a quit that was armed when the round-trip blew up
+    // (contents.send on a destroyed webContents) used to stay armed forever
+    // — no window closed, sheets kept the quit-time no-prompt mode, the
+    // bridge stayed down
+    const { deps, guard } = makeGuard([makeTab('1'), makeTab('2', 'pdf')], async (tab) => {
+      if (tab.id === '2') throw new Error('webContents destroyed mid-send')
+      return true
+    })
+    guard(closeEvent())
+    await flush()
+    expect(deps.logFailure).toHaveBeenCalledTimes(1)
+    // the quit unwinds once, the failed window neither closes nor finishes
+    expect(deps.abortQuit).toHaveBeenCalledTimes(1)
+    expect(deps.finishClose).not.toHaveBeenCalled()
+    expect(deps.closeWindow).not.toHaveBeenCalled()
+    // and the latch is free: the next close starts and completes a fresh
+    // cycle over both tabs
+    guard(closeEvent())
+    await flush()
+    expect(deps.requestClose).toHaveBeenCalledTimes(4)
+  })
 })
