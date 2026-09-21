@@ -298,7 +298,7 @@ export const th = {
   ribbonTransDuration: 'ระยะเวลา',
   ribbonTransDurationDefault: 'ค่าเริ่มต้น',
   ribbonTransDurationTip: 'ระยะเวลาการเปลี่ยนฉากเป็นวินาที (ว่าง = ค่าเริ่มต้น)',
-  ribbonTransDurationRange: 'ช่วงที่อนุญาต: 0.1–60 วินาที',
+  ribbonTransDurationRange: 'ช่วงที่อนุญาต: 0.1–{max} วินาที',
   ribbonAnimDirectionTip: 'ตัวเลือกทิศทางของเอฟเฟกต์แอนิเมชันที่เลือก',
   ribbonPreview: 'แสดงตัวอย่าง',
   ribbonAnimPreviewTip: 'เล่นภาพเคลื่อนไหวทั้งหมดของสไลด์ปัจจุบันบนผืนผ้าใบแก้ไข',

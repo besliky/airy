@@ -309,7 +309,7 @@ export const ms = {
   ribbonTransDuration: 'Tempoh',
   ribbonTransDurationDefault: 'Lalai',
   ribbonTransDurationTip: 'Tempoh peralihan dalam saat (kosong = lalai)',
-  ribbonTransDurationRange: 'Julat dibenarkan: 0.1–60 saat',
+  ribbonTransDurationRange: 'Julat dibenarkan: 0.1–{max} saat',
   ribbonAnimDirectionTip: 'Varian arah kesan animasi yang dipilih',
   ribbonPreview: 'Pratonton',
   ribbonAnimPreviewTip: 'Mainkan semua animasi pada slaid ini dalam kanvas pengeditan',

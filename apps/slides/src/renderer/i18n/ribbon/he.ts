@@ -294,7 +294,7 @@ export const he = {
   ribbonTransDuration: 'משך',
   ribbonTransDurationDefault: 'ברירת מחדל',
   ribbonTransDurationTip: 'משך המעבר בשניות (ריק = ברירת מחדל)',
-  ribbonTransDurationRange: 'טווח מותר: 0.1–60 שניות',
+  ribbonTransDurationRange: 'טווח מותר: 0.1–{max} שניות',
   ribbonAnimDirectionTip: 'וריאנט כיוון של אפקט ההנפשה שנבחר',
   ribbonPreview: 'תצוגה מקדימה',
   ribbonAnimPreviewTip: 'ניגון כל ההנפשות בשקופית זו בקנבס העריכה',

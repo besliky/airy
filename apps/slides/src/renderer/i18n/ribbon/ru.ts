@@ -307,7 +307,7 @@ export const ru = {
   ribbonTransDuration: 'Длительность',
   ribbonTransDurationDefault: 'По умолчанию',
   ribbonTransDurationTip: 'Длительность перехода в секундах (пусто = по умолчанию)',
-  ribbonTransDurationRange: 'Допустимо: 0,1–60 секунд',
+  ribbonTransDurationRange: 'Допустимо: 0,1–{max} секунд',
   ribbonAnimDirectionTip: 'Вариант направления выбранного эффекта анимации',
   ribbonPreview: 'Просмотр',
   ribbonAnimPreviewTip: 'Воспроизвести все анимации этого слайда на холсте редактирования',

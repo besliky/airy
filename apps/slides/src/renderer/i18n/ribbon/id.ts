@@ -306,7 +306,7 @@ export const id = {
   ribbonTransDuration: 'Durasi',
   ribbonTransDurationDefault: 'Default',
   ribbonTransDurationTip: 'Durasi transisi dalam detik (kosong = default)',
-  ribbonTransDurationRange: 'Rentang yang diizinkan: 0,1–60 detik',
+  ribbonTransDurationRange: 'Rentang yang diizinkan: 0,1–{max} detik',
   ribbonAnimDirectionTip: 'Varian arah efek animasi yang dipilih',
   ribbonPreview: 'Pratinjau',
   ribbonAnimPreviewTip: 'Putar semua animasi slide ini di kanvas pengeditan',

@@ -289,7 +289,7 @@ export const zhTW = {
   ribbonTransDuration: '持續時間',
   ribbonTransDurationDefault: '預設',
   ribbonTransDurationTip: '切換持續時間（秒），留空為預設值',
-  ribbonTransDurationRange: '允許：0.1–60 秒',
+  ribbonTransDurationRange: '允許：0.1–{max} 秒',
   ribbonAnimDirectionTip: '所選動畫效果的方向變體',
   ribbonPreview: '預覽',
   ribbonAnimPreviewTip: '在編輯畫布上播放目前頁全部動畫',

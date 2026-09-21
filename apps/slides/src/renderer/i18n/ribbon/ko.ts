@@ -305,7 +305,7 @@ export const ko = {
   ribbonTransDuration: '지속 시간',
   ribbonTransDurationDefault: '기본값',
   ribbonTransDurationTip: '전환 지속 시간(초), 비워 두면 기본값',
-  ribbonTransDurationRange: '허용 범위: 0.1~60초',
+  ribbonTransDurationRange: '허용 범위: 0.1~{max}초',
   ribbonAnimDirectionTip: '선택한 애니메이션 효과의 방향 옵션',
   // Animations
   ribbonPreview: '미리 보기',

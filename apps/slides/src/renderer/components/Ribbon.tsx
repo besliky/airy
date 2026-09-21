@@ -2305,36 +2305,45 @@ export function Ribbon({
                     ) : null}
                     <label>
                       {t('ribbonTransDuration')}
-                      <input
-                        key={`trans-dur-${transition.kind}-${transition.durationMs ?? ''}`}
-                        type="number"
-                        min={0.1}
-                        max={60}
-                        step={0.05}
-                        defaultValue={
-                          transition.durationMs != null
-                            ? (transition.durationMs / 1000).toFixed(2)
-                            : ''
-                        }
-                        placeholder={t('ribbonTransDurationDefault')}
-                        onBlur={(e) => {
-                          const v = parseFloat(e.target.value)
-                          onTransition(
-                            {
-                              ...transition,
-                              durationMs:
-                                Number.isFinite(v) && v > 0
-                                  ? Math.round(clampDurationSeconds(v, 0.1, 60) * 1000)
-                                  : null,
-                            },
-                            false,
-                          )
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-                        }}
-                        title={`${t('ribbonTransDurationTip')} — ${t('ribbonTransDurationRange')}`}
-                      />
+                      {/* PowerPoint caps morph at 59 s, every other transition at 60 */}
+                      {(() => {
+                        const ceiling = transition.kind === 'morph' ? 59 : 60
+                        return (
+                          <input
+                            key={`trans-dur-${transition.kind}-${transition.durationMs ?? ''}`}
+                            type="number"
+                            min={0.1}
+                            max={ceiling}
+                            step={0.05}
+                            defaultValue={
+                              transition.durationMs != null
+                                ? (transition.durationMs / 1000).toFixed(2)
+                                : ''
+                            }
+                            placeholder={t('ribbonTransDurationDefault')}
+                            onBlur={(e) => {
+                              const v = parseFloat(e.target.value)
+                              onTransition(
+                                {
+                                  ...transition,
+                                  durationMs:
+                                    Number.isFinite(v) && v > 0
+                                      ? Math.round(clampDurationSeconds(v, 0.1, ceiling) * 1000)
+                                      : null,
+                                },
+                                false,
+                              )
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                            }}
+                            title={`${t('ribbonTransDurationTip')} — ${t(
+                              'ribbonTransDurationRange',
+                              { max: ceiling },
+                            )}`}
+                          />
+                        )
+                      })()}
                       {t('ribbonSecondsUnit')}
                     </label>
                   </div>

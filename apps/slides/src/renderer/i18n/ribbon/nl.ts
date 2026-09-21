@@ -308,7 +308,7 @@ export const nl = {
   ribbonTransDuration: 'Duur',
   ribbonTransDurationDefault: 'Standaard',
   ribbonTransDurationTip: 'Duur van de overgang in seconden (leeg = standaard)',
-  ribbonTransDurationRange: 'Toegestaan bereik: 0,1–60 seconden',
+  ribbonTransDurationRange: 'Toegestaan bereik: 0,1–{max} seconden',
   ribbonAnimDirectionTip: 'Richtingsvariant van het geselecteerde animatie-effect',
   ribbonPreview: 'Voorbeeld',
   ribbonAnimPreviewTip: 'Alle animaties van deze dia in het bewerkingscanvas afspelen',

@@ -297,7 +297,7 @@ export const ar = {
   ribbonTransDuration: 'المدة',
   ribbonTransDurationDefault: 'افتراضي',
   ribbonTransDurationTip: 'مدة الانتقال بالثواني (فارغ = الافتراضي)',
-  ribbonTransDurationRange: 'النطاق المسموح: 0.1–60 ثانية',
+  ribbonTransDurationRange: 'النطاق المسموح: 0.1–{max} ثانية',
   ribbonAnimDirectionTip: 'اتجاه تأثير الحركة المحدد',
   ribbonPreview: 'معاينة',
   ribbonAnimPreviewTip: 'تشغيل كل حركات هذه الشريحة على لوحة التحرير',

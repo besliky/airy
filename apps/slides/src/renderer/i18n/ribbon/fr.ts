@@ -313,7 +313,7 @@ export const fr = {
   ribbonTransDuration: 'Durée',
   ribbonTransDurationDefault: 'Par défaut',
   ribbonTransDurationTip: 'Durée de la transition en secondes (vide = valeur par défaut)',
-  ribbonTransDurationRange: 'Plage autorisée : 0,1 à 60 secondes',
+  ribbonTransDurationRange: 'Plage autorisée : 0,1 à {max} secondes',
   ribbonAnimDirectionTip: 'Variante de direction de l’effet d’animation sélectionné',
   ribbonPreview: 'Aperçu',
   ribbonAnimPreviewTip:

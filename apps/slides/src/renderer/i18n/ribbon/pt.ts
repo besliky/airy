@@ -306,7 +306,7 @@ export const pt = {
   ribbonTransDuration: 'Duração',
   ribbonTransDurationDefault: 'Padrão',
   ribbonTransDurationTip: 'Duração da transição em segundos (vazio = padrão)',
-  ribbonTransDurationRange: 'Intervalo permitido: 0,1 a 60 segundos',
+  ribbonTransDurationRange: 'Intervalo permitido: 0,1 a {max} segundos',
   ribbonAnimDirectionTip: 'Variação de direção do efeito de animação selecionado',
   ribbonPreview: 'Visualizar',
   ribbonAnimPreviewTip: 'Reproduzir todas as animações deste slide no canvas de edição',

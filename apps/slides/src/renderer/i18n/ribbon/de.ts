@@ -311,7 +311,7 @@ export const de = {
   ribbonTransDuration: 'Dauer',
   ribbonTransDurationDefault: 'Standard',
   ribbonTransDurationTip: 'Übergangsdauer in Sekunden (leer = Standard)',
-  ribbonTransDurationRange: 'Zulässiger Bereich: 0,1–60 Sekunden',
+  ribbonTransDurationRange: 'Zulässiger Bereich: 0,1–{max} Sekunden',
   ribbonAnimDirectionTip: 'Richtungsvariante des ausgewählten Animationseffekts',
   ribbonPreview: 'Vorschau',
   ribbonAnimPreviewTip: 'Alle Animationen dieser Folie im Bearbeitungscanvas abspielen',

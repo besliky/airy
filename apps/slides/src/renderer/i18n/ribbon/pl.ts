@@ -308,7 +308,7 @@ export const pl = {
   ribbonTransDuration: 'Czas trwania',
   ribbonTransDurationDefault: 'Domyślnie',
   ribbonTransDurationTip: 'Czas trwania przejścia w sekundach (puste = domyślny)',
-  ribbonTransDurationRange: 'Dozwolony zakres: 0,1–60 sekund',
+  ribbonTransDurationRange: 'Dozwolony zakres: 0,1–{max} sekund',
   ribbonAnimDirectionTip: 'Wariant kierunku wybranego efektu animacji',
   ribbonPreview: 'Podgląd',
   ribbonAnimPreviewTip: 'Odtwórz wszystkie animacje tego slajdu na kanwie edycji',

@@ -299,7 +299,7 @@ export const en = {
   ribbonTransDuration: 'Duration',
   ribbonTransDurationDefault: 'Default',
   ribbonTransDurationTip: 'Transition duration in seconds (empty = effect default)',
-  ribbonTransDurationRange: 'Allowed: 0.1–60 seconds',
+  ribbonTransDurationRange: 'Allowed: 0.1–{max} seconds',
   ribbonAnimDirectionTip: 'Direction variant of the selected animation effect',
   ribbonPreview: 'Preview',
   ribbonAnimPreviewTip: 'Play all animations on this slide in the editing canvas',

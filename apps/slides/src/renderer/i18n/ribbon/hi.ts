@@ -306,7 +306,7 @@ export const hi = {
   ribbonTransDuration: 'अवधि',
   ribbonTransDurationDefault: 'डिफ़ॉल्ट',
   ribbonTransDurationTip: 'संक्रमण अवधि सेकंड में (रिक्त = डिफ़ॉल्ट)',
-  ribbonTransDurationRange: 'अनुमत सीमा: 0.1–60 सेकंड',
+  ribbonTransDurationRange: 'अनुमत सीमा: 0.1–{max} सेकंड',
   ribbonAnimDirectionTip: 'चयनित एनिमेशन प्रभाव का दिशा विकल्प',
   ribbonPreview: 'पूर्वावलोकन',
   ribbonAnimPreviewTip: 'संपादन कैनवास में इस स्लाइड के सभी एनिमेशन चलाएँ',

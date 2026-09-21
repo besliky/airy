@@ -315,7 +315,7 @@ export const it = {
   ribbonTransDuration: 'Durata',
   ribbonTransDurationDefault: 'Predefinito',
   ribbonTransDurationTip: 'Durata della transizione in secondi (vuoto = valore predefinito)',
-  ribbonTransDurationRange: 'Intervallo consentito: 0,1–60 secondi',
+  ribbonTransDurationRange: 'Intervallo consentito: 0,1–{max} secondi',
   ribbonAnimDirectionTip: 'Variante di direzione dell’effetto di animazione selezionato',
   ribbonPreview: 'Anteprima',
   ribbonAnimPreviewTip:

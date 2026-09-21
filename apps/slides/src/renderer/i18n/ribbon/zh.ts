@@ -298,7 +298,7 @@ export const zh = {
   ribbonTransDuration: '持续时间',
   ribbonTransDurationDefault: '默认',
   ribbonTransDurationTip: '切换持续时间（秒），留空为默认值',
-  ribbonTransDurationRange: '允许：0.1–60 秒',
+  ribbonTransDurationRange: '允许：0.1–{max} 秒',
   ribbonAnimDirectionTip: '所选动画效果的方向变体',
   // Animations
   ribbonPreview: '预览',

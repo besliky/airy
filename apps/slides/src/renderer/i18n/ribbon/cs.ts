@@ -300,7 +300,7 @@ export const cs = {
   ribbonTransDuration: 'Doba trvání',
   ribbonTransDurationDefault: 'Výchozí',
   ribbonTransDurationTip: 'Doba trvání přechodu v sekundách (prázdné = výchozí)',
-  ribbonTransDurationRange: 'Povolený rozsah: 0,1–60 sekund',
+  ribbonTransDurationRange: 'Povolený rozsah: 0,1–{max} sekund',
   ribbonAnimDirectionTip: 'Směrová varianta vybraného efektu animace',
   ribbonPreview: 'Náhled',
   ribbonAnimPreviewTip: 'Přehrát všechny animace tohoto snímku na plátně úprav',
