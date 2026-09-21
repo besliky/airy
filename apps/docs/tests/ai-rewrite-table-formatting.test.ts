@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
 import {
   BLANK_BULLET_NUM_ID,
   BLANK_ORDERED_NUM_ID,
@@ -7,6 +7,7 @@ import {
   saveDocx,
 } from '@airy-office/docx-engine'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from '../src/renderer/editor/convert'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { serializeRangeToHtml } from '../src/renderer/ai/protocol'
@@ -93,22 +94,16 @@ type Json = {
   marks?: Array<{ type: string; attrs?: Record<string, unknown> }>
 }
 
-// Destroyed after each test so no DOMObserver flush timer outlives the jsdom
-// environment (see ai-rewrite-formatting.test.ts).
-const liveEditors: Editor[] = []
-
-afterEach(() => {
-  for (const editor of liveEditors.splice(0)) editor.destroy()
-})
+// Destroyed after each test through the shared tracked-editor helper, so no
+// DOMObserver flush timer outlives the jsdom environment.
+afterEach(() => drainTrackedEditors())
 
 async function open(bodyXml: string, withNumbering = false) {
   const parsed = await parseDocx(await buildDocx({ bodyXml, withNumbering }))
-  const editor = new Editor({
-    element: document.createElement('div'),
+  const editor = createTrackedEditor({
     extensions: editorExtensions,
     content: blocksToPmDoc(parsed.blocks) as never,
   })
-  liveEditors.push(editor)
   return { editor, parsed }
 }
 

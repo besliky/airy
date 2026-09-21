@@ -7,13 +7,14 @@
  * lands the hidden-anchor stamp together with the REF in one transaction, so
  * one undo removes both.
  */
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
 import type { Block } from '@airy-office/docx-engine'
 import { parseDocx } from '@airy-office/docx-engine'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { CrossRefModal } from '../src/renderer/components/ribbon-insert-tab'
 import { blocksToPmDoc } from '../src/renderer/editor/convert'
 import { editorExtensions } from '../src/renderer/editor/extensions'
@@ -26,28 +27,17 @@ const BODY =
   '<w:p><w:bookmarkStart w:id="1" w:name="Intro"/><w:bookmarkEnd w:id="1"/>' +
   '<w:r><w:t>Intro paragraph.</w:t></w:r></w:p>'
 
-const editors = new Set<Editor>()
-
 async function openDoc(bodyXml = BODY) {
   const parsed = await parseDocx(await buildDocx({ bodyXml }))
-  const editor = new Editor({
-    element: document.createElement('div'),
+  const editor = createTrackedEditor({
     extensions: editorExtensions,
     content: blocksToPmDoc(parsed.blocks) as never,
   })
-  editors.add(editor)
   return { editor, blocks: parsed.blocks }
 }
 
-afterEach(async () => {
-  // the tracked editors must be destroyed before the jsdom environment goes
-  // away — a leaked ProseMirror DOMObserver polling timer fires after
-  // teardown ("document is not defined") and fails the whole run
-  for (const editor of editors) editor.destroy()
-  editors.clear()
-  // let a pending DOMObserver flush land while the document still exists
-  await new Promise((resolve) => setTimeout(resolve, 30))
-})
+// the tracked editors are destroyed before the jsdom environment goes away
+afterEach(() => drainTrackedEditors())
 
 describe('CrossRefModal dialog semantics (UX-902)', () => {
   let editor: Editor
