@@ -1,15 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   GAP_BAND,
   alignGapHfStrips,
   alignTableGapFills,
   makeGapEl,
+  setPageGaps,
+  suppressPageLeadMargin,
   syncCutOverlays,
   syncPhantomRowspans,
   clampCellBoxTops,
   pageBorderStyleOf,
 } from '../src/renderer/editor/pagination-gaps'
 import { createLineRectsCache, singleCutCell } from '../src/renderer/pagination'
+import { editorExtensions } from '../src/renderer/editor/extensions'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
+import { computeSectionedSlicesF2, type BlockBox } from '../src/renderer/pagination'
 
 const rowOf = (cells: number): HTMLTableRowElement => {
   const tr = document.createElement('tr')
@@ -558,5 +563,78 @@ describe('pageBorderStyleOf', () => {
     })
     expect(style!.sides.top!.css).toBe('1px solid #FF0000')
     expect(style!.sides.bottom!.css).toBe('1px solid #000000')
+  })
+})
+
+describe('page-lead space-before suppression (BUG-1400)', () => {
+  afterEach(() => drainTrackedEditors())
+
+  it('flow-opened page tops suppress the lead spacing (probes 2026-09-18)', () => {
+    // automatic break (docs 04 p3 / 10 p4 / 13 p3 render flush in the LO/Word
+    // corpus PDFs) and forced w:br/pageBreakBefore pages alike
+    expect(suppressPageLeadMargin({})).toBe(true)
+    expect(suppressPageLeadMargin({ forced: true })).toBe(true)
+  })
+
+  it('a page-type section start keeps the lead spacing (doc 08 probe: +12pt)', () => {
+    expect(suppressPageLeadMargin({ sectionPageStart: true })).toBe(false)
+    expect(suppressPageLeadMargin({ sectionPageStart: true, forced: false })).toBe(false)
+  })
+
+  it('tables are exempt: the 2px canvas margin is TABLE_SEAM_PX bookkeeping', () => {
+    expect(suppressPageLeadMargin({ leadIsTable: true })).toBe(false)
+    expect(suppressPageLeadMargin({ leadIsTable: true, forced: true })).toBe(false)
+    expect(suppressPageLeadMargin({ leadIsTable: true, sectionPageStart: false })).toBe(false)
+  })
+
+  it('setPageGaps zeroes a suppressing page lead via .page-break-lead', () => {
+    const editor = createTrackedEditor({
+      extensions: editorExtensions,
+      content: {
+        type: 'doc',
+        content: [
+          { type: 'docParagraph', content: [{ type: 'text', text: 'first page body' }] },
+          { type: 'docParagraph', content: [{ type: 'text', text: 'second page lead' }] },
+        ],
+      } as never,
+    })
+    const lead = editor.view.dom.querySelectorAll('p')[1] as HTMLElement
+    expect(lead.classList.contains('page-break-lead')).toBe(false)
+    setPageGaps(editor.view, [{ el: lead, metrics: m }])
+    // no suppressLeadMt flag: the leader keeps its inline spacing
+    expect(lead.classList.contains('page-break-lead')).toBe(false)
+    setPageGaps(editor.view, [{ el: lead, metrics: m, suppressLeadMt: true }])
+    expect(lead.classList.contains('page-break-lead')).toBe(true)
+    // styles.css zeroes margin-top for the class, so the leader sits at the
+    // page's content top (Word: flush after automatic breaks) instead of
+    // spaceBefore px below it
+    setPageGaps(editor.view, [])
+    expect(lead.classList.contains('page-break-lead')).toBe(false)
+  })
+})
+
+describe('page-lead geometry vs the slicing engine (BUG-1400)', () => {
+  it("a leader's space-before stays on the previous page; page 2 starts at its border box", () => {
+    // measureBlocks semantics: the inter-block gap (the heading's w:before,
+    // 13.33px here) is folded into the PREVIOUS block's trailing space, and the
+    // leader's top is its border box. Word's page 2 therefore opens exactly at
+    // that border box — the space-before belongs to page 1's tail. The canvas
+    // mirrors this by zeroing the leader's margin (.page-break-lead); rendering
+    // it below the page gap instead sank every heading-led page by its
+    // space-before (BUG-1400).
+    const body: BlockBox = { top: 0, height: 930 }
+    const heading: BlockBox = { top: 930, height: 50, spaceAfterPx: 8 }
+    const slices = computeSectionedSlicesF2(
+      [body, heading],
+      [{ contentHeight: 930, forceBreak: false }],
+      988,
+    )
+    expect(slices.length).toBe(2)
+    // page 2 opens at the heading's border-box top, not 13.33px below it
+    expect(slices[1].start).toBe(heading.top)
+    expect(slices[0].end).toBe(heading.top)
+    // the folded trailing gap stays charged to page 1 (trailing space may
+    // overflow the bottom margin; Word breaks by text only)
+    expect(body.height).toBe(930)
   })
 })

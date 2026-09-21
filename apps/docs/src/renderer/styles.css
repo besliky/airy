@@ -3778,8 +3778,10 @@ th.cell-rev-del {
   display: none;
 }
 
-/* Word drops space-before on the lead block of a page forced by an explicit break;
-   !important beats the inline spacing style, unscoped so pv clones and direct print match */
+/* Word drops space-before on the lead block of a page the flow opened — an
+   automatic (soft) break or an explicit w:br/pageBreakBefore alike; only a
+   section's own page start keeps it (App.tsx decides, BUG-1400). !important
+   beats the inline spacing style, unscoped so pv clones and direct print match */
 .page-break-lead {
   margin-top: 0 !important;
 }

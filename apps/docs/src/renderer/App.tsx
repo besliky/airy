@@ -122,6 +122,7 @@ import {
   syncColumnRules,
   clampCellBoxTops,
   pageBorderStyleOf,
+  suppressPageLeadMargin,
   type PageGapSpec,
 } from './editor/pagination-gaps'
 import { syncLineNumberOverlays } from './line-numbers'
@@ -3315,6 +3316,19 @@ export function App() {
             if (i >= 0 && blocks[i].el) {
               // footnotes sit at the paper bottom (Word): shift past the padding
               if (notes && pad > 0) notes.style.top = `${5 + pad}px`
+              // Word drops the lead block's space-before at every page top the flow
+              // itself opened (automatic break, w:br page — see the probe table on
+              // suppressPageLeadMargin) and only a page-type section start keeps it
+              // (doc 08's landscape section renders its heading 12pt below the content
+              // top). Rendering the margin under the gap instead shifts the whole
+              // page down by the space-before (BUG-1400: pages "sinking" vs Word) —
+              // the slicing engine already models the suppression (the leader's
+              // space-before stays charged to the previous page's trailing space).
+              const sectionPageStart =
+                slice.section !== slices[k].section &&
+                ['nextPage', 'evenPage', 'oddPage'].includes(
+                  secList?.[slice.section]?.startType ?? 'nextPage',
+                )
               gaps.push({
                 el: blocks[i].el!,
                 boundaryY: slice.start,
@@ -3323,7 +3337,11 @@ export function App() {
                     ? { ...notesMetrics, marginBottom: notesMetrics.marginBottom + pad }
                     : notesMetrics,
                 ...(pullUp > 0.5 ? { pullUp } : {}),
-                ...(blocks[i].breakBefore || (i > 0 && blocks[i - 1].breakAfter)
+                ...(suppressPageLeadMargin({
+                  leadIsTable: blocks[i].el!.tagName === 'TABLE',
+                  sectionPageStart,
+                  forced: blocks[i].breakBefore || (i > 0 && blocks[i - 1].breakAfter),
+                })
                   ? { suppressLeadMt: true }
                   : {}),
                 ...(notes ? { notes, notesKey } : {}),
