@@ -23,6 +23,13 @@ All application windows run with the full Electron renderer lockdown:
   configures; user-supplied keys stay in the local settings store, encrypted
   at rest with the OS keychain (Electron safeStorage) whenever one is
   available, and the settings file is user-readable only (mode 0600).
+- The bundled MCP server is part of the posture: every headless input and
+  output path is confined to a workspace root, hostile documents are
+  size-fenced at open (a raw 512 MiB cap checked by stat before any read,
+  plus declared-uncompressed budgets for the zip-based formats), and the
+  local-socket live bridge authenticates a per-session token from a `0600`
+  info file with bounded message sizes and a traffic-independent teardown
+  deadline. [docs/COPILOT.md](docs/COPILOT.md) documents the full model.
 - Known residual: the sheets Insert → Screenshot picker. Electron offers no
   native multi-source picker on Windows/Linux, so consent is enforced as
   bounded + session-bound rather than per-frame: enumeration only inside an
