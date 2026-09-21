@@ -219,6 +219,7 @@ import { collectRevisions, gotoRevision, type TrackChangesStorage } from './edit
 import { NavPane } from './components/NavPane'
 import { Ruler } from './components/Ruler'
 import { docBodyFont, docLineFactor, docStyleCss, docThemeCss } from './doc-style-css'
+import { cssHyphenationSupported } from './hyphenation-support'
 import { isDocDirty } from './doc-dirty'
 import {
   EMPTY_HF_VARIANTS,
@@ -2134,7 +2135,13 @@ export function App() {
       setHyphAuto(on)
       setHyphDirty(on !== (doc?.parsed.autoHyphenation === true))
       if (editor && doc) applyHyphenationLive(editor, doc.parsed, on)
-      if (doc) setDocCss(docStyleCss({ ...doc.parsed, autoHyphenation: on }))
+      if (doc)
+        setDocCss(
+          docStyleCss(
+            { ...doc.parsed, autoHyphenation: on },
+            { cssHyphenation: cssHyphenationSupported() },
+          ),
+        )
       setStatus(t(on ? 'layoutHyphSet' : 'layoutHyphUnset'))
     },
     [doc, editor],
@@ -5458,7 +5465,7 @@ export function App() {
               qFormat: true,
               display,
             })
-            setDocCss(docStyleCss(doc.parsed))
+            setDocCss(docStyleCss(doc.parsed, { cssHyphenation: cssHyphenationSupported() }))
             setStylesRev((v) => v + 1)
           }}
         />
