@@ -4,6 +4,9 @@ import {
   recordVideoTimeline,
   videoBitrate,
   type RecorderHost,
+  type SlideBitmap,
+  type SlideBitmapProvider,
+  type VideoChunkSink,
 } from '../src/renderer/video-export'
 import { buildVideoTimeline } from '../src/renderer/video-plan'
 
@@ -11,11 +14,21 @@ import { buildVideoTimeline } from '../src/renderer/video-plan'
  * Mock-pipeline tests for the video export: the canvas/MediaRecorder host is
  * faked (jsdom has no real canvas capture), recording every draw call so the
  * tests pin the frame stream the encoder would see — which slides, in which
- * order, how the crossfade composes, and that cancel/stop stay clean.
+ * order, how the crossfade composes, and that cancel/stop stay clean. The
+ * slide bitmaps come from a counting fake so the streaming window (BUG-1300)
+ * is pinned here too: what got decoded, when it was released, and how the
+ * recorder's chunks reached the sink.
  */
 
-/** One drawable stand-in per slide; the ctx logs which image index was painted. */
-const image = (tag: string) => ({ tag }) as unknown as CanvasImageSource
+/** Bitmap stand-in per slide: a drawable tag plus a spied release. */
+function slideBitmap(tag: string, log: { released: string[] }): SlideBitmap {
+  return {
+    image: { tag } as unknown as CanvasImageSource,
+    release: () => {
+      log.released.push(tag)
+    },
+  }
+}
 
 interface FakeHostState {
   draws: Array<{ tag: string; alpha: number }>
@@ -69,8 +82,8 @@ function fakeHost(state: FakeHostState, behavior?: FakeHostBehavior): RecorderHo
       let stopHandler: (() => void) | null = null
       let dataHandler: ((e: { data: Blob }) => void) | null = null
       return {
-        start() {
-          state.recorderCalls.push(`start:${recOpts.mimeType}`)
+        start(timesliceMs?: number) {
+          state.recorderCalls.push(`start:${recOpts.mimeType}:${timesliceMs}`)
           if (behavior?.errorAfterStart)
             queueMicrotask(() => errorHandler?.({ error: behavior.errorAfterStart }))
         },
@@ -129,6 +142,40 @@ const twoSlideTimeline = () =>
     never,
   )
 
+/** Sink fake: records the ordered chunk hand-off + how the stream settled. */
+interface SinkTrace {
+  writes: number[]
+  finish: boolean[] // per FIRST settle: the aborted flag (finish is idempotent by contract)
+}
+
+function fakeSink(trace: SinkTrace): VideoChunkSink {
+  let seq = 0
+  let settled = false
+  return {
+    async write() {
+      trace.writes.push(seq++)
+    },
+    async finish(aborted) {
+      if (settled) return null // the real file sink settles once; so does the fake
+      settled = true
+      trace.finish.push(aborted)
+      return aborted ? null : '/tmp/out.mp4'
+    },
+  }
+}
+
+/** Bitmap provider fake over per-slide tags; `log.released` fills via release(). */
+function bitmapProvider(
+  tags: string[],
+  log: { released: string[]; fetched: string[] },
+): SlideBitmapProvider {
+  return async (itemIndex) => {
+    const tag = tags[itemIndex]!
+    log.fetched.push(tag)
+    return slideBitmap(tag, log)
+  }
+}
+
 describe('pickRecorderMime', () => {
   it('prefers MP4 (H.264) when the build can mux it', () => {
     expect(pickRecorderMime(() => true)).toEqual({
@@ -167,13 +214,16 @@ describe('recordVideoTimeline', () => {
       recorderCalls: [],
     }
     const progress: number[] = []
-    const blob = await recordVideoTimeline(
+    const log = { released: [] as string[], fetched: [] as string[] }
+    const sinkTrace: SinkTrace = { writes: [], finish: [] }
+    const recorded = await recordVideoTimeline(
       {
         timeline: twoSlideTimeline(),
         fps: 10,
         width: 320,
         height: 180,
-        slideImages: [image('s0'), image('s1')],
+        slideBitmaps: bitmapProvider(['s0', 's1'], log),
+        sink: fakeSink(sinkTrace),
         mimeType: 'video/mp4;codecs=avc1.640028',
         onProgress: (done, total) => progress.push(done / total),
       },
@@ -181,11 +231,14 @@ describe('recordVideoTimeline', () => {
     )
     // timeline: hold s0 1000ms (frames 0..9), fade 1000ms (10..19), hold s1 1000ms (20..29)
     expect(state.requestedFrames).toBe(30)
-    expect(state.recorderCalls).toEqual(['start:video/mp4;codecs=avc1.640028', 'stop'])
-    expect(blob).not.toBeNull()
-    expect(blob!.type).toBe('video/mp4;codecs=avc1.640028')
+    expect(state.recorderCalls[0]).toBe('start:video/mp4;codecs=avc1.640028:1000')
+    expect(state.recorderCalls[1]).toBe('stop')
+    expect(recorded).toEqual({ bytes: 1, path: '/tmp/out.mp4' })
     expect(progress[0]).toBeCloseTo(1 / 30)
     expect(progress.at(-1)).toBe(1)
+    // the recorder's stop-flush chunk landed in the sink, and only a committed
+    // finish followed it
+    expect(sinkTrace).toEqual({ writes: [0], finish: [false] })
 
     // first frame: only slide 0 at full opacity
     expect(state.draws[0]).toEqual({ tag: 's0', alpha: 1 })
@@ -196,6 +249,9 @@ describe('recordVideoTimeline', () => {
     expect(state.draws[19]).toEqual({ tag: 's0', alpha: 1 })
     expect(state.draws[20]!.tag).toBe('s1')
     expect(state.draws[20]!.alpha).toBeCloseTo(0.5)
+    // every slide was fetched exactly once and released by the end (BUG-1300)
+    expect(log.fetched).toEqual(['s0', 's1'])
+    expect(log.released.sort()).toEqual(['s0', 's1'])
   })
 
   it('resolves null for an empty timeline and honors cooperative cancel', async () => {
@@ -205,7 +261,8 @@ describe('recordVideoTimeline', () => {
         fps: 10,
         width: 320,
         height: 180,
-        slideImages: [],
+        slideBitmaps: bitmapProvider([], { released: [], fetched: [] }),
+        sink: fakeSink({ writes: [], finish: [] }),
         mimeType: 'video/webm',
       },
       fakeHost({ draws: [], requestedFrames: 0, chunks: [], recorderCalls: [] }),
@@ -218,6 +275,8 @@ describe('recordVideoTimeline', () => {
       chunks: [],
       recorderCalls: [],
     }
+    const log = { released: [] as string[], fetched: [] as string[] }
+    const sinkTrace: SinkTrace = { writes: [], finish: [] }
     const cancel = { current: true } // cancel before the first frame lands
     const cancelled = await recordVideoTimeline(
       {
@@ -225,7 +284,8 @@ describe('recordVideoTimeline', () => {
         fps: 10,
         width: 320,
         height: 180,
-        slideImages: [image('s0'), image('s1')],
+        slideBitmaps: bitmapProvider(['s0', 's1'], log),
+        sink: fakeSink(sinkTrace),
         mimeType: 'video/webm',
         cancel,
       },
@@ -233,7 +293,10 @@ describe('recordVideoTimeline', () => {
     )
     expect(cancelled).toBeNull()
     expect(state.requestedFrames).toBe(0)
-    expect(state.recorderCalls).toEqual(['start:video/webm', 'stop'])
+    expect(state.recorderCalls).toEqual(['start:video/webm:1000', 'stop'])
+    // a cancelled run aborts the stream — the temp file is discarded
+    expect(sinkTrace.finish).toEqual([true])
+    expect(log.released).toEqual(['s0']) // the pre-loop decode is still freed
   })
 
   it('fails with the encoder error instead of returning a truncated blob', async () => {
@@ -245,22 +308,27 @@ describe('recordVideoTimeline', () => {
       chunks: [],
       recorderCalls: [],
     }
-    const cause = new Error('encoder exploded')
+    const log = { released: [] as string[], fetched: [] as string[] }
+    const sinkTrace: SinkTrace = { writes: [], finish: [] }
     const p = recordVideoTimeline(
       {
         timeline: twoSlideTimeline(),
         fps: 10,
         width: 320,
         height: 180,
-        slideImages: [image('s0'), image('s1')],
+        slideBitmaps: bitmapProvider(['s0', 's1'], log),
+        sink: fakeSink(sinkTrace),
         mimeType: 'video/mp4',
       },
-      fakeHost(state, { errorAfterStart: cause }),
+      fakeHost(state, { errorAfterStart: new Error('encoder exploded') }),
     )
     await expect(p).rejects.toThrow('video recording failed: encoder exploded')
     // the recorder is still torn down, and no frames land after the error
-    expect(state.recorderCalls).toEqual(['start:video/mp4', 'stop'])
+    expect(state.recorderCalls).toEqual(['start:video/mp4:1000', 'stop'])
     expect(state.requestedFrames).toBe(0)
+    // the failure aborts the output stream and frees the decoded window
+    expect(sinkTrace.finish).toEqual([true])
+    expect(log.released).toEqual(['s0'])
   })
 
   it('fails when stop() never settles (encoder hang) instead of awaiting forever', async () => {
@@ -270,20 +338,23 @@ describe('recordVideoTimeline', () => {
       chunks: [],
       recorderCalls: [],
     }
+    const sinkTrace: SinkTrace = { writes: [], finish: [] }
     const p = recordVideoTimeline(
       {
         timeline: twoSlideTimeline(),
         fps: 10,
         width: 320,
         height: 180,
-        slideImages: [image('s0'), image('s1')],
+        slideBitmaps: bitmapProvider(['s0', 's1'], { released: [], fetched: [] }),
+        sink: fakeSink(sinkTrace),
         mimeType: 'video/webm',
       },
       fakeHost(state, { hangOnStop: true }),
     )
     // the collapsed fake timers fire the stop-timeout guard on a microtask
     await expect(p).rejects.toThrow('video recorder did not finish (encoder hang)')
-    expect(state.recorderCalls).toEqual(['start:video/webm', 'stop'])
+    expect(state.recorderCalls).toEqual(['start:video/webm:1000', 'stop'])
+    expect(sinkTrace.finish).toEqual([true])
   })
 
   it('fails when the recorder stops cleanly but produced no data', async () => {
@@ -293,18 +364,21 @@ describe('recordVideoTimeline', () => {
       chunks: [],
       recorderCalls: [],
     }
+    const sinkTrace: SinkTrace = { writes: [], finish: [] }
     const p = recordVideoTimeline(
       {
         timeline: twoSlideTimeline(),
         fps: 10,
         width: 320,
         height: 180,
-        slideImages: [image('s0'), image('s1')],
+        slideBitmaps: bitmapProvider(['s0', 's1'], { released: [], fetched: [] }),
+        sink: fakeSink(sinkTrace),
         mimeType: 'video/webm',
       },
       fakeHost(state, { noData: true }),
     )
     await expect(p).rejects.toThrow('video recorder produced no data')
+    expect(sinkTrace.finish).toEqual([true])
   })
 
   it('still resolves null on cooperative cancel even with no data', async () => {
@@ -320,7 +394,8 @@ describe('recordVideoTimeline', () => {
         fps: 10,
         width: 320,
         height: 180,
-        slideImages: [image('s0'), image('s1')],
+        slideBitmaps: bitmapProvider(['s0', 's1'], { released: [], fetched: [] }),
+        sink: fakeSink({ writes: [], finish: [] }),
         mimeType: 'video/webm',
         cancel: { current: true },
       },
@@ -352,22 +427,23 @@ describe('recordVideoTimeline', () => {
       recorderCalls: [],
       drawBoxes: [],
     }
-    const blob = await recordVideoTimeline(
+    const recorded = await recordVideoTimeline(
       {
         timeline,
         fps: 10,
         width: 320,
         height: 180,
-        slideImages: [image('s0'), image('s1')],
+        slideBitmaps: bitmapProvider(['s0', 's1'], { released: [], fetched: [] }),
         slideSizes: [
           { width: 1600, height: 900 }, // 16:9 — fills the frame
           { width: 1280, height: 960 }, // 4:3 — pillarboxed
         ],
+        sink: fakeSink({ writes: [], finish: [] }),
         mimeType: 'video/webm',
       },
       fakeHost(state),
     )
-    expect(blob).not.toBeNull()
+    expect(recorded).not.toBeNull()
     expect(state.drawBoxes!.length).toBe(10) // 1s of content at 10fps
     // frames 0..4 hold the 16:9 slide full-frame
     expect(state.drawBoxes![0]).toEqual([0, 0, 320, 180])

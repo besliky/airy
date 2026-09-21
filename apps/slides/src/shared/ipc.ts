@@ -1274,22 +1274,34 @@ export interface ExportPdfResult {
   error?: string
 }
 
-/** Export as video: the renderer recorded the container bytes (canvas + MediaRecorder); the main process only writes them atomically. */
-export interface ExportVideoOp {
-  /** Target video absolute path (chosen via pickExportVideoPath) */
-  filePath: string
-  /**
-   * Recorded video bytes. Structured clone carries TypedArrays natively —
-   * a 5-min 1080p export is ~375 MB here instead of >1.2 GB of transient
-   * renderer memory for a base64 string (binary + btoa + IPC copy) (BUG-1209).
-   */
-  bytes: Uint8Array
-  /** MediaRecorder mime that produced the bytes (informational) */
-  mimeType: string
+/**
+ * Export as video, streamed in chunks (BUG-1300): the recorder flushes every
+ * ~1s (MediaRecorder timeslice) and each chunk is appended to main's temp
+ * file as it arrives, so the renderer never materializes the container — the
+ * pre-streaming peak was ~3x the file size (chunk array + arrayBuffer copy +
+ * structured clone), which OOMed the renderer on long decks.
+ *
+ * begin opens a dot-prefixed temp next to the picked target (same discipline
+ * as atomicWriteFile); appends are ordered by the renderer; finish(commit)
+ * fsyncs and renames over the target (then reveals it), or discards the temp.
+ * A stream token is bound to the exporting webContents; renderer death
+ * discards its temp files from main.
+ */
+export interface VideoFileStreamBeginResult {
+  ok: boolean
+  /** Stream token for the append/finish calls */
+  token?: number
+  error?: string
 }
 
-export interface ExportVideoResult {
+export interface VideoFileStreamAppendResult {
   ok: boolean
+  error?: string
+}
+
+export interface VideoFileStreamFinishResult {
+  ok: boolean
+  /** The committed file path (commit path only) */
   path?: string
   error?: string
 }
@@ -1739,8 +1751,12 @@ export interface SlidesApi {
   exportPdf: (op: ExportPdfOp) => Promise<ExportPdfResult>
   /** Export as video: shows the save dialog (filter follows the container), cancel returns null */
   pickExportVideoPath: (defaultName: string, container: 'mp4' | 'webm') => Promise<string | null>
-  /** Write the recorded video bytes to the picked path atomically */
-  exportVideo: (op: ExportVideoOp) => Promise<ExportVideoResult>
+  /** Streaming video export (BUG-1300): open the picked target's temp file, chunks are appended as the recorder emits them */
+  beginVideoFileStream: (filePath: string) => Promise<VideoFileStreamBeginResult>
+  /** Append one recorded chunk to the stream's temp file (ordered by the renderer) */
+  appendVideoFileStream: (token: number, bytes: Uint8Array) => Promise<VideoFileStreamAppendResult>
+  /** Commit (fsync + atomic rename + reveal) or discard (unlink temp) the stream */
+  finishVideoFileStream: (token: number, commit: boolean) => Promise<VideoFileStreamFinishResult>
   /** Each slide's rehearsed auto-advance time in ms (<p:transition advTm>; null = none) */
   getAdvanceTimes: () => Promise<Array<number | null>>
   /** Suspend/restore background timer throttling while a video export records (real-time pacing) */

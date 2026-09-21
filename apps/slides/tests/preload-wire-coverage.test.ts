@@ -96,10 +96,12 @@ const PINNED_API_MEMBERS = `
   applyHeaderFooter
   applyTheme
   applyTxn
+  appendVideoFileStream
   audienceNav
   audienceReady
   batchEditTransform
   beginHistoryBatch
+  beginVideoFileStream
   changeShape
   clipboardExternal
   clipboardProbe
@@ -125,8 +127,8 @@ const PINNED_API_MEMBERS = `
   endHistoryBatch
   exportImages
   exportPdf
-  exportVideo
   findReplace
+  finishVideoFileStream
   flipElements
   fontCatalog
   fontDownload

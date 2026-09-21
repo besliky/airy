@@ -5,10 +5,15 @@
  */
 import type { RenderSlide } from '@airy-office/pptx-render'
 import type { ActionCtx } from './action-context'
-import { renderSlidesToPngBase64 } from './export-render'
+import { createSlidePngRenderer, renderSlidesToPngBase64 } from './export-render'
 import { renderSlideSvg } from './slide-svg'
 import { buildVideoTimeline, videoFrameDimensions } from './video-plan'
-import { decodePngImages, pickRecorderMime, recordVideoTimeline } from './video-export'
+import {
+  createSlideBitmapProvider,
+  createVideoFileSink,
+  pickRecorderMime,
+  recordVideoTimeline,
+} from './video-export'
 import { t } from './i18n/locale'
 import { showToast } from '@airy-office/ui/toast-bus'
 
@@ -250,14 +255,19 @@ export interface VideoExportOutcome {
   error?: string
 }
 
-/** Blob → base64 (chunked to avoid call stack overflow — same as screen recording). */
-
 /**
- * Export the deck as a video: slides render to PNGs through the images-export
- * path, the pure timeline paces them by rehearsed timings (or the fallback
- * dwell) with transitions as crossfades, and an offscreen canvas records the
- * frames through MediaRecorder (mp4 when the Chromium build muxes it, else
- * WebM). Recording is real-time paced — MediaRecorder timestamps frames by
+ * Export the deck as a video: an offscreen canvas records the slides through
+ * MediaRecorder (mp4 when the Chromium build muxes it, else WebM), paced by
+ * the pure timeline (rehearsed timings or the fallback dwell) with
+ * transitions as crossfades.
+ *
+ * The pipeline streams end to end (BUG-1300): each slide is rendered to a PNG
+ * blob and decoded only when the recording window reaches it (the crossfading
+ * pair at most, released as the timeline moves on), and every recorder chunk
+ * is appended to the main process's temp file as it is flushed — the peak
+ * footprint is O(1 slide) + a couple of chunks instead of O(deck PNGs +
+ * decoded deck + 3x the recorded file), which OOMed the renderer on long
+ * decks. Recording is real-time paced — MediaRecorder timestamps frames by
  * the wall clock — so export duration ≈ video duration. Failures return a
  * localized reason for the dialog's alert line; user aborts return ok:false
  * without one.
@@ -303,58 +313,44 @@ export async function exportVideo(
   // recording is wall-clock paced: suspend background timer throttling for the
   // run (a minimized window would otherwise clamp frame timers to 1s)
   await window.slidesApi.setVideoExportActive(true)
+  // on-demand slide renderer: mounted before anything can fail mid-run and
+  // torn down on every exit below
+  const renderer = createSlidePngRenderer(visible, ctx.images, dims.width / first.widthPx)
   try {
-    const pngs = await renderSlidesToPngBase64(
-      visible,
-      ctx.images,
-      dims.width / first.widthPx,
-      (done, total) => onProgress?.('render', done, total),
-      // UX-1202: the render phase is cooperative too — Cancel between slides
-      // stops the loop and no file is ever written (the write is the atomic
-      // last step, so a cancelled run leaves no partial file behind)
-      cancel,
+    // streaming output (BUG-1300): the temp file is opened up front and every
+    // recorder chunk is appended as flushed — the container never exists as a
+    // renderer-side blob. Commit is the atomic last step, so a cancelled or
+    // failed run leaves no partial file behind (only a dot-prefixed temp,
+    // which the abort discards).
+    const begin = await window.slidesApi.beginVideoFileStream(target)
+    if (!begin.ok || begin.token === undefined) {
+      throw new Error(begin.error ?? t('appUnknownError'))
+    }
+    const sink = createVideoFileSink(
+      (bytes) => window.slidesApi.appendVideoFileStream(begin.token!, bytes),
+      (commit) => window.slidesApi.finishVideoFileStream(begin.token!, commit),
     )
-    if (cancel?.current) return { ok: false }
-    const images = await decodePngImages(pngs)
-    if (cancel?.current) return { ok: false }
-    const blob = await recordVideoTimeline({
+    const recorded = await recordVideoTimeline({
       timeline,
       fps: settings.fps,
       width: dims.width,
       height: dims.height,
-      slideImages: images,
+      slideBitmaps: createSlideBitmapProvider(renderer.renderPng),
       slideSizes: visible.map((s) => ({ width: s.widthPx, height: s.heightPx })),
       mimeType: mime.mimeType,
+      sink,
       onProgress: (done, total) => onProgress?.('record', done, total),
       ...(cancel ? { cancel } : {}),
     })
-    if (!blob || blob.size === 0) {
-      if (cancel?.current) return { ok: false }
-      // nothing recorded and nobody cancelled: an encoder that produced zero
-      // chunks — surface it instead of silently dropping back to options
-      const error = t('appUnknownError')
-      ctx.setStatus(t('appExportVideoFailed', { error }))
-      return { ok: false, error }
-    }
-    const r = await window.slidesApi.exportVideo({
-      filePath: target,
-      // binary over structured clone — no base64 string ever materializes
-      // (BUG-1209); the Uint8Array is a zero-copy view over the ArrayBuffer
-      bytes: new Uint8Array(await blob.arrayBuffer()),
-      mimeType: mime.mimeType,
-    })
-    if (r.ok) {
-      ctx.setStatus(t('appExportVideoDone', { path: r.path ?? '' }))
-      return { ok: true }
-    }
-    const error = r.error ?? t('appUnknownError')
-    ctx.setStatus(t('appExportVideoFailed', { error }))
-    return { ok: false, error }
+    if (!recorded) return { ok: false } // cancelled (user abort) — temp discarded in the pipeline
+    ctx.setStatus(t('appExportVideoDone', { path: recorded.path ?? target }))
+    return { ok: true }
   } catch (err) {
     const error = String(err)
     ctx.setStatus(t('appExportVideoFailed', { error }))
     return { ok: false, error }
   } finally {
+    renderer.dispose()
     await window.slidesApi.setVideoExportActive(false)
   }
 }
