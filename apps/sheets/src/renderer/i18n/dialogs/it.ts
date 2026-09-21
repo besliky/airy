@@ -461,6 +461,9 @@ export const it = {
   dlgT2cTypeDateYmd: 'Data (AMG)',
   dlgT2cNeedDelimiter: 'Seleziona almeno un delimitatore.',
   dlgT2cBadBreaks: 'Le posizioni di interruzione sono numeri positivi separati da virgole.',
+  dlgT2cOverwriteNote:
+    'Le celle di destinazione contengono dati. Scegli Sostituisci per sovrascriverle oppure modifica la destinazione.',
+  dlgT2cOverwriteConfirm: 'Sostituisci',
   dlgOutlineSettingsTitle: 'Impostazioni struttura',
   dlgOutlineRows: 'Righe',
   dlgOutlineSummaryBelow: 'Righe di totali sotto il dettaglio',

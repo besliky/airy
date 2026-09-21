@@ -15,6 +15,9 @@
  * - Home: start of the current row (first unfrozen column)
  * - Ctrl+Space / Shift+Space: select the whole column / row of the
  *   active cell (mac: ⌃Space — ⌘Space belongs to Spotlight)
+ * - Alt+Shift+→ / ←: group / ungroup the selection's rows (columns when
+ *   whole columns are selected), Excel's Data ▸ Outline chords
+ * - Ctrl/Cmd+8: show / hide the outline symbols (the +/- gutter)
  */
 import {
   CommandType,
@@ -57,6 +60,32 @@ const HIDE_SELECTED_ROWS_ID = 'airy.command.hide-selected-rows'
 const UNHIDE_SELECTED_ROWS_ID = 'airy.command.unhide-selected-rows'
 const HIDE_SELECTED_COLS_ID = 'airy.command.hide-selected-cols'
 const UNHIDE_SELECTED_COLS_ID = 'airy.command.unhide-selected-cols'
+const OUTLINE_GROUP_ID = 'airy.command.outline-group'
+const OUTLINE_UNGROUP_ID = 'airy.command.outline-ungroup'
+const OUTLINE_SYMBOLS_ID = 'airy.command.outline-symbols'
+
+/**
+ * The outline chords route back to the app layer: grouping writes through
+ * the journaled data-tools channel (Data ▸ Outline semantics, with visual
+ * undo), and the symbols toggle flips the gutter overlay's visibility —
+ * neither lives inside Univer's command world.
+ */
+export interface ExcelOutlineShortcutActions {
+  /// Alt+Shift+→ on the selection's axis (rows, or columns when whole
+  /// columns are selected).
+  group(axis: 'rows' | 'cols'): void
+  /// Alt+Shift+← on the selection's axis.
+  ungroup(axis: 'rows' | 'cols'): void
+  /// Ctrl/Cmd+8: show/hide the outline symbols (the +/- gutter overlay).
+  toggleSymbols(): void
+}
+
+/** Excel's axis rule for the outline chords: whole-column selections act on columns, everything else on rows */
+export function outlineAxisOfSelection(selection: {
+  range: { rangeType?: IRange['rangeType'] }
+}): 'rows' | 'cols' {
+  return selection.range.rangeType === RANGE_TYPE.COLUMN ? 'cols' : 'rows'
+}
 
 /** first visible line at or after `from` (hidden rows/columns are not landing spots) */
 function firstVisible(worksheet: Worksheet, axis: 'row' | 'column', from: number): number {
@@ -115,6 +144,7 @@ function selectCell(accessor: IAccessor, row: number, column: number): Promise<b
 export function registerExcelShortcuts(
   runtime: UniverRuntime,
   usedEndOf?: (subUnitId: string) => { row: number; column: number } | null,
+  outlineActions?: ExcelOutlineShortcutActions,
 ): void {
   const injector = runtime.univer.__getInjector()
   const commandService = injector.get(ICommandService)
@@ -311,7 +341,38 @@ export function registerExcelShortcuts(
     handler: (accessor) => hideOrUnhide(accessor, 'column', 'unhide'),
   }
 
-  for (const command of [
+  // Excel's outline chords: the axis comes from the selection shape (whole
+  // columns → columns, everything else → rows), the action from the app.
+  const outlineAction = (accessor: IAccessor, action: 'group' | 'ungroup'): Promise<boolean> => {
+    if (!outlineActions) return Promise.resolve(false)
+    const selection = accessor.get(SheetsSelectionsService).getCurrentLastSelection()
+    if (!selection) return Promise.resolve(false)
+    const axis = outlineAxisOfSelection(selection)
+    if (action === 'group') outlineActions.group(axis)
+    else outlineActions.ungroup(axis)
+    return Promise.resolve(true)
+  }
+
+  const outlineGroup: ICommand = {
+    id: OUTLINE_GROUP_ID,
+    type: CommandType.COMMAND,
+    handler: (accessor) => outlineAction(accessor, 'group'),
+  }
+  const outlineUngroup: ICommand = {
+    id: OUTLINE_UNGROUP_ID,
+    type: CommandType.COMMAND,
+    handler: (accessor) => outlineAction(accessor, 'ungroup'),
+  }
+  const outlineSymbols: ICommand = {
+    id: OUTLINE_SYMBOLS_ID,
+    type: CommandType.COMMAND,
+    handler: () => {
+      outlineActions?.toggleSymbols()
+      return true
+    },
+  }
+
+  const commands: ICommand[] = [
     activateAdjacentSheet,
     selectSheetHome,
     selectSheetEnd,
@@ -322,7 +383,11 @@ export function registerExcelShortcuts(
     unhideSelectedRows,
     hideSelectedCols,
     unhideSelectedCols,
-  ]) {
+  ]
+  // The outline chords only exist when the app wired their actions (older
+  // callers and tests register the navigation set alone).
+  if (outlineActions) commands.push(outlineGroup, outlineUngroup, outlineSymbols)
+  for (const command of commands) {
     commandService.registerCommand(command)
   }
 
@@ -411,6 +476,29 @@ export function registerExcelShortcuts(
       preconditions: whenSheetEditorFocused,
     },
   ]
+  if (outlineActions) {
+    items.push(
+      // Excel's Data ▸ Outline chords; Alt alone is sheet-tab switching on
+      // mac only, so the Shift member keeps them distinct everywhere
+      {
+        id: OUTLINE_GROUP_ID,
+        binding: KeyCode.ARROW_RIGHT | MetaKeys.ALT | MetaKeys.SHIFT,
+        preconditions: whenSheetEditorFocused,
+      },
+      {
+        id: OUTLINE_UNGROUP_ID,
+        binding: KeyCode.ARROW_LEFT | MetaKeys.ALT | MetaKeys.SHIFT,
+        preconditions: whenSheetEditorFocused,
+      },
+      // Excel's outline symbols toggle; the shell reserves digits 1/8/9 for
+      // sheets so tab switching never eats the Excel parity chords
+      {
+        id: OUTLINE_SYMBOLS_ID,
+        binding: KeyCode.Digit8 | MetaKeys.CTRL_COMMAND,
+        preconditions: whenSheetEditorFocused,
+      },
+    )
+  }
   for (const item of items) shortcutService.registerShortcut(item)
 }
 
@@ -422,9 +510,13 @@ export const _shortcutInternals = {
   SELECT_ROW_HOME_ID,
   SELECT_WHOLE_COLUMN_ID,
   SELECT_WHOLE_ROW_ID,
+  OUTLINE_GROUP_ID,
+  OUTLINE_UNGROUP_ID,
+  OUTLINE_SYMBOLS_ID,
   KEY_PAGE_UP,
   KEY_PAGE_DOWN,
   KEY_END,
   KEY_HOME,
   unfrozenOrigin,
+  outlineAxisOfSelection,
 }

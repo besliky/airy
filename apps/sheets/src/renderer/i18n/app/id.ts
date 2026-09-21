@@ -419,6 +419,8 @@ export const id = {
   appDetailHidden: 'Detail disembunyikan — simpan dengan ⌘S.',
   appDetailShown: 'Detail ditampilkan — simpan dengan ⌘S.',
   appOutlineMaxLevel: 'Sudah di level kerangka terdalam (7).',
+  appOutlineSymbolsShown: 'Simbol kerangka ditampilkan.',
+  appOutlineSymbolsHidden: 'Simbol kerangka disembunyikan; tekan Ctrl+8 untuk menampilkannya lagi.',
   appNothingToUngroup: 'Tidak ada yang dapat dipisahkan kelompoknya pada pilihan.',
   appRowsGrouped: 'Baris dikelompokkan — simpan dengan ⌘S. Ciutkan dengan "Sembunyikan Detail".',
   appColsGrouped: 'Kolom dikelompokkan — simpan dengan ⌘S. Ciutkan dengan "Sembunyikan Detail".',
@@ -1365,6 +1367,9 @@ export const id = {
   scUnhideRows: 'Tampilkan baris',
   scHideColumns: 'Sembunyikan kolom',
   scUnhideColumns: 'Tampilkan kolom',
+  scOutlineGroup: 'Grupkan baris atau kolom (kerangka)',
+  scOutlineUngroup: 'Batalkan pengelompokan baris atau kolom',
+  scOutlineSymbols: 'Tampilkan/sembunyikan simbol kerangka',
   appPrintSelectionMissing: 'Tidak ada yang dipilih untuk dicetak.',
   appTextToColsEmpty: 'Kolom yang dipilih tidak memiliki konten untuk dipisah.',
   appTextToColsTooManyRows:

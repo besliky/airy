@@ -198,6 +198,23 @@ export function installOutlineGutter(
         const collapsed = entries.get(group.summary)?.collapsed ?? false
         button.textContent = collapsed ? '+' : '−'
         button.className = 'outline-gutter-button'
+        // UX-1106: deeper level lanes must stay ON the header strip — the
+        // gutter is a fixed layer above the app chrome, and lanes reaching
+        // past the strip's outer edge drew the level 2+ buttons over the
+        // formula bar / Name Box. A lane that does not fit clamps to the
+        // strip edge instead; every button keeps its own summary line, so
+        // clamped buttons never stack on top of each other.
+        const lane =
+          axis === 'rows'
+            ? Math.max(strip.left, surface.x - 3 - group.level * LANE_PX)
+            : Math.max(strip.top, surface.y - 3 - group.level * LANE_PX)
+        if (axis === 'rows') {
+          button.style.left = `${lane}px`
+          button.style.top = `${leading + Math.max((size - BUTTON_PX) / 2, 0)}px`
+        } else {
+          button.style.top = `${lane}px`
+          button.style.left = `${leading + Math.max((size - BUTTON_PX) / 2, 0)}px`
+        }
         // name the control beyond its +/− glyph and announce the group state
         // (the label also says which axis and level the button acts on): the
         // + button of a collapsed group expands it, the − button collapses
@@ -215,13 +232,6 @@ export function installOutlineGutter(
           ),
         )
         button.setAttribute('aria-expanded', String(!collapsed))
-        if (axis === 'rows') {
-          button.style.left = `${surface.x - 3 - group.level * LANE_PX}px`
-          button.style.top = `${leading + Math.max((size - BUTTON_PX) / 2, 0)}px`
-        } else {
-          button.style.top = `${surface.y - 3 - group.level * LANE_PX}px`
-          button.style.left = `${leading + Math.max((size - BUTTON_PX) / 2, 0)}px`
-        }
       }
       return placed > 0
     }
@@ -348,4 +358,28 @@ function headerStrip(surface: DOMRect, axis: 'rows' | 'cols'): DOMRect | null {
     if (!best || rect.width * rect.height > best.width * best.height) best = rect
   }
   return best
+}
+
+const SYMBOLS_STORAGE_KEY = 'ai-sheets-outline-symbols'
+
+/**
+ * Excel's Ctrl+8 toggle (show/hide outline symbols) persists across
+ * sessions like the cross-highlight preference; symbols are on until the
+ * user hides them (also headless-safe).
+ */
+export function loadOutlineSymbolsPreference(): boolean {
+  try {
+    return window.localStorage.getItem(SYMBOLS_STORAGE_KEY) !== '0'
+  } catch {
+    // No localStorage (tests, blocked storage): the safe default is on.
+    return true
+  }
+}
+
+export function storeOutlineSymbolsPreference(visible: boolean): void {
+  try {
+    window.localStorage.setItem(SYMBOLS_STORAGE_KEY, visible ? '1' : '0')
+  } catch {
+    // Preference stays session-only when storage is unavailable.
+  }
 }

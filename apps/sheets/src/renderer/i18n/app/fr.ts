@@ -465,6 +465,8 @@ export const fr = {
   appDetailHidden: 'Détail masqué — enregistrez avec ⌘S.',
   appDetailShown: 'Détail affiché — enregistrez avec ⌘S.',
   appOutlineMaxLevel: 'Niveau de plan le plus profond déjà atteint (7).',
+  appOutlineSymbolsShown: 'Les symboles du plan sont affichés.',
+  appOutlineSymbolsHidden: 'Les symboles du plan sont masqués ; Ctrl+8 les affiche à nouveau.',
   appNothingToUngroup: 'Rien à dissocier dans la sélection.',
   appRowsGrouped: 'Lignes groupées — enregistrez avec ⌘S. Réduisez-les avec « Masquer le détail ».',
   appColsGrouped:
@@ -1428,6 +1430,9 @@ export const fr = {
   scUnhideRows: 'Afficher les lignes',
   scHideColumns: 'Masquer les colonnes',
   scUnhideColumns: 'Afficher les colonnes',
+  scOutlineGroup: 'Grouper des lignes ou colonnes (plan)',
+  scOutlineUngroup: 'Dissocier des lignes ou colonnes',
+  scOutlineSymbols: 'Afficher/masquer les symboles du plan',
   appPrintSelectionMissing: 'Aucune sélection à imprimer.',
   appTextToColsEmpty: 'La colonne sélectionnée n’a aucun contenu à fractionner.',
   appTextToColsTooManyRows:

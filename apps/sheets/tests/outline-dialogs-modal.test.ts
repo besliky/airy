@@ -101,6 +101,88 @@ describe('TextToColumnsDialog modal semantics (UX-1101)', () => {
   })
 })
 
+describe('Text to Columns: Enter applies, overwriting asks first (UX-1108)', () => {
+  const renderDialog = (overwrites: boolean) => {
+    const onApply = vi.fn().mockReturnValue(null)
+    const onClose = vi.fn()
+    const rendered = render(
+      createElement(TextToColumnsDialog, {
+        source: { rows: ['a,b', 'c,d'], destinationLabel: 'A1' },
+        onApply,
+        onDestinationOverwrites: () => overwrites,
+        onClose,
+      }),
+    )
+    return { onApply, onClose, ...rendered }
+  }
+
+  const destinationInput = (container: HTMLElement): HTMLInputElement =>
+    container.querySelector<HTMLInputElement>('.t2c-destination-input') as HTMLInputElement
+
+  const typeInto = (input: HTMLInputElement, value: string): void => {
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, value)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
+
+  it('Enter in the destination field applies on the first press when nothing is overwritten', () => {
+    const { onApply, onClose, container, unmount } = renderDialog(false)
+    const destination = destinationInput(container)
+    expect(key(destination, 'Enter').defaultPrevented).toBe(true)
+    expect(onApply).toHaveBeenCalledTimes(1)
+    expect(onApply.mock.calls[0]?.[0]).toMatchObject({ destination: null })
+    expect(onClose).toHaveBeenCalledTimes(1)
+    unmount()
+  })
+
+  it('Enter arms the overwrite confirm; the second press applies', () => {
+    const { onApply, onClose, container, unmount } = renderDialog(true)
+    const destination = destinationInput(container)
+    key(destination, 'Enter')
+    expect(onApply).not.toHaveBeenCalled()
+    expect(container.textContent).toContain(t('dlgT2cOverwriteNote'))
+    const ok = [...container.querySelectorAll('button')].find((button) =>
+      button.className.includes('primary-action'),
+    ) as HTMLElement
+    expect(ok.textContent).toBe(t('dlgT2cOverwriteConfirm'))
+    key(destination, 'Enter')
+    expect(onApply).toHaveBeenCalledTimes(1)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    unmount()
+  })
+
+  it('editing the destination disarms the confirm', () => {
+    const { onApply, container, unmount } = renderDialog(true)
+    const destination = destinationInput(container)
+    key(destination, 'Enter')
+    expect(container.textContent).toContain(t('dlgT2cOverwriteNote'))
+    typeInto(destination, 'E1')
+    expect(container.textContent).not.toContain(t('dlgT2cOverwriteNote'))
+    key(destination, 'Enter')
+    // the probe runs again for the edited destination — still overwriting
+    // here, so the wizard asks again instead of applying
+    expect(onApply).not.toHaveBeenCalled()
+    expect(container.textContent).toContain(t('dlgT2cOverwriteNote'))
+    unmount()
+  })
+
+  it('Enter does not apply while the config is invalid', () => {
+    const { onApply, container, unmount } = renderDialog(false)
+    // switch to fixed width so the breaks field exists, then make it invalid
+    const radios = [...container.querySelectorAll<HTMLInputElement>('input[name="t2c-mode"]')]
+    act(() => radios[1]?.click())
+    const breaks = container.querySelector<HTMLInputElement>(
+      '.t2c-breaks-input',
+    ) as HTMLInputElement
+    typeInto(breaks, 'x')
+    key(breaks, 'Enter')
+    expect(onApply).not.toHaveBeenCalled()
+    unmount()
+  })
+})
+
 describe('OutlineSettingsDialog modal semantics (UX-1101)', () => {
   const renderDialog = (onClose = vi.fn()) =>
     render(

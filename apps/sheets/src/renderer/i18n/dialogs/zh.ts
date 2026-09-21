@@ -444,6 +444,8 @@ export const zh = {
   dlgT2cTypeDateYmd: '日期（年/月/日）',
   dlgT2cNeedDelimiter: '请至少勾选一个分隔符号。',
   dlgT2cBadBreaks: '分列位置必须是逗号分隔的正数。',
+  dlgT2cOverwriteNote: '目标单元格包含数据。选择“覆盖”将替换这些单元格，或更改目标区域。',
+  dlgT2cOverwriteConfirm: '覆盖',
   dlgOutlineSettingsTitle: '分级显示设置',
   dlgOutlineRows: '行',
   dlgOutlineSummaryBelow: '汇总行在明细下方',

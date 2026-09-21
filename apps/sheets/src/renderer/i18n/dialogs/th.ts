@@ -455,6 +455,9 @@ export const th = {
   dlgT2cTypeDateYmd: 'วันที่ (ป/ด/ว)',
   dlgT2cNeedDelimiter: 'เลือกตัวคั่นอย่างน้อยหนึ่งตัว',
   dlgT2cBadBreaks: 'ตำแหน่งการแยกต้องเป็นตัวเลขบวกคั่นด้วยจุลภาค',
+  dlgT2cOverwriteNote:
+    'เซลล์ปลายทางมีข้อมูลอยู่ เลือกเขียนทับเพื่อแทนที่ หรือเปลี่ยนตำแหน่งปลายทาง',
+  dlgT2cOverwriteConfirm: 'เขียนทับ',
   dlgOutlineSettingsTitle: 'การตั้งค่าเค้าร่าง',
   dlgOutlineRows: 'แถว',
   dlgOutlineSummaryBelow: 'แถวสรุปอยู่ใต้รายละเอียด',

@@ -456,6 +456,9 @@ export const ar = {
   dlgT2cTypeDateYmd: 'التاريخ (س/ش/ي)',
   dlgT2cNeedDelimiter: 'حدد محرف فاصل واحدًا على الأقل.',
   dlgT2cBadBreaks: 'مواضع التقسيم أرقام موجبة مفصولة بفواصل.',
+  dlgT2cOverwriteNote:
+    'تحتوي الخلايا الوجهة على بيانات. اختر "الكتابة فوقها" لاستبدالها، أو غيّر الوجهة.',
+  dlgT2cOverwriteConfirm: 'الكتابة فوقها',
   dlgOutlineSettingsTitle: 'إعدادات المخطط التفصيلي',
   dlgOutlineRows: 'الصفوف',
   dlgOutlineSummaryBelow: 'صفوف الملخص أسفل التفاصيل',

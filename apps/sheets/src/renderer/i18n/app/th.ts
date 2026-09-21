@@ -404,6 +404,8 @@ export const th = {
   appDetailHidden: 'ซ่อนรายละเอียดแล้ว — บันทึกด้วย ⌘S',
   appDetailShown: 'แสดงรายละเอียดแล้ว — บันทึกด้วย ⌘S',
   appOutlineMaxLevel: 'ถึงระดับเค้าร่างที่ลึกที่สุดแล้ว (7)',
+  appOutlineSymbolsShown: 'แสดงสัญลักษณ์เค้าร่างแล้ว',
+  appOutlineSymbolsHidden: 'ซ่อนสัญลักษณ์เค้าร่างแล้ว กด Ctrl+8 เพื่อแสดงอีกครั้ง',
   appNothingToUngroup: 'ไม่มีกลุ่มให้ยกเลิกในส่วนที่เลือก',
   appRowsGrouped: 'จัดกลุ่มแถวแล้ว — บันทึกด้วย ⌘S ยุบด้วย "ซ่อนรายละเอียด"',
   appColsGrouped: 'จัดกลุ่มคอลัมน์แล้ว — บันทึกด้วย ⌘S ยุบด้วย "ซ่อนรายละเอียด"',
@@ -1332,6 +1334,9 @@ export const th = {
   scUnhideRows: 'แสดงแถว',
   scHideColumns: 'ซ่อนคอลัมน์',
   scUnhideColumns: 'แสดงคอลัมน์',
+  scOutlineGroup: 'จัดกลุ่มแถวหรือคอลัมน์ (เค้าร่าง)',
+  scOutlineUngroup: 'ยกเลิกการจัดกลุ่มแถวหรือคอลัมน์',
+  scOutlineSymbols: 'แสดง/ซ่อนสัญลักษณ์เค้าร่าง',
   appPrintSelectionMissing: 'ไม่มีส่วนที่เลือกไว้สำหรับพิมพ์',
   appTextToColsEmpty: 'คอลัมน์ที่เลือกไม่มีเนื้อหาให้แยก',
   appTextToColsTooManyRows:

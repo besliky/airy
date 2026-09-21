@@ -406,6 +406,8 @@ export const ar = {
   appDetailHidden: 'أُخفيت التفاصيل — احفظ بـ ⌘S.',
   appDetailShown: 'أُظهرت التفاصيل — احفظ بـ ⌘S.',
   appOutlineMaxLevel: 'تم بلوغ أعمق مستوى في المخطط التفصيلي (7).',
+  appOutlineSymbolsShown: 'رموز المخطط التفصيلي ظاهرة.',
+  appOutlineSymbolsHidden: 'رموز المخطط التفصيلي مخفية؛ اضغط Ctrl+8 لإظهارها مجددًا.',
   appNothingToUngroup: 'لا يوجد في التحديد ما يمكن فك تجميعه.',
   appRowsGrouped: 'جُمّعت الصفوف — احفظ بـ ⌘S. اطوِها عبر «إخفاء التفاصيل».',
   appColsGrouped: 'جُمّعت الأعمدة — احفظ بـ ⌘S. اطوِها عبر «إخفاء التفاصيل».',
@@ -1331,6 +1333,9 @@ export const ar = {
   scUnhideRows: 'إظهار الصفوف',
   scHideColumns: 'إخفاء الأعمدة',
   scUnhideColumns: 'إظهار الأعمدة',
+  scOutlineGroup: 'تجميع صفوف أو أعمدة (مخطط تفصيلي)',
+  scOutlineUngroup: 'إلغاء تجميع صفوف أو أعمدة',
+  scOutlineSymbols: 'إظهار/إخفاء رموز المخطط التفصيلي',
   appPrintSelectionMissing: 'لا يوجد تحديد للطباعة.',
   appTextToColsEmpty: 'لا يوجد محتوى لتقسيمه في العمود المحدد.',
   appTextToColsTooManyRows:

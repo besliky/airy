@@ -445,6 +445,8 @@ export const nl = {
   appDetailHidden: 'Details verborgen — sla op met ⌘S.',
   appDetailShown: 'Details weergegeven — sla op met ⌘S.',
   appOutlineMaxLevel: 'Dit is al het diepste overzichtsniveau (7).',
+  appOutlineSymbolsShown: 'De overzichtssymbolen zijn zichtbaar.',
+  appOutlineSymbolsHidden: 'De overzichtssymbolen zijn verborgen; Ctrl+8 toont ze opnieuw.',
   appNothingToUngroup: 'Niets om te degroeperen in de selectie.',
   appRowsGrouped: 'Rijen gegroepeerd — sla op met ⌘S. Vouw ze samen met Detail verbergen.',
   appColsGrouped: 'Kolommen gegroepeerd — sla op met ⌘S. Vouw ze samen met Detail verbergen.',
@@ -1400,6 +1402,9 @@ export const nl = {
   scUnhideRows: 'Rijen weergeven',
   scHideColumns: 'Kolommen verbergen',
   scUnhideColumns: 'Kolommen weergeven',
+  scOutlineGroup: 'Rijen of kolommen groeperen (overzichtsstructuur)',
+  scOutlineUngroup: 'Groepering van rijen of kolommen opheffen',
+  scOutlineSymbols: 'Overzichtssymbolen tonen/verbergen',
   appPrintSelectionMissing: 'Er is niets geselecteerd om af te drukken.',
   appTextToColsEmpty: 'De geselecteerde kolom bevat geen tekst om te splitsen.',
   appTextToColsTooManyRows:

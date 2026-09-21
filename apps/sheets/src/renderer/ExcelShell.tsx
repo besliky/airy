@@ -7,6 +7,7 @@ import {
   ShapePreview,
   ribbonPanelProps,
   useDismissablePopover,
+  useModalDialog,
   useRibbonCollapse,
   useRibbonTablist,
 } from '@airy-office/ui'
@@ -322,6 +323,9 @@ interface ExcelShellProps {
   readonly onGetT2cSource: () => TextToColumnsSourceResult
   /// Text to Columns Finish; returns an error message, or null on success.
   readonly onApplyTextToColumns: (config: TextToColumnsConfig) => string | null
+  /// Whether the wizard's destination would overwrite non-empty cells
+  /// outside the split column (drives the confirm-before-replace ask).
+  readonly onT2cDestinationOverwrites: (config: TextToColumnsConfig) => boolean
   /// The active sheet's outline summary placement (Outline Settings seed).
   readonly onGetOutlineSettings: () => OutlineSettingsValue
   /// Outline Settings OK; returns an error message, or null on success.
@@ -409,6 +413,7 @@ export function ExcelShell({
   onGetConsolidateDefault,
   onGetT2cSource,
   onApplyTextToColumns,
+  onT2cDestinationOverwrites,
   onGetOutlineSettings,
   onApplyOutlineSettings,
   onApplyHeaderFooter,
@@ -1025,6 +1030,7 @@ export function ExcelShell({
         <TextToColumnsDialog
           source={t2cSource}
           onApply={onApplyTextToColumns}
+          onDestinationOverwrites={onT2cDestinationOverwrites}
           onClose={() => setT2cSource(null)}
         />
       )}
@@ -1280,6 +1286,7 @@ function ChartTextDialog({
   readonly onClose: () => void
 }): React.JSX.Element {
   const { t } = useI18n()
+  const dialog = useModalDialog(onClose)
   const [value, setValue] = useState(initial)
   const { heading, command } = CHART_TEXT_LABELS[target]
   const apply = (): void => {
@@ -1287,26 +1294,24 @@ function ChartTextDialog({
     onClose()
   }
   return (
-    <div className="dialog-backdrop" onClick={onClose}>
+    <div className="dialog-backdrop" {...dialog.backdropProps} onClick={onClose}>
       <div
         className="format-cells-dialog link-dialog"
-        role="dialog"
-        aria-label={t(heading)}
+        {...dialog.dialogProps}
         onClick={(event) => event.stopPropagation()}
       >
-        <header>{t(heading)}</header>
+        <header {...dialog.titleProps}>{t(heading)}</header>
         <div className="dialog-body">
           <label>
             {t(target === 'title' ? 'appTitleText' : 'appAxisTitleText')}
             <input
-              autoFocus
               type="text"
               value={value}
               maxLength={255}
               onChange={(event) => setValue(event.target.value)}
               onKeyDown={(event) => {
+                // Enter applies; Escape belongs to the modal hook
                 if (event.key === 'Enter') apply()
-                if (event.key === 'Escape') onClose()
               }}
             />
           </label>
@@ -1334,6 +1339,7 @@ function AxisSizeDialog({
   readonly onClose: () => void
 }): React.JSX.Element {
   const { t } = useI18n()
+  const dialog = useModalDialog(onClose)
   const [value, setValue] = useState('')
   const max = axis === 'row' ? 409.5 : 255
   const parsed = Number(value.trim().replace(',', '.'))
@@ -1344,26 +1350,24 @@ function AxisSizeDialog({
     onClose()
   }
   return (
-    <div className="dialog-backdrop" onClick={onClose}>
+    <div className="dialog-backdrop" {...dialog.backdropProps} onClick={onClose}>
       <div
         className="format-cells-dialog link-dialog"
-        role="dialog"
-        aria-label={t(axis === 'row' ? 'appRowHeight' : 'appColWidth')}
+        {...dialog.dialogProps}
         onClick={(event) => event.stopPropagation()}
       >
-        <header>{t(axis === 'row' ? 'appRowHeight' : 'appColWidth')}</header>
+        <header {...dialog.titleProps}>{t(axis === 'row' ? 'appRowHeight' : 'appColWidth')}</header>
         <div className="dialog-body">
           <label>
             {t(axis === 'row' ? 'appRowHeightLabel' : 'appColWidthLabel')}
             <input
-              autoFocus
               type="text"
               inputMode="decimal"
               value={value}
               onChange={(event) => setValue(event.target.value)}
               onKeyDown={(event) => {
+                // Enter applies; Escape belongs to the modal hook
                 if (event.key === 'Enter') apply()
-                if (event.key === 'Escape') onClose()
               }}
             />
           </label>
@@ -1389,32 +1393,33 @@ function LinkDialog({
   readonly onClose: () => void
 }): React.JSX.Element {
   const { t } = useI18n()
+  const dialog = useModalDialog(onClose)
   const [value, setValue] = useState(currentTarget ?? '')
   const apply = (): void => {
     if (value.trim()) onCommand(`link-set:${encodeURIComponent(value)}`)
     onClose()
   }
   return (
-    <div className="dialog-backdrop" onClick={onClose}>
+    <div className="dialog-backdrop" {...dialog.backdropProps} onClick={onClose}>
       <div
         className="format-cells-dialog link-dialog"
-        role="dialog"
-        aria-label={t(currentTarget ? 'appEditLinkTitle' : 'appInsertLinkTitle')}
+        {...dialog.dialogProps}
         onClick={(event) => event.stopPropagation()}
       >
-        <header>{t(currentTarget ? 'appEditLinkTitle' : 'appInsertLinkTitle')}</header>
+        <header {...dialog.titleProps}>
+          {t(currentTarget ? 'appEditLinkTitle' : 'appInsertLinkTitle')}
+        </header>
         <div className="dialog-body">
           <label>
             {t('appLinkAddressLabel')}
             <input
-              autoFocus
               type="text"
               value={value}
               placeholder={t('appLinkPlaceholder')}
               onChange={(event) => setValue(event.target.value)}
               onKeyDown={(event) => {
+                // Enter applies; Escape belongs to the modal hook
                 if (event.key === 'Enter') apply()
-                if (event.key === 'Escape') onClose()
               }}
             />
           </label>

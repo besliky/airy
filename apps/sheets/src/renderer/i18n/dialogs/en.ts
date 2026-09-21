@@ -460,6 +460,9 @@ export const en = {
   dlgT2cTypeDateYmd: 'Date (YMD)',
   dlgT2cNeedDelimiter: 'Check at least one delimiter.',
   dlgT2cBadBreaks: 'Break positions are comma-separated positive numbers.',
+  dlgT2cOverwriteNote:
+    'The destination cells contain data. Choose Overwrite to replace them, or change the destination.',
+  dlgT2cOverwriteConfirm: 'Overwrite',
   dlgOutlineSettingsTitle: 'Outline Settings',
   dlgOutlineRows: 'Rows',
   dlgOutlineSummaryBelow: 'Summary rows below detail',

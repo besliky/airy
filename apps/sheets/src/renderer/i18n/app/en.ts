@@ -408,6 +408,8 @@ export const en = {
   appDetailHidden: 'Detail hidden — save with ⌘S.',
   appDetailShown: 'Detail shown — save with ⌘S.',
   appOutlineMaxLevel: 'Already at the deepest outline level (7).',
+  appOutlineSymbolsShown: 'Outline symbols are shown.',
+  appOutlineSymbolsHidden: 'Outline symbols are hidden; press Ctrl+8 to show them again.',
   appNothingToUngroup: 'Nothing to ungroup in the selection.',
   appRowsGrouped: 'Rows grouped — save with ⌘S. Collapse them with Hide Detail.',
   appColsGrouped: 'Columns grouped — save with ⌘S. Collapse them with Hide Detail.',
@@ -1345,6 +1347,9 @@ export const en = {
   scUnhideRows: 'Unhide rows',
   scHideColumns: 'Hide columns',
   scUnhideColumns: 'Unhide columns',
+  scOutlineGroup: 'Group rows or columns (outline)',
+  scOutlineUngroup: 'Ungroup rows or columns',
+  scOutlineSymbols: 'Show/hide outline symbols',
   appPrintSelectionMissing: 'There is nothing selected to print.',
   appTextToColsEmpty: 'The selected column has no content to split.',
   appTextToColsTooManyRows:

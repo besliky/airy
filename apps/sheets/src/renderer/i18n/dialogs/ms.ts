@@ -458,6 +458,9 @@ export const ms = {
   dlgT2cTypeDateYmd: 'Tarikh (TBH)',
   dlgT2cNeedDelimiter: 'Tandakan sekurang-kurangnya satu pemisah.',
   dlgT2cBadBreaks: 'Kedudukan pemecahan ialah nombor positif dipisahkan dengan koma.',
+  dlgT2cOverwriteNote:
+    'Sel destinasi mengandungi data. Pilih Tulis Ganti untuk menggantikannya, atau ubah destinasi.',
+  dlgT2cOverwriteConfirm: 'Tulis Ganti',
   dlgOutlineSettingsTitle: 'Tetapan Rangka',
   dlgOutlineRows: 'Baris',
   dlgOutlineSummaryBelow: 'Baris ringkasan di bawah butiran',

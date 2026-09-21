@@ -458,6 +458,9 @@ export const hi = {
   dlgT2cTypeDateYmd: 'दिनांक (वर्ष/मा/द)',
   dlgT2cNeedDelimiter: 'कम से कम एक पृथक्कारक चुनें।',
   dlgT2cBadBreaks: 'विभाजन स्थितियाँ अल्पविराम से अलग धनात्मक संख्याएँ हैं।',
+  dlgT2cOverwriteNote:
+    'गंतव्य कोशिकाओं में डेटा है। बदलने के लिए "ओवरराइट" चुनें, या गंतव्य बदलें।',
+  dlgT2cOverwriteConfirm: 'ओवरराइट करें',
   dlgOutlineSettingsTitle: 'रूपरेखा सेटिंग्स',
   dlgOutlineRows: 'पंक्तियाँ',
   dlgOutlineSummaryBelow: 'सारांश पंक्तियाँ विवरण के नीचे',

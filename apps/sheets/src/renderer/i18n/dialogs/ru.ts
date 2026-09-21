@@ -462,6 +462,9 @@ export const ru = {
   dlgT2cTypeDateYmd: 'Дата (ГГГГММДД)',
   dlgT2cNeedDelimiter: 'Отметьте хотя бы один разделитель.',
   dlgT2cBadBreaks: 'Позиции разбиения — положительные числа через запятую.',
+  dlgT2cOverwriteNote:
+    'В ячейках назначения есть данные. Нажмите «Заменить», чтобы перезаписать их, либо измените область назначения.',
+  dlgT2cOverwriteConfirm: 'Заменить',
   dlgOutlineSettingsTitle: 'Параметры структуры',
   dlgOutlineRows: 'Строки',
   dlgOutlineSummaryBelow: 'Итоги под данными',

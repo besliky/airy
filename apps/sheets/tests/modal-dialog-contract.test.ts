@@ -47,8 +47,8 @@ const LEGACY: Record<string, number> = {
   'ConsolidateDialog.tsx': 1,
   // EquationDialog
   'EquationDialog.tsx': 1,
-  // SortDialog + RemoveDuplicatesDialog + ChartTextDialog + AxisSizeDialog + LinkDialog
-  'ExcelShell.tsx': 5,
+  // SortDialog + RemoveDuplicatesDialog
+  'ExcelShell.tsx': 2,
   // FormatCellsDialog
   'FormatCellsDialog.tsx': 1,
   // GoalSeekDialog
@@ -81,8 +81,6 @@ const LEGACY: Record<string, number> = {
   'TimelinePanel.tsx': 1,
   // PrintDialog (modal-backdrop root)
   'PrintDialog.tsx': 1,
-  // ShortcutsDialog (modal-backdrop root, useModalKeys)
-  'ShortcutsDialog.tsx': 1,
 }
 
 const occurrences = (src: string, needle: string): number => src.split(needle).length - 1

@@ -459,6 +459,9 @@ export const nl = {
   dlgT2cTypeDateYmd: 'Datum (JMD)',
   dlgT2cNeedDelimiter: 'Vink minstens één scheidingsteken aan.',
   dlgT2cBadBreaks: 'Splitsposities zijn door komma’s gescheiden positieve getallen.',
+  dlgT2cOverwriteNote:
+    'De doelcellen bevatten gegevens. Kies Overschrijven om ze te vervangen, of wijzig het doel.',
+  dlgT2cOverwriteConfirm: 'Overschrijven',
   dlgOutlineSettingsTitle: 'Overzichtsinstellingen',
   dlgOutlineRows: 'Rijen',
   dlgOutlineSummaryBelow: 'Subtotalenrijen onder details',

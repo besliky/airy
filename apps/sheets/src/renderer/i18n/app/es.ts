@@ -450,6 +450,8 @@ export const es = {
   appDetailHidden: 'Detalle oculto — guarde con ⌘S.',
   appDetailShown: 'Detalle mostrado — guarde con ⌘S.',
   appOutlineMaxLevel: 'Ya está en el nivel de esquema más profundo (7).',
+  appOutlineSymbolsShown: 'Los símbolos de esquema están visibles.',
+  appOutlineSymbolsHidden: 'Los símbolos de esquema están ocultos; Ctrl+8 los muestra de nuevo.',
   appNothingToUngroup: 'No hay nada que desagrupar en la selección.',
   appRowsGrouped: 'Filas agrupadas — guarde con ⌘S. Contráigalas con "Ocultar detalle".',
   appColsGrouped: 'Columnas agrupadas — guarde con ⌘S. Contráigalas con "Ocultar detalle".',
@@ -1406,6 +1408,9 @@ export const es = {
   scUnhideRows: 'Mostrar filas',
   scHideColumns: 'Ocultar columnas',
   scUnhideColumns: 'Mostrar columnas',
+  scOutlineGroup: 'Agrupar filas o columnas (esquema)',
+  scOutlineUngroup: 'Desagrupar filas o columnas',
+  scOutlineSymbols: 'Mostrar/ocultar los símbolos de esquema',
   appPrintSelectionMissing: 'No hay nada seleccionado para imprimir.',
   appTextToColsEmpty: 'La columna seleccionada no tiene contenido que dividir.',
   appTextToColsTooManyRows:

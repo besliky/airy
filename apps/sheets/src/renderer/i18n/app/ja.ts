@@ -447,6 +447,8 @@ export const ja = {
   appDetailHidden: '詳細を非表示にしました — ⌘S で保存します。',
   appDetailShown: '詳細を表示しました — ⌘S で保存します。',
   appOutlineMaxLevel: '既に最も深いアウトラインレベル（7）です。',
+  appOutlineSymbolsShown: 'アウトライン記号を表示しました。',
+  appOutlineSymbolsHidden: 'アウトライン記号を非表示にしました。Ctrl+8 で再表示できます。',
   appNothingToUngroup: '選択範囲にグループ解除できるものがありません。',
   appRowsGrouped: '行をグループ化しました — ⌘S で保存します。「詳細の非表示」で折りたためます。',
   appColsGrouped: '列をグループ化しました — ⌘S で保存します。「詳細の非表示」で折りたためます。',
@@ -1414,6 +1416,9 @@ export const ja = {
   scUnhideRows: '行の再表示',
   scHideColumns: '列を非表示',
   scUnhideColumns: '列の再表示',
+  scOutlineGroup: '行または列をグループ化（アウトライン）',
+  scOutlineUngroup: '行または列のグループ解除',
+  scOutlineSymbols: 'アウトライン記号の表示/非表示',
   appPrintSelectionMissing: '印刷する選択範囲がありません。',
   appTextToColsEmpty: '選択した列には分割する内容がありません。',
   appTextToColsTooManyRows:

@@ -458,6 +458,9 @@ export const ja = {
   dlgT2cTypeDateYmd: '日付 (年/月/日)',
   dlgT2cNeedDelimiter: '区切り文字を少なくとも 1 つオンにしてください。',
   dlgT2cBadBreaks: '分割位置はカンマ区切りの正の数で指定します。',
+  dlgT2cOverwriteNote:
+    '貼り付け先のセルにデータが含まれています。上書きして置き換えるか、貼り付け先を変更してください。',
+  dlgT2cOverwriteConfirm: '上書き',
   dlgOutlineSettingsTitle: 'アウトラインの設定',
   dlgOutlineRows: '行',
   dlgOutlineSummaryBelow: '集計行を明細行の下に配置',

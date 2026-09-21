@@ -453,6 +453,9 @@ export const de = {
   appDetailHidden: 'Detail ausgeblendet — mit ⌘S speichern.',
   appDetailShown: 'Detail eingeblendet — mit ⌘S speichern.',
   appOutlineMaxLevel: 'Bereits auf der tiefsten Gliederungsebene (7).',
+  appOutlineSymbolsShown: 'Die Gliederungssymbole sind eingeblendet.',
+  appOutlineSymbolsHidden:
+    'Die Gliederungssymbole sind ausgeblendet; Strg+8 blendet sie wieder ein.',
   appNothingToUngroup: 'Nichts zum Aufheben der Gruppierung in der Auswahl.',
   appRowsGrouped: 'Zeilen gruppiert — mit ⌘S speichern. Mit „Detail ausblenden“ reduzieren.',
   appColsGrouped: 'Spalten gruppiert — mit ⌘S speichern. Mit „Detail ausblenden“ reduzieren.',
@@ -1415,6 +1418,9 @@ export const de = {
   scUnhideRows: 'Zeilen einblenden',
   scHideColumns: 'Spalten ausblenden',
   scUnhideColumns: 'Spalten einblenden',
+  scOutlineGroup: 'Zeilen oder Spalten gruppieren (Gliederung)',
+  scOutlineUngroup: 'Gruppierung von Zeilen oder Spalten aufheben',
+  scOutlineSymbols: 'Gliederungssymbole ein-/ausblenden',
   appPrintSelectionMissing: 'Es gibt nichts Ausgewähltes zum Drucken.',
   appTextToColsEmpty: 'Die ausgewählte Spalte hat keinen Inhalt zum Aufteilen.',
   appTextToColsTooManyRows:

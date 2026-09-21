@@ -452,6 +452,8 @@ export const he = {
   dlgT2cTypeDateYmd: 'תאריך (שנה/חודש/יום)',
   dlgT2cNeedDelimiter: 'סמנו לפחות מפריד אחד.',
   dlgT2cBadBreaks: 'מקומות הפיצול הם מספרים חיוביים מופרדים בפסיקים.',
+  dlgT2cOverwriteNote: 'תאי היעד מכילים נתונים. בחרו "החלף" כדי לדרוס אותם, או שנו את היעד.',
+  dlgT2cOverwriteConfirm: 'החלף',
   dlgOutlineSettingsTitle: 'הגדרות מתאר',
   dlgOutlineRows: 'שורות',
   dlgOutlineSummaryBelow: 'שורות סיכום מתחת לפרטים',

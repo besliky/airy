@@ -461,6 +461,9 @@ export const es = {
   dlgT2cTypeDateYmd: 'Fecha (AMD)',
   dlgT2cNeedDelimiter: 'Marque al menos un delimitador.',
   dlgT2cBadBreaks: 'Las posiciones de división son números positivos separados por comas.',
+  dlgT2cOverwriteNote:
+    'Las celdas de destino contienen datos. Elija Sobrescribir para reemplazarlas o cambie el destino.',
+  dlgT2cOverwriteConfirm: 'Sobrescribir',
   dlgOutlineSettingsTitle: 'Configuración del esquema',
   dlgOutlineRows: 'Filas',
   dlgOutlineSummaryBelow: 'Filas de totales debajo del detalle',

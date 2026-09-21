@@ -464,6 +464,9 @@ export const fr = {
   dlgT2cTypeDateYmd: 'Date (AAAAMMJJ)',
   dlgT2cNeedDelimiter: 'Cochez au moins un délimiteur.',
   dlgT2cBadBreaks: 'Les positions de coupure sont des nombres positifs séparés par des virgules.',
+  dlgT2cOverwriteNote:
+    'Les cellules de destination contiennent des données. Choisissez Remplacer pour les écraser, ou modifiez la destination.',
+  dlgT2cOverwriteConfirm: 'Remplacer',
   dlgOutlineSettingsTitle: 'Paramètres du plan',
   dlgOutlineRows: 'Lignes',
   dlgOutlineSummaryBelow: 'Lignes de total sous le détail',

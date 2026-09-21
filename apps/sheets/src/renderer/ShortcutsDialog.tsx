@@ -5,13 +5,13 @@
  * ShortcutsDialog.
  */
 import { useState } from 'react'
+import { useModalDialog } from '@airy-office/ui'
 import { useI18n } from './i18n/locale'
 import { SHORTCUT_GROUPS, SHORTCUTS, shortcutKeys } from './shortcut-registry'
-import { useModalKeys } from './modal-keys'
 
 export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   const { t } = useI18n()
-  const modalKeys = useModalKeys(onClose)
+  const dialog = useModalDialog(onClose)
   const [query, setQuery] = useState('')
 
   const needle = query.trim().toLowerCase()
@@ -30,12 +30,11 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="modal-backdrop"
-      ref={modalKeys.ref}
-      onKeyDown={modalKeys.onKeyDown}
+      {...dialog.backdropProps}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="modal modal-shortcuts" role="dialog" aria-label={t('scTitle')}>
-        <h2>{t('scTitle')}</h2>
+      <div className="modal modal-shortcuts" {...dialog.dialogProps}>
+        <h2 {...dialog.titleProps}>{t('scTitle')}</h2>
         <input
           type="search"
           className="sc-filter"

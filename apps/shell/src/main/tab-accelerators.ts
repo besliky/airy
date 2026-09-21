@@ -8,11 +8,12 @@ import type { TabKind } from '../shared/tabs-api'
  * its own Word/Excel-parity shortcuts are excluded per active tab kind so the
  * application never eats them:
  * - docs: Ctrl+1/2/5 line spacing (Word), Ctrl+8 formatting marks
- * - sheets: Ctrl+9 hide rows (Excel); (Ctrl+0 hide columns is not bound here)
+ * - sheets: Ctrl+1 Format Cells (Excel), Ctrl+8 outline symbols (Excel),
+ *   Ctrl+9 hide rows (Excel); (Ctrl+0 hide columns is not bound here)
  */
 export const RESERVED_TAB_DIGITS: Partial<Record<TabKind, ReadonlySet<number>>> = {
   docs: new Set([1, 2, 5, 8]),
-  sheets: new Set([9]),
+  sheets: new Set([1, 8, 9]),
 }
 
 /** which switch-to-tab digits the menu may bind for a given active tab kind */
