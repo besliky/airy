@@ -3,13 +3,16 @@
 // embedded agent pipeline — buildDocContext for context+selection, executeTool
 // for insert_content/apply_ops (one ProseMirror transaction each, same
 // stale-guard and tracked-changes behavior), and the AI panel's snapshot
-// rollback for undo. One bridge call = one "turn"; undo reverts exactly the
-// last turn and refuses when the user has edited since. Turns are stamped
-// with the calling bridge connection's id: the automatic rollback after a
-// failed turn (params.ownTurnsOnly) only reverts the requester's OWN turn —
-// with two copilot clients on one document it must never silently revert the
-// other client's edit (that is a turn_owned_by_other error instead; an
-// explicit undo stays allowed and reports whose turn it reverted).
+// rollback for undo. One bridge call = one "turn"; turns sit on a small LIFO
+// stack, undo reverts exactly the latest turn (the MCP live_apply_ops contract
+// "each bridge call is one undo step" — a combined html+ops call pushes two
+// turns, so live_undo reverts it in two steps) and refuses when the user has
+// edited since. Turns are stamped with the calling bridge connection's id: the
+// automatic rollback after a failed turn (params.ownTurnsOnly) only reverts
+// the requester's OWN turn — with two copilot clients on one document it must
+// never silently revert the other client's edit (that is a
+// turn_owned_by_other error instead; an explicit undo stays allowed and
+// reports whose turn it reverted).
 import type { Editor, JSONContent } from '@tiptap/core'
 import type { Node as PmNode } from '@tiptap/pm/model'
 import { BLANK_BULLET_NUM_ID, BLANK_ORDERED_NUM_ID, type Block } from '@airy-office/docx-engine'
@@ -78,8 +81,8 @@ function executionError(exec: ToolExecution): BridgeCommandResult {
 }
 
 /**
- * Build the per-tab bridge command handler. The handler owns one slot of
- * bridge-undo state; App.tsx keeps a single instance alive per document.
+ * Build the per-tab bridge command handler. The handler owns the bridge-undo
+ * turn stack; App.tsx keeps a single instance alive per document.
  *
  * `clientId` is the calling bridge connection's identity (stamped by the
  * shell's bridge server, one per socket). Callers without one — the embedded
@@ -93,7 +96,17 @@ export function createBridgeCommandHandler(
   params: Record<string, unknown>,
   clientId?: string,
 ) => Promise<BridgeCommandResult> {
-  let lastTurn: BridgeTurn | null = null
+  // LIFO of bridge turns. A single slot could not hold a combined
+  // live_apply_ops (the MCP server sends insert_content and apply_ops as two
+  // bridge calls): the ops turn overwrote the insert turn, the first undo
+  // reverted only the ops and the second found nothing — the insert was
+  // stranded (BUG-1505). Each undo pops one turn, so the combined call takes
+  // exactly the two undos the live_apply_ops contract documents. Deeper turns
+  // stay reachable (a later failed call never orphans an earlier one) but the
+  // stack is bounded: each turn holds a full document snapshot, and undoing
+  // under newer edits is refused by the stale guard anyway.
+  const turns: BridgeTurn[] = []
+  const MAX_BRIDGE_TURNS = 16
   const connectionId = (clientId?: string): string =>
     typeof clientId === 'string' && clientId !== '' ? clientId : 'unknown'
 
@@ -158,9 +171,12 @@ export function createBridgeCommandHandler(
     }
 
     if (method === 'undo') {
-      const turn = lastTurn
+      const turn = turns[turns.length - 1]
       if (!turn) return fail('nothing_to_undo', 'no bridge turn to undo yet')
-      if (editor.state.doc !== turn.afterDoc) {
+      // content comparison, not identity: undoing the turn above this one
+      // rebuilds the doc node, so a turn reached through the stack is only
+      // current by CONTENT (eq is ProseMirror's structural equality)
+      if (!editor.state.doc.eq(turn.afterDoc)) {
         return fail(
           'stale_document',
           'the document changed since the last bridge turn; undoing would discard those edits — fetch fresh context before editing',
@@ -182,8 +198,10 @@ export function createBridgeCommandHandler(
         .setMeta(TABLE_TRAILING_SKIP, true)
         .setContent(turn.before as never)
         .run()
-      lastTurn = null
+      // pop only when the rollback applied — a failed setContent leaves the
+      // turn in place so the undo can be retried
       if (!run) return fail('internal', 'undo failed to apply the pre-turn snapshot')
+      turns.pop()
       // the rewound doc is the new freshness baseline for the client
       markDocSeen(editor)
       // an explicit undo may legitimately revert another client's turn (the
@@ -214,8 +232,10 @@ export function createBridgeCommandHandler(
           })
         : await runTool(editor, state, 'apply_ops', { ops: params.ops })
     if (exec.isError) return executionError(exec)
-    if (exec.mutated)
-      lastTurn = { before, afterDoc: editor.state.doc, owner: connectionId(clientId) }
+    if (exec.mutated) {
+      turns.push({ before, afterDoc: editor.state.doc, owner: connectionId(clientId) })
+      if (turns.length > MAX_BRIDGE_TURNS) turns.shift()
+    }
     return { ok: true, result: exec.output }
   }
 }
