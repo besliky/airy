@@ -79,6 +79,12 @@ const DEFAULT_BOX_INCHES = { x: 1, y: 1, width: 6, height: 1 }
  * XML that PowerPoint then flags for repair (audit BUG-1110).
  */
 export const MAX_BOX_INCHES = 1000
+/**
+ * Lower bound for insert geometry (inches): offsets must be >= 0 and boxes
+ * must be at least 0.1 in — mirroring the zod schema's `.min()` half that
+ * the session guard used to skip (BUG-1221).
+ */
+export const MIN_BOX_INCHES = 0.1
 
 function clip(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1))}…`
@@ -376,16 +382,27 @@ export class SlidesSession {
         `text is ${String(text.length)} characters; the cap is ${String(INSERT_MAX_CHARS)}`,
       )
     }
-    // geometry cap before any element dispatch, mirroring the tool schema: a
-    // value beyond the OOXML coordinate universe would serialize as valid XML
-    // that PowerPoint flags for repair (audit BUG-1110)
-    for (const [name, value] of [
-      ['x', options.x],
-      ['y', options.y],
-      ['width', options.width],
-      ['height', options.height],
+    // geometry guard before any element dispatch, mirroring the tool schema
+    // one-for-one (finite + min + max; audit BUG-1110 for the cap, BUG-1221
+    // for the finite/min half): the MCP path is already zod-fenced, but a
+    // direct in-process caller could pass NaN (every comparison is false, so
+    // Math.round(NaN * 914400) serialized x="NaN" — well-formed XML, invalid
+    // ST_Coordinate, the repair profile again) or a negative offset /
+    // undersized box the schema would have rejected
+    for (const [name, value, min] of [
+      ['x', options.x, 0],
+      ['y', options.y, 0],
+      ['width', options.width, MIN_BOX_INCHES],
+      ['height', options.height, MIN_BOX_INCHES],
     ] as const) {
-      if (value !== undefined && value > MAX_BOX_INCHES) {
+      if (value === undefined) continue
+      if (!Number.isFinite(value) || value < min) {
+        throw new Error(
+          `${name} must be a finite number of at least ${String(min)} in for text box geometry ` +
+            `(got ${String(value)})`,
+        )
+      }
+      if (value > MAX_BOX_INCHES) {
         throw new Error(
           `${name} ${String(value)} in is above the ${String(MAX_BOX_INCHES)} in cap for text box ` +
             'geometry — keep the box on the slide canvas',
