@@ -284,8 +284,8 @@ export function registerTools(server: McpServer): void {
         'index) and an A1-style range ("A1:E10", single cell "B2") returns a pipe table of cell ' +
         'values; formula cells render as "=FORMULA (cached value)". Without a range the sheet\'s ' +
         'top-left corner (up to 20 rows x 10 columns) is returned as a starting point. Reads ' +
-        'include edits journaled by this session\'s apply_workbook_ops but not yet saved (a note ' +
-        'counts the pending cells overlaid, and journaled cells beyond the file\'s used range are ' +
+        "include edits journaled by this session's apply_workbook_ops but not yet saved (a note " +
+        "counts the pending cells overlaid, and journaled cells beyond the file's used range are " +
         'readable, growing the rows x cols the overview reports); re-read after save_document to ' +
         'confirm the persisted state.',
       inputSchema: {

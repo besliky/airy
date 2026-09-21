@@ -58,7 +58,10 @@ export function svgFontFamilies(pages: Array<{ svg?: string; pngBase64?: string 
     if (!page.svg) continue
     for (const match of page.svg.matchAll(/font-family="([^"]*)"/g)) {
       for (const raw of match[1]!.split(',')) {
-        const name = raw.trim().replace(/^['"]|['"]$/g, '').trim()
+        const name = raw
+          .trim()
+          .replace(/^['"]|['"]$/g, '')
+          .trim()
         if (name && !GENERIC_FAMILIES.has(name.toLowerCase())) names.add(name)
       }
     }

@@ -72,8 +72,7 @@ describe('style-driven list numbering on regenerated paragraphs (BUG-1502)', () 
   })
 
   it('styles without numbering never gain the override', async () => {
-    const body =
-      '<w:p><w:pPr><w:pStyle w:val="Quiet"/></w:pPr><w:r><w:t>plain</w:t></w:r></w:p>'
+    const body = '<w:p><w:pPr><w:pStyle w:val="Quiet"/></w:pPr><w:r><w:t>plain</w:t></w:r></w:p>'
     const doc = await parseDocx(await buildStyleListDocx(body))
     const original = doc.blocks[0]
     expect(original.type).toBe('paragraph')

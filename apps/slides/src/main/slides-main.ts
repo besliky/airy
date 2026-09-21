@@ -252,7 +252,12 @@ import {
 } from './session-state'
 import { registerAiIpc, registerSlidesOnlyAiIpc } from './ai-ipc'
 import { trackSlidesRenderer, untrackSlidesRenderer, isSlidesRenderer } from './slides-renderers'
-import { exportFontFaces, listPrivateFontFaces, getPrivateFontData, registerEmbeddedFonts } from './fonts'
+import {
+  exportFontFaces,
+  listPrivateFontFaces,
+  getPrivateFontData,
+  registerEmbeddedFonts,
+} from './fonts'
 import { listMetafileFonts } from './metafile-fonts'
 import {
   downloadFontFamily,

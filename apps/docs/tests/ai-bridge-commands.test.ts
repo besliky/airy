@@ -169,9 +169,9 @@ describe('bridge command handler', () => {
     expect(first).toEqual({ ok: true, result: { undone: true } })
     expect(editor.state.doc.childCount).toBe(2)
     expect(editor.state.doc.child(1).textContent).toBe('LIVE-EDITED ITEM')
-    expect(
-      editor.state.doc.child(1).firstChild?.marks.some((m) => m.type.name === 'bold'),
-    ).toBe(false)
+    expect(editor.state.doc.child(1).firstChild?.marks.some((m) => m.type.name === 'bold')).toBe(
+      false,
+    )
 
     // second undo reverts the insert turn — the document is back to base
     const second = await handler('undo', {}, 'conn-1')

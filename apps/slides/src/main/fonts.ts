@@ -1150,7 +1150,7 @@ export function exportFontFaces(families: readonly string[]): ExportFontFace[] {
     // count: the layout never drew the missing family with the substitute's
     // name, and inlining it under the absent name would ship a font the
     // pages never reference.
-    let resolvesToBundled = false
+    let resolvesToBundled: boolean
     try {
       const hit = getRegistry().resolve({
         fontFamily: family,

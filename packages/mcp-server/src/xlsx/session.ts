@@ -500,7 +500,11 @@ export class XlsxSession {
       }
       const key = `${String(edit.row)},${String(edit.column)}`
       if (edit.cell.formula !== undefined) {
-        cellByCoordinate.set(key, { row: edit.row, column: edit.column, formula: edit.cell.formula })
+        cellByCoordinate.set(key, {
+          row: edit.row,
+          column: edit.column,
+          formula: edit.cell.formula,
+        })
       } else if (edit.cell.value === null) {
         // an explicit null clears the cell
         cellByCoordinate.set(key, { row: edit.row, column: edit.column })
@@ -539,7 +543,9 @@ export class XlsxSession {
     const to = `${columnToLabel(clamped.endColumn)}${String(clamped.endRow + 1)}`
     const notes: string[] = []
     if (!result.indexingComplete) {
-      notes.push('(Indexing still in progress — the data above may be partial; re-read the range shortly.)')
+      notes.push(
+        '(Indexing still in progress — the data above may be partial; re-read the range shortly.)',
+      )
     }
     if (overlaid > 0) {
       notes.push(
