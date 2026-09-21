@@ -2540,6 +2540,8 @@ const SETTINGS_TAGS_AFTER_HYPHENATION = [
   'w:bookFoldPrintingSheets',
   'w:drawingGridHorizontalSpacing',
   'w:drawingGridVerticalSpacing',
+  'w:displayHorizontalDrawingGridEvery',
+  'w:displayVerticalDrawingGridEvery',
   'w:doNotUseMarginsForDrawingGridOrigin',
   'w:drawingGridHorizontalOrigin',
   'w:drawingGridVerticalOrigin',
