@@ -302,6 +302,7 @@ export const pt = {
   ribbonTransApplyAllTip: 'Aplicar a transição deste slide a todos os slides',
   ribbonEffectOptions: 'Opções de Efeito',
   ribbonEffectOptionsTip: 'Direção e duração da transição atual',
+  ribbonEffectOptionsNoneTip: 'Escolha primeiro uma transição — as Opções de Efeito exigem uma',
   ribbonEffectOptionsDirection: 'Direção',
   ribbonTransDuration: 'Duração',
   ribbonTransDurationDefault: 'Padrão',

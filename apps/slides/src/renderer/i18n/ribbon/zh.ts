@@ -294,6 +294,7 @@ export const zh = {
   ribbonTransApplyAllTip: '把当前页的切换效果应用到全部页',
   ribbonEffectOptions: '效果选项',
   ribbonEffectOptionsTip: '当前切换的方向和持续时间',
+  ribbonEffectOptionsNoneTip: '先选择切换效果，才能使用效果选项',
   ribbonEffectOptionsDirection: '方向',
   ribbonTransDuration: '持续时间',
   ribbonTransDurationDefault: '默认',

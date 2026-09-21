@@ -307,6 +307,7 @@ export const de = {
   ribbonTransApplyAllTip: 'Übergang dieser Folie auf alle Folien anwenden',
   ribbonEffectOptions: 'Effektoptionen',
   ribbonEffectOptionsTip: 'Richtung und Dauer des aktuellen Übergangs',
+  ribbonEffectOptionsNoneTip: 'Wähle zuerst einen Übergang — Effektoptionen brauchen einen',
   ribbonEffectOptionsDirection: 'Richtung',
   ribbonTransDuration: 'Dauer',
   ribbonTransDurationDefault: 'Standard',

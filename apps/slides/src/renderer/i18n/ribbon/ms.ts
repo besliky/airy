@@ -305,6 +305,7 @@ export const ms = {
   ribbonTransApplyAllTip: 'Gunakan peralihan slaid ini pada semua slaid',
   ribbonEffectOptions: 'Pilihan Kesan',
   ribbonEffectOptionsTip: 'Arah dan tempoh peralihan semasa',
+  ribbonEffectOptionsNoneTip: 'Pilih peralihan dahulu — Pilihan Kesan memerlukannya',
   ribbonEffectOptionsDirection: 'Arah',
   ribbonTransDuration: 'Tempoh',
   ribbonTransDurationDefault: 'Lalai',

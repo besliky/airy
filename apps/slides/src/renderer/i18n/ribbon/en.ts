@@ -295,6 +295,7 @@ export const en = {
   ribbonTransApplyAllTip: "Apply this slide's transition to all slides",
   ribbonEffectOptions: 'Effect Options',
   ribbonEffectOptionsTip: 'Direction and duration of the current transition',
+  ribbonEffectOptionsNoneTip: 'Pick a transition first — Effect Options needs one',
   ribbonEffectOptionsDirection: 'Direction',
   ribbonTransDuration: 'Duration',
   ribbonTransDurationDefault: 'Default',

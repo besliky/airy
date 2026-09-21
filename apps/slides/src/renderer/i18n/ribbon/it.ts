@@ -311,6 +311,7 @@ export const it = {
   ribbonTransApplyAllTip: 'Applica la transizione di questa diapositiva a tutte le diapositive',
   ribbonEffectOptions: 'Opzioni effetto',
   ribbonEffectOptionsTip: 'Direzione e durata della transizione corrente',
+  ribbonEffectOptionsNoneTip: 'Scegli prima una transizione: le Opzioni effetti ne richiedono una',
   ribbonEffectOptionsDirection: 'Direzione',
   ribbonTransDuration: 'Durata',
   ribbonTransDurationDefault: 'Predefinito',

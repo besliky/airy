@@ -302,6 +302,7 @@ export const id = {
   ribbonTransApplyAllTip: 'Terapkan efek transisi slide ini ke semua slide',
   ribbonEffectOptions: 'Opsi Efek',
   ribbonEffectOptionsTip: 'Arah dan durasi transisi saat ini',
+  ribbonEffectOptionsNoneTip: 'Pilih transisi dulu — Opsi Efek membutuhkannya',
   ribbonEffectOptionsDirection: 'Arah',
   ribbonTransDuration: 'Durasi',
   ribbonTransDurationDefault: 'Default',

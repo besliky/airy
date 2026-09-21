@@ -294,6 +294,7 @@ export const th = {
   ribbonTransApplyAllTip: 'ใช้เอฟเฟกต์การเปลี่ยนของสไลด์นี้กับทุกสไลด์',
   ribbonEffectOptions: 'ตัวเลือกลูกเล่น',
   ribbonEffectOptionsTip: 'ทิศทางและระยะเวลาของการเปลี่ยนฉากปัจจุบัน',
+  ribbonEffectOptionsNoneTip: 'เลือกการเปลี่ยนหน้าก่อน — ตัวเลือกลักษณะพิเศษต้องมีการเปลี่ยนหน้า',
   ribbonEffectOptionsDirection: 'ทิศทาง',
   ribbonTransDuration: 'ระยะเวลา',
   ribbonTransDurationDefault: 'ค่าเริ่มต้น',

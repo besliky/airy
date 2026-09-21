@@ -304,6 +304,7 @@ export const nl = {
   ribbonTransApplyAllTip: "De overgang van deze dia op alle dia's toepassen",
   ribbonEffectOptions: 'Effectopties',
   ribbonEffectOptionsTip: 'Richting en duur van de huidige overgang',
+  ribbonEffectOptionsNoneTip: 'Kies eerst een overgang — Effectopties hebben er een nodig',
   ribbonEffectOptionsDirection: 'Richting',
   ribbonTransDuration: 'Duur',
   ribbonTransDurationDefault: 'Standaard',

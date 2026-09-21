@@ -285,6 +285,7 @@ export const zhTW = {
   ribbonTransApplyAllTip: '把目前頁的轉場效果套用到全部頁',
   ribbonEffectOptions: '效果選項',
   ribbonEffectOptionsTip: '目前切換的方向和持續時間',
+  ribbonEffectOptionsNoneTip: '先選擇切換效果，才能使用效果選項',
   ribbonEffectOptionsDirection: '方向',
   ribbonTransDuration: '持續時間',
   ribbonTransDurationDefault: '預設',

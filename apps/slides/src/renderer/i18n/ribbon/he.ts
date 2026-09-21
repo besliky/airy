@@ -290,6 +290,7 @@ export const he = {
   ribbonTransApplyAllTip: 'החלת המעבר של שקופית זו על כל השקופיות',
   ribbonEffectOptions: 'אפשרויות אפקט',
   ribbonEffectOptionsTip: 'כיוון ומשך המעבר הנוכחי',
+  ribbonEffectOptionsNoneTip: 'קודם בחר מעבר — אפשרויות האפקט דורשות מעבר',
   ribbonEffectOptionsDirection: 'כיוון',
   ribbonTransDuration: 'משך',
   ribbonTransDurationDefault: 'ברירת מחדל',

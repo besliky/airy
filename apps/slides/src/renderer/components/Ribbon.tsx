@@ -2255,7 +2255,13 @@ export function Ribbon({
                     closeSiblingPanels(e, closePanels, 'transOptions')
                   }}
                   onClick={() => setTransOptionsOpen((v) => !v)}
-                  data-tip={t('ribbonEffectOptionsTip')}
+                  data-tip={
+                    // screentips render on disabled buttons too (pointerover),
+                    // so the none-transition state names its reason
+                    hasDoc && transition.kind === 'none'
+                      ? t('ribbonEffectOptionsNoneTip')
+                      : t('ribbonEffectOptionsTip')
+                  }
                 >
                   <span className="rb-big-icon">
                     <IconTransWipe size={BIG} />

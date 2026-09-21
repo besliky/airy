@@ -301,6 +301,7 @@ export const ko = {
   ribbonTransApplyAllTip: '현재 슬라이드의 화면 전환 효과를 모든 슬라이드에 적용',
   ribbonEffectOptions: '효과 옵션',
   ribbonEffectOptionsTip: '현재 전환의 방향 및 지속 시간',
+  ribbonEffectOptionsNoneTip: '먼저 전환을 선택하세요. 효과 옵션에는 전환이 필요합니다',
   ribbonEffectOptionsDirection: '방향',
   ribbonTransDuration: '지속 시간',
   ribbonTransDurationDefault: '기본값',

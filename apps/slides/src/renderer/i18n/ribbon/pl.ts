@@ -304,6 +304,7 @@ export const pl = {
   ribbonTransApplyAllTip: 'Zastosuj przejście tego slajdu do wszystkich slajdów',
   ribbonEffectOptions: 'Opcje efektów',
   ribbonEffectOptionsTip: 'Kierunek i czas trwania bieżącego przejścia',
+  ribbonEffectOptionsNoneTip: 'Najpierw wybierz przejście — Opcje efektów go wymagają',
   ribbonEffectOptionsDirection: 'Kierunek',
   ribbonTransDuration: 'Czas trwania',
   ribbonTransDurationDefault: 'Domyślnie',

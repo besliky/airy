@@ -293,6 +293,7 @@ export const ar = {
   ribbonTransApplyAllTip: 'تطبيق انتقال هذه الشريحة على كل الشرائح',
   ribbonEffectOptions: 'خيارات التأثير',
   ribbonEffectOptionsTip: 'اتجاه ومدة الانتقال الحالي',
+  ribbonEffectOptionsNoneTip: 'اختر انتقالًا أولاً — خيارات التأثيرات تتطلب انتقالًا',
   ribbonEffectOptionsDirection: 'الاتجاه',
   ribbonTransDuration: 'المدة',
   ribbonTransDurationDefault: 'افتراضي',

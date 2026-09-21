@@ -303,6 +303,7 @@ export const ru = {
   ribbonTransApplyAllTip: 'Применить переход этого слайда ко всем слайдам',
   ribbonEffectOptions: 'Параметры эффектов',
   ribbonEffectOptionsTip: 'Направление и длительность текущего перехода',
+  ribbonEffectOptionsNoneTip: 'Сначала выберите переход — параметрам эффектов нужен переход',
   ribbonEffectOptionsDirection: 'Направление',
   ribbonTransDuration: 'Длительность',
   ribbonTransDurationDefault: 'По умолчанию',

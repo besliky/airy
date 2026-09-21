@@ -296,6 +296,7 @@ export const cs = {
   ribbonTransApplyAllTip: 'Použít přechod tohoto snímku na všechny snímky',
   ribbonEffectOptions: 'Možnosti efektu',
   ribbonEffectOptionsTip: 'Směr a doba trvání aktuálního přechodu',
+  ribbonEffectOptionsNoneTip: 'Nejprve vyberte přechod — Možnosti efektu jej vyžadují',
   ribbonEffectOptionsDirection: 'Směr',
   ribbonTransDuration: 'Doba trvání',
   ribbonTransDurationDefault: 'Výchozí',

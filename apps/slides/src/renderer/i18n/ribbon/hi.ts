@@ -302,6 +302,7 @@ export const hi = {
   ribbonTransApplyAllTip: 'इस स्लाइड का ट्रांज़िशन सभी स्लाइड पर लागू करें',
   ribbonEffectOptions: 'प्रभाव विकल्प',
   ribbonEffectOptionsTip: 'वर्तमान संक्रमण की दिशा और अवधि',
+  ribbonEffectOptionsNoneTip: 'पहले एक ट्रांज़िशन चुनें — प्रभाव विकल्पों के लिए इसकी आवश्यकता है',
   ribbonEffectOptionsDirection: 'दिशा',
   ribbonTransDuration: 'अवधि',
   ribbonTransDurationDefault: 'डिफ़ॉल्ट',
