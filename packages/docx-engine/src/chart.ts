@@ -1059,6 +1059,10 @@ export async function patchChartWorkbookXlsxBase64(
       const rowXml = rm[0]
       const rNum = Number(/\br="(\d+)"/.exec(rowXml)?.[1] ?? 0)
       if (!rNum) continue
+      // every row counts, cell-less ones too: a trailing <row> that only
+      // carries ht/hidden/style attrs used to fall out of the loop bound and
+      // silently vanish from sheetData (BUG-1218/1238)
+      maxExistingRow = Math.max(maxExistingRow, rNum)
       const selfClosing = /\/>$/.test(rowXml)
       const open = selfClosing
         ? rowXml.slice(0, -2) + '>'
@@ -1066,10 +1070,7 @@ export async function patchChartWorkbookXlsxBase64(
       const cells = parseSheetCells(
         selfClosing ? '' : rowXml.slice(open.length, rowXml.length - '</row>'.length),
       )
-      for (const c of cells) {
-        maxExistingCol = Math.max(maxExistingCol, c.col)
-        maxExistingRow = Math.max(maxExistingRow, rNum)
-      }
+      for (const c of cells) maxExistingCol = Math.max(maxExistingCol, c.col)
       existingRows.set(rNum, { xml: rowXml, open, cells })
     }
 
@@ -1139,10 +1140,13 @@ export async function patchChartWorkbookXlsxBase64(
       /<sheetData\/>|<sheetData[^>]*>[\s\S]*?<\/sheetData>/,
       newSheetData,
     )
-    // dimension covers the union of the old extent and the new data rectangle
-    const dim = /<dimension ref="A1:([A-Z]+)(\d+)"\s*\/>/.exec(sheetXml)
-    const dimCol = dim ? xlsxColIndex(dim[1]) : 1
-    const dimRow = dim ? Number(dim[2]) : 1
+    // dimension covers the union of the old extent and the new data rectangle;
+    // the origin may be any ref (a non-A1 dimension used to parse as 1,1 and
+    // shrink the union to the cell extent — BUG-1218/1238), and a single-cell
+    // `ref="B2"` spelling uses its start as the end
+    const dim = /<dimension ref="([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?"\s*\/>/.exec(sheetXml)
+    const dimCol = dim ? xlsxColIndex(dim[3] ?? dim[1]) : 1
+    const dimRow = dim ? Number(dim[4] ?? dim[2]) : 1
     const lastRef = `${xlsxColLetters(Math.max(lastCol, dimCol, maxExistingCol))}${Math.max(
       lastDataRow,
       dimRow,
