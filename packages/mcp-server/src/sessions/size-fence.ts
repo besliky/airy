@@ -15,7 +15,9 @@
  *    budget. The docx engine already runs this fence inside parseDocx
  *    (docx-engine zip-load); the pptx engine does not, so the slides session
  *    applies the same numbers here. Workbook bytes never transit Node (the
- *    Rust sidecar reads the file itself), so xlsx gets only the raw cap.
+ *    Rust sidecar reads the file itself), so xlsx gets only the raw cap
+ *    here — its declared-uncompressed budget (same 1.5 GiB total) runs
+ *    inside the sidecar (SEC-1103) and surfaces as the open error.
  */
 import JSZip from 'jszip'
 

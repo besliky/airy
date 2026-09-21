@@ -280,8 +280,10 @@ export class XlsxSession {
     // SEC-1102 raw-size fence for parity with the docx/slides opens. The
     // workbook bytes themselves never transit Node — the Rust sidecar reads
     // the file — so this refuses runaway inputs before spawning any work;
-    // the declared-uncompressed (zip-bomb) budget for .xlsx is the sidecar's
-    // domain, not observable from Node without reading the bytes back in
+    // the declared-uncompressed (zip-bomb) budget for .xlsx runs inside the
+    // sidecar itself (SEC-1103: it sums the central-directory sizes and
+    // refuses over 1.5 GiB before decompressing), reaching this session as
+    // the open reply's error
     let rawSize = 0
     try {
       rawSize = (await stat(path)).size
