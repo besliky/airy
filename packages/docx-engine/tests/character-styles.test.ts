@@ -574,6 +574,45 @@ describe('styleUpserts explicit off (BUG-1101): clearing an inherited facet', ()
     })
   })
 
+  it('explicit off also clears the complex-script twins (BUG-1237)', async () => {
+    // rtl runs read w:bCs/w:iCs instead of w:b/w:i: a latin-only off used to
+    // leave Arabic/Hebrew runs bold+italic after "uncheck Bold/Italic"
+    const parsed = await parseDocx(
+      await buildDocx({
+        bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+        extraStylesXml:
+          '<w:style w:type="paragraph" w:styleId="CsBase"><w:name w:val="Cs Base"/>' +
+          '<w:rPr><w:b/><w:bCs/><w:i/><w:iCs/></w:rPr></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="CsChild"><w:name w:val="Cs Child"/>' +
+          '<w:basedOn w:val="CsBase"/><w:rPr><w:bCs/><w:sz w:val="24"/></w:rPr></w:style>',
+      }),
+    )
+    const saved = await saveWithUpsert(parsed, [
+      {
+        styleId: 'CsChild',
+        type: 'paragraph',
+        name: 'Cs Child',
+        rPr: { bold: false, italic: false },
+      },
+    ])
+    const child = /<w:style [^>]*w:styleId="CsChild"[\s\S]*?<\/w:style>/.exec(
+      await stylesXmlOf(saved),
+    )![0]
+    expect(child).toContain('<w:b w:val="0"/>')
+    expect(child).toContain('<w:bCs w:val="0"/>')
+    expect(child).toContain('<w:i w:val="0"/>')
+    expect(child).toContain('<w:iCs w:val="0"/>')
+    expect(child).toContain('<w:sz w:val="24"/>')
+    // after reopen both scripts resolve the off — rtl reads the Cs twins
+    const reparsed = await parseDocx(saved)
+    expect(reparsed.styles.get('CsChild')!.display).toMatchObject({
+      bold: false,
+      boldCs: false,
+      italic: false,
+      italicCs: false,
+    })
+  })
+
   it('outlineLevel false writes w:outlineLvl 9 and blocks the inherited level', async () => {
     const parsed = await openInheritDoc()
     expect(parsed.styles.get('InhBare')!.headingLevel).toBe(1) // inherited from InhBase

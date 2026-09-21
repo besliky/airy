@@ -70,9 +70,9 @@ function planBodyXml(
 describe('updateTocField keeps the region trailing section break (BUG-1003)', () => {
   it('re-attaches the last paragraph sectPr to the regenerated last entry', async () => {
     const { editor, parsed } = await openTocDoc()
-    expect(updateTocField(editor, parsed.blocks, undefined, undefined, { silent: true })).toBe(
-      'updated',
-    )
+    expect(
+      updateTocField(editor, parsed.blocks, undefined, undefined, undefined, { silent: true }),
+    ).toBe('updated')
     const lines = tocLineXmls(editor)
     expect(lines).toHaveLength(2) // stale entries replaced by the real headings
     expect(lines[0]).toContain('Chapter One')
@@ -85,7 +85,7 @@ describe('updateTocField keeps the region trailing section break (BUG-1003)', ()
 
   it('the preserved sectPr reaches the saved body (no section loss on save)', async () => {
     const { editor, parsed } = await openTocDoc()
-    updateTocField(editor, parsed.blocks, undefined, undefined, { silent: true })
+    updateTocField(editor, parsed.blocks, undefined, undefined, undefined, { silent: true })
     const body = planBodyXml(
       pmDocToSavePlan(editor.getJSON() as PmNode, parsed.blocks),
       parsed.blocks,
@@ -127,9 +127,9 @@ async function openTwoColumnTocDoc() {
 describe('updateTocField keeps mid-region continuous section breaks (BUG-1107)', () => {
   it('re-attaches every sectPr of the region, in document order', async () => {
     const { editor, parsed } = await openTwoColumnTocDoc()
-    expect(updateTocField(editor, parsed.blocks, undefined, undefined, { silent: true })).toBe(
-      'updated',
-    )
+    expect(
+      updateTocField(editor, parsed.blocks, undefined, undefined, undefined, { silent: true }),
+    ).toBe('updated')
     const lines = tocLineXmls(editor)
     expect(lines).toHaveLength(2)
     // the continuous column break lands on an intermediate regenerated entry…
@@ -144,7 +144,7 @@ describe('updateTocField keeps mid-region continuous section breaks (BUG-1107)',
 
   it('both sections reach the saved body', async () => {
     const { editor, parsed } = await openTwoColumnTocDoc()
-    updateTocField(editor, parsed.blocks, undefined, undefined, { silent: true })
+    updateTocField(editor, parsed.blocks, undefined, undefined, undefined, { silent: true })
     const body = planBodyXml(
       pmDocToSavePlan(editor.getJSON() as PmNode, parsed.blocks),
       parsed.blocks,
@@ -178,9 +178,10 @@ describe('updateTocField keeps mid-region continuous section breaks (BUG-1107)',
       extensions: editorExtensions,
       content: blocksToPmDoc(parsed.blocks) as never,
     })
-    expect(updateTocField(editor, parsed.blocks, undefined, undefined, { silent: true })).toBe(
-      'updated',
-    )
+    openEditors.push(editor)
+    expect(
+      updateTocField(editor, parsed.blocks, undefined, undefined, undefined, { silent: true }),
+    ).toBe('updated')
     const body = planBodyXml(
       pmDocToSavePlan(editor.getJSON() as PmNode, parsed.blocks),
       parsed.blocks,

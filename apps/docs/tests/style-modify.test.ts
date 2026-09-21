@@ -205,6 +205,32 @@ describe('BUG-1022: built-in detection beyond Normal|HeadingN', () => {
     expect(marked.styles.get('Title2')!.builtin).toBeUndefined()
   })
 
+  it('w:customStyle="true" (boolean ST_OnOff spelling) marks a custom style too (BUG-1236)', async () => {
+    // only "1" used to be read: a "true"-spelled producer's style with a
+    // built-in NAME parsed as built-in, and a Modify then stripped its marker
+    const parsed = await parseDocx(
+      await buildDocx({
+        bodyXml: '<w:p><w:r><w:t>x</w:t></w:r></w:p>',
+        extraStylesXml:
+          '<w:style w:type="paragraph" w:styleId="Title3" w:customStyle="true">' +
+          '<w:name w:val="Title"/></w:style>',
+      }),
+    )
+    expect(parsed.styles.get('Title3')!.builtin).toBeUndefined()
+    const info = parsed.styles.get('Title3')!
+    const { upsert } = styleUpsertFromEdits(info, { ...styleEditsFromInfo(info), bold: true })
+    expect(upsert.builtin).toBeUndefined()
+    const blocks = parsed.blocks
+      .filter((b) => !b.hidden && b.docxIndex !== null)
+      .map((b) => ({ kind: 'original' as const, docxIndex: b.docxIndex! }))
+    const saved = await saveDocx(parsed, blocks, { styleUpserts: [upsert] })
+    const stylesXml = await (await JSZip.loadAsync(saved)).file('word/styles.xml')!.async('string')
+    const title3 = /<w:style [^>]*w:styleId="Title3"[\s\S]*?<\/w:style>/.exec(stylesXml)![0]
+    // the custom marker survives the modify (a wrong built-in flag used to cut it)
+    expect(title3).toContain('w:customStyle')
+    expect(title3).toContain('<w:b/>')
+  })
+
   it('a Title modify keeps the built-in marker instead of flipping to custom', async () => {
     const parsed = await openBuiltinDoc()
     const info = parsed.styles.get('Title')!

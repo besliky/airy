@@ -2387,12 +2387,19 @@ export interface TocEntry {
 export interface TocFieldOptions {
   /** \o "1-N": deepest outline level included (default: deepest entry level) */
   levels?: number
-  /** \n: omit the tab leader and page numbers */
+  /** \n: omit the tab leader and page numbers (every level) */
   hidePageNumbers?: boolean
+  /** \n 2-4: omit the tab leader and page numbers only for outline levels
+   *  within [from,to] — a level outside the range keeps its page number. A
+   *  plain \n (hidePageNumbers) still hides every level (BUG-1012) */
+  hidePageNumbersFrom?: number
+  /** upper bound of the \n level range (defaults to `hidePageNumbersFrom`) */
+  hidePageNumbersTo?: number
   /** \h: hyperlink entries (default on, like Word's built-in TOC) */
   hyperlinks?: boolean
   /** \t "Style,level,…" (e.g. "Chapter 1,1,Appendix,2"): build from paragraph
-   *  styles instead of outline levels (drops \o and \u, like Word) */
+   *  styles instead of outline levels; with `levels` also set the two sources
+   *  union, like Word (BUG-1012) */
   styles?: string
   /** \c "Figure": build a table of figures from SEQ captions of that label */
   seqIdentifier?: string
@@ -2400,18 +2407,35 @@ export interface TocFieldOptions {
 
 const clampTocLevel = (level: number): number => Math.min(Math.max(Math.round(level), 1), 9)
 
+/** true when the \n switches of `options` hide the page number of `level`:
+ *  a bare \n hides every level, a ranged \n 2-4 only levels 2 through 4 */
+export function tocEntryHidesPage(options: TocFieldOptions, level: number): boolean {
+  if (options.hidePageNumbers) return true
+  const from = options.hidePageNumbersFrom
+  if (from === undefined) return false
+  const lo = Math.min(from, options.hidePageNumbersTo ?? from)
+  const hi = Math.max(from, options.hidePageNumbersTo ?? from)
+  return level >= lo && level <= hi
+}
+
 /**
  * The TOC field instruction text (without its padding spaces) for the given
  * options. Switch order is canonical, matching Word's own output:
- * `\o` (or `\t` for source styles, which Word appends after \z and pairs with
- * neither \o nor \u), `\n`, `\h`, `\z`, `\u`; a table of figures is always
- * `TOC \h \z \c "label"`.
+ * `\o` (or `\o` + `\t` when source styles pair with an outline range — Word
+ * unions the two entry sources; a styles-only TOC drops both `\o` and `\u`),
+ * `\n` (bare, or with its level range `\n 2-4`), `\h`, `\z`, `\u`/`\t`; a
+ * table of figures is always `TOC \h \z \c "label"`.
  */
 export function buildTocInstruction(options: TocFieldOptions = {}): string {
   if (options.seqIdentifier) return `TOC \\h \\z \\c "${escapeXmlAttr(options.seqIdentifier)}"`
   const parts = ['TOC']
-  if (!options.styles) parts.push(`\\o "1-${clampTocLevel(options.levels ?? 9)}"`)
+  if (!options.styles || options.levels !== undefined)
+    parts.push(`\\o "1-${clampTocLevel(options.levels ?? 9)}"`)
   if (options.hidePageNumbers) parts.push('\\n')
+  else if (options.hidePageNumbersFrom !== undefined) {
+    const from = clampTocLevel(options.hidePageNumbersFrom)
+    parts.push(`\\n ${from}-${clampTocLevel(options.hidePageNumbersTo ?? from)}`)
+  }
   if (options.hyperlinks !== false) parts.push('\\h')
   parts.push('\\z')
   if (!options.styles) parts.push('\\u')
@@ -2427,15 +2451,19 @@ export function buildTocInstruction(options: TocFieldOptions = {}): string {
  * (Word regenerates them anyway on open).
  */
 export function generateTocFieldXml(entries: TocEntry[], options: TocFieldOptions = {}): string[] {
+  // \o narrows the OUTLINE-range entries; style-mapped entries (\t) carry
+  // their own TOC level and must not be cut by the heading range (BUG-1012)
   const shown =
-    options.levels === undefined
+    options.styles || options.levels === undefined
       ? entries
       : entries.filter((e) => e.level <= clampTocLevel(options.levels!))
   if (shown.length === 0) return []
   // no explicit level range: cover 1..deepest entry level (byte-identical to
-  // the pre-options instruction, so untouched callers keep their output)
+  // the pre-options instruction, so untouched callers keep their output).
+  // A styles-mapped TOC invents no range: its instruction stays `\t`-only
+  // unless the caller set one (the union case).
   const opts: TocFieldOptions =
-    options.levels === undefined && !options.seqIdentifier
+    options.levels === undefined && !options.seqIdentifier && !options.styles
       ? { ...options, levels: Math.min(Math.max(...shown.map((e) => e.level), 1), 9) }
       : options
   const pPr = (level: number) =>
@@ -2443,11 +2471,16 @@ export function generateTocFieldXml(entries: TocEntry[], options: TocFieldOption
     '<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9350"/></w:tabs>' +
     '<w:rPr><w:noProof/></w:rPr></w:pPr>'
   const run = (inner: string) => `<w:r><w:rPr><w:noProof/></w:rPr>${inner}</w:r>`
-  // \n hides the tab leader and page number: the cached entry is title-only
-  const entryRuns = (text: string, pageNo?: number) =>
-    run(`<w:t xml:space="preserve">${escapeXmlText(text)}</w:t>`) +
-    (options.hidePageNumbers ? '' : run('<w:tab/>')) +
-    (!options.hidePageNumbers && pageNo !== undefined ? run(`<w:t>${pageNo}</w:t>`) : '')
+  // \n hides the tab leader and page number: the cached entry is title-only.
+  // A ranged \n 2-4 hides only the levels inside the range (BUG-1012).
+  const entryRuns = (text: string, pageNo: number | undefined, level: number) => {
+    const hidden = tocEntryHidesPage(options, level)
+    return (
+      run(`<w:t xml:space="preserve">${escapeXmlText(text)}</w:t>`) +
+      (hidden ? '' : run('<w:tab/>')) +
+      (!hidden && pageNo !== undefined ? run(`<w:t>${pageNo}</w:t>`) : '')
+    )
+  }
   const begin =
     '<w:r><w:fldChar w:fldCharType="begin" w:dirty="true"/></w:r>' +
     `<w:r><w:instrText xml:space="preserve"> ${buildTocInstruction(opts)} </w:instrText></w:r>` +
@@ -2457,7 +2490,7 @@ export function generateTocFieldXml(entries: TocEntry[], options: TocFieldOption
   return shown.map((entry, i) => {
     const first = i === 0 ? begin : ''
     const last = i === shown.length - 1 ? end : ''
-    let content = entryRuns(entry.text, entry.pageNo)
+    let content = entryRuns(entry.text, entry.pageNo, entry.level)
     if (entry.anchor)
       content = `<w:hyperlink w:anchor="${escapeXmlAttr(entry.anchor)}" w:history="1">${content}</w:hyperlink>`
     return `<w:p>${pPr(entry.level)}${first}${content}${last}</w:p>`

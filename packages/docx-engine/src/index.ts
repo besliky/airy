@@ -28,6 +28,7 @@ export {
   generateTableXml,
   generateTocFieldXml,
   buildTocInstruction,
+  tocEntryHidesPage,
   mergePPrFormat,
   setPPrChange,
   stripPPrChange,

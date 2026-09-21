@@ -160,6 +160,28 @@ describe('hyphenation switches land at their CT_Settings sequence slot (BUG-1018
     )
     expect(xml).toContain('<w:zoom w:percent="100"/><w:autoHyphenation/></w:settings>')
   })
+
+  it('a display*DrawingGridEvery-only tail anchors the flag before itself (BUG-1219/1239)', async () => {
+    // the grid display switches sit between drawingGridVerticalSpacing and
+    // doNotUseMarginsForDrawingGridOrigin in CT_Settings — a settings part
+    // whose only tail is these two used to push the flag past them (the
+    // anchored insert found no anchor and fell through to the end)
+    const doc = await parseDocx(
+      await settingsDocx(
+        '<w:zoom w:percent="100"/>' +
+          '<w:defaultTabStop w:val="720"/>' +
+          '<w:displayHorizontalDrawingGridEvery w:val="5"/>' +
+          '<w:displayVerticalDrawingGridEvery w:val="5"/>',
+      ),
+    )
+    const xml = await settingsOf(
+      await saveDocx(doc, originalOrder(doc), { hyphenation: { auto: true } }),
+    )
+    expect(xml).toContain(
+      '<w:defaultTabStop w:val="720"/><w:autoHyphenation/>' +
+        '<w:displayHorizontalDrawingGridEvery w:val="5"/>',
+    )
+  })
 })
 
 describe('soft hyphen round-trip (w:softHyphen)', () => {

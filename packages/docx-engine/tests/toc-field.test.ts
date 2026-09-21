@@ -125,7 +125,17 @@ describe('parseTocInstruction', () => {
   const cases: Array<[string, TocFieldOptions]> = [
     ['TOC \\o "1-3" \\h \\z \\u', { levels: 3, hyperlinks: true }],
     ['TOC \\o "1-2" \\n \\h \\z \\u', { levels: 2, hidePageNumbers: true, hyperlinks: true }],
+    [
+      'TOC \\o "1-3" \\n 2-4 \\h \\z \\u',
+      { levels: 3, hidePageNumbersFrom: 2, hidePageNumbersTo: 4, hyperlinks: true },
+    ],
     ['TOC \\h \\z \\t "Chapter 1,1"', { styles: 'Chapter 1,1', hyperlinks: true }],
+    // \o + \t union: the update path collects headings AND style-mapped
+    // paragraphs, and the instruction keeps both switches (BUG-1012)
+    [
+      'TOC \\o "1-3" \\h \\z \\t "Chapter 1,1"',
+      { levels: 3, styles: 'Chapter 1,1', hyperlinks: true },
+    ],
     ['TOC \\o "1-1" \\z \\u', { levels: 1, hyperlinks: false }],
     ['TOC \\h \\z \\c "Figure"', { seqIdentifier: 'Figure', hyperlinks: true }],
   ]
@@ -201,15 +211,64 @@ describe('parseTocInstruction does not swallow the next switch (BUG-1109)', () =
     })
   })
 
-  it('a no-space ranged \\n still hides page numbers, and \\h survives a packed switch', () => {
-    // `TOC \n2-4` used to read as "show page numbers" — the inverse of the
-    // spaced spelling; \h directly followed by another switch works too
+  it('a no-space ranged \\n parses per level, and \\h survives a packed switch', () => {
+    // `TOC \n2-4` used to widen to a full \n — the regenerated instruction
+    // hid every level's page numbers instead of levels 2-4 only (BUG-1012)
     expect(parseTocInstruction('TOC \\o "1-3" \\n2-4 \\h')).toEqual({
       levels: 3,
-      hidePageNumbers: true,
+      hidePageNumbersFrom: 2,
+      hidePageNumbersTo: 4,
+      hyperlinks: true,
+    })
+    expect(parseTocInstruction('TOC \\o "1-3" \\n 2-4 \\h \\z \\u')).toEqual({
+      levels: 3,
+      hidePageNumbersFrom: 2,
+      hidePageNumbersTo: 4,
       hyperlinks: true,
     })
     expect(parseTocInstruction('TOC \\n')).toEqual({ hidePageNumbers: true, hyperlinks: false })
     expect(parseTocInstruction('TOC \\h\\z')).toEqual({ hyperlinks: true })
+  })
+})
+
+describe('ranged \\n keeps page numbers per level (BUG-1012)', () => {
+  it('regenerating from a parsed ranged \\n round-trips the range', () => {
+    expect(buildTocInstruction({ levels: 3, hidePageNumbersFrom: 2, hidePageNumbersTo: 4 })).toBe(
+      'TOC \\o "1-3" \\n 2-4 \\h \\z \\u',
+    )
+    const parsed = parseTocInstruction('TOC \\o "1-3" \\n 2-4 \\h \\z \\u')
+    expect(buildTocInstruction(parsed)).toBe('TOC \\o "1-3" \\n 2-4 \\h \\z \\u')
+  })
+
+  it('levels inside the range lose the tab and page number; levels outside keep them', () => {
+    const fragments = generateTocFieldXml(ENTRIES, {
+      levels: 3,
+      hidePageNumbersFrom: 2,
+      hidePageNumbersTo: 4,
+    })
+    expect(instructionOf(fragments)).toBe('TOC \\o "1-3" \\n 2-4 \\h \\z \\u')
+    // level 1 (Chapter One): page number kept
+    expect(fragments[0]).toContain('Chapter One')
+    expect(fragments[0]).toContain('<w:tab/>')
+    expect(fragments[0]).toContain('<w:t>1</w:t>')
+    // levels 2-3 (Section A, Deep): title-only cached entries
+    expect(fragments[1]).not.toContain('<w:tab/>')
+    expect(fragments[1]).not.toContain('<w:t>2</w:t>')
+    expect(fragments[2]).not.toContain('<w:tab/>')
+  })
+
+  it('round-trips through parseDocx: in-range lines are noPage, level 1 keeps its page', async () => {
+    const fragments = generateTocFieldXml(ENTRIES, {
+      levels: 3,
+      hidePageNumbersFrom: 2,
+      hidePageNumbersTo: 3,
+    })
+    const doc = await parseDocx(await buildDocx({ bodyXml: fragments.join('') }))
+    const lines = doc.blocks.filter((b) => b.fieldDisplay?.kind === 'tocLine')
+    expect(lines).toHaveLength(3)
+    expect(lines[0].fieldDisplay).toMatchObject({ left: 'Chapter One', right: '1', level: 1 })
+    expect(lines[0].fieldDisplay?.noPage).toBeUndefined()
+    expect(lines[1].fieldDisplay).toMatchObject({ left: 'Section A', right: '', noPage: true })
+    expect(lines[2].fieldDisplay?.noPage).toBe(true)
   })
 })
