@@ -47,8 +47,8 @@ const LEGACY: Record<string, number> = {
   'ConsolidateDialog.tsx': 1,
   // EquationDialog
   'EquationDialog.tsx': 1,
-  // SortDialog + RemoveDuplicatesDialog + ChartTextDialog + AxisSizeDialog + LinkDialog
-  'ExcelShell.tsx': 5,
+  // SortDialog + RemoveDuplicatesDialog
+  'ExcelShell.tsx': 2,
   // FormatCellsDialog
   'FormatCellsDialog.tsx': 1,
   // GoalSeekDialog
