@@ -22,6 +22,7 @@ import {
   buildActiveSheetPrintRequest,
   type PageLayoutContext,
 } from '../src/renderer/page-layout-actions'
+import { createEditJournal, recordPageSetup } from '../src/renderer/edit-journal'
 import type { PrintWorksheet } from '../src/renderer/print-html'
 import type { UniverRuntime } from '../src/renderer/univer-state'
 
@@ -79,7 +80,22 @@ describe('buildActiveSheetPrintRequest', () => {
       orientation: 'portrait',
       scale: 100,
       fitToPage: false,
+      pageOrder: 'down-then-over',
     })
+  })
+
+  it('seeds from the journaled page order when the dialog passes none (BUG-1213)', async () => {
+    const journal = createEditJournal()
+    recordPageSetup(journal, 'sheet-1', { pageOrder: 'over-then-down' })
+    const ctx = layoutContext()
+    ctx.lazyWorkbookRef.current = {
+      editJournal: journal,
+      file: { sheets: [] },
+      flags: { preloadComplete: true },
+      sheetFilePageSetups: new Map(),
+    } as unknown as PageLayoutContext['lazyWorkbookRef']['current']
+    const { effective } = await buildActiveSheetPrintRequest(ctx)
+    expect(effective.pageOrder).toBe('over-then-down')
   })
 
   it('applies the dialog overrides without touching the saved setup', async () => {
@@ -97,6 +113,7 @@ describe('buildActiveSheetPrintRequest', () => {
       orientation: 'landscape',
       scale: 50,
       fitToPage: false,
+      pageOrder: 'down-then-over',
     })
     // A second build without overrides still sees the untouched defaults.
     const again = await buildActiveSheetPrintRequest(ctx)
@@ -113,22 +130,64 @@ describe('controlsFromEffective (dialog seed)', () => {
         orientation: 'portrait',
         scale: 100,
         fitToPage: false,
+        pageOrder: 'down-then-over',
       }),
-    ).toEqual({ paperSize: 9, orientation: 'portrait', scale: 100, fitToPage: false })
+    ).toEqual({
+      paperSize: 9,
+      orientation: 'portrait',
+      scale: 100,
+      fitToPage: false,
+      pageOrder: 'down-then-over',
+    })
+    // A saved over-then-down seeds the dialog's order select.
+    expect(
+      controlsFromEffective({
+        paperSize: 9,
+        orientation: 'portrait',
+        scale: 100,
+        fitToPage: false,
+        pageOrder: 'over-then-down',
+      }),
+    ).toEqual({
+      paperSize: 9,
+      orientation: 'portrait',
+      scale: 100,
+      fitToPage: false,
+      pageOrder: 'over-then-down',
+    })
     expect(
       controlsFromEffective({
         paperSize: 1,
         orientation: 'landscape',
         scale: 62.5,
         fitToPage: false,
+        pageOrder: 'over-then-down',
       }),
-    ).toEqual({ paperSize: 1, orientation: 'landscape', scale: 63, fitToPage: false })
+    ).toEqual({
+      paperSize: 1,
+      orientation: 'landscape',
+      scale: 63,
+      fitToPage: false,
+      pageOrder: 'over-then-down',
+    })
   })
 
   it('fit-to-page owns the scale control at 100%', () => {
     expect(
-      controlsFromEffective({ paperSize: 9, orientation: 'portrait', scale: 40, fitToPage: true }),
-    ).toEqual({ paperSize: 9, orientation: 'portrait', scale: 100, fitToPage: true })
+      controlsFromEffective({
+        paperSize: 9,
+        orientation: 'portrait',
+        scale: 40,
+        fitToPage: true,
+        pageOrder: 'down-then-over',
+      }),
+    ).toEqual({
+      paperSize: 9,
+      orientation: 'portrait',
+      scale: 100,
+      fitToPage: true,
+      pageOrder: 'down-then-over',
+    })
   })
 })
 

@@ -1283,6 +1283,7 @@ export const zhTW = {
   scUnhideColumns: '取消隱藏欄',
   appPrintSelectionMissing: '沒有可列印的選定範圍。',
   appTextToColsEmpty: '所選欄沒有可分割的內容。',
+  appTextToColsTooManyRows: '分列最多支援 {count} 列——選定範圍有 {rows} 列，請選擇較小的範圍。',
   appTextToColsNeedDelimiter: '請至少選擇一個分隔符號。',
   appTextToColsBadDestination: '「{ref}」不是本工作表中的儲存格參照。',
   appOutlineSettings: '設定',

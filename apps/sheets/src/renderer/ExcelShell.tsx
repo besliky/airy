@@ -59,6 +59,7 @@ import { InsertFunctionDialog } from './InsertFunctionDialog'
 import { PrintDialog } from './PrintDialog'
 import { TextToColumnsDialog, type TextToColumnsSource } from './TextToColumnsDialog'
 import type { TextToColumnsConfig } from './text-to-columns'
+import type { TextToColumnsSourceResult } from './data-tools-actions'
 import { OutlineSettingsDialog, type OutlineSettingsValue } from './OutlineSettingsDialog'
 import type { PrintSetupOverrides } from './page-layout-actions'
 import type { WorkbookExportPdfRequest } from '../shared/desktop-api'
@@ -308,6 +309,7 @@ interface ExcelShellProps {
       orientation: 'portrait' | 'landscape'
       scale: number
       fitToPage: boolean
+      pageOrder: 'down-then-over' | 'over-then-down'
     }
   }>
   readonly onCreateSubtotal: (config: SubtotalConfig) => string | null
@@ -315,8 +317,9 @@ interface ExcelShellProps {
   /// Prefill for the Consolidate reference input (current multi-cell selection).
   readonly onGetConsolidateDefault: () => string
   /// Text to Columns: reads the single selected column for the wizard's
-  /// preview (null when the selection is not one column).
-  readonly onGetT2cSource: () => TextToColumnsSource | null
+  /// preview; an error result explains (not one column, or too large) and
+  /// the wizard stays closed.
+  readonly onGetT2cSource: () => TextToColumnsSourceResult
   /// Text to Columns Finish; returns an error message, or null on success.
   readonly onApplyTextToColumns: (config: TextToColumnsConfig) => string | null
   /// The active sheet's outline summary placement (Outline Settings seed).
@@ -340,6 +343,9 @@ export interface PageLayoutEcho {
   readonly scale?: number | undefined
   readonly fitToWidth?: number | undefined
   readonly fitToHeight?: number | undefined
+  /// Page order for a sheet tiled over several pages (journal value; unset
+  /// means "as saved in the file", Excel's down-then-over default).
+  readonly pageOrder?: 'down-then-over' | 'over-then-down' | undefined
   readonly margins?: 'normal' | 'wide' | 'narrow' | undefined
   readonly printGridlines?: boolean | undefined
   readonly printHeadings?: boolean | undefined
@@ -790,9 +796,9 @@ export function ExcelShell({
             else if (command === 'subtotal-open') setShowSubtotalDialog(true)
             else if (command === 'consolidate-open') setShowConsolidateDialog(true)
             else if (command === 'text-to-columns-open') {
-              const source = onGetT2cSource()
-              if (source) setT2cSource(source)
-              else onSetStatusMessage(t('appTextToColsSelectOne'))
+              const result = onGetT2cSource()
+              if (result.kind === 'source') setT2cSource(result)
+              else onSetStatusMessage(result.message)
             } else if (command === 'outline-settings-open') setShowOutlineSettings(true)
             else if (command === 'goto-open') setShowGoTo(true)
             else if (command === 'header-footer-open') setShowHeaderFooter(true)
@@ -2074,6 +2080,27 @@ function Ribbon({
             [
               { value: 'page-layout:orientation:portrait', label: t('appPortrait') },
               { value: 'page-layout:orientation:landscape', label: t('appLandscape') },
+            ],
+          )}
+          {largeMenu(
+            t('dlgPrintPageOrder'),
+            '⇉',
+            pageLayout.pageOrder
+              ? t(
+                  pageLayout.pageOrder === 'down-then-over'
+                    ? 'dlgPrintOrderDownThenOver'
+                    : 'dlgPrintOrderOverThenDown',
+                )
+              : t('appAsSavedInFile'),
+            [
+              {
+                value: 'page-layout:page-order:down-then-over',
+                label: t('dlgPrintOrderDownThenOver'),
+              },
+              {
+                value: 'page-layout:page-order:over-then-down',
+                label: t('dlgPrintOrderOverThenDown'),
+              },
             ],
           )}
           {largeMenu(t('appSizeLabel'), '▭', t('appPaperSizeTitle'), [

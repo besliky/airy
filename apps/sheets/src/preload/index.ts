@@ -1367,6 +1367,9 @@ function parsePagePrintSettings(input: unknown): WorkbookRangeResult['pageSetup'
     (input.fitToWidth !== undefined && !boundedInt(input.fitToWidth, 0, 32_767)) ||
     (input.fitToHeight !== undefined && !boundedInt(input.fitToHeight, 0, 32_767)) ||
     (input.fitToPage !== undefined && typeof input.fitToPage !== 'boolean') ||
+    (input.pageOrder !== undefined &&
+      input.pageOrder !== 'downThenOver' &&
+      input.pageOrder !== 'overThenDown') ||
     (input.printGridlines !== undefined && typeof input.printGridlines !== 'boolean') ||
     (input.printHeadings !== undefined && typeof input.printHeadings !== 'boolean') ||
     (input.oddHeader !== undefined && !isBoundedString(input.oddHeader, 500)) ||
@@ -1415,6 +1418,7 @@ function parsePagePrintSettings(input: unknown): WorkbookRangeResult['pageSetup'
     ...(validated.fitToWidth === undefined ? {} : { fitToWidth: validated.fitToWidth }),
     ...(validated.fitToHeight === undefined ? {} : { fitToHeight: validated.fitToHeight }),
     ...(validated.fitToPage === undefined ? {} : { fitToPage: validated.fitToPage }),
+    ...(validated.pageOrder === undefined ? {} : { pageOrder: validated.pageOrder }),
     ...(margins === undefined ? {} : { margins }),
     ...(validated.printGridlines === undefined ? {} : { printGridlines: validated.printGridlines }),
     ...(validated.printHeadings === undefined ? {} : { printHeadings: validated.printHeadings }),
@@ -2333,6 +2337,12 @@ function isPageSetupState(input: unknown): boolean {
   if (input.scale !== undefined && !isBoundedInt(input.scale, 10, 400)) return false
   if (input.fitToWidth !== undefined && !isBoundedInt(input.fitToWidth, 0, 1_000)) return false
   if (input.fitToHeight !== undefined && !isBoundedInt(input.fitToHeight, 0, 1_000)) return false
+  if (
+    input.pageOrder !== undefined &&
+    input.pageOrder !== 'down-then-over' &&
+    input.pageOrder !== 'over-then-down'
+  )
+    return false
   if (input.margins !== undefined && !['normal', 'wide', 'narrow'].includes(String(input.margins)))
     return false
   for (const key of [

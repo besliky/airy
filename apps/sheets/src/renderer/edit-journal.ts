@@ -228,6 +228,9 @@ export interface PageSetupJournalState {
   fitToHeight?: number
   /// Scale and fit are exclusive; whichever the user touched last wins.
   fitToPage?: boolean
+  /// Page order for a sheet tiled over several pages (pageSetup@pageOrder);
+  /// Excel stores the choice and preselects it in the next dialog.
+  pageOrder?: 'down-then-over' | 'over-then-down'
   margins?: 'normal' | 'wide' | 'narrow'
   printGridlines?: boolean
   printHeadings?: boolean

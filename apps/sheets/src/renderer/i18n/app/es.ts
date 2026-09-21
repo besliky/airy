@@ -1408,6 +1408,8 @@ export const es = {
   scUnhideColumns: 'Mostrar columnas',
   appPrintSelectionMissing: 'No hay nada seleccionado para imprimir.',
   appTextToColsEmpty: 'La columna seleccionada no tiene contenido que dividir.',
+  appTextToColsTooManyRows:
+    'Texto en columnas admite hasta {count} filas; la selección tiene {rows}. Selecciona un rango más pequeño.',
   appTextToColsNeedDelimiter: 'Elija al menos un delimitador.',
   appTextToColsBadDestination: '«{ref}» no es una referencia de celda de esta hoja.',
   appOutlineSettings: 'Configuración',

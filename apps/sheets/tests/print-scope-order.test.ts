@@ -261,6 +261,126 @@ describe('buildSheetsPrintPayload', () => {
     expect(firstRows[1]).toContain('m2')
     expect(firstRows[1]).toContain('x')
   })
+
+  it('styles merge continuation fillers with the anchor cell (fill and gridlines)', () => {
+    // Same wide merge as above, but the anchor carries a fill and the job
+    // prints gridlines: the second stripe's filler cells must inherit the
+    // anchor's css so the merge's fill and the gridline net continue onto
+    // the continuation page instead of printing unstyled.
+    const grid = [
+      ['m', '', '', '', '', '', '', ''],
+      ['m2', 'x', '', '', '', '', '', ''],
+    ]
+    const worksheet: PrintWorksheet = {
+      getSheetName: () => 'Grid',
+      getLastRow: () => grid.length - 1,
+      getLastColumn: () => 7,
+      getRowHeight: () => 20,
+      getColumnWidth: () => 100,
+      getMergedRanges: () => [
+        { getRow: () => 0, getColumn: () => 0, getWidth: () => 7, getHeight: () => 1 },
+      ],
+      getRange: ((row: number, column: number, numRows?: number, numColumns?: number) => ({
+        getDisplayValues: () =>
+          grid
+            .slice(row, row + (numRows ?? 1))
+            .map((cells) => cells.slice(column, column + (numColumns ?? 1))),
+        getValues: () => [],
+        getCellStyleData: () => (row === 0 && column === 0 ? { bg: { rgb: '#ffff00' } } : null),
+      })) as PrintWorksheet['getRange'],
+    }
+    const payload = buildSheetsPrintPayload(
+      [{ worksheet, printAreas: [], printTitles: null }],
+      payloadSetup({ printGridlines: true }),
+      'Book.pdf',
+      'S',
+    )
+    const tables = tablesOf(payload.html)
+    expect(tables).toHaveLength(2)
+    const secondRows = (tables[1] ?? '').match(/<tr[^>]*>[\s\S]*?<\/tr>/g) ?? []
+    // The filler keeps the anchor's fill …
+    expect(secondRows[0]).toMatch(/<td style="[^"]*background:#ffff00/)
+    // … and the default gridline borders real cells get with gridlines on.
+    expect(secondRows[0]).toMatch(/<td style="[^"]*border-top:0\.5pt solid #c0c0c0/)
+    // No unstyled filler remains in the continuation stripe's merge row.
+    expect(secondRows[0]).not.toContain('<td></td>')
+  })
+
+  it('declares the text-boosted printed height the over-then-down bands count', () => {
+    // A 20pt font needs a 27pt line box (1.25x + 2pt padding); declaring
+    // the saved 15pt row height instead let the rendered row outrun the
+    // band's page capacity, so Chromium split a band and the page order
+    // silently stopped being over-then-down (BUG-1110).
+    const grid = [['tall'], ['tall']]
+    const worksheet: PrintWorksheet = {
+      getSheetName: () => 'Grid',
+      getLastRow: () => grid.length - 1,
+      getLastColumn: () => 0,
+      getRowHeight: () => 20, // 20px = 15pt saved
+      getColumnWidth: () => 100,
+      getMergedRanges: () => [],
+      getRange: ((row: number, column: number, numRows?: number, numColumns?: number) => ({
+        getDisplayValues: () =>
+          grid
+            .slice(row, row + (numRows ?? 1))
+            .map((cells) => cells.slice(column, column + (numColumns ?? 1))),
+        getValues: () => [],
+        getCellStyleData: () => ({ fs: 20 }),
+      })) as PrintWorksheet['getRange'],
+    }
+    const payload = buildSheetsPrintPayload(
+      [{ worksheet, printAreas: [], printTitles: null }],
+      payloadSetup(),
+      'Book.pdf',
+      'S',
+    )
+    expect(payload.html).toContain('<tr style="height:27pt">')
+    expect(payload.html).not.toContain('<tr style="height:15pt">')
+  })
+
+  it('styles fillers of merges anchored above the print area', () => {
+    // The merge's anchor sits above both the title rows and the print
+    // area, but its span covers the printed body cells: those shadowed
+    // cells must paint with the anchor's fill.
+    const grid = [
+      ['m', '', ''],
+      ['', '', ''],
+      ['', '', ''],
+    ]
+    const worksheet: PrintWorksheet = {
+      getSheetName: () => 'Grid',
+      getLastRow: () => 2,
+      getLastColumn: () => 2,
+      getRowHeight: () => 20,
+      getColumnWidth: () => 100,
+      getMergedRanges: () => [
+        { getRow: () => 0, getColumn: () => 0, getWidth: () => 3, getHeight: () => 3 },
+      ],
+      getRange: ((row: number, column: number, numRows?: number, numColumns?: number) => ({
+        getDisplayValues: () =>
+          grid
+            .slice(row, row + (numRows ?? 1))
+            .map((cells) => cells.slice(column, column + (numColumns ?? 1))),
+        getValues: () => [],
+        getCellStyleData: () => (row === 0 && column === 0 ? { bg: { rgb: '#00ff00' } } : null),
+      })) as PrintWorksheet['getRange'],
+    }
+    const payload = buildSheetsPrintPayload(
+      [{ worksheet, printAreas: ['A3:C3'], printTitles: '2:2' }],
+      payloadSetup({ printGridlines: true }),
+      'Book.pdf',
+      'S',
+    )
+    const tables = tablesOf(payload.html)
+    expect(tables).toHaveLength(1)
+    const rows = (tables[0] ?? '').match(/<tr[^>]*>[\s\S]*?<\/tr>/g) ?? []
+    // One repeated title row (itself merge-covered, so no cells) plus the
+    // body row: three styled fillers carrying the anchor's fill.
+    expect(rows).toHaveLength(2)
+    expect(rows[1]).toMatch(/<td style="[^"]*background:#00ff00/)
+    expect((rows[1] ?? '').match(/<td/g)).toHaveLength(3)
+    expect(rows[1]).not.toContain('<td></td>')
+  })
 })
 
 /// A runtime with two visible sheets plus one hidden, used by the scope tests.

@@ -115,6 +115,26 @@ describe('resolveEffectivePageSetup', () => {
     expect(setup.printAreas).toEqual([])
     expect(setup.header).toBeNull()
     expect(setup.footer).toBeNull()
+    expect(setup.pageOrder).toBe('down-then-over')
+  })
+
+  it('reads the saved page order and lets the session journal win', () => {
+    // pageSetup@pageOrder arrives as the OOXML token from the sidecar.
+    const fromFile = resolveEffectivePageSetup({}, { pageOrder: 'overThenDown' }, null)
+    expect(fromFile.pageOrder).toBe('over-then-down')
+    expect(resolveEffectivePageSetup({}, { pageOrder: 'downThenOver' }, null).pageOrder).toBe(
+      'down-then-over',
+    )
+    // An explicit down-then-over in the session restores the default.
+    const journaled = resolveEffectivePageSetup(
+      { pageOrder: 'down-then-over' },
+      { pageOrder: 'overThenDown' },
+      null,
+    )
+    expect(journaled.pageOrder).toBe('down-then-over')
+    expect(resolveEffectivePageSetup({ pageOrder: 'over-then-down' }, null, null).pageOrder).toBe(
+      'over-then-down',
+    )
   })
 
   it('applies the saved file settings when the session touched nothing', () => {

@@ -14,6 +14,7 @@ import type {
 } from '../shared/desktop-api'
 import type { createUniver } from './create-univer'
 import type { EditJournal } from './edit-journal'
+import { pruneVisualUndoRegistry } from './visual-undo-registry'
 import { netAxisDelta } from './view-transform'
 
 export type UniverRuntime = ReturnType<typeof createUniver>
@@ -263,6 +264,11 @@ export function installJournalSuppressionUndoFilter(): void {
       aiBulkUndoGate.pushed += 1
     }
     originalPush.call(this, item)
+    // BUG-1109: the original push above emptied the unit's redo stack and
+    // evicted any undo entry beyond its capacity — visual-undo steps that
+    // were reachable only through those entries are gone for good, so
+    // release their closures instead of retaining them for the session.
+    pruneVisualUndoRegistry(this)
   }
 }
 

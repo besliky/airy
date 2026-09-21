@@ -178,7 +178,6 @@ describe('updateTocField keeps mid-region continuous section breaks (BUG-1107)',
       extensions: editorExtensions,
       content: blocksToPmDoc(parsed.blocks) as never,
     })
-    openEditors.push(editor)
     expect(
       updateTocField(editor, parsed.blocks, undefined, undefined, undefined, { silent: true }),
     ).toBe('updated')

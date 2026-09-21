@@ -181,6 +181,18 @@ export function handlePageLayoutCommand(ctx: PageLayoutContext, rest: string): v
         value === '1' ? t('appGridlinesWillPrint') : t('appGridlinesWontPrint'),
       )
       return
+    case 'page-order':
+      if (value !== 'down-then-over' && value !== 'over-then-down') return
+      // No set_page_setup op carries page order (the AI op set does not
+      // expose it); it journals directly into the page-setup state like
+      // breaks and print titles.
+      recordDirect(
+        { pageOrder: value },
+        value === 'down-then-over'
+          ? t('dlgPrintOrderDownThenOver')
+          : t('dlgPrintOrderOverThenDown'),
+      )
+      return
     case 'print-headings':
       record(
         { printHeadings: value === '1' },
@@ -407,6 +419,7 @@ export async function buildPrintRequest(
     orientation: 'portrait' | 'landscape'
     scale: number
     fitToPage: boolean
+    pageOrder: 'down-then-over' | 'over-then-down'
   }
 }> {
   const runtime = ctx.univerRef.current
@@ -485,7 +498,9 @@ export async function buildPrintRequest(
         `${baseName}.pdf`,
         worksheet.getSheetName(),
         pictures,
-        overrides.pageOrder ?? 'down-then-over',
+        // The dialog's per-job choice wins; without one the sheet's saved
+        // order (journal over file pageSetup@pageOrder) applies.
+        overrides.pageOrder ?? effective.pageOrder ?? 'down-then-over',
       ),
       ...(overrides.collate === undefined ? {} : { collate: overrides.collate }),
     },
@@ -494,6 +509,7 @@ export async function buildPrintRequest(
       orientation: effective.orientation,
       scale: effective.scale,
       fitToPage: effective.fitToPage,
+      pageOrder: effective.pageOrder ?? 'down-then-over',
     },
   }
 }
@@ -512,6 +528,7 @@ export async function buildActiveSheetPrintRequest(
     orientation: 'portrait' | 'landscape'
     scale: number
     fitToPage: boolean
+    pageOrder: 'down-then-over' | 'over-then-down'
   }
 }> {
   return buildPrintRequest(ctx, overrides)

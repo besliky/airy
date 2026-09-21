@@ -1406,6 +1406,8 @@ export const it = {
   scUnhideColumns: 'Mostra colonne',
   appPrintSelectionMissing: 'Non c’è nulla di selezionato da stampare.',
   appTextToColsEmpty: 'La colonna selezionata non ha contenuti da dividere.',
+  appTextToColsTooManyRows:
+    'Testo in colonne supporta fino a {count} righe — la selezione ne ha {rows}. Seleziona un intervallo più piccolo.',
   appTextToColsNeedDelimiter: 'Scegli almeno un delimitatore.',
   appTextToColsBadDestination: '«{ref}» non è un riferimento di cella di questo foglio.',
   appOutlineSettings: 'Impostazioni',

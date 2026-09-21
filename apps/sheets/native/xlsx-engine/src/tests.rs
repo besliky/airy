@@ -916,11 +916,11 @@ fn reads_saved_print_settings_and_print_names() {
             "xl/worksheets/sheet1.xml",
             r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <sheetPr><outlinePr summaryBelow="0"/><pageSetUpPr fitToPage="1"/></sheetPr>
-<customSheetViews><customSheetView guid="{1}"><pageSetup paperSize="1" orientation="landscape"/><headerFooter><oddHeader>decoy</oddHeader></headerFooter></customSheetView></customSheetViews>
+<customSheetViews><customSheetView guid="{1}"><pageSetup paperSize="1" orientation="landscape" pageOrder="overThenDown"/><headerFooter><oddHeader>decoy</oddHeader></headerFooter></customSheetView></customSheetViews>
 <sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>
 <printOptions gridLines="1" headings="true"/>
 <pageMargins left="0.25" right="0.3" top="0.75" bottom="0.8" header="0.3" footer="0.4"/>
-<pageSetup paperSize="9" scale="65" fitToWidth="2" fitToHeight="0" orientation="landscape"/>
+<pageSetup paperSize="9" scale="65" fitToWidth="2" fitToHeight="0" orientation="landscape" pageOrder="overThenDown"/>
 <headerFooter><oddHeader>&amp;CBudget &amp;A</oddHeader><oddFooter>&amp;CSeite &amp;P von &amp;N</oddFooter></headerFooter>
 </worksheet>"#,
         ),
@@ -963,6 +963,7 @@ fn reads_saved_print_settings_and_print_names() {
     assert_eq!(setup.fit_to_width, Some(2));
     assert_eq!(setup.fit_to_height, Some(0));
     assert!(setup.fit_to_page);
+    assert_eq!(setup.page_order.as_deref(), Some("overThenDown"));
     assert!(setup.print_gridlines);
     assert!(setup.print_headings);
     let margins = setup.margins.expect("margins");

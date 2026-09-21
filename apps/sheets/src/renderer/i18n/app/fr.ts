@@ -1430,6 +1430,8 @@ export const fr = {
   scUnhideColumns: 'Afficher les colonnes',
   appPrintSelectionMissing: 'Aucune sélection à imprimer.',
   appTextToColsEmpty: 'La colonne sélectionnée n’a aucun contenu à fractionner.',
+  appTextToColsTooManyRows:
+    'Convertir gère au maximum {count} lignes — la sélection en contient {rows}. Sélectionnez une plage plus petite.',
   appTextToColsNeedDelimiter: 'Choisissez au moins un délimiteur.',
   appTextToColsBadDestination: '« {ref} » n’est pas une référence de cellule de cette feuille.',
   appOutlineSettings: 'Paramètres',

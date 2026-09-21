@@ -540,6 +540,8 @@ pub(crate) fn index_worksheet(
                 page_print.fit_to_height = attribute_value(&reader, &element, b"fitToHeight")?
                     .and_then(|value| value.parse::<u32>().ok())
                     .filter(|value| *value <= 32_767);
+                page_print.page_order = attribute_value(&reader, &element, b"pageOrder")?
+                    .filter(|value| value == "downThenOver" || value == "overThenDown");
             }
             Event::Start(element) | Event::Empty(element)
                 if element.local_name().as_ref() == b"headerFooter" && !in_custom_sheet_views =>

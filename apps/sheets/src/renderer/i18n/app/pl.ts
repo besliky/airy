@@ -1395,6 +1395,8 @@ export const pl = {
   scUnhideColumns: 'Pokaż kolumny',
   appPrintSelectionMissing: 'Nie ma nic zaznaczonego do wydrukowania.',
   appTextToColsEmpty: 'Zaznaczona kolumna nie ma treści do podzielenia.',
+  appTextToColsTooManyRows:
+    'Tekst jako kolumny obsługuje do {count} wierszy — zaznaczenie ma {rows}. Wybierz mniejszy zakres.',
   appTextToColsNeedDelimiter: 'Wybierz co najmniej jeden separator.',
   appTextToColsBadDestination: '„{ref}” nie jest odwołaniem do komórki w tym arkuszu.',
   appOutlineSettings: 'Ustawienia',

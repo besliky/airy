@@ -533,6 +533,10 @@ pub struct PagePrintInfo {
     pub fit_to_height: Option<u32>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub fit_to_page: bool,
+    /// pageSetup/@pageOrder ("downThenOver" | "overThenDown"); the schema
+    /// default (downThenOver) is written by producers but reads the same.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page_order: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub margins: Option<PageMarginsInfo>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]

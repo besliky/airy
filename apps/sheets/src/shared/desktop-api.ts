@@ -929,6 +929,8 @@ export const workbookRangeResultSchema = z
         fitToWidth: z.number().int().min(0).max(32_767).optional(),
         fitToHeight: z.number().int().min(0).max(32_767).optional(),
         fitToPage: z.boolean().optional(),
+        /// pageSetup/@pageOrder (OOXML token; downThenOver is the default).
+        pageOrder: z.enum(['downThenOver', 'overThenDown']).optional(),
         /// Inches.
         margins: z
           .object({
@@ -1401,6 +1403,8 @@ export const workbookPageSetupStateSchema = z
     fitToWidth: z.number().int().min(0).max(1_000).optional(),
     fitToHeight: z.number().int().min(0).max(1_000).optional(),
     fitToPage: z.boolean().optional(),
+    /// pageSetup/@pageOrder for a sheet tiled over several pages.
+    pageOrder: z.enum(['down-then-over', 'over-then-down']).optional(),
     margins: z.enum(['normal', 'wide', 'narrow']).optional(),
     printGridlines: z.boolean().optional(),
     printHeadings: z.boolean().optional(),

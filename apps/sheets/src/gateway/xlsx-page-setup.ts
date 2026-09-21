@@ -24,6 +24,8 @@ export interface SheetPageSetupState {
   readonly fitToWidth?: number | undefined
   readonly fitToHeight?: number | undefined
   readonly fitToPage?: boolean | undefined
+  /// Page order for a sheet tiled over several pages (pageSetup@pageOrder).
+  readonly pageOrder?: 'down-then-over' | 'over-then-down' | undefined
   readonly margins?: 'normal' | 'wide' | 'narrow' | undefined
   readonly printGridlines?: boolean | undefined
   readonly printHeadings?: boolean | undefined
@@ -441,6 +443,11 @@ export function applyPageSetupState(worksheetXml: string, state: SheetPageSetupS
   }
   if (state.fitToHeight !== undefined) {
     pageSetup.fitToHeight = state.fitToHeight === 1 ? null : String(state.fitToHeight)
+  }
+  // downThenOver is the schema default: write the attribute only for the
+  // non-default order, drop it to restore (same convention as scale=100).
+  if (state.pageOrder !== undefined) {
+    pageSetup.pageOrder = state.pageOrder === 'over-then-down' ? 'overThenDown' : null
   }
   if (Object.keys(pageSetup).length > 0) {
     xml = mergeElementAttrs(xml, 'pageSetup', pageSetup, AFTER_PAGE_SETUP)
