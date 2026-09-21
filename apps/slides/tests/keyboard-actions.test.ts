@@ -177,3 +177,50 @@ describe('copy shortcuts with a DOM text selection', () => {
     expect(slideActions.cutSlideAt).not.toHaveBeenCalled()
   })
 })
+
+describe('escape layering (UX-11s2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    document.body.innerHTML = ''
+  })
+
+  it('drops the ink tool on a plain Escape', () => {
+    const setInkTool = vi.fn()
+    const e = keydown('Escape', { metaKey: false })
+    handleGlobalKeydown(makeCtx({ inkTool: 'pen', setInkTool }), e)
+    expect(e.defaultPrevented).toBe(true)
+    expect(setInkTool).toHaveBeenCalledWith('select')
+  })
+
+  it('keeps the ink tool when an overlay layer already consumed the Escape', () => {
+    const setInkTool = vi.fn()
+    const e = keydown('Escape', { metaKey: false })
+    e.preventDefault() // capture-phase claim: reading view, media overlay, ribbon popup
+    handleGlobalKeydown(makeCtx({ inkTool: 'pen', setInkTool }), e)
+    expect(setInkTool).not.toHaveBeenCalled()
+  })
+
+  it('keeps format-brush mode when the Escape was consumed', () => {
+    const setBrushMode = vi.fn()
+    const e = keydown('Escape', { metaKey: false })
+    e.preventDefault()
+    handleGlobalKeydown(
+      makeCtx({ brushMode: { format: {} }, setBrushMode, setStatus: vi.fn() }),
+      e,
+    )
+    expect(setBrushMode).not.toHaveBeenCalled()
+  })
+
+  it('stays inside the group when the Escape was consumed', () => {
+    const setSelectedIds = vi.fn()
+    const setEnteredGroupId = vi.fn()
+    const e = keydown('Escape', { metaKey: false })
+    e.preventDefault()
+    handleGlobalKeydown(
+      makeCtx({ enteredGroupId: 'g1', selectedIds: ['g1'], setSelectedIds, setEnteredGroupId }),
+      e,
+    )
+    expect(setEnteredGroupId).not.toHaveBeenCalled()
+    expect(setSelectedIds).not.toHaveBeenCalled()
+  })
+})

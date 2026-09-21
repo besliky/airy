@@ -102,6 +102,11 @@ export function handleGlobalKeydown(
     return
   }
   if (editing || inField) return
+  // Esc layering: a capture-phase layer that already claimed the key (reading
+  // view exit, the media overlay, a closing ribbon popup) suppresses the Esc
+  // actions below — one press dismisses one layer, not the whole stack (the
+  // same defaultPrevented contract the arrow page-turning branch uses)
+  if (e.key === 'Escape' && e.defaultPrevented) return
   // ⌘C/⌘X with text dragged in plain DOM (e.g. AI panel, focus on body): let the
   // native copy run instead of hijacking it for the slide/element clipboard
   if (mod && !e.altKey && !e.shiftKey && ['c', 'C', 'x', 'X'].includes(e.key)) {
