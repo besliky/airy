@@ -308,11 +308,13 @@ export const ja = {
   ribbonTransApplyAllTip: '現在のスライドの画面切り替え効果をすべてのスライドに適用',
   ribbonEffectOptions: '効果のオプション',
   ribbonEffectOptionsTip: '現在の切り替えの方向と継続時間',
+  ribbonEffectOptionsNoneTip:
+    '先に切り替えを選択してください。効果のオプションには切り替えが必要です',
   ribbonEffectOptionsDirection: '方向',
   ribbonTransDuration: '継続時間',
   ribbonTransDurationDefault: '既定',
   ribbonTransDurationTip: '切り替えの継続時間（秒）。空欄で既定値',
-  ribbonTransDurationRange: '許容範囲：0.1～60秒',
+  ribbonTransDurationRange: '許容範囲：0.1～{max}秒',
   ribbonAnimDirectionTip: '選択したアニメーション効果の方向バリエーション',
   // Animations
   ribbonPreview: 'プレビュー',

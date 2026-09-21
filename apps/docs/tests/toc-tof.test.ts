@@ -4,9 +4,10 @@
  * instruction (switches survive), and the flow round-trips through a save.
  */
 import { describe, expect, it, beforeAll, afterAll, afterEach } from 'vitest'
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
 import { generateCaptionXml, generateTocFieldXml, parseDocx } from '@airy-office/docx-engine'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { blocksToPmDoc, pmDocToSavePlan, type PmNode } from '../src/renderer/editor/convert'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { loadLocale, setModuleLang } from '../src/renderer/i18n/locale'
@@ -16,27 +17,17 @@ import {
   updateTocField,
 } from '../src/renderer/components/ribbon-references-tab'
 
-/** editors created by these tests; destroyed in afterEach so the ProseMirror
- *  DOMObserver polling timer never outlives the jsdom environment (an
- *  unhandled "document is not defined" after teardown fails the whole run) */
-const openEditors: Editor[] = []
-
 async function openDoc(bodyXml: string) {
   const parsed = await parseDocx(await buildDocx({ bodyXml }))
-  const editor = new Editor({
-    element: document.createElement('div'),
+  const editor = createTrackedEditor({
     extensions: editorExtensions,
     content: blocksToPmDoc(parsed.blocks) as never,
   })
-  openEditors.push(editor)
   return { editor, parsed }
 }
 
-afterEach(async () => {
-  while (openEditors.length) openEditors.pop()?.destroy()
-  // let a pending DOMObserver flush land while the document still exists
-  await new Promise((resolve) => setTimeout(resolve, 30))
-})
+// tracked editors are destroyed before the jsdom environment goes away
+afterEach(() => drainTrackedEditors())
 
 /** a generated caption paragraph, the shape the ribbon's Caption dialog inserts */
 function captionNode(label: string, n: number, text: string, anchor: string) {

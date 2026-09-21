@@ -4,7 +4,13 @@
  * extracted tab components.
  */
 import { useId } from 'react'
-import type { Dispatch, MouseEvent as ReactMouseEvent, ReactNode, SetStateAction } from 'react'
+import type {
+  Dispatch,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+  SetStateAction,
+} from 'react'
 import type {
   AnimDirection,
   AnimEffectKind,
@@ -277,6 +283,45 @@ export function closeSiblingPanels(
 ): void {
   const nested = e.currentTarget.closest('.rb-drop') != null
   closePanels(nested ? [own, 'collapse', 'para'] : [own])
+}
+
+/** Whether the ribbon's window-capture Escape handler must stand down for a
+ *  keydown originating on `el` because a layer beneath the popup owns that
+ *  press (one Escape dismisses one layer):
+ *  - a modal dialog stacked on top closes itself (its own Esc handler,
+ *    registered later on capture, still sees the event);
+ *  - an editable ribbon field cancels its own draft (the font combobox
+ *    blurs on Escape; the list then closes on the next press);
+ *  - an expanded shared Dropdown closes its own list first (Ribbon.tsx
+ *    panels host Dropdowns whose React handler runs later in bubble). */
+export function ribbonEscapeDeferred(el: Element | null): boolean {
+  if (!el) return false
+  if (el.closest('.modal-backdrop')) return true
+  if (
+    el.closest('.rb-drop-wrap') &&
+    (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || (el as HTMLElement).isContentEditable)
+  )
+    return true
+  return el.closest('.gs-dd [aria-expanded="true"]') != null
+}
+
+/** Keyboard path into a split button's caret menu (UX-11s2). The caret hit
+ *  zone is a nested span — a real <button> cannot nest inside the main-action
+ *  button — so it cannot take focus; instead the enclosing focusable button
+ *  opens the menu on ArrowDown/ArrowUp (Alt+arrows included, the native
+ *  combobox chord; Enter/Space keep the main action), the same keys the
+ *  shared Dropdown uses. The claimed key never reaches the window listeners,
+ *  so it cannot nudge the canvas selection either. */
+export function splitCaretKeyDown(
+  open: () => void,
+): (e: ReactKeyboardEvent<HTMLButtonElement>) => void {
+  return (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    if (e.ctrlKey || e.metaKey) return
+    e.preventDefault()
+    e.stopPropagation()
+    open()
+  }
 }
 
 export function Group({

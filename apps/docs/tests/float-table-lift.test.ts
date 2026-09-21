@@ -1,5 +1,5 @@
-import { Editor } from '@tiptap/core'
 import { afterEach, describe, expect, it } from 'vitest'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import {
   applyLiftTops,
@@ -25,24 +25,13 @@ const rectOf = (top: number, height: number) =>
 const cell = { type: 'docTableCell', content: [{ type: 'docParagraph' }] }
 const row = { type: 'docTableRow', content: [cell] }
 
-/** schema-carrying editors, one per use, tracked and destroyed in afterEach:
- *  a module-scope editor stays live at environment teardown, where its
- *  ProseMirror DOMObserver polling timer fires "document is not defined" and
- *  fails the whole run */
-const openEditors: Editor[] = []
-
-afterEach(async () => {
-  while (openEditors.length) openEditors.pop()?.destroy()
-  // let a pending DOMObserver flush land while the document still exists
-  await new Promise((resolve) => setTimeout(resolve, 30))
-})
+// schema-carrying editors mount one per tableSpec call; a module-scope
+// editor would instead stay live at environment teardown, where its
+// ProseMirror DOMObserver polling timer fires "document is not defined"
+afterEach(() => drainTrackedEditors())
 
 function tableSpec(attrs: Record<string, unknown>): [string, Record<string, string>] {
-  const editor = new Editor({
-    element: document.createElement('div'),
-    extensions: editorExtensions,
-  })
-  openEditors.push(editor)
+  const editor = createTrackedEditor({ extensions: editorExtensions })
   const table = editor.schema.nodeFromJSON({ type: 'docTable', attrs, content: [row] })
   return editor.schema.nodes.docTable.spec.toDOM!(table) as [string, Record<string, string>]
 }
