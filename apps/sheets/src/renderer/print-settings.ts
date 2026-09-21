@@ -42,6 +42,10 @@ export interface EffectivePageSetup {
   readonly fitToWidth: number
   readonly fitToHeight: number
   readonly fitToPage: boolean
+  /// Page order for a sheet tiled over several pages (pageSetup@pageOrder;
+  /// down-then-over is Excel's default). Optional so hand-built test
+  /// fixtures keep compiling; resolveEffectivePageSetup always sets it.
+  readonly pageOrder?: 'down-then-over' | 'over-then-down' | undefined
   /// Inches.
   readonly margins: PrintMargins
   readonly printGridlines: boolean
@@ -199,6 +203,9 @@ export function resolveEffectivePageSetup(
     fitToWidth,
     fitToHeight,
     fitToPage,
+    pageOrder:
+      journal.pageOrder ??
+      (file?.pageOrder === 'overThenDown' ? 'over-then-down' : 'down-then-over'),
     margins,
     printGridlines: journal.printGridlines ?? file?.printGridlines ?? false,
     printHeadings: journal.printHeadings ?? file?.printHeadings ?? false,

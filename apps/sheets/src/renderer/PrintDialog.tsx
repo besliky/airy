@@ -44,6 +44,7 @@ interface EffectiveSetup {
   orientation: 'portrait' | 'landscape'
   scale: number
   fitToPage: boolean
+  pageOrder: 'down-then-over' | 'over-then-down'
 }
 
 /// What the job prints (Excel's Print Selection / Active Sheets / Entire
@@ -51,18 +52,21 @@ interface EffectiveSetup {
 export type PrintDialogScope = 'selection' | 'active-sheet' | 'workbook'
 
 /// Initial dialog control values for a sheet's effective saved page setup:
-/// fit-to-page takes over the scale control at 100%.
+/// fit-to-page takes over the scale control at 100%, and the saved page
+/// order preselects (pageSetup@pageOrder, Excel-style).
 export function controlsFromEffective(effective: EffectiveSetup): {
   paperSize: number
   orientation: 'portrait' | 'landscape'
   scale: number
   fitToPage: boolean
+  pageOrder: 'down-then-over' | 'over-then-down'
 } {
   return {
     paperSize: effective.paperSize,
     orientation: effective.orientation,
     scale: effective.fitToPage ? 100 : Math.round(effective.scale),
     fitToPage: effective.fitToPage,
+    pageOrder: effective.pageOrder,
   }
 }
 
@@ -141,6 +145,7 @@ export function PrintDialog({
         setOrientation(seeded.orientation)
         setScale(seeded.scale)
         setFitToPage(seeded.fitToPage)
+        setPageOrder(seeded.pageOrder)
       } catch {
         // Nothing printable: the preview pass below reports the error.
       } finally {

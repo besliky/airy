@@ -309,6 +309,7 @@ interface ExcelShellProps {
       orientation: 'portrait' | 'landscape'
       scale: number
       fitToPage: boolean
+      pageOrder: 'down-then-over' | 'over-then-down'
     }
   }>
   readonly onCreateSubtotal: (config: SubtotalConfig) => string | null
@@ -342,6 +343,9 @@ export interface PageLayoutEcho {
   readonly scale?: number | undefined
   readonly fitToWidth?: number | undefined
   readonly fitToHeight?: number | undefined
+  /// Page order for a sheet tiled over several pages (journal value; unset
+  /// means "as saved in the file", Excel's down-then-over default).
+  readonly pageOrder?: 'down-then-over' | 'over-then-down' | undefined
   readonly margins?: 'normal' | 'wide' | 'narrow' | undefined
   readonly printGridlines?: boolean | undefined
   readonly printHeadings?: boolean | undefined
@@ -2076,6 +2080,27 @@ function Ribbon({
             [
               { value: 'page-layout:orientation:portrait', label: t('appPortrait') },
               { value: 'page-layout:orientation:landscape', label: t('appLandscape') },
+            ],
+          )}
+          {largeMenu(
+            t('dlgPrintPageOrder'),
+            '⇉',
+            pageLayout.pageOrder
+              ? t(
+                  pageLayout.pageOrder === 'down-then-over'
+                    ? 'dlgPrintOrderDownThenOver'
+                    : 'dlgPrintOrderOverThenDown',
+                )
+              : t('appAsSavedInFile'),
+            [
+              {
+                value: 'page-layout:page-order:down-then-over',
+                label: t('dlgPrintOrderDownThenOver'),
+              },
+              {
+                value: 'page-layout:page-order:over-then-down',
+                label: t('dlgPrintOrderOverThenDown'),
+              },
             ],
           )}
           {largeMenu(t('appSizeLabel'), '▭', t('appPaperSizeTitle'), [

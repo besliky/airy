@@ -75,6 +75,23 @@ describe('applyPageSetupState', () => {
     expect(xml).toContain('<pageSetup fitToHeight="0"/>')
   })
 
+  it('writes pageOrder only for the non-default order (BUG-1213)', () => {
+    const xml = '<worksheet><sheetData/><pageSetup paperSize="9" pageOrder="overThenDown"/></worksheet>'
+    const ordered = applyPageSetupState(xml, { sheetName: 'S', pageOrder: 'down-then-over' })
+    // downThenOver is the schema default: the attribute drops to restore it.
+    expect(ordered).toContain('<pageSetup paperSize="9"/>')
+    expect(ordered).not.toContain('pageOrder=')
+
+    const bare = applyPageSetupState(BARE, { sheetName: 'S', pageOrder: 'over-then-down' })
+    expect(bare).toContain('<pageSetup pageOrder="overThenDown"/>')
+
+    const existing =
+      '<worksheet><sheetData/><pageSetup paperSize="9" orientation="landscape"/></worksheet>'
+    const merged = applyPageSetupState(existing, { sheetName: 'S', pageOrder: 'over-then-down' })
+    // a new attribute inserts right after the tag name
+    expect(merged).toContain('<pageSetup pageOrder="overThenDown" paperSize="9" orientation="landscape"/>')
+  })
+
   it('clears fitToPage when the user switches to a fixed scale', () => {
     const fitted = applyPageSetupState(BARE, {
       sheetName: 'S',
