@@ -81,6 +81,14 @@ export interface PrintWorksheet {
   getLastColumn(): number
   getRowHeight(row: number): number
   getColumnWidth(column: number): number
+  /// Row/column visibility of the underlying sheet. Hidden rows and columns
+  /// never print (Excel drops them from every print path), and a filter is
+  /// just row hiding — `getRowVisible` is false for filtered-out rows too,
+  /// so "apply a filter, then export" must not leak the filtered rows.
+  getSheet(): {
+    getRowVisible(row: number): boolean
+    getColVisible(column: number): boolean
+  }
   getMergedRanges(): {
     getRow(): number
     getColumn(): number
@@ -391,9 +399,15 @@ function nameOf(job: PrintSheetJob): string {
 interface LayoutCell {
   /// Absolute sheet column of the cell.
   readonly column: number
-  /// Raw merge span (clamped to the area and the page tile at emit time).
+  /// Raw merge span in printed rows/columns (hidden ones folded out by
+  /// mergeMaps; clamped further to the page tile at emit time).
   readonly rowspan: number
   readonly colspan: number
+  /// Absolute sheet end row/column of the cell's merge (the cell itself
+  /// when unmerged) — emit-time span clamping counts printed rows/columns
+  /// up to the tile edge from here.
+  readonly endRow: number
+  readonly endColumn: number
   readonly text: string
   readonly css: string
 }
@@ -433,6 +447,13 @@ interface AreaBounds {
 
 interface LayoutArea extends AreaBounds {
   readonly columnWidthsPt: readonly number[]
+  /// The area's printed columns (hidden ones never print), ascending; the
+  /// widths array carries 0 for them so stripes reserve no space.
+  readonly printedColumns: readonly number[]
+  readonly printedColumnSet: ReadonlySet<number>
+  /// Every printed row index of the area (title rows plus visible body
+  /// rows), ascending — emit-time merge span counting walks these.
+  readonly printedRows: readonly number[]
   /// Height repeated at the top of every page (heading strip + titles).
   readonly repeatedHeightPt: number
   /// Title rows (repeated in every page's thead), then the body rows.
@@ -452,9 +473,30 @@ interface AreaPoint {
   readonly column: number
 }
 
+/// One merge as the layout prints it (hidden rows/columns folded out):
+/// spans count only printed cells, and an anchor sitting on a hidden
+/// row/column relocates to the merge's first printed cell while keeping the
+/// real anchor's text and style.
+interface MergeAnchor {
+  /// Printed rows/columns the merge covers, clamped to the area.
+  readonly rows: number
+  readonly columns: number
+  /// The merge's real anchor cell — the text and style source even when the
+  /// printed anchor moved (hidden anchor row/column).
+  readonly sourceRow: number
+  readonly sourceColumn: number
+  /// Real sheet end indexes of the merge.
+  readonly endRow: number
+  readonly endColumn: number
+}
+
 /// Builds one area's rows: display text, styles, and merge anchors. The
-/// stored spans are raw merge dimensions; emitTable clamps them to the area
-/// and the page tile being written.
+/// stored spans are the merge's printed dimensions (hidden rows/columns
+/// folded out); emitTable clamps them further to the page tile being
+/// written. Hidden rows and columns drop out of the layout entirely —
+/// Excel prints neither, and filtered rows are hidden rows (BUG-1521).
+/// Title rows always print even when hidden (Excel repeats the title range
+/// as saved; hiding a title row is a pathological sheet).
 function layoutPrintArea(
   worksheet: PrintWorksheet,
   area: AreaBounds,
@@ -467,25 +509,40 @@ function layoutPrintArea(
   const grid = worksheet.getRange(area.startRow, area.startColumn, rows, columns)
   const display = grid.getDisplayValues()
   const raw = grid.getValues()
-  const merges = mergeMaps(worksheet, area)
-  const columnWidthsPt = Array.from(
-    { length: columns },
-    (_, offset) => worksheet.getColumnWidth(area.startColumn + offset) * 0.75,
-  )
+  const sheet = worksheet.getSheet()
+  const rowPrints = (row: number): boolean =>
+    sheet.getRowVisible(row) || (titles !== null && row >= titles.start && row <= titles.end)
+  const columnPrints = (column: number): boolean => sheet.getColVisible(column)
+  const merges = mergeMaps(worksheet, area, rowPrints, columnPrints)
+  const printedColumns: number[] = []
+  const columnWidthsPt = Array.from({ length: columns }, (_, offset) => {
+    const column = area.startColumn + offset
+    if (!columnPrints(column)) return 0
+    printedColumns.push(column)
+    return worksheet.getColumnWidth(column) * 0.75
+  })
 
   const buildRow = (row: number): LayoutRow => {
     const cells: LayoutCell[] = []
     let textHeightPt = 0
     for (let column = area.startColumn; column <= area.endColumn; column += 1) {
+      // Hidden columns never print, not even as merge fillers.
+      if (!columnPrints(column)) continue
       const key = `${row}:${column}`
       const anchor = merges.anchors.get(key)
       if (merges.covered.has(key) && !anchor) continue
-      const inArea = row >= area.startRow && row <= area.endRow
+      // A relocated anchor (hidden anchor row/column) prints the merge's
+      // real anchor content at the first printed cell of the merge.
+      const sourceRow = anchor ? anchor.sourceRow : row
+      const sourceColumn = anchor ? anchor.sourceColumn : column
+      const inArea = sourceRow >= area.startRow && sourceRow <= area.endRow
       const text = inArea
-        ? (display[row - area.startRow]?.[column - area.startColumn] ?? '')
-        : cellDisplay(worksheet, row, column)
-      const rawValue = inArea ? raw[row - area.startRow]?.[column - area.startColumn] : undefined
-      const style = worksheet.getRange(row, column).getCellStyleData()
+        ? (display[sourceRow - area.startRow]?.[sourceColumn - area.startColumn] ?? '')
+        : cellDisplay(worksheet, sourceRow, sourceColumn)
+      const rawValue = inArea
+        ? raw[sourceRow - area.startRow]?.[sourceColumn - area.startColumn]
+        : undefined
+      const style = worksheet.getRange(sourceRow, sourceColumn).getCellStyleData()
       if (text !== '' && !anchor) {
         textHeightPt = Math.max(
           textHeightPt,
@@ -496,6 +553,8 @@ function layoutPrintArea(
         column,
         rowspan: anchor ? anchor.rows : 1,
         colspan: anchor ? anchor.columns : 1,
+        endRow: anchor ? anchor.endRow : row,
+        endColumn: anchor ? anchor.endColumn : column,
         text,
         css: cellCss(style, rawValue, gridlines),
       })
@@ -517,6 +576,8 @@ function layoutPrintArea(
   for (let row = area.startRow; row <= area.endRow; row += 1) {
     // Title rows already repeat via the table header.
     if (titles && row >= titles.start && row <= titles.end) continue
+    // Hidden rows (manual hide, outline collapse, or filter) never print.
+    if (!rowPrints(row)) continue
     bodyRows.push(buildRow(row))
   }
   const anchorCss = new Map<string, string>()
@@ -530,18 +591,23 @@ function layoutPrintArea(
   // Merges anchored above the print area (and its title rows) still shadow
   // area cells; style their fillers from the anchor cell directly, the same
   // read buildRow does for out-of-area title rows.
-  for (const key of merges.anchors.keys()) {
+  for (const [key, info] of merges.anchors) {
     if (anchorCss.has(key)) continue
-    const [row, column] = key.split(':').map(Number)
-    if (row === undefined || column === undefined) continue
     anchorCss.set(
       key,
-      cellCss(worksheet.getRange(row, column).getCellStyleData(), undefined, gridlines),
+      cellCss(
+        worksheet.getRange(info.sourceRow, info.sourceColumn).getCellStyleData(),
+        undefined,
+        gridlines,
+      ),
     )
   }
   return {
     ...area,
     columnWidthsPt,
+    printedColumns,
+    printedColumnSet: new Set(printedColumns),
+    printedRows: [...titleRows, ...bodyRows].map((row) => row.row).sort((a, b) => a - b),
     repeatedHeightPt:
       (headings ? HEADING_ROW_HEIGHT_PT : 0) +
       titleRows.reduce((total, row) => total + row.printedHeightPt, 0),
@@ -550,6 +616,20 @@ function layoutPrintArea(
     covered: merges.covered,
     anchorCss,
   }
+}
+
+/// Number of ascending indexes within [from, to] — the printed rows or
+/// columns a merge covers up to a tile edge (hidden ones are simply absent
+/// from the list, so they never inflate a span).
+function countInRange(ascending: readonly number[], from: number, to: number): number {
+  if (to < from) return 0
+  let count = 0
+  for (const value of ascending) {
+    if (value < from) continue
+    if (value > to) break
+    count += 1
+  }
+  return count
 }
 
 /// One page tile of an area: a row band × a column stripe.
@@ -681,7 +761,8 @@ function rowBandsOf(area: LayoutArea, capacityPt: number): AreaTile[] {
 /// and title rows in thead, and the tile's body rows. Cells outside the tile
 /// are dropped; a merge crossing a tile edge clamps its span, and the rows
 /// or columns it covers past the edge render as empty cells so nothing
-/// shifts left into the wrong column slot.
+/// shifts left into the wrong column slot. Hidden columns never emit — no
+/// cell, no heading letter, no <col> (BUG-1521).
 function emitTable(area: LayoutArea, tile: AreaTile, headings: boolean): string {
   const emitRow = (layoutRow: LayoutRow): string => {
     const cells: string[] = []
@@ -689,6 +770,10 @@ function emitTable(area: LayoutArea, tile: AreaTile, headings: boolean): string 
     let pointer = 0
     let column = tile.colStart
     while (column <= tile.colEnd) {
+      if (!area.printedColumnSet.has(column)) {
+        column += 1
+        continue
+      }
       const cell = layoutRow.cells[pointer]
       if (cell && cell.column < column) {
         pointer += 1
@@ -696,8 +781,17 @@ function emitTable(area: LayoutArea, tile: AreaTile, headings: boolean): string 
       }
       if (cell && cell.column === column) {
         pointer += 1
-        const rowspan = Math.max(1, Math.min(cell.rowspan, tile.rowEnd - layoutRow.row + 1))
-        const colspan = Math.max(1, Math.min(cell.colspan, tile.colEnd - column + 1))
+        // Clamp the span to the tile edge by counting the printed rows and
+        // columns the merge still covers there (hidden ones are absent from
+        // the lists, so a span never counts an unprinted slot).
+        const rowspan = Math.max(
+          1,
+          countInRange(area.printedRows, layoutRow.row, Math.min(cell.endRow, tile.rowEnd)),
+        )
+        const colspan = Math.max(
+          1,
+          countInRange(area.printedColumns, column, Math.min(cell.endColumn, tile.colEnd)),
+        )
         const span =
           (rowspan > 1 ? ` rowspan="${rowspan}"` : '') +
           (colspan > 1 ? ` colspan="${colspan}"` : '')
@@ -732,6 +826,7 @@ function emitTable(area: LayoutArea, tile: AreaTile, headings: boolean): string 
   if (headings) {
     const letters: string[] = []
     for (let column = tile.colStart; column <= tile.colEnd; column += 1) {
+      if (!area.printedColumnSet.has(column)) continue
       letters.push(`<th class="hd">${columnLabel(column)}</th>`)
     }
     headParts.push(`<tr><th class="hd"></th>${letters.join('')}</tr>`)
@@ -743,11 +838,11 @@ function emitTable(area: LayoutArea, tile: AreaTile, headings: boolean): string 
     if (row.row >= tile.rowStart && row.row <= tile.rowEnd) bodyParts.push(emitRow(row))
   }
 
-  const columnCount = tile.colEnd - tile.colStart + 1
-  const widths = Array.from(
-    { length: columnCount },
-    (_, offset) => area.columnWidthsPt[tile.colStart - area.startColumn + offset] ?? 0,
-  )
+  const widths: number[] = []
+  for (let column = tile.colStart; column <= tile.colEnd; column += 1) {
+    if (!area.printedColumnSet.has(column)) continue
+    widths.push(area.columnWidthsPt[column - area.startColumn] ?? 0)
+  }
   const colgroup = `<colgroup>${headings ? `<col style="width:${24}pt">` : ''}${widths
     .map((width) => `<col style="width:${round(width)}pt">`)
     .join('')}</colgroup>`
@@ -982,25 +1077,81 @@ function parseTitleRows(titles: string): { start: number; end: number } {
   return { start, end }
 }
 
-/// Merge anchors and shadowed cells of the merges intersecting an area.
-/// `covered` maps every shadowed cell to its anchor so a page tile can tell
-/// where a merge continues from.
+/// Merge anchors and shadowed cells of the merges intersecting an area,
+/// with hidden rows/columns folded out (BUG-1521): a merge's spans count
+/// only the printed cells it covers, a merge anchored on a hidden row or
+/// column relocates its printed anchor to the merge's first printed cell
+/// (the merge's fill and text survive on the visible part, like Excel
+/// renders it), and a merge with no printed cell in the area drops out
+/// entirely. `covered` maps every shadowed cell to its printed anchor so a
+/// page tile can tell where a merge continues from.
 function mergeMaps(
   worksheet: PrintWorksheet,
   area: { startRow: number; endRow: number; startColumn: number; endColumn: number },
+  rowPrints: (row: number) => boolean,
+  columnPrints: (column: number) => boolean,
 ) {
-  const anchors = new Map<string, { rows: number; columns: number }>()
+  const anchors = new Map<string, MergeAnchor>()
   const covered = new Map<string, AreaPoint>()
   for (const merge of worksheet.getMergedRanges()) {
     const row = merge.getRow()
     const column = merge.getColumn()
+    const endRow = row + merge.getHeight() - 1
+    const endColumn = column + merge.getWidth() - 1
     if (row > area.endRow || column > area.endColumn) continue
-    if (row + merge.getHeight() - 1 < area.startRow) continue
-    if (column + merge.getWidth() - 1 < area.startColumn) continue
-    anchors.set(`${row}:${column}`, { rows: merge.getHeight(), columns: merge.getWidth() })
-    for (let r = row; r < row + merge.getHeight(); r += 1) {
-      for (let c = column; c < column + merge.getWidth(); c += 1) {
-        if (r !== row || c !== column) covered.set(`${r}:${c}`, { row, column })
+    if (endRow < area.startRow || endColumn < area.startColumn) continue
+    const printedRows: number[] = []
+    for (let r = Math.max(row, area.startRow); r <= Math.min(endRow, area.endRow); r += 1) {
+      if (rowPrints(r)) printedRows.push(r)
+    }
+    const printedColumns: number[] = []
+    for (
+      let c = Math.max(column, area.startColumn);
+      c <= Math.min(endColumn, area.endColumn);
+      c += 1
+    ) {
+      if (columnPrints(c)) printedColumns.push(c)
+    }
+    // Nothing of the merge prints inside the area — leave its cells free.
+    if (printedRows.length === 0 || printedColumns.length === 0) continue
+    const anchorInsideArea = row >= area.startRow && column >= area.startColumn
+    const anchorPrints = anchorInsideArea && rowPrints(row) && columnPrints(column)
+    if (!anchorInsideArea) {
+      // The anchor sits above/left of the area and never prints as a cell;
+      // keep it at its real position so area cells render as continuation
+      // fillers (spans never emit here).
+      anchors.set(`${row}:${column}`, {
+        rows: merge.getHeight(),
+        columns: merge.getWidth(),
+        sourceRow: row,
+        sourceColumn: column,
+        endRow,
+        endColumn,
+      })
+      for (let r = row; r <= endRow; r += 1) {
+        for (let c = column; c <= endColumn; c += 1) {
+          if (r !== row || c !== column) covered.set(`${r}:${c}`, { row, column })
+        }
+      }
+      continue
+    }
+    // A hidden anchor row/column relocates the printed anchor to the
+    // merge's first printed cell; the spans count printed cells only.
+    const anchorRow = anchorPrints ? row : printedRows[0]!
+    const anchorColumn = anchorPrints ? column : printedColumns[0]!
+    anchors.set(`${anchorRow}:${anchorColumn}`, {
+      rows: printedRows.length,
+      columns: printedColumns.length,
+      sourceRow: row,
+      sourceColumn: column,
+      endRow,
+      endColumn,
+    })
+    for (let r = row; r <= endRow; r += 1) {
+      for (let c = column; c <= endColumn; c += 1) {
+        if (r !== anchorRow || c !== anchorColumn) {
+          covered.set(`${r}:${c}`, { row: anchorRow, column: anchorColumn })
+        }
       }
     }
   }
