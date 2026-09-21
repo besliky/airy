@@ -127,6 +127,7 @@ import {
   RIBBON_SHAPE_STYLES,
   clampDurationSeconds,
   closeSiblingPanels,
+  ribbonEscapeDeferred,
   type Props,
   type RibbonPanelKey,
   type RibbonTabCtx,
@@ -1425,6 +1426,25 @@ export function Ribbon({
   // commits). The shared installer covers outside mousedown, window blur and
   // the shell app:chrome-pressed relay; panels survive via stopPropagation.
   useDismissablePopover(anyPanelOpen, closePanels)
+
+  // Escape closes the open popup — keyboard parity with the outside press
+  // (sheets' ribbon had it via useEscapeClose; slides' dismissal trio didn't).
+  // Capture + claim: the app-global Esc actions respect defaultPrevented, so
+  // one press closes only the popup. Layers that own their Escape (modal
+  // dialogs stacked on top, editable fields cancelling a draft, an expanded
+  // shared Dropdown list) keep it — see ribbonEscapeDeferred.
+  useEffect(() => {
+    if (!anyPanelOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.isComposing) return
+      if (ribbonEscapeDeferred(e.target as Element | null)) return
+      e.preventDefault()
+      e.stopPropagation()
+      closePanels()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [anyPanelOpen, closePanels])
 
   // ── Responsive collapse (PowerPoint model): the collapsed set is a pure
   // function of the current width, never of resize history — pick the fewest

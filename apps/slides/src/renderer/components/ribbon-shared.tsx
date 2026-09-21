@@ -279,6 +279,26 @@ export function closeSiblingPanels(
   closePanels(nested ? [own, 'collapse', 'para'] : [own])
 }
 
+/** Whether the ribbon's window-capture Escape handler must stand down for a
+ *  keydown originating on `el` because a layer beneath the popup owns that
+ *  press (one Escape dismisses one layer):
+ *  - a modal dialog stacked on top closes itself (its own Esc handler,
+ *    registered later on capture, still sees the event);
+ *  - an editable ribbon field cancels its own draft (the font combobox
+ *    blurs on Escape; the list then closes on the next press);
+ *  - an expanded shared Dropdown closes its own list first (Ribbon.tsx
+ *    panels host Dropdowns whose React handler runs later in bubble). */
+export function ribbonEscapeDeferred(el: Element | null): boolean {
+  if (!el) return false
+  if (el.closest('.modal-backdrop')) return true
+  if (
+    el.closest('.rb-drop-wrap') &&
+    (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || (el as HTMLElement).isContentEditable)
+  )
+    return true
+  return el.closest('.gs-dd [aria-expanded="true"]') != null
+}
+
 export function Group({
   label,
   children,
