@@ -276,6 +276,18 @@ describe('parseSession', () => {
     expect(twoWindows.windows[0]!.tabs).toHaveLength(64)
     expect(twoWindows.windows).toHaveLength(1) // the second window hit the shared cap
   })
+
+  it('caps the GLOBAL total at 64, not 127 (BUG-1109 audit tail)', () => {
+    // a first window with 63 valid tabs used to let the second add 64 of
+    // its own — the per-window parser did not know the global budget, so
+    // the declared cap of 64 actually admitted 127
+    const w1 = Array.from({ length: 63 }, (_, i) => ({ kind: 'docs', path: `/a${i}.docx` }))
+    const w2 = Array.from({ length: 80 }, (_, i) => ({ kind: 'pdf', path: `/b${i}.pdf` }))
+    const state = S.parseSession({ windows: [{ tabs: w1 }, { tabs: w2 }] })
+    const total = state.windows.reduce((n, w) => n + w.tabs.length, 0)
+    expect(total).toBe(64)
+    expect(state.windows[1]!.tabs).toHaveLength(1) // 64 - 63 leftover budget
+  })
 })
 
 describe('pruneSession', () => {
