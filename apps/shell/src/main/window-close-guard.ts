@@ -5,8 +5,9 @@ import type { WebContents } from 'electron'
  * re-entrancy rules are unit-testable with fake prompts.
  *
  * The guard walks the window's dirty tabs through their save/don't-save/
- * cancel prompts; any cancel aborts the close (and with it an in-flight
- * app quit — the caller's abortQuit). A second close event while a cycle is
+ * cancel prompts; any cancel — or a prompt/save round-trip that throws
+ * (BUG-1310) — aborts the close and unwinds an in-flight app quit with it
+ * (the caller's abortQuit). A second close event while a cycle is
  * still awaiting a prompt (the X button, then Cmd+Q firing close on every
  * window) used to start a SECOND parallel cycle over the same tabs: double
  * dialogs for one tab, clashing Cancel/Save answers, the window closing
@@ -33,9 +34,8 @@ export interface WindowCloseGuardDeps<Tab extends GuardedCloseTab> {
   isWindowAlive(): boolean
   /** a dirty-guard Cancel: unwind an in-flight quit (BUG-1104) */
   abortQuit(): void
-  /** a prompt/save round-trip threw: log-only (the cycle is abandoned and
-   *  the latch released — the pre-extraction code surfaced the same failure
-   *  as an unhandled rejection the process handler logged) */
+  /** a prompt/save round-trip threw: log it — the abandoned cycle then
+   *  unwinds an in-flight quit exactly like a Cancel would (BUG-1310) */
   logFailure(err: unknown): void
 }
 
@@ -71,7 +71,16 @@ export function createWindowCloseGuard<Tab extends GuardedCloseTab>(
         deps.finishClose()
         if (deps.isWindowAlive()) deps.closeWindow()
       } catch (err) {
+        // BUG-1310: the abandoned cycle must unwind an armed quit exactly
+        // like a Cancel does (abortQuit is a no-op when no quit is in
+        // flight). A thrown prompt/save round-trip during a quit (e.g.
+        // contents.send on a destroyed webContents) used to only release
+        // the latch: the quit stayed armed with no window ever closing —
+        // sheets kept closing dirty tabs with no prompt and the live
+        // bridge stayed down until restart (the BUG-1216 symptom via a new
+        // path).
         deps.logFailure(err)
+        deps.abortQuit()
       } finally {
         // never strand the latch: a cancelled or failed cycle releases it so
         // a later close event starts a fresh one; a confirmed close keeps it
