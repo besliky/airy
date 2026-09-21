@@ -5,7 +5,8 @@
 Airy is an open-source office suite (docs, sheets, slides, PDF, Markdown,
 HTML) with a built-in **MCP copilot**: a Model Context Protocol server that
 lets CLI coding agents — Claude Code, ZCode, and any other MCP client — open,
-read, and edit real `.docx` / `.xlsx` files headlessly, or edit the document
+read, and edit real `.docx` / `.xlsx` / `.pptx` / Markdown / HTML files
+headlessly (`.pdf` opens read-only for text extraction), or edit the document
 that is open in the running Airy app.
 
 - **Real formats, byte-preserving.** Documents are opened with the suite's
@@ -158,7 +159,7 @@ support and limits, and the security model — is in
 | Branding: build configs, README, docs                                             | done            |
 | i18n brand strings, UI marks, packaged distribution                               | done (phase 4b) |
 | Markdown / HTML headless tools (line-based open / read / edit / save)             | done            |
-| Slides / PDF headless tools                                                       | backlog         |
+| Slides / PDF headless tools                                                       | done            |
 
 ## Development
 
