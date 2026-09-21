@@ -40,6 +40,7 @@ import {
   LayoutList,
   RbCaret,
   closeSiblingPanels,
+  splitCaretKeyDown,
   type RibbonTabCtx,
 } from './ribbon-shared'
 
@@ -95,6 +96,12 @@ export function RibbonInsertTab({ rb }: { rb: RibbonTabCtx }) {
             className="rb-big rb-split"
             disabled={!hasDoc}
             onClick={onAddSlide}
+            onKeyDown={splitCaretKeyDown(() => {
+              if (hasDoc) {
+                closePanels(['layout'])
+                setLayoutOpen(true)
+              }
+            })}
             data-tip={t('ribbonNewSlideTip')}
             aria-haspopup="menu"
             aria-expanded={layoutOpen}

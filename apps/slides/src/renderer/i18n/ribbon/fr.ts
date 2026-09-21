@@ -309,11 +309,13 @@ export const fr = {
   ribbonTransApplyAllTip: 'Appliquer la transition de cette diapositive à toutes les diapositives',
   ribbonEffectOptions: 'Options des effets',
   ribbonEffectOptionsTip: 'Direction et durée de la transition actuelle',
+  ribbonEffectOptionsNoneTip:
+    "Choisissez d'abord une transition — les Options d'effet en exigent une",
   ribbonEffectOptionsDirection: 'Direction',
   ribbonTransDuration: 'Durée',
   ribbonTransDurationDefault: 'Par défaut',
   ribbonTransDurationTip: 'Durée de la transition en secondes (vide = valeur par défaut)',
-  ribbonTransDurationRange: 'Plage autorisée : 0,1 à 60 secondes',
+  ribbonTransDurationRange: 'Plage autorisée : 0,1 à {max} secondes',
   ribbonAnimDirectionTip: 'Variante de direction de l’effet d’animation sélectionné',
   ribbonPreview: 'Aperçu',
   ribbonAnimPreviewTip:

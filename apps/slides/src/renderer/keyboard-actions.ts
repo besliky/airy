@@ -102,6 +102,11 @@ export function handleGlobalKeydown(
     return
   }
   if (editing || inField) return
+  // Esc layering: a capture-phase layer that already claimed the key (reading
+  // view exit, the media overlay, a closing ribbon popup) suppresses the Esc
+  // actions below — one press dismisses one layer, not the whole stack (the
+  // same defaultPrevented contract the arrow page-turning branch uses)
+  if (e.key === 'Escape' && e.defaultPrevented) return
   // ⌘C/⌘X with text dragged in plain DOM (e.g. AI panel, focus on body): let the
   // native copy run instead of hijacking it for the slide/element clipboard
   if (mod && !e.altKey && !e.shiftKey && ['c', 'C', 'x', 'X'].includes(e.key)) {
@@ -249,7 +254,13 @@ export function handleGlobalKeydown(
     else void arrangeActions.groupSelected(ctx)
     return
   }
+  // Canvas-scoped keys: Delete/Backspace and the nudge arrows only act while
+  // the canvas owns focus (body — the Konva container is not focusable). From
+  // a focused chrome button (ribbon trigger, dialog button) they used to edit
+  // the deck right through the UI; the Tab-cycling branch already uses the
+  // same body-focus gate.
   if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (document.activeElement !== document.body) return
     e.preventDefault()
     void clipboardActions.deleteSelected(ctx)
     return
@@ -262,6 +273,9 @@ export function handleGlobalKeydown(
   else if (e.key === 'ArrowUp') dy = -step
   else if (e.key === 'ArrowDown') dy = step
   else return
+  // reading view claims the arrows on capture (page turning); body-focus
+  // keeps focused chrome widgets (ribbon triggers, dialogs) untouched
+  if (e.defaultPrevented || document.activeElement !== document.body) return
   e.preventDefault()
   // Nudge the whole multi-selection; undo granularity is one step per element for now
   for (const id of selectedIds) {

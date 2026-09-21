@@ -2290,11 +2290,17 @@ export function App() {
   )
   useEffect(() => {
     if (!mediaPlay) return
+    // Capture + claim (the useModalDialog model): one Esc closes only the
+    // overlay — the global shortcuts see defaultPrevented and stand down, so
+    // the ink tool / format brush / group-editing state survives the press
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMediaPlay(null)
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      setMediaPlay(null)
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [mediaPlay])
 
   const startEditCell = useCallback((sourceId: string, row: number, col: number) => {

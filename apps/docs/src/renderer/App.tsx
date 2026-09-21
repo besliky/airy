@@ -2849,10 +2849,18 @@ export function App() {
       view.dispatch(tr)
     }
     // TOC / table of figures: F9 rebuilds the cached field (entries + pages)
-    // like Word's update — the authored switches are read back from the field
-    const toc = updateTocField(editor, doc?.parsed.blocks ?? [], headingPages, anchorPage, {
-      silent: true,
-    })
+    // like Word's update — the authored switches are read back from the field;
+    // \t source styles match by name, so the parsed style map rides along (BUG-1012)
+    const toc = updateTocField(
+      editor,
+      doc?.parsed.blocks ?? [],
+      headingPages,
+      anchorPage,
+      doc?.parsed.styles,
+      {
+        silent: true,
+      },
+    )
     if (jobs.length === 0 && toc !== 'updated') {
       setStatus(t('appNoFieldsToUpdate'))
       return

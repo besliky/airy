@@ -129,7 +129,10 @@ describe('atomicWriteFile', () => {
     expect(readdirSync(dir)).toEqual(['a.docx'])
   })
 
-  it('preserves the completed temp file when the fallback write fails', async () => {
+  // BUG-1222: the double-failure path (rename stayed locked AND the in-place
+  // fallback failed) used to skip both unlinks and orphan the temp next to
+  // the target; it is cleaned either way now, without masking the failure.
+  it('cleans the temp file when the fallback write fails too (BUG-1222)', async () => {
     dir = mkdtempSync(join(tmpdir(), 'aw-'))
     const target = join(dir, 'a.docx')
     writeFileSync(target, 'old')
@@ -144,11 +147,10 @@ describe('atomicWriteFile', () => {
       'fallback write failed',
     )
 
-    const files = readdirSync(dir)
-    expect(files).toContain('a.docx')
-    const temp = files.find((file) => file !== 'a.docx')
-    expect(temp).toBeDefined()
-    expect(readFileSync(join(dir, temp!), 'utf-8')).toBe('new')
+    // no temp orphan remains next to the target (the in-place fallback's
+    // open('w') truncating the target on its own failure is that fallback's
+    // pre-existing hazard, unchanged by this fix and out of its scope)
+    expect(readdirSync(dir)).toEqual(['a.docx'])
   })
 
   // BUG-1203: the fallback writes through a file handle and fsyncs it —

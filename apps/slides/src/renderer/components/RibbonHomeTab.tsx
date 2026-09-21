@@ -59,6 +59,7 @@ import {
   RbCaret,
   TEXT_COLORS,
   closeSiblingPanels,
+  splitCaretKeyDown,
   type RibbonTabCtx,
 } from './ribbon-shared'
 
@@ -309,6 +310,12 @@ export function RibbonHomeTab({ rb }: { rb: RibbonTabCtx }) {
             className="rb-big rb-split"
             disabled={!hasDoc}
             onClick={() => onSlideShow(slideShowFromStart)}
+            onKeyDown={splitCaretKeyDown(() => {
+              if (hasDoc) {
+                closePanels(['slideShow'])
+                setSlideShowOpen(true)
+              }
+            })}
             data-tip={t(slideShowFromStart ? 'ribbonFromBeginningTip' : 'ribbonFromCurrentTip')}
             aria-haspopup="menu"
             aria-expanded={slideShowOpen}
@@ -390,6 +397,12 @@ export function RibbonHomeTab({ rb }: { rb: RibbonTabCtx }) {
             className="rb-big rb-split"
             disabled={!hasDoc}
             onClick={onAddSlide}
+            onKeyDown={splitCaretKeyDown(() => {
+              if (hasDoc) {
+                closePanels(['layout'])
+                setLayoutOpen(true)
+              }
+            })}
             data-tip={t('ribbonNewSlideTip')}
             aria-haspopup="menu"
             aria-expanded={layoutOpen}

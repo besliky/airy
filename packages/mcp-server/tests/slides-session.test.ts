@@ -206,6 +206,33 @@ describe('slides session insert_content', () => {
     ).not.toThrow()
   })
 
+  it('rejects non-finite and below-min geometry like the tool schema (BUG-1221)', async () => {
+    const session = await openSession()
+    // zod fences the MCP path (.finite().min(0).min(0.1)), but the session
+    // guard used to mirror only .max(): NaN slipped through every comparison
+    // and serialized x="NaN", and negative/undersized values the schema
+    // rejects were accepted in-process
+    expect(() => session.insertContent('x', { slide: 0, x: Number.NaN })).toThrow(
+      /x must be a finite number of at least 0 in/,
+    )
+    expect(() => session.insertContent('x', { slide: 0, y: Number.POSITIVE_INFINITY })).toThrow(
+      /y must be a finite number/,
+    )
+    expect(() => session.insertContent('x', { slide: 0, x: -1 })).toThrow(
+      /x must be a finite number of at least 0 in/,
+    )
+    expect(() => session.insertContent('x', { slide: 0, width: 0.01 })).toThrow(
+      /width must be a finite number of at least 0.1 in/,
+    )
+    expect(() => session.insertContent('x', { slide: 0, height: Number.NaN })).toThrow(
+      /height must be a finite number/,
+    )
+    // the min itself stays usable: a 0 in offset and a 0.1 in box pass
+    expect(() =>
+      session.insertContent('min', { slide: 0, x: 0, y: 0, width: 0.1, height: 0.1 }),
+    ).not.toThrow()
+  })
+
   it('replaces the text of an existing element and round-trips it', async () => {
     const session = await openSession()
     const result = session.insertContent('Rewritten\nshape text', { slide: 0, element: 1 })

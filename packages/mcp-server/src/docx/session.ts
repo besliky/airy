@@ -54,6 +54,7 @@ import {
   SOFFICE_FILTERS,
   sofficeMissingError,
 } from '../import/soffice.js'
+import { assertWithinOpenCap, OpenSizeError } from '../sessions/size-fence.js'
 
 // ---- limits (mirror the embedded agent, scaled to the MCP 30k answer budget) ----
 
@@ -296,10 +297,17 @@ export class DocxSession {
     let bytes: Uint8Array
     let stamp: FileStamp
     try {
-      bytes = new Uint8Array(await readFile(path))
+      // SEC-1102: refuse a runaway raw file before reading it into memory
+      // (the zip-bomb budget itself runs inside parseDocx — docx-engine's
+      // assertZipWithinLimits — so declared-uncompressed bombs are refused
+      // before any entry is inflated)
       const info = await stat(path)
+      assertWithinOpenCap(path, info.size, 'docx')
+      bytes = new Uint8Array(await readFile(path))
+      assertWithinOpenCap(path, bytes.byteLength, 'docx')
       stamp = { mtimeMs: info.mtimeMs, size: info.size }
     } catch (e) {
+      if (e instanceof OpenSizeError) throw e
       throw new Error(`Cannot read "${path}": ${e instanceof Error ? e.message : String(e)}`, {
         cause: e,
       })

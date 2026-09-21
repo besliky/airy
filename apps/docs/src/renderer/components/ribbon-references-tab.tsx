@@ -8,8 +8,10 @@ import {
   generateIndexFieldXml,
   generateTocFieldXml,
   parseTocInstruction,
+  tocEntryHidesPage,
   type Block,
   type SourceInfo,
+  type StyleInfo,
   type TocEntry,
   type TocFieldOptions,
 } from '@airy-office/docx-engine'
@@ -49,6 +51,106 @@ function collectTocEntriesWithPages(
     return entries.map((e, i) => ({ ...e, pageNo: pages[i] }))
   }
   return entries
+}
+
+/** one `StyleName,level` pair of a \t source-styles spec ("A,1,B,2") */
+export function parseTocStyleSpec(spec: string): Array<{ name: string; level: number }> {
+  const parts = spec.split(',').map((p) => p.trim())
+  const out: Array<{ name: string; level: number }> = []
+  for (let i = 0; i + 1 < parts.length; i += 2) {
+    const name = parts[i]
+    const level = parseInt(parts[i + 1], 10)
+    if (name && Number.isFinite(level) && level >= 1 && level <= 9)
+      out.push({ name, level: Math.round(level) })
+  }
+  return out
+}
+
+/**
+ * Entries from the \t source-styles mapping: paragraphs whose style matches a
+ * `StyleName,level` pair of the spec, at that level, in document order with
+ * real page numbers when pagination is available. The instruction carries
+ * style NAMES while a paragraph's pStyle carries styleIds — the document's
+ * parsed styles bridge the two (BUG-1012); a spec token that is itself a
+ * styleId (some producers write ids into \t) still matches directly.
+ */
+export function collectStyledTocEntries(
+  editor: Editor,
+  styles: Map<string, StyleInfo> | undefined,
+  spec: string,
+  anchorPage?: (pos: number) => number | null,
+): Array<TocEntry & { pos: number }> {
+  const pairs = parseTocStyleSpec(spec)
+  if (pairs.length === 0) return []
+  const norm = (s: string) => s.trim().toLowerCase()
+  const levelOf = new Map<string, number>()
+  if (styles)
+    for (const info of styles.values()) {
+      if (info.type !== 'paragraph') continue
+      for (const { name, level } of pairs) {
+        if (norm(info.name) === norm(name) || norm(info.styleId) === norm(name))
+          if (!levelOf.has(info.styleId)) levelOf.set(info.styleId, level)
+      }
+    }
+  for (const { name, level } of pairs) if (!levelOf.has(name)) levelOf.set(name, level)
+  const out: Array<TocEntry & { pos: number }> = []
+  editor.state.doc.forEach((node, offset) => {
+    const styleId = node.attrs?.styleId
+    const level = typeof styleId === 'string' ? levelOf.get(styleId) : undefined
+    if (level === undefined) return
+    const text = node.textContent.trim()
+    if (!text) return
+    const page = anchorPage?.(offset)
+    out.push({
+      level,
+      text,
+      ...(page !== null && page !== undefined ? { pageNo: page } : {}),
+      pos: offset,
+    })
+  })
+  return out
+}
+
+/**
+ * TOC entries for the parsed/dialog options, in document order: the \o
+ * heading range unions with the \t style-mapped paragraphs (Word's semantics
+ * when an instruction carries both); a styles-only TOC (\t without \o)
+ * collects the mapped styles alone (BUG-1012). A paragraph collected by both
+ * sources keeps its heading entry.
+ */
+export function collectTocEntriesForOptions(
+  editor: Editor,
+  options: TocFieldOptions,
+  ctx: {
+    headingPages?: () => number[] | null
+    anchorPage?: (pos: number) => number | null
+    styles?: Map<string, StyleInfo>
+  } = {},
+): TocEntry[] {
+  const byPos = new Map<number, TocEntry>()
+  if (!options.styles || options.levels !== undefined) {
+    const pages = ctx.headingPages?.()
+    collectHeadings(editor.state.doc).forEach((h, i) => {
+      if (options.levels !== undefined && h.level > options.levels) return
+      byPos.set(h.pos, {
+        level: h.level,
+        text: h.text,
+        ...(pages && pages[i] !== undefined ? { pageNo: pages[i] } : {}),
+      })
+    })
+  }
+  if (options.styles) {
+    for (const entry of collectStyledTocEntries(
+      editor,
+      ctx.styles,
+      options.styles,
+      ctx.anchorPage,
+    )) {
+      const { pos, ...rest } = entry
+      if (!byPos.has(pos)) byPos.set(pos, rest)
+    }
+  }
+  return [...byPos.entries()].sort((a, b) => a[0] - b[0]).map(([, e]) => e)
 }
 
 /**
@@ -91,12 +193,13 @@ function tocFieldNodes(
       fieldDisplay: {
         kind: 'tocLine',
         left: entries[i].text,
+        // a ranged \n hides the page number per entry level (BUG-1012)
         right:
-          options.hidePageNumbers || entries[i].pageNo === undefined
+          tocEntryHidesPage(options, entries[i].level) || entries[i].pageNo === undefined
             ? ''
             : String(entries[i].pageNo),
         level: entries[i].level,
-        ...(options.hidePageNumbers ? { noPage: true } : {}),
+        ...(tocEntryHidesPage(options, entries[i].level) ? { noPage: true } : {}),
         ...(entries[i].anchor ? { anchor: entries[i].anchor } : {}),
       },
     },
@@ -210,14 +313,18 @@ function attachRegionSectPrs(nodes: Array<Record<string, unknown>>, sectPrs: str
  * regenerated dirty fields in one transaction (BUG-1011: documents can carry
  * a TOC and a table of figures — only the first used to update). Each
  * authored instruction is parsed first, so an update keeps the chosen
- * switches (level range, \n, \t styles) and rebuilds a table of figures
- * (\c label) from SEQ captions instead of headings.
+ * switches (level range, \n and its per-level range, \t styles) and rebuilds
+ * a table of figures (\c label) from SEQ captions instead of headings.
+ * `styles` is the document's parsed style map: \t matches style NAMES while
+ * paragraphs carry styleIds, so without it a style-mapped TOC would fall
+ * back to heading entries (BUG-1012).
  */
 export function updateTocField(
   editor: Editor,
   blocks: Block[],
   headingPages?: () => number[] | null,
   anchorPage?: (pos: number) => number | null,
+  styles?: Map<string, StyleInfo>,
   opts: { silent?: boolean } = {},
 ): TocUpdateResult {
   // every TOC/TOF field region (begin ... matching end, tracked by fldChar
@@ -278,12 +385,12 @@ export function updateTocField(
   for (const region of regions) {
     const options = parseTocInstruction(region.instr)
     // BUG-1110: the update path collects ToF entries under the same
-    // canonical+locale alias set the Insert dialog uses (seqAliases/UX-1011)
+    // canonical+locale alias set the Insert dialog uses (seqAliases/UX-1011);
+    // BUG-1012: a \t style-mapped TOC collects entries by style (union with
+    // the \o heading range when the instruction carries both)
     const entries = options.seqIdentifier
       ? collectTofEntries(editor, blocks, tofLabelAliases(options.seqIdentifier), anchorPage)
-      : collectTocEntriesWithPages(editor, headingPages).filter(
-          (e) => options.levels === undefined || e.level <= options.levels,
-        )
+      : collectTocEntriesForOptions(editor, options, { headingPages, anchorPage, styles })
     if (entries.length === 0) {
       continue // empty field: skipped, reported in the aggregate below
     }
@@ -366,10 +473,15 @@ function captionDisplayLabel(id: string, t: (key: StringKey) => string): string 
 export function TocOptionsModal({
   editor,
   headingPages,
+  anchorPage,
+  docStyles,
   onClose,
 }: {
   editor: Editor
   headingPages?: () => number[] | null
+  anchorPage?: (pos: number) => number | null
+  /** document style map (name→styleId bridging for the \t spec, BUG-1012) */
+  docStyles?: Map<string, StyleInfo>
   onClose: () => void
 }) {
   const { t } = useI18n()
@@ -389,9 +501,12 @@ export function TocOptionsModal({
       ...(hyperlinks ? {} : { hyperlinks: false }),
       ...(styles.trim() ? { styles: styles.trim() } : {}),
     }
-    const entries = collectTocEntriesWithPages(editor, headingPages).filter(
-      (e) => e.level <= levelCount,
-    )
+    // \t style-mapped paragraphs union with the heading range (BUG-1012)
+    const entries = collectTocEntriesForOptions(editor, options, {
+      headingPages,
+      anchorPage,
+      styles: docStyles,
+    })
     if (entries.length === 0) {
       setError('ribbonTocNoHeadings')
       return
@@ -738,6 +853,8 @@ function SourceModal({
 
 interface ReferencesTabProps extends TabProps {
   blocks: Block[]
+  /** document style map: \t source-styles matching by name (BUG-1012) */
+  docStyles?: Map<string, StyleInfo>
   onInsertNote: (kind: 'footnote' | 'endnote') => void
   /** open the Footnote and Endnote options dialog (numbering format, conversion) */
   onNoteOptions?: () => void
@@ -755,6 +872,7 @@ export function ReferencesTab({
   editor,
   hasDoc,
   blocks,
+  docStyles,
   dropdown,
   setDropdown,
   onInsertNote,
@@ -916,7 +1034,7 @@ export function ReferencesTab({
             className="rb-big"
             disabled={!hasDoc}
             data-tip={t('ribbonTocUpdateTip')}
-            onClick={() => updateTocField(editor, blocks, headingPages, anchorPage)}
+            onClick={() => updateTocField(editor, blocks, headingPages, anchorPage, docStyles)}
           >
             <span className="rb-big-icon">
               <IconRefresh size={BIG} />
@@ -1104,6 +1222,8 @@ export function ReferencesTab({
         <TocOptionsModal
           editor={editor}
           headingPages={headingPages}
+          anchorPage={anchorPage}
+          docStyles={docStyles}
           onClose={() => setTocOptionsOpen(false)}
         />
       )}

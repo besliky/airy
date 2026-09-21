@@ -4242,6 +4242,7 @@ function RibbonInner({
             editor={editor}
             hasDoc={canEdit}
             blocks={blocks}
+            docStyles={styles}
             dropdown={dropdown}
             setDropdown={setDropdown}
             onInsertNote={onInsertNote}

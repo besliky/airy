@@ -670,16 +670,25 @@ function styleRPrOps(up: StyleUpsert): StyleChildOp[] {
   }
   if (fontSets.length > 0) ops.push({ kind: 'attrs', tag: 'w:rFonts', sets: fontSets })
 
-  for (const [flag, tag] of [
-    [r.bold, 'w:b'],
-    [r.italic, 'w:i'],
-    [r.strike, 'w:strike'],
-  ] as Array<[boolean | null | undefined, string]>) {
+  // bold/italic own a complex-script twin (w:bCs/w:iCs): RTL/CJK runs read
+  // those instead of w:b/w:i (the display model resolves them per script),
+  // so an explicit off must clear both — latin-only "off" used to leave
+  // Arabic/Hebrew runs bold (BUG-1217/1237). Removals clear the twin too.
+  for (const [flag, tag, csTag] of [
+    [r.bold, 'w:b', 'w:bCs'],
+    [r.italic, 'w:i', 'w:iCs'],
+    [r.strike, 'w:strike', undefined],
+  ] as Array<[boolean | null | undefined, string, string | undefined]>) {
     if (flag === true) ops.push({ kind: 'element', tag, xml: `<${tag}/>` })
     // BUG-1101: false is an explicit off — a plain removal would silently
     // re-inherit the facet from the basedOn chain after reopen
-    else if (flag === false) ops.push({ kind: 'element', tag, xml: `<${tag} w:val="0"/>` })
-    else if (flag === null) ops.push({ kind: 'element', tag, xml: null })
+    else if (flag === false) {
+      ops.push({ kind: 'element', tag, xml: `<${tag} w:val="0"/>` })
+      if (csTag) ops.push({ kind: 'element', tag: csTag, xml: `<${csTag} w:val="0"/>` })
+    } else if (flag === null) {
+      ops.push({ kind: 'element', tag, xml: null })
+      if (csTag) ops.push({ kind: 'element', tag: csTag, xml: null })
+    }
   }
   if (r.underline === true) ops.push({ kind: 'ensure', tag: 'w:u', xml: '<w:u w:val="single"/>' })
   else if (r.underline === false)
@@ -2540,6 +2549,8 @@ const SETTINGS_TAGS_AFTER_HYPHENATION = [
   'w:bookFoldPrintingSheets',
   'w:drawingGridHorizontalSpacing',
   'w:drawingGridVerticalSpacing',
+  'w:displayHorizontalDrawingGridEvery',
+  'w:displayVerticalDrawingGridEvery',
   'w:doNotUseMarginsForDrawingGridOrigin',
   'w:drawingGridHorizontalOrigin',
   'w:drawingGridVerticalOrigin',

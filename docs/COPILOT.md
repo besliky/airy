@@ -437,6 +437,17 @@ HTML sessions add an 8 MiB / 2,000,000-line open cap (larger files are
 refused with a clear error, by stat before the content is read); HTML
 documents above 1M characters skip the parse5 structure scan.
 
+Opens are size-fenced against hostile inputs (SEC-1102): every binary
+document session (`.docx` / `.pptx` / `.xlsx` / `.xlsm` / `.xls` / `.ods`)
+refuses a raw file over 512 MiB by stat before a byte is read, and the zip
+formats additionally refuse packages whose central directory declares more
+than 10,000 parts, a part over 512 MiB uncompressed, or a total over
+1.5 GiB uncompressed (the zip-bomb budget — the docx engine runs it inside
+`parseDocx`, the slides session in front of `openPptx`). Workbook bytes
+never transit the Node server (the Rust sidecar reads the file itself), so
+for workbooks the declared-uncompressed budget is the sidecar's domain and
+only the raw cap is enforced server-side.
+
 ## Security model
 
 - **Path confinement.** Every input and output path must resolve inside the

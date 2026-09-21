@@ -306,6 +306,38 @@ describe('saveDocx kind:chart — new kinds round-trip', () => {
     expect(out).toContain('<dimension ref="A1:E5"/>')
   })
 
+  it('cell-less trailing rows survive the sync; a non-A1 dimension unions by its end (BUG-1238)', async () => {
+    // rows that carry only row-level attrs (height/hidden/style) have no
+    // cells: they used to fall out of the loop bound and vanish from
+    // sheetData; a dimension not starting at A1 parsed as 1,1 and shrank
+    const base64 = await buildChartWorkbookXlsxBase64(['Q1', 'Q2'], [{ name: 'S', values: [1, 2] }])
+    const xlsx = await JSZip.loadAsync(Buffer.from(base64, 'base64'))
+    const sheet = (await xlsx.file('xl/worksheets/sheet1.xml')!.async('string'))
+      .replace('</sheetData>', '<row r="5" ht="24" customHeight="1"/><row r="6"></row></sheetData>')
+      .replace('<sheetData>', '<dimension ref="B2:C7"/><sheetData>')
+    xlsx.file('xl/worksheets/sheet1.xml', sheet)
+    const enriched = await xlsx.generateAsync({ type: 'base64' })
+
+    const patched = await patchChartWorkbookXlsxBase64(
+      enriched,
+      ['Q1', 'Q2'],
+      [{ name: 'S', values: [10, 20] }],
+    )
+    expect(patched).toBeTruthy()
+    const out = await (
+      await JSZip.loadAsync(Buffer.from(patched!, 'base64'))
+    )
+      .file('xl/worksheets/sheet1.xml')!
+      .async('string')
+    // the self-closing and the empty-paired cell-less rows ride along byte-identical
+    expect(out).toContain('<row r="5" ht="24" customHeight="1"/>')
+    expect(out).toContain('<row r="6"></row>')
+    // the data rectangle still merged
+    expect(out).toContain('<c r="B3"><v>20</v></c>')
+    // dimension: union of the new rectangle (B3) with the old end (C7)
+    expect(out).toContain('<dimension ref="A1:C7"/>')
+  })
+
   it('a formula cell keeps its own cached value through a data edit (BUG-1105)', async () => {
     // an Excel-authored helper formula inside the chart range (series column B):
     // editing the chart data must not pretend the workbook recalculated it

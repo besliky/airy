@@ -53,10 +53,17 @@ export async function atomicWriteFile(filePath: string, data: Uint8Array): Promi
   } catch (error) {
     const retryable = RETRYABLE_RENAME_CODES.has((error as NodeJS.ErrnoException).code ?? '')
     if (retryable) {
-      // Preserve the completed temp until the non-atomic fallback succeeds.
-      // If that write fails or the process exits, the new bytes still exist.
-      await writeInPlaceDurably(filePath, data)
-      await unlink(tmp).catch(() => {})
+      // The temp file is cleaned on BOTH fallback outcomes (BUG-1222): on
+      // the double-failure path — rename stayed locked AND the in-place
+      // write failed — the old code skipped both unlinks and left a hidden
+      // .<name>.<hex>.tmp next to the target forever, the same orphan class
+      // withSaveTmpCleanup fixed for the MCP saves. The save itself already
+      // failed and reported; the leftover bytes have no recovery value.
+      try {
+        await writeInPlaceDurably(filePath, data)
+      } finally {
+        await unlink(tmp).catch(() => {})
+      }
       return
     }
     await unlink(tmp).catch(() => {})

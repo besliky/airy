@@ -4,9 +4,10 @@
  * right w:pStyle in the saved XML and survive a reopen (round-trip).
  */
 import { afterEach, describe, expect, it } from 'vitest'
-import { Editor } from '@tiptap/core'
+import type { Editor } from '@tiptap/core'
 import { parseDocx, saveDocx } from '@airy-office/docx-engine'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
+import { createTrackedEditor, drainTrackedEditors } from './helpers/tracked-editor'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import {
   blocksToPmDoc,
@@ -33,21 +34,15 @@ const CUSTOM_STYLES =
 
 const BODY = ['one', 'two', 'three'].map((x) => `<w:p><w:r><w:t>${x}</w:t></w:r></w:p>`).join('')
 
-const editors = new Set<Editor>()
-afterEach(() => {
-  for (const editor of editors) editor.destroy()
-  editors.clear()
-})
+afterEach(() => drainTrackedEditors())
 
 async function open(bodyXml = BODY, extraStylesXml = CUSTOM_STYLES) {
   const source = await buildDocx({ bodyXml, extraStylesXml })
   const parsed = await parseDocx(source)
-  const editor = new Editor({
-    element: document.createElement('div'),
+  const editor = createTrackedEditor({
     extensions: editorExtensions,
     content: blocksToPmDoc(parsed.blocks) as never,
   })
-  editors.add(editor)
   return { editor, parsed, source }
 }
 

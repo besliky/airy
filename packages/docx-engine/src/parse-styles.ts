@@ -336,8 +336,12 @@ export async function parseStyles(
       tableDisplay: type === 'table' ? tableStyleDisplayOf(styleNode, theme) : undefined,
       numPr,
       isDefault: attrs['w:default'] === '1' || attrs['w:default'] === 'true' ? true : undefined,
+      // w:customStyle is ST_OnOff: "true"/"on" mark a custom style just like
+      // "1" — only "1" used to be read, so a "true"-spelled producer's style
+      // with a built-in name parsed as built-in (BUG-1216/1236)
       builtin:
         attrs['w:customStyle'] !== '1' &&
+        attrs['w:customStyle'] !== 'true' &&
         (BUILTIN_STYLE_KEYS.has(normId) || BUILTIN_STYLE_KEYS.has(normName))
           ? true
           : undefined,

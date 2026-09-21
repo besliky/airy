@@ -123,4 +123,36 @@ describe('createQuitFlow', () => {
     expect(flow.cancel()).toBe(false)
     expect(flow.quitting).toBe(false)
   })
+
+  it('a failed snapshot write re-arms persist-once so the next close retries (BUG-1224)', () => {
+    const flow = createQuitFlow()
+    flow.begin()
+    expect(flow.closeDecision(3).persist).toBe(true)
+    // the write that closeDecision armed just failed (disk full, read-only
+    // userData): without the re-arm every later confirmed close would skip
+    // its retry and the next launch would resurrect already-closed windows
+    // from the stale snapshot
+    flow.markSnapshotWriteFailed()
+    expect(flow.closeDecision(2).persist).toBe(true)
+  })
+
+  it('a cancel right after a failed snapshot write needs no recovery rewrite (BUG-1224)', () => {
+    const flow = createQuitFlow()
+    flow.begin()
+    flow.closeDecision(3)
+    flow.markSnapshotWriteFailed()
+    // nothing actually landed, so the cancel skips the (equally doomed)
+    // recovery rewrite
+    expect(flow.cancel()).toBe(false)
+    expect(flow.quitting).toBe(false)
+  })
+
+  it('markSnapshotWriteFailed is a no-op outside a quit', () => {
+    const flow = createQuitFlow()
+    flow.markSnapshotWriteFailed()
+    expect(flow.quitting).toBe(false)
+    // an ordinary close is unaffected (its write failures retry via the
+    // debounced save; there is no persist-once to re-arm)
+    expect(flow.closeDecision(1).persist).toBe(true)
+  })
 })
