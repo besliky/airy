@@ -400,10 +400,14 @@ interface LayoutCell {
 
 interface LayoutRow {
   readonly row: number
-  /// Saved row height in print points (the forced <tr> height).
+  /// Saved row height in print points.
   readonly heightPt: number
-  /// Height the printed row needs: the saved height, or taller when a
-  /// cell's text line does not fit it.
+  /// Height the printed row needs — the forced <tr> height: the saved
+  /// height, or taller when a cell's text line does not fit it. The
+  /// over-then-down banding and fit-to-page pagination count this same
+  /// value, so declaring it on the <tr> keeps Chromium's own pagination
+  /// (rows never split) in step with the planned bands instead of letting
+  /// a text-boosted row silently overflow its band's page.
   readonly printedHeightPt: number
   /// The row's cells (merge anchors included), ascending by column.
   readonly cells: readonly LayoutCell[]
@@ -696,7 +700,7 @@ function emitTable(area: LayoutArea, tile: AreaTile, headings: boolean): string 
       cells.push(css === undefined ? '<td></td>' : `<td style="${css}"></td>`)
       column += 1
     }
-    return `<tr style="height:${round(layoutRow.heightPt)}pt">${cells.join('')}</tr>`
+    return `<tr style="height:${round(layoutRow.printedHeightPt)}pt">${cells.join('')}</tr>`
   }
 
   const headParts: string[] = []

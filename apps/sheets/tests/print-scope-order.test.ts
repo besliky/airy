@@ -306,6 +306,38 @@ describe('buildSheetsPrintPayload', () => {
     expect(secondRows[0]).not.toContain('<td></td>')
   })
 
+  it('declares the text-boosted printed height the over-then-down bands count', () => {
+    // A 20pt font needs a 27pt line box (1.25x + 2pt padding); declaring
+    // the saved 15pt row height instead let the rendered row outrun the
+    // band's page capacity, so Chromium split a band and the page order
+    // silently stopped being over-then-down (BUG-1110).
+    const grid = [['tall'], ['tall']]
+    const worksheet: PrintWorksheet = {
+      getSheetName: () => 'Grid',
+      getLastRow: () => grid.length - 1,
+      getLastColumn: () => 0,
+      getRowHeight: () => 20, // 20px = 15pt saved
+      getColumnWidth: () => 100,
+      getMergedRanges: () => [],
+      getRange: ((row: number, column: number, numRows?: number, numColumns?: number) => ({
+        getDisplayValues: () =>
+          grid
+            .slice(row, row + (numRows ?? 1))
+            .map((cells) => cells.slice(column, column + (numColumns ?? 1))),
+        getValues: () => [],
+        getCellStyleData: () => ({ fs: 20 }),
+      })) as PrintWorksheet['getRange'],
+    }
+    const payload = buildSheetsPrintPayload(
+      [{ worksheet, printAreas: [], printTitles: null }],
+      payloadSetup(),
+      'Book.pdf',
+      'S',
+    )
+    expect(payload.html).toContain('<tr style="height:27pt">')
+    expect(payload.html).not.toContain('<tr style="height:15pt">')
+  })
+
   it('styles fillers of merges anchored above the print area', () => {
     // The merge's anchor sits above both the title rows and the print
     // area, but its span covers the printed body cells: those shadowed
