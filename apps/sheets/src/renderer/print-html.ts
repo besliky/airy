@@ -46,9 +46,16 @@ type PageVariant = 'odd' | 'even' | 'first'
 /// otherwise; a text row is at least one line plus the cell padding tall,
 /// which can exceed Excel's saved row height by a point or so — the
 /// fit-to-page pagination must count the printed height, not the saved one.
+/// On top of that, border-collapse grows every bordered row by its border
+/// (a thin edge is worth ~0.75pt per row), which the saved height never
+/// carries — a 40-row bordered sheet drifted ~30pt past the model and
+/// pushed a phantom trailing page into the PDF (BUG-1504), so the declared
+/// <tr> height includes the border too.
 const LINE_HEIGHT_FACTOR = 1.25
 const CELL_VERTICAL_PADDING_PT = 2
 const DEFAULT_FONT_SIZE_PT = 11
+/// The gridline net's collapsed border weight (td rule when gridlines print).
+const GRIDLINE_BORDER_PT = 0.5
 /// The row/column heading strip (8.5pt text, padding, border).
 const HEADING_ROW_HEIGHT_PT = 14
 
@@ -459,11 +466,14 @@ interface LayoutRow {
   /// Saved row height in print points.
   readonly heightPt: number
   /// Height the printed row needs — the forced <tr> height: the saved
-  /// height, or taller when a cell's text line does not fit it. The
-  /// over-then-down banding and fit-to-page pagination count this same
-  /// value, so declaring it on the <tr> keeps Chromium's own pagination
-  /// (rows never split) in step with the planned bands instead of letting
-  /// a text-boosted row silently overflow its band's page.
+  /// height (or the taller text line), plus the row's widest collapsed
+  /// border, which border-collapse adds on top of the content box when the
+  /// sheet prints borders or gridlines (BUG-1504: without it, 82 thin-
+  /// bordered rows drifted ~0.5-0.75pt each and spilled a phantom trailing
+  /// page). The over-then-down banding and fit-to-page pagination count
+  /// this same value, so declaring it on the <tr> keeps Chromium's own
+  /// pagination (rows never split) in step with the planned bands instead
+  /// of letting a text-boosted row silently overflow its band's page.
   /// Known residual (BUG-1214 recheck, headless Chromium): the model counts
   /// ONE text line at 1.25 x font size, but a rendered row still grows past
   /// the declared height when (a) wrap-text cells (`tb: 3`, or embedded
@@ -532,6 +542,7 @@ function layoutPrintArea(
   const buildRow = (row: number): LayoutRow => {
     const cells: LayoutCell[] = []
     let textHeightPt = 0
+    let borderHeightPt = 0
     for (let column = area.startColumn; column <= area.endColumn; column += 1) {
       const key = `${row}:${column}`
       const anchor = merges.anchors.get(key)
@@ -554,6 +565,14 @@ function layoutPrintArea(
           (style?.fs ?? DEFAULT_FONT_SIZE_PT) * LINE_HEIGHT_FACTOR + CELL_VERTICAL_PADDING_PT,
         )
       }
+      // Collapsed table borders grow the rendered row beyond its content
+      // box (a thin bottom border adds ~0.75pt per row); take the row's
+      // widest vertical border so the declared <tr> height covers it.
+      const verticalBorder = (edge: 't' | 'b'): number => {
+        const border = style?.bd?.[edge]
+        return border ? printBorderWidthPt(border.s) : gridlines ? GRIDLINE_BORDER_PT : 0
+      }
+      borderHeightPt = Math.max(borderHeightPt, verticalBorder('t'), verticalBorder('b'))
       cells.push({
         column,
         rowspan: anchor ? anchor.rows : 1,
@@ -566,7 +585,7 @@ function layoutPrintArea(
     return {
       row,
       heightPt,
-      printedHeightPt: Math.max(heightPt, textHeightPt),
+      printedHeightPt: Math.max(heightPt, textHeightPt) + borderHeightPt,
       cells,
     }
   }
