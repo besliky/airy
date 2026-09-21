@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-21
+
+### Added
+
+- Docs: TOC options gain style-source mapping — fields built from named styles
+  (`\t`) alongside outline levels, with per-level page-number ranges.
+- Slides: Escape layering, popover close, and split-caret keyboard access; effect
+  option disabled-reasons; per-transition duration clamps with localized hints.
+
+### Fixed
+
+- Sheets: Text-to-Columns clamps to the used range and refuses >50k-row selections
+  with a clear message; print tile continuations inherit anchor cell styles so
+  gridlines and fills survive page breaks; page order round-trips through the
+  file and preselects in the print dialog; the visual-undo registry is cleared on
+  teardown.
+- Slides: video export records encoder errors instead of truncating silently and
+  restores the active-export flag on renderer crashes; the render-phase cancel
+  works; per-slide aspect fit for mixed-size decks; fly-in/out animations no
+  longer add a diagonal offset in PowerPoint; split animation tokens serialize in
+  the OOXML-legal form.
+- Shell: cancelling quit now fully rolls back (sheets shutdown flag, live bridge
+  restart) and restores per-window sessions; window-close prompts latch; restore
+  windows cascade instead of stacking; video-export focus stays trapped in the
+  dialog during recording.
+- MCP: geometry NaN/negative guards; temp-file orphans cleaned on double failure;
+  zip-bomb size fences on open (stat-first 512 MiB and pptx central-directory
+  budgets).
+- Docs: note spill budgets survive multiple footnotes and carry remainders;
+  built-in style inventory completed (no more customStyle markers on Word
+  built-ins); explicit offsets write complex-script twins; workbook sync keeps
+  cell-less rows and non-A1 dimensions.
+- Tests: editors mounted in docs tests are tracked and destroyed behind a
+  lifecycle contract (fixes an intermittent unhandled-error CI failure); crypto
+  and retry-pacing seams bring the serial suite back under 140s.
+
+### Changed
+
+- Shared tracked-editor test helper replaces per-file cleanup idioms (14 files
+  migrated).
+
 ## [0.13.0] - 2026-09-19
 
 ### Added
@@ -308,7 +349,8 @@ agent-driven document work.
 - The `gsk` CLI search backend and the `@genspark/cli` dependency.
 - The Genspark AI provider — AI in the app is bring-your-own-key only.
 
-[Unreleased]: https://github.com/besliky/airy/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/besliky/airy/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/besliky/airy/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/besliky/airy/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/besliky/airy/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/besliky/airy/compare/v0.10.0...v0.11.0
