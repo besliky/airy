@@ -23,7 +23,9 @@
  *    applies the same numbers here. Workbook bytes never transit Node (the
  *    Rust sidecar reads the file itself), so xlsx gets only the raw cap
  *    here — its declared-uncompressed budget (same 1.5 GiB total) runs
- *    inside the sidecar (SEC-1103) and surfaces as the open error.
+ *    inside the sidecar (SEC-1103) and surfaces as the open error; the
+ *    .xls/.ods conversion runs the same budget inside the sidecar's
+ *    convert path (SEC-1301) before calamine decompresses a single entry.
  */
 import JSZip from 'jszip'
 
