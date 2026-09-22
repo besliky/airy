@@ -11189,3 +11189,12 @@ tr > .page-gap-cut {
 .doc-ea-quotes {
   font-family: 'Noto Serif CJK SC';
 }
+
+/* East Asian square symbols (U+25CB and the JIS/GB2312 geometric set): Word
+   classifies them as East Asian characters and takes them from the eastAsia
+   font at a fullwidth advance; Latin faces cover several with proportional
+   glyphs (Carlito U+25CB = 0.55em), so they render through the bundled CJK
+   face like the hinted quotes above (BUG-1543). */
+.doc-ea-symbol {
+  font-family: 'Noto Serif CJK SC';
+}

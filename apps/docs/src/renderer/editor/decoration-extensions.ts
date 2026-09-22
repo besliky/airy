@@ -15,6 +15,7 @@ import { type TabStop } from '@airy-office/docx-engine'
 import { SearchHighlight } from './extensions'
 import { revisionDisplayState } from './marks'
 import { borderMergeFlags, type ParaBorderAttrs } from './para-border-merge'
+import { eaSquareSymbolRanges } from '../line-metrics'
 import { rangeSlot } from '../dom-range'
 
 const alignRange = rangeSlot()
@@ -805,6 +806,44 @@ export const EaHintQuotesExtension = Extension.create({
               const raw = style?.attrs.rawRPr as string | null | undefined
               for (const r of eaHintQuoteRanges(raw, node.text)) {
                 decos.push(Decoration.inline(pos + r.from, pos + r.to, { class: 'doc-ea-quotes' }))
+              }
+            })
+            return decos.length > 0 ? DecorationSet.create(state.doc, decos) : DecorationSet.empty
+          },
+        },
+      }),
+    ]
+  },
+})
+
+// ---- East Asian square symbols (U+25CB class) ----
+
+const eaSquareSymbolsPluginKey = new PluginKey<DecorationSet>('eaSquareSymbols')
+
+const EA_SQUARE_SYMBOL_RE = /[\u25A0\u25A1\u25B2\u25B3\u25C6\u25C7\u25CB\u25CE\u25CF\u2605\u2606]/
+
+/**
+ * The CJK-encoding geometric shapes (U+25CB and siblings, see
+ * eaSquareSymbolRanges) are East Asian characters for Word: they render with
+ * the run's eastAsia font at a fullwidth advance. Chromium resolves them
+ * through the Latin head of the font chain (Carlito U+25CB = 0.55em), so every
+ * symbol stretch gets a display-only span whose bundled CJK face restores the
+ * 1em advance (BUG-1543; doc 10 date line measured 5.22pt short).
+ */
+export const EaSquareSymbolsExtension = Extension.create({
+  name: 'eaSquareSymbols',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: eaSquareSymbolsPluginKey,
+        props: {
+          decorations(state) {
+            const decos: Decoration[] = []
+            state.doc.descendants((node, pos) => {
+              if (!node.isText || !node.text) return
+              if (!EA_SQUARE_SYMBOL_RE.test(node.text)) return
+              for (const r of eaSquareSymbolRanges(node.text)) {
+                decos.push(Decoration.inline(pos + r.from, pos + r.to, { class: 'doc-ea-symbol' }))
               }
             })
             return decos.length > 0 ? DecorationSet.create(state.doc, decos) : DecorationSet.empty
