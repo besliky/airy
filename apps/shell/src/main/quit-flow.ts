@@ -41,6 +41,12 @@ export interface QuitFlow {
    *  the write instead of skipping it and leaving a stale session that
    *  resurrects windows closed before the failure. */
   markSnapshotWriteFailed(): void
+  /** true while a quit is in flight and its one snapshot has not landed —
+   *  an armed persist-once, a failed write, or a quit whose windows all
+   *  closed before any snapshot could be written. The final will-quit flush
+   *  retries the write for the BUG-1307 residual: a failure on the LAST
+   *  confirmed close has no successor close to re-arm into. */
+  snapshotWritePending(): boolean
 }
 
 export function createQuitFlow(): QuitFlow {
@@ -73,6 +79,9 @@ export function createQuitFlow(): QuitFlow {
       // no-op outside a quit: an ordinary-close write failure is retried by
       // the debounced save anyway, and there is no persist-once to re-arm
       if (quitting) quitSessionPersisted = false
+    },
+    snapshotWritePending() {
+      return quitting && !quitSessionPersisted
     },
     closeDecision(liveWindows) {
       if (quitting) {
