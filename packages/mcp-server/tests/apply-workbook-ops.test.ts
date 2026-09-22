@@ -172,6 +172,39 @@ describe('apply_workbook_ops over MCP', () => {
     }
   })
 
+  it('accepts minimal rich runs: the style flags are optional (absent = plain)', async () => {
+    // the schema used to require all four booleans per run, so an honest
+    // minimal call failed zod with "expected boolean, received undefined at
+    // italic" — the flags serialize truthily and must be optional
+    const { client, close } = await connectSession()
+    try {
+      const handle = await openBook(client)
+      const result = await call(client, 'apply_workbook_ops', {
+        handle,
+        edits: [
+          {
+            sheet: 'Sheet1',
+            ref: 'A1',
+            rich: [{ text: 'Big ', bold: true }, { text: 'news' }],
+          },
+        ],
+      })
+      expect(result.isError).toBeFalsy()
+      expect(result.structuredContent).toEqual({ journaled: 1, dirty: true, dryRun: false })
+
+      const saved = await call(client, 'save_document', { handle })
+      expect(saved.isError).toBeFalsy()
+      const edits = saveCalls[0]?.edits as Array<Record<string, unknown>>
+      expect(edits[0]).toMatchObject({
+        writeValue: true,
+        cell: { value: 'Big news' },
+        rich: [{ text: 'Big ', bold: true }, { text: 'news' }],
+      })
+    } finally {
+      await close()
+    }
+  })
+
   it('reports the merged journal count, not the raw input edit count', async () => {
     const { client, close } = await connectSession()
     try {

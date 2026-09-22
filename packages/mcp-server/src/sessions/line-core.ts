@@ -143,6 +143,13 @@ export interface LineSessionHooks {
    * no hook). May splice the lines in place and push save warnings.
    */
   beforeEncode?(lines: Line[], warnings: string[], encoding: string): void
+  /**
+   * Marker lines whose content must land BEFORE the line, not after (html:
+   * a bare closing </body>/</html>/</head> tag — inserting after it would
+   * push the fragment outside the element it closes, DOC-1506). Receives the
+   * full text of the first line matching the marker.
+   */
+  insertBeforeMarkerLine?(lineText: string): boolean
 }
 
 // ---- text <-> line model ----
@@ -533,7 +540,10 @@ export class LineDocument {
   insert(
     text: string,
     position: { at?: number; marker?: string },
-    options: { afterHeading?: { ordinal: number; line: number }; detailSuffix?: string } = {},
+    options: {
+      afterHeading?: { ordinal: number; line: number }
+      detailSuffix?: string
+    } = {},
   ): LineInsertResult {
     // addressable count: a phantom after the final newline is not a position
     // an insert can name (BUG-1102) — "the end" is the last real line, and
@@ -550,8 +560,16 @@ export class LineDocument {
           `marker "${position.marker}" does not match any line - re-read the document and retry`,
         )
       }
-      after = found
-      where = `after marker line ${String(found)}`
+      // DOC-1506: a marker that names a structural closing tag (e.g.
+      // "</body>") must not push content PAST the element it closes - the
+      // session hook opts such lines into a before-the-line insert
+      if (this.hooks.insertBeforeMarkerLine?.(this.lineModel[found]!.text) === true) {
+        after = found - 1
+        where = `before line ${String(found)}, the first line matching marker "${position.marker}"`
+      } else {
+        after = found
+        where = `after marker line ${String(found)}`
+      }
     } else if (options.afterHeading !== undefined) {
       after = options.afterHeading.line
       where = `after heading ${String(options.afterHeading.ordinal)} (line ${String(after)})`

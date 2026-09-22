@@ -124,6 +124,19 @@ describeWithBinary(
       )
     })
 
+    it('refuses a too-many-entries workbook naming the count and the budget (BUG-1504 batch)', async () => {
+      // the entry-count refusal used to be the vague "Workbook contains too
+      // many ZIP entries." — it must name the counter and the budget like the
+      // declared-size refusal above (and the docx-engine fence) do
+      const zip = await JSZip.loadAsync(await csvToXlsxBuffer('A,B\n1,2\n', 'S'))
+      for (let i = 0; i < 10_010; i++) zip.file(`junk/${String(i)}.bin`, 'x')
+      const manyPath = join(root, 'many-entries.xlsx')
+      await writeFile(manyPath, await zip.generateAsync({ type: 'nodebuffer' }))
+      await expect(XlsxSession.open(manyPath, root, client!)).rejects.toThrow(
+        /Workbook contains \d+ ZIP entries, above the 10000 entry open budget/,
+      )
+    })
+
     it('refuses an .ods zip bomb declared in the central directory (convert-path fence, SEC-1301)', async () => {
       // Mirror of the xlsx bomb test above for the .ods conversion path:
       // calamine reads .ods through the same ZIP container, so the sidecar

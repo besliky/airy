@@ -265,14 +265,17 @@ const worksheetMetadataSchema = z
   .strict()
 /// Exported for the MCP server's apply_workbook_ops input schema, so the
 /// agent-accepted rich-run shape cannot drift from what the save gateway
-/// serializes.
+/// serializes. The four style flags are optional (absent = plain): every
+/// serializer reads them truthily, and requiring them made an honest minimal
+/// run `{ text: "Hi", bold: true }` fail zod validation with "expected
+/// boolean, received undefined at italic".
 export const richRunSchema = z
   .object({
     text: z.string(),
-    bold: z.boolean(),
-    italic: z.boolean(),
-    underline: z.boolean(),
-    strikethrough: z.boolean(),
+    bold: z.boolean().optional(),
+    italic: z.boolean().optional(),
+    underline: z.boolean().optional(),
+    strikethrough: z.boolean().optional(),
     color: z.string().optional(),
     size: z.number().positive().optional(),
     family: z.string().optional(),

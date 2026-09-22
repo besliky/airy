@@ -143,7 +143,8 @@ describe('html tools over MCP', () => {
     const { client, close } = await connectSession()
     try {
       const handle = await openFixture(client)
-      // insert a section verbatim before the closing body tag
+      // insert a section verbatim before the closing body tag (DOC-1506: the
+      // marker names the </body> line, so the fragment must stay INSIDE body)
       const inserted = await call(client, 'insert_content', {
         handle,
         html: '  <h2>Outlook</h2>\n  <p>Next quarter looks promising.</p>',
@@ -151,7 +152,9 @@ describe('html tools over MCP', () => {
       })
       expect(inserted.isError).toBeFalsy()
       expect(inserted.structuredContent?.inserted).toBe(2)
-      expect(inserted.structuredContent?.at).toBe(12)
+      // landed after line 11, i.e. BEFORE the closing tag on line 12
+      expect(inserted.structuredContent?.at).toBe(11)
+      expect(text(inserted)).toContain('before line 12')
 
       // line ops: retarget a link, fix a typo, delete the old list line.
       // the window is 12..14: line 15 is the phantom after the final
@@ -176,10 +179,39 @@ describe('html tools over MCP', () => {
       expect(onDisk).toContain('Next quarter looks excellent.')
       expect(onDisk).toContain('full-detail.html')
       expect(onDisk).not.toContain('External source')
+      // the appended section sits inside the body element: before </body>,
+      // not between </body> and </html> (DOC-1506)
+      const bodyClose = onDisk.indexOf('</body>')
+      expect(bodyClose).toBeGreaterThan(onDisk.indexOf('<h2>Outlook</h2>'))
+      expect(onDisk.indexOf('</html>')).toBeGreaterThan(bodyClose)
       // the reopened copy re-scans structure from the edited markup
       const reopened = await call(client, 'open_document', { path: 'edited.html' })
       expect(reopened.structuredContent?.headingCount).toBe(3)
       expect(reopened.structuredContent?.linkCount).toBe(1)
+    } finally {
+      await close()
+    }
+  })
+
+  it('keeps a marker carrying more than the bare closing tag on the after-the-line side', async () => {
+    const { client, close } = await connectSession()
+    try {
+      // only a line that is JUST a structural closing tag flips to the
+      // before-side; a line with other markup keeps the documented behavior
+      const handle = await openFixture(
+        client,
+        'inline-close.html',
+        new TextEncoder().encode('<body>\n<p>Last.</p></body>\n</html>\n'),
+      )
+      const inserted = await call(client, 'insert_content', {
+        handle,
+        html: '<p>New.</p>',
+        marker: '</body>',
+      })
+      expect(inserted.isError).toBeFalsy()
+      // marker line is 1 ("<p>Last.</p></body>"): content goes AFTER it
+      expect(inserted.structuredContent?.at).toBe(1)
+      expect(text(inserted)).toContain('after marker line 1')
     } finally {
       await close()
     }
