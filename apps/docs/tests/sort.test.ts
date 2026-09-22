@@ -1,5 +1,5 @@
 import { Editor } from '@tiptap/core'
-import { TextSelection } from '@tiptap/pm/state'
+import { NodeSelection, TextSelection } from '@tiptap/pm/state'
 import { parseDocx, saveDocx, type ParsedDocFull } from '@airy-office/docx-engine'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
@@ -317,6 +317,110 @@ describe('table sorting', () => {
     editor.commands.undo()
     expect(rowNames(editor)).toEqual(['Name', 'Delta', 'Alpha', 'Charlie', 'Bravo'])
     expect(editor.can().undo()).toBe(false)
+    editor.destroy()
+  })
+})
+
+/* ================= exotic table shapes (TEST-701) ================= */
+
+describe('exotic table shapes', () => {
+  const GRID3 = '<w:tblGrid>' + '<w:gridCol w:w="1800"/>'.repeat(3) + '</w:tblGrid>'
+  // horizontally merged (gridSpan) cells in every data row: displayed slots
+  // 0 and 1 are covered by ONE cell, so both key levels must read its text
+  const COLSPAN_TABLE =
+    `<w:tbl><w:tblPr/>${GRID3}` +
+    `${tr(['A', 'B', 'C'], true)}` +
+    '<w:tr>' +
+    '<w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p><w:r><w:t>Beta</w:t></w:r></w:p></w:tc>' +
+    '<w:tc><w:p><w:r><w:t>z1</w:t></w:r></w:p></w:tc>' +
+    '</w:tr>' +
+    '<w:tr>' +
+    '<w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p><w:r><w:t>Alpha</w:t></w:r></w:p></w:tc>' +
+    '<w:tc><w:p><w:r><w:t>z2</w:t></w:r></w:p></w:tc>' +
+    '</w:tr>' +
+    '</w:tbl>'
+
+  it('keys a colspan>1 cell for every displayed slot it covers', async () => {
+    const { editor } = await openTable(COLSPAN_TABLE)
+    const scope = sortScope(editor.state)
+    expect(scope).toMatchObject({ kind: 'table', columnCount: 3, rowCount: 3 })
+    // keying by either covered slot reads the spanning cell's text, so both
+    // levels produce the same (correct) row order
+    expect(sortTableRows(options([level(0, 'text')]))(editor.state, editor.view.dispatch)).toBe(
+      true,
+    )
+    expect(rowNames(editor)).toEqual(['A', 'Alpha', 'Beta'])
+    editor.commands.undo()
+    expect(rowNames(editor)).toEqual(['A', 'Beta', 'Alpha'])
+    expect(sortTableRows(options([level(1, 'text')]))(editor.state, editor.view.dispatch)).toBe(
+      true,
+    )
+    expect(rowNames(editor)).toEqual(['A', 'Alpha', 'Beta'])
+    editor.destroy()
+  })
+
+  // w:bidiVisual renders the FIRST XML cell on the right, so the displayed
+  // column 0 is the LAST XML grid slot — sorting must key the visual column
+  const RTL_TABLE =
+    '<w:tbl><w:tblPr><w:bidiVisual/></w:tblPr>' +
+    `${GRID3}` +
+    `${tr(['H1', 'H2', 'H3'], true)}` +
+    `${tr(['Delta', 'ny', '1300'])}` +
+    `${tr(['Alpha', 'la', '125'])}` +
+    `${tr(['Charlie', 'la', '470'])}` +
+    '</w:tbl>'
+
+  it('maps displayed columns right-to-left in a bidiVisual (RTL) table', async () => {
+    const { editor } = await openTable(RTL_TABLE)
+    // header labels follow the VISUAL order: displayed column 0 is H3
+    const scope = sortScope(editor.state)
+    expect(scope).toMatchObject({ kind: 'table', columnCount: 3, rowCount: 4 })
+    expect((scope as { headerLabels: string[] }).headerLabels).toEqual(['H3', 'H2', 'H1'])
+
+    // numeric sort by displayed column 0 reads the LAST XML cell (1300/125/470);
+    // a wrong left-to-right mapping would read the first-cell TEXT instead,
+    // parse no numbers, and leave the rows unsorted
+    expect(sortTableRows(options([level(0, 'number')]))(editor.state, editor.view.dispatch)).toBe(
+      true,
+    )
+    expect(rowNames(editor)).toEqual(['H1', 'Alpha', 'Charlie', 'Delta'])
+    editor.destroy()
+  })
+
+  it('accepts a whole-table NodeSelection as the sort target', async () => {
+    // the context menu selects the table node itself (caret outside any cell):
+    // the docTable NodeSelection branch must own the target, and the replace
+    // range must land on the table, not on a neighbouring block
+    const { editor } = await openDoc(`<w:p><w:r><w:t>intro</w:t></w:r></w:p>${TABLE5}`)
+    let tablePos = -1
+    let offset = 0
+    editor.state.doc.forEach((child) => {
+      if (tablePos < 0 && child.type.name === 'docTable') tablePos = offset
+      offset += child.nodeSize
+    })
+    expect(tablePos).toBeGreaterThan(0)
+    editor.view.dispatch(
+      editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, tablePos)),
+    )
+    // without the NodeSelection branch the caret is in no table and the scope
+    // would fall through to (null) paragraphs
+    expect(sortScope(editor.state)).toMatchObject({ kind: 'table', rowCount: 5 })
+    expect(sortTableRows(options([level(0, 'text')]))(editor.state, editor.view.dispatch)).toBe(
+      true,
+    )
+    const table = [...editor.state.doc.children].find((c) => c.type.name === 'docTable')
+    const names: string[] = []
+    table!.forEach((row) => names.push(row.firstChild?.textContent ?? ''))
+    expect(names).toEqual(['Name', 'Alpha', 'Bravo', 'Charlie', 'Delta'])
+    expect(editor.state.doc.firstChild?.textContent).toBe('intro')
+    expect(editor.can().undo()).toBe(true)
+    editor.commands.undo()
+    editor.state.doc.forEach((child) => {
+      if (child.type.name === 'docTable') {
+        child.forEach((row) => names.push(row.firstChild?.textContent ?? ''))
+      }
+    })
+    expect(names.slice(5)).toEqual(['Name', 'Delta', 'Alpha', 'Charlie', 'Bravo'])
     editor.destroy()
   })
 })
