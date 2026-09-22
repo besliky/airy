@@ -32,6 +32,7 @@ import { CFValueType, type IValueConfig } from '@univerjs/preset-sheets-conditio
 
 import { CENTER_ACROSS_END_KEY } from './center-continuous'
 import { notifyCfStreamWindow } from './cf-formula-fold'
+import { refreshDvSourcesAfterSheetLoad } from './data-validation-source-gate'
 import {
   THRESHOLD_RANGE_CELL_CAP,
   clampColorScaleStops,
@@ -5053,6 +5054,11 @@ async function preloadEntireWorkbookInner(
       startColumn: 0,
       endColumn: sheet.columnCount - 1 + netAxisDelta(finalOps, 'column'),
     })
+    // The sheet's values are fully materialized now: validations elsewhere
+    // that read this sheet (hidden list sources are common) must re-resolve —
+    // they were passing every input through while the source was empty
+    // (BUG-1601).
+    refreshDvSourcesAfterSheetLoad(runtime, state, sheetId)
   }
   if (lazyWorkbookRef.current === state) {
     state.flags.preloadComplete = true
