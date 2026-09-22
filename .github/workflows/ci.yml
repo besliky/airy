@@ -1,9 +1,17 @@
 name: CI
 
-# Test gate for every PR and push: changed-file formatting, lint, typecheck across
-# all workspaces, and the full unit-test suite (engine packages and app tests; the
-# sheets suite also runs the Rust xlsx-sidecar tests). Packaging/signing is handled
-# by separate release automation — this workflow never builds installers.
+# Test gate for every PR and push. PERF-1550: the single monolithic test job
+# (~11 min wall) is split into independent parallel jobs so the CI wall clock
+# is the slowest shard, not the sum of the suite:
+#   quality     — changed-file gates, licenses, lint, typecheck (incl. i18n)
+#   native      — Rust xlsx-sidecar unit tests, release build, compat gate
+#   test (x6)   — workspace-sharded vitest; docs and sheets additionally shard
+#                 their vitest suites in half (--shard=n/2)
+#   e2e (x2)    — native Playwright shards; each leg builds the apps in
+#                 parallel (tools/run-workspaces.mjs build)
+# Packaging/signing is handled by separate release automation — this workflow
+# never builds installers. Baseline authority for the visual e2e suite is
+# unchanged: same config, fonts and serial per-file execution.
 
 on:
   push:
@@ -20,13 +28,18 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  quality:
+    # Everything that gates a PR without running workspace test suites or
+    # building native/bundles. No Rust toolchain needed: cargo-deny ships its
+    # own prebuilt binary.
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The format/theme/hygiene gates diff changed files against the PR
+          # base (HEAD^1 of the merge commit), which needs history.
           fetch-depth: 0
 
       - name: Setup Node
@@ -36,17 +49,18 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Setup Rust
-        # SHA-pinned (third-party action); the ref no longer selects the
-        # toolchain, so it is passed explicitly.
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, 2026-07
-        with:
-          toolchain: stable
+      - name: Resolve Electron version (cache key)
+        id: electron-version
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/electron'].version")" >> "$GITHUB_OUTPUT"
 
-      - name: Cache cargo (xlsx-sidecar)
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      # Electron's postinstall (install-electron) downloads the binary zip on
+      # every npm ci otherwise. Keyed on the lockfile-pinned version, so a
+      # bump refills it instead of masking a broken install.
+      - name: Cache Electron binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          workspaces: apps/sheets/native/xlsx-engine
+          path: ~/.cache/electron
+          key: electron-${{ runner.os }}-v${{ steps.electron-version.outputs.version }}
 
       - name: Install dependencies
         run: npm ci
@@ -121,21 +135,24 @@ jobs:
       - name: Check committed fixtures match the generator
         run: git diff --exit-code -- fixtures/generated
 
-      - name: Test
-        run: npm test
-
-      # Preservation gate: a no-op-adjacent edit through the OOXML gateway must
-      # leave every untouched package entry byte-identical (fails closed otherwise).
-      - name: Sheets compatibility gate
+      # Shard coverage guard: the union of the test-matrix workspace groups
+      # below (everything except docs/sheets, which have their own vitest
+      # shards) must cover the full test order — a new workspace missing from
+      # a shard fails here instead of silently never running in CI.
+      - name: Verify CI test-shard coverage
         run: |
-          npm run fixtures -w @airy-office/sheets
-          npm run compat -w @airy-office/sheets
+          node tools/run-workspaces.mjs test --dry-run --require-all --excluded docs sheets \
+            --only html2docx docx-engine markdown html pptx-render i18n electron-utils \
+            font-metrics ai-search agent-core ai-provider project-store ui \
+            slides pptx-engine pdf mcp-server pdf2docx file-parse shell
 
-  e2e:
-    # 22.04, not -latest: 24.04's AppArmor hardening blocks Electron renderer
-    # spawn under xvfb even with --no-sandbox and the userns sysctl lifted
-    runs-on: ubuntu-22.04
-    timeout-minutes: 45
+  native:
+    # Rust gate for the xlsx-sidecar: cargo unit tests, the release build and
+    # the sheets fixture/compatibility gates (which spawn the freshly built
+    # binary). The test matrix's sheets legs rebuild via the same rust-cache,
+    # so no artifact hand-off is needed.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -147,7 +164,19 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
+      - name: Resolve Electron version (cache key)
+        id: electron-version
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/electron'].version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Electron binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/electron
+          key: electron-${{ runner.os }}-v${{ steps.electron-version.outputs.version }}
+
       - name: Setup Rust
+        # SHA-pinned (third-party action); the ref no longer selects the
+        # toolchain, so it is passed explicitly.
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, 2026-07
         with:
           toolchain: stable
@@ -160,19 +189,182 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Rust unit tests (xlsx-sidecar)
+        run: npm run native:test -w @airy-office/sheets
+
+      - name: Rust release build (xlsx-sidecar)
+        run: npm run native:build -w @airy-office/sheets
+
+      # Preservation gate: a no-op-adjacent edit through the OOXML gateway must
+      # leave every untouched package entry byte-identical (fails closed otherwise).
+      - name: Sheets compatibility gate
+        run: |
+          npm run fixtures -w @airy-office/sheets
+          npm run compat -w @airy-office/sheets
+
+  test:
+    name: test (${{ matrix.name }})
+    # Workspace-sharded unit tests: the wall is the slowest shard, not the
+    # whole suite. docs and sheets dominate the suite (over half the CI test
+    # runtime between them), so each splits its vitest suite in half with the
+    # native --shard flag; sheets legs also rebuild the Rust sidecar (vitest
+    # spawns it).
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: engines
+            workspaces: 'html2docx docx-engine markdown html pptx-render i18n electron-utils font-metrics ai-search agent-core ai-provider project-store ui'
+          - name: apps
+            workspaces: 'slides pptx-engine pdf mcp-server pdf2docx file-parse shell'
+          - name: docs-shard-1
+            workspaces: docs
+            vitestShard: '1/2'
+          - name: docs-shard-2
+            workspaces: docs
+            vitestShard: '2/2'
+          - name: sheets-shard-1
+            workspaces: sheets
+            vitestShard: '1/2'
+            rust: true
+          - name: sheets-shard-2
+            workspaces: sheets
+            vitestShard: '2/2'
+            rust: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Resolve Electron version (cache key)
+        id: electron-version
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/electron'].version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Electron binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/electron
+          key: electron-${{ runner.os }}-v${{ steps.electron-version.outputs.version }}
+
+      - name: Setup Rust
+        if: matrix.rust == true
+        # SHA-pinned (third-party action); the ref no longer selects the
+        # toolchain, so it is passed explicitly.
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, 2026-07
+        with:
+          toolchain: stable
+
+      - name: Cache cargo (xlsx-sidecar)
+        if: matrix.rust == true
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: apps/sheets/native/xlsx-engine
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Sheets vitest spawns target/release/xlsx-sidecar directly (warm
+      # rust-cache makes this a single-crate rebuild).
+      - name: Build xlsx-sidecar (release)
+        if: matrix.rust == true
+        run: npm run native:build -w @airy-office/sheets
+
+      # Vitest-native sharding for the two heavyweight suites: run from the
+      # workspace directory (same cwd the `test` script gets via npm -w) and
+      # split its test files with the native --shard flag.
+      - name: Test (vitest shard)
+        if: matrix.vitestShard
+        run: |
+          cd apps/${{ matrix.workspaces }}
+          npx vitest run --shard=${{ matrix.vitestShard }}
+
+      - name: Test (workspace shard)
+        if: '!matrix.vitestShard'
+        run: node tools/run-workspaces.mjs test --only ${{ matrix.workspaces }}
+
+  e2e:
+    name: e2e (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+    # 22.04, not -latest: 24.04's AppArmor hardening blocks Electron renderer
+    # spawn under xvfb even with --no-sandbox and the userns sysctl lifted.
+    # Native Playwright shards: same config/fonts/serial per-file execution as
+    # before, files partitioned across the matrix (baseline authority intact).
+    # Each leg builds the apps in parallel (run-workspaces build) instead of
+    # the serial build:all chain — a build-once artifact job measured slower
+    # end-to-end because the e2e legs would chain behind it (see PERF-1550).
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    env:
+      # electron's install.js reads exactly this var for its download cache
+      # (@electron/get); it must match the actions/cache path below.
+      electron_config_cache: ~/.cache/electron
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Resolve Electron version (cache key)
+        id: electron-version
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/electron'].version")" >> "$GITHUB_OUTPUT"
+
+      # Electron's postinstall (install-electron) downloads the binary zip on
+      # every npm ci otherwise. Keyed on the lockfile-pinned version, so a
+      # bump refills it instead of masking a broken install.
+      - name: Cache Electron binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/electron
+          key: electron-${{ runner.os }}-v${{ steps.electron-version.outputs.version }}
+
+      - name: Setup Rust
+        # SHA-pinned (third-party action); the ref no longer selects the
+        # toolchain, so it is passed explicitly.
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, 2026-07
+        with:
+          toolchain: stable
+
+      - name: Cache cargo (xlsx-sidecar)
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: apps/sheets/native/xlsx-engine
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Parallel replacement for the serial `npm run build:all` chain (the
+      # app builds are independent — they only reference each other's output
+      # at runtime).
       - name: Build apps
-        run: npm run build:all
+        run: node tools/run-workspaces.mjs build --concurrency 3
 
       # PERF-903 (completes PERF-501): sheets renderer bundle-size gate.
       # PERF-1001: docs joins the gate with an entry-chunk budget (2,200 kB,
       # ~10% headroom over the ~2.0 MB entry PERF-904 landed), and the JSON
       # artifacts are captured with `npm run --silent` — npm's run banner
       # used to land in the redirected stdout, making bundle-sizes.json
-      # invalid (and machine-undiffable). build:all above already produced
-      # both out/renderer trees, so this step only reads the chunks; every
-      # invocation exits non-zero on a budget violation, failing the job
-      # before the (slower) e2e minutes are spent.
+      # invalid (and machine-undiffable). The parallel build above already
+      # produced both out/renderer trees, so this step only reads the chunks;
+      # every invocation exits non-zero on a budget violation, failing the
+      # shard before the (slower) e2e minutes are spent.
       - name: Bundle-size report (budget gate)
+        if: matrix.shard == 1
         run: |
           mkdir -p reports
           npm run --silent bundle-report -w @airy-office/sheets -- --json > reports/sheets-bundle-sizes.json
@@ -183,7 +375,7 @@ jobs:
           npm run bundle-report -w @airy-office/docs
 
       - name: Upload bundle-size report
-        if: always()
+        if: matrix.shard == 1
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bundle-sizes
@@ -219,17 +411,18 @@ jobs:
 
       # Electron needs a display server on Linux runners. DEBUG=pw:browser
       # forwards the Electron process stdout/stderr into the CI log so launch
-      # failures are diagnosable.
+      # failures are diagnosable. Playwright partitions spec files across the
+      # matrix shards; workers stay 1 (serial) per shard.
       - name: E2E (Electron shell)
         env:
           DEBUG: 'pw:browser'
-        run: xvfb-run --auto-servernum -- npm run test:e2e
+        run: xvfb-run --auto-servernum -- npm run test:e2e -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
       - name: Upload E2E artifacts on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2e-artifacts
+          name: e2e-artifacts-shard-${{ matrix.shard }}
           path: |
             e2e/artifacts
             e2e/test-results
