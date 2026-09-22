@@ -141,10 +141,11 @@ const deleteColsSchema = z.object({
 const addSheetSchema = z.object({
   op: z.literal('add_sheet'),
   name: sheetNameSchema,
-  /** grid rows for the new sheet (default 1000) — writes and formula spills
-   * beyond the grid are rejected/truncated, so size it to the expected data */
+  /** grid rows for the new sheet (default 1000, auto-grows when a user
+   * navigates or types below it) — AI-plan writes beyond the grid are still
+   * rejected with an insert_rows hint, so size it to the expected data */
   rows: z.number().int().min(1).max(1_048_576).optional(),
-  /** grid columns for the new sheet (default 20) */
+  /** grid columns for the new sheet (default 26) */
   columns: z.number().int().min(1).max(16_384).optional(),
 })
 

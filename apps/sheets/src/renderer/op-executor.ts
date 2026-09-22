@@ -68,6 +68,8 @@ import {
   lazyWorkbookCellReader,
   loadVisibleRange,
   measureImage,
+  MINIMUM_SHEET_COLUMN_COUNT,
+  MINIMUM_SHEET_ROW_COUNT,
   pinStreamedPrecedents,
   protectSheetGuard,
   pushVisualUndo,
@@ -450,17 +452,15 @@ async function executeOp(op: PlannedOp, run: OpRun): Promise<void> {
       run.userFacing && taken.some((existing) => existing.toLowerCase() === op.name.toLowerCase())
         ? nextSheetName(taken)
         : op.name
-    workbook.insertSheet(
-      name,
-      op.rows !== undefined || op.columns !== undefined
-        ? {
-            sheet: {
-              ...(op.rows !== undefined ? { rowCount: op.rows } : {}),
-              ...(op.columns !== undefined ? { columnCount: op.columns } : {}),
-            },
-          }
-        : undefined,
-    )
+    // Univer's own insertSheet default is 1000×20; pin the app's 1000×26 so
+    // a new tab matches the new-book grid (BUG-1615 growth handles anything
+    // typed or jumped to beyond it).
+    workbook.insertSheet(name, {
+      sheet: {
+        rowCount: op.rows ?? MINIMUM_SHEET_ROW_COUNT,
+        columnCount: op.columns ?? MINIMUM_SHEET_COLUMN_COUNT,
+      },
+    })
   } else if (op.op === 'delete_sheet') workbook.deleteSheet(op.sheetId)
   else if (op.op === 'merge_cells') sheetById(op.sheetId).getRange(op.range).merge()
   else if (op.op === 'unmerge_cells') sheetById(op.sheetId).getRange(op.range).breakApart()

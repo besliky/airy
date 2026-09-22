@@ -71,6 +71,8 @@ import {
   characterWidthToPixels,
   attachVisualUndoToLastStep,
   getScrollAnchor,
+  MINIMUM_SHEET_COLUMN_COUNT,
+  MINIMUM_SHEET_ROW_COUNT,
   normalizeLinkTarget,
   topUndoElement,
   pushVisualUndo,
@@ -346,7 +348,15 @@ export function handleRibbonCommand(ctx: RibbonCommandContext, command: string):
         return
       }
       try {
-        workbook.insertSheet()
+        // Univer's own insertSheet default is 1000×20; pin the app's 1000×26
+        // so a new tab matches the new-book grid (BUG-1615 growth handles
+        // anything typed or jumped to beyond it).
+        workbook.insertSheet(undefined, {
+          sheet: {
+            rowCount: MINIMUM_SHEET_ROW_COUNT,
+            columnCount: MINIMUM_SHEET_COLUMN_COUNT,
+          },
+        })
         ctx.setMessage(t('appSheetAdded'))
       } catch (error: unknown) {
         ctx.setMessage(error instanceof Error ? error.message : t('appSheetAddFailed'))
