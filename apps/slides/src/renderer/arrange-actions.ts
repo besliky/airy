@@ -13,7 +13,9 @@ import { t } from './i18n/locale'
 export async function groupSelected(ctx: ActionCtx): Promise<void> {
   const { slide, selectedIds, current } = ctx
   if (!slide || selectedIds.length < 2) return
-  const GROUPABLE = new Set(['text', 'shape', 'picture'])
+  // Mirrors the engine's groupElements allowlist: tables ride along too
+  // (p:graphicFrame children; ungroup rewrites their p:xfrm back)
+  const GROUPABLE = new Set(['text', 'shape', 'picture', 'table'])
   const nodes = selectedIds
     .map((id) => slide.nodes.find((n) => n.sourceId === id))
     .filter(Boolean) as RenderNode[]

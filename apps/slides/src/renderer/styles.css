@@ -5704,6 +5704,46 @@ body.vib .slide-list {
   background: transparent;
 }
 
+/* Whole-body notes formatting bar (bold / italic / size steps), compact
+ * chip buttons so it stays unobtrusive over the canvas-gray pane */
+.notes-format-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 4px;
+}
+
+.notes-format-bar button {
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.notes-format-bar button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.notes-format-bar button.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.notes-format-bar .notes-pt {
+  min-width: 26px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  user-select: none;
+}
+
 .notes-pane textarea::placeholder {
   color: var(--text-tertiary);
 }
@@ -9341,4 +9381,59 @@ body.show-curtain::after {
   text-align: center;
   font-size: 13px;
   color: var(--text-dim);
+}
+
+/* ── Custom slide size dialog (Design → Slide Size → Custom…) ─────────── */
+
+.slide-size-dlg fieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 8px;
+}
+
+.slide-size-dlg legend {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+.slide-size-fields {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.slide-size-fields label {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.slide-size-unit {
+  display: flex;
+  gap: 2px;
+  padding-bottom: 3px;
+}
+
+.slide-size-unit button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.slide-size-unit button.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.slide-size-error {
+  font-size: 12px;
+  color: var(--danger);
+  margin: 2px 0 6px;
 }

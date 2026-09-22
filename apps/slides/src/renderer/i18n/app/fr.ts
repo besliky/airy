@@ -240,6 +240,9 @@ export const fr = {
   appSectionHeaderTitle: 'Cliquez pour réduire/développer ; clic droit pour gérer la section',
   appNotesLabel: 'Notes',
   appNotesClickToAdd: 'Cliquez pour ajouter des notes',
+  appSlideSizeRange:
+    'La taille des diapositives doit être comprise entre 1,27 et 142,24 cm (0,5 à 56 pouces)',
+  appNotesFontSize: 'Taille de police des notes',
   appNotesPlaceholder:
     'Cliquez pour ajouter des notes du présentateur (enregistrées dans le .pptx)',
   appNotesShow: 'Afficher les notes',

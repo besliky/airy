@@ -238,6 +238,8 @@ export const pl = {
     'Kliknij, aby zwinąć/rozwinąć; kliknij prawym przyciskiem, aby zarządzać sekcją',
   appNotesLabel: 'Notatki',
   appNotesClickToAdd: 'Kliknij, aby dodać notatki',
+  appSlideSizeRange: 'Rozmiar slajdu musi mieścić się między 1,27 a 142,24 cm (0,5–56 cala)',
+  appNotesFontSize: 'Rozmiar czcionki notatek',
   appNotesPlaceholder: 'Kliknij, aby dodać notatki prelegenta (zapisywane w pliku .pptx)',
   appNotesShow: 'Pokaż notatki',
   appNotesHide: 'Ukryj notatki',

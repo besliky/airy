@@ -214,6 +214,8 @@ export const zhTW = {
   appSectionHeaderTitle: '按一下摺疊/展開；按右鍵管理章節',
   appNotesLabel: '備忘稿',
   appNotesClickToAdd: '按一下此處新增備忘稿',
+  appSlideSizeRange: '投影片大小必須介於 1.27 至 142.24 公分 (0.5 至 56 吋) 之間',
+  appNotesFontSize: '備忘字型大小',
   appNotesPlaceholder: '按一下此處新增演講者備忘稿（隨文件儲存進 pptx）',
   appNotesShow: '顯示備忘稿',
   appNotesHide: '隱藏備忘稿',

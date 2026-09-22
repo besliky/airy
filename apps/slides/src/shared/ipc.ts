@@ -9,10 +9,10 @@ import type { AiPanelPrefs } from '@airy-office/ui'
  * them to the model and rebuilds the RenderSlide.
  */
 import type { RenderSlide } from '@airy-office/pptx-render'
-import type { SlideComment, SectionInfo } from '@airy-office/pptx-engine'
+import type { NotesFormat, SlideComment, SectionInfo } from '@airy-office/pptx-engine'
 import type { AiSettings, AiStreamChunk, AiStreamRequest } from '@airy-office/ai-provider'
 
-export type { SlideComment, SectionInfo } from '@airy-office/pptx-engine'
+export type { SlideComment, SectionInfo, NotesFormat } from '@airy-office/pptx-engine'
 
 // Canonical definitions of AI-related types live in @airy-office/ai-provider / @airy-office/agent-core (shared with docs)
 export type {
@@ -1034,10 +1034,12 @@ export interface EditConnectorEndpointsOp {
   end?: { targetId: string; idx: number } | null
 }
 
-/** Overwrite-write speaker notes (\n splits paragraphs). */
+/** Overwrite-write speaker notes (\n splits paragraphs); format styles the whole body. */
 export interface SetNotesOp {
   slideIndex: number
   text: string
+  /** Whole-body formatting (bold/italic/font size); omitted = keep the default */
+  format?: NotesFormat
 }
 
 /** Add a comment (the author is the system username fetched by the main process); parentRef makes it a reply. */
@@ -1225,14 +1227,16 @@ export interface EditChartOp {
 
 // ── Export (PDF / images) ─────────────────────────────────────────────
 
-/** Export as images: the renderer has already rendered hi-res PNGs; the main process only writes them to disk. */
+/** Export as images: the renderer has already rendered the pages; the main process only writes them to disk. */
 export interface ExportImagesOp {
   /** Target directory (absolute path chosen via pickExportDir) */
   dir: string
   /** File base name (without extension), written as <baseName>-01.png / -02.png … */
   baseName: string
-  /** base64 per page PNG (without the data: prefix), in page order */
+  /** base64 per page image (without the data: prefix), in page order */
   pngsBase64: string[]
+  /** Image format: 'png' (default) or 'jpg' (JPEG export, flattened on white) */
+  ext?: 'png' | 'jpg'
 }
 
 export interface ExportImagesResult {
@@ -1353,9 +1357,11 @@ export type MenuCommand =
   | 'save-as'
   | 'export-pdf'
   | 'export-images'
+  | 'export-jpeg'
   | 'export-video'
   | 'print'
   | 'shortcuts'
+  | 'new-slide'
   | 'zoom-in'
   | 'zoom-out'
   | 'zoom-reset'
@@ -1685,6 +1691,8 @@ export interface SlidesApi {
   moveSlide: (op: MoveSlideOp) => Promise<{ slides: RenderSlide[]; sections: SectionInfo[] } | null>
   /** Plain text of the current page's speaker notes ('' when there are none) */
   getNotes: (slideIndex: number) => Promise<string>
+  /** Whole-body format of the page's speaker notes (null = the defaults) */
+  getNotesFormat: (slideIndex: number) => Promise<NotesFormat | null>
   /** Overwrite-write notes (into the pptx's notesSlide part); returns success */
   setNotes: (op: SetNotesOp) => Promise<boolean>
   /** All comments on a page (in add order) */

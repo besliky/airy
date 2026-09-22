@@ -239,6 +239,9 @@ export const es = {
     'Haga clic para contraer/expandir; clic derecho para administrar la sección',
   appNotesLabel: 'Notas',
   appNotesClickToAdd: 'Haga clic para agregar notas',
+  appSlideSizeRange:
+    'El tamaño de la diapositiva debe estar entre 1,27 y 142,24 cm (0,5 a 56 pulgadas)',
+  appNotesFontSize: 'Tamaño de fuente de las notas',
   appNotesPlaceholder: 'Haga clic para agregar notas del orador (se guardan en el .pptx)',
   appNotesShow: 'Mostrar notas',
   appNotesHide: 'Ocultar notas',

@@ -298,6 +298,7 @@ const api: SlidesApi = {
   moveSection: (op: MoveSectionOp) => ipcRenderer.invoke('slides:move-section', op),
   moveSlide: (op: MoveSlideOp) => ipcRenderer.invoke('slides:move-slide', op),
   getNotes: (slideIndex: number) => ipcRenderer.invoke('slides:get-notes', slideIndex),
+  getNotesFormat: (slideIndex: number) => ipcRenderer.invoke('slides:get-notes-format', slideIndex),
   setNotes: (op) => ipcRenderer.invoke('slides:set-notes', op),
   getComments: (slideIndex: number) => ipcRenderer.invoke('slides:get-comments', slideIndex),
   addComment: (op) => ipcRenderer.invoke('slides:add-comment', op),

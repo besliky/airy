@@ -243,6 +243,8 @@ function buildChartNodeInner(
   if (model.kind === 'radar') return buildRadarNode(id, sourceId, model, box, vp, metrics)
   if (model.kind === 'funnel') return buildFunnelNode(id, sourceId, model, box, vp, metrics)
   if (model.kind === 'sunburst') return buildSunburstNode(id, sourceId, model, box, vp, metrics)
+  if (model.kind === 'treemap') return buildTreemapNode(id, sourceId, model, box, vp, metrics)
+  if (model.kind === 'waterfall') return buildWaterfallNode(id, sourceId, model, box, vp, metrics)
   if (model.kind === 'bar' && model.barDir === 'bar') {
     return buildHBarNode(id, sourceId, model, box, vp, metrics)
   }
@@ -2746,6 +2748,242 @@ function buildSunburstNode(
     const s = (c.value / root.value) * 360
     drawNode(c, a, s, rootColors.get(c.label) ?? palette[0]!)
     a += s
+  }
+  return node
+}
+
+// ── chartEx: treemap / waterfall (fallback renders) ────────────────────
+
+/**
+ * Treemap → squarified leaf tiles (swatches + labels). Limitation vs
+ * PowerPoint: the branch hierarchy is flattened to the leaf level (tiles are
+ * colored by data order rather than nested branch rectangles and per-branch
+ * borders are not drawn) — the documented fallback keeps every leaf visible
+ * at its correct area.
+ */
+function buildTreemapNode(
+  id: string,
+  sourceId: string,
+  model: ChartModel,
+  box: PlacedBox,
+  vp: Viewport,
+  metrics: FontMetricsProvider,
+): ChartRenderNode | null {
+  const tm = model.treemap
+  if (!tm) return null
+  const palette = chartPalette(model)
+  const leaves: Array<{ label: string; size: number; color: string }> = []
+  for (let i = 0; i < tm.sizes.length; i++) {
+    const size = Math.abs(tm.sizes[i] ?? 0)
+    if (size <= 0) continue
+    leaves.push({
+      label: tm.levels[0]?.[i] ?? '',
+      size,
+      color: tm.pointColors?.[i] ?? palette[leaves.length % palette.length]!,
+    })
+  }
+  if (leaves.length === 0) return null
+  const total = leaves.reduce((s, l) => s + l.size, 0)
+  if (total <= 0) return null
+
+  const node = emptyChartNode(id, sourceId, box)
+  const labelSizePx = ptToPx(chartTextPt(model), vp.scale) * 0.8
+  const style: RunStyle = {
+    fontFamily: LABEL_FONT,
+    fontSizePx: labelSizePx,
+    bold: false,
+    italic: false,
+  }
+  const measure = (text: string) => metrics.measure(text, style)
+  const pad = Math.max(2, Math.min(box.w, box.h) * 0.02)
+  const gap = 1
+  const W = box.w - pad * 2
+  const H = box.h - pad * 2
+  if (W <= 0 || H <= 0) return node
+
+  // Squarified treemap (Bruls et al.): greedy-extend a row while its worst
+  // aspect ratio keeps improving, then lay it as a band across the full
+  // shorter side (wide rect → horizontal band consuming y; tall rect →
+  // vertical band consuming x).
+  const rest = leaves
+    .slice()
+    .sort((p, q) => q.size - p.size)
+    .map((l) => ({ leaf: l, area: (l.size / total) * W * H }))
+  let rx = pad
+  let ry = pad
+  let rw = W
+  let rh = H
+  let row: typeof rest = []
+  const rowArea = (arr: typeof rest) => arr.reduce((s, r) => s + r.area, 0)
+  const worst = (arr: typeof rest, side: number) => {
+    const s = rowArea(arr)
+    const mx = Math.max(...arr.map((r) => r.area))
+    const mn = Math.min(...arr.map((r) => r.area))
+    const s2 = side * side
+    return Math.max((s2 * mx) / (s * s), (s * s) / (s2 * mn))
+  }
+  const layoutRow = (arr: typeof rest) => {
+    // Horizontal band (rw < rh): spans the full width, consumed in y.
+    const horizontal = rw < rh
+    const side = horizontal ? rw : rh
+    const th = rowArea(arr) / side
+    let cross = 0
+    for (const r of arr) {
+      const len = r.area / th
+      const tx = horizontal ? rx + cross : rx
+      const ty = horizontal ? ry : ry + cross
+      const tw = horizontal ? len : th
+      const tt = horizontal ? th : len
+      node.swatches.push({
+        x: tx + gap / 2,
+        y: ty + gap / 2,
+        w: Math.max(0, tw - gap),
+        h: Math.max(0, tt - gap),
+        color: r.leaf.color,
+      })
+      if (r.leaf.label && tw - gap > measure(r.leaf.label) && tt - gap > labelSizePx * 1.4) {
+        node.labels.push({
+          text: r.leaf.label,
+          x: tx + gap * 2,
+          y: ty + gap * 2,
+          fontSizePx: labelSizePx,
+          color: '#ffffff',
+        })
+      }
+      cross += len
+    }
+    if (horizontal) {
+      ry += th
+      rh -= th
+    } else {
+      rx += th
+      rw -= th
+    }
+  }
+  while (rest.length > 0 && rw > 0 && rh > 0) {
+    const side = Math.min(rw, rh)
+    if (row.length === 0) {
+      row.push(rest.shift()!)
+      continue
+    }
+    const candidate = [...row, rest[0]!]
+    if (worst(candidate, side) <= worst(row, side)) row.push(rest.shift()!)
+    else {
+      layoutRow(row)
+      row = []
+    }
+  }
+  if (row.length > 0) layoutRow(row)
+  return node
+}
+
+/**
+ * Waterfall → running-total bars (delta semantics): each value floats from
+ * the previous cumulative level; increases take the palette's first color,
+ * decreases the second (explicit per-point colors win), dashed connectors tie
+ * each bar to the next at the running-total level. Limitation vs PowerPoint:
+ * explicit subtotal rows are not detected — a file that stores them renders
+ * them as ordinary delta bars (documented).
+ */
+function buildWaterfallNode(
+  id: string,
+  sourceId: string,
+  model: ChartModel,
+  box: PlacedBox,
+  vp: Viewport,
+  metrics: FontMetricsProvider,
+): ChartRenderNode | null {
+  const wf = model.waterfall
+  const vals = wf?.values
+  if (!vals?.length) return null
+  const palette = chartPalette(model)
+
+  // Running totals: each value is a delta from the previous bar's end level
+  const starts: Array<number | null> = []
+  let cum = 0
+  for (const v of vals) {
+    if (v == null) {
+      starts.push(null)
+      continue
+    }
+    starts.push(cum)
+    cum += v
+  }
+  const bounds = [0, cum]
+  for (let i = 0; i < vals.length; i++) {
+    const s = starts[i]
+    if (s == null || vals[i] == null) continue
+    bounds.push(s, s + vals[i]!)
+  }
+  const lo = Math.min(...bounds)
+  const hi = Math.max(...bounds)
+  if (hi <= lo) return null
+
+  const node = emptyChartNode(id, sourceId, box)
+  const labelSizePx = ptToPx(chartTextPt(model), vp.scale) * 0.85
+  const style: RunStyle = {
+    fontFamily: LABEL_FONT,
+    fontSizePx: labelSizePx,
+    bold: false,
+    italic: false,
+  }
+  const measure = (text: string) => metrics.measure(text, style)
+  const pad = Math.max(6, Math.min(box.w, box.h) * 0.03)
+  const catAxisY = box.h - pad - labelSizePx * 1.2
+  const plotX = pad
+  const plotW = box.w - pad * 2
+  const plotH = catAxisY - pad
+  if (plotH <= 0 || plotW <= 0) return node
+  const yOf = (v: number) => pad + ((hi - v) / (hi - lo)) * plotH
+  const n = vals.length
+  const slotW = plotW / n
+  const gapFrac = (model.gapWidthPct ?? 40) / 100
+  const barW = slotW / (1 + gapFrac)
+  const fmt = (v: number) => String(Math.abs(v))
+
+  for (let i = 0; i < n; i++) {
+    const v = vals[i]
+    const cat = model.categories[i] ?? ''
+    const x = plotX + i * slotW + (slotW - barW) / 2
+    if (cat)
+      node.labels.push({
+        text: cat,
+        x: x + barW / 2 - measure(cat) / 2,
+        y: catAxisY + labelSizePx * 0.2,
+        fontSizePx: labelSizePx,
+        color: '#595959',
+      })
+    if (v == null || v === 0) continue
+    const start = starts[i]!
+    const end = start + v
+    const yTop = yOf(Math.max(start, end))
+    const barH = Math.abs(yOf(start) - yOf(end))
+    node.bars.push({
+      x,
+      y: yTop,
+      w: barW,
+      h: barH,
+      color: wf!.pointColors?.[i] ?? (v > 0 ? palette[0]! : (palette[1] ?? palette[0]!)),
+    })
+    const text = fmt(v)
+    const labelY = v > 0 ? yTop - labelSizePx * 1.2 : yTop + barH + labelSizePx * 0.2
+    node.labels.push({
+      text,
+      x: x + barW / 2 - measure(text) / 2,
+      y: Math.max(pad, labelY),
+      fontSizePx: labelSizePx,
+      color: '#595959',
+    })
+    // Dashed connector from this bar's end level to the next bar's plane
+    if (i + 1 < n && vals[i + 1] != null) {
+      const cy = yOf(end)
+      node.polylines.push({
+        points: [x + barW, cy, plotX + (i + 1) * slotW + (slotW - barW) / 2, cy],
+        color: '#a6a6a6',
+        widthPx: 1,
+        dash: [3, 3],
+      })
+    }
   }
   return node
 }

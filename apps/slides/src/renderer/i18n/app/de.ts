@@ -242,6 +242,8 @@ export const de = {
     'Klicken zum Reduzieren/Erweitern; Rechtsklick zum Verwalten des Abschnitts',
   appNotesLabel: 'Notizen',
   appNotesClickToAdd: 'Klicken, um Notizen hinzuzufügen',
+  appSlideSizeRange: 'Die Foliengröße muss zwischen 1,27 und 142,24 cm (0,5 bis 56 Zoll) liegen',
+  appNotesFontSize: 'Notiz-Schriftgröße',
   appNotesPlaceholder:
     'Klicken, um Sprechernotizen hinzuzufügen (werden in der .pptx-Datei gespeichert)',
   appNotesShow: 'Notizen anzeigen',

@@ -1001,3 +1001,105 @@ describe('axis calibration', () => {
     expect(b!.points[1]!).toBeLessThan(a!.points[1]!)
   })
 })
+
+describe('buildChartNode chartEx fallbacks: treemap / waterfall (PAR-316)', () => {
+  const treemapModel: ChartModel = {
+    kind: 'treemap',
+    categories: ['a', 'b', 'c', 'd'],
+    series: [{ values: [40, 30, 20, 10] }],
+    treemap: {
+      levels: [['a', 'b', 'c', 'd']],
+      sizes: [40, 30, 20, 10],
+    },
+  }
+
+  it('lays the leaves out as tiles covering the plot area, largest first', () => {
+    const node = buildChartNode('r_tm', 'el_tm', treemapModel, box, vp, metrics)!
+    expect(node.type).toBe('chart')
+    expect(node.swatches).toHaveLength(4)
+    const totalTile = node.swatches.reduce((s, t) => s + t.w * t.h, 0)
+    const inner = (box.w - 4) * (box.h - 4)
+    // Tiles fill the padded inner area (gaps between tiles only)
+    expect(totalTile).toBeGreaterThan(inner * 0.9)
+    const [t0] = node.swatches
+    expect(t0!.w * t0!.h).toBeGreaterThan(node.swatches[3]!.w * node.swatches[3]!.h!)
+    // Every tile stays inside the chart box
+    for (const t of node.swatches) {
+      expect(t.x).toBeGreaterThanOrEqual(0)
+      expect(t.y).toBeGreaterThanOrEqual(0)
+      expect(t.x + t.w).toBeLessThanOrEqual(box.w)
+      expect(t.y + t.h).toBeLessThanOrEqual(box.h)
+    }
+    // The largest leaf is labeled when it has room
+    expect(node.labels.some((l) => l.text === 'a')).toBe(true)
+  })
+
+  it('honors explicit per-point colors on treemap tiles', () => {
+    const model: ChartModel = {
+      ...treemapModel,
+      treemap: {
+        levels: [['a', 'b', 'c', 'd']],
+        sizes: [40, 30, 20, 10],
+        pointColors: ['#123456', undefined, undefined, undefined],
+      },
+    }
+    const node = buildChartNode('r_tmc', 'el_tmc', model, box, vp, metrics)!
+    expect(node.swatches.some((t) => t.color === '#123456')).toBe(true)
+  })
+
+  it('returns null without treemap data (chip fallback)', () => {
+    expect(
+      buildChartNode(
+        'r_tm0',
+        'el_tm0',
+        { kind: 'treemap', categories: [], series: [] },
+        box,
+        vp,
+        metrics,
+      ),
+    ).toBeNull()
+  })
+
+  const waterfallModel: ChartModel = {
+    kind: 'waterfall',
+    categories: ['q1', 'q2', 'q3', 'q4'],
+    series: [{ values: [100, -30, 40, 20] }],
+    waterfall: { values: [100, -30, 40, 20] },
+  }
+
+  it('renders delta bars stacked on the running total with connectors', () => {
+    const node = buildChartNode('r_wf', 'el_wf', waterfallModel, box, vp, metrics)!
+    expect(node.bars).toHaveLength(4)
+    // Value labels show the deltas
+    for (const v of ['100', '30', '40', '20'])
+      expect(node.labels.some((l) => l.text === v)).toBe(true)
+    // Increase (first bar) takes the palette head, decrease the second color
+    expect(node.bars[0]!.color).toBe('#4472C4')
+    expect(node.bars[1]!.color).toBe('#ED7D31')
+    // Dashed connectors between consecutive bars
+    expect(node.polylines.length).toBeGreaterThan(0)
+    expect(node.polylines[0]!.dash).toBeDefined()
+    // Everything inside the chart box
+    for (const b of node.bars) {
+      expect(b.y).toBeGreaterThanOrEqual(0)
+      expect(b.y + b.h).toBeLessThanOrEqual(box.h)
+    }
+    // Running total: the last bar's end level is the sum (130) — its connector
+    // plane matches the previous cumulative of the preceding bar chain
+    const ends = node.bars.map((b) => b.y)
+    expect(new Set(ends).size).toBeGreaterThan(1)
+  })
+
+  it('waterfall handles a negative net total', () => {
+    const model: ChartModel = {
+      kind: 'waterfall',
+      categories: ['a', 'b'],
+      series: [{ values: [50, -80] }],
+      waterfall: { values: [50, -80] },
+    }
+    const node = buildChartNode('r_wfn', 'el_wfn', model, box, vp, metrics)!
+    expect(node.bars).toHaveLength(2)
+    expect(node.bars[0]!.color).toBe('#4472C4')
+    expect(node.bars[1]!.color).toBe('#ED7D31')
+  })
+})

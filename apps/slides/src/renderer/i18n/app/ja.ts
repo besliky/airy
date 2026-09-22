@@ -226,6 +226,8 @@ export const ja = {
   appSectionHeaderTitle: 'クリックで折りたたみ/展開。右クリックでセクションを管理',
   appNotesLabel: 'ノート',
   appNotesClickToAdd: 'クリックしてノートを追加',
+  appSlideSizeRange: 'スライド サイズは 1.27 ～ 142.24 cm (0.5 ～ 56 インチ) にしてください',
+  appNotesFontSize: 'ノートのフォント サイズ',
   appNotesPlaceholder: 'クリックして発表者のノートを追加（ドキュメントと一緒に pptx に保存）',
   appNotesShow: 'ノートを表示',
   appNotesHide: 'ノートを非表示',

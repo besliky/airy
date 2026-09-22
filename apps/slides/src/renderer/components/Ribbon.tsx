@@ -1144,6 +1144,7 @@ export function Ribbon({
   onExportPdf,
   onPrint,
   onExportImages,
+  onExportJpeg,
   onExportVideo,
   onFormat,
   zoom,
@@ -1196,6 +1197,7 @@ export function Ribbon({
   onResetLayout,
   onSlideSize,
   slideSizeKey,
+  onSlideSizeCustom,
   onParagraphFormat,
   onInsertTable,
   transition,
@@ -1876,6 +1878,15 @@ export function Ribbon({
                   disabled={!hasDoc}
                   onClick={() => {
                     setFileOpen(false)
+                    onExportJpeg()
+                  }}
+                >
+                  {t('ribbonFileExportJpeg')}
+                </button>
+                <button
+                  disabled={!hasDoc}
+                  onClick={() => {
+                    setFileOpen(false)
                     onExportVideo()
                   }}
                 >
@@ -2225,6 +2236,14 @@ export function Ribbon({
                         {label}
                       </button>
                     ))}
+                    <button
+                      onClick={() => {
+                        setSlideSizeOpen(false)
+                        onSlideSizeCustom()
+                      }}
+                    >
+                      {t('ribbonSlideSizeCustom')}
+                    </button>
                   </div>
                 )}
               </div>
