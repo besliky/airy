@@ -145,6 +145,7 @@ import {
 import {
   DropCapExtension,
   EaHintQuotesExtension,
+  EaSquareSymbolsExtension,
   MoveRevisionExtension,
   PPrChangeExtension,
   ParaBorderMergeExtension,
@@ -5677,6 +5678,7 @@ export const editorExtensions = [
   CjkPunctShrinkExtension,
   WsRunLineHeightExtension,
   EaHintQuotesExtension,
+  EaSquareSymbolsExtension,
   DropCapExtension,
   ParaBorderMergeExtension,
   SdtExtension,
