@@ -3,11 +3,14 @@ name: CI
 # Test gate for every PR and push. PERF-1550: the single monolithic test job
 # (~11 min wall) is split into independent parallel jobs so the CI wall clock
 # is the slowest shard, not the sum of the suite:
+#   plan        — computes the test/e2e matrices (affected-only on PRs via the
+#                 workspace dependency graph, full on push/dispatch) and owns
+#                 the shard-coverage guard
 #   quality     — changed-file gates, licenses, lint, typecheck (incl. i18n)
 #   native      — Rust xlsx-sidecar unit tests, release build, compat gate
-#   test (x6)   — workspace-sharded vitest; docs and sheets additionally shard
+#   test (xN)   — workspace-sharded vitest; docs and sheets additionally shard
 #                 their vitest suites in half (--shard=n/2)
-#   e2e (x2)    — native Playwright shards; each leg builds the apps in
+#   e2e (x3)    — native Playwright shards; each leg builds the apps in
 #                 parallel (tools/run-workspaces.mjs build)
 # Packaging/signing is handled by separate release automation — this workflow
 # never builds installers. Baseline authority for the visual e2e suite is
@@ -28,6 +31,36 @@ permissions:
   contents: read
 
 jobs:
+  plan:
+    # Affected-only planner (PERF-1550 phase 2, tools/ci-plan.mjs): PRs run
+    # just the test/e2e legs their changes can reach; push and workflow_dispatch
+    # always get the full set, so the dispatch path is never weakened. Anything
+    # that cannot be attributed to a workspace (root configs, .github, tools,
+    # e2e specs, ...) fails wide to the full matrix.
+    # Also owns the shard-coverage guard: the full matrix is validated against
+    # the canonical workspace order on every run, so a new workspace missing
+    # from a group fails the plan instead of silently never running in CI.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      test: ${{ steps.plan.outputs.test }}
+      e2e: ${{ steps.plan.outputs.e2e }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Depth 2 is exactly the PR merge commit + its first parent (the base
+          # revision), which is all the affected-diff needs. No npm ci — the
+          # planner is plain node + git, keeping this leg (and the matrix jobs
+          # chained behind it) fast.
+          fetch-depth: 2
+
+      - name: Plan affected matrices
+        id: plan
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: node tools/ci-plan.mjs
+
   quality:
     # Everything that gates a PR without running workspace test suites or
     # building native/bundles. No Rust toolchain needed: cargo-deny ships its
@@ -135,17 +168,6 @@ jobs:
       - name: Check committed fixtures match the generator
         run: git diff --exit-code -- fixtures/generated
 
-      # Shard coverage guard: the union of the test-matrix workspace groups
-      # below (everything except docs/sheets, which have their own vitest
-      # shards) must cover the full test order — a new workspace missing from
-      # a shard fails here instead of silently never running in CI.
-      - name: Verify CI test-shard coverage
-        run: |
-          node tools/run-workspaces.mjs test --dry-run --require-all --excluded docs sheets \
-            --only html2docx docx-engine markdown html pptx-render i18n electron-utils \
-            font-metrics ai-search agent-core ai-provider project-store ui \
-            slides pptx-engine pdf mcp-server pdf2docx file-parse shell
-
   native:
     # Rust gate for the xlsx-sidecar: cargo unit tests, the release build and
     # the sheets fixture/compatibility gates (which spawn the freshly built
@@ -204,35 +226,19 @@ jobs:
 
   test:
     name: test (${{ matrix.name }})
+    needs: plan
     # Workspace-sharded unit tests: the wall is the slowest shard, not the
     # whole suite. docs and sheets dominate the suite (over half the CI test
     # runtime between them), so each splits its vitest suite in half with the
     # native --shard flag; sheets legs also rebuild the Rust sidecar (vitest
-    # spawns it).
+    # spawns it). The legs come from the plan job: the full six on push and
+    # workflow_dispatch, the affected subset on pull_request. An empty include
+    # (nothing unit-testable changed) skips the job.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: engines
-            workspaces: 'html2docx docx-engine markdown html pptx-render i18n electron-utils font-metrics ai-search agent-core ai-provider project-store ui'
-          - name: apps
-            workspaces: 'slides pptx-engine pdf mcp-server pdf2docx file-parse shell'
-          - name: docs-shard-1
-            workspaces: docs
-            vitestShard: '1/2'
-          - name: docs-shard-2
-            workspaces: docs
-            vitestShard: '2/2'
-          - name: sheets-shard-1
-            workspaces: sheets
-            vitestShard: '1/2'
-            rust: true
-          - name: sheets-shard-2
-            workspaces: sheets
-            vitestShard: '2/2'
-            rust: true
+      matrix: ${{ fromJson(needs.plan.outputs.test) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -292,13 +298,19 @@ jobs:
 
   e2e:
     name: e2e (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+    needs: plan
     # 22.04, not -latest: 24.04's AppArmor hardening blocks Electron renderer
     # spawn under xvfb even with --no-sandbox and the userns sysctl lifted.
     # Native Playwright shards: same config/fonts/serial per-file execution as
     # before, files partitioned across the matrix (baseline authority intact).
-    # Each leg builds the apps in parallel (run-workspaces build) instead of
-    # the serial build:all chain — a build-once artifact job measured slower
-    # end-to-end because the e2e legs would chain behind it (see PERF-1550).
+    # Three shards (phase 2) put the e2e minutes, the pipeline wall, at ~65s of
+    # tests per leg. Each leg builds the apps in parallel (run-workspaces
+    # build); a build-once artifact job was re-evaluated at three shards and
+    # still loses ~1.5m: the legs would chain behind the build job's own setup
+    # + build + upload (~2.5m warm) and still need their full npm ci + Electron
+    # runtime download afterwards, while per-leg parallel builds cost ~55s each
+    # and run concurrently with nothing (see LOGS/PERF-1550-phase2.md). Empty
+    # include (no app workspace affected on a PR) skips the job.
     runs-on: ubuntu-22.04
     timeout-minutes: 35
     env:
@@ -307,8 +319,7 @@ jobs:
       electron_config_cache: ~/.cache/electron
     strategy:
       fail-fast: false
-      matrix:
-        shard: [1, 2]
+      matrix: ${{ fromJson(needs.plan.outputs.e2e) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
