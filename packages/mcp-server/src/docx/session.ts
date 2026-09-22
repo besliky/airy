@@ -37,6 +37,7 @@ import {
 } from '@airy-office/docx-engine'
 
 import { blocksToHtml, blockPreviewText, blockTypeName, parseRestrictedHtml } from './html.js'
+import { classifyOleContent, encryptedOfficeRefusal } from '../import/ole.js'
 import {
   allocateNumId,
   emptyNumbering,
@@ -311,6 +312,21 @@ export class DocxSession {
       throw new Error(`Cannot read "${path}": ${e instanceof Error ? e.message : String(e)}`, {
         cause: e,
       })
+    }
+    // BUG-1504: an encrypted .docx is not a zip — Word repackages it as an
+    // OLE2 (CFB) container, so jszip's parse failure ("Can't find end of
+    // central directory") reads like a corrupt file. Name password
+    // protection explicitly; a plain OLE container is a renamed .doc.
+    const ole = classifyOleContent(bytes)
+    if (ole === 'encrypted-ooxml' || ole === 'encrypted-legacy') {
+      throw encryptedOfficeRefusal(path, 'docx')
+    }
+    if (ole === 'plain') {
+      throw new Error(
+        `Cannot open "${path}": the file is an OLE2 compound document (a legacy .doc or other ` +
+          'non-zip container), not a .docx package. Open it as .doc — LibreOffice converts it — ' +
+          'or re-save it as .docx.',
+      )
     }
     let parsed: ParsedDocFull
     try {

@@ -9,6 +9,7 @@ import { basename } from 'node:path'
 
 import { countWords } from '../docx/session.js'
 import { resolveConfined } from '../docx/paths.js'
+import { EncryptedOfficeError } from '../import/ole.js'
 import { assertWithinOpenCap, OpenSizeError } from './size-fence.js'
 
 export interface TextSessionMeta {
@@ -73,6 +74,9 @@ export class TextSession {
     try {
       text = await options.extract(bytes)
     } catch (e) {
+      // a typed open refusal (e.g. the encrypted-file error, BUG-1504) already
+      // carries its actionable message — the generic extract wrap would bury it
+      if (e instanceof EncryptedOfficeError) throw e
       throw new Error(
         `Cannot extract text from "${path}": ${e instanceof Error ? e.message : String(e)}`,
         { cause: e },

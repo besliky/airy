@@ -32,6 +32,7 @@ import { DocxSession, type SessionOrigin } from '../docx/session.js'
 import { resolveConfined } from '../docx/paths.js'
 import { HtmlSession } from '../html/session.js'
 import { MarkdownSession } from '../markdown/session.js'
+import { classifyOleContent, encryptedOfficeRefusal, OLE_SNIFF_MAX_BYTES, readHead } from './ole.js'
 import { SlidesSession } from '../slides/session.js'
 import { assertWithinOpenCap } from '../sessions/size-fence.js'
 import { TextSession } from '../sessions/text.js'
@@ -70,6 +71,21 @@ async function statOrNull(path: string): Promise<{ mtimeMs: number; size: number
   }
 }
 
+/**
+ * Refuse a password-protected file before its engine (sidecar, pptx engine,
+ * LibreOffice, word-extractor) sees garbage: an encrypted Office document is
+ * an OLE2 container, not a plain package (BUG-1504). Head sniff (64 KiB) —
+ * best-effort on this path; the docx session re-checks with the full bytes.
+ * Legacy CFB documents without an encryption signal (a plain .doc/.xls) pass.
+ */
+async function refuseEncryptedContainer(path: string, format: string): Promise<void> {
+  const head = await readHead(path, OLE_SNIFF_MAX_BYTES)
+  const ole = classifyOleContent(head)
+  if (ole === 'encrypted-ooxml' || ole === 'encrypted-legacy') {
+    throw encryptedOfficeRefusal(path, format)
+  }
+}
+
 const DOC_TEXT_FALLBACK_WARNING =
   'Legacy .doc opened read-only: text extraction without formatting structure. ' +
   'Full editing (converted .docx session) requires LibreOffice.'
@@ -86,7 +102,7 @@ const LEGACY_PRESENTATION_HINT =
 export async function openDocument(rawPath: string, root?: string): Promise<OpenedDocument> {
   // confinement is checked up front for every format so a path outside the
   // root always reports the confinement error, whatever its extension
-  resolveConfined(rawPath, root)
+  const path = resolveConfined(rawPath, root)
   const ext = extensionOf(rawPath)
   switch (ext) {
     case 'docx':
@@ -95,6 +111,7 @@ export async function openDocument(rawPath: string, root?: string): Promise<Open
     case 'xlsm':
     case 'xls':
     case 'ods':
+      await refuseEncryptedContainer(path, ext)
       return XlsxSession.open(rawPath, root)
     case 'doc': {
       const tool = await findSoffice()
@@ -102,7 +119,15 @@ export async function openDocument(rawPath: string, root?: string): Promise<Open
         return TextSession.open(rawPath, root, {
           format: 'doc',
           warning: DOC_TEXT_FALLBACK_WARNING,
-          extract: (bytes) => docToText(bytes),
+          extract: (bytes) => {
+            // word-extractor dies with "memory outside buffer bounds" on an
+            // encrypted container — name password protection instead (BUG-1504)
+            const ole = classifyOleContent(bytes)
+            if (ole === 'encrypted-ooxml' || ole === 'encrypted-legacy') {
+              throw encryptedOfficeRefusal(path, 'doc')
+            }
+            return docToText(bytes)
+          },
         })
       }
       return openConvertedWordDocument(rawPath, root, tool, 'doc')
@@ -123,6 +148,7 @@ export async function openDocument(rawPath: string, root?: string): Promise<Open
     case 'htm':
       return HtmlSession.open(rawPath, root)
     case 'pptx':
+      await refuseEncryptedContainer(path, ext)
       return SlidesSession.open(rawPath, root)
     case 'pdf':
       return TextSession.open(rawPath, root, {
@@ -161,6 +187,9 @@ async function openConvertedWordDocument(
   // so without this an oversized hostile file would spend host memory/CPU in
   // the conversion subprocess first.
   assertWithinOpenCap(path, stamp.size, format)
+  // BUG-1504: headless soffice cannot decrypt either — an encrypted container
+  // would surface as an opaque conversion failure; name password protection.
+  await refuseEncryptedContainer(path, format)
   const tempDir = await mkdtemp(join(tmpdir(), 'airy-import-'))
   try {
     const converted = await convertViaSoffice(tool, path, {
