@@ -1189,6 +1189,8 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "calamine",
+ "codepage",
+ "encoding_rs",
  "ironcalc",
  "quick-xml 0.38.4",
  "roxmltree 0.21.1",
