@@ -21,13 +21,15 @@ import {
   type PageSetupJournalState,
 } from './edit-journal'
 import type { HeaderFooterResult } from './HeaderFooterDialog'
-import { t } from './i18n/locale'
+import { t, getLang } from './i18n/locale'
 import { effectivePageBreaks } from './page-break-preview'
+import { detectPrintPain, localePaperSize, type PrintGuard } from './print-guard'
 import { COLOR_SCHEMES, FONT_SCHEMES, rethemeStyles, THEME_PRESETS } from './themes'
 import { loadVisibleRange } from './univer-sync'
 import {
   buildSheetsPrintPayload,
   PrintError,
+  stripsAcrossJob,
   type HeaderFooterPictureImage,
   type PrintCellStyle,
   type PrintConditionalFormatStyle,
@@ -41,6 +43,7 @@ import {
   printTitleRowsFromFormula,
   resolveEffectivePageSetup,
   resolveSheetPageBreaks,
+  type EffectivePageSetup,
   type HeaderFooterPictureSlot,
 } from './print-settings'
 import type { LazyWorkbookState, UniverRuntime } from './univer-state'
@@ -373,6 +376,11 @@ export interface PrintSetupOverrides {
   /// Percent; applies when fitToPage is off.
   readonly scale?: number | undefined
   readonly fitToPage?: boolean | undefined
+  /// Fit budget when the override turns fit-to-page on (the print guard's
+  /// fit-to-width applies 1 × 0: one page across, height unconstrained).
+  /// Absent = the sheet's saved fitToWidth/fitToHeight keep applying.
+  readonly fitToWidth?: number | undefined
+  readonly fitToHeight?: number | undefined
   /// What to print: the selection, the active sheet (default), or every
   /// visible sheet of the workbook.
   readonly scope?: 'selection' | 'active-sheet' | 'workbook' | undefined
@@ -489,6 +497,7 @@ export async function buildPrintRequest(
     fitToPage: boolean
     pageOrder: 'down-then-over' | 'over-then-down'
   }
+  guard: PrintGuard
 }> {
   const runtime = ctx.univerRef.current
   const workbook = runtime?.univerAPI.getActiveWorkbook()
@@ -518,6 +527,8 @@ export async function buildPrintRequest(
     ...(overrides.orientation === undefined ? {} : { orientation: overrides.orientation }),
     ...(overrides.scale === undefined ? {} : { scale: overrides.scale }),
     ...(overrides.fitToPage === undefined ? {} : { fitToPage: overrides.fitToPage }),
+    ...(overrides.fitToWidth === undefined ? {} : { fitToWidth: overrides.fitToWidth }),
+    ...(overrides.fitToHeight === undefined ? {} : { fitToHeight: overrides.fitToHeight }),
   }
   const baseName = (state?.file.name ?? 'Book1').replace(/\.[^.]+$/, '')
   const pictures = state
@@ -597,7 +608,21 @@ export async function buildPrintRequest(
       fitToPage: effective.fitToPage,
       pageOrder: effective.pageOrder ?? 'down-then-over',
     },
+    guard: printGuard(jobs, effective),
   }
+}
+
+/// The print guard for the job as configured (BUG-1603): the strip count at
+/// the fixed scale (fit-to-page jobs are already fitted — nothing to
+/// suggest) and the paper vs UI-locale mismatch. Both stay one-click
+/// suggestions; Excel fits a sheet only when the user asks for it.
+function printGuard(jobs: readonly PrintSheetJob[], effective: EffectivePageSetup): PrintGuard {
+  return detectPrintPain({
+    fitToPage: effective.fitToPage,
+    stripsAcross: effective.fitToPage ? null : stripsAcrossJob(jobs, effective),
+    paperSize: effective.paperSize,
+    localePaperSize: localePaperSize(getLang()),
+  })
 }
 
 /// Lays the active sheet out with its effective Page Layout settings — the
@@ -616,6 +641,7 @@ export async function buildActiveSheetPrintRequest(
     fitToPage: boolean
     pageOrder: 'down-then-over' | 'over-then-down'
   }
+  guard: PrintGuard
 }> {
   return buildPrintRequest(ctx, overrides)
 }

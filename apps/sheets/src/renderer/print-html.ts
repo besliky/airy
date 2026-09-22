@@ -457,6 +457,43 @@ function nameOf(job: PrintSheetJob): string {
   return job.worksheet.getSheetName()
 }
 
+/// Column stripes (pages across) a print job spans at its fixed scale: the
+/// widest area's stripe count under the same stripe model the layout tiles
+/// pages with, so a guard hint saying "prints on N pages across" agrees with
+/// the actual pagination. Reads column visibility and widths only — no cell
+/// layout — so the print dialog can afford it on every preview rebuild.
+/// Meaningful for fixed-scale setups only: a fit-to-page job has no fixed
+/// scale (the fit solve decides, and fitToWidth caps the stripes anyway).
+export function stripsAcrossJob(jobs: readonly PrintSheetJob[], setup: EffectivePageSetup): number {
+  const pageSize = PAPER_SIZES[setup.paperSize] ?? 'A4'
+  const printable = printableSizePt(pageSize, setup.orientation === 'landscape', setup.margins)
+  const scale = clamp(setup.scale / 100, MIN_PRINT_SCALE, MAX_PRINT_SCALE)
+  const rowHeaderPt = setup.printHeadings ? 24 : 0
+  let max = 0
+  for (const job of jobs) {
+    const areas =
+      job.printAreas.length > 0 ? job.printAreas.map(parseArea) : [usedArea(job.worksheet)]
+    for (const area of areas) {
+      const columns = area.endColumn - area.startColumn + 1
+      const sheet = job.worksheet.getSheet()
+      // Same widths the full layout builds (print points, 0 for hidden).
+      const columnWidthsPt = Array.from({ length: columns }, (_, offset) =>
+        sheet.getColVisible(area.startColumn + offset)
+          ? job.worksheet.getColumnWidth(area.startColumn + offset) * 0.75
+          : 0,
+      )
+      const stripes = columnStripesOf(
+        { ...area, columnWidthsPt },
+        printable.widthPt / scale,
+        rowHeaderPt,
+        job.colBreaks ?? setup.colBreaks ?? [],
+      )
+      max = Math.max(max, stripes.length)
+    }
+  }
+  return max
+}
+
 /// A laid-out print area: rows with their cells built once, then tiled into
 /// page-sized tables at emit time (see emitAreaTables).
 interface LayoutCell {
@@ -808,9 +845,11 @@ function tilePageCount(area: LayoutArea, tile: AreaTile, capacityPt: number): nu
 /// Column stripes of an area at the effective scale: each stripe's columns
 /// (plus the row-heading strip, which prints on every page) fit one page
 /// across, with manual column breaks forced as stripe edges. A single
-/// over-wide column always gets its own stripe.
+/// over-wide column always gets its own stripe. Takes the stripe-model slice
+/// of a laid-out area only, so the guard's light measure (stripsAcrossJob)
+/// shares this exact tiling.
 function columnStripesOf(
-  area: LayoutArea,
+  area: AreaBounds & { readonly columnWidthsPt: readonly number[] },
   capacityPt: number,
   rowHeaderPt: number,
   colBreaks: readonly number[] = [],
