@@ -224,6 +224,8 @@ export const ar = {
   appSectionHeaderTitle: 'انقر للطي/التوسيع؛ انقر بزر الماوس الأيمن لإدارة المقطع',
   appNotesLabel: 'الملاحظات',
   appNotesClickToAdd: 'انقر لإضافة ملاحظات',
+  appSlideSizeRange: 'يجب أن يكون حجم الشريحة بين 1.27 و142.24 سم (0.5 إلى 56 بوصة)',
+  appNotesFontSize: 'حجم خط الملاحظات',
   appNotesPlaceholder: 'انقر لإضافة ملاحظات المحاضر (يتم حفظها في ملف pptx)',
   appNotesShow: 'إظهار الملاحظات',
   appNotesHide: 'إخفاء الملاحظات',

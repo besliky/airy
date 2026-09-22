@@ -149,6 +149,7 @@ const PINNED_API_MEMBERS = `
   getLink
   getMediaData
   getNotes
+  getNotesFormat
   getRecentFiles
   getRenderSlides
   getRunLinks

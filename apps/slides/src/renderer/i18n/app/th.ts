@@ -221,6 +221,8 @@ export const th = {
   appSectionHeaderTitle: 'คลิกเพื่อยุบ/ขยาย คลิกขวาเพื่อจัดการส่วน',
   appNotesLabel: 'บันทึกย่อ',
   appNotesClickToAdd: 'คลิกเพื่อเพิ่มบันทึกย่อ',
+  appSlideSizeRange: 'ขนาดสไลด์ต้องอยู่ระหว่าง 1.27 ถึง 142.24 ซม. (0.5 ถึง 56 นิ้ว)',
+  appNotesFontSize: 'ขนาดฟอนต์ของบันทึกย่อ',
   appNotesPlaceholder: 'คลิกเพื่อเพิ่มบันทึกย่อของผู้บรรยาย (บันทึกลงใน pptx พร้อมเอกสาร)',
   appNotesShow: 'แสดงบันทึกย่อ',
   appNotesHide: 'ซ่อนบันทึกย่อ',

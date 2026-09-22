@@ -213,6 +213,8 @@ export const zh = {
   appSectionHeaderTitle: '单击折叠/展开；右键管理节',
   appNotesLabel: '备注',
   appNotesClickToAdd: '单击此处添加备注',
+  appSlideSizeRange: '幻灯片大小必须介于 1.27 到 142.24 厘米（0.5 到 56 英寸）之间',
+  appNotesFontSize: '备注字号',
   appNotesPlaceholder: '单击此处添加演讲者备注（随文档保存进 pptx）',
   appNotesShow: '显示备注',
   appNotesHide: '隐藏备注',

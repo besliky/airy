@@ -139,8 +139,8 @@ export function exportBaseName(ctx: ActionCtx): string {
   return (ctx.path?.split('/').pop() ?? t('appUntitledPresentation')).replace(/\.pptx$/i, '')
 }
 
-/** Export as images: each page (skipping hidden ones) rendered offscreen to 2x PNG, written to disk by the main process */
-export async function exportImages(ctx: ActionCtx): Promise<void> {
+/** Export as images: each page (skipping hidden ones) rendered offscreen to 2x PNG or JPEG, written to disk by the main process */
+export async function exportImages(ctx: ActionCtx, format: 'png' | 'jpeg' = 'png'): Promise<void> {
   const visible = ctx.slides.filter((s) => !s.hidden)
   if (visible.length === 0) {
     ctx.setStatus(t('appExportNoSlides'))
@@ -150,11 +150,19 @@ export async function exportImages(ctx: ActionCtx): Promise<void> {
   if (!dir) return
   ctx.setStatus(t('appExportImagesProgress', { count: visible.length }))
   try {
-    const pngs = await renderSlidesToPngBase64(visible, ctx.images)
+    const pngs = await renderSlidesToPngBase64(
+      visible,
+      ctx.images,
+      undefined,
+      undefined,
+      undefined,
+      format,
+    )
     const r = await window.slidesApi.exportImages({
       dir,
       baseName: exportBaseName(ctx),
       pngsBase64: pngs,
+      ...(format === 'jpeg' ? { ext: 'jpg' as const } : {}),
     })
     ctx.setStatus(
       r.ok

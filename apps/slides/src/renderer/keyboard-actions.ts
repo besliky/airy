@@ -5,6 +5,7 @@
  * once with an empty dependency list.
  */
 import type { ActionCtx } from './action-context'
+import type { RenderNode } from '@airy-office/pptx-render'
 import { isEditableText } from './konva-adapter'
 import * as clipboardActions from './clipboard-actions'
 import * as arrangeActions from './arrange-actions'
@@ -49,6 +50,16 @@ export function handleGlobalKeydown(
     if (e.defaultPrevented || editing || inField || ctx.cropTarget) return
     e.preventDefault()
     showActions.startSlideShow(ctx, false)
+    return
+  }
+  // ⌘M / Ctrl+M: new slide (PowerPoint's Home → New Slide). PowerPoint fires
+  // it globally — even while editing a text box or typing in the notes pane —
+  // so this deliberately sits before the editing/inField bailouts below.
+  // Master view pages are not slides: no insertion there (same as the menu).
+  if (mod && !e.altKey && !e.shiftKey && (e.key === 'm' || e.key === 'M')) {
+    if (ctx.masterItems) return
+    e.preventDefault()
+    void slideActions.addSlide(ctx)
     return
   }
   // Undo/redo (menu accelerators normally intercept; fallback for shell/menuless scenarios)
@@ -166,15 +177,57 @@ export function handleGlobalKeydown(
       return
     }
   }
-  // Tab / Shift+Tab: cycle shape selection in z-order. Only take over when
-  // focus is on the canvas/body, not hijacking focus navigation in ribbon controls etc.
+  // Tab / Shift+Tab: cycle shape selection in z-order. With a group selected,
+  // Tab descends into it and cycles its children (PowerPoint behavior); Esc
+  // still exits in-group editing. Only take over when focus is on the
+  // canvas/body, not hijacking focus navigation in ribbon controls etc.
   if (e.key === 'Tab' && !mod && !e.altKey && document.activeElement === document.body) {
-    const ids = (slide?.nodes ?? [])
-      .filter((n) => !n.decoration && n.type !== 'placeholder-chip')
-      .map((n) => n.sourceId)
+    const pickIds = (nodes: readonly RenderNode[]) =>
+      nodes.filter((n) => !n.decoration && n.type !== 'placeholder-chip').map((n) => n.sourceId)
+    // In-group editing: cycle the group's children; Shift+Tab from the first
+    // child climbs back up to the whole group
+    if (ctx.enteredGroupId && ctx.enteredGroupNode) {
+      const ids = pickIds(ctx.enteredGroupNode.children)
+      if (ids.length) {
+        e.preventDefault()
+        const cur = ids.indexOf(selectedIds[selectedIds.length - 1]!)
+        if (e.shiftKey && cur <= 0) {
+          ctx.setSelectedIds([ctx.enteredGroupId])
+          ctx.setEnteredGroupId(null)
+          return
+        }
+        const next =
+          cur < 0
+            ? e.shiftKey
+              ? ids.length - 1
+              : 0
+            : e.shiftKey
+              ? (cur - 1 + ids.length) % ids.length
+              : (cur + 1) % ids.length
+        ctx.setSelectedIds([ids[next]!])
+      }
+      return
+    }
+    const nodes = slide?.nodes ?? []
+    const ids = pickIds(nodes)
     if (ids.length) {
       e.preventDefault()
-      const cur = selectedIds.length ? ids.indexOf(selectedIds[selectedIds.length - 1]!) : -1
+      // Tab with exactly one group selected: descend into it and select its
+      // first child (PowerPoint's group penetration)
+      const lastId = selectedIds[selectedIds.length - 1]
+      const single =
+        selectedIds.length === 1 && lastId != null
+          ? nodes.find((n) => n.sourceId === lastId)
+          : undefined
+      if (!e.shiftKey && single && single.type === 'group') {
+        const childIds = pickIds(single.children ?? [])
+        if (childIds.length) {
+          ctx.setEnteredGroupId(single.sourceId)
+          ctx.setSelectedIds([childIds[0]!])
+          return
+        }
+      }
+      const cur = selectedIds.length ? ids.indexOf(lastId!) : -1
       const next =
         cur < 0
           ? e.shiftKey

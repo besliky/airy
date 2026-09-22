@@ -402,6 +402,8 @@ export interface Props {
   onPrint: () => void
   /** Export as images (one PNG per page, hidden slides skipped) */
   onExportImages: () => void
+  /** Export as JPEG (one JPEG per page, hidden slides skipped) */
+  onExportJpeg: () => void
   /** Export as video (mp4/WebM; hidden slides skipped) */
   onExportVideo: () => void
   onFormat: (cmd: FormatCmd) => void
@@ -488,6 +490,8 @@ export interface Props {
   /** Slide size (EMU) and the current size tag ('16:9'|'4:3'|null for display) */
   onSlideSize: (cx: number, cy: number) => void
   slideSizeKey: '16:9' | '4:3' | null
+  /** Open the custom slide size dialog (Design → Slide Size → Custom…) */
+  onSlideSizeCustom: () => void
   /** Element-level paragraph format (bullets/numbering/line spacing) */
   onParagraphFormat: (patch: {
     bullet?: 'char' | 'number' | 'none'
