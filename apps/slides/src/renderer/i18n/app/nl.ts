@@ -242,6 +242,8 @@ export const nl = {
     'Klik om samen/uit te vouwen; klik met de rechtermuisknop om de sectie te beheren',
   appNotesLabel: 'Notities',
   appNotesClickToAdd: 'Klik om notities toe te voegen',
+  appSlideSizeRange: 'De diagrootte moet tussen 1,27 en 142,24 cm (0,5 tot 56 inch) liggen',
+  appNotesFontSize: 'Lettergrootte notities',
   appNotesPlaceholder: 'Klik om sprekersnotities toe te voegen (opgeslagen in het .pptx-bestand)',
   appNotesShow: 'Notities weergeven',
   appNotesHide: 'Notities verbergen',

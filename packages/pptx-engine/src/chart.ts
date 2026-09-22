@@ -28,7 +28,17 @@ const chartParser = new XMLParser({
 })
 
 export type ChartKind =
-  'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'radar' | 'funnel' | 'sunburst' | 'unknown'
+  | 'line'
+  | 'bar'
+  | 'pie'
+  | 'area'
+  | 'scatter'
+  | 'radar'
+  | 'funnel'
+  | 'sunburst'
+  | 'treemap'
+  | 'waterfall'
+  | 'unknown'
 
 export interface ChartSeries {
   name?: string
@@ -219,6 +229,25 @@ export interface ChartModel {
   sunburst?: {
     levels: string[][]
     sizes: Array<number | null>
+    pointColors?: Array<string | undefined>
+  }
+  /**
+   * Treemap (chartEx): same leaf-first levels/sizes shape as sunburst. The
+   * render layer lays the LEAF level out as squarified tiles (branch grouping
+   * and per-branch borders are not modeled — documented limitation).
+   */
+  treemap?: {
+    levels: string[][]
+    sizes: Array<number | null>
+    pointColors?: Array<string | undefined>
+  }
+  /**
+   * Waterfall (chartEx): every value is a DELTA from the previous running
+   * total. PowerPoint's explicit subtotal markers are not modeled — a file
+   * with subtotal rows renders them as ordinary bars (documented limitation).
+   */
+  waterfall?: {
+    values: Array<number | null>
     pointColors?: Array<string | undefined>
   }
   /** chartUserShapes straight-line overlays; coordinates are fractions of the chart frame */

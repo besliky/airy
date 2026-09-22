@@ -47,6 +47,8 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
   },
 
   // ---- Editing (keyboard-actions.ts + menu accelerators) ----
+  // label reuses the context menu's "New Slide" string
+  { id: 'new-slide', group: 'edit', labelKey: 'appCtxNewSlide', keys: '⌘M' },
   { id: 'open', group: 'edit', labelKey: 'scOpen', keys: '⌘O' },
   { id: 'save', group: 'edit', labelKey: 'scSave', keys: '⌘S' },
   { id: 'save-as', group: 'edit', labelKey: 'scSaveAs', keys: '⇧⌘S' },

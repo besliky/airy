@@ -54,6 +54,30 @@ describe('parseChartExXml', () => {
   })
 
   it('unsupported layoutId returns null', () => {
-    expect(parseChartExXml(FUNNEL.replace('layoutId="funnel"', 'layoutId="waterfall"'))).toBeNull()
+    expect(parseChartExXml(FUNNEL.replace('layoutId="funnel"', 'layoutId="histogram"'))).toBeNull()
+  })
+
+  it('treemap: levels + sizes + per-point color (PAR-316)', () => {
+    const m = parseChartExXml(SUNBURST.replace('layoutId="sunburst"', 'layoutId="treemap"'))!
+    expect(m.kind).toBe('treemap')
+    expect(m.treemap!.levels[0]).toEqual(['Leaf1', 'Leaf2', ''])
+    expect(m.treemap!.sizes).toEqual([10, 20, 30])
+    expect(m.treemap!.pointColors![2]).toBe('#B0F0FF00')
+  })
+
+  it('waterfall: delta values + per-point colors (PAR-316)', () => {
+    const waterfall = `<?xml version="1.0"?><cx:chartSpace xmlns:cx="cx" xmlns:a="a" xmlns:r="r">
+<cx:chartData><cx:data id="0">
+<cx:strDim type="cat"><cx:f>S!A</cx:f><cx:lvl ptCount="3"><cx:pt idx="0">Q1</cx:pt><cx:pt idx="1">Q2</cx:pt><cx:pt idx="2">Q3</cx:pt></cx:lvl></cx:strDim>
+<cx:numDim type="val"><cx:f>S!B</cx:f><cx:lvl ptCount="3"><cx:pt idx="0">100</cx:pt><cx:pt idx="1">-30</cx:pt><cx:pt idx="2">40</cx:pt></cx:lvl></cx:numDim>
+</cx:data></cx:chartData>
+<cx:chart><cx:plotArea><cx:plotAreaRegion><cx:series layoutId="waterfall">
+<cx:dataPt idx="1"><cx:spPr><a:solidFill><a:srgbClr val="FF4477"/></a:srgbClr></cx:spPr></cx:dataPt>
+<cx:dataId val="0"/></cx:series></cx:plotAreaRegion></cx:plotArea></cx:chart></cx:chartSpace>`
+    const m = parseChartExXml(waterfall)!
+    expect(m.kind).toBe('waterfall')
+    expect(m.categories).toEqual(['Q1', 'Q2', 'Q3'])
+    expect(m.waterfall!.values).toEqual([100, -30, 40])
+    expect(m.waterfall!.pointColors![1]).toBe('#FF4477')
   })
 })

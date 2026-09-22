@@ -25,7 +25,8 @@ const SLIDE_REL = `${REL_BASE}/slide`
 const THEME_REL = `${REL_BASE}/theme`
 
 const NOTES_SLIDE_CT = 'application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml'
-const NOTES_MASTER_CT = 'application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml'
+const NOTES_MASTER_CT =
+  'application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml'
 
 function setEntry(archive: PackageArchive, path: string, xml: string): void {
   archive.entries.set(path, Buffer.from(xml, 'utf8'))
@@ -79,19 +80,67 @@ export function getSlideNotes(archive: PackageArchive, slidePath: string): strin
   return paras.join('\n')
 }
 
-/** text (\n-separated) → notes txBody. */
-function buildNotesTxBody(text: string): string {
+/**
+ * Read the notes body's whole-body formatting (the first run's rPr; falls back
+ * to the first endParaRPr for empty bodies). Null when there is no notes part
+ * or no explicit attributes — the pane then shows the defaults.
+ */
+export function getSlideNotesFormat(
+  archive: PackageArchive,
+  slidePath: string,
+): NotesFormat | null {
+  const notesPath = notesPathForSlide(archive, slidePath)
+  if (!notesPath) return null
+  const xml = archive.readText(notesPath)
+  if (!xml) return null
+  const body = findBodySp(xml)
+  if (!body) return null
+  const tx = /<p:txBody>([\s\S]*?)<\/p:txBody>/.exec(body.xml)?.[1]
+  if (!tx) return null
+  const rpr = /<(?:a:rPr|a:endParaRPr)\b([^>]*)\/>/.exec(tx)?.[1] ?? ''
+  const attr = (name: string): string | undefined =>
+    new RegExp(`(?:^|\\s)${name}="([^"]*)"`).exec(rpr)?.[1]
+  const format: NotesFormat = {}
+  if (attr('b') === '1') format.bold = true
+  if (attr('i') === '1') format.italic = true
+  const sz = attr('sz')
+  if (sz) {
+    const pt = parseInt(sz, 10)
+    if (Number.isFinite(pt) && pt > 0) format.fontSizePt = pt / 100
+  }
+  return Object.keys(format).length ? format : null
+}
+
+/**
+ * Whole-body notes formatting (PowerPoint's select-all + bold/size in the notes
+ * pane). Applied to every run of the notes body; per-run formatting is not
+ * modeled — the notes editor stays plain text and rewrites the txBody on edit.
+ */
+export interface NotesFormat {
+  bold?: boolean
+  italic?: boolean
+  /** Run size in points (a:rPr sz, hundredths of a point on the wire) */
+  fontSizePt?: number
+}
+
+/** text (\n-separated) → notes txBody; `format` styles every run when given. */
+function buildNotesTxBody(text: string, format?: NotesFormat): string {
   const lines = text.split('\n')
-  const paras =
-    lines.every((l) => l === '')
-      ? '<a:p><a:endParaRPr lang="zh-CN"/></a:p>'
-      : lines
-          .map((line) =>
-            line === ''
-              ? '<a:p><a:endParaRPr lang="zh-CN"/></a:p>'
-              : `<a:p><a:r><a:rPr lang="zh-CN" dirty="0"/><a:t>${escapeXmlText(line)}</a:t></a:r></a:p>`,
-          )
-          .join('')
+  const attrs: string[] = []
+  if (format?.bold) attrs.push('b="1"')
+  if (format?.italic) attrs.push('i="1"')
+  if (format?.fontSizePt && format.fontSizePt > 0)
+    attrs.push(`sz="${Math.round(format.fontSizePt * 100)}"`)
+  const rpr = `<a:rPr lang="zh-CN" dirty="0"${attrs.map((a) => ` ${a}`).join('')}/>`
+  const paras = lines.every((l) => l === '')
+    ? `<a:p><a:endParaRPr lang="zh-CN"${attrs.map((a) => ` ${a}`).join('')}/></a:p>`
+    : lines
+        .map((line) =>
+          line === ''
+            ? `<a:p><a:endParaRPr lang="zh-CN"${attrs.map((a) => ` ${a}`).join('')}/></a:p>`
+            : `<a:p><a:r>${rpr}<a:t>${escapeXmlText(line)}</a:t></a:r></a:p>`,
+        )
+        .join('')
   return `<p:txBody><a:bodyPr/><a:lstStyle/>${paras}</p:txBody>`
 }
 
@@ -103,8 +152,14 @@ const NOTES_BODY_SP_OPEN =
 /**
  * Write notes (overwrite): patch the existing notesSlide's body txBody;
  * if there is no notesSlide, create the part (with a notesMaster if needed).
+ * `format` styles the whole body (bold/italic/size); omit to keep the default.
  */
-export function setSlideNotes(opened: OpenedPptx, slideIndex: number, text: string): boolean {
+export function setSlideNotes(
+  opened: OpenedPptx,
+  slideIndex: number,
+  text: string,
+  format?: NotesFormat,
+): boolean {
   const slide = opened.deck.slides[slideIndex]
   if (!slide) return false
   const { archive } = opened
@@ -113,7 +168,7 @@ export function setSlideNotes(opened: OpenedPptx, slideIndex: number, text: stri
   const xml = archive.readText(notesPath)
   if (!xml) return false
 
-  const txBody = buildNotesTxBody(text)
+  const txBody = buildNotesTxBody(text, format)
   const body = findBodySp(xml)
   let next: string
   if (body) {
@@ -127,14 +182,21 @@ export function setSlideNotes(opened: OpenedPptx, slideIndex: number, text: stri
 }
 
 /** Add an Override to [Content_Types].xml (skipped if already present). */
-function addContentTypeOverride(archive: PackageArchive, partPath: string, contentType: string): void {
+function addContentTypeOverride(
+  archive: PackageArchive,
+  partPath: string,
+  contentType: string,
+): void {
   const ctPath = '[Content_Types].xml'
   const ct = archive.readText(ctPath)
   if (!ct || ct.includes(`PartName="/${partPath}"`)) return
   setEntry(
     archive,
     ctPath,
-    ct.replace('</Types>', `<Override PartName="/${partPath}" ContentType="${contentType}"/></Types>`),
+    ct.replace(
+      '</Types>',
+      `<Override PartName="/${partPath}" ContentType="${contentType}"/></Types>`,
+    ),
   )
 }
 
@@ -187,7 +249,12 @@ function ensureNotesMaster(archive: PackageArchive): string | null {
   const presPath = 'ppt/presentation.xml'
   const pres = archive.readText(presPath)
   if (pres && !pres.includes('<p:notesMasterIdLst>')) {
-    const rid = appendRelationship(archive, presPath, NOTES_MASTER_REL, 'notesMasters/notesMaster1.xml')
+    const rid = appendRelationship(
+      archive,
+      presPath,
+      NOTES_MASTER_REL,
+      'notesMasters/notesMaster1.xml',
+    )
     const lst = `<p:notesMasterIdLst><p:notesMasterId r:id="${rid}"/></p:notesMasterIdLst>`
     const next = pres.includes('</p:sldMasterIdLst>')
       ? pres.replace('</p:sldMasterIdLst>', `</p:sldMasterIdLst>${lst}`)
@@ -226,7 +293,9 @@ function createNotesSlide(opened: OpenedPptx, slidePath: string): string | null 
   addContentTypeOverride(archive, notesPath, NOTES_SLIDE_CT)
 
   // notesSlide rels: notesMaster + owning slide
-  const master = [...archive.entries.keys()].find((p) => /^ppt\/notesMasters\/notesMaster\d+\.xml$/.test(p))!
+  const master = [...archive.entries.keys()].find((p) =>
+    /^ppt\/notesMasters\/notesMaster\d+\.xml$/.test(p),
+  )!
   appendRelationship(archive, notesPath, NOTES_MASTER_REL, `../${master.slice(4)}`)
   appendRelationship(archive, notesPath, SLIDE_REL, `../${slidePath.slice(4)}`)
 

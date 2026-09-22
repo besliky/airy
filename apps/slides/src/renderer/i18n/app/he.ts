@@ -219,6 +219,8 @@ export const he = {
   appSectionHeaderTitle: 'לחץ לכיווץ/הרחבה; לחץ לחיצה ימנית לניהול המקטע',
   appNotesLabel: 'הערות',
   appNotesClickToAdd: 'לחץ כדי להוסיף הערות',
+  appSlideSizeRange: 'גודל השקופית חייב להיות בין 1.27 ל-142.24 ס״מ (0.5 עד 56 אינץ׳)',
+  appNotesFontSize: 'גודל גופן הערות',
   appNotesPlaceholder: 'לחץ כדי להוסיף הערות מציג (נשמרות בקובץ ה-.pptx)',
   appNotesShow: 'הצג הערות',
   appNotesHide: 'הסתר הערות',

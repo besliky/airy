@@ -654,15 +654,35 @@ sectionOp('moveSection', (op, ctx) =>
 
 // ── notes / comments ────────────────────────────────────────────────────
 
+/** Whole-body notes formatting carried on the setNotes op (optional). */
+interface NotesFormatIpc {
+  bold?: boolean
+  italic?: boolean
+  fontSizePt?: number
+}
+
 register({
   name: 'setNotes',
   validate(op, ctx) {
     resolveSlide(ctx, op)
     if (typeof op.text !== 'string') throw new GuidedError('op "setNotes" needs "text".')
+    // Optional whole-body formatting (bold/italic/fontSizePt)
+    const fmt = op.format as NotesFormatIpc | undefined
+    if (
+      fmt !== undefined &&
+      (typeof fmt !== 'object' ||
+        fmt === null ||
+        (fmt.bold !== undefined && typeof fmt.bold !== 'boolean') ||
+        (fmt.italic !== undefined && typeof fmt.italic !== 'boolean') ||
+        (fmt.fontSizePt !== undefined && typeof fmt.fontSizePt !== 'number'))
+    ) {
+      throw new GuidedError('op "setNotes": "format" must be { bold?, italic?, fontSizePt? }.')
+    }
   },
   apply(op, ctx): OpRecord {
     const { index } = resolveSlide(ctx, op)
-    if (!setSlideNotes(ctx.opened, index, String(op.text))) {
+    const format = op.format as NotesFormatIpc | undefined
+    if (!setSlideNotes(ctx.opened, index, String(op.text), format)) {
       throw new GuidedError(`op "setNotes": notes for slide ${index} could not be written.`)
     }
     return { op, after: op.text }

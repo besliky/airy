@@ -95,6 +95,7 @@ import {
   slideDurableId,
   getSlideComments,
   getSlideNotes,
+  getSlideNotesFormat,
   getSlideAdvanceTime,
   getSlideTransitionSpec,
   elementSpid,
@@ -3990,11 +3991,24 @@ export function registerSlidesIpc(): void {
     return session && slide ? getSlideNotes(session.opened.archive, slide.path) : ''
   })
 
+  ipcMain.handle('slides:get-notes-format', (e, slideIndex: number) => {
+    const session = sessions.get(e.sender.id)
+    const slide = session?.opened.deck.slides[slideIndex]
+    return session && slide ? getSlideNotesFormat(session.opened.archive, slide.path) : null
+  })
+
   ipcMain.handle('slides:set-notes', (e, op: SetNotesOp) => {
     const session = sessions.get(e.sender.id)
     if (!session) return false
     const r = sessionTxn(session, {
-      ops: [{ op: 'setNotes', target: { slide: op.slideIndex }, text: op.text }],
+      ops: [
+        {
+          op: 'setNotes',
+          target: { slide: op.slideIndex },
+          text: op.text,
+          ...(op.format ? { format: op.format } : {}),
+        },
+      ],
     })
     if (r) session.metaDirty = true
     return r !== null
@@ -4252,7 +4266,18 @@ export function registerSlidesIpc(): void {
         ) {
           return { ok: false, error: tm('errExportDestNotPicked') }
         }
-        const paths = resolveExportImagePaths(op.dir, op.baseName, op.pngsBase64.length)
+        // Only 'png' (default) and 'jpg' are accepted; anything else fails the
+        // pick check so the export never writes unexpected file types
+        const ext = op.ext === 'jpg' ? 'jpg' : op.ext === undefined ? 'png' : null
+        const paths = ext
+          ? resolveExportImagePaths(
+              op.dir,
+              op.baseName,
+              op.pngsBase64.length,
+              process.platform,
+              ext,
+            )
+          : null
         if (!paths) return { ok: false, error: tm('errExportDestNotPicked') }
         for (let i = 0; i < paths.length; i++) {
           await writeFile(paths[i], Buffer.from(op.pngsBase64[i], 'base64'))
@@ -4897,6 +4922,7 @@ export function buildSlidesMenu(): Menu {
         // to export or print at all
         { label: tm('menuExportPdf'), click: () => send('export-pdf') },
         { label: tm('menuExportImages'), click: () => send('export-images') },
+        { label: tm('menuExportJpeg'), click: () => send('export-jpeg') },
         { label: tm('menuExportVideo'), click: () => send('export-video') },
         { label: tm('menuPrint'), accelerator: 'CmdOrCtrl+P', click: () => send('print') },
         { type: 'separator' },
@@ -4918,6 +4944,9 @@ export function buildSlidesMenu(): Menu {
     {
       label: tm('menuEdit'),
       submenu: [
+        // ⌘M / Ctrl+M: new slide (PowerPoint parity; renderer adds it after the current page)
+        { label: tm('menuNewSlide'), accelerator: 'CmdOrCtrl+M', click: () => send('new-slide') },
+        { type: 'separator' },
         // Undo/redo are sent to the renderer: text-editing state uses native execCommand, otherwise document history
         { label: tm('menuUndo'), accelerator: 'CmdOrCtrl+Z', click: () => send('undo') },
         { label: tm('menuRedo'), accelerator: 'Shift+CmdOrCtrl+Z', click: () => send('redo') },

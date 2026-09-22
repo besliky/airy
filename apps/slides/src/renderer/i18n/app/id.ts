@@ -231,6 +231,8 @@ export const id = {
   appSectionHeaderTitle: 'Klik untuk menciutkan/memperluas; klik kanan untuk mengelola bagian',
   appNotesLabel: 'Catatan',
   appNotesClickToAdd: 'Klik untuk menambahkan catatan',
+  appSlideSizeRange: 'Ukuran slide harus antara 1,27 dan 142,24 cm (0,5 hingga 56 inci)',
+  appNotesFontSize: 'Ukuran font catatan',
   appNotesPlaceholder: 'Klik untuk menambahkan catatan pembicara (disimpan ke dalam .pptx)',
   appNotesShow: 'Tampilkan catatan',
   appNotesHide: 'Sembunyikan catatan',

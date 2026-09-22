@@ -71,6 +71,23 @@ describe('resolveExportImagePaths', () => {
     expect(isSameExportFile('C:\\Users\\me\\Exports\\deck-01.png', paths![0], 'win32')).toBe(true)
     expect(isSameExportFile('C:\\Users\\me\\evil.png', paths![0], 'win32')).toBe(false)
   })
+
+  it('resolves .jpg paths for the jpeg format (PAR-316)', () => {
+    expect(resolveExportImagePaths('/tmp/out', 'deck', 2, 'linux', 'jpg')).toEqual([
+      '/tmp/out/deck-01.jpg',
+      '/tmp/out/deck-02.jpg',
+    ])
+    // png stays the explicit default
+    expect(resolveExportImagePaths('/tmp/out', 'deck', 1, 'linux', 'png')).toEqual([
+      '/tmp/out/deck-01.png',
+    ])
+  })
+
+  it('refuses unsupported extensions instead of writing surprise file types', () => {
+    expect(resolveExportImagePaths('/tmp/out', 'deck', 1, 'linux', 'exe' as never)).toBeNull()
+    expect(resolveExportImagePaths('/tmp/out', 'deck', 1, 'linux', 'JPG' as never)).toBeNull()
+    expect(resolveExportImagePaths('/tmp/out', '../evil', 1, 'linux', 'jpg')).toBeNull()
+  })
 })
 
 describe('isSameExportFile', () => {

@@ -24,6 +24,26 @@ describe('zip bomb protection', () => {
     await expect(parseDocx(bomb)).rejects.toThrow(/docx rejected.*uncompressed/)
   })
 
+  it('rejects a part whose declared size wraps negative in JSZip (declared >= 2 GiB)', async () => {
+    // SEC-1551: the CD field is unsigned 32-bit but JSZip surfaces it as a
+    // signed int32, so 3 GiB (0xC0000000) reads as -1073741824 and used to
+    // slip past both budgets before the declared size is normalized
+    const bytes = await buildDocx({ bodyXml: PLAIN_PARA })
+    const bomb = patchCentralSizes(bytes, 3 * 1024 * 1024 * 1024)
+    await expect(parseDocx(bomb)).rejects.toThrow(
+      /docx rejected: part .* declares 3221225472 uncompressed bytes/,
+    )
+  })
+
+  it('rejects a 0xFFFFFFFF declared size (JSZip refuses the -1 sentinel at load)', async () => {
+    // SEC-1551 scoping: 0xFFFFFFFF reads as JSZip's "unknown size" sentinel
+    // (-1) and loadAsync itself refuses it, so the fence never sees it —
+    // pinned so a JSZip bump cannot silently turn the sentinel into a pass
+    const bytes = await buildDocx({ bodyXml: PLAIN_PARA })
+    const bomb = patchCentralSizes(bytes, 0xffffffff)
+    await expect(parseDocx(bomb)).rejects.toThrow(/didn't get enough information/)
+  })
+
   it('rejects an archive whose total declared uncompressed size exceeds the limit', async () => {
     const bytes = await buildDocx({ bodyXml: PLAIN_PARA })
     const zip = await JSZip.loadAsync(bytes)

@@ -230,6 +230,8 @@ export const cs = {
   appSectionHeaderTitle: 'Kliknutím sbalíte/rozbalíte; pravým tlačítkem spravujete oddíl',
   appNotesLabel: 'Poznámky',
   appNotesClickToAdd: 'Klikněte a přidejte poznámky',
+  appSlideSizeRange: 'Velikost snímku musí být mezi 1,27 a 142,24 cm (0,5 až 56 palců)',
+  appNotesFontSize: 'Velikost písma poznámek',
   appNotesPlaceholder: 'Klikněte a přidejte poznámky lektora (ukládají se do .pptx)',
   appNotesShow: 'Zobrazit poznámky',
   appNotesHide: 'Skrýt poznámky',

@@ -12,6 +12,12 @@ import { SlideThumb } from './SlideThumb'
 /** Pixel ratio of the exported bitmap (2x hi-res, 1280 viewport width → 2560px PNG) */
 const EXPORT_PIXEL_RATIO = 2
 
+/** Output image format of the offscreen render: PNG (default, alpha-capable) or JPEG (flattened). */
+export type ExportImageFormat = 'png' | 'jpeg'
+
+/** JPEG quality (0..1) used when exporting lossy bitmaps. */
+const JPEG_QUALITY = 0.92
+
 /**
  * Draw `slide` into a stage on the shared offscreen root and wait for Konva's
  * batchDraw: resolves the stage once it holds the slide's content.
@@ -37,9 +43,11 @@ function drawSlideStage(
 const nextFrame = () => new Promise((r) => requestAnimationFrame(r))
 
 /**
- * Render each page to PNG base64 (without the data: prefix).
+ * Render each page to PNG/JPEG base64 (without the data: prefix).
  * Reuse a single offscreen root page by page, grabbing each page as it's drawn.
  * pixelRatio 1 is enough for AI-vision screenshots (half the tokens of the 2x export default).
+ * `format: 'jpeg'` encodes lossy JPEG (slides flatten on their opaque page
+ * fill, so transparency is never lost — SlideThumb always paints the page).
  * `cancel` (cooperative, checked between slides — the images/PDF export phase)
  * stops the loop early and returns the slides drawn so far.
  */
@@ -49,6 +57,7 @@ export async function renderSlidesToPngBase64(
   pixelRatio: number | ReadonlyArray<number> = EXPORT_PIXEL_RATIO,
   onProgress?: (done: number, total: number) => void,
   cancel?: { current: boolean },
+  format: ExportImageFormat = 'png',
 ): Promise<string[]> {
   // Offscreen container: mounted outside the body viewport (display:none would give the Konva canvas zero size, unusable)
   const container = document.createElement('div')
@@ -65,8 +74,12 @@ export async function renderSlidesToPngBase64(
         typeof pixelRatio === 'number'
           ? pixelRatio
           : (pixelRatio[out.length] ?? pixelRatio[0] ?? EXPORT_PIXEL_RATIO)
-      const dataUrl = stage.toDataURL({ mimeType: 'image/png', pixelRatio: ratio })
-      out.push(dataUrl.replace(/^data:image\/png;base64,/, ''))
+      const dataUrl = stage.toDataURL({
+        mimeType: `image/${format}`,
+        pixelRatio: ratio,
+        ...(format === 'jpeg' ? { quality: JPEG_QUALITY } : {}),
+      })
+      out.push(dataUrl.replace(/^data:image\/(?:png|jpeg);base64,/, ''))
       onProgress?.(out.length, slides.length)
     }
   } finally {

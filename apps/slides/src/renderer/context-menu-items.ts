@@ -130,12 +130,14 @@ export function buildCtxItems(ctx: ActionCtx): Array<CtxItem | null> {
   const node = slide?.nodes.find((n) => n.sourceId === ctxMenu.targetId)
   const single = selectedIds.length === 1
   const cell = ctxMenu.cell
-  // Group: multi-select and all are text/shape/picture
+  // Group: multi-select and all are text/shape/picture/table (the engine's allowlist)
   const canGroup =
     selectedIds.length >= 2 &&
     selectedIds.every((id) => {
       const n = slide?.nodes.find((nn) => nn.sourceId === id)
-      return n && (n.type === 'text' || n.type === 'shape' || n.type === 'picture')
+      return (
+        n && (n.type === 'text' || n.type === 'shape' || n.type === 'picture' || n.type === 'table')
+      )
     })
   // Ungroup: single selection and it's a group
   const canUngroup = single && node?.type === 'group'
