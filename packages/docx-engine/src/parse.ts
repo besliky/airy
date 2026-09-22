@@ -68,6 +68,7 @@ import {
   underlineProp,
   deepXmlParser,
   xmlParser,
+  xmlWellFormednessError,
   type XNode,
 } from './xml-utils'
 import {
@@ -271,6 +272,14 @@ export async function parseDocx(bytes: Uint8Array): Promise<ParsedDoc & { extras
     throw new Error('not a docx: missing word/document.xml')
   }
   const documentXml = await zip.file(docPath)!.async('string')
+  // BUG-1609: a truncated or garbled main part used to surface as a silently
+  // empty document (the regex scanner just stopped at the cut). Refuse it the
+  // way Word does instead of losing content without a word; the renderer
+  // surfaces the thrown error through its standard open-failure toast.
+  const malformed = xmlWellFormednessError(documentXml)
+  if (malformed) {
+    throw new Error(`docx file is corrupted: ${docPath} is not well-formed XML (${malformed})`)
+  }
 
   const theme = await parseTheme(zip)
   const { styles, docDefaults } = await parseStyles(zip, theme.colors, theme.fonts)
