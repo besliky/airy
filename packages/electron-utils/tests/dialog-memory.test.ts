@@ -13,6 +13,7 @@ import {
   saveAsSuggestion,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
+  writeAppSettingsFile,
   writeLastDialogDir,
 } from '../src/index'
 
@@ -189,8 +190,8 @@ describe('persisted dialog directories (lastDialogDirs LRU)', () => {
     try {
       const settingsPath = join(scratch, 'app-settings.json')
       expect(readLastDialogDirs(settingsPath)).toEqual([]) // absent file
-      writeLastDialogDir(settingsPath, 'shell', '/work')
-      writeLastDialogDir(settingsPath, 'docs', '/docs-dir')
+      await writeLastDialogDir(settingsPath, 'shell', '/work')
+      await writeLastDialogDir(settingsPath, 'docs', '/docs-dir')
       // an unrelated setting survives the read-merge-write
       const raw = JSON.parse(readFileSync(settingsPath, 'utf8')) as Record<string, unknown>
       expect(raw.lastDialogDirs).toEqual([
@@ -201,6 +202,40 @@ describe('persisted dialog directories (lastDialogDirs LRU)', () => {
         { scope: 'docs', dir: '/docs-dir' },
         { scope: 'shell', dir: '/work' },
       ])
+    } finally {
+      rmSync(scratch, { recursive: true, force: true })
+    }
+  })
+
+  it('concurrent picks never drop other settings keys (OBS-1532 single writer)', async () => {
+    const scratch = mkdtempSync(join(tmpdir(), 'airy-dialog-dirs-race-'))
+    try {
+      const settingsPath = join(scratch, 'app-settings.json')
+      writeAppSettingsFile(settingsPath, { onboardingSeen: true, language: 'en' })
+      // stay under the persisted LRU cap (10 scopes) so every pick survives
+      const scopes = Array.from({ length: 8 }, (_, i) => `scope${i}`)
+      // every pick goes through the same write queue as the shell's settings
+      // handlers; interleaved synchronous merges land between queued sections
+      const interleavedSyncWrites = (async () => {
+        for (let i = 0; i < 24; i++) {
+          writeAppSettingsFile(settingsPath, { [`shellKey${i}`]: i })
+          await Promise.resolve()
+        }
+      })()
+      await Promise.all([
+        ...scopes.map((scope) => writeLastDialogDir(settingsPath, scope, `/picked-${scope}`)),
+        interleavedSyncWrites,
+      ])
+      const raw = JSON.parse(readFileSync(settingsPath, 'utf8')) as Record<string, unknown>
+      expect(raw.onboardingSeen).toBe(true)
+      expect(raw.language).toBe('en')
+      for (let i = 0; i < 24; i++) expect(raw[`shellKey${i}`]).toBe(i)
+      const persisted = readLastDialogDirs(settingsPath)
+      for (const scope of scopes) {
+        expect(
+          persisted.some((entry) => entry.scope === scope && entry.dir === `/picked-${scope}`),
+        ).toBe(true)
+      }
     } finally {
       rmSync(scratch, { recursive: true, force: true })
     }

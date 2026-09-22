@@ -8,10 +8,9 @@
 /// app process has its own), seeded from and written back to a persisted
 /// LRU in userData/app-settings.json (`lastDialogDirs`) so the memory also
 /// survives relaunches.
-import { randomUUID } from 'node:crypto'
-import { readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 
+import { queueAppSettingsUpdate, readAppSettingsFile } from './app-settings-file'
 import { grantRendererDir, grantRendererFileAccess } from './renderer-file-access'
 
 import type {
@@ -53,21 +52,8 @@ export function recordDialogDir(
   return [{ scope, dir }, ...rest].slice(0, cap)
 }
 
-function readAppSettings(settingsPath: string): Record<string, unknown> {
-  try {
-    const raw: unknown = JSON.parse(readFileSync(settingsPath, 'utf8'))
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-      return raw as Record<string, unknown>
-    }
-  } catch {
-    // missing or corrupt file: treat as empty settings
-  }
-  return {}
-}
-
 /** parse the persisted LRU; malformed values yield an empty list */
-export function readLastDialogDirs(settingsPath: string): DialogDirEntry[] {
-  const raw = readAppSettings(settingsPath)[LAST_DIALOG_DIRS_KEY]
+function parseLastDialogDirs(raw: unknown): DialogDirEntry[] {
   if (!Array.isArray(raw)) return []
   const entries: DialogDirEntry[] = []
   for (const item of raw) {
@@ -86,26 +72,31 @@ export function readLastDialogDirs(settingsPath: string): DialogDirEntry[] {
   return entries
 }
 
-/** read-merge-write with the same atomic temp+rename the shell uses */
-export function writeLastDialogDir(settingsPath: string, scope: string, dir: string): void {
-  const settings = readAppSettings(settingsPath)
-  settings[LAST_DIALOG_DIRS_KEY] = recordDialogDir(readLastDialogDirs(settingsPath), scope, dir)
-  const tempPath = `${settingsPath}.${process.pid}.${randomUUID()}.tmp`
-  try {
-    writeFileSync(tempPath, JSON.stringify(settings, null, 2), {
-      encoding: 'utf8',
-      flag: 'wx',
-      flush: true,
-    })
-    renameSync(tempPath, settingsPath)
-  } catch (error) {
-    try {
-      unlinkSync(tempPath)
-    } catch {
-      // The write may have failed before the temporary file was created.
-    }
-    // persistence is best-effort; the session WeakMap still works
-  }
+export function readLastDialogDirs(settingsPath: string): DialogDirEntry[] {
+  return parseLastDialogDirs(readAppSettingsFile(settingsPath)[LAST_DIALOG_DIRS_KEY])
+}
+
+/**
+ * Record a pick in the persisted LRU through the shared single-writer queue
+ * (app-settings-file.ts): the read-modify-write runs as one queued section,
+ * so a pick confirmed while other settings writes are in flight can neither
+ * drop their keys nor be dropped by them (OBS-1532). Rejects on I/O errors;
+ * callers treat persistence as best-effort — the session WeakMap keeps
+ * working either way.
+ */
+export function writeLastDialogDir(
+  settingsPath: string,
+  scope: string,
+  dir: string,
+): Promise<void> {
+  return queueAppSettingsUpdate(settingsPath, (current) => ({
+    ...current,
+    [LAST_DIALOG_DIRS_KEY]: recordDialogDir(
+      parseLastDialogDirs(current[LAST_DIALOG_DIRS_KEY]),
+      scope,
+      dir,
+    ),
+  }))
 }
 
 /** minimal electron app surface the persistence glue needs */
@@ -162,7 +153,13 @@ async function seedPersistedDirectory(dialog: Dialog): Promise<void> {
 async function persistPickedDirectory(dir: string): Promise<void> {
   const app = await resolveElectronApp()
   if (!app?.getPath) return
-  writeLastDialogDir(join(app.getPath('userData'), 'app-settings.json'), await dialogScope(), dir)
+  writeLastDialogDir(
+    join(app.getPath('userData'), 'app-settings.json'),
+    await dialogScope(),
+    dir,
+  ).catch(() => {
+    // persistence is best-effort; the session WeakMap still works
+  })
 }
 
 function withRememberedDirectory<T extends OpenDialogOptions | SaveDialogOptions>(

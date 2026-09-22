@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   AUTHOR_NAME_KEY,
+  queueAppSettingsUpdate,
   readAuthorNameSetting,
   sanitizeAuthorName,
 } from '@airy-office/electron-utils'
@@ -101,5 +102,31 @@ describe('authorName (settings round-trip)', () => {
     const stored = JSON.parse(readFileSync(settingsPath, 'utf8'))
     expect(stored).toEqual({ language: 'de', [AUTHOR_NAME_KEY]: '' })
     expect(readAuthorNameSetting(settingsPath)).toBe('')
+  })
+})
+
+describe('single writer shared with the editor modules (OBS-1532)', () => {
+  it('synchronous shell writes coexist with the queued writer without key loss', async () => {
+    // The shell's helpers and the queued writer used by dialog-memory are
+    // the SAME module instance (workspace symlink): interleaving both must
+    // never drop a key, whatever the interleaving.
+    writeAppSetting(settingsPath, 'onboardingSeen', true)
+    const queued = Array.from({ length: 40 }, (_, i) =>
+      queueAppSettingsUpdate(settingsPath, (current) => ({
+        ...current,
+        lastDialogDirs: [
+          ...(Array.isArray(current.lastDialogDirs) ? current.lastDialogDirs : []),
+          i,
+        ],
+      })),
+    )
+    for (let i = 0; i < 40; i++) writeAppSetting(settingsPath, `shellKey${i}`, i)
+    await Promise.all(queued)
+    writeAppSettings(settingsPath, { starPrompt: { resolved: true } })
+    const stored = JSON.parse(readFileSync(settingsPath, 'utf8')) as Record<string, unknown>
+    expect(stored.onboardingSeen).toBe(true)
+    expect(stored.starPrompt).toEqual({ resolved: true })
+    for (let i = 0; i < 40; i++) expect(stored[`shellKey${i}`]).toBe(i)
+    expect(stored.lastDialogDirs).toHaveLength(40)
   })
 })
