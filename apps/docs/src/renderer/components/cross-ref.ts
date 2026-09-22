@@ -1,7 +1,7 @@
 // Cross-reference (REF field) sources, types, and cache computation. Pure
 // editor-doc helpers — no React — so tests cover them without the ribbon.
 import type { Editor } from '@tiptap/core'
-import { decodeEntities, type Block } from '@airy-office/docx-engine'
+import { bookmarkIdOf, decodeEntities, type Block } from '@airy-office/docx-engine'
 
 /** what a cross-reference displays (Word's "Insert reference to") */
 export type CrossRefType = 'text' | 'page' | 'number'
@@ -181,11 +181,49 @@ export function allRefAnchorNames(doc: Editor['state']['doc'], blocks: Block[]):
   return names
 }
 
-/** a fresh Word-style anchor (`_Ref…`/`_Toc…` + 9 digits) not colliding with `taken` */
-export function uniqueAnchor(prefix: '_Ref' | '_Toc', taken: Set<string>): string {
+/** w:id of a stamped anchor: a pure function of its name, so generateCaptionXml
+ * embeds the very same id that stampCaptionAnchor computes for that name */
+export function anchorIdOf(name: string): number {
+  return 1000000000 + Number(name.replace(/\D/g, '').slice(-9) || '0')
+}
+
+/**
+ * Every bookmark w:id the saved document will contain (BUG-919): the engine
+ * hash ids re-emitted for node-attr bookmarks (bookmarkIdOf — parse keeps names
+ * only, so save-time ids are these) plus the literal ids inside protected XML
+ * (original producer ids, previously stamped anchors). Word requires unique
+ * w:id within a story — a fresh anchor id must stay outside this pool.
+ */
+export function allBookmarkIds(doc: Editor['state']['doc'], blocks: Block[]): Set<number> {
+  const ids = new Set<number>()
+  doc.descendants((node) => {
+    for (const attr of ['bookmarks', 'hiddenBookmarks'] as const) {
+      const list = node.attrs?.[attr] as string[] | null | undefined
+      if (Array.isArray(list)) for (const name of list) ids.add(bookmarkIdOf(name))
+    }
+    const xml = xmlOfNode(node as never, blocks)
+    for (const m of xml.matchAll(/<w:bookmark(?:Start|End)\b[^>]*\bw:id="(\d+)"/g)) {
+      const id = Number(m[1])
+      if (Number.isSafeInteger(id)) ids.add(id)
+    }
+    return !node.isLeaf
+  })
+  return ids
+}
+
+/** a fresh Word-style anchor (`_Ref…`/`_Toc…` + 9 digits) not colliding with
+ * `taken` names; `takenIds` additionally rejects names whose derived w:id is
+ * already present in the document (duplicate w:id risks a Word repair, BUG-919) */
+export function uniqueAnchor(
+  prefix: '_Ref' | '_Toc',
+  taken: Set<string>,
+  takenIds?: Set<number>,
+): string {
   for (;;) {
     const name = `${prefix}${Math.floor(100000000 + Math.random() * 900000000)}`
-    if (!taken.has(name)) return name
+    if (taken.has(name)) continue
+    if (takenIds?.has(anchorIdOf(name))) continue
+    return name
   }
 }
 
@@ -274,8 +312,14 @@ export function stampCaptionAnchor(
   const existing = xmlAnchorOf(xml)
   if (existing) return existing
   if (!editor.isEditable) return null
-  const name = uniqueAnchor('_Ref', allRefAnchorNames(editor.state.doc, blocks))
-  const id = 1000000000 + Number(name.replace(/\D/g, '').slice(-9) || '0')
+  // the name pick is id-aware (BUG-919): the derived w:id must not equal any
+  // bookmark id the saved document will already contain
+  const name = uniqueAnchor(
+    '_Ref',
+    allRefAnchorNames(editor.state.doc, blocks),
+    allBookmarkIds(editor.state.doc, blocks),
+  )
+  const id = anchorIdOf(name)
   const start = `<w:bookmarkStart w:id="${id}" w:name="${name}"/>`
   const end = `<w:bookmarkEnd w:id="${id}"/>`
   // wrap the paragraph content: start after its pPr, end before </w:p>
