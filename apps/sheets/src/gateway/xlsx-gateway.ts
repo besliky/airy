@@ -1702,7 +1702,13 @@ function canonicalEntryName(raw: string): string | null {
 async function loadSafeZip(buffer: Buffer): Promise<JSZip> {
   const zip = await JSZip.loadAsync(buffer, { checkCRC32: true })
   const paths = Object.keys(zip.files)
-  if (paths.length > MAX_ENTRY_COUNT) throw new Error('Workbook contains too many ZIP entries.')
+  // name the counter and the budget like the sidecar's open-path refusal does
+  if (paths.length > MAX_ENTRY_COUNT) {
+    throw new Error(
+      `Workbook contains ${paths.length} ZIP entries, above the ` +
+        `${MAX_ENTRY_COUNT} entry budget — the file may be a zip bomb.`,
+    )
+  }
   // Snapshot first: removing a folder entry such as "/" drops its children too.
   const files = paths.map((path) => [path, zip.files[path]] as const)
   for (const [path, file] of files) {
