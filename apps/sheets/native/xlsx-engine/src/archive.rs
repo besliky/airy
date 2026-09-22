@@ -367,15 +367,13 @@ pub(crate) fn validate_entries(archive: &mut ZipArchive<File>) -> Result<(), Sid
     Ok(())
 }
 
-/// Rewrite the declared uncompressed size (central-directory field at
-/// offset 24) of each record whose name ends with `suffix`, walking the
-/// records sequentially from the end-of-central-directory pointer so a
-/// `PK\x01\x02` byte run inside compressed data can never be mistaken for
-/// a record header. Returns how many records were patched — callers assert
-/// it to pin the fixture shape. This forges a zip bomb: tiny real bytes,
-/// giant declared ones.
+/// Walk the central-directory records from the end-of-central-directory
+/// pointer (so a `PK\x01\x02` byte run inside compressed data can never be
+/// mistaken for a record header) and hand each record's raw bytes to `patch`
+/// for in-place rewriting. Returns how many records `patch` patched —
+/// callers assert it to pin the fixture shape.
 #[cfg(test)]
-pub(crate) fn forge_declared_size(path: &Path, suffix: &str, declared: u32) -> usize {
+fn patch_central_records(path: &Path, mut patch: impl FnMut(&mut [u8]) -> bool) -> usize {
     fn read_u16(bytes: &[u8], at: usize) -> usize {
         u16::from_le_bytes([bytes[at], bytes[at + 1]]) as usize
     }
@@ -394,16 +392,60 @@ pub(crate) fn forge_declared_size(path: &Path, suffix: &str, declared: u32) -> u
         let name_len = read_u16(&bytes, record + 28);
         let extra_len = read_u16(&bytes, record + 30);
         let comment_len = read_u16(&bytes, record + 32);
-        let name =
-            String::from_utf8_lossy(&bytes[record + 46..record + 46 + name_len]).into_owned();
-        if name.ends_with(suffix) {
-            bytes[record + 24..record + 28].copy_from_slice(&declared.to_le_bytes());
+        let end = record + 46 + name_len + extra_len + comment_len;
+        if patch(&mut bytes[record..end]) {
             patched += 1;
         }
-        record += 46 + name_len + extra_len + comment_len;
+        record = end;
     }
     fs::write(path, bytes).expect("write forged zip fixture");
     patched
+}
+
+/// Rewrite the declared uncompressed size (central-directory field at
+/// offset 24) of each record whose name ends with `suffix`. This forges a
+/// zip bomb: tiny real bytes, giant declared ones.
+#[cfg(test)]
+pub(crate) fn forge_declared_size(path: &Path, suffix: &str, declared: u32) -> usize {
+    patch_central_records(path, |record| {
+        let name_len = u16::from_le_bytes([record[28], record[29]]) as usize;
+        let name = String::from_utf8_lossy(&record[46..46 + name_len]).into_owned();
+        if !name.ends_with(suffix) {
+            return false;
+        }
+        record[24..28].copy_from_slice(&declared.to_le_bytes());
+        true
+    })
+}
+
+/// Rewrite the uncompressed-size u64 inside each record's zip64
+/// extended-information extra field (id 0x0001) — the value `by_index_raw`
+/// reports once the record's fixed-size fields hold the 0xFFFFFFFF zip64
+/// sentinel, i.e. what a zip64 entry can declare beyond the u32 range.
+#[cfg(test)]
+pub(crate) fn forge_zip64_declared_size(path: &Path, suffix: &str, declared: u64) -> usize {
+    patch_central_records(path, |record| {
+        let name_len = u16::from_le_bytes([record[28], record[29]]) as usize;
+        let extra_len = u16::from_le_bytes([record[30], record[31]]) as usize;
+        let name = String::from_utf8_lossy(&record[46..46 + name_len]).into_owned();
+        if !name.ends_with(suffix) {
+            return false;
+        }
+        // walk the extra-field chain ([id u16][len u16][payload] per field);
+        // the zip64 payload's first u64 is the uncompressed size
+        let mut field = 46 + name_len;
+        let extra_end = field + extra_len;
+        while field + 4 <= extra_end {
+            let field_len = u16::from_le_bytes([record[field + 2], record[field + 3]]) as usize;
+            let field_id = u16::from_le_bytes([record[field], record[field + 1]]) as usize;
+            if field_id == 0x0001 && field_len >= 8 {
+                record[field + 4..field + 12].copy_from_slice(&declared.to_le_bytes());
+                return true;
+            }
+            field += 4 + field_len;
+        }
+        panic!("fixture record carries no zip64 extra field");
+    })
 }
 
 fn open_validated(path: &Path) -> Result<ZipArchive<File>, SidecarError> {
@@ -647,6 +689,41 @@ mod tests {
         );
         assert!(scan_entries_for_text(&source, &["keep/a.xml".into()], "a").is_err());
         assert!(read_entries_to_dir(&source, &["keep/a.xml".into()], &dir).is_err());
+        let target = dir.join("saved.zip");
+        assert!(save_archive(&source, &target, &[], &[], &[]).is_err());
+        assert!(!target.exists());
+    }
+
+    /// BUG-1303: zip64 entries declare u64 sizes the u32 CD fields cannot
+    /// hold, and the declared-total accumulator must saturate on them —
+    /// without `saturating_add` a release build wraps 2^63 + 2^63 back to 0
+    /// and the declared bomb passes the budget (a debug build overflows
+    /// instead). The refusal's saturated total (u64::MAX) pins both that the
+    /// zip64 u64 declarations — not the 0xFFFFFFFF fixed-field sentinels —
+    /// reach the accumulator and that their sum stayed over the budget.
+    #[test]
+    fn zip64_u64_declared_sizes_saturate_the_total_instead_of_wrapping() {
+        let dir = tempdir();
+        let source = dir.join("zip64-fixture.zip");
+        let mut writer = ZipWriter::new(File::create(&source).unwrap());
+        // large_file(true) writes the sizes as zip64 sentinel fields plus a
+        // zip64 extra carrying the real u64 values our helper rewrites
+        let stored = SimpleFileOptions::default()
+            .compression_method(CompressionMethod::Deflated)
+            .large_file(true);
+        for (name, content) in [("a.xml", "<a/>"), ("b.xml", "<b/>")] {
+            writer.start_file(name, stored).unwrap();
+            writer.write_all(content.as_bytes()).unwrap();
+        }
+        writer.finish().unwrap();
+        assert_eq!(forge_zip64_declared_size(&source, ".xml", u64::MAX / 2 + 1), 2);
+        let message = archive_manifest(&source).unwrap_err().to_string();
+        assert!(
+            message.contains("18446744073709551615 uncompressed bytes"),
+            "unexpected refusal: {message}"
+        );
+        // the same saturated fence covers every session-less archive command
+        assert!(scan_entries_for_text(&source, &["a.xml".into()], "a").is_err());
         let target = dir.join("saved.zip");
         assert!(save_archive(&source, &target, &[], &[], &[]).is_err());
         assert!(!target.exists());
