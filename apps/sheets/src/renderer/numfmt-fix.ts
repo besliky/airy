@@ -111,15 +111,42 @@ function safeFormat(pattern: string, value: number | string): string | null {
 
 const formatInfoCache = new Map<string, { type: string; maxDecimals: number; scale: number }>()
 
+/// A comparison condition in a `[...]` block (`[<100]`, `[Red][>=10]`).
+const CONDITION_BLOCK = /\[[^\]]*[<>=]/
+
 /**
  * Excel rounds the value's 15-significant-digit decimal literal half away
  * from zero; numfmt rounds the binary double (`Math.round(v * 10^d)`), so
  * 1.005 → "1.00" and -2.5 under `0` → "-2". Returns the decimal-rounded
- * value when the two disagree, else null. Only single-section fixed-decimal
- * patterns qualify — per-sign sections can carry different decimal counts.
+ * value when the two disagree, else null. Fixed-decimal patterns qualify,
+ * multi-section ones included: the section the value's sign picks carries
+ * its own decimal count (BUG-1506: `0.00;(0.00)` on 1.005 → 1.01).
  */
 export function decimalRoundForPattern(pattern: string, value: number): number | null {
-  if (!Number.isFinite(value) || pattern.includes(';')) return null
+  if (!Number.isFinite(value)) return null
+  const section = sectionForValue(pattern, value)
+  if (section === null || section === '') return null
+  return decimalRoundSection(section, value)
+}
+
+/// Excel picks a pattern's section by the value's sign: positive, negative
+/// and zero sections when there are three (a lone or two-section pattern
+/// formats zeros with the positive section; a fourth section is text-only).
+/// Comparison conditions (`[<100]"low";...`) select sections by value
+/// comparison instead, which this sign-based pick cannot model -> null.
+function sectionForValue(pattern: string, value: number): string | null {
+  const sections = patternSections(pattern)
+  if (sections.slice(0, 3).some((section) => CONDITION_BLOCK.test(section))) return null
+  let index = 0
+  if (value < 0 && sections.length >= 2) index = 1
+  else if (value === 0 && sections.length >= 3) index = 2
+  return sections[index] ?? null
+}
+
+/// The decimal half-away-from-zero round for one section of a pattern (the
+/// same rules the single-section path always applied, now reached per
+/// section).
+function decimalRoundSection(pattern: string, value: number): number | null {
   let info = formatInfoCache.get(pattern)
   if (!info) {
     try {

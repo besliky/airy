@@ -476,7 +476,9 @@ describe('buildSheetPrintPayload', () => {
     expect(payload.headerTemplate).toBeUndefined()
     expect(payload.footerTemplate).toContain('<span class="pageNumber"></span>')
     expect(payload.footerTemplate).toContain('<span class="totalPages"></span>')
-    expect(payload.footerTemplate).toContain('padding-bottom:0.51in')
+    // the footer margin minus Chromium's template inset (BUG-1505: the text
+    // anchors at the file's footer margin, not margin + engine inset)
+    expect(payload.footerTemplate).toContain('padding-bottom:0.31in')
     // the template document is content-box: without an inline border-box the
     // padded 100%-wide row overflows the page and shifts/clips the sections
     expect(payload.footerTemplate).toContain('box-sizing:border-box')

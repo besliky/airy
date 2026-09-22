@@ -270,8 +270,32 @@ describe('decimal half-way rounding (Excel rounds the decimal literal)', () => {
     expect(decimalRoundForPattern('0.00%', 0.12345)).toBeCloseTo(0.1235, 10)
   })
 
-  it('skips multi-section, date, fraction and scientific patterns', () => {
-    expect(decimalRoundForPattern('#,##0.0;(#,##0.00)', 1.005)).toBeNull()
+  it('rounds the x.x5 half-way doubles Excel rounds up', () => {
+    expect(decimalRoundForPattern('0.00', 0.125)).toBe(0.13)
+    // 2.67 + 0.01 lands on the neighbouring double; the display text is 2.68.
+    expect(decimalRoundForPattern('0.00', 2.675)).toBeCloseTo(2.68, 10)
+    expect(decimalRoundForPattern('##0.00', 2.675)).toBeCloseTo(2.68, 10)
+    expect(decimalRoundForPattern('0.000', 0.0005)).toBeCloseTo(0.001, 10)
+  })
+
+  it('rounds the sign-picked section of multi-section patterns (BUG-1506)', () => {
+    // Positive section 0.00: Excel prints 1.01, numfmt the binary 1.00.
+    expect(decimalRoundForPattern('0.00;(0.00)', 1.005)).toBe(1.01)
+    // Negative section carries its own decimal count.
+    expect(decimalRoundForPattern('0.00;(0.00)', -1.005)).toBe(-1.01)
+    expect(decimalRoundForPattern('#,##0.0;(#,##0.00)', 1.005)).toBe(1)
+    expect(fixFormattedValue('#,##0.0;(#,##0.00)', -1.005, '(1.00)')).toBe('(1.01)')
+    // Zeros go to the third section when there is one, the first otherwise.
+    expect(decimalRoundForPattern('0.00;(0.00);0.000', 0)).toBe(0)
+    expect(decimalRoundForPattern('0.00;(0.00)', 0)).toBe(0)
+    // The full pattern re-renders the rounded value in the right section.
+    expect(fixFormattedValue('0.00;(0.00)', 1.005, '1.00')).toBe('1.01')
+    expect(fixFormattedValue('0.00;(0.00)', -1.005, '(1.00)')).toBe('(1.01)')
+  })
+
+  it('skips condition-selected, date, fraction and scientific patterns', () => {
+    expect(decimalRoundForPattern('[<100]"low";0.00', 1.005)).toBeNull()
+    expect(decimalRoundForPattern('0.00;[Red][<-1](0.00)', -1.005)).toBeNull()
     expect(decimalRoundForPattern('yyyy-mm-dd', 1.005)).toBeNull()
     expect(decimalRoundForPattern('# ?/?', 1.005)).toBeNull()
     expect(decimalRoundForPattern('0.00E+00', 1.005)).toBeNull()
