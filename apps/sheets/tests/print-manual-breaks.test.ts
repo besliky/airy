@@ -49,6 +49,10 @@ function gridWorksheet(
   const columnWidth = options.columnWidth ?? 100
   return {
     getSheetName: () => 'Grid',
+    getSheet: () => ({
+      getRowVisible: () => true,
+      getColVisible: () => true,
+    }),
     getLastRow: () => grid.length - 1,
     getLastColumn: () => Math.max(...grid.map((row) => row.length - 1), 0),
     getRowHeight: () => rowHeight,

@@ -53,6 +53,10 @@ function cfWorksheet(
 ): PrintWorksheet {
   return {
     getSheetName: () => 'CF',
+    getSheet: () => ({
+      getRowVisible: () => true,
+      getColVisible: () => true,
+    }),
     getLastRow: () => grid.length - 1,
     getLastColumn: () => Math.max(...grid.map((row) => row.length - 1), 0),
     getRowHeight: () => 20,
@@ -222,6 +226,9 @@ describe('withConditionalFormatStyle wiring', () => {
     }
     getMergedRanges(): unknown[] {
       return []
+    }
+    getSheet(): { getRowVisible(row: number): boolean; getColVisible(column: number): boolean } {
+      return { getRowVisible: () => true, getColVisible: () => true }
     }
     getRange(row: number, column: number, numRows = 1, numColumns = 1): unknown {
       return {

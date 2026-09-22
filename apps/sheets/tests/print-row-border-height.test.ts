@@ -40,6 +40,10 @@ function payloadSetup(overrides: Partial<EffectivePageSetup> = {}): EffectivePag
 function borderedWorksheet(style: Record<string, unknown> | null): PrintWorksheet {
   return {
     getSheetName: () => 'Bordered',
+    getSheet: () => ({
+      getRowVisible: () => true,
+      getColVisible: () => true,
+    }),
     getLastRow: () => 0,
     getLastColumn: () => 0,
     getRowHeight: () => 20, // 20px = 15pt saved
@@ -112,6 +116,10 @@ describe('printedHeightPt collapsed-border contribution', () => {
   it('a cell borders the whole row even when a neighbour is unstyled', () => {
     const worksheet: PrintWorksheet = {
       getSheetName: () => 'Mixed',
+      getSheet: () => ({
+        getRowVisible: () => true,
+        getColVisible: () => true,
+      }),
       getLastRow: () => 0,
       getLastColumn: () => 1,
       getRowHeight: () => 20,
@@ -141,6 +149,10 @@ describe('printedHeightPt collapsed-border contribution', () => {
     const rowCount = 46
     const worksheet: PrintWorksheet = {
       getSheetName: () => 'Tall',
+      getSheet: () => ({
+        getRowVisible: () => true,
+        getColVisible: () => true,
+      }),
       getLastRow: () => rowCount - 1,
       getLastColumn: () => 0,
       getRowHeight: () => 20,
