@@ -1,19 +1,22 @@
 //! Legacy-format import: reads an .xls (or anything calamine understands)
-//! and writes a minimal .xlsx with values, formulas, and date number formats.
-//! Styles beyond date formats are not carried over — the converted file is a
-//! fresh workbook, not a byte-preserving edit.
+//! and writes a fresh .xlsx with values, formulas, date number formats and —
+//! for BIFF8 books — the layout that makes a form look like a form: merged
+//! ranges, column widths and basic cell styles (bold/size, fills, borders,
+//! alignments, number formats) via `xls_layout` (BUG-1602). The converted
+//! file is a fresh workbook, not a byte-preserving edit.
 
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 
-use calamine::{open_workbook_auto, Data, Reader};
+use calamine::{Data, Reader, open_workbook_auto};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::SidecarError;
 use crate::legacy_xls::{self, SheetStrings};
+use crate::xls_layout::{self, StyleInterner};
 
 #[derive(Debug)]
 pub struct ConvertResult {
@@ -65,6 +68,11 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
     // single-byte-codepage books come out as mojibake. The overlay is the
     // spec-correct re-decode of the SST; empty for every other format.
     let repaired = legacy_xls::LegacyXlsStrings::extract(source);
+    // BUG-1602: merges, column widths and basic cell styles, walked from the
+    // BIFF stream directly (calamine exposes none of them). Empty for every
+    // non-.xls source, which keeps those conversions unchanged.
+    let layout = xls_layout::WorkbookLayout::extract(source);
+    let mut styler = StyleInterner::new(&layout);
     let names: Vec<String> = workbook.sheet_names().to_vec();
     if names.is_empty() {
         return Err(SidecarError::Workbook("The workbook has no sheets.".into()));
@@ -89,7 +97,13 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
                 }
             }
         }
-        let (xml, sheet_cells) = worksheet_xml(&range, &formula_map, repaired.sheet(index));
+        let (xml, sheet_cells) = worksheet_xml(
+            &range,
+            &formula_map,
+            repaired.sheet(index),
+            layout.sheet(index),
+            &mut styler,
+        );
         cells += sheet_cells;
         sheet_xmls.push(xml);
     }
@@ -106,32 +120,53 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
     add("[Content_Types].xml", &content_types_xml(names.len()))?;
     add("_rels/.rels", ROOT_RELS)?;
     add("xl/workbook.xml", &workbook_xml(&names, &repaired))?;
-    add("xl/_rels/workbook.xml.rels", &workbook_rels_xml(names.len()))?;
-    add("xl/styles.xml", STYLES_XML)?;
+    add(
+        "xl/_rels/workbook.xml.rels",
+        &workbook_rels_xml(names.len()),
+    )?;
+    // Styles last of the parts that reference them: cell styles are
+    // interned while the sheets serialize, so styles.xml can only be built
+    // once every sheet has been walked.
+    add("xl/styles.xml", &styler.styles_xml())?;
     for (index, xml) in sheet_xmls.iter().enumerate() {
         add(&format!("xl/worksheets/sheet{}.xml", index + 1), xml)?;
     }
     writer.finish()?.sync_all()?;
-    Ok(ConvertResult { sheets: names.len(), cells, source_bytes })
+    Ok(ConvertResult {
+        sheets: names.len(),
+        cells,
+        source_bytes,
+    })
 }
 
 fn worksheet_xml(
     range: &calamine::Range<Data>,
     formulas: &HashMap<(u32, u32), String>,
     repaired: Option<&SheetStrings>,
+    layout: Option<&xls_layout::SheetLayout>,
+    styler: &mut StyleInterner<'_>,
 ) -> (String, usize) {
     // Rows carrying values plus rows carrying only formulas.
     let mut rows: HashMap<u32, Vec<(u32, String)>> = HashMap::new();
     let mut cells = 0usize;
     let (start_row, start_col) = range.start().unwrap_or((0, 0));
+    let position_is_written = |rows: &HashMap<u32, Vec<(u32, String)>>, position: (u32, u32)| {
+        rows.get(&position.0)
+            .is_some_and(|line| line.iter().any(|(column, _)| *column == position.1))
+    };
     for (row, column, value) in range.used_cells() {
         let absolute = (start_row + row as u32, start_col + column as u32);
         // BUG-1600: the overlay carries the spec-correct SST decode for
         // cells whose string calamine mangled through the book codepage.
         let formula = formulas.get(&absolute).map(String::as_str);
+        // BUG-1602: cells with a walked style reference their interned xf;
+        // plain cells keep the fallback (dates stay date-formatted).
+        let style = layout
+            .and_then(|layout| layout.cells.get(&absolute))
+            .and_then(|&xf| styler.cell_style(xf));
         let outcome = match repaired.and_then(|sheet| sheet.cells.get(&absolute)) {
-            Some(text) => cell_xml(absolute, &Data::String(text.clone()), formula),
-            None => cell_xml(absolute, value, formula),
+            Some(text) => cell_xml(absolute, &Data::String(text.clone()), formula, style),
+            None => cell_xml(absolute, value, formula, style),
         };
         if let Some(cell) = outcome {
             cells += 1;
@@ -139,7 +174,9 @@ fn worksheet_xml(
         }
     }
     for (position, formula) in formulas {
-        let covered = range.get_value((position.0, position.1)).is_some_and(|v| *v != Data::Empty);
+        let covered = range
+            .get_value((position.0, position.1))
+            .is_some_and(|v| *v != Data::Empty);
         if !covered {
             cells += 1;
             rows.entry(position.0).or_default().push((
@@ -148,6 +185,28 @@ fn worksheet_xml(
                     r#"<c r="{}"><f>{}</f></c>"#,
                     cell_reference(position.0, position.1),
                     escape_xml(formula),
+                ),
+            ));
+        }
+    }
+    // BUG-1602: styled empty cells — merge continuations and blank painted/
+    // bordered boxes the value walk above never sees. Without them the
+    // borders of a merged header die with the anchor row.
+    if let Some(layout) = layout {
+        for (&position, &xf) in layout.cells.iter() {
+            if position_is_written(&rows, position) {
+                continue;
+            }
+            let Some(style) = styler.cell_style(xf) else {
+                continue;
+            };
+            cells += 1;
+            rows.entry(position.0).or_default().push((
+                position.1,
+                format!(
+                    r#"<c r="{}" s="{}"/>"#,
+                    cell_reference(position.0, position.1),
+                    style,
                 ),
             ));
         }
@@ -174,17 +233,75 @@ fn worksheet_xml(
         ),
         _ => "A1:A1".into(),
     };
+    // Schema order: dimension, cols, sheetData, mergeCells.
+    let cols = layout.map(columns_xml).unwrap_or_default();
+    let merges = layout.map(merges_xml).unwrap_or_default();
     (
         format!(
             r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="{dimension}"/><sheetData>{body}</sheetData></worksheet>"#,
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="{dimension}"/>{cols}<sheetData>{body}</sheetData>{merges}</worksheet>"#,
         ),
         cells,
     )
 }
 
-fn cell_xml(position: (u32, u32), value: &Data, formula: Option<&str>) -> Option<String> {
+/// `<cols>` runs for the user-set columns of a walked sheet.
+fn columns_xml(layout: &xls_layout::SheetLayout) -> String {
+    if layout.cols.is_empty() {
+        return String::new();
+    }
+    let mut xml = String::from("<cols>");
+    for span in &layout.cols {
+        xml.push_str(&format!(
+            r#"<col min="{}" max="{}" width="{}" customWidth="1"{}/>"#,
+            span.first + 1,
+            span.last + 1,
+            format_width(span.width),
+            if span.hidden { r#" hidden="1""# } else { "" },
+        ));
+    }
+    xml.push_str("</cols>");
+    xml
+}
+
+/// Column width without a trailing decimal point (8, not 8.00).
+fn format_width(width: f64) -> String {
+    let rounded = (width * 100.0).round() / 100.0;
+    if (rounded - rounded.trunc()).abs() < f64::EPSILON {
+        format!("{}", rounded as i64)
+    } else {
+        format!("{rounded}")
+    }
+}
+
+/// `<mergeCells>` for the walked ranges, sorted, deduplicated, clamped to
+/// the sheet geometry.
+fn merges_xml(layout: &xls_layout::SheetLayout) -> String {
+    if layout.merges.is_empty() {
+        return String::new();
+    }
+    let mut xml = format!(r#"<mergeCells count="{}">"#, layout.merges.len());
+    for (rows, columns) in &layout.merges {
+        xml.push_str(&format!(
+            r#"<mergeCell ref="{}:{}"/>"#,
+            cell_reference(u32::from(rows[0]), u32::from(columns[0])),
+            cell_reference(u32::from(rows[1]), u32::from(columns[1])),
+        ));
+    }
+    xml.push_str("</mergeCells>");
+    xml
+}
+
+fn cell_xml(
+    position: (u32, u32),
+    value: &Data,
+    formula: Option<&str>,
+    style: Option<usize>,
+) -> Option<String> {
     let reference = cell_reference(position.0, position.1);
+    let style_attr = style
+        .map(|style| format!(r#" s="{style}""#))
+        .unwrap_or_default();
     let formula_xml = formula
         .map(|text| format!("<f>{}</f>", escape_xml(text)))
         .unwrap_or_default();
@@ -193,29 +310,39 @@ fn cell_xml(position: (u32, u32), value: &Data, formula: Option<&str>) -> Option
             if formula.is_none() {
                 return None;
             }
-            format!(r#"<c r="{reference}">{formula_xml}</c>"#)
+            format!(r#"<c r="{reference}"{style_attr}>{formula_xml}</c>"#)
         }
         Data::String(text) => format!(
-            r#"<c r="{reference}" t="inlineStr">{formula_xml}<is><t xml:space="preserve">{}</t></is></c>"#,
+            r#"<c r="{reference}"{style_attr} t="inlineStr">{formula_xml}<is><t xml:space="preserve">{}</t></is></c>"#,
             escape_xml(text),
         ),
-        Data::Float(number) => format!(r#"<c r="{reference}">{formula_xml}<v>{number}</v></c>"#),
-        Data::Int(number) => format!(r#"<c r="{reference}">{formula_xml}<v>{number}</v></c>"#),
+        Data::Float(number) => {
+            format!(r#"<c r="{reference}"{style_attr}>{formula_xml}<v>{number}</v></c>"#)
+        }
+        Data::Int(number) => {
+            format!(r#"<c r="{reference}"{style_attr}>{formula_xml}<v>{number}</v></c>"#)
+        }
         Data::Bool(flag) => format!(
-            r#"<c r="{reference}" t="b">{formula_xml}<v>{}</v></c>"#,
+            r#"<c r="{reference}"{style_attr} t="b">{formula_xml}<v>{}</v></c>"#,
             if *flag { 1 } else { 0 },
         ),
         Data::DateTime(datetime) => {
             let serial = datetime.as_f64();
-            let style = if serial.fract() == 0.0 { 1 } else { 2 };
-            format!(r#"<c r="{reference}" s="{style}">{formula_xml}<v>{serial}</v></c>"#)
+            // Fallback styling for books without a walked layout: xf 1 =
+            // short date, xf 2 = date+time. Walked books carry the real
+            // number format in the cell's own style.
+            let fallback = if serial.fract() == 0.0 { 1 } else { 2 };
+            let style_attr = style
+                .map(|style| format!(r#" s="{style}""#))
+                .unwrap_or_else(|| format!(r#" s="{fallback}""#));
+            format!(r#"<c r="{reference}"{style_attr}>{formula_xml}<v>{serial}</v></c>"#)
         }
         Data::Error(error) => format!(
-            r#"<c r="{reference}" t="e">{formula_xml}<v>{}</v></c>"#,
+            r#"<c r="{reference}"{style_attr} t="e">{formula_xml}<v>{}</v></c>"#,
             escape_xml(&error.to_string()),
         ),
         Data::DateTimeIso(text) | Data::DurationIso(text) => format!(
-            r#"<c r="{reference}" t="inlineStr">{formula_xml}<is><t xml:space="preserve">{}</t></is></c>"#,
+            r#"<c r="{reference}"{style_attr} t="inlineStr">{formula_xml}<is><t xml:space="preserve">{}</t></is></c>"#,
             escape_xml(text),
         ),
     };
@@ -296,10 +423,6 @@ fn workbook_rels_xml(sheet_count: usize) -> String {
     )
 }
 
-/// xf 1 = short date (numFmt 14), xf 2 = date+time (numFmt 22).
-const STYLES_XML: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="14" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="22" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs></styleSheet>"#;
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,7 +450,9 @@ mod tests {
         assert!(result.cells >= 4);
 
         let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
-        assert!(sheet.contains(r#"<c r="A1" t="inlineStr"><is><t xml:space="preserve">Name &amp; Co</t></is></c>"#));
+        assert!(sheet.contains(
+            r#"<c r="A1" t="inlineStr"><is><t xml:space="preserve">Name &amp; Co</t></is></c>"#
+        ));
         assert!(sheet.contains(r#"<c r="B1"><v>42</v></c>"#));
         assert!(sheet.contains(r#"<c r="B2"><f>B1*2</f>"#));
         let workbook = read_entry(&target, "xl/workbook.xml");
@@ -377,7 +502,11 @@ mod tests {
         assert_eq!(result.cells, 2);
 
         let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
-        assert!(sheet.contains(r#"<c r="A1" t="inlineStr"><is><t xml:space="preserve">Alpha</t></is></c>"#));
+        assert!(
+            sheet.contains(
+                r#"<c r="A1" t="inlineStr"><is><t xml:space="preserve">Alpha</t></is></c>"#
+            )
+        );
         assert!(sheet.contains(r#"<c r="B1"><v>2</v></c>"#));
         let workbook = read_entry(&target, "xl/workbook.xml");
         assert!(workbook.contains(r#"<sheet name="Sheet1" sheetId="1" r:id="rId1"/>"#));
@@ -462,9 +591,11 @@ mod tests {
         let target = dir.path().join("converted.xlsx");
 
         let error = convert_to_xlsx(&source, &target).unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("ZIP entries, above the 10000 entry open budget"));
+        assert!(
+            error
+                .to_string()
+                .contains("ZIP entries, above the 10000 entry open budget")
+        );
         assert!(!target.exists());
     }
 
@@ -535,6 +666,95 @@ mod tests {
 
         let workbook = read_entry(&target, "xl/workbook.xml");
         assert!(workbook.contains(r#"<sheet name="Прайс""#));
+    }
+
+    /// BUG-1602: a BIFF8 form — merged two-tier header, custom column
+    /// widths, bold title on a solid fill, bordered boxes, date columns —
+    /// must keep that shape through conversion. The committed fixture is a
+    /// LibreOffice-generated workbook whose merges, widths, fonts, fills,
+    /// borders and custom number formats were verified against xlrd and
+    /// against LibreOffice's own xlsx conversion of the same file.
+    #[test]
+    fn carries_a_form_layout_from_a_legacy_book() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/bug-1602-merges-widths-styles.xls"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let result = convert_to_xlsx(source, &target).unwrap();
+        assert_eq!(result.sheets, 1);
+
+        let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
+        // All three merged ranges, sorted (title, horizontal, vertical).
+        assert!(sheet.contains(r#"<mergeCells count="3">"#));
+        assert!(sheet.contains(r#"<mergeCell ref="A1:D1"/>"#));
+        assert!(sheet.contains(r#"<mergeCell ref="B3:D3"/>"#));
+        assert!(sheet.contains(r#"<mergeCell ref="A3:A4"/>"#));
+        // The three custom widths; the producer's catch-all record for the
+        // untouched tail (8.68 chars) must not become 256 custom columns.
+        assert!(sheet.contains(r#"<col min="1" max="1" width="8" customWidth="1"/>"#));
+        assert!(sheet.contains(r#"<col min="2" max="2" width="32" customWidth="1"/>"#));
+        assert!(sheet.contains(r#"<col min="3" max="3" width="15" customWidth="1"/>"#));
+        assert!(!sheet.contains("8.68"), "catch-all width leaked into cols");
+        // Merge continuations keep the header's fill and borders via styled
+        // empty cells, the way LibreOffice writes them.
+        assert!(sheet.contains(r#"<c r="B1" s="3"/>"#));
+        assert!(sheet.contains(r#"<c r="C3" s="4"/>"#));
+        // Title cell: bold 14pt on the amber fill, centered — cellXfs 3.
+        assert!(sheet.contains(r#"<c r="A1" s="3" t="inlineStr">"#));
+        // A date keeps its real number format (custom 165 = yyyy-mm-dd),
+        // not the fallback short-date style.
+        assert!(sheet.contains(r#"<c r="D5" s="6"><v>46223</v></c>"#));
+
+        let styles = read_entry(&target, "xl/styles.xml");
+        assert!(styles.contains(r#"<font><b/><sz val="14"/><name val="Cambria"/></font>"#));
+        assert!(styles.contains(r#"<fill><patternFill patternType="solid"><fgColor rgb="FFFFCC00"/></patternFill></fill>"#));
+        assert!(styles.contains(r#"<fill><patternFill patternType="solid"><fgColor rgb="FFDDEBF7"/></patternFill></fill>"#));
+        assert!(styles.contains(r#"<left style="thin"><color rgb="FF000000"/></left>"#));
+        assert!(styles.contains(r#"<numFmt numFmtId="165" formatCode="yyyy\-mm\-dd"/>"#));
+        assert!(styles.contains(r#"<alignment horizontal="center" vertical="center"/>"#));
+        // cellXfs 0-2 are the converter's fallback styles, unchanged.
+        assert!(styles.contains(r#"<cellXfs count="7">"#));
+    }
+
+    /// BUG-1602: zip-based sources have no BIFF walk; their conversion must
+    /// stay byte-for-byte the minimal output — no merges, no cols, no extra
+    /// styles.
+    #[test]
+    fn keeps_zip_sources_free_of_legacy_layout() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source.xlsx");
+        convert_fixture(&source);
+        let target = dir.path().join("converted.xlsx");
+
+        convert_to_xlsx(&source, &target).unwrap();
+        let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
+        assert!(!sheet.contains("mergeCell"));
+        assert!(!sheet.contains("<cols>"));
+        let styles = read_entry(&target, "xl/styles.xml");
+        assert!(styles.contains(r#"<cellXfs count="3">"#));
+    }
+
+    /// BUG-1602: the layout walk must never panic, on truncated books just
+    /// like the string overlay it mirrors (same truncation sweep). The walk
+    /// runs on its own; the full convert path cannot be swept this way
+    /// because calamine itself panics on some truncated OLE2 headers —
+    /// pre-existing upstream behavior, unchanged by this module.
+    #[test]
+    fn truncated_layout_fixture_never_panics_the_walk() {
+        let full = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/bug-1602-merges-widths-styles.xls"
+        ))
+        .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        for cut in (0..full.len()).step_by(64) {
+            let path = dir.path().join("cut.xls");
+            std::fs::write(&path, &full[..cut]).unwrap();
+            let _ = xls_layout::WorkbookLayout::extract(&path);
+        }
     }
 
     fn convert_fixture(path: &Path) {
