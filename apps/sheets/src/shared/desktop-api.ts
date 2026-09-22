@@ -702,6 +702,13 @@ export const workbookFileSchema = z
     sha256: z.string().length(64),
     /// Byte size of the opened snapshot; gates the IronCalc recalc fallback.
     fileBytes: z.number().int().nonnegative().optional(),
+    /// Raw byte length of the opened file as the sidecar measured it on the
+    /// very handle it read (BUG-1305). Optional so a sidecar binary from
+    /// before the field keeps opening: this schema is strict, so an additive
+    /// sidecar reply field MUST be whitelisted here before the binary that
+    /// sends it ships — a missed key fails every workbook open with a
+    /// ZodError unrecognized_keys (the PR #123 sheets e2e regression).
+    rawBytes: z.number().int().nonnegative().optional(),
     entryCount: z.number().int().nonnegative(),
     sheets: z.array(worksheetMetadataSchema).min(1),
     /// workbookView/@activeTab — sheet index Excel had active on save.

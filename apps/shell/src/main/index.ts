@@ -1153,14 +1153,23 @@ function finishWindowClose(entry: ShellWindowEntry): void {
   }
   const decision = quitFlow.closeDecision(shellEntries().length)
   if (decision.persist) {
-    const written = decision.excludeClosing
-      ? persistSessionState(false, entry)
-      : persistSessionState(decision.skipStaged)
     // a failed quit-time snapshot write must not count as the one write
     // (BUG-1224): quitSessionPersisted is already true, so without the
     // re-arm every later confirmed close would skip its retry and the next
     // launch would resurrect windows closed before the failure (disk full,
     // userData gone read-only, …) from the stale snapshot
+    let written = decision.excludeClosing
+      ? persistSessionState(false, entry)
+      : persistSessionState(decision.skipStaged)
+    if (!written) {
+      // BUG-1307: on the LAST confirmed close there is no successor close
+      // the re-arm could retry into, so retry in place — the closing window
+      // is still registered here (closingConfirmed is set below), making
+      // this the only point where the exact intended snapshot is writable
+      written = decision.excludeClosing
+        ? persistSessionState(false, entry)
+        : persistSessionState(decision.skipStaged)
+    }
     if (!written) quitFlow.markSnapshotWriteFailed()
   }
   // mark only AFTER this window's own snapshot write (the quit snapshot and
@@ -3591,4 +3600,20 @@ app.on('before-quit', () => {
   // and pdf workers stop, and the live bridge closes its socket — the whole
   // set rolls back if a cancelled dirty-guard aborts the quit (BUG-1216)
   shutdownEffects.arm()
+})
+
+app.on('will-quit', () => {
+  // BUG-1307: the quit snapshot may still be missing when the quit completes
+  // — a write failure on the LAST confirmed close has no successor close the
+  // BUG-1224 re-arm could retry into. One final write here (the same full
+  // snapshot before-quit makes); only a real write failure logs, so the
+  // empty-registry flush (nothing left to serialize) stays silent.
+  if (!quitFlow.snapshotWritePending()) return
+  if (!persistSessionState(false)) {
+    console.error(
+      '[shell] quit-time session snapshot write failed again at will-quit; the next ' +
+        'launch restores the stale snapshot and may resurrect windows closed before ' +
+        'the failure',
+    )
+  }
 })

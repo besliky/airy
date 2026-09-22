@@ -491,6 +491,8 @@ fn handle_request(
                 to_json_value(serde_json::json!({
                     "sheets": result.sheets,
                     "cells": result.cells,
+                    // raw source size as this sidecar actually read it (BUG-1305)
+                    "sourceBytes": result.source_bytes,
                 }))
             })
         }

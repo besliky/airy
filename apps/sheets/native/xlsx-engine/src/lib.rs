@@ -123,6 +123,10 @@ impl WorkbookSessions {
     ) -> Result<WorkbookMetadata, SidecarError> {
         let canonical_path = path.canonicalize()?;
         let file = File::open(&canonical_path)?;
+        // measured on this very handle before it moves into the archive, so
+        // the open reply reports the raw size the sidecar actually served
+        // even when the file changed since the caller's own stat (BUG-1305)
+        let raw_bytes = file.metadata().map(|metadata| metadata.len()).unwrap_or(0);
         let mut archive = ZipArchive::new(file)?;
         archive::validate_entries(&mut archive)?;
         let entry_count = archive.len();
@@ -316,6 +320,7 @@ impl WorkbookSessions {
             session_id,
             name,
             entry_count,
+            raw_bytes,
             sheets,
             active_tab,
             styles,
