@@ -10,6 +10,11 @@ pub struct WorkbookMetadata {
     pub session_id: String,
     pub name: String,
     pub entry_count: usize,
+    /// Raw on-disk byte length of the opened file, measured on the very
+    /// file handle the sidecar read (BUG-1305): lets the session re-run its
+    /// open-size fence against the size actually served, closing the
+    /// stat→open race where the file grows past the cap in between.
+    pub raw_bytes: u64,
     pub sheets: Vec<SheetMetadata>,
     /// workbookView/@activeTab (sheet index in workbook order); 0 when absent.
     pub active_tab: usize,

@@ -137,6 +137,51 @@ describe('open size fences (SEC-1102)', () => {
   })
 })
 
+describe('xlsx stat→open race: the served size is re-fenced (BUG-1305)', () => {
+  it('refuses an open whose reply reports a raw size over the cap', async () => {
+    // the stat fence ran on the small on-disk file, but the sidecar's own
+    // handle saw the grown file; the session must refuse on the reply's
+    // rawBytes instead of opening a session around an over-cap workbook
+    const book = join(root, 'grew.xlsx')
+    await writeFile(book, 'stub-xlsx-bytes')
+    const io = makeStubIo({ openRawBytes: 512 * 1024 * 1024 + 1 })
+    await expect(XlsxSession.open(book, root, io)).rejects.toThrow(
+      /grew\.xlsx" is 536870913 bytes; xlsx sessions cap open size at 536870912 bytes/,
+    )
+    // the sidecar session the refusal orphaned is released again
+    expect(io.calls.close).toEqual(['stub-session-1'])
+  })
+
+  it('opens when the reply reports a raw size within the cap', async () => {
+    const book = join(root, 'book.xlsx')
+    await writeFile(book, 'stub-xlsx-bytes')
+    const io = makeStubIo({ openRawBytes: 1024 })
+    const session = await XlsxSession.open(book, root, io)
+    expect(session.meta().kind).toBe('xlsx')
+    expect(io.calls.close).toEqual([])
+  })
+
+  it('refuses a conversion whose reply reports an over-cap source', async () => {
+    // same race for the .xls/.ods import input: the source is re-fenced
+    // against the size the converter itself served, before any sidecar open
+    const legacy = join(root, 'legacy.ods')
+    await writeFile(legacy, 'stub-ods-bytes')
+    const io = makeStubIo({ convertSourceBytes: 600 * 1024 * 1024 })
+    await expect(XlsxSession.open(legacy, root, io)).rejects.toThrow(
+      /legacy\.ods" is 629145600 bytes; xlsx sessions cap open size at 536870912 bytes/,
+    )
+    expect(io.calls.open).toEqual([])
+  })
+
+  it('still opens a reply without rawBytes (pre-BUG-1305 sidecars)', async () => {
+    const book = join(root, 'book.xlsx')
+    await writeFile(book, 'stub-xlsx-bytes')
+    const io = makeStubIo()
+    const session = await XlsxSession.open(book, root, io)
+    expect(session.meta().kind).toBe('xlsx')
+  })
+})
+
 // Fake soffice for the conversion-fence test: records its own invocation so
 // the test can prove the over-cap input never reached the subprocess.
 const FAKED_SOFFICE = `#!/bin/sh

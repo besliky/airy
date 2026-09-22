@@ -18,6 +18,11 @@ use crate::SidecarError;
 pub struct ConvertResult {
     pub sheets: usize,
     pub cells: usize,
+    /// Raw on-disk byte length of the conversion source, measured when the
+    /// conversion starts (BUG-1305): the session re-runs its open-size fence
+    /// against the size actually served even when the file grew past the cap
+    /// between the host's stat and this read.
+    pub source_bytes: u64,
 }
 
 /// SEC-1301: calamine reads .ods — and every other zip-based workbook its
@@ -48,6 +53,9 @@ fn validate_zip_based_source(source: &Path) -> Result<(), SidecarError> {
 }
 
 pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, SidecarError> {
+    let source_bytes = std::fs::metadata(source)
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
     validate_zip_based_source(source)?;
     let mut workbook = open_workbook_auto(source)
         .map_err(|error| SidecarError::Workbook(format!("Unable to read the workbook: {error}")))?;
@@ -98,7 +106,7 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
         add(&format!("xl/worksheets/sheet{}.xml", index + 1), xml)?;
     }
     writer.finish()?.sync_all()?;
-    Ok(ConvertResult { sheets: names.len(), cells })
+    Ok(ConvertResult { sheets: names.len(), cells, source_bytes })
 }
 
 fn worksheet_xml(
