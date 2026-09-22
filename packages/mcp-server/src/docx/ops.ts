@@ -51,6 +51,13 @@ export function emptyNumbering(): PendingNumbering {
 /** the numbering map shape the engine's ParsedDoc exposes (allocation source) */
 export interface NumberingSource {
   numbering: Map<string, { abstractNumId: string; levels: Record<number, { numFmt: string }> }>
+  /**
+   * heading level -> styleId present in the document (ParsedDoc exposes it).
+   * setHeadingLevel reads it to report when the target level has no style, so
+   * the op can disclose the serializer's outline-level fallback (BUG-1631)
+   * instead of a bare "changed N".
+   */
+  headingStyleIds?: ReadonlyMap<number, string>
 }
 
 // ---- op / target contracts (mirrors the embedded agent's ops.ts) ----
@@ -77,6 +84,15 @@ export interface OpResult {
   changed: number
   skippedProtected: number
   detail?: string
+  /**
+   * Non-fatal compromises the op made, when any. "changed" blocks survive
+   * save regardless; the warnings explain HOW (BUG-1631: a heading level
+   * with no style in the document is applied as a direct outline-level
+   * override and the paragraph keeps its previous formatting). Optional —
+   * absent when the op had nothing to disclose, so the wire shape of the
+   * common path is unchanged.
+   */
+  warnings?: string[]
 }
 
 export interface ExecuteOutcome {
@@ -757,7 +773,24 @@ register({
       }
       if (edit.commit()) changed++
     }
-    return { op: op.op, matched, changed, skippedProtected: skipped }
+    // BUG-1631: when the document has no style for the level, the serializer
+    // keeps the paragraph's current style and carries the level with a direct
+    // w:outlineLvl override — the retag is durable, but the paragraph keeps
+    // its previous formatting. Disclose that instead of a bare "changed N".
+    const warnings =
+      level >= 1 && changed > 0 && env.doc.headingStyleIds?.get(level) === undefined
+        ? [
+            `no style for heading level ${level} in this document; the level is applied as a direct ` +
+              'outline-level override and the paragraphs keep their previous formatting',
+          ]
+        : undefined
+    return {
+      op: op.op,
+      matched,
+      changed,
+      skippedProtected: skipped,
+      ...(warnings ? { warnings } : {}),
+    }
   },
 })
 

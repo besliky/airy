@@ -504,6 +504,53 @@ describe('setHeadingLevel survives save (BUG-1501)', () => {
   })
 })
 
+// BUG-1631: retagging to a level whose style the document does not define used
+// to report "changed 1" while the save silently kept the old style. The
+// serializer now carries the level with a direct w:outlineLvl override (the
+// edit survives save), and the op must disclose that compromise in its result.
+describe('setHeadingLevel to a level with no style is honest (BUG-1631)', () => {
+  it('reports a warning, and the retag survives save+reopen', async () => {
+    const session = await openSession() // fixture styles know Heading1/Heading2 only
+    const { results, summary } = session.applyOps([
+      { op: 'setHeadingLevel', target: { blockIndexes: [0] }, level: 3 },
+    ])
+    expect(results[0]!.changed).toBe(1)
+    expect(results[0]!.warnings).toEqual([expect.stringContaining('no style for heading level 3')])
+    expect(summary).toContain('warning:')
+    const target = join(root, 'override.docx')
+    await session.save(target)
+    const reopened = await reparseSaved(target)
+    expect(reopened.blocks[0]!.type).toBe('heading')
+    expect(reopened.blocks[0]!.level).toBe(3)
+    expect(reopened.blocks[0]!.styleId).toBe('Heading1')
+  })
+
+  it('keeps the wire shape clean when there is nothing to disclose', async () => {
+    const session = await openSession()
+    const { results } = session.applyOps([
+      // control: level 2 has a style — the common path gains no new fields
+      { op: 'setHeadingLevel', target: { blockIndexes: [0] }, level: 2 },
+      // a no-op (demoting an already-plain paragraph) does not warn either
+      { op: 'setHeadingLevel', target: { blockIndexes: [1] }, level: 0 },
+    ])
+    for (const result of results) {
+      // the base wire fields are intact (additive-field lesson BUG-13xx-P4:
+      // consumers key on op/matched/changed/skippedProtected)
+      expect(result).toEqual(
+        expect.objectContaining({
+          op: 'setHeadingLevel',
+          matched: expect.any(Number),
+          changed: expect.any(Number),
+          skippedProtected: expect.any(Number),
+        }),
+      )
+      expect('warnings' in result).toBe(false)
+      // and the result survives a JSON round trip unchanged
+      expect(JSON.parse(JSON.stringify(result))).toEqual(result)
+    }
+  })
+})
+
 describe('save: byte preservation and fencing', () => {
   it('save with no edits returns the original bytes verbatim', async () => {
     const session = await openSession()
