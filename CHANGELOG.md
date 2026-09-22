@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-22
+
+### Added
+
+- Docs: TOC options support style sources (`\t`) with per-level page-number
+  ranges; text-column controls; WordArt transform presets; Notes/Handouts PDF
+  export layouts; alt text editing across element kinds.
+
+### Fixed
+
+- Rendering fidelity (product-level audit round): pages stopped double-counting
+  the leader paragraph's top margin on natural breaks (content sat 13–16 px lower
+  than Word) and adjacent paragraph margins now sum like Word instead of
+  collapsing (content sat 8–10 px higher); CJK↔Latin autospacing carries Word's
+  full 1/4 em gap; hyphenation degrades to manual when the runtime has no
+  dictionaries.
+- Slides: video export streams frames and file chunks (peak memory on a
+  30-minute deck drops from ~6 GB to ~30 MB), recorder errors surface instead
+  of truncating silently, and fly-in/out animations enter horizontally in
+  PowerPoint; PDF export embeds the deck's fonts so text no longer falls back
+  on machines without them.
+- Sheets: hidden and filtered rows/columns no longer print (a filtered export
+  used to leak the filtered-out data); conditional-formatting fills, font
+  colors, and data bars print; manual page breaks are honored; collapsed
+  borders no longer produce a blank trailing page; time formats truncate like
+  Excel; text-to-columns clamps to the used range and confirms streamed
+  destinations before overwriting.
+- Shell: cancelling quit fully rolls back (window-close prompts latch, the
+  live bridge restarts); the Home recents list updates live as tabs open.
+- MCP: `setHeadingLevel` and `clearList` survive saves; `read_workbook` sees
+  pending edits; combined live operations undo with exactly two `live_undo`
+  calls; workbook opens enforce zip-bomb byte budgets on every format path.
+- Engine: style definitions are patched surgically on Modify (numbering, tabs,
+  and keep-with-next survive) with Word-style explicit offsets; built-in
+  styles no longer get customStyle markers.
+
+### Changed
+
+- Test infrastructure: editors mounted in docs tests are tracked and destroyed
+  behind a lifecycle contract (fixes an intermittent CI failure); local e2e
+  runs headless under xvfb via `npm run test:e2e:xvfb`.
+
 ## [0.14.0] - 2026-09-21
 
 ### Added
@@ -349,7 +391,8 @@ agent-driven document work.
 - The `gsk` CLI search backend and the `@genspark/cli` dependency.
 - The Genspark AI provider — AI in the app is bring-your-own-key only.
 
-[Unreleased]: https://github.com/besliky/airy/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/besliky/airy/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/besliky/airy/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/besliky/airy/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/besliky/airy/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/besliky/airy/compare/v0.11.0...v0.12.0
