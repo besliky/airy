@@ -139,6 +139,7 @@ import {
 import { IPC_CHANNELS } from '../shared/ipc-channels'
 import { atomicWriteFile } from '@airy-office/electron-utils'
 import { CaptureConsentTracker } from './capture-consent'
+import { AiStreamRegistry } from './ai-streams'
 import { closeGuardDecision } from './close-guard'
 import { writeCsvBackAtomic } from './csv-save-back'
 import { checkMergeSourcePaths } from './merge-source-policy'
@@ -1810,7 +1811,7 @@ interface SheetsTabSession {
   readonly webContents: WebContents
   readonly client: XlsxSidecarClient
   readonly sessions: Map<string, SessionInfo>
-  readonly aiStreams: Map<string, AbortController>
+  readonly aiStreams: AiStreamRegistry
   /// Chunked uploads of large saves' cell edits, pending their save request.
   readonly saveTransfers: SaveEditsTransferStore
 }
@@ -1878,7 +1879,7 @@ function registerSheetsSession(webContents: WebContents, client: XlsxSidecarClie
     webContents,
     client,
     sessions: new Map(),
-    aiStreams: new Map(),
+    aiStreams: new AiStreamRegistry(),
     saveTransfers: new SaveEditsTransferStore(),
   })
   activeSheetsWebContents = webContents
@@ -1889,6 +1890,10 @@ function registerSheetsSession(webContents: WebContents, client: XlsxSidecarClie
     forgetWitnessedDrops(webContents.id)
     forgetRendererFileAccess(webContents.id)
     if (entry) {
+      // BUG-407: abort the tab's in-flight AI streams — without this the
+      // provider request keeps running (and streaming chunks) for a sender
+      // that no longer exists.
+      entry.aiStreams.abortAll()
       // Free pending chunked-save uploads with the tab (the sweep timer's
       // closure would otherwise keep them reachable until the idle expiry).
       entry.saveTransfers.dispose()
@@ -3603,8 +3608,7 @@ export function registerSheetsAiIpc(): void {
       send({ requestId, type: 'error', error: tm('errNoModel') })
       return
     }
-    const controller = new AbortController()
-    entry.aiStreams.set(requestId, controller)
+    const controller = entry.aiStreams.start(requestId)
     // wire-activity keepalive: lets the renderer's silence watchdog tell a slow turn from a dead one
     let lastPing = 0
     const ping = () => {
@@ -3654,13 +3658,13 @@ export function registerSheetsAiIpc(): void {
         })
       }
     } finally {
-      entry.aiStreams.delete(requestId)
+      entry.aiStreams.finish(requestId)
     }
   })
 
   ipcMain.handle(IPC_CHANNELS.aiStreamCancel, (event, requestId: unknown) => {
     const entry = sessionFor(event)
-    entry.aiStreams.get(z.string().min(1).parse(requestId))?.abort()
+    entry.aiStreams.cancel(z.string().min(1).parse(requestId))
   })
 
   // Shared search tools (content + images): Serper with DuckDuckGo fallback

@@ -15,6 +15,8 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use ironcalc::base::Model;
+use ironcalc::base::formatter::format::format_number;
+use ironcalc::base::locale::{get_default_locale, get_locale};
 use ironcalc::import::load_from_xlsx;
 use serde::{Deserialize, Serialize};
 
@@ -298,6 +300,15 @@ fn run(
                     }
                 }
                 let number = raw_number(&entry.model, sheet, row_1, column_1);
+                // BUG-1507: a date-returning function under General shows a
+                // date, like the format Excel applies at entry time.
+                let formatted = match (number, formula.as_deref()) {
+                    (Some(value), Some(text)) => {
+                        auto_date_display(&entry.model, sheet, row_1, column_1, value, text)
+                            .unwrap_or(formatted)
+                    }
+                    _ => formatted,
+                };
                 cells.push(RecalcCell {
                     sheet: read.sheet.clone(),
                     row: row as u32,
@@ -372,6 +383,98 @@ fn sheet_index(model: &Model, name: &str) -> Result<u32, SidecarError> {
         .ok_or_else(|| SidecarError::InvalidRequest(format!("Unknown sheet: {name}")))
 }
 
+/// The root function name of a formula that is a single call, uppercased
+/// ("DATE" for "=DATE(2023,12,31)"); None for literals, references and
+/// anything else — an arithmetic tail ("=DATE(..)+0") or a wrapper
+/// ("=SUM(DATE(..),0)") is a numeric expression, not a date entry. The `=`
+/// is always there (get_cell_formula adds it).
+fn root_function(formula: &str) -> Option<String> {
+    let body = formula.strip_prefix('=')?.trim();
+    let name_end = body
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '.' || c == '_'))
+        .unwrap_or(body.len());
+    let (name, rest) = body.split_at(name_end);
+    if name.is_empty() || !rest.trim_start().starts_with('(') {
+        return None;
+    }
+    if !call_closes_at_end(rest.trim_start()) {
+        return None;
+    }
+    Some(name.to_ascii_uppercase())
+}
+
+/// Whether the first `(` closes as the last character of the call: the call
+/// is the whole expression, no operator or extra token follows it. String
+/// literals are skipped so a `)` inside them cannot fake the close.
+fn call_closes_at_end(call: &str) -> bool {
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut close = None;
+    for (index, ch) in call.char_indices() {
+        if in_string {
+            if ch == '"' {
+                in_string = false;
+            }
+        } else {
+            match ch {
+                '"' => in_string = true,
+                '(' => depth += 1,
+                ')' => {
+                    if depth == 0 {
+                        return false;
+                    }
+                    depth -= 1;
+                    if depth == 0 && close.is_none() {
+                        close = Some(index);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    !in_string && depth == 0 && close.is_some_and(|index| call[index + 1..].trim().is_empty())
+}
+
+/// Excel applies an automatic date format when a date-returning function is
+/// entered into a General cell: =DATE(2023,12,31) shows 12/31/23, not the
+/// raw serial 45291. Files saved without cached values (openpyxl and other
+/// third-party generators) surface through this recalc path, so the display
+/// mirrors that automatic format: the locale's short date for the date
+/// functions, date and time for NOW, a time for TIME and TIMEVALUE. Only a
+/// single root call counts (numeric expressions stay numeric), and an
+/// explicit cell format is never overridden — Excel applies the automatic
+/// format only at entry, and the file's own formats always win.
+fn auto_date_display(
+    model: &Model,
+    sheet: u32,
+    row: i32,
+    column: i32,
+    value: f64,
+    formula: &str,
+) -> Option<String> {
+    if !value.is_finite() || value < 0.0 {
+        return None;
+    }
+    let is_general = model
+        .get_style_for_cell(sheet, row, column)
+        .map(|style| style.num_fmt.eq_ignore_ascii_case("general"))
+        .unwrap_or(false);
+    if !is_general {
+        return None;
+    }
+    let locale = get_locale(&model.get_locale()).unwrap_or_else(|_| get_default_locale());
+    let short_date = &locale.dates.date_formats.short;
+    let pattern = match root_function(formula)?.as_str() {
+        "DATE" | "DATEVALUE" | "TODAY" | "EDATE" | "EOMONTH" | "WORKDAY" | "WORKDAY.INTL" => {
+            short_date.clone()
+        }
+        "NOW" => format!("{short_date} h:mm"),
+        "TIME" | "TIMEVALUE" => "h:mm AM/PM".to_string(),
+        _ => return None,
+    };
+    Some(format_number(value, &pattern, locale).text)
+}
+
 fn raw_number(model: &Model, sheet: u32, row: i32, column: i32) -> Option<f64> {
     use ironcalc::base::cell::CellValue;
     match model.get_cell_value_by_index(sheet, row, column) {
@@ -383,6 +486,7 @@ fn raw_number(model: &Model, sheet: u32, row: i32, column: i32) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ironcalc::base::types::Style;
     use ironcalc::export::save_to_xlsx;
 
     fn fixture(path: &Path) {
@@ -436,55 +540,180 @@ mod tests {
             .clone()
     }
 
+    /// BUG-1507: a date-returning function in a General cell gets Excel's
+    /// automatic date format on display (DATE/TODAY/EDATE/EOMONTH/WORKDAY as
+    /// the locale short date, NOW with a time, TIME/TIMEVALUE as a time);
+    /// numeric expressions and literal serials keep the General number
+    /// display, and an explicit number format is never overridden. The
+    /// fixture models a third-party generator (openpyxl & co): those write
+    /// the formula with the cell left General, so the entry-time format
+    /// IronCalc applies inside set_user_input is stripped again.
+    #[test]
+    fn date_functions_display_as_dates_under_general() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dates.xlsx");
+        let mut model = Model::new_empty("fixture", "en", "UTC", "en").unwrap();
+        let cells: [(&str, &str); 8] = [
+            ("A1", "=DATE(2023,12,31)"),
+            ("A2", "=EDATE(DATE(2023,12,31),2)"),
+            ("A3", "=EOMONTH(DATE(2023,12,1),0)"),
+            ("A4", "=DATE(2023,12,31)+0"),
+            ("A5", "45291"),
+            ("A6", "=DATE(2023,12,31)"),
+            ("A7", "=TIME(12,0,0)"),
+            ("A8", "=SUM(DATE(2023,12,31),0)"),
+        ];
+        for (address, input) in cells {
+            let column = (address.as_bytes()[0] - b'A' + 1) as i32;
+            let row: i32 = address[1..].parse().unwrap();
+            model
+                .set_user_input(0, row, column, input.to_string())
+                .unwrap();
+        }
+        for row in [1, 2, 3, 4, 7, 8] {
+            model.set_cell_style(0, row, 1, &Style::default()).unwrap();
+        }
+        // A6 carries an explicit numeric format: the raw serial rounds, the
+        // automatic date format must not touch it.
+        let mut explicit = Style::default();
+        explicit.num_fmt = "0.00".to_string();
+        model.set_cell_style(0, 6, 1, &explicit).unwrap();
+        model.evaluate();
+        save_to_xlsx(&model, path.to_str().unwrap()).unwrap();
 
-/// Deleting rows/columns that formulas reference now succeeds and writes
-/// Excel-style #REF! into the affected formulas (the gateway rewrites
-/// orphaned references to the bare #REF! token — the qualified
-/// `Sheet!#REF!` form is not parseable here). The sidecar must round-trip
-/// those formulas: parse them, evaluate to the #REF! error, and keep
-/// reporting them as formulas on recalc.
-#[test]
-fn ref_error_formulas_survive_the_recalc_round_trip() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("ref-error.xlsx");
-    write_fixture(
-        &path,
-        &[
-            ("A1", "10"),
-            ("A2", "20"),
-            ("A3", "=SUM(#REF!)"),
-            ("A4", "=#REF!+1"),
-            ("A5", "=SUM(#REF!)+Sheet1!A1"),
-        ],
-    );
-    let mut cache = RecalcCache::new();
-    let result = recalc_cells(
-        &mut cache,
-        &path,
-        &[],
-        &[RecalcRead {
-            sheet: "Sheet1".into(),
-            range: CellRange {
-                start_row: 2,
-                end_row: 4,
-                start_column: 0,
-                end_column: 0,
-            },
-        }],
-    )
-    .unwrap();
-    let by_row = |row: u32| {
-        result
-            .cells
-            .iter()
-            .find(|cell| cell.row == row)
-            .map(|cell| (cell.formatted.clone(), cell.is_formula))
-            .unwrap()
-    };
-    assert_eq!(by_row(2), ("#REF!".to_owned(), true));
-    assert_eq!(by_row(3), ("#REF!".to_owned(), true));
-    assert_eq!(by_row(4), ("#REF!".to_owned(), true));
-}
+        let mut cache = RecalcCache::new();
+        let result = recalc_cells(
+            &mut cache,
+            &path,
+            &[],
+            &[RecalcRead {
+                sheet: "Sheet1".into(),
+                range: CellRange {
+                    start_row: 0,
+                    end_row: 7,
+                    start_column: 0,
+                    end_column: 0,
+                },
+            }],
+        )
+        .unwrap();
+        let at = |row: u32| {
+            result
+                .cells
+                .iter()
+                .find(|cell| cell.row == row)
+                .map(|cell| (cell.formatted.as_str(), cell.number))
+                .unwrap()
+        };
+        // Date functions: the short-date/time rendering Excel auto-applies.
+        assert_eq!(at(0), ("12/31/23", Some(45291.0)));
+        assert_eq!(at(1), ("2/29/24", Some(45351.0)));
+        assert_eq!(at(2), ("12/31/23", Some(45291.0)));
+        assert_eq!(at(6), ("12:00 PM", Some(0.5)));
+        // Numeric expressions and plain serials keep the General display.
+        assert_eq!(at(3), ("45291", Some(45291.0)));
+        assert_eq!(at(4), ("45291", Some(45291.0)));
+        assert_eq!(at(7), ("45291", Some(45291.0)));
+        // An explicit cell format always wins over the automatic date.
+        assert_eq!(at(5), ("45291.00", Some(45291.0)));
+    }
+
+    /// The automatic format only applies to a formula that is a single date
+    /// call: wrappers, arithmetic tails and literals stay numeric.
+    #[test]
+    fn root_function_matches_only_a_single_root_call() {
+        assert_eq!(root_function("=DATE(2023,12,31)").as_deref(), Some("DATE"));
+        assert_eq!(root_function("=today()  ").as_deref(), Some("TODAY"));
+        assert_eq!(
+            root_function("=WORKDAY.INTL(DATE(2023,12,31),1)").as_deref(),
+            Some("WORKDAY.INTL")
+        );
+        // A ")" inside a string literal cannot fake the close; the real one
+        // still ends the call.
+        assert_eq!(
+            root_function(r#"=DATEVALUE("12/31/2023 (file)")"#).as_deref(),
+            Some("DATEVALUE")
+        );
+        assert_eq!(root_function("=DATE(2023,12,31)+0"), None);
+        assert_eq!(root_function("=DATE(2023,12,31)*TODAY()"), None);
+        // A wrapper is a single root call, but not a date one: the
+        // auto-date allowlist in auto_date_display skips it.
+        assert_eq!(
+            root_function("=SUM(DATE(2023,12,31),0)").as_deref(),
+            Some("SUM")
+        );
+        assert_eq!(root_function("=IF(TRUE,TODAY(),0)").as_deref(), Some("IF"));
+        assert_eq!(root_function("45291"), None);
+        assert_eq!(root_function("=A1"), None);
+    }
+
+    /// TIME's time pattern renders with the AM/PM marker Excel shows on
+    /// entry (kept deterministic by formatting the exact serial 0.5: the
+    /// formatter floors near-inexact second fractions one minute down).
+    #[test]
+    fn time_pattern_renders_am_pm() {
+        let locale = get_locale("en").unwrap();
+        let text = format_number(0.5, "h:mm AM/PM", locale).text;
+        assert_eq!(text, "12:00 PM");
+    }
+
+    /// NOW()'s combined date+time pattern renders through the same formatter
+    /// (kept deterministic by formatting a fixed serial directly).
+    #[test]
+    fn now_pattern_renders_date_and_time() {
+        let locale = get_locale("en").unwrap();
+        let text = format_number(45291.5, "m/d/yy h:mm", locale).text;
+        assert_eq!(text, "12/31/23 12:00");
+    }
+
+    /// Deleting rows/columns that formulas reference now succeeds and writes
+    /// Excel-style #REF! into the affected formulas (the gateway rewrites
+    /// orphaned references to the bare #REF! token — the qualified
+    /// `Sheet!#REF!` form is not parseable here). The sidecar must round-trip
+    /// those formulas: parse them, evaluate to the #REF! error, and keep
+    /// reporting them as formulas on recalc.
+    #[test]
+    fn ref_error_formulas_survive_the_recalc_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ref-error.xlsx");
+        write_fixture(
+            &path,
+            &[
+                ("A1", "10"),
+                ("A2", "20"),
+                ("A3", "=SUM(#REF!)"),
+                ("A4", "=#REF!+1"),
+                ("A5", "=SUM(#REF!)+Sheet1!A1"),
+            ],
+        );
+        let mut cache = RecalcCache::new();
+        let result = recalc_cells(
+            &mut cache,
+            &path,
+            &[],
+            &[RecalcRead {
+                sheet: "Sheet1".into(),
+                range: CellRange {
+                    start_row: 2,
+                    end_row: 4,
+                    start_column: 0,
+                    end_column: 0,
+                },
+            }],
+        )
+        .unwrap();
+        let by_row = |row: u32| {
+            result
+                .cells
+                .iter()
+                .find(|cell| cell.row == row)
+                .map(|cell| (cell.formatted.clone(), cell.is_formula))
+                .unwrap()
+        };
+        assert_eq!(by_row(2), ("#REF!".to_owned(), true));
+        assert_eq!(by_row(3), ("#REF!".to_owned(), true));
+        assert_eq!(by_row(4), ("#REF!".to_owned(), true));
+    }
 
     #[test]
     fn keeps_at_most_one_heavy_model_resident() {

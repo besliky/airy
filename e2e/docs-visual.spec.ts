@@ -10,7 +10,9 @@
  *
  * Baselines are rendered on Linux under xvfb with the fonts CI pins
  * (fonts-crosextra-carlito/caladea for Calibri/Cambria metrics,
- * fonts-noto-cjk); the suite skips on other platforms. After an intentional
+ * fonts-noto-cjk); the suite skips on other platforms. Install the same
+ * stack locally with `npm run setup:e2e-fonts` before running — without it
+ * every page diverges by font metrics alone. After an intentional
  * rendering change, regenerate on Linux:
  *   npm run build:all && npm run fixtures
  *   xvfb-run --auto-servernum -- npm run test:e2e -- docs-visual --update-snapshots

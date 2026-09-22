@@ -1013,6 +1013,13 @@ export function sectionPictures(
 /// Header/footer text size before scaleWithDoc applies.
 const HEADER_FOOTER_FONT_SIZE_PT = 9
 
+/// Chromium prints header/footer templates inside the margin boxes with a
+/// fixed inset of its own: the rendered text lands ~14.7pt below the paper
+/// edge regardless of the page margins, the template padding, or the font
+/// size (measured on Electron's printToPDF with pdftotext word bboxes:
+/// yMin = padding x 72 + 14.4..15.1pt across every configuration, BUG-1505).
+export const HEADER_FOOTER_TEMPLATE_INSET_IN = 14.7 / 72
+
 /// One left/center/right header or footer as a Chromium print template
 /// (rendered in the page's margin box; undefined when the parts are empty).
 /// `scale` is the print scale the text and pictures follow (1 when the
@@ -1034,11 +1041,21 @@ export function buildHeaderFooterTemplate(
     renderHeaderFooterHtml(text, fileName, sheetName, now, sectionPicture[index], scale),
   )
   const fontSizePt = round(HEADER_FOOTER_FONT_SIZE_PT * scale)
-  // Excel offsets the header/footer from the paper edge by its own margin.
+  // Excel anchors the header/footer text at the file's own header/footer
+  // margin from the paper edge (LibreOffice measures the top of the header
+  // text at exactly the header margin); padding the template with the raw
+  // margin left the text at margin + Chromium's ~14.7pt inset instead. The
+  // padding compensates for the inset so the text lands at Excel's position;
+  // a margin smaller than the inset clamps at zero (Chromium cannot print
+  // above its own origin, leaving the text near the paper edge).
+  const anchorMarginIn = round(
+    Math.max(
+      (kind === 'header' ? margins.header : margins.footer) - HEADER_FOOTER_TEMPLATE_INSET_IN,
+      0,
+    ),
+  )
   const offset =
-    kind === 'header'
-      ? `padding-top:${round(margins.header)}in`
-      : `padding-bottom:${round(margins.footer)}in`
+    kind === 'header' ? `padding-top:${anchorMarginIn}in` : `padding-bottom:${anchorMarginIn}in`
   // Equal thirds like Excel's sections; an oversized picture or unbreakable
   // text overflows its neighbours instead of squeezing them.
   const spanStyle = 'flex:1;min-width:0;white-space:pre-wrap'
