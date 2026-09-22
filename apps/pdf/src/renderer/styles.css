@@ -12,13 +12,15 @@
   --pdf-ok: #217346;
   --pdf-thumb-border-hover: #a8a6a4;
   --pdf-prop-bg: rgb(0 0 0 / 3%);
-  --pdf-focus-ring: rgb(35 36 37 / 20%);
+  /* Ring tokens hold the WCAG non-text minimum (>=3:1) once composited over
+   * their worst-case surface (UX-831; guarded in tokens-contrast.test.ts) */
+  --pdf-focus-ring: rgb(35 36 37 / 50%);
   --pdf-shimmer-base: #666;
   --pdf-shimmer-hi: #d9d9d9;
   --pdf-statusbar-bg: #f3f4f6;
   --pdf-statusbar-border: #e1e4e8;
   --pdf-statusbar-hover: rgb(0 0 0 / 8%);
-  --pdf-swatch-ring: rgb(0 0 0 / 15%);
+  --pdf-swatch-ring: rgb(0 0 0 / 45%);
   --pdf-scroll-thumb: rgb(0 0 0 / 25%);
 
   /* content-side constants: pages are paper, page overlays sit on paper —
@@ -41,7 +43,7 @@
   --pdf-search-hit-cur-bg: rgb(255 150 50 / 55%);
   --pdf-search-hit-cur-outline: #f08c00;
   --pdf-link-hover-bg: rgb(196 62 28 / 12%);
-  --pdf-link-hover-ring: rgb(196 62 28 / 35%);
+  --pdf-link-hover-ring: rgb(196 62 28 / 70%);
   --pdf-text-selection: rgb(56 108 255 / 32%);
   --pdf-page-hover-outline: rgb(0 0 0 / 35%);
   /* text edit overlays sit on the rendered page, so paper/ink stay unthemed like form-text */
@@ -49,8 +51,8 @@
   --pdf-textedit-ink: #111;
   --pdf-textedit-ring: rgb(196 62 28 / 90%);
   --pdf-textedit-hover-bg: rgb(196 62 28 / 10%);
-  --pdf-textblock-ring: rgb(96 99 102 / 40%);
-  --pdf-textblock-ring-hover: rgb(196 62 28 / 65%);
+  --pdf-textblock-ring: rgb(96 99 102 / 70%);
+  --pdf-textblock-ring-hover: rgb(196 62 28 / 70%);
   --pdf-textblock-hover-bg: rgb(196 62 28 / 5%);
 
   /* image edit overlays also sit on paper; unthemed like the text-edit set */
@@ -71,8 +73,8 @@
   --pdf-shadow-modal: 0 3px 30px rgb(0 0 0 / 8%);
   --pdf-shadow-modal-gs: 0 12px 40px rgb(0 0 0 / 16%);
   --pdf-input-focus: #0f7fff;
-  --pdf-input-ring: rgb(15 127 255 / 10%);
-  --pdf-error-ring: rgb(239 68 68 / 10%);
+  --pdf-input-ring: rgb(15 127 255 / 85%);
+  --pdf-error-ring: rgb(239 68 68 / 85%);
   --pdf-shadow-page: 0 1px 4px rgb(0 0 0 / 18%);
   --pdf-shadow-pin: 0 1px 4px rgb(0 0 0 / 30%);
   --pdf-shadow-drop: 0 6px 20px rgb(0 0 0 / 14%), 0 1px 3px rgb(0 0 0 / 8%);
@@ -89,18 +91,18 @@
   --pdf-ok: #58b380;
   --pdf-thumb-border-hover: #777;
   --pdf-prop-bg: rgb(255 255 255 / 5%);
-  --pdf-focus-ring: rgb(255 255 255 / 30%);
+  --pdf-focus-ring: rgb(255 255 255 / 35%);
   --pdf-shimmer-base: #8a8a8a;
   --pdf-shimmer-hi: #d0d0d0;
   --pdf-statusbar-bg: #252525;
   --pdf-statusbar-border: #3a3a3a;
   --pdf-statusbar-hover: rgb(255 255 255 / 10%);
-  --pdf-swatch-ring: rgb(255 255 255 / 30%);
+  --pdf-swatch-ring: rgb(255 255 255 / 35%);
   --pdf-scroll-thumb: rgb(255 255 255 / 28%);
   --pdf-shadow-modal-gs: 0 20px 50px rgb(0 0 0 / 65%);
   --pdf-input-focus: #4a9eff;
-  --pdf-input-ring: rgb(74 158 255 / 20%);
-  --pdf-error-ring: rgb(242 139 130 / 20%);
+  --pdf-input-ring: rgb(74 158 255 / 70%);
+  --pdf-error-ring: rgb(242 139 130 / 60%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -114,18 +116,18 @@
     --pdf-ok: #58b380;
     --pdf-thumb-border-hover: #777;
     --pdf-prop-bg: rgb(255 255 255 / 5%);
-    --pdf-focus-ring: rgb(255 255 255 / 30%);
+    --pdf-focus-ring: rgb(255 255 255 / 35%);
     --pdf-shimmer-base: #8a8a8a;
     --pdf-shimmer-hi: #d0d0d0;
     --pdf-statusbar-bg: #252525;
     --pdf-statusbar-border: #3a3a3a;
     --pdf-statusbar-hover: rgb(255 255 255 / 10%);
-    --pdf-swatch-ring: rgb(255 255 255 / 30%);
+    --pdf-swatch-ring: rgb(255 255 255 / 35%);
     --pdf-scroll-thumb: rgb(255 255 255 / 28%);
     --pdf-shadow-modal-gs: 0 20px 50px rgb(0 0 0 / 65%);
     --pdf-input-focus: #4a9eff;
-    --pdf-input-ring: rgb(74 158 255 / 20%);
-    --pdf-error-ring: rgb(242 139 130 / 20%);
+    --pdf-input-ring: rgb(74 158 255 / 70%);
+    --pdf-error-ring: rgb(242 139 130 / 60%);
   }
 }
 
