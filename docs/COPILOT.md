@@ -246,7 +246,11 @@ value, a formula (stored without a cached result, so apps recalculate on
 open), a style patch (`bold`, `fillColor`, `numberFormat`, borders, ...),
 rich-text runs, or a combination. Formulas win over values; later edits to
 the same cell win per channel (content replaces content, style replaces
-style). Charts, pivots, merged ranges and sheet structure are **not**
+style). Journaled edits are visible to `read_workbook` immediately — the
+read overlays the pending journal onto the file (a trailing note counts the
+overlaid cells), and cells journaled beyond the file's used range are
+readable, so a read-after-write shows the edits before `save_document`
+persists them. Charts, pivots, merged ranges and sheet structure are **not**
 editable headlessly.
 
 Markdown editing (`.md` / `.markdown`) is line-based. `read_document` shows

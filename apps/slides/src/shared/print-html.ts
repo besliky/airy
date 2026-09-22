@@ -26,6 +26,12 @@ export interface PrintDocOptions {
   frame?: boolean
   /** Preview mode: page gaps/shadows + page-number badges instead of a printable document */
   preview?: boolean
+  /**
+   * @font-face rules (data: URLs) for faces the consuming window cannot
+   * resolve by name — PDF export inlines them for its sandboxed window; the
+   * renderer's print preview passes nothing (its fonts are registered).
+   */
+  fontFacesCss?: string
 }
 
 /** "1,3,5-8" → 0-based slide indices (1-based input over the whole deck); null = invalid */
@@ -119,6 +125,7 @@ body { counter-reset: pg; background: transparent; padding: 18px 0 6px; }
     : ''
 
   return `<!doctype html><html><head><meta charset="utf-8"><style>
+${o.fontFacesCss ?? ''}
 @page { size: ${pageW}in ${pageH}in; margin: 0; }
 html, body { margin: 0; padding: 0; font-family: -apple-system, 'Segoe UI', sans-serif; }
 .page { width: ${pageW}in; height: ${pageH}in; overflow: hidden; page-break-after: always; box-sizing: border-box; }

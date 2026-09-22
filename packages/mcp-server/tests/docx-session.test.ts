@@ -40,7 +40,7 @@ import {
 import { resolveConfined, WORKSPACE_ROOT_ENV } from '../src/docx/paths.js'
 import type { Target } from '../src/docx/ops.js'
 import { parseRestrictedHtml, blocksToHtml } from '../src/docx/html.js'
-import { buildFixtureDocx } from './helpers/docx-fixture.js'
+import { buildFixtureDocx, buildStyleListDocx } from './helpers/docx-fixture.js'
 
 let root: string
 let docPath: string
@@ -390,6 +390,40 @@ describe('apply_ops', () => {
     const text = session.readDocument()
     expect(text).not.toMatch(/\|li\|/)
     expect(text).toMatch(/^2\|p\|First bullet item$/m)
+  })
+
+  it('clearList survives the save when the numbering lives on the style (BUG-1502)', async () => {
+    // audit repro: ListBullet/ListNumber styles carry w:numPr, the paragraphs
+    // only the pStyle. clearList used to keep the style, drop the (absent)
+    // direct numPr and save — the style's numbering then resurrected the list
+    // on reopen and in Word.
+    const stylePath = join(root, 'style-list.docx')
+    await writeFile(stylePath, await buildStyleListDocx())
+    const session = await DocxSession.open(stylePath, root)
+    expect(session.readDocument()).toMatch(/^1\|li\|Styled bullet one$/m)
+
+    const { results } = session.applyOps([{ op: 'clearList', target: { nodeType: 'listItem' } }])
+    expect(results[0]?.changed).toBe(3)
+    // in-session read already reports plain paragraphs
+    expect(session.readDocument()).not.toMatch(/\|li\|/)
+
+    await session.save(join(root, 'style-list-saved.docx'))
+    const saved = await reparseSaved(join(root, 'style-list-saved.docx'))
+    // the saved file cancels the style numbering with Word's numId="0"
+    // override instead of relying on the (still numbered) pStyle
+    expect(saved.internal.documentXml).toContain(
+      '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="0"/></w:numPr>',
+    )
+    // and the reopen must not resurrect the list items
+    for (const block of saved.blocks) {
+      expect(block.type).not.toBe('listItem')
+    }
+    expect(saved.blocks[1]?.type).toBe('paragraph')
+
+    // a fresh session on the saved file reads paragraphs only
+    const reopened = await DocxSession.open(join(root, 'style-list-saved.docx'), root)
+    expect(reopened.readDocument()).not.toMatch(/\|li\|/)
+    expect(reopened.readDocument()).toMatch(/^1\|p\|Styled bullet one$/m)
   })
 
   it('dryRun reports but does not apply', async () => {

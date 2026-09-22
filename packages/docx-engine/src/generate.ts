@@ -25,6 +25,14 @@ export interface GenerateContext {
   headingLevelOfStyles?: Map<string, number | undefined>
   /** styleId for list paragraphs, if present in the original doc */
   listParagraphStyleId?: string
+  /**
+   * styleIds whose style pPr carries w:numPr (ListBullet/ListNumber and
+   * friends — numbering referenced via pStyle). A regenerated paragraph
+   * whose styleId is in this set must carry Word's explicit "no numbering"
+   * override (w:numPr with numId="0"), or the saved file silently
+   * resurrects the list the editor removed (BUG-1502).
+   */
+  numberedStyleIds?: Set<string>
   /** allocate a new relationship id for a hyperlink target; returns rId */
   allocateHyperlinkRel: (href: string) => string
 }
@@ -1971,6 +1979,17 @@ export function generateParagraphXml(block: GeneratedBlock, ctx: GenerateContext
     children.push({
       name: 'w:numPr',
       xml: `<w:numPr><w:ilvl w:val="${ilvl}"/><w:numId w:val="${escapeXmlAttr(block.list.numId)}"/></w:numPr>`,
+    })
+  } else if (styleId !== undefined && ctx.numberedStyleIds?.has(styleId)) {
+    // BUG-1502: the kept pStyle contributes numbering, so a regenerated
+    // non-list paragraph (clearList, setHeadingLevel 0, ...) must cancel it
+    // explicitly — Word's own semantics for unlisting a ListBullet paragraph
+    // is a direct w:numPr override with numId="0" (parse side listRefOf
+    // reads it as "no numbering"). Without it the saved file renders the
+    // bullet again and reparses the block as a listItem.
+    children.push({
+      name: 'w:numPr',
+      xml: `<w:numPr><w:ilvl w:val="0"/><w:numId w:val="0"/></w:numPr>`,
     })
   }
   children.push(...formatPPrChildren(block.format))

@@ -187,6 +187,118 @@ describe('XlsxSession.readWorkbook', () => {
   })
 })
 
+describe('read-after-write journal overlay (BUG-1503)', () => {
+  function salesIo() {
+    return makeStubIo({
+      sheets: [{ id: 'sheet-0', name: 'Sales', rowCount: 11, columnCount: 4 }],
+      cells: [
+        { row: 0, column: 0, value: 'Region' },
+        { row: 0, column: 1, value: 'Q1' },
+        { row: 1, column: 0, value: 'North' },
+        { row: 1, column: 1, value: 100 },
+      ],
+    })
+  }
+
+  async function openSales(io = salesIo()) {
+    const bookPath = join(root, 'sales.xlsx')
+    await writeFile(bookPath, 'stub-xlsx-bytes')
+    return { session: await XlsxSession.open(bookPath, root, io), io, bookPath }
+  }
+
+  it('reads show journaled edits before the save, not the stale file', async () => {
+    // audit repro: apply_workbook_ops A1/B2 -> read_workbook A1:B2 used to
+    // return the on-disk "Region|Q1|North|100" although the edits were journaled
+    const { session } = await openSales()
+    session.setCells({
+      sheet: 'Sales',
+      cells: [
+        { ref: 'A1', value: 'EDITED-HEADER' },
+        { ref: 'B2', value: 999 },
+      ],
+    })
+    const text = await session.readWorkbook({ sheet: 'Sales', range: 'A1:B2' })
+    expect(text).toContain('|1|EDITED-HEADER|Q1|')
+    expect(text).toContain('|2|North|999|')
+    expect(text).toContain('2 pending edit(s)')
+
+    // a null clears the cell; a formula renders without a cached value
+    session.setCells({
+      sheet: 'Sales',
+      cells: [
+        { ref: 'A1', value: null },
+        { ref: 'B1', formula: 'SUM(B2:B2)' },
+      ],
+    })
+    const updated = await session.readWorkbook({ sheet: 'Sales', range: 'A1:B2' })
+    expect(updated).toContain('|1||=SUM(B2:B2)|')
+    expect(updated).toContain('|2|North|999|')
+  })
+
+  it('style-only edits do not change the value table', async () => {
+    const { session } = await openSales()
+    session.setCells({ sheet: 'Sales', cells: [{ ref: 'A1', style: { bold: true } }] })
+    const text = await session.readWorkbook({ sheet: 'Sales', range: 'A1:B2' })
+    expect(text).toContain('|1|Region|Q1|')
+    expect(text).not.toContain('pending edit')
+  })
+
+  it('journaled cells beyond the used range are readable', async () => {
+    // audit repro: edits into column E (beyond 11x4) made read E1:E4 fail
+    // with "Range is outside sheet" until save
+    const io = salesIo()
+    const { session } = await openSales(io)
+    session.setCells({
+      sheet: 'Sales',
+      cells: [
+        { ref: 'E1', value: 'new col' },
+        { ref: 'E2', value: 7 },
+        { ref: 'E3', value: 8 },
+        { ref: 'E4', value: 9 },
+      ],
+    })
+    // the overview reports the journal-grown area
+    const overview = await session.readWorkbook()
+    expect(overview).toMatch(/0\|Sales\|sheet-0\|11 x 5/)
+    const text = await session.readWorkbook({ sheet: 'Sales', range: 'E1:E4' })
+    expect(text).toContain('|1|new col|')
+    expect(text).toContain('|2|7|')
+    expect(text).toContain('|4|9|')
+    expect(text).toContain('4 pending edit(s)')
+    // the sidecar only ever sees the on-disk 11x4 intersection (the real
+    // binary refuses ranges past the used area)
+    expect(io.readRanges.every((spec) => !/ x 4\.\.\d+/.test(spec))).toBe(true)
+    // beyond the journal-extended area still refuses, with the grown dims
+    await expect(session.readWorkbook({ sheet: 'Sales', range: 'F1:F1' })).rejects.toThrow(
+      /Range is outside sheet "Sales" \(11 rows x 5 columns\)/,
+    )
+  })
+
+  it('a journaled cell on an empty sheet makes the corner read non-empty', async () => {
+    const io = makeStubIo({
+      sheets: [{ id: 'sheet-0', name: 'Blank', rowCount: 0, columnCount: 0 }],
+    })
+    const { session } = await openSales(io)
+    const before = await session.readWorkbook({ sheet: 'Blank' })
+    expect(before).toContain('is empty')
+    session.setCells({ sheet: 'Blank', cells: [{ ref: 'A1', value: 'hello' }] })
+    const after = await session.readWorkbook({ sheet: 'Blank' })
+    expect(after).toContain('|1|hello|')
+    expect(after).toContain('1 pending edit(s)')
+  })
+
+  it('reads after save reflect the persisted file again (journal flushed)', async () => {
+    const { session } = await openSales()
+    session.setCells({ sheet: 'Sales', cells: [{ ref: 'A1', value: 'EDITED' }] })
+    await session.save()
+    // journal flushed: the stub sidecar still serves the original canned
+    // cells (the mocked save never wrote them), and no overlay note appears
+    const text = await session.readWorkbook({ sheet: 'Sales', range: 'A1:A1' })
+    expect(text).toContain('|1|Region|')
+    expect(text).not.toContain('pending edit')
+  })
+})
+
 describe('XlsxSession journal + save matrix', () => {
   async function nativeSession() {
     const bookPath = join(root, 'book.xlsx')

@@ -138,6 +138,75 @@ describe('bridge command handler', () => {
     )
   })
 
+  it('a combined live_apply_ops takes exactly two undos (BUG-1505)', async () => {
+    // the MCP server sends a combined live_apply_ops as TWO bridge calls —
+    // insert_content first, then apply_ops. A single undo slot let the ops
+    // turn overwrite the insert turn: the first undo reverted only the ops,
+    // the second answered nothing_to_undo and the insert was stranded.
+    const editor = makeEditor()
+    const handler = makeHandler(editor)
+
+    // insert turn (html at the end, as the live_apply_ops contract says)
+    const insert = await handler('insert_content', { html: '<p>LIVE-EDITED ITEM</p>' }, 'conn-1')
+    expect(insert.ok).toBe(true)
+    // ops turn touching both the original and the inserted block
+    const ops = await handler(
+      'apply_ops',
+      {
+        ops: [
+          { op: 'setFont', target: { nodeType: 'paragraph' }, bold: true },
+          { op: 'findReplace', find: 'LIVE-EDITED', replace: 'DONE' },
+        ],
+      },
+      'conn-1',
+    )
+    expect(ops.ok).toBe(true)
+    expect(editor.state.doc.childCount).toBe(2)
+    expect(editor.state.doc.child(1).textContent).toBe('DONE ITEM')
+
+    // first undo reverts the ops turn only (the insert survives)
+    const first = await handler('undo', {}, 'conn-1')
+    expect(first).toEqual({ ok: true, result: { undone: true } })
+    expect(editor.state.doc.childCount).toBe(2)
+    expect(editor.state.doc.child(1).textContent).toBe('LIVE-EDITED ITEM')
+    expect(editor.state.doc.child(1).firstChild?.marks.some((m) => m.type.name === 'bold')).toBe(
+      false,
+    )
+
+    // second undo reverts the insert turn — the document is back to base
+    const second = await handler('undo', {}, 'conn-1')
+    expect(second).toEqual({ ok: true, result: { undone: true } })
+    expect(editor.state.doc.childCount).toBe(1)
+    expect(editor.state.doc.child(0).textContent).toBe('Body paragraph')
+
+    // and the stack is empty again
+    expect(await handler('undo', {}, 'conn-1')).toEqual({
+      ok: false,
+      error: { code: 'nothing_to_undo', message: 'no bridge turn to undo yet' },
+    })
+  })
+
+  it('a failed ops turn after an insert still rolls back with one guarded undo', async () => {
+    // the MCP auto-rollback path: insert ok, ops batch fails -> one
+    // ownTurnsOnly undo must take the document back to the pre-call state
+    const editor = makeEditor()
+    const handler = makeHandler(editor)
+    await handler('insert_content', { html: '<p>Inserted</p>' }, 'conn-1')
+    const failed = await handler(
+      'apply_ops',
+      { ops: [{ op: 'setFont', target: { blockIndexes: [0] }, bogus: 1 }] },
+      'conn-1',
+    )
+    expect(failed.ok).toBe(false)
+    const rollback = await handler('undo', { ownTurnsOnly: true }, 'conn-1')
+    expect(rollback).toEqual({ ok: true, result: { undone: true } })
+    expect(editor.state.doc.childCount).toBe(1)
+    expect(await handler('undo', {}, 'conn-1')).toMatchObject({
+      ok: false,
+      error: { code: 'nothing_to_undo' },
+    })
+  })
+
   it('refuses undo when the user edited after the bridge turn', async () => {
     const editor = makeEditor()
     const handler = makeHandler(editor)

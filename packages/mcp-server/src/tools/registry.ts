@@ -283,8 +283,11 @@ export function registerTools(server: McpServer): void {
         'sheet overview ("index|name|id|rows x cols", one line per sheet). With sheet (name or ' +
         'index) and an A1-style range ("A1:E10", single cell "B2") returns a pipe table of cell ' +
         'values; formula cells render as "=FORMULA (cached value)". Without a range the sheet\'s ' +
-        'top-left corner (up to 20 rows x 10 columns) is returned as a starting point. Re-read ' +
-        'after save_document — sessions always reflect the latest save.',
+        'top-left corner (up to 20 rows x 10 columns) is returned as a starting point. Reads ' +
+        "include edits journaled by this session's apply_workbook_ops but not yet saved (a note " +
+        "counts the pending cells overlaid, and journaled cells beyond the file's used range are " +
+        'readable, growing the rows x cols the overview reports); re-read after save_document to ' +
+        'confirm the persisted state.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
         sheet: z
@@ -362,7 +365,8 @@ export function registerTools(server: McpServer): void {
         "the cell's content, a style edit replaces only the cell's format, and later edits to the " +
         'same cell win per channel. The batch is validated up front (unknown sheets, bad refs, ' +
         'malformed edits reject the whole batch); dryRun reports without journaling. Edits are ' +
-        'journaled in memory; persist with save_document, which keeps untouched zip entries ' +
+        'journaled in memory and visible to read_workbook immediately (including cells beyond the ' +
+        "file's used range); persist with save_document, which keeps untouched zip entries " +
         'byte-identical (xl/workbook.xml excepted — it gains the fullCalcOnLoad recalc flag ' +
         'when the source lacks it). Cell values, formulas and styles only — charts, pivots, merged ranges and ' +
         'sheet structure are not editable headlessly.',

@@ -6,7 +6,9 @@
 //
 //   open:   .xlsx/.xlsm -> sidecar open; .xls/.ods -> convert_workbook into a
 //           temp .xlsx (calamine path; styles are NOT carried over) then open
-//   read:   sidecar read_range (A1-notation ranges, values + formulas)
+//   read:   sidecar read_range (A1-notation ranges, values + formulas) with
+//           the pending journal overlaid: read-after-write shows the edits,
+//           and journaled cells beyond the on-disk used range are readable
 //   save:   saveWorkbookViaSidecar (apps/sheets gateway) with the edit
 //           journal; untouched zip entries are raw-copied byte-identical
 //   close:  sidecar close + temp cleanup
@@ -381,10 +383,12 @@ export class XlsxSession {
       if (options.range !== undefined) {
         throw new Error('A range requires the sheet it belongs to.')
       }
-      const lines = this.sheets.map(
-        (sheet) =>
-          `${String(sheet.index)}|${sheet.name}|${sheet.id}|${sheet.rowCount} x ${String(sheet.columnCount)}`,
-      )
+      const lines = this.sheets.map((sheet) => {
+        // journal-aware dims: journaled cells beyond the on-disk used range
+        // are readable, so the overview reports the grown area (BUG-1503)
+        const extent = this.sheetExtent(sheet)
+        return `${String(sheet.index)}|${sheet.name}|${sheet.id}|${String(extent.rowCount)} x ${String(extent.columnCount)}`
+      })
       return [
         `The workbook has ${String(this.sheets.length)} sheet(s) (index|name|id|rows x cols):`,
         ...lines,
@@ -398,8 +402,10 @@ export class XlsxSession {
     const sheet = this.resolveSheet(options.sheet)
     if (options.range === undefined) {
       // whole used area is often huge; start the agent with the top corner
-      const rows = Math.min(sheet.rowCount, 20)
-      const columns = Math.min(sheet.columnCount, 10)
+      // (journal-aware: a fresh cell in an empty sheet is visible there too)
+      const extent = this.sheetExtent(sheet)
+      const rows = Math.min(extent.rowCount, 20)
+      const columns = Math.min(extent.columnCount, 10)
       if (rows <= 0 || columns <= 0) {
         return `Sheet "${sheet.name}" is empty.`
       }
@@ -413,19 +419,36 @@ export class XlsxSession {
     return this.readRange(sheet, parseA1Range(options.range))
   }
 
+  /**
+   * Journal-aware sheet bounds: the readable area covers the on-disk used
+   * range plus any journaled cell beyond it (BUG-1503 — an edit into a fresh
+   * row/column made the cells "not exist" for reads until save).
+   */
+  private sheetExtent(sheet: XlsxSheetSummary): { rowCount: number; columnCount: number } {
+    let rowCount = sheet.rowCount
+    let columnCount = sheet.columnCount
+    for (const edit of this.edits) {
+      if (edit.sheetName !== sheet.name) continue
+      rowCount = Math.max(rowCount, edit.row + 1)
+      columnCount = Math.max(columnCount, edit.column + 1)
+    }
+    return { rowCount, columnCount }
+  }
+
   private async readRange(
     sheet: XlsxSheetSummary,
     range: { startRow: number; endRow: number; startColumn: number; endColumn: number },
   ): Promise<string> {
+    const extent = this.sheetExtent(sheet)
     const clamped = {
       startRow: Math.max(0, range.startRow),
-      endRow: Math.min(range.endRow, sheet.rowCount - 1),
+      endRow: Math.min(range.endRow, extent.rowCount - 1),
       startColumn: Math.max(0, range.startColumn),
-      endColumn: Math.min(range.endColumn, sheet.columnCount - 1),
+      endColumn: Math.min(range.endColumn, extent.columnCount - 1),
     }
     if (clamped.endRow < clamped.startRow || clamped.endColumn < clamped.startColumn) {
       throw new Error(
-        `Range is outside sheet "${sheet.name}" (${String(sheet.rowCount)} rows x ${String(sheet.columnCount)} columns).`,
+        `Range is outside sheet "${sheet.name}" (${String(extent.rowCount)} rows x ${String(extent.columnCount)} columns).`,
       )
     }
     const cells =
@@ -435,12 +458,65 @@ export class XlsxSession {
         `Range has ${String(cells)} cells (limit ${String(MAX_READ_CELLS)}). Split it into smaller reads.`,
       )
     }
-    const result = parseRangeResult(
-      await this.io.readRange({ sessionId: this.sessionId, sheetId: sheet.id, range: clamped }),
-    )
+    // the sidecar refuses ranges past the sheet's on-disk used area, so only
+    // the intersection is fetched; cells beyond it come from the journal
+    const diskEndRow = Math.min(clamped.endRow, sheet.rowCount - 1)
+    const diskEndColumn = Math.min(clamped.endColumn, sheet.columnCount - 1)
+    let result: { cells: readonly RangeCell[]; indexingComplete: boolean } = {
+      cells: [],
+      indexingComplete: true,
+    }
+    if (diskEndRow >= clamped.startRow && diskEndColumn >= clamped.startColumn) {
+      result = parseRangeResult(
+        await this.io.readRange({
+          sessionId: this.sessionId,
+          sheetId: sheet.id,
+          range: {
+            startRow: clamped.startRow,
+            endRow: diskEndRow,
+            startColumn: clamped.startColumn,
+            endColumn: diskEndColumn,
+          },
+        }),
+      )
+    }
     const cellByCoordinate = new Map<string, RangeCell>()
     for (const cell of result.cells)
       cellByCoordinate.set(`${String(cell.row)},${String(cell.column)}`, cell)
+    // journal overlay: read-after-write must show the pending edits, not the
+    // on-disk state (BUG-1503). Content edits replace the cell; style-only
+    // edits change nothing the value table shows. A journaled formula has no
+    // cached result, so it renders as "=FORMULA" alone.
+    let overlaid = 0
+    for (const edit of this.edits) {
+      if (edit.sheetName !== sheet.name || !edit.writeValue) continue
+      if (
+        edit.row < clamped.startRow ||
+        edit.row > clamped.endRow ||
+        edit.column < clamped.startColumn ||
+        edit.column > clamped.endColumn
+      ) {
+        continue
+      }
+      const key = `${String(edit.row)},${String(edit.column)}`
+      if (edit.cell.formula !== undefined) {
+        cellByCoordinate.set(key, {
+          row: edit.row,
+          column: edit.column,
+          formula: edit.cell.formula,
+        })
+      } else if (edit.cell.value === null) {
+        // an explicit null clears the cell
+        cellByCoordinate.set(key, { row: edit.row, column: edit.column })
+      } else {
+        cellByCoordinate.set(key, {
+          row: edit.row,
+          column: edit.column,
+          value: edit.cell.value,
+        })
+      }
+      overlaid += 1
+    }
     const header = [
       ' ',
       ...Array.from({ length: clamped.endColumn - clamped.startColumn + 1 }, (_, i) =>
@@ -465,9 +541,18 @@ export class XlsxSession {
     })
     const from = `${columnToLabel(clamped.startColumn)}${String(clamped.startRow + 1)}`
     const to = `${columnToLabel(clamped.endColumn)}${String(clamped.endRow + 1)}`
-    const note = result.indexingComplete
-      ? ''
-      : '\n(Indexing still in progress — the data above may be partial; re-read the range shortly.)'
+    const notes: string[] = []
+    if (!result.indexingComplete) {
+      notes.push(
+        '(Indexing still in progress — the data above may be partial; re-read the range shortly.)',
+      )
+    }
+    if (overlaid > 0) {
+      notes.push(
+        `(${String(overlaid)} pending edit(s) from this session's journal are included; save_document persists them.)`,
+      )
+    }
+    const note = notes.length > 0 ? `\n${notes.join(' ')}` : ''
     const out = [`Sheet "${sheet.name}", range ${from}:${to}:`, header, ...body, note].join('\n')
     return out.length > READ_MAX_CHARS
       ? `${out.slice(0, READ_MAX_CHARS)}\n…(output truncated at ${String(READ_MAX_CHARS)} characters; request a narrower range)`

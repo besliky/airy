@@ -964,6 +964,11 @@ export async function saveDocx(
     return rId
   }
 
+  // styleIds whose style pPr carries w:numPr: a regenerated paragraph that
+  // keeps such a pStyle needs the explicit numId="0" override to stay unlisted
+  // (BUG-1502). 'none' (an explicit w:numId 0 on the style) cancels numbering,
+  // so those styles are excluded — same rule the parse-side listRefOf applies.
+  const numberedStyleIds = new Set<string>()
   // styleId -> outline level of every paragraph style the document defines
   // (undefined = defined without a level; absent = styles.xml does not know
   // the id). styleUpserts fold in this save's Modify-Style outline changes so
@@ -972,6 +977,7 @@ export async function saveDocx(
   // by a setHeadingLevel retag (BUG-1501).
   const headingLevelOfStyles = new Map<string, number | undefined>()
   for (const [styleId, info] of parsed.styles) {
+    if (info.numPr && info.numPr !== 'none') numberedStyleIds.add(styleId)
     if (info.type === 'paragraph') headingLevelOfStyles.set(styleId, info.headingLevel)
   }
   for (const up of options.styleUpserts ?? []) {
@@ -985,6 +991,7 @@ export async function saveDocx(
     headingStyleIds: parsed.headingStyleIds,
     headingLevelOfStyles,
     listParagraphStyleId: parsed.listParagraphStyleId,
+    numberedStyleIds,
     allocateHyperlinkRel,
   }
 
