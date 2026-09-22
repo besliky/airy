@@ -11,7 +11,7 @@ use zip::ZipArchive;
 use crate::SidecarError;
 
 mod charts;
-mod colors;
+pub(crate) mod colors;
 mod drawing;
 mod styles;
 #[cfg(test)]

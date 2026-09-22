@@ -32,6 +32,10 @@ use std::path::Path;
 use codepage::to_encoding;
 use encoding_rs::Encoding;
 
+// BUG-1602: the layout walk (`xls_layout`) reuses this module's compound-file
+// reader and record walker for its own pass — merges, column widths and
+// styles are parsed from the same Workbook stream the string overlay reads.
+
 /// BIFF record ids used by the walk ([MS-XLS] 2.4 record enumeration).
 const REC_EOF: u16 = 0x000A;
 const REC_CONTINUE: u16 = 0x003C;
@@ -43,7 +47,7 @@ const REC_SST: u16 = 0x00FC;
 
 /// BOF header version for BIFF8 (biffVersion 0x0600); older BIFF books
 /// carry no SST and calamine's single-byte path already reads them right.
-const BIFF8_BOF_VERSION: u16 = 0x0600;
+pub(crate) const BIFF8_BOF_VERSION: u16 = 0x0600;
 
 /// Workbook codepage calamine assumes when CODEPAGE is absent — mirrored
 /// so the overlay's gate sees the same decoder calamine uses.
@@ -54,7 +58,7 @@ const DEFAULT_CODEPAGE: u16 = 1200;
 const CHAIN_END: u32 = 0xFFFF_FFFA;
 
 /// OLE2 compound-file magic bytes ([MS-CFB] 2.2).
-const CFB_MAGIC: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+pub(crate) const CFB_MAGIC: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
 
 /// Cap on one decoded stream: beyond it the overlay degrades to calamine's
 /// output rather than buffering an absurd allocation.
@@ -116,7 +120,7 @@ fn extract_repaired_strings(file: File) -> Option<Vec<SheetStrings>> {
 }
 
 /// Decode UTF-16LE bytes the way [MS-XLS] fHighByte=1 strings require.
-fn decode_utf16le(bytes: &[u8]) -> String {
+pub(crate) fn decode_utf16le(bytes: &[u8]) -> String {
     let units: Vec<u16> = bytes
         .as_chunks::<2>()
         .0
@@ -126,11 +130,21 @@ fn decode_utf16le(bytes: &[u8]) -> String {
     String::from_utf16_lossy(&units)
 }
 
-fn read_u16(bytes: &[u8]) -> Option<u16> {
+/// Decode compressed (fHighByte=0) BIFF string bytes through the workbook
+/// codepage; Latin-1 is the never-failing fallback when the codepage has no
+/// encoding table (only cosmetic for the strings the layout walk decodes).
+pub(crate) fn decode_single_byte(bytes: &[u8], encoding: Option<&'static Encoding>) -> String {
+    match encoding {
+        Some(encoding) => encoding.decode(bytes).0.into_owned(),
+        None => bytes.iter().map(|&byte| byte as char).collect(),
+    }
+}
+
+pub(crate) fn read_u16(bytes: &[u8]) -> Option<u16> {
     Some(u16::from_le_bytes([*bytes.first()?, *bytes.get(1)?]))
 }
 
-fn read_u32(bytes: &[u8]) -> Option<u32> {
+pub(crate) fn read_u32(bytes: &[u8]) -> Option<u32> {
     Some(u32::from_le_bytes([
         *bytes.first()?,
         *bytes.get(1)?,
@@ -143,7 +157,7 @@ fn read_u32(bytes: &[u8]) -> Option<u32> {
 // Compound file (OLE2) reader — just enough of [MS-CFB] to pull one stream.
 // ---------------------------------------------------------------------------
 
-struct CompoundFile {
+pub(crate) struct CompoundFile {
     file: File,
     sector_size: u64,
     mini_size: u64,
@@ -160,7 +174,7 @@ struct CompoundFile {
 }
 
 impl CompoundFile {
-    fn open(mut file: File) -> Option<Self> {
+    pub(crate) fn open(mut file: File) -> Option<Self> {
         let file_len = file.metadata().ok()?.len();
         file.seek(SeekFrom::Start(0)).ok()?;
         let mut header = [0u8; 512];
@@ -299,7 +313,7 @@ impl CompoundFile {
         read_sector(&mut self.file, sector, self.sector_size)
     }
 
-    fn read_workbook_stream(&mut self) -> Option<Vec<u8>> {
+    pub(crate) fn read_workbook_stream(&mut self) -> Option<Vec<u8>> {
         let (start, size) = self.workbook?;
         if size > MAX_STREAM_BYTES {
             return None;
@@ -451,14 +465,14 @@ fn repair_stream_strings(stream: &[u8]) -> Option<Vec<SheetStrings>> {
 
 /// A BIFF record view: 4-byte header (u16 id, u16 length) plus the body
 /// slice. `end` is the offset of the next record.
-struct Record<'a> {
-    id: u16,
-    body: &'a [u8],
-    end: usize,
+pub(crate) struct Record<'a> {
+    pub(crate) id: u16,
+    pub(crate) body: &'a [u8],
+    pub(crate) end: usize,
 }
 
 impl<'a> Record<'a> {
-    fn at(stream: &'a [u8], position: usize) -> Option<Self> {
+    pub(crate) fn at(stream: &'a [u8], position: usize) -> Option<Self> {
         let header_end = position.checked_add(4)?;
         let header = stream.get(position..header_end)?;
         let id = read_u16(&header[..2])?;
@@ -615,7 +629,10 @@ fn parse_sst_string(reader: &mut ChunkReader<'_>, encoding: &'static Encoding) -
 }
 
 /// BoundSheet8 sheet name ([MS-XLS] 2.5.292 ShortXLUnicodeString).
-fn parse_short_xl_unicode_string(body: &[u8], encoding: &'static Encoding) -> Option<String> {
+pub(crate) fn parse_short_xl_unicode_string(
+    body: &[u8],
+    encoding: &'static Encoding,
+) -> Option<String> {
     let char_count = *body.first()? as usize;
     let flags = *body.get(1)?;
     let bytes_per_char: usize = if flags & 0x1 != 0 { 2 } else { 1 };

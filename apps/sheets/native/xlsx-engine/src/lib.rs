@@ -20,6 +20,7 @@ pub mod recalc;
 mod richdata;
 mod shared_formulas;
 mod visuals;
+mod xls_layout;
 
 mod cell_images;
 mod refs;
