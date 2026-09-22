@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest'
 const here = dirname(fileURLToPath(import.meta.url))
 const shellMain = readFileSync(join(here, '../src/main/index.ts'), 'utf8')
 const sheetsMain = readFileSync(join(here, '../../sheets/src/main/sheets-main.ts'), 'utf8')
+const updaterMain = readFileSync(join(here, '../src/main/updater/index.ts'), 'utf8')
 
 describe('quit rollback wiring (BUG-1216)', () => {
   it('before-quit arms quit flow and the rollback-able shutdown effects', () => {
@@ -106,5 +107,57 @@ describe('quit snapshot write failure re-arm (BUG-1224)', () => {
     // session that resurrects already-closed windows
     expect(shellMain).toContain('const written = decision.excludeClosing')
     expect(shellMain).toContain('if (!written) quitFlow.markSnapshotWriteFailed()')
+  })
+})
+
+describe('before-quit session flush (BUG-408)', () => {
+  it('before-quit lands a full session snapshot before the windows start closing', () => {
+    // the debounced tab-change save is 800 ms deep: a crash once the quit has
+    // started used to lose the last tab changes; the flush must run while
+    // every window is still registered (a full snapshot can only widen the
+    // persisted set) and before the shutdown effects arm
+    const start = shellMain.indexOf("app.on('before-quit'")
+    const beforeQuit = shellMain.slice(start)
+    expect(beforeQuit).toContain('persistSessionState(false)')
+    const persistAt = beforeQuit.indexOf('persistSessionState(false)')
+    const beginAt = beforeQuit.indexOf('quitFlow.begin()')
+    const armAt = beforeQuit.indexOf('shutdownEffects.arm()')
+    expect(beginAt).toBeGreaterThan(-1)
+    expect(persistAt).toBeGreaterThan(beginAt)
+    expect(armAt).toBeGreaterThan(persistAt)
+  })
+})
+
+describe('updater install behind the close flow (BUG-411)', () => {
+  it('the updater glue requests the install via app.quit, not quitAndInstall directly', () => {
+    expect(updaterMain).toContain('pendingInstaller.request()')
+    const requestAt = updaterMain.indexOf('pendingInstaller.request()')
+    const quitAt = updaterMain.indexOf('app.quit()', requestAt)
+    expect(quitAt).toBeGreaterThan(-1)
+    // the direct call must be gone: it spawned the NSIS/AppImage installer
+    // before any window's dirty guard could object
+    expect(updaterMain.match(/quitAndInstall: \(\) => autoUpdater\.quitAndInstall/)).toBeNull()
+  })
+
+  it('the install fires only from the flush points (windows gone, no guard left)', () => {
+    expect(updaterMain).toContain(
+      'if (pendingInstaller.flush()) autoUpdater.quitAndInstall(true, true)',
+    )
+    // flush point 1: window-all-closed, before the platform quit
+    const allClosed = shellMain.indexOf("app.on('window-all-closed'")
+    expect(allClosed).toBeGreaterThan(-1)
+    expect(shellMain.slice(allClosed)).toContain('flushPendingInstall()')
+    const flushAt = shellMain.indexOf('flushPendingInstall()', allClosed)
+    const quitAt = shellMain.indexOf('app.quit()', flushAt)
+    expect(quitAt).toBeGreaterThan(flushAt)
+    // flush point 2: will-quit safety net (a quit with zero windows never
+    // emits window-all-closed)
+    expect(updaterMain).toContain("app.on('will-quit'")
+  })
+
+  it('a cancelled dirty-guard disarms the pending install', () => {
+    const abortAt = shellMain.indexOf('function abortAppQuit')
+    expect(abortAt).toBeGreaterThan(-1)
+    expect(shellMain.slice(abortAt)).toContain('cancelPendingInstall()')
   })
 })

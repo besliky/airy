@@ -23,6 +23,7 @@ import {
   safeExternalUrl,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
+  truncateByCodePoints,
   voidLoad,
 } from '@airy-office/electron-utils'
 import { createI18n, getUiLang } from '@airy-office/i18n'
@@ -626,10 +627,8 @@ async function resolveSaveTarget(
   if (mode === 'save' && current) return current
   // AI auto-naming: silent first save of an untitled document
   if (mode === 'save' && !current && suggestedName) {
-    const base = suggestedName
-      .replace(/[/\\:*?"<>|]/g, '_')
-      .slice(0, 80)
-      .trim()
+    // the cap counts code points (BUG-412): slice would split a surrogate pair
+    const base = truncateByCodePoints(suggestedName.replace(/[/\\:*?"<>|]/g, '_'), 80).trim()
     if (base) {
       const dir = configuredDefaultSaveDir(app)
       let target = join(dir, `${base}.md`)
@@ -895,11 +894,12 @@ function registerMarkdownIpc(): void {
       if (typeof request?.base64 !== 'string' || !request.base64) {
         return { ok: false, error: 'markdown: bad export request' }
       }
+      // the cap counts code points (BUG-412): slice would split a surrogate pair
       const safeName =
-        String(request.suggestedName || tm('untitledFile'))
-          .replace(/[/\\:*?"<>|]/g, '_')
-          .slice(0, 80)
-          .trim() || tm('untitledFile')
+        truncateByCodePoints(
+          String(request.suggestedName || tm('untitledFile')).replace(/[/\\:*?"<>|]/g, '_'),
+          80,
+        ).trim() || tm('untitledFile')
       try {
         const bytes = Buffer.from(request.base64, 'base64')
         if (request.mode === 'openInDocs') {
@@ -940,11 +940,12 @@ function registerMarkdownIpc(): void {
       if (typeof request?.html !== 'string' || !request.html) {
         return { ok: false, error: 'markdown: bad export request' }
       }
+      // the cap counts code points (BUG-412): slice would split a surrogate pair
       const safeName =
-        String(request.suggestedName || tm('untitledFile'))
-          .replace(/[/\\:*?"<>|]/g, '_')
-          .slice(0, 80)
-          .trim() || tm('untitledFile')
+        truncateByCodePoints(
+          String(request.suggestedName || tm('untitledFile')).replace(/[/\\:*?"<>|]/g, '_'),
+          80,
+        ).trim() || tm('untitledFile')
       const win =
         BrowserWindow.fromWebContents(e.sender) ?? BrowserWindow.getFocusedWindow() ?? undefined
       const picked = await showSaveDialogWithMemory(

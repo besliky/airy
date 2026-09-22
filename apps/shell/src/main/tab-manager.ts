@@ -831,6 +831,16 @@ export class TabManager {
         // issue, not something fixable from here). Detaching without destroying
         // avoids the freeze; the orphaned webContents is reclaimed when the app quits.
         teardownDocsRenderer(removed.view.webContents)
+        // BUG-409: the workaround orphans a LIVE renderer that would keep the
+        // whole docs app heap (document model, undo history, editor bundles)
+        // until quit. Navigating the torn-down renderer to about:blank drops
+        // all of that at once; a navigation does not enter the wedged native
+        // modal run loop that close()/destroy() hit. The renderer stays
+        // orphaned (by design), but only as an empty about:blank shell.
+        voidLoad(
+          removed.view.webContents.loadURL('about:blank'),
+          `about:blank teardown for tab ${removed.id}`,
+        )
       } else {
         removed.view.webContents.close()
       }

@@ -254,3 +254,44 @@ function clampPercent(percent: number): number {
   if (!Number.isFinite(percent) || percent < 0) return 0
   return Math.min(100, Math.round(percent))
 }
+
+/**
+ * Gate between "install now" and actually handing over to the installer
+ * (BUG-411). electron-updater's quitAndInstall spawns the NSIS/AppImage
+ * installer BEFORE its own app.quit(), so calling it directly while windows
+ * are still open let a dirty-guard Cancel abort the quit with the installer
+ * already waiting outside — unsaved work on one side, a half-started update
+ * on the other. The request instead rides a normal app.quit(): every window
+ * walks its close guard, and the flush (wired to window-all-closed / will-quit)
+ * calls quitAndInstall only once no window is left to object. A Cancel after
+ * the request disarms it — the staged update still installs on a later
+ * natural quit via autoInstallOnAppQuit.
+ */
+export interface PendingInstaller {
+  get pending(): boolean
+  request(): void
+  /** a dirty-guard Cancel aborted the quit the install was riding on */
+  cancel(): void
+  /** true exactly once, when a request survived up to the flush point */
+  flush(): boolean
+}
+
+export function createPendingInstaller(): PendingInstaller {
+  let pending = false
+  return {
+    get pending() {
+      return pending
+    },
+    request() {
+      pending = true
+    },
+    cancel() {
+      pending = false
+    },
+    flush() {
+      if (!pending) return false
+      pending = false
+      return true
+    },
+  }
+}

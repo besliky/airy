@@ -22,6 +22,7 @@ import {
   printHtmlToPdf,
   safeExternalUrl,
   showOpenDialogWithMemory,
+  truncateByCodePoints,
   voidLoad,
 } from '@airy-office/electron-utils'
 import { createI18n, getUiLang } from '@airy-office/i18n'
@@ -498,9 +499,10 @@ function sanitizeGeneratedDocumentTitle(title: string): string {
     // eslint-disable-next-line no-control-regex -- generated file names must reject controls
     .replace(/[/\\:*?"<>|\u0000-\u001f]/g, '_')
     .trim()
-    .slice(0, 80)
-    .trim()
-  return cleaned && cleaned !== '.' && cleaned !== '..' ? cleaned : 'Untitled'
+  // the cap counts code points: slice would split a surrogate pair and hand
+  // the filesystem a name it cannot encode (BUG-412)
+  const capped = truncateByCodePoints(cleaned, 80).trim()
+  return capped && capped !== '.' && capped !== '..' ? capped : 'Untitled'
 }
 
 function uniqueGeneratedTextPath(dir: string, title: string, ext: 'md' | 'html'): string {
@@ -626,7 +628,8 @@ function sanitizeAutoRenameBase(raw: string): string | null {
   // Windows device names stay reserved with an extension (CON.pdf is still
   // CON): suffix them so the no-clobber move works there instead of failing.
   const safe = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(cleaned) ? cleaned + '_' : cleaned
-  return safe.length > 40 ? safe.slice(0, 40).trim() : safe
+  // the cap counts code points (BUG-412): slice would split a surrogate pair
+  return truncateByCodePoints(safe, 40).trim()
 }
 
 export type NoClobberMoveResult = 'moved' | 'occupied' | 'failed'

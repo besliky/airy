@@ -61,10 +61,23 @@ export function createWindowCloseGuard<Tab extends GuardedCloseTab>(
     if (!firstCycle) return
     void (async () => {
       try {
-        for (const tab of dirty) {
-          if (!(await deps.requestClose(tab))) {
-            deps.abortQuit()
-            return
+        // BUG-410: `dirty` was captured when the close event arrived; a tab
+        // that became dirty while these prompts ran (a background edit, an AI
+        // flow opening a document in this window) used to be closed silently
+        // by the confirmed flag. Recompute the set before the final close and
+        // walk only the tabs this cycle has not already put through a prompt
+        // ("Don't save" leaves its tab dirty by design, so a plain second
+        // walk would re-prompt it); two passes bound the loop against a flow
+        // that keeps dirtying further tabs while the current ones confirm.
+        const walked = new Set(dirty.map((tab) => tab.id))
+        for (let pass = 0; pass < 2; pass += 1) {
+          const pending = pass === 0 ? dirty : deps.dirtyTabs().filter((tab) => !walked.has(tab.id))
+          for (const tab of pending) {
+            walked.add(tab.id)
+            if (!(await deps.requestClose(tab))) {
+              deps.abortQuit()
+              return
+            }
           }
         }
         closeConfirmed = true

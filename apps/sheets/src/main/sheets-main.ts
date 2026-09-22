@@ -58,6 +58,7 @@ import {
   safeExternalUrl,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
+  truncateByCodePoints,
   viewMenuTemplate,
   windowMenuTemplate,
   voidLoad,
@@ -1750,9 +1751,10 @@ export function sanitizeGeneratedFileBase(title: string): string {
     // eslint-disable-next-line no-control-regex -- generated file names must reject controls
     .replace(/[/\\:*?"<>|\u0000-\u001f]/g, '_')
     .trim()
-    .slice(0, 80)
-    .trim()
-  return cleaned && cleaned !== '.' && cleaned !== '..' ? cleaned : 'Untitled'
+  // the cap counts code points: slice would split a surrogate pair and hand
+  // the filesystem a name it cannot encode (BUG-412)
+  const capped = truncateByCodePoints(cleaned, 80).trim()
+  return capped && capped !== '.' && capped !== '..' ? capped : 'Untitled'
 }
 
 /** first free path for fileName inside dir: name.ext, name-2.ext, name-3.ext… */
@@ -1966,7 +1968,8 @@ function sanitizeAutoRenameBase(raw: string): string | null {
     .replace(/^\.+|\.+$/g, '')
     .trim()
   if (!cleaned) return null
-  return cleaned.length > 40 ? cleaned.slice(0, 40).trim() : cleaned
+  // the cap counts code points (BUG-412): slice would split a surrogate pair
+  return truncateByCodePoints(cleaned, 40).trim()
 }
 
 /** shell hook: a tab opened a workbook (dialog or queued path) — used for tab titles/dedupe */

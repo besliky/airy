@@ -385,6 +385,23 @@ describe('closing tabs', () => {
     expect(teardownDocsRenderer).toHaveBeenCalledWith(view.webContents)
   })
 
+  it('navigates the orphaned docs renderer to about:blank to release its heap (BUG-409)', async () => {
+    const id = manager.openDocsTab('/tmp/thesis.docx')
+    const view = lastCreatedView(createDocsView)
+    await manager.closeTab(id)
+    // the renderer is never destroyed (freeze workaround), so the whole docs
+    // app heap would live until quit; the teardown navigation drops it
+    expect(view.webContents.loadURL).toHaveBeenCalledWith('about:blank')
+    // ...and still without entering the wedged close()/destroy() path
+    expect(view.webContents.close).not.toHaveBeenCalled()
+    // non-docs tabs are destroyed outright — no teardown navigation there
+    const sheetsId = manager.openSheetsTab()
+    const sheetsView = lastCreatedView(createSheetsView)
+    await manager.closeTab(sheetsId)
+    expect(sheetsView.webContents.loadURL).not.toHaveBeenCalled()
+    expect(sheetsView.webContents.close).toHaveBeenCalledTimes(1)
+  })
+
   it('closes a clean docs tab after the async dirty query says clean', async () => {
     const id = manager.openDocsTab()
     await manager.closeTab(id)

@@ -4,6 +4,7 @@ import {
   DEFAULT_START_DELAY_MS,
   RELEASES_LATEST_URL,
   UpdaterController,
+  createPendingInstaller,
   detectUpdatePolicy,
   releaseNotesUrl,
   type UpdaterClient,
@@ -306,5 +307,34 @@ describe('re-check guards', () => {
     expect(h.controller.status).toEqual({ phase: 'downloading', percent: 0 })
     h.controller.checkNow() // downloading: refused
     expect(h.client.checkForUpdates).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('pending installer gate (BUG-411)', () => {
+  it('the flush fires exactly once for a surviving request', () => {
+    const installer = createPendingInstaller()
+    expect(installer.pending).toBe(false)
+    expect(installer.flush()).toBe(false) // nothing requested: no install
+    installer.request()
+    expect(installer.pending).toBe(true)
+    expect(installer.flush()).toBe(true)
+    expect(installer.pending).toBe(false)
+    expect(installer.flush()).toBe(false) // second flush point is a no-op
+  })
+
+  it('a Cancel after the request disarms the install', () => {
+    const installer = createPendingInstaller()
+    installer.request()
+    installer.cancel()
+    expect(installer.pending).toBe(false)
+    expect(installer.flush()).toBe(false)
+  })
+
+  it('Cancel without a request stays a harmless no-op', () => {
+    const installer = createPendingInstaller()
+    installer.cancel()
+    expect(installer.flush()).toBe(false)
+    installer.request()
+    expect(installer.flush()).toBe(true)
   })
 })
