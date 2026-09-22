@@ -124,6 +124,20 @@ describeWithBinary(
       )
     })
 
+    it('refuses an .ods zip bomb declared in the central directory (convert-path fence, SEC-1301)', async () => {
+      // Mirror of the xlsx bomb test above for the .ods conversion path:
+      // calamine reads .ods through the same ZIP container, so the sidecar
+      // runs the same SEC-1103 budgets before convert_workbook decompresses
+      // anything. The refusal surfaces inside the session's "Cannot import"
+      // wrap with the fence message intact.
+      const bombPath = join(root, 'bomb.ods')
+      const bomb = patchCentralSizes(await buildOdsFixture(), 600 * 1024 * 1024)
+      await writeFile(bombPath, bomb)
+      await expect(XlsxSession.open(bombPath, root, client!)).rejects.toThrow(
+        /Cannot import .* as \.xlsx: Workbook declares \d+ uncompressed bytes across its ZIP entries, .*open budget/,
+      )
+    })
+
     it('editing one sheet keeps every untouched zip entry byte-identical', async () => {
       // a real two-sheet workbook: Main (sheet1.xml) and Data (sheet2.xml)
       const zip = new JSZip()

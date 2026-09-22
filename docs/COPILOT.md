@@ -459,7 +459,11 @@ declares more than 10,000 entries or over 1.5 GiB total uncompressed is
 refused before a single entry is decompressed. There is deliberately no
 per-part cap for workbooks — worksheet reads stream in bounded chunks, so
 one large sheet stays openable — and the refusal names the declared total
-and the budget.
+and the budget. The same budget guards the legacy conversion path (SEC-1301):
+`.ods` imports go through the sidecar's calamine converter, which reads the
+same ZIP container, so the fence runs there too (content-based, by the zip
+magic — `.xls` is an OLE2 compound document and has no central directory)
+before calamine decompresses a single entry.
 
 ## Security model
 
