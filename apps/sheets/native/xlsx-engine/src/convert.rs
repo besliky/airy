@@ -431,7 +431,9 @@ mod tests {
         let target = dir.path().join("converted.xlsx");
 
         let error = convert_to_xlsx(&source, &target).unwrap_err();
-        assert!(error.to_string().contains("too many ZIP entries"));
+        assert!(error
+            .to_string()
+            .contains("ZIP entries, above the 10000 entry open budget"));
         assert!(!target.exists());
     }
 
