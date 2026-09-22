@@ -24,6 +24,7 @@ import type {
   InsertKind,
   LinkTargetOp,
   MasterPartItem,
+  NotesFormat,
   PasteSlideMode,
   SectionInfo,
   SetEffectsPatch,
@@ -59,6 +60,7 @@ import { IconNotes, IconPlayBoxed } from './components/icons'
 import { PresenterView } from './components/PresenterView'
 import { CustomShowDialog } from './components/CustomShowDialog'
 import { PdfExportDialog } from './components/PdfExportDialog'
+import { SlideSizeDialog } from './components/SlideSizeDialog'
 import { ExportVideoDialog } from './components/ExportVideoDialog'
 import { PrintDialog } from './components/PrintDialog'
 import { FindReplaceDialog } from './components/FindReplaceDialog'
@@ -81,6 +83,7 @@ import {
   type EditQueueItem,
 } from './ai/edit-queue'
 import { FormatBackgroundPane, type BgPaneOp } from './components/FormatBackgroundPane'
+import { nextNotesFormat, type NotesFormatPatch } from './notes-format'
 import { FormatPane } from './components/FormatPane'
 import { CommentsPane } from './components/CommentsPane'
 import { AnimationPane } from './components/AnimationPane'
@@ -109,7 +112,7 @@ import type {
   LinkDialogState,
   SlideShowState,
 } from './action-context'
-import { FIT_WIDTH } from './app-constants'
+import { DEFAULT_NOTES_PT, FIT_WIDTH } from './app-constants'
 import { StageRuler } from './components/StageRuler'
 import { formatRulerValue, type RulerUnit } from './ruler-ticks'
 import * as fileActions from './file-actions'
@@ -504,6 +507,9 @@ export function App() {
   // the way down to hide.
   const [showNotes, setShowNotes] = useState(true)
   const [notesText, setNotesText] = useState('')
+  /** Whole-body notes formatting (bold/italic/font size), PowerPoint select-all semantics */
+  const [notesFormat, setNotesFormat] = useState<NotesFormat>({})
+  const notesFormatRef = useRef<NotesFormat>({})
   /** Unsaved notes draft (flushed before page switch/save) */
   const notesDraftRef = useRef<{ index: number; text: string } | null>(null)
   /** Notes pane height (px): default shows ~4 lines (PowerPoint-like), drag-resizable */
@@ -594,7 +600,11 @@ export function App() {
     const pending = notesDraftRef.current
     if (!pending) return
     notesDraftRef.current = null
-    const ok = await window.slidesApi.setNotes({ slideIndex: pending.index, text: pending.text })
+    const ok = await window.slidesApi.setNotes({
+      slideIndex: pending.index,
+      text: pending.text,
+      ...(Object.keys(notesFormatRef.current).length ? { format: notesFormatRef.current } : {}),
+    })
     if (ok) setDirty(true)
   }, [])
 
@@ -952,6 +962,10 @@ export function App() {
 
   const saveAs = useCallback(() => fileActions.saveAs(() => ctxRef.current), [])
   const exportImages = useCallback(() => fileActions.exportImages(ctxRef.current), [])
+  const exportJpeg = useCallback(() => fileActions.exportImages(ctxRef.current, 'jpeg'), [])
+  const openSlideSizeDialog = useCallback(() => {
+    void window.slidesApi.getSlideSize().then((s) => s && setSlideSizeDlg(s))
+  }, [])
   const exportPdf = useCallback(
     (layout?: Parameters<typeof fileActions.exportPdf>[1]) =>
       fileActions.exportPdf(ctxRef.current, layout),
@@ -973,6 +987,8 @@ export function App() {
     transitions: TransitionSpec[]
   } | null>(null)
   const [printDlgOpen, setPrintDlgOpen] = useState(false)
+  /// Design → Slide Size → Custom…: dialog state carries the current EMU size
+  const [slideSizeDlg, setSlideSizeDlg] = useState<{ cx: number; cy: number } | null>(null)
   /// Help > Keyboard Shortcuts reference dialog.
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
@@ -1855,9 +1871,15 @@ export function App() {
     if (!hasDoc) return
     let cancelled = false
     void flushNotes()
-      .then(() => window.slidesApi.getNotes(current))
-      .then((t) => {
-        if (!cancelled) setNotesText(t)
+      .then(() =>
+        Promise.all([window.slidesApi.getNotes(current), window.slidesApi.getNotesFormat(current)]),
+      )
+      .then(([t, fmt]) => {
+        if (cancelled) return
+        setNotesText(t)
+        const next = fmt ?? {}
+        notesFormatRef.current = next
+        setNotesFormat(next)
       })
     return () => {
       cancelled = true
@@ -1870,6 +1892,20 @@ export function App() {
       notesDraftRef.current = { index: current, text }
     },
     [current],
+  )
+
+  /**
+   * Apply a whole-body notes format patch (bold/italic/font size steps). The
+   * write rides the same setNotes overwrite path as text edits.
+   */
+  const onNotesFormat = useCallback(
+    (patch: NotesFormatPatch) => {
+      notesFormatRef.current = nextNotesFormat(notesFormatRef.current, patch)
+      setNotesFormat(notesFormatRef.current)
+      notesDraftRef.current = { index: current, text: notesText }
+      void flushNotes()
+    },
+    [current, notesText, flushNotes],
   )
 
   // ── Comments: fetch the current page's list on page switch/document change/undo (the ribbon badge uses it too) ──────────
@@ -2158,9 +2194,12 @@ export function App() {
       if (cmd === 'open') void openDialog()
       else if (cmd === 'save') void save()
       else if (cmd === 'save-as') void saveAs()
+      // PowerPoint parity: a new slide is inserted after the current page (⌘M / Ctrl+M)
+      else if (cmd === 'new-slide') void addSlide()
       // macOS has no File ribbon tab, so these only exist in the menu
       else if (cmd === 'export-pdf') setPdfDlgOpen(true)
       else if (cmd === 'export-images') void exportImages()
+      else if (cmd === 'export-jpeg') void exportJpeg()
       else if (cmd === 'export-video') openVideoExport()
       else if (cmd === 'print') setPrintDlgOpen(true)
       else if (cmd === 'shortcuts') setShortcutsOpen(true)
@@ -2189,6 +2228,8 @@ export function App() {
     saveAs,
     exportPdf,
     exportImages,
+    exportJpeg,
+    addSlide,
     openVideoExport,
     undo,
     redo,
@@ -2929,6 +2970,7 @@ export function App() {
         onExportPdf={() => setPdfDlgOpen(true)}
         onPrint={() => setPrintDlgOpen(true)}
         onExportImages={() => void exportImages()}
+        onExportJpeg={() => void exportJpeg()}
         onExportVideo={openVideoExport}
         onFormat={onFormat}
         zoom={zoom}
@@ -2997,6 +3039,7 @@ export function App() {
             }
           })
         }
+        onSlideSizeCustom={openSlideSizeDialog}
         slideSizeKey={
           slide
             ? Math.abs(slide.widthPx / slide.heightPx - 16 / 9) < 0.02
@@ -3983,6 +4026,51 @@ export function App() {
                         className="notes-resize-handle"
                         onMouseDown={(e) => startNotesDrag(e, notesHeight)}
                       />
+                      {/* Whole-body notes formatting (PowerPoint's select-all + toggle):
+                          bold / italic / font-size steps for the notes text */}
+                      {notesHeight >= 60 && (
+                        <div className="notes-format-bar">
+                          <button
+                            className={notesFormat.bold ? 'on' : ''}
+                            data-tip={t('ribbonBold')}
+                            aria-label={t('ribbonBold')}
+                            aria-pressed={!!notesFormat.bold}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => onNotesFormat({ bold: !notesFormat.bold })}
+                          >
+                            <b>B</b>
+                          </button>
+                          <button
+                            className={notesFormat.italic ? 'on' : ''}
+                            data-tip={t('ribbonItalic')}
+                            aria-label={t('ribbonItalic')}
+                            aria-pressed={!!notesFormat.italic}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => onNotesFormat({ italic: !notesFormat.italic })}
+                          >
+                            <i>I</i>
+                          </button>
+                          <button
+                            data-tip={t('appNotesFontSize')}
+                            aria-label={t('appNotesFontSize')}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => onNotesFormat({ sizeDelta: -1 })}
+                          >
+                            A−
+                          </button>
+                          <span className="notes-pt" aria-hidden="true">
+                            {notesFormat.fontSizePt ?? DEFAULT_NOTES_PT}
+                          </span>
+                          <button
+                            data-tip={t('appNotesFontSize')}
+                            aria-label={t('appNotesFontSize')}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => onNotesFormat({ sizeDelta: 1 })}
+                          >
+                            A+
+                          </button>
+                        </div>
+                      )}
                       <textarea
                         value={notesText}
                         placeholder={
@@ -4213,6 +4301,26 @@ export function App() {
             void exportPdf(layout)
           }}
           onClose={() => setPdfDlgOpen(false)}
+        />
+      )}
+
+      {slideSizeDlg && (
+        <SlideSizeDialog
+          widthCm={slideSizeDlg.cx / 360000}
+          heightCm={slideSizeDlg.cy / 360000}
+          onApply={(cx, cy) => {
+            setSlideSizeDlg(null)
+            void window.slidesApi.setSlideSize({ cx, cy }).then((all) => {
+              if (all) {
+                setSlides(all)
+                // Every slide re-materializes with fresh element ids
+                setSelectedIds([])
+                setEditing(null)
+                setDirty(true)
+              }
+            })
+          }}
+          onClose={() => setSlideSizeDlg(null)}
         />
       )}
 

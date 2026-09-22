@@ -236,6 +236,8 @@ export const ms = {
   appSectionHeaderTitle: 'Klik untuk meruntuh/mengembangkan; klik kanan untuk mengurus seksyen',
   appNotesLabel: 'Nota',
   appNotesClickToAdd: 'Klik untuk menambah nota',
+  appSlideSizeRange: 'Saiz slaid mesti antara 1.27 dan 142.24 cm (0.5 hingga 56 inci)',
+  appNotesFontSize: 'Saiz fon nota',
   appNotesPlaceholder: 'Klik untuk menambah nota penceramah (disimpan dalam fail .pptx)',
   appNotesShow: 'Tunjukkan nota',
   appNotesHide: 'Sembunyikan nota',

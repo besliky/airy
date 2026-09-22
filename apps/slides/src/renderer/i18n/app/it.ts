@@ -242,6 +242,9 @@ export const it = {
     'Fai clic per comprimere/espandere; fai clic con il pulsante destro per gestire la sezione',
   appNotesLabel: 'Note',
   appNotesClickToAdd: 'Fai clic per aggiungere note',
+  appSlideSizeRange:
+    'Le dimensioni della diapositiva devono essere tra 1,27 e 142,24 cm (0,5-56 pollici)',
+  appNotesFontSize: 'Dimensione carattere note',
   appNotesPlaceholder: 'Fai clic per aggiungere le note del relatore (salvate nel file .pptx)',
   appNotesShow: 'Mostra note',
   appNotesHide: 'Nascondi note',

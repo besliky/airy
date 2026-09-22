@@ -258,7 +258,14 @@ export {
   type ChartAxisStyle,
 } from './chart'
 export { parseChartExXml } from './chartex'
-export { getSlideNotes, setSlideNotes, notesPathForSlide, unescapeXml } from './notes'
+export {
+  getSlideNotes,
+  getSlideNotesFormat,
+  setSlideNotes,
+  notesPathForSlide,
+  unescapeXml,
+} from './notes'
+export type { NotesFormat } from './notes'
 export {
   getSlideComments,
   addSlideComment,
@@ -4092,7 +4099,9 @@ export function reassembleSlideXml(slide: Slide): string {
  *
  * - Removes the selected elements from slide.elements, builds the p:grpSp XML and appends at the slide end
  * - Goes through the appendRawElements → materialize path (structureDirty=true, rebuilt on save)
- * - Only accepts text/shape/picture; passthrough/table/chart/group are refused outright
+ * - Accepts text/shape/picture/table (tables ride along as p:graphicFrame children — the
+ *   parse/render layers already handle tables inside groups, and ungroup rewrites each
+ *   child's p:xfrm back to slide coordinates); passthrough/chart/group are refused outright
  * - Requires at least 2 elements
  *
  * Returns: { slide: fresh Slide, groupId: new group element id } or null (failure)
@@ -4105,10 +4114,10 @@ export function groupElements(
   const slide = opened.deck.slides[slideIndex]
   if (!slide || sourceIds.length < 2) return null
 
-  // Validate: only text/shape/picture allowed. Refs resolve like every other
-  // op (parse-time id, durable e_<guid8>, e_<cNvPr id>), deduplicated in case
-  // two forms name the same element.
-  const GROUPABLE = new Set(['text', 'shape', 'picture'])
+  // Validate: only text/shape/picture/table allowed. Refs resolve like every
+  // other op (parse-time id, durable e_<guid8>, e_<cNvPr id>), deduplicated in
+  // case two forms name the same element.
+  const GROUPABLE = new Set(['text', 'shape', 'picture', 'table'])
   const targets = [
     ...new Set(
       sourceIds

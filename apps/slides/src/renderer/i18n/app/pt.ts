@@ -239,6 +239,8 @@ export const pt = {
     'Clique para recolher/expandir; clique com o botão direito para gerenciar a seção',
   appNotesLabel: 'Anotações',
   appNotesClickToAdd: 'Clique para adicionar anotações',
+  appSlideSizeRange: 'O tamanho do slide deve estar entre 1,27 e 142,24 cm (0,5 a 56 pol)',
+  appNotesFontSize: 'Tamanho da fonte das anotações',
   appNotesPlaceholder: 'Clique para adicionar anotações do orador (salvas no .pptx)',
   appNotesShow: 'Mostrar anotações',
   appNotesHide: 'Ocultar anotações',

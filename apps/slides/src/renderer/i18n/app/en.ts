@@ -227,6 +227,8 @@ export const en = {
   appSectionHeaderTitle: 'Click to collapse/expand; right-click to manage the section',
   appNotesLabel: 'Notes',
   appNotesClickToAdd: 'Click to add notes',
+  appSlideSizeRange: 'Slide size must be between 1.27 and 142.24 cm (0.5 to 56 in)',
+  appNotesFontSize: 'Notes font size',
   appNotesPlaceholder: 'Click to add speaker notes (saved into the .pptx)',
   appNotesShow: 'Show notes',
   appNotesHide: 'Hide notes',

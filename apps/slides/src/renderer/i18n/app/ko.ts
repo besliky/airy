@@ -222,6 +222,8 @@ export const ko = {
   appSectionHeaderTitle: '클릭하여 축소/확장, 마우스 오른쪽 단추로 구역 관리',
   appNotesLabel: '노트',
   appNotesClickToAdd: '클릭하여 노트 추가',
+  appSlideSizeRange: '슬라이드 크기는 1.27~142.24cm(0.5~56인치)여야 합니다',
+  appNotesFontSize: '노트 글꼴 크기',
   appNotesPlaceholder: '클릭하여 발표자 노트 추가(문서와 함께 pptx에 저장됨)',
   appNotesShow: '노트 표시',
   appNotesHide: '노트 숨기기',

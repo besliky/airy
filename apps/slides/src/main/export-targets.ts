@@ -54,24 +54,30 @@ function padWidth(pageCount: number): number {
   return pageCount >= 100 ? 3 : 2
 }
 
+/** Supported export image formats: PNG (default) and JPEG. */
+export type ExportImageExt = 'png' | 'jpg'
+
 /**
- * Resolve the per-page PNG paths of an images export inside `dir`:
- * `<name>-01.png`, `<name>-02.png`, ... Null when the base name is unsafe
- * or a resolved target escapes `dir` (defense in depth — the sanitized
- * name alone already prevents traversal).
+ * Resolve the per-page image paths of an images export inside `dir`:
+ * `<name>-01.png`, `<name>-02.png`, … (`ext='jpg'` → `.jpg`). Null when the
+ * base name is unsafe, the extension is unsupported, or a resolved target
+ * escapes `dir` (defense in depth — the sanitized name alone already prevents
+ * traversal).
  */
 export function resolveExportImagePaths(
   dir: string,
   baseName: string,
   pageCount: number,
   platform: NodeJS.Platform = process.platform,
+  ext: ExportImageExt = 'png',
 ): string[] | null {
+  if (ext !== 'png' && ext !== 'jpg') return null
   const name = sanitizeExportBaseName(baseName)
   if (!name || !Number.isFinite(pageCount) || pageCount < 1 || pageCount > 10_000) return null
   const pad = padWidth(pageCount)
   const paths: string[] = []
   for (let i = 1; i <= pageCount; i++) {
-    const p = join(dir, `${name}-${String(i).padStart(pad, '0')}.png`)
+    const p = join(dir, `${name}-${String(i).padStart(pad, '0')}.${ext}`)
     if (!isPathInsideDir(dir, p, platform)) return null
     paths.push(p)
   }

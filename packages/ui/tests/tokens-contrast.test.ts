@@ -4,25 +4,26 @@ import { dirname, join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-const tokensPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'tokens.css')
+const uiRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
+const tokensPath = join(uiRoot, 'src', 'tokens.css')
 const css = readFileSync(tokensPath, 'utf8')
 
 /** Parse `--token: value;` declarations out of a single CSS block body.
  * The selector regex must anchor the rule's opening brace so a selector
  * mentioned inside a comment (the file header documents these) never matches. */
-function blockDeclarations(selector: RegExp): Map<string, string> {
-  const match = css.match(selector)
-  if (!match) throw new Error(`selector not found in tokens.css: ${String(selector)}`)
-  const open = css.indexOf('{', match.index! + match[0].length - 1)
+function blockDeclarations(text: string, selector: RegExp): Map<string, string> {
+  const match = text.match(selector)
+  if (!match) throw new Error(`selector not found: ${String(selector)}`)
+  const open = text.indexOf('{', match.index! + match[0].length - 1)
   let depth = 1
   let end = open
-  while (depth > 0 && end < css.length) {
+  while (depth > 0 && end < text.length) {
     end += 1
-    const ch = css[end]
+    const ch = text[end]
     if (ch === '{') depth += 1
     if (ch === '}') depth -= 1
   }
-  const body = css.slice(open + 1, end)
+  const body = text.slice(open + 1, end)
   const decls = new Map<string, string>()
   for (const match of body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
     decls.set(match[1], match[2].trim())
@@ -52,9 +53,10 @@ export function contrastRatio(fg: string, bg: string): number {
   return (l1 + 0.05) / (l2 + 0.05)
 }
 
-const light = blockDeclarations(/:root\s*\{/)
-const dark = blockDeclarations(/\[data-theme='dark'\]\s*\{/)
+const light = blockDeclarations(css, /:root\s*\{/)
+const dark = blockDeclarations(css, /\[data-theme='dark'\]\s*\{/)
 const systemDark = blockDeclarations(
+  css,
   /:root:not\(\[data-theme='light'\]\):not\(\[data-theme='dark'\]\)\s*\{/,
 )
 
@@ -105,4 +107,109 @@ describe('tokens.css WCAG contrast', () => {
       expect(systemDark.get(token)).toBe(dark.get(token))
     }
   })
+})
+
+/* ── App ring tokens (UX-831) ──
+ * Focus/selection rings are alpha colors; WCAG 2.x contrast applies to what
+ * they composite into over the surface they are painted on. Every ring token
+ * of the pdf/docs/markdown apps must reach the non-text minimum (3:1) on the
+ * worst-case surface of its theme:
+ *   light theme — the lightest chrome surface, --surface #ffffff;
+ *   dark theme  — --surface #1e1e1e and the lighter --surface-subtle /
+ *                 --color-bg-subtle #2a2a2a (hover+focus states).
+ * Paper overlays (pdf text-edit/link marks) are theme-static and always sit
+ * on the white page. Systems-dark blocks must mirror the dark values. */
+
+type RingSurfaces = { light: string[]; dark: string[] }
+
+const CHROME: RingSurfaces = { light: ['#ffffff'], dark: ['#1e1e1e', '#2a2a2a'] }
+const PAPER: RingSurfaces = { light: ['#ffffff'], dark: ['#ffffff'] }
+
+const APP_RING_TOKENS: Array<{
+  app: string
+  token: string
+  surfaces: RingSurfaces
+}> = [
+  { app: 'pdf', token: '--pdf-focus-ring', surfaces: CHROME },
+  { app: 'pdf', token: '--pdf-swatch-ring', surfaces: CHROME },
+  { app: 'pdf', token: '--pdf-input-ring', surfaces: CHROME },
+  { app: 'pdf', token: '--pdf-error-ring', surfaces: CHROME },
+  { app: 'pdf', token: '--pdf-link-hover-ring', surfaces: PAPER },
+  { app: 'pdf', token: '--pdf-textedit-ring', surfaces: PAPER },
+  { app: 'pdf', token: '--pdf-textblock-ring', surfaces: PAPER },
+  { app: 'pdf', token: '--pdf-textblock-ring-hover', surfaces: PAPER },
+  { app: 'docs', token: '--docs-focus-ring', surfaces: CHROME },
+  { app: 'docs', token: '--docs-focus-ring-blue', surfaces: CHROME },
+  { app: 'docs', token: '--docs-brand-ring', surfaces: CHROME },
+  { app: 'docs', token: '--docs-input-ring', surfaces: CHROME },
+  { app: 'docs', token: '--docs-error-ring', surfaces: CHROME },
+  { app: 'markdown', token: '--md-focus-ring', surfaces: CHROME },
+  { app: 'markdown', token: '--md-focus-ring-blue', surfaces: CHROME },
+]
+
+const appsRoot = join(uiRoot, '..', '..')
+
+type Rgba = { r: number; g: number; b: number; a: number }
+
+function parseRgba(value: string): Rgba {
+  const m = value.match(/^rgba?\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\/\s*([\d.]+)%\s*\)$/)
+  if (!m) throw new Error(`ring token must be rgb(R G B / A%): ${value}`)
+  return { r: Number(m[1]), g: Number(m[2]), b: Number(m[3]), a: Number(m[4]) / 100 }
+}
+
+function compositeOver(fg: Rgba, bg: [number, number, number]): [number, number, number] {
+  return [
+    fg.a * fg.r + (1 - fg.a) * bg[0],
+    fg.a * fg.g + (1 - fg.a) * bg[1],
+    fg.a * fg.b + (1 - fg.a) * bg[2],
+  ]
+}
+
+function contrastOver(fg: Rgba, bgHex: string): number {
+  const bg = hexToRgb(bgHex)
+  const l1 = relativeLuminance(
+    `#${compositeOver(fg, bg)
+      .map((v) => Math.round(v).toString(16).padStart(2, '0'))
+      .join('')}`,
+  )
+  const l2 = relativeLuminance(bgHex)
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)
+}
+
+describe('app ring tokens composite to >= 3:1 on their surfaces (UX-831)', () => {
+  for (const { app, token, surfaces } of APP_RING_TOKENS) {
+    const appCss = readFileSync(
+      join(appsRoot, 'apps', app, 'src', 'renderer', 'styles.css'),
+      'utf8',
+    )
+    const appLight = blockDeclarations(appCss, /:root\s*\{/)
+    const appDark = blockDeclarations(appCss, /\[data-theme='dark'\]\s*\{/)
+    const appSystemDark = blockDeclarations(
+      appCss,
+      /:root:not\(\[data-theme='light'\]\):not\(\[data-theme='dark'\]\)\s*\{/,
+    )
+    // Theme-static (paper) rings are declared once in :root and apply to both themes.
+    const themeValue = (theme: 'light' | 'dark'): string => {
+      const value = (theme === 'dark' ? appDark : appLight).get(token)
+      if (value === undefined && theme === 'dark') return appLight.get(token)!
+      if (value === undefined) throw new Error(`${token} not found in ${app} styles.css`)
+      return value
+    }
+    const mirroredInSystemDark = appDark.has(token)
+      ? appSystemDark.get(token) === appDark.get(token)
+      : true
+
+    it(`${token} (${app}) meets the non-text minimum in both themes`, () => {
+      for (const theme of ['light', 'dark'] as const) {
+        const rgba = parseRgba(themeValue(theme))
+        for (const surface of surfaces[theme]) {
+          expect(
+            contrastOver(rgba, surface),
+            `${token} [${theme}] ${themeValue(theme)} on ${surface}`,
+          ).toBeGreaterThanOrEqual(3)
+        }
+      }
+      expect(mirroredInSystemDark, `${token} system-dark must mirror dark`).toBe(true)
+    })
+  }
 })

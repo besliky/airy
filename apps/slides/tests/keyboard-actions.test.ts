@@ -15,7 +15,7 @@ vi.mock('../src/renderer/clipboard-actions', () => ({
   duplicateSelected: vi.fn(),
   deleteSelected: vi.fn(),
 }))
-vi.mock('../src/renderer/slide-actions', () => ({ cutSlideAt: vi.fn() }))
+vi.mock('../src/renderer/slide-actions', () => ({ cutSlideAt: vi.fn(), addSlide: vi.fn() }))
 vi.mock('../src/renderer/arrange-actions', () => ({}))
 vi.mock('../src/renderer/show-actions', () => ({ startSlideShow: vi.fn() }))
 
@@ -32,6 +32,8 @@ function makeCtx(over: Record<string, unknown> = {}): ActionCtx {
     brushMode: null,
     enteredGroupId: null,
     findNodeCtx: () => null,
+    setSelectedIds: vi.fn(),
+    setEnteredGroupId: vi.fn(),
     ...over,
   } as unknown as ActionCtx
 }
@@ -285,5 +287,115 @@ describe('canvas keys stay canvas-scoped (UX-11s2)', () => {
       left,
     )
     expect(onTransform).not.toHaveBeenCalled()
+  })
+})
+
+describe('new slide shortcut (PAR-316 Ctrl/Cmd+M)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    document.body.innerHTML = ''
+  })
+
+  it('inserts a new slide after the current page on Ctrl/Cmd+M', () => {
+    const ctx = makeCtx()
+    const e = keydown('m')
+    handleGlobalKeydown(ctx, e)
+    expect(e.defaultPrevented).toBe(true)
+    expect(slideActions.addSlide).toHaveBeenCalledTimes(1)
+    expect(slideActions.addSlide).toHaveBeenCalledWith(ctx)
+  })
+
+  it('also fires while a text box is being edited (PowerPoint behavior)', () => {
+    const ctx = makeCtx({ editing: { sourceId: 's1' } })
+    const e = keydown('m')
+    handleGlobalKeydown(ctx, e)
+    expect(slideActions.addSlide).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fire without the modifier, with Shift, or in master view', () => {
+    handleGlobalKeydown(makeCtx(), keydown('m', { metaKey: false }))
+    handleGlobalKeydown(makeCtx(), keydown('m', { metaKey: true, shiftKey: true }))
+    handleGlobalKeydown(makeCtx({ masterItems: {} }), keydown('m'))
+    expect(slideActions.addSlide).not.toHaveBeenCalled()
+  })
+})
+
+describe('Tab selection cycle (PAR-316 group penetration)', () => {
+  const nodes = [
+    { sourceId: 's1', type: 'shape' },
+    { sourceId: 's2', type: 'text' },
+    {
+      sourceId: 'g1',
+      type: 'group',
+      children: [
+        { sourceId: 'c1', type: 'shape' },
+        { sourceId: 'c2', type: 'text' },
+      ],
+    },
+  ]
+
+  function plainKey(key: string, init: KeyboardEventInit = {}): KeyboardEvent {
+    return new KeyboardEvent('keydown', { key, cancelable: true, ...init })
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    document.body.innerHTML = ''
+  })
+
+  it('cycles forward through the top-level nodes in z-order', () => {
+    const ctx = makeCtx({ slide: { nodes } })
+    handleGlobalKeydown(ctx, plainKey('Tab'))
+    expect(ctx.setSelectedIds).toHaveBeenCalledWith(['s1'])
+    ctx.selectedIds = ['s1']
+    handleGlobalKeydown(ctx, plainKey('Tab'))
+    expect(ctx.setSelectedIds).toHaveBeenLastCalledWith(['s2'])
+  })
+
+  it('Shift+Tab from nothing starts at the last node', () => {
+    const ctx = makeCtx({ slide: { nodes } })
+    handleGlobalKeydown(ctx, plainKey('Tab', { shiftKey: true }))
+    expect(ctx.setSelectedIds).toHaveBeenCalledWith(['g1'])
+  })
+
+  it('Tab on a selected group descends into it and selects its first child', () => {
+    const ctx = makeCtx({
+      slide: { nodes },
+      selectedIds: ['g1'],
+      setEnteredGroupId: vi.fn(),
+    })
+    handleGlobalKeydown(ctx, plainKey('Tab'))
+    expect(ctx.setEnteredGroupId).toHaveBeenCalledWith('g1')
+    expect(ctx.setSelectedIds).toHaveBeenLastCalledWith(['c1'])
+  })
+
+  it('cycles the group children while in-group; Shift+Tab from the first child climbs back out', () => {
+    const groupNode = nodes[2]
+    const inGroup = {
+      slide: { nodes },
+      selectedIds: ['c1'],
+      enteredGroupId: 'g1',
+      enteredGroupNode: groupNode,
+      setEnteredGroupId: vi.fn(),
+    }
+    const ctx = makeCtx(inGroup)
+    handleGlobalKeydown(ctx, plainKey('Tab'))
+    expect(ctx.setSelectedIds).toHaveBeenLastCalledWith(['c2'])
+
+    const back = makeCtx({ ...inGroup, selectedIds: ['c1'] })
+    handleGlobalKeydown(back, plainKey('Tab', { shiftKey: true }))
+    expect(back.setEnteredGroupId).toHaveBeenCalledWith(null)
+    expect(back.setSelectedIds).toHaveBeenLastCalledWith(['g1'])
+  })
+
+  it('does not hijack Tab when focus sits on a ribbon control', () => {
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.focus()
+    const ctx = makeCtx({ slide: { nodes } })
+    const e = plainKey('Tab')
+    handleGlobalKeydown(ctx, e)
+    expect(e.defaultPrevented).toBe(false)
+    expect(ctx.setSelectedIds).not.toHaveBeenCalled()
   })
 })

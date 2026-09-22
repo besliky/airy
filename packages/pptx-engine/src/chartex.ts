@@ -1,10 +1,10 @@
 /**
  * chartEx parsing (2014 cx namespace: ppt/charts/chartExN.xml → ChartModel).
  *
- * Modern chart types PowerPoint stores outside the classic c: namespace.
- * Supported layoutIds: funnel (categories + values → centered bars) and
- * sunburst (multi-level strDim hierarchy + leaf sizes → rings). Other
- * layoutIds (waterfall, treemap, …) return null and fall back to the chip.
+ * Supported layoutIds: funnel (categories + values → centered bars), sunburst
+ * (multi-level strDim hierarchy + leaf sizes → rings), treemap (leaf sizes →
+ * squarified tiles) and waterfall (deltas → running-total bars). Other
+ * layoutIds return null and fall back to the chip.
  */
 import { XMLParser } from 'fast-xml-parser'
 import { type Theme } from './theme'
@@ -66,7 +66,13 @@ export function parseChartExXml(xml: string, theme?: Theme): ChartModel | null {
   const seriesRaw = region?.['cx:series']
   const ser = Array.isArray(seriesRaw) ? seriesRaw[0] : seriesRaw
   const layoutId = ser?.['@_layoutId']
-  if (layoutId !== 'funnel' && layoutId !== 'sunburst') return null
+  if (
+    layoutId !== 'funnel' &&
+    layoutId !== 'sunburst' &&
+    layoutId !== 'treemap' &&
+    layoutId !== 'waterfall'
+  )
+    return null
 
   const dataId = ser?.['cx:dataId']?.['@_val'] ?? '0'
   const datas: any[] = space?.['cx:chartData']?.['cx:data'] ?? []
@@ -94,15 +100,15 @@ export function parseChartExXml(xml: string, theme?: Theme): ChartModel | null {
   }
   if (layoutId === 'sunburst') {
     model.sunburst = { levels: strLvls, sizes: values }
-    const dPtsRaw = ser?.['cx:dataPt'] ?? []
-    const dPts: any[] = Array.isArray(dPtsRaw) ? dPtsRaw : [dPtsRaw]
-    const pointColors: Array<string | undefined> = []
-    for (const dPt of dPts) {
-      const i = parseInt(dPt?.['@_idx'], 10)
-      const c = resolveColorNode(dPt?.['cx:spPr']?.['a:solidFill'], theme)
-      if (!Number.isNaN(i) && c != null) pointColors[i] = c
-    }
-    if (pointColors.length) model.sunburst.pointColors = pointColors
+    setPointColors(model.sunburst, ser?.['cx:dataPt'], theme)
+  }
+  if (layoutId === 'treemap') {
+    model.treemap = { levels: strLvls, sizes: values }
+    setPointColors(model.treemap, ser?.['cx:dataPt'], theme)
+  }
+  if (layoutId === 'waterfall') {
+    model.waterfall = { values }
+    setPointColors(model.waterfall, ser?.['cx:dataPt'], theme)
   }
   if (layoutId === 'funnel') {
     const gap = parseFloat(
@@ -117,4 +123,23 @@ export function parseChartExXml(xml: string, theme?: Theme): ChartModel | null {
     if (accents.length === 6) model.themePalette = accents
   }
   return model
+}
+
+/**
+ * Per-point explicit fills (cx:dataPt/cx:spPr) → the model field's pointColors,
+ * keyed by data-point idx. Shared by sunburst/treemap/waterfall.
+ */
+function setPointColors(
+  field: { pointColors?: Array<string | undefined> },
+  dPtsRaw: any,
+  theme?: Theme,
+): void {
+  const dPts: any[] = Array.isArray(dPtsRaw) ? dPtsRaw : dPtsRaw ? [dPtsRaw] : []
+  const pointColors: Array<string | undefined> = []
+  for (const dPt of dPts) {
+    const i = parseInt(dPt?.['@_idx'], 10)
+    const c = resolveColorNode(dPt?.['cx:spPr']?.['a:solidFill'], theme)
+    if (!Number.isNaN(i) && c != null) pointColors[i] = c
+  }
+  if (pointColors.length) field.pointColors = pointColors
 }
