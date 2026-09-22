@@ -445,6 +445,10 @@ export async function recordVideoTimeline(
       // an errored recorder refuses stop(); the gate below is already settled
       // by onerror — proceed to the error report
     }
+    // BUG-1301: the hang rejection fires unconditionally, but a user cancel
+    // that races a hung encoder must stay a quiet null (the docstring promise;
+    // the status bar must not report a failed export for a user abort) —
+    // swallow the rejection when the cancel is what broke out of the loop
     await Promise.race([
       stopped,
       new Promise<void>((_, reject) =>
@@ -453,7 +457,9 @@ export async function recordVideoTimeline(
           RECORDER_STOP_TIMEOUT_MS,
         ),
       ),
-    ])
+    ]).catch((err: unknown) => {
+      if (!cancelled) throw err
+    })
     await sinkTail // every flushed chunk is appended before the file settles
     if (cancelled) {
       await discard()
