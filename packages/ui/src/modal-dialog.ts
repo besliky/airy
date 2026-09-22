@@ -12,7 +12,9 @@
  * not take the modal with it). A window-level capture fallback only fires when
  * focus is NOT inside the dialog, so Escape still closes the dialog when focus
  * sits on the page behind it — and is stopped before app-global Escape
- * listeners (read mode, thumbnail navigation) see it.
+ * listeners (read mode, thumbnail navigation) see it. The fallback respects a
+ * press another layer already claimed (defaultPrevented, BUG-1320): one
+ * Escape dismisses exactly one layer.
  */
 import { useCallback, useEffect, useId, useRef } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react'
@@ -75,10 +77,15 @@ export function useModalDialog(onClose: () => void): ModalDialogController {
   }, [])
 
   // Escape with focus outside the dialog (body, or chrome the focus trap
-  // missed): capture phase, stopped before app-global listeners see it
+  // missed): capture phase, stopped before app-global listeners see it.
+  // A press another layer already claimed (defaultPrevented — e.g. the
+  // ribbon popover's window-capture handler, BUG-1320) belongs to that
+  // layer: "one Escape dismisses one layer", so this fallback stands down
+  // and the next press closes the dialog.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.isComposing) return
+      if (e.defaultPrevented) return
       if (ref.current?.contains(document.activeElement)) return
       e.preventDefault()
       e.stopPropagation()

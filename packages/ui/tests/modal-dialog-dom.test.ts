@@ -121,6 +121,44 @@ describe('useModalDialog', () => {
     act(() => root.unmount())
   })
 
+  it('stands down on a press another layer claimed — one Esc, one layer (BUG-1320)', () => {
+    // The ribbon popover's window-capture handler is registered BEFORE the
+    // modal mounts and claims Escape with preventDefault+stopPropagation —
+    // which does not stop same-node listeners. The fallback used to close the
+    // dialog with the same press: one Esc dismissed two layers whenever focus
+    // sat outside the modal box (body), where the defer predicate missed.
+    const onClose = vi.fn()
+    const popoverClosed = vi.fn()
+    const popoverClaim = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      e.preventDefault()
+      e.stopPropagation()
+      popoverClosed()
+    }
+    window.addEventListener('keydown', popoverClaim, true)
+    try {
+      const { root, container } = mount(onClose)
+      ;(document.activeElement as HTMLElement | null)?.blur()
+      expect(document.activeElement).toBe(document.body)
+      const event = press(document.body, 'Escape')
+      // the popover took the press; the modal stays open for the next one
+      expect(popoverClosed).toHaveBeenCalledTimes(1)
+      expect(event.defaultPrevented).toBe(true)
+      expect(onClose).not.toHaveBeenCalled()
+      expect(container.querySelector('.modal')).not.toBeNull()
+      act(() => root.unmount())
+    } finally {
+      window.removeEventListener('keydown', popoverClaim, true)
+    }
+    // the popover is gone now: the next press closes the dialog alone
+    const { root, container } = mount(onClose)
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    expect(press(document.body, 'Escape').defaultPrevented).toBe(true)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(container.querySelector('.modal')).toBeNull()
+    act(() => root.unmount())
+  })
+
   it('returns focus to the trigger when the dialog unmounts', () => {
     const trigger = document.createElement('button')
     document.body.appendChild(trigger)

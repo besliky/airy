@@ -94,4 +94,16 @@ describe('Ribbon wires the escape dismissal (source contract)', () => {
     expect(handler).toContain('e.preventDefault()')
     expect(handler).toContain('e.stopPropagation()')
   })
+
+  it('stands down when a same-node listener already claimed the press (BUG-1320)', () => {
+    // the modal fallback is a window-capture peer: stopPropagation cannot hold
+    // same-node listeners back, so the handler must respect defaultPrevented
+    // or one Esc closes the popover AND the dialog (focus outside the modal
+    // box misses the ribbonEscapeDeferred .modal-backdrop probe)
+    const handler = src.slice(
+      src.indexOf('const onKey = (e: KeyboardEvent) => {', src.indexOf('ribbonEscapeDeferred')),
+      src.indexOf('closePanels()', src.indexOf('ribbonEscapeDeferred')),
+    )
+    expect(handler).toContain('if (e.defaultPrevented) return')
+  })
 })
