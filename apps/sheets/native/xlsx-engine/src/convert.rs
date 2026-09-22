@@ -13,6 +13,7 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::SidecarError;
+use crate::legacy_xls::{self, SheetStrings};
 
 #[derive(Debug)]
 pub struct ConvertResult {
@@ -59,6 +60,11 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
     validate_zip_based_source(source)?;
     let mut workbook = open_workbook_auto(source)
         .map_err(|error| SidecarError::Workbook(format!("Unable to read the workbook: {error}")))?;
+    // BUG-1600: calamine decodes legacy .xls strings through the workbook
+    // codepage even when a string's own fHighByte flag selects UTF-16, so
+    // single-byte-codepage books come out as mojibake. The overlay is the
+    // spec-correct re-decode of the SST; empty for every other format.
+    let repaired = legacy_xls::LegacyXlsStrings::extract(source);
     let names: Vec<String> = workbook.sheet_names().to_vec();
     if names.is_empty() {
         return Err(SidecarError::Workbook("The workbook has no sheets.".into()));
@@ -66,7 +72,7 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
 
     let mut sheet_xmls: Vec<String> = Vec::new();
     let mut cells = 0usize;
-    for name in &names {
+    for (index, name) in names.iter().enumerate() {
         let range = workbook
             .worksheet_range(name)
             .map_err(|error| SidecarError::Workbook(format!("Sheet {name}: {error}")))?;
@@ -83,7 +89,7 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
                 }
             }
         }
-        let (xml, sheet_cells) = worksheet_xml(&range, &formula_map);
+        let (xml, sheet_cells) = worksheet_xml(&range, &formula_map, repaired.sheet(index));
         cells += sheet_cells;
         sheet_xmls.push(xml);
     }
@@ -99,7 +105,7 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
 
     add("[Content_Types].xml", &content_types_xml(names.len()))?;
     add("_rels/.rels", ROOT_RELS)?;
-    add("xl/workbook.xml", &workbook_xml(&names))?;
+    add("xl/workbook.xml", &workbook_xml(&names, &repaired))?;
     add("xl/_rels/workbook.xml.rels", &workbook_rels_xml(names.len()))?;
     add("xl/styles.xml", STYLES_XML)?;
     for (index, xml) in sheet_xmls.iter().enumerate() {
@@ -112,6 +118,7 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
 fn worksheet_xml(
     range: &calamine::Range<Data>,
     formulas: &HashMap<(u32, u32), String>,
+    repaired: Option<&SheetStrings>,
 ) -> (String, usize) {
     // Rows carrying values plus rows carrying only formulas.
     let mut rows: HashMap<u32, Vec<(u32, String)>> = HashMap::new();
@@ -119,8 +126,14 @@ fn worksheet_xml(
     let (start_row, start_col) = range.start().unwrap_or((0, 0));
     for (row, column, value) in range.used_cells() {
         let absolute = (start_row + row as u32, start_col + column as u32);
+        // BUG-1600: the overlay carries the spec-correct SST decode for
+        // cells whose string calamine mangled through the book codepage.
         let formula = formulas.get(&absolute).map(String::as_str);
-        if let Some(cell) = cell_xml(absolute, value, formula) {
+        let outcome = match repaired.and_then(|sheet| sheet.cells.get(&absolute)) {
+            Some(text) => cell_xml(absolute, &Data::String(text.clone()), formula),
+            None => cell_xml(absolute, value, formula),
+        };
+        if let Some(cell) = outcome {
             cells += 1;
             rows.entry(absolute.0).or_default().push((absolute.1, cell));
         }
@@ -242,16 +255,24 @@ fn content_types_xml(sheet_count: usize) -> String {
 const ROOT_RELS: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#;
 
-fn workbook_xml(names: &[String]) -> String {
+fn workbook_xml(names: &[String], repaired: &legacy_xls::LegacyXlsStrings) -> String {
     let sheets: String = names
         .iter()
         .enumerate()
-        .map(|(index, name)| format!(
-            r#"<sheet name="{}" sheetId="{}" r:id="rId{}"/>"#,
-            escape_xml(name),
-            index + 1,
-            index + 1,
-        ))
+        .map(|(index, name)| {
+            // BUG-1600: BOUNDSHEET names mangle like the strings they sit
+            // next to; the overlay carries the spec-correct decode.
+            let display = repaired
+                .sheet(index)
+                .and_then(|sheet| sheet.name.as_deref())
+                .unwrap_or(name);
+            format!(
+                r#"<sheet name="{}" sheetId="{}" r:id="rId{}"/>"#,
+                escape_xml(display),
+                index + 1,
+                index + 1,
+            )
+        })
         .collect();
     format!(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -433,7 +454,9 @@ mod tests {
     fn refuses_an_ods_with_too_many_zip_entries() {
         let dir = tempfile::tempdir().unwrap();
         let source = dir.path().join("many.ods");
-        let names: Vec<String> = (0..10_000).map(|index| format!("junk/{index}.bin")).collect();
+        let names: Vec<String> = (0..10_000)
+            .map(|index| format!("junk/{index}.bin"))
+            .collect();
         let junk: Vec<(&str, &str)> = names.iter().map(|name| (name.as_str(), "x")).collect();
         write_ods_fixture(&source, &junk);
         let target = dir.path().join("converted.xlsx");
@@ -479,6 +502,39 @@ mod tests {
             "expected the calamine refusal, got: {message}"
         );
         assert!(!target.exists());
+    }
+
+    /// BUG-1600: a BIFF8 book with a single-byte codepage (1252) but
+    /// UTF-16-flagged SST strings used to convert every Cyrillic string
+    /// into mojibake plus U+0004 control characters, compressed strings
+    /// into NUL-padded ones, and the sheet name into garbage. The committed
+    /// fixture is a LibreOffice-generated workbook whose CODEPAGE record
+    /// was patched 1200 -> 1252 (the exact report shape); xlrd reads all of
+    /// its text cleanly, and so must the conversion.
+    #[test]
+    fn repairs_utf16_sst_strings_from_a_single_byte_codepage_book() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/bug-1600-utf16-sst-codepage-1252.xls"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let result = convert_to_xlsx(source, &target).unwrap();
+        assert_eq!(result.sheets, 1);
+
+        let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
+        assert!(sheet.contains(r#"xml:space="preserve">Наименование</t>"#));
+        // Embedded newline of the source cell survives conversion.
+        assert!(sheet.contains("Первая строка\nВторая строка"));
+        // An 8-bit compressed SST string (fHighByte=0) must come out clean,
+        // not NUL-padded the way calamine's codepage decode leaves it.
+        assert!(sheet.contains("Plain ASCII item"));
+        assert!(sheet.contains("Кириллица и ASCII mix"));
+        assert!(!sheet.contains('\u{0}'), "NUL bytes in converted sheet");
+
+        let workbook = read_entry(&target, "xl/workbook.xml");
+        assert!(workbook.contains(r#"<sheet name="Прайс""#));
     }
 
     fn convert_fixture(path: &Path) {
