@@ -449,23 +449,24 @@ binary document session (`.docx` / `.pptx` / `.xlsx` / `.xlsm` / `.xls` /
 `.ods`) refuses a raw file over 512 MiB by stat before a byte is read, and
 the same raw cap covers the read-only `.pdf` / `.doc` text-extraction opens
 and the original handed to the `.doc` / `.odt` LibreOffice conversion
-(refused before the soffice subprocess is spawned). The zip formats
-additionally refuse packages whose central directory declares more
-than 10,000 parts, a part over 512 MiB uncompressed, or a total over
-1.5 GiB uncompressed (the zip-bomb budget — the docx engine runs it inside
-`parseDocx`, the slides session in front of `openPptx`). Workbook bytes
-never transit the Node server (the Rust sidecar reads the file itself), so
-server-side workbooks get only the raw cap; the sidecar itself enforces the
-zip-bomb budget on open (SEC-1103): a workbook whose central directory
-declares more than 10,000 entries or over 1.5 GiB total uncompressed is
-refused before a single entry is decompressed. There is deliberately no
-per-part cap for workbooks — worksheet reads stream in bounded chunks, so
-one large sheet stays openable — and the refusal names the declared total
-and the budget. The same budget guards the legacy conversion path (SEC-1301):
-`.ods` imports go through the sidecar's calamine converter, which reads the
-same ZIP container, so the fence runs there too (content-based, by the zip
-magic — `.xls` is an OLE2 compound document and has no central directory)
-before calamine decompresses a single entry.
+(refused before the soffice subprocess is spawned). The zip-based formats
+additionally enforce a declared-uncompressed zip-bomb budget — 10,000
+parts, 512 MiB per part, 1.5 GiB total — read from the central directory
+before any entry is decompressed. Where that budget runs, and what it does
+not cover, differs by format:
+
+| Format                   | Zip-bomb budget at open                                                                                                                                                                                                                  | Known limitations                                                                                                                                                                   |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.docx`                  | inside the engine, before any part inflates — `assertZipWithinLimits` (docx-engine `zip-load.ts`), run by `parseDocx` → `loadDocxZip` and by every save-side reload                                                                      | declared sizes surface as JSZip signed int32: a part declaring ≥ 2 GiB wraps negative and slips the per-part and total budgets (fix in progress: SEC-1551)                          |
+| `.pptx`                  | twice — the headless session applies the same budgets (`assertPptxWithinZipBudget`, mcp-server `size-fence.ts`), then the engine re-checks in `PackageArchive.open` (pptx-engine `zip.ts`; also covers the desktop and merge open paths) | the session-level check shares the docx int32 seam, but the engine fence behind it normalizes the wrap, so the open path stays covered                                              |
+| `.xlsx` / `.xlsm`        | the Rust sidecar refuses more than 10,000 entries or a declared total over 1.5 GiB before any decompression (`validate_entries`, xlsx-engine `archive.rs`); Node adds only the raw cap (workbook bytes never transit Node)               | deliberately no per-part cap — worksheet reads stream in bounded chunks, so one large sheet stays openable; only the edit path materializes entries (500 MiB per-entry patch limit) |
+| `.ods` / `.xls` import   | the same sidecar budget runs on the convert path, content-based by the zip magic, before calamine decompresses anything (`validate_zip_based_source`, xlsx-engine `convert.rs`)                                                          | a source without the zip magic (`.xls` is an OLE2 compound document, no central directory) skips the fence by design and fails inside calamine with its own message                 |
+| `.pdf` / `.doc` / `.odt` | raw cap only — these opens are not zip containers                                                                                                                                                                                        | a `.doc` / `.odt` open's converted `.docx` re-enters through the `.docx` budget                                                                                                     |
+
+Every budget is metadata-only, and every refusal names the numbers it
+tripped over (the declared total and the budget); a file whose declarations
+stay under the budgets still opens — the fences refuse bombs, not
+big-looking metadata.
 
 ## Security model
 
