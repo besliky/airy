@@ -404,10 +404,9 @@ describe('list marker decorations', () => {
   async function renderLi(
     lvlXml: string,
     styles?: Map<string, StyleInfo>,
+    bodyXml: string = li,
   ): Promise<{ el: Element; destroy: () => void }> {
-    const parsed = await parseDocx(
-      await buildDocx({ bodyXml: li, numberingXml: numberingXml(lvlXml) }),
-    )
+    const parsed = await parseDocx(await buildDocx({ bodyXml, numberingXml: numberingXml(lvlXml) }))
     const editor = new Editor({
       element: document.createElement('div'),
       extensions: editorExtensions,
@@ -619,6 +618,81 @@ describe('list marker decorations', () => {
     )
     // 12pt Normal -> 16px, family from the default paragraph style
     expect(measuredFonts[0]).toBe('16px "Times New Roman", Calibri, sans-serif')
+    destroy()
+  })
+
+  // BUG-1544: Word takes list indents only from numbering.xml (+ the paragraph's
+  // and the style's own w:ind); the old CSS per-level defaults rendered a phantom
+  // ~0.3" indent whenever numbering.xml carries no w:ind
+  it('takes the indent verbatim from the numbering.xml level w:ind', async () => {
+    const { el, destroy } = await renderLi(
+      '<w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>' +
+        '<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>',
+    )
+    const style = el.getAttribute('style') ?? ''
+    expect(style).toContain('--li-left: 36pt')
+    expect(style).toContain('--li-hang: 18pt')
+    destroy()
+  })
+
+  it('renders numbering without any w:ind flush: marker at the margin, text at the first default tab', async () => {
+    const { el, destroy } = await renderLi(
+      '<w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>' +
+        '<w:rPr><w:sz w:val="24"/></w:rPr>',
+    )
+    expect(el.getAttribute('data-marker')).toBe('1.')
+    const style = el.getAttribute('style') ?? ''
+    expect(style).toContain('--li-left: 0pt')
+    expect(style).toContain('--li-hang: 0pt')
+    // "1." = 16px = 240tw at marker start 0 -> next default stop 720tw = 36pt
+    expect(style).toContain('--li-tab: 36pt')
+    expect(el.hasAttribute('data-marker-clip')).toBe(false)
+    destroy()
+  })
+
+  it('a paragraph w:ind with no left anywhere still renders the text column at the margin', async () => {
+    const pStyleFirst =
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>' +
+      '<w:ind w:firstLine="288"/></w:pPr><w:r><w:t>item</w:t></w:r></w:p>'
+    const { el, destroy } = await renderLi(
+      '<w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>',
+      undefined,
+      pStyleFirst,
+    )
+    const style = el.getAttribute('style') ?? ''
+    expect(style).toContain('--li-left: 0pt')
+    expect(style).toContain('--li-hang: 0pt')
+    expect(style).toContain('text-indent: 14.4pt')
+    // marker at 288tw, ends 528 -> next default stop 720: box 432tw = 21.6pt
+    expect(style).toContain('--li-tab: 21.6pt')
+    destroy()
+  })
+
+  it('a style-level w:ind keeps feeding the CSS fallback chain (no flush overrides)', async () => {
+    const styled =
+      '<w:p><w:pPr><w:pStyle w:val="ListParagraph"/>' +
+      '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>' +
+      '<w:r><w:t>item</w:t></w:r></w:p>'
+    const styles = new Map<string, StyleInfo>([
+      [
+        'ListParagraph',
+        {
+          styleId: 'ListParagraph',
+          name: 'List Paragraph',
+          type: 'paragraph',
+          display: { indentLeftTwips: 720 },
+        },
+      ],
+    ])
+    const { el, destroy } = await renderLi(
+      '<w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>',
+      styles,
+      styled,
+    )
+    expect(el.getAttribute('data-style')).toBe('ListParagraph')
+    const style = el.getAttribute('style') ?? ''
+    expect(style).not.toContain('--li-left')
+    expect(style).not.toContain('--li-hang')
     destroy()
   })
 })
