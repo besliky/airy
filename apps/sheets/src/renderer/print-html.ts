@@ -1,5 +1,6 @@
 /// Lays the active sheet out as print HTML from the live Univer model —
-/// display strings (number formats applied), cell styles, merges, and the
+/// display strings (number formats applied), cell styles, conditional-
+/// formatting visuals (fills, font colors, data bars), merges, and the
 /// sheet's effective page setup (print areas, repeated title rows, gridlines,
 /// headings, header/footer). The main process turns the HTML into a PDF.
 
@@ -45,9 +46,16 @@ type PageVariant = 'odd' | 'even' | 'first'
 /// otherwise; a text row is at least one line plus the cell padding tall,
 /// which can exceed Excel's saved row height by a point or so — the
 /// fit-to-page pagination must count the printed height, not the saved one.
+/// On top of that, border-collapse grows every bordered row by its border
+/// (a thin edge is worth ~0.75pt per row), which the saved height never
+/// carries — a 40-row bordered sheet drifted ~30pt past the model and
+/// pushed a phantom trailing page into the PDF (BUG-1504), so the declared
+/// <tr> height includes the border too.
 const LINE_HEIGHT_FACTOR = 1.25
 const CELL_VERTICAL_PADDING_PT = 2
 const DEFAULT_FONT_SIZE_PT = 11
+/// The gridline net's collapsed border weight (td rule when gridlines print).
+const GRIDLINE_BORDER_PT = 0.5
 /// The row/column heading strip (8.5pt text, padding, border).
 const HEADING_ROW_HEIGHT_PT = 14
 
@@ -105,10 +113,40 @@ export interface PrintWorksheet {
     getValues(): unknown[][]
   }
   getRange(row: number, column: number): { getCellStyleData(): PrintCellStyle | null }
+  /// Conditional-formatting visuals for one cell, composed the way the grid's
+  /// CF engine composes them (matched rules' dxf merged, stopIfTrue honored):
+  /// the style fields the rules define plus data-bar render parameters.
+  /// Optional — hand-built test fixtures and harnesses without the CF plugin
+  /// keep compiling; the caller wires the live service in page-layout-actions.
+  getConditionalFormatStyle?(row: number, column: number): PrintConditionalFormatStyle | null
+}
+
+/// One cell's conditional-formatting result: the merged dxf style (fields
+/// present override the static cell style, like Excel layers CF) and the
+/// data-bar bar geometry. Icon sets have no HTML twin here — the grid draws
+/// them as canvas bitmaps from its own image map — and stay deferred.
+export interface PrintConditionalFormatStyle {
+  readonly style?: PrintCellStyle | undefined
+  readonly dataBar?: PrintDataBar | undefined
+  /// The data-bar rule's "Show Bar Only" switch; false hides the cell's text.
+  readonly showValue?: boolean | undefined
+}
+
+/// A data bar's geometry, mirroring the render parameters Univer's canvas
+/// extension draws (all values in percent of the cell).
+export interface PrintDataBar {
+  readonly color: string
+  /// Bar length as a percent of the value span, signed: negative bars grow
+  /// left from the axis.
+  readonly value: number
+  /// The zero axis position (50 by default, 0/100 for all-positive or
+  /// all-negative ranges).
+  readonly startPoint: number
+  readonly isGradient: boolean
 }
 
 /// The IStyleData fields the layout reads (all optional in Univer).
-interface PrintCellStyle {
+export interface PrintCellStyle {
   readonly bl?: number
   readonly it?: number
   readonly ul?: { s?: number } | null
@@ -172,7 +210,15 @@ export function buildSheetPrintPayload(
   pageOrder: PrintPageOrder = 'down-then-over',
 ): WorkbookExportPdfRequest {
   return buildSheetsPrintPayload(
-    [{ worksheet, printAreas: setup.printAreas, printTitles: setup.printTitles }],
+    [
+      {
+        worksheet,
+        printAreas: setup.printAreas,
+        printTitles: setup.printTitles,
+        rowBreaks: setup.rowBreaks,
+        colBreaks: setup.colBreaks,
+      },
+    ],
     setup,
     fileName,
     sheetName,
@@ -190,6 +236,12 @@ export interface PrintSheetJob {
   readonly printAreas: readonly string[]
   /// Rows repeated at the top of every page ("1:2"), or null.
   readonly printTitles: string | null
+  /// This sheet's manual page breaks (screen indices; the break sits above
+  /// the index). Absent = the shared setup's (the active sheet's set, which
+  /// is the same sheet for active-sheet and selection jobs; workbook jobs
+  /// resolve each sheet's own).
+  readonly rowBreaks?: readonly number[] | undefined
+  readonly colBreaks?: readonly number[] | undefined
   /// Entire-workbook jobs skip a sheet whose used range is empty (Excel
   /// prints nothing for a blank sheet); explicit areas always print.
   readonly skipWhenEmpty?: boolean
@@ -271,16 +323,27 @@ export function buildSheetsPrintPayload(
   // that starts a new page) — what the per-sheet header/footer sets below
   // are keyed by, so the main process can print one ranged pass per sheet.
   const sheetPages: number[] = []
-  for (const sheetLayouts of layouts) {
+  layouts.forEach((sheetLayouts, index) => {
+    const job = resolved[index]!.job
+    // The sheet's manual breaks for pagination: the job's own (per sheet on
+    // workbook jobs) or the setup's (the active sheet's). Excel honours
+    // manual breaks only at a fixed print scale — fit-to-page jobs ignore
+    // them entirely, and the fit scale search never sees them either.
+    const breaks = setup.fitToPage
+      ? { rowBreaks: [] as const, colBreaks: [] as const }
+      : {
+          rowBreaks: job.rowBreaks ?? setup.rowBreaks ?? [],
+          colBreaks: job.colBreaks ?? setup.colBreaks ?? [],
+        }
     let pages = 0
     for (const area of sheetLayouts) {
-      for (const tile of areaTiles(area, printable, scale, rowHeaderPt, pageOrder)) {
+      for (const tile of areaTiles(area, printable, scale, rowHeaderPt, pageOrder, breaks)) {
         tables.push(emitTable(area, tile, headings))
         pages += tilePageCount(area, tile, printable.heightPt / scale)
       }
     }
     sheetPages.push(pages)
-  }
+  })
 
   const html =
     `<!doctype html><html lang="${htmlLang(getLang())}"><head><meta charset="utf-8"><style>
@@ -417,11 +480,14 @@ interface LayoutRow {
   /// Saved row height in print points.
   readonly heightPt: number
   /// Height the printed row needs — the forced <tr> height: the saved
-  /// height, or taller when a cell's text line does not fit it. The
-  /// over-then-down banding and fit-to-page pagination count this same
-  /// value, so declaring it on the <tr> keeps Chromium's own pagination
-  /// (rows never split) in step with the planned bands instead of letting
-  /// a text-boosted row silently overflow its band's page.
+  /// height (or the taller text line), plus the row's widest collapsed
+  /// border, which border-collapse adds on top of the content box when the
+  /// sheet prints borders or gridlines (BUG-1504: without it, 82 thin-
+  /// bordered rows drifted ~0.5-0.75pt each and spilled a phantom trailing
+  /// page). The over-then-down banding and fit-to-page pagination count
+  /// this same value, so declaring it on the <tr> keeps Chromium's own
+  /// pagination (rows never split) in step with the planned bands instead
+  /// of letting a text-boosted row silently overflow its band's page.
   /// Known residual (BUG-1214 recheck, headless Chromium): the model counts
   /// ONE text line at 1.25 x font size, but a rendered row still grows past
   /// the declared height when (a) wrap-text cells (`tb: 3`, or embedded
@@ -525,6 +591,7 @@ function layoutPrintArea(
   const buildRow = (row: number): LayoutRow => {
     const cells: LayoutCell[] = []
     let textHeightPt = 0
+    let borderHeightPt = 0
     for (let column = area.startColumn; column <= area.endColumn; column += 1) {
       // Hidden columns never print, not even as merge fillers.
       if (!columnPrints(column)) continue
@@ -536,9 +603,16 @@ function layoutPrintArea(
       const sourceRow = anchor ? anchor.sourceRow : row
       const sourceColumn = anchor ? anchor.sourceColumn : column
       const inArea = sourceRow >= area.startRow && sourceRow <= area.endRow
-      const text = inArea
-        ? (display[sourceRow - area.startRow]?.[sourceColumn - area.startColumn] ?? '')
-        : cellDisplay(worksheet, sourceRow, sourceColumn)
+      // A data-bar rule with "Show Bar Only" prints the bar alone (Excel
+      // hides the value); every other CF rule keeps the cell's text. CF is
+      // evaluated at the printed position, like the grid does.
+      const conditional = worksheet.getConditionalFormatStyle?.(sourceRow, sourceColumn) ?? null
+      const barOnly = conditional?.dataBar !== undefined && conditional.showValue === false
+      const text = !inArea
+        ? cellDisplay(worksheet, sourceRow, sourceColumn)
+        : barOnly
+          ? ''
+          : (display[sourceRow - area.startRow]?.[sourceColumn - area.startColumn] ?? '')
       const rawValue = inArea
         ? raw[sourceRow - area.startRow]?.[sourceColumn - area.startColumn]
         : undefined
@@ -549,6 +623,14 @@ function layoutPrintArea(
           (style?.fs ?? DEFAULT_FONT_SIZE_PT) * LINE_HEIGHT_FACTOR + CELL_VERTICAL_PADDING_PT,
         )
       }
+      // Collapsed table borders grow the rendered row beyond its content
+      // box (a thin bottom border adds ~0.75pt per row); take the row's
+      // widest vertical border so the declared <tr> height covers it.
+      const verticalBorder = (edge: 't' | 'b'): number => {
+        const border = style?.bd?.[edge]
+        return border ? printBorderWidthPt(border.s) : gridlines ? GRIDLINE_BORDER_PT : 0
+      }
+      borderHeightPt = Math.max(borderHeightPt, verticalBorder('t'), verticalBorder('b'))
       cells.push({
         column,
         rowspan: anchor ? anchor.rows : 1,
@@ -556,14 +638,14 @@ function layoutPrintArea(
         endRow: anchor ? anchor.endRow : row,
         endColumn: anchor ? anchor.endColumn : column,
         text,
-        css: cellCss(style, rawValue, gridlines),
+        css: cellCss(style, rawValue, gridlines, conditional),
       })
     }
     const heightPt = Math.max(worksheet.getRowHeight(row) * 0.75, 10)
     return {
       row,
       heightPt,
-      printedHeightPt: Math.max(heightPt, textHeightPt),
+      printedHeightPt: Math.max(heightPt, textHeightPt) + borderHeightPt,
       cells,
     }
   }
@@ -599,6 +681,7 @@ function layoutPrintArea(
         worksheet.getRange(info.sourceRow, info.sourceColumn).getCellStyleData(),
         undefined,
         gridlines,
+        worksheet.getConditionalFormatStyle?.(info.sourceRow, info.sourceColumn) ?? null,
       ),
     )
   }
@@ -640,37 +723,73 @@ interface AreaTile {
   readonly colEnd: number
 }
 
+/// The manual breaks that fall strictly inside an area's body rows: a break
+/// at or before the first body row would cut a titles-only segment, and the
+/// caller's fit-to-page jobs pass [] anyway (Excel ignores manual breaks
+/// there). Breaks landing inside the repeated title rows are dropped — the
+/// titles re-print whole on every page regardless.
+function bodyRowBreaks(area: LayoutArea, rowBreaks: readonly number[]): Set<number> {
+  const first = area.bodyRows[0]?.row
+  if (first === undefined) return new Set()
+  return new Set(rowBreaks.filter((index) => index > first && index <= area.endRow))
+}
+
 /// The area's page tiles (a row band × a column stripe each) in print order —
 /// shared by the table emitter and the per-sheet page counter so both agree
-/// on the pagination.
+/// on the pagination. Manual row breaks force band edges (Excel honours them
+/// at a fixed scale): down-then-over jobs only cut segments at the breaks and
+/// let Chromium flow rows between them, while over-then-down jobs keep their
+/// capacity-simulated bands with the breaks cut in as hard edges.
 function areaTiles(
   area: LayoutArea,
   printable: { widthPt: number; heightPt: number },
   scale: number,
   rowHeaderPt: number,
   pageOrder: PrintPageOrder,
+  breaks: { rowBreaks: readonly number[]; colBreaks: readonly number[] } = {
+    rowBreaks: [],
+    colBreaks: [],
+  },
 ): AreaTile[] {
-  const columnStripes = columnStripesOf(area, printable.widthPt / scale, rowHeaderPt)
+  const columnStripes = columnStripesOf(
+    area,
+    printable.widthPt / scale,
+    rowHeaderPt,
+    breaks.colBreaks,
+  )
+  const wholeBand: AreaTile = {
+    rowStart: area.startRow,
+    rowEnd: area.endRow,
+    colStart: area.startColumn,
+    colEnd: area.endColumn,
+  }
   const rowBands =
     pageOrder === 'over-then-down' && columnStripes.length > 1
-      ? rowBandsOf(area, printable.heightPt / scale)
-      : [{ rowStart: area.startRow, rowEnd: area.endRow }]
+      ? rowBandsOf(area, printable.heightPt / scale, breaks.rowBreaks)
+      : breaks.rowBreaks.length > 0
+        ? rowBandsOf(area, Number.POSITIVE_INFINITY, breaks.rowBreaks)
+        : [wholeBand]
   const tiles: AreaTile[] = []
-  for (const band of rowBands) {
-    for (const stripe of columnStripes) {
-      // Compose the tile axis by axis: both shapes carry the OTHER axis's
-      // full range (stripes span every row, bands span every column), so a
-      // spread like { ...band, ...stripe } silently clobbers the band's row
-      // bounds with the stripe's full range — every tile then re-prints the
-      // whole sheet and over-then-down duplicates every page (found by the
-      // BUG-1214 recheck headless-print harness).
-      tiles.push({
-        rowStart: band.rowStart,
-        rowEnd: band.rowEnd,
-        colStart: stripe.colStart,
-        colEnd: stripe.colEnd,
-      })
-    }
+  // Down-then-over walks every row page of a stripe before the next stripe;
+  // over-then-down walks every stripe of a band before the next band.
+  const push = (band: AreaTile, stripe: AreaTile): void => {
+    // Compose the tile axis by axis: both shapes carry the OTHER axis's
+    // full range (stripes span every row, bands span every column), so a
+    // spread like { ...band, ...stripe } silently clobbers the band's row
+    // bounds with the stripe's full range — every tile then re-prints the
+    // whole sheet and over-then-down duplicates every page (found by the
+    // BUG-1214 recheck headless-print harness).
+    tiles.push({
+      rowStart: band.rowStart,
+      rowEnd: band.rowEnd,
+      colStart: stripe.colStart,
+      colEnd: stripe.colEnd,
+    })
+  }
+  if (pageOrder === 'over-then-down') {
+    for (const band of rowBands) for (const stripe of columnStripes) push(band, stripe)
+  } else {
+    for (const stripe of columnStripes) for (const band of rowBands) push(band, stripe)
   }
   return tiles
 }
@@ -688,8 +807,14 @@ function tilePageCount(area: LayoutArea, tile: AreaTile, capacityPt: number): nu
 
 /// Column stripes of an area at the effective scale: each stripe's columns
 /// (plus the row-heading strip, which prints on every page) fit one page
-/// across. A single over-wide column always gets its own stripe.
-function columnStripesOf(area: LayoutArea, capacityPt: number, rowHeaderPt: number): AreaTile[] {
+/// across, with manual column breaks forced as stripe edges. A single
+/// over-wide column always gets its own stripe.
+function columnStripesOf(
+  area: LayoutArea,
+  capacityPt: number,
+  rowHeaderPt: number,
+  colBreaks: readonly number[] = [],
+): AreaTile[] {
   if (capacityPt <= 0)
     return [
       {
@@ -699,12 +824,18 @@ function columnStripesOf(area: LayoutArea, capacityPt: number, rowHeaderPt: numb
         colEnd: area.endColumn,
       },
     ]
+  const breakSet = new Set(
+    colBreaks.filter((index) => index > area.startColumn && index <= area.endColumn),
+  )
   const stripes: AreaTile[] = []
   let start = area.startColumn
   let used = rowHeaderPt
   for (let column = area.startColumn; column <= area.endColumn; column += 1) {
     const width = area.columnWidthsPt[column - area.startColumn] ?? 0
-    if (used > rowHeaderPt && used + width > capacityPt) {
+    if (
+      (used > rowHeaderPt && used + width > capacityPt) ||
+      (breakSet.has(column) && column > start)
+    ) {
       stripes.push({
         rowStart: area.startRow,
         rowEnd: area.endRow,
@@ -727,16 +858,26 @@ function columnStripesOf(area: LayoutArea, capacityPt: number, rowHeaderPt: numb
 
 /// Row bands of an area at the effective scale, mirroring Chromium's own
 /// pagination (rows never split, the repeated header takes its share of
-/// every page). Used for over-then-down ordering only. The mirror holds only
-/// while every <tr> renders at its declared printedHeightPt — see the
-/// printedHeightPt doc for the wrap-text / tall-font residuals that can
-/// still shift Chromium's page breaks off the simulated ones.
-function rowBandsOf(area: LayoutArea, capacityPt: number): AreaTile[] {
+/// every page) with manual row breaks cut in as hard edges. Used for
+/// over-then-down ordering, and for down-then-over jobs that carry manual
+/// breaks (with an infinite capacity, so ONLY the manual edges cut — rows
+/// between two breaks stay one flowing table Chromium paginates itself).
+/// The mirror holds only while every <tr> renders at its declared
+/// printedHeightPt — see the printedHeightPt doc for the wrap-text /
+/// tall-font residuals that can still shift Chromium's page breaks off the
+/// simulated ones.
+function rowBandsOf(
+  area: LayoutArea,
+  capacityPt: number,
+  rowBreaks: readonly number[] = [],
+): AreaTile[] {
+  const breakSet = bodyRowBreaks(area, rowBreaks)
   const bands: AreaTile[] = []
   let start = area.startRow
   let used = area.repeatedHeightPt
   for (const row of area.bodyRows) {
-    if (used + row.printedHeightPt > capacityPt && used > area.repeatedHeightPt) {
+    const manual = breakSet.has(row.row) && row.row > start
+    if (manual || (used + row.printedHeightPt > capacityPt && used > area.repeatedHeightPt)) {
       bands.push({
         rowStart: start,
         rowEnd: row.row - 1,
@@ -1162,7 +1303,15 @@ function cellDisplay(worksheet: PrintWorksheet, row: number, column: number): st
   return worksheet.getRange(row, column, 1, 1).getDisplayValues()[0]?.[0] ?? ''
 }
 
-function cellCss(style: PrintCellStyle | null, rawValue: unknown, gridlines: boolean): string {
+function cellCss(
+  style: PrintCellStyle | null,
+  rawValue: unknown,
+  gridlines: boolean,
+  conditional: PrintConditionalFormatStyle | null = null,
+): string {
+  // A matched CF rule's dxf replaces the static style's fill and font fields
+  // (borders per edge) like Excel layers conditional formatting on print.
+  if (conditional?.style) style = mergeConditionalStyle(style, conditional.style)
   const rules: string[] = []
   if (style?.bl === 1) rules.push('font-weight:700')
   if (style?.it === 1) rules.push('font-style:italic')
@@ -1215,7 +1364,63 @@ function cellCss(style: PrintCellStyle | null, rawValue: unknown, gridlines: boo
       }`,
     )
   }
+  // The data-bar gradient goes after every `background` shorthand so its
+  // image layer stays on top of the fill (the shorthand would reset it).
+  if (conditional?.dataBar) rules.push(dataBarCss(conditional.dataBar))
   return rules.join(';')
+}
+
+/// Excel layers a matched CF rule's dxf over the static cell style: the
+/// fields the dxf defines replace the cell's own (fills and font colors are
+/// the visual core; borders override per edge), undefined fields keep the
+/// cell's formatting.
+function mergeConditionalStyle(style: PrintCellStyle | null, cf: PrintCellStyle): PrintCellStyle {
+  const merged: {
+    -readonly [K in keyof PrintCellStyle]: PrintCellStyle[K]
+  } = { ...style }
+  const override = <K extends keyof PrintCellStyle>(key: K): void => {
+    if (cf[key] !== undefined) merged[key] = cf[key]
+  }
+  override('bl')
+  override('it')
+  override('ul')
+  override('st')
+  override('fs')
+  override('ff')
+  override('cl')
+  override('bg')
+  if (cf.bd) {
+    const borders: NonNullable<PrintCellStyle['bd']> = { ...merged.bd }
+    for (const edge of ['t', 'b', 'l', 'r'] as const) {
+      if (cf.bd[edge] !== undefined) borders[edge] = cf.bd[edge]
+    }
+    merged.bd = borders
+  }
+  return merged
+}
+
+/// A data bar as a CSS gradient over the cell: the bar grows from the axis
+/// (startPoint, percent of the cell) toward the value's side, its length a
+/// percent of the remaining span, fading to white on gradient bars — the
+/// same geometry Univer's canvas extension draws. The rounded corners and
+/// the 2px inset stay approximated; a zero-width bar shows nothing.
+function dataBarCss(bar: PrintDataBar): string {
+  const color = cssColor(bar.color)
+  const axis = clamp(bar.startPoint, 0, 100)
+  const positive = bar.value >= 0
+  const extent = (clamp(Math.abs(bar.value), 0, 100) * (positive ? 100 - axis : axis)) / 100
+  const from = round(positive ? axis : axis - extent)
+  const to = round(positive ? axis + extent : axis)
+  if (to <= from) return `background-image:linear-gradient(90deg,${color} ${from}%)`
+  const stops = bar.isGradient
+    ? positive
+      ? `${color} ${from}%,#fff ${to}%`
+      : `#fff ${from}%,${color} ${to}%`
+    : `${color} ${from}%,${color} ${to}%`
+  return (
+    `background-image:linear-gradient(90deg,rgba(0,0,0,0) ${from}%,` +
+    `${stops},rgba(0,0,0,0) ${to}%)`
+  )
 }
 
 function cssColor(rgb: string): string {

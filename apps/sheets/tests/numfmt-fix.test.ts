@@ -321,8 +321,9 @@ describe('hostLocalePattern — [$sym-LCID] keeps host separators', () => {
   it('drops an empty [$] token: Excel prints nothing for it', () => {
     expect(hostLocalePattern('[$]hh:mm;@')).toBe('hh:mm;@')
     expect(hostLocalePattern('[$]#,##0.00')).toBe('#,##0.00')
-    // numfmt rejects `[$]` and Univer shows its ###### error text.
-    expect(fixFormattedValue('[$]hh:mm;@', 0.2083333333333333, '######')).toBe('05:00')
+    // numfmt rejects `[$]` and Univer shows its ###### error text. The value
+    // is 04:59:59.999…: Excel truncates the display to the minute (BUG-1525).
+    expect(fixFormattedValue('[$]hh:mm;@', 0.2083333333333333, '######')).toBe('04:59')
     expect(fixFormattedValue('[$]hh:mm;@', 0.25, '0.25')).toBe('06:00')
     expect(fixFormattedValue('[$]hh:mm;@', 0, '0')).toBe('00:00')
     expect(fixFormattedValue('[$]hh:mm;@', 'late', 'late')).toBeNull()

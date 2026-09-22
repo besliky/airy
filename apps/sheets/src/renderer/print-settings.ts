@@ -66,6 +66,13 @@ export interface EffectivePageSetup {
   /// the print scale like the sheet does.
   readonly headerFooterScaleWithDoc: boolean
   readonly headerFooterPictures: readonly HeaderFooterPictureSlot[]
+  /// The sheet's manual page breaks in screen coordinates (0-based index of
+  /// the row/column the break sits above; [] = none). The active sheet's set
+  /// — workbook-scope jobs carry each sheet's own breaks on their jobs.
+  /// Optional so hand-built test fixtures keep compiling;
+  /// resolveEffectivePageSetup always sets it.
+  readonly rowBreaks?: readonly number[] | undefined
+  readonly colBreaks?: readonly number[] | undefined
 }
 
 /// Inches, mirroring the gateway's margin presets.
@@ -81,6 +88,35 @@ const MAX_MARGIN_INCHES = 3
 export interface FilePrintNames {
   readonly printArea?: string | undefined
   readonly printTitles?: string | undefined
+}
+
+/// A sheet's manual page breaks straight from the file (worksheet
+/// rowBreaks/colBreaks ids, file coordinates): the 0-based index of the row
+/// or column the break sits above.
+export interface FilePageBreaks {
+  readonly rowBreaks?: readonly number[] | undefined
+  readonly colBreaks?: readonly number[] | undefined
+}
+
+/// A sheet's effective manual break set in screen coordinates: the journal's
+/// replacement set when present (a Page Layout 'breaks' edit rewrites the
+/// whole set), else the file's breaks shifted through this session's
+/// structural ops — the same merge effectivePageBreaks applies for the
+/// preview overlay. Excel honours manual breaks only at a fixed print scale;
+/// the print layout ignores them under fitToPage (BUG-1500).
+export function resolveSheetPageBreaks(
+  journal: PageSetupJournalState | undefined,
+  fileBreaks: FilePageBreaks | null,
+  ops: readonly StructuralJournalOp[] = [],
+): { rowBreaks: number[]; colBreaks: number[] } {
+  const mapped = (axis: 'row' | 'column', ids: readonly number[] | undefined): number[] =>
+    (ids ?? [])
+      .map((id) => fileToScreen(ops, axis, id))
+      .filter((id): id is number => id !== null && id > 0)
+  return {
+    rowBreaks: journal?.rowBreaks ?? mapped('row', fileBreaks?.rowBreaks),
+    colBreaks: journal?.colBreaks ?? mapped('column', fileBreaks?.colBreaks),
+  }
 }
 
 /// File-space A1 areas → this session's screen space (envelope semantics,
@@ -141,6 +177,9 @@ export function resolveEffectivePageSetup(
   /// original workbook coordinates and must shift into screen space
   /// (journal-sourced values are already screen space).
   ops: readonly StructuralJournalOp[] = [],
+  /// The sheet's manual page breaks from the file (worksheet rowBreaks/
+  /// colBreaks ids, file coordinates); the journal's replacement set wins.
+  fileBreaks: FilePageBreaks | null = null,
 ): EffectivePageSetup {
   const clampMargin = (value: number): number => Math.min(Math.max(value, 0), MAX_MARGIN_INCHES)
   const fileMargins = file?.margins
@@ -196,6 +235,7 @@ export function resolveEffectivePageSetup(
     file?.differentOddEven === true
       ? { header: decodeOptional(file.evenHeader), footer: decodeOptional(file.evenFooter) }
       : null
+  const breaks = resolveSheetPageBreaks(journal, fileBreaks, ops)
   return {
     orientation: journal.orientation ?? file?.orientation ?? 'portrait',
     paperSize: journal.paperSize ?? file?.paperSize ?? 9,
@@ -217,6 +257,8 @@ export function resolveEffectivePageSetup(
     evenPages,
     headerFooterScaleWithDoc: file?.headerFooterFixedSize !== true,
     headerFooterPictures: file?.headerFooterPictures ?? [],
+    rowBreaks: breaks.rowBreaks,
+    colBreaks: breaks.colBreaks,
   }
 }
 
