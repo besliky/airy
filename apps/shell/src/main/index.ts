@@ -1122,7 +1122,16 @@ const shutdownEffects = createShutdownEffects({
   disposePdfWorkers: disposePdfConversionWorkers,
   bridgeEnabled: liveBridgeEnabled,
   stopBridge: stopShellBridge,
-  startBridge: startLiveBridge,
+  // BUG-1312: the rollback restart rides the same serialized chain as the
+  // Settings toggle (a plain startLiveBridge() could interleave with a
+  // concurrent toggle-off: stop settles first, the bridge ends up up while
+  // liveBridge=false). The setting is re-read inside the chain so a toggle
+  // that landed while this restart waited keeps the bridge down.
+  startBridge: async () => {
+    await setLiveBridgeEnabled.runExclusive(async () => {
+      if (liveBridgeEnabled()) await startLiveBridge()
+    })
+  },
   log: (message, err) => console.error(message, err),
 })
 
@@ -1178,7 +1187,20 @@ function abortAppQuit(): void {
   if (!quitFlow.quitting) return
   const restoreSession = quitFlow.cancel()
   shutdownEffects.rollback()
-  if (restoreSession) persistSessionState(false)
+  if (restoreSession) {
+    // BUG-1311: a failed rewrite leaves the quit-time snapshot on disk, and
+    // the next launch resurrects windows whose close had confirmed before the
+    // cancel (the BUG-1218 class). Retry once — a transient failure (AV scan,
+    // momentary lock) recovers — and escalate loudly when the retry fails too,
+    // so a stale snapshot is at least diagnosable instead of silently wrong.
+    if (!persistSessionState(false) && !persistSessionState(false)) {
+      console.error(
+        '[shell] recovery rewrite after the aborted quit failed twice; ' +
+          'the stale quit-time snapshot stays on disk and may restore ' +
+          'windows the user had already closed',
+      )
+    }
+  }
 }
 
 /** which editor's close prompt runs for a dirty-tab walk step */
