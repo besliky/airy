@@ -38,6 +38,27 @@ const WORKSPACE_ORDER = [
   'html',
 ]
 
+// CI shard coverage guard: `--require-all --excluded docs sheets` fails when a
+// workspace is added to WORKSPACE_ORDER but not to any CI shard (the same
+// silent-drop failure mode the self-check below guards against).
+const CI_EXCLUDED_FROM_SHARDS = ['docs', 'sheets']
+
+// Workspace build order, carried over verbatim from the `build:all` chain in
+// the root package.json. The builds are independent (apps only reference each
+// other's output at runtime), so the CI e2e job runs this list in parallel
+// instead of the serial chain. Locally `npm run build:all` keeps the serial
+// chain unchanged.
+const BUILD_WORKSPACE_ORDER = [
+  'mcp-server',
+  'docs',
+  'sheets',
+  'slides',
+  'pdf',
+  'markdown',
+  'html',
+  'shell',
+]
+
 // Workspaces that must not run at the same time as each other because they
 // contend on a shared resource (fixed ports, shared output dirs, ...). Members
 // of a group run sequentially (in WORKSPACE_ORDER) while unrelated workspaces
@@ -57,10 +78,14 @@ function tag(name, index) {
 
 function usage() {
   console.error(
-    'Usage: node tools/run-workspaces.mjs <test|typecheck> [--concurrency <n>]\n' +
-      'Flags may come before or after the mode. Concurrency defaults to ' +
-      'min(workspace count, max(2, cpu count / 2)); ' +
-      'AIRY_WORKSPACE_CONCURRENCY overrides the default.',
+    'Usage: node tools/run-workspaces.mjs <test|typecheck|build> [flags]\n' +
+      'Flags: --concurrency <n> | --only <names...> | --excluded <names...> | ' +
+      '--require-all | --dry-run. Flags may come before or after the mode. ' +
+      'Concurrency defaults to min(workspace count, max(2, cpu count / 2)); ' +
+      'AIRY_WORKSPACE_CONCURRENCY overrides the default. --only restricts the ' +
+      'run to the named workspaces (CI shards); --require-all asserts that ' +
+      '--only plus --excluded covers the whole order (shard coverage guard); ' +
+      '--dry-run validates and prints the selection without running it.',
   )
 }
 
@@ -69,24 +94,61 @@ function usage() {
 const args = process.argv.slice(2)
 let concurrency = Number.parseInt(process.env.AIRY_WORKSPACE_CONCURRENCY ?? '', 10)
 const positional = []
+
+function takeNames(startIndex) {
+  const names = []
+  let index = startIndex
+  while (index < args.length && !args[index].startsWith('-')) {
+    // Accept both space- and comma-separated lists (`--only a b`, `--only a,b`).
+    for (const name of args[index].split(',')) {
+      if (name !== '') names.push(name)
+    }
+    index += 1
+  }
+  return [names, index]
+}
+
+let onlyNames = []
+let excludedNames = []
+let requireAll = false
+let dryRun = false
 for (let i = 0; i < args.length; i++) {
   const arg = args[i]
   if (arg === '--concurrency' || arg === '-c') {
     concurrency = Number.parseInt(args[++i], 10)
   } else if (arg.startsWith('--concurrency=')) {
     concurrency = Number.parseInt(arg.slice(arg.indexOf('=') + 1), 10)
+  } else if (arg === '--only' || arg === '--excluded') {
+    const flag = arg
+    const [names, next] = takeNames(i + 1)
+    if (names.length === 0) {
+      console.error(`${flag} requires at least one workspace name`)
+      process.exit(2)
+    }
+    if (flag === '--only') onlyNames = names
+    else excludedNames = names
+    i = next - 1
+  } else if (arg === '--require-all') {
+    requireAll = true
+  } else if (arg === '--dry-run') {
+    dryRun = true
   } else if (arg.startsWith('-')) {
     continue
   } else {
     positional.push(arg)
   }
 }
+if (requireAll && onlyNames.length === 0) {
+  console.error('--require-all is only meaningful together with --only')
+  process.exit(2)
+}
 const mode = positional[0]
 if (!Number.isFinite(concurrency) || concurrency < 1) concurrency = undefined
-if (mode !== 'test' && mode !== 'typecheck') {
+if (mode !== 'test' && mode !== 'typecheck' && mode !== 'build') {
   usage()
   process.exit(2)
 }
+const order = mode === 'build' ? BUILD_WORKSPACE_ORDER : WORKSPACE_ORDER
 
 // --- Self-check: the list must exactly cover the workspaces that have the
 // script, so nothing is silently dropped (the failure mode of hand-maintained
@@ -116,17 +178,54 @@ function discoverWorkspacesWithScript(script) {
 
 const problems = []
 const discovered = discoverWorkspacesWithScript(mode)
-for (const name of WORKSPACE_ORDER) {
-  const location = workspaceDir(name)
-  if (!location) problems.push(`workspace "${name}" from WORKSPACE_ORDER does not exist`)
-  else if (!JSON.parse(readFileSync(location.manifest, 'utf8')).scripts?.[mode])
-    problems.push(`workspace "${name}" has no "${mode}" script`)
-}
-for (const name of discovered) {
-  if (!WORKSPACE_ORDER.includes(name))
-    problems.push(
-      `workspace "${name}" has a "${mode}" script but is missing from WORKSPACE_ORDER in tools/run-workspaces.mjs — add it or its tests will never run`,
+if (onlyNames.length > 0) {
+  // Shard mode: validate the requested subset instead of the full order.
+  const unique = [...new Set(onlyNames)]
+  const unknown = unique.filter((name) => !order.includes(name))
+  for (const name of unknown) problems.push(`workspace "${name}" is not in the ${mode} order`)
+  for (const name of unique) {
+    const location = workspaceDir(name)
+    if (!location) problems.push(`workspace "${name}" does not exist`)
+    else if (!JSON.parse(readFileSync(location.manifest, 'utf8')).scripts?.[mode])
+      problems.push(`workspace "${name}" has no "${mode}" script`)
+  }
+  if (requireAll) {
+    // Coverage guard: every workspace must run in some CI shard.
+    const covered = new Set([...unique, ...CI_EXCLUDED_FROM_SHARDS, ...excludedNames])
+    for (const name of order) {
+      if (!covered.has(name))
+        problems.push(`workspace "${name}" is not covered by any CI test shard`)
+    }
+    for (const name of excludedNames) {
+      if (!order.includes(name)) problems.push(`workspace "${name}" is not in the ${mode} order`)
+    }
+  }
+  if (problems.length === 0 && dryRun) {
+    console.log(
+      `dry-run ${mode}: would run ${unique.length} workspaces (ordered): ${unique
+        .slice()
+        .sort((a, b) => order.indexOf(a) - order.indexOf(b))
+        .join(', ')}`,
     )
+    process.exit(0)
+  }
+} else {
+  for (const name of order) {
+    const location = workspaceDir(name)
+    if (!location) problems.push(`workspace "${name}" from the ${mode} order does not exist`)
+    else if (!JSON.parse(readFileSync(location.manifest, 'utf8')).scripts?.[mode])
+      problems.push(`workspace "${name}" has no "${mode}" script`)
+  }
+  for (const name of discovered) {
+    if (!order.includes(name))
+      problems.push(
+        `workspace "${name}" has a "${mode}" script but is missing from the ${mode} order in tools/run-workspaces.mjs — add it or it will never run`,
+      )
+  }
+  if (problems.length === 0 && dryRun) {
+    console.log(`dry-run ${mode}: would run all ${order.length} workspaces`)
+    process.exit(0)
+  }
 }
 if (problems.length > 0) {
   console.error(`run-workspaces self-check failed for "${mode}":`)
@@ -140,16 +239,26 @@ if (problems.length > 0) {
 // timeouts on CPU-heavy cases, wasm conversions). Half a workspace per CPU
 // kept the full suite green on a 12-core dev box while still cutting wall
 // time ~30%; override with --concurrency / AIRY_WORKSPACE_CONCURRENCY.
-const limit =
-  concurrency ?? Math.min(WORKSPACE_ORDER.length, Math.max(2, Math.floor(cpus().length / 2)))
-const effectiveLimit = Math.min(limit, WORKSPACE_ORDER.length)
+const limit = concurrency ?? Math.min(order.length, Math.max(2, Math.floor(cpus().length / 2)))
+const effectiveLimit = Math.min(limit, order.length)
 
 // --- Scheduler: start tasks in order, never exceeding the concurrency limit,
 // and hold back any task whose conflict-group members are still running.
 const conflictGroupsOf = (name) =>
   CONFLICT_GROUPS.filter((group) => group.includes(name)).map((group) => new Set(group))
 
-const pending = WORKSPACE_ORDER.map((name) => ({ name, groups: conflictGroupsOf(name) }))
+// Shard mode runs only the requested subset, in canonical order.
+const scheduled =
+  onlyNames.length > 0
+    ? [...new Set(onlyNames)]
+        .slice()
+        .sort((a, b) => order.indexOf(a) - order.indexOf(b))
+        .map((name) => ({ name, groups: conflictGroupsOf(name) }))
+    : order.map((name) => ({ name, groups: conflictGroupsOf(name) }))
+// Constant: `scheduled` is spliced as tasks start, so finish() must not
+// compare against its live length (that fires mid-run once completed and
+// pending counts cross).
+const taskCount = scheduled.length
 const running = []
 const results = []
 
@@ -159,15 +268,15 @@ function wouldConflict(task) {
 
 function pump() {
   while (running.length < effectiveLimit) {
-    const next = pending.find((task) => !wouldConflict(task))
+    const next = scheduled.find((task) => !wouldConflict(task))
     if (!next) return
-    pending.splice(pending.indexOf(next), 1)
+    scheduled.splice(scheduled.indexOf(next), 1)
     start(next)
   }
 }
 
 function start(task) {
-  const index = WORKSPACE_ORDER.indexOf(task.name)
+  const index = order.indexOf(task.name)
   const label = tag(task.name, index)
   const startedAt = Date.now()
   const child = spawn(
@@ -192,7 +301,7 @@ function start(task) {
     const ok = code === 0
     results.push({ name: task.name, ok, seconds })
     console.log(`${label} ${ok ? 'done' : 'FAILED'} in ${seconds}s`)
-    if (results.length === WORKSPACE_ORDER.length) finish()
+    if (results.length === taskCount) finish()
     else pump()
   }
   child.on('exit', (code) => settle(code))
