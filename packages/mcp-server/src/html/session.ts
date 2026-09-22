@@ -48,6 +48,19 @@ const STRUCTURE_SCAN_MAX_CHARS = 1_000_000
 /** how many links the read summary lists before eliding */
 const LINK_LIST_MAX = 200
 
+/**
+ * Closing tags whose line a marker insert must land BEFORE: a marker like
+ * "</body>" names the element boundary, and splicing after the line would
+ * push the fragment between </body> and </html> — outside the body element
+ * (DOC-1506). Only a line that is JUST the closing tag flips (a line that
+ * carries other markup keeps the documented after-the-line behavior).
+ */
+const STRUCTURAL_CLOSING_TAGS = new Set(['</body>', '</html>', '</head>'])
+
+function isStructuralClosingLine(lineText: string): boolean {
+  return STRUCTURAL_CLOSING_TAGS.has(lineText.trim().toLowerCase())
+}
+
 const REPLACEMENT_CHAR = String.fromCharCode(0xfffd)
 
 export type HtmlLine = Line
@@ -286,6 +299,7 @@ const htmlHooks: LineSessionHooks = {
       )
     }
   },
+  insertBeforeMarkerLine: isStructuralClosingLine,
 }
 
 // ---- session ----
@@ -391,8 +405,10 @@ export class HtmlSession {
 
   /**
    * Insert an HTML fragment verbatim: after the first line containing
-   * `marker` (e.g. '</body>' to append rendered content), after line `at`
-   * (-1 = document start), or at the end by default. Precedence: marker > at.
+   * `marker`, after line `at` (-1 = document start), or at the end by
+   * default. Precedence: marker > at. A line that is just a closing
+   * </body>/</html>/</head> tag inserts BEFORE it, so a marker like
+   * "</body>" keeps the fragment inside the element (DOC-1506).
    */
   insertContent(html: string, position: HtmlInsertPosition = {}): HtmlInsertResult {
     if (typeof html !== 'string' || html.length === 0) {

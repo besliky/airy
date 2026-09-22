@@ -438,7 +438,9 @@ export function registerTools(server: McpServer): void {
         '(-1 = document start; default: end of document; marker > afterHeading > at). HTML ' +
         'sessions take the fragment VERBATIM (no reparse or rewrite — exactly these bytes land ' +
         "on disk, modulo the file's EOL style) at one of two positions: after the first line " +
-        'containing `marker` (e.g. "</body>" to append rendered content), or after line `at` ' +
+        'containing `marker` (a line that is just a closing </body>/</html>/</head> tag ' +
+        'inserts BEFORE it, so marker "</body>" appends inside the body element), or after ' +
+        'line `at` ' +
         '(-1 = document start; default: end of document; marker > at). Passing afterHeading to ' +
         'an html session is an explicit error — it is a markdown-session option. Slides sessions ' +
         'take plain `text` plus `slide` (0-based index, required): with `slideElement` the text ' +
@@ -481,7 +483,8 @@ export function registerTools(server: McpServer): void {
           .optional()
           .describe(
             'Markdown/HTML sessions: insert after the first line containing this exact substring ' +
-              '(html: e.g. "</body>"); ignored for docx sessions',
+              '(html: a bare closing </body>/</head>/</html> line inserts BEFORE it, keeping ' +
+              'the fragment inside the element); ignored for docx sessions',
           ),
         slide: z
           .number()
