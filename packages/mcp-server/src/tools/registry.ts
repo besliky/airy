@@ -92,8 +92,9 @@ const CELL_EDIT_SCHEMA = z
       .max(1_000)
       .optional()
       .describe(
-        'Rich-text runs for a string value ({ text, bold, italic, underline, strikethrough, ' +
-          'color?, size?, family?, vertAlign? }); the joined run text becomes the cell value',
+        'Rich-text runs for a string value ({ text, bold?, italic?, underline?, ' +
+          'strikethrough?, color?, size?, family?, vertAlign? }; style flags are optional — ' +
+          'absent means plain — and the joined run text becomes the cell value)',
       ),
     styleReset: z
       .boolean()
@@ -993,6 +994,10 @@ export function registerTools(server: McpServer): void {
       if (ops === undefined && html === undefined) {
         throw new Error('live_apply_ops requires at least one of ops or html')
       }
+      // setImageProperties skips every non-image block silently (image blocks
+      // only), so a paragraph/heading target came back as "applied 1 op(s),
+      // changed 0" — reject the no-op here, before the document is touched.
+      if (ops !== undefined) validateImageOnlyOps(ops)
       const bridge = sharedLiveBridge()
       const applied: Record<string, unknown> = {}
       let inserted = false
@@ -1103,6 +1108,27 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
+}
+
+/**
+ * setImageProperties applies to image blocks only (the guide says so); any
+ * other target matches blocks the op then skips, silently changing nothing.
+ * Reject that up front with the offending target spelled out — the live
+ * document is not touched (this runs before any bridge call).
+ */
+function validateImageOnlyOps(ops: Array<Record<string, unknown>>): void {
+  for (const [index, op] of ops.entries()) {
+    if (op.op !== 'setImageProperties') continue
+    const target = asRecord(op.target)
+    const nodeType = typeof target?.nodeType === 'string' ? target.nodeType : undefined
+    if (nodeType === 'image') continue
+    const got = nodeType === undefined ? 'no nodeType in target' : `nodeType "${nodeType}"`
+    throw new Error(
+      `ops[${String(index)}] setImageProperties applies to image blocks only: give target ` +
+        `{ nodeType: "image" } (got ${got}); the live document was not modified. Use ` +
+        'live_get_context to find image blocks.',
+    )
+  }
 }
 
 /** agent-facing message for any live bridge failure */
