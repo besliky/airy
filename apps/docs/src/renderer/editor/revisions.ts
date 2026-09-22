@@ -10,7 +10,7 @@
  * so both accepting and rejecting remove it.
  */
 import { Extension, type Editor } from '@tiptap/core'
-import type { Node as PmNode } from '@tiptap/pm/model'
+import type { Mark as PmMark, Node as PmNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
 import {
   AddMarkStep,
@@ -44,6 +44,33 @@ export interface RevisionRange {
 
 /** transactions carrying this meta are never recorded as revisions */
 export const TRACK_IGNORE = 'trackIgnore'
+
+/** one cached field result to refresh: replace [from, to) with `text`, keeping
+ * the field marks (the shape updateFields collects while walking the doc) */
+export interface FieldCacheJob {
+  from: number
+  to: number
+  text: string
+  marks: readonly PmMark[]
+}
+
+/**
+ * F9-style field-cache refresh (PAGE / NUMPAGES / REF results): replaces the
+ * cached results in one transaction marked TRACK_IGNORE. Word's update-fields
+ * command recomputes results silently even with Track Changes on — a refreshed
+ * result is recomputation, not an authored edit, so the recorder must never
+ * turn it into tracked ins/del (BUG-917).
+ */
+export function applyFieldCaches(editor: Editor, jobs: readonly FieldCacheJob[]): void {
+  if (jobs.length === 0) return
+  let tr = editor.state.tr
+  // descending order keeps earlier positions valid while later ranges replace
+  for (const j of [...jobs].sort((a, b) => b.from - a.from)) {
+    tr = tr.replaceWith(j.from, j.to, editor.state.schema.text(j.text, [...j.marks]))
+  }
+  tr.setMeta(TRACK_IGNORE, true)
+  editor.view.dispatch(tr)
+}
 
 const TRACKED_FORMAT_MARKS = new Set(['bold', 'italic', 'underline', 'strike', 'docTextStyle'])
 

@@ -30,9 +30,44 @@ describe('quit rollback wiring (BUG-1216)', () => {
     expect(shellMain).toContain('shutdownEffects.rollback()')
     // ordering: rollback precedes the recovery session write
     const rollbackAt = shellMain.indexOf('shutdownEffects.rollback()')
-    const recoveryAt = shellMain.indexOf('if (restoreSession) persistSessionState(false)')
+    const recoveryAt = shellMain.indexOf('if (restoreSession) {')
     expect(rollbackAt).toBeGreaterThan(-1)
     expect(recoveryAt).toBeGreaterThan(rollbackAt)
+  })
+
+  it('a failed recovery rewrite is retried and escalated, not ignored (BUG-1311)', () => {
+    // the ignored boolean left the quit-time snapshot on disk: the next
+    // launch resurrected windows whose close had confirmed before the cancel
+    const block = shellMain.slice(
+      shellMain.indexOf('function abortAppQuit'),
+      shellMain.indexOf('/** which editor'),
+    )
+    // one retry (a transient failure recovers)...
+    expect(block).toContain('!persistSessionState(false) && !persistSessionState(false)')
+    // ...then a loud escalation instead of a silent stale snapshot
+    expect(block).toContain('console.error')
+    expect(block).toContain('recovery rewrite after the aborted quit failed')
+  })
+
+  it('the rollback bridge restart rides the toggle serializer (BUG-1312)', () => {
+    // a plain startLiveBridge() bypassed the createLiveBridgeToggle chain and
+    // could interleave with a concurrent Settings toggle-off
+    expect(shellMain).toContain('setLiveBridgeEnabled.runExclusive')
+    // the setting is re-checked inside the chain, after any queued toggle
+    expect(shellMain).toMatch(
+      /runExclusive\(async \(\) => \{\s*\n\s*if \(liveBridgeEnabled\(\)\) await startLiveBridge\(\)/,
+    )
+  })
+
+  it('the bridge token lives for the process, not per restart (BUG-1313)', () => {
+    // shell-bridge.ts owns the cache (it imports Electron, so this source pin
+    // is the test): generated once, reused across aborted-quit restarts so
+    // the published info file never rotates under connected clients
+    const shellBridge = readFileSync(join(here, '../src/main/bridge/shell-bridge.ts'), 'utf8')
+    expect(shellBridge).toContain('token: (processToken ??= generateBridgeToken())')
+    // server.ts must accept the reuse instead of always generating
+    const bridgeServer = readFileSync(join(here, '../src/main/bridge/server.ts'), 'utf8')
+    expect(bridgeServer).toContain('options.token ?? generateBridgeToken()')
   })
 
   it('the sheets shutdown flag can be cleared and the listener stays arrow-wrapped', () => {

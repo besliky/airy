@@ -1432,11 +1432,16 @@ export function Ribbon({
   // Capture + claim: the app-global Esc actions respect defaultPrevented, so
   // one press closes only the popup. Layers that own their Escape (modal
   // dialogs stacked on top, editable fields cancelling a draft, an expanded
-  // shared Dropdown list) keep it — see ribbonEscapeDeferred.
+  // shared Dropdown list) keep it — see ribbonEscapeDeferred. A peer capture
+  // listener on window (the modal fallback) runs in registration order, and
+  // stopPropagation cannot hold same-node listeners back — so when another
+  // layer has already claimed the press (defaultPrevented, BUG-1320), this
+  // handler stands down too and one Escape dismisses exactly one layer.
   useEffect(() => {
     if (!anyPanelOpen) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.isComposing) return
+      if (e.defaultPrevented) return
       if (ribbonEscapeDeferred(e.target as Element | null)) return
       e.preventDefault()
       e.stopPropagation()

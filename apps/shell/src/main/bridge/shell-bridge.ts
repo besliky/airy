@@ -12,7 +12,7 @@ import type { BridgeCommandResult } from '../../../../docs/src/shared/ipc'
 import { BRIDGE_INVOKE_CHANNEL, BRIDGE_RESULT_CHANNEL } from '../../../../docs/src/shared/ipc'
 import { BridgeMethodError, isBridgeErrorCode } from './protocol'
 import type { BridgeCallContext } from './dispatcher'
-import { startBridgeServer, type BridgeServerHandle } from './server'
+import { generateBridgeToken, startBridgeServer, type BridgeServerHandle } from './server'
 
 /** default per-call timeout; the env var AIRY_DISABLE_BRIDGE=1 turns the bridge off entirely */
 export const DEFAULT_BRIDGE_TIMEOUT_MS = 30_000
@@ -129,6 +129,15 @@ async function callActiveDocs(
 let server: BridgeServerHandle | null = null
 
 /**
+ * BUG-1313: the bridge token lives for the PROCESS, not per server start. An
+ * aborted quit restarts the bridge (stop→start); regenerating would rewrite
+ * the published info file and invalidate every connected client's token —
+ * "cancel quit" must leave the app as if nothing happened. Generated once
+ * per process, reused across restarts; a fresh process generates anew.
+ */
+let processToken: string | null = null
+
+/**
  * Start the live bridge in the shell main process (on by default;
  * AIRY_DISABLE_BRIDGE=1 turns it off). Called from app.whenReady next to
  * startSheetsCaptureServer.
@@ -147,6 +156,7 @@ export async function startShellBridge(options: {
     userDataDir,
     timeoutMs,
     log,
+    token: (processToken ??= generateBridgeToken()),
     methods: {
       ping: () => ({
         pong: true,

@@ -18,6 +18,7 @@ import { Dropdown, useAutoSavePref, useModalDialog } from '@airy-office/ui'
 import { wordRangeAtCaret } from './editor/comments'
 import { markdownPasteHtml } from './editor/markdown-paste'
 import { pasteTextSlice, singleCellPasteText } from './editor/paste-text'
+import { applyFieldCaches } from './editor/revisions'
 import {
   BLANK_BULLET_NUM_ID,
   BLANK_ORDERED_NUM_ID,
@@ -2817,7 +2818,7 @@ export function App() {
    * TOC is recomputed when Word opens the file */
   const updateFields = useCallback(() => {
     if (!editor) return
-    const { state, view } = editor
+    const { state } = editor
     const jobs: Array<{ from: number; to: number; text: string; marks: readonly PmMark[] }> = []
     const refs: Array<{
       pos: number
@@ -2857,13 +2858,9 @@ export function App() {
         jobs.push({ from: r.pos, to: r.pos + r.nodeSize, text: next, marks: r.marks })
       }
     }
-    if (jobs.length > 0) {
-      let tr = state.tr
-      for (const j of jobs.sort((a, b) => b.from - a.from)) {
-        tr = tr.replaceWith(j.from, j.to, state.schema.text(j.text, [...j.marks]))
-      }
-      view.dispatch(tr)
-    }
+    // one TRACK_IGNORE transaction: a refreshed field result is recomputation,
+    // not an authored edit, so track changes must not record it (BUG-917)
+    applyFieldCaches(editor, jobs)
     // TOC / table of figures: F9 rebuilds the cached field (entries + pages)
     // like Word's update — the authored switches are read back from the field;
     // \t source styles match by name, so the parsed style map rides along (BUG-1012)

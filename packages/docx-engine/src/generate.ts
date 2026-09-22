@@ -2002,8 +2002,12 @@ export function generateParagraphXml(block: GeneratedBlock, ctx: GenerateContext
   return `<w:p>${pPr}${content}</w:p>`
 }
 
-/** stable 31-bit id per bookmark name (start/end pair only needs to agree with itself) */
-function bookmarkIdOf(name: string): number {
+/**
+ * Stable 31-bit id per bookmark name — every re-emitted bookmark gets this id
+ * on save. Exported so anchor stamping can keep its own ids out of this pool:
+ * duplicate w:id inside one story is a Word repair risk (BUG-919).
+ */
+export function bookmarkIdOf(name: string): number {
   let h = 0
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0
   return Math.abs(h) % 0x7fffffff
@@ -2628,8 +2632,9 @@ export function generateCaptionXml(
   const shown = displayLabel ?? label
   const rPr = '<w:rPr><w:color w:val="44546A"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>'
   const run = (inner: string) => `<w:r>${rPr}${inner}</w:r>`
-  // bookmark ids must stay unique within the story: anchor names carry random
-  // 9 digits, offset above every producer id seen so far (Word ids are small)
+  // bookmark ids must stay unique within the story: the anchor name is chosen
+  // collision-free against every existing w:id (uniqueAnchor + allBookmarkIds),
+  // and the id derives deterministically from that name (BUG-919)
   const bmId = anchor ? 1000000000 + parseInt(anchor.replace(/\D/g, '').slice(-9) || '0', 10) : 0
   const bmStart = anchor
     ? `<w:bookmarkStart w:id="${bmId}" w:name="${escapeXmlAttr(anchor)}"/>`

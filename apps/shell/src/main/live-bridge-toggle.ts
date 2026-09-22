@@ -18,28 +18,43 @@ export interface LiveBridgeToggleDeps {
   stop(): Promise<void>
 }
 
-export function createLiveBridgeToggle(
-  deps: LiveBridgeToggleDeps,
-): (on: boolean) => Promise<boolean> {
+/** the serialized toggle, plus a way for non-toggle callers (the quit
+ *  rollback's bridge restart, BUG-1312) to share the same start/stop order */
+export interface LiveBridgeToggleController {
+  (on: boolean): Promise<boolean>
+  /** run `fn` on the toggle serialization chain without persisting: a user
+   *  toggle and the rollback restart can never interleave their start/stop */
+  runExclusive<T>(fn: () => Promise<T>): Promise<T>
+}
+
+export function createLiveBridgeToggle(deps: LiveBridgeToggleDeps): LiveBridgeToggleController {
   // every toggle runs after the previous one settled (success or failure):
   // two rapid flips cannot interleave start/stop
   let chain: Promise<void> = Promise.resolve()
-  return (on: boolean): Promise<boolean> => {
-    if (!deps.toggleAllowed()) return Promise.resolve(deps.isEnabled())
-    const run = chain.then(async () => {
-      if (on) await deps.start()
-      else await deps.stop()
-      // reached only when the transition succeeded: persist the EFFECTIVE
-      // resulting state — a failed start throws below and leaves the
-      // previous stored value intact
-      deps.persist(on)
-    })
-    // keep the chain alive regardless of this run's outcome; `run` itself
-    // rejects so the caller (the IPC result) sees the failure
+  const enqueue = <T>(run: Promise<T>): Promise<T> => {
+    // keep the chain alive regardless of this run's outcome
     chain = run.then(
       () => undefined,
       () => undefined,
     )
+    return run
+  }
+  const toggle = (on: boolean): Promise<boolean> => {
+    if (!deps.toggleAllowed()) return Promise.resolve(deps.isEnabled())
+    const run = enqueue(
+      chain.then(async () => {
+        if (on) await deps.start()
+        else await deps.stop()
+        // reached only when the transition succeeded: persist the EFFECTIVE
+        // resulting state — a failed start throws below and leaves the
+        // previous stored value intact
+        deps.persist(on)
+      }),
+    )
+    // `run` itself rejects so the caller (the IPC result) sees the failure
     return run.then(() => deps.isEnabled())
   }
+  return Object.assign(toggle, {
+    runExclusive: <T>(fn: () => Promise<T>): Promise<T> => enqueue(chain.then(fn)),
+  })
 }

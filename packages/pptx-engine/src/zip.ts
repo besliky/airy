@@ -18,6 +18,66 @@ const relsParser = new XMLParser({
   isArray: (name) => name === 'Relationship' || name === 'sldId' || name === 'Override',
 })
 
+// Open-time size fences (SEC-1304). The engine is the single open gate shared
+// by the desktop app (slides-main reads the file from disk and hands over the
+// bytes), the merge/insert paths, and the headless MCP session — which used to
+// be the only fenced one (mcp-server size-fence), leaving the desktop open to
+// the zip-bomb/raw-size class the docx engine had already closed inside
+// parseDocx. The budgets mirror the docx-engine fence (zip-load.ts) and the
+// mcp-server fence (size-fence.ts) — same numbers on purpose, do not drift.
+const MAX_OPEN_BYTES = 512 * 1024 * 1024
+const MAX_ZIP_PARTS = 10_000
+const MAX_PART_UNCOMPRESSED_BYTES = 512 * 1024 * 1024
+const MAX_TOTAL_UNCOMPRESSED_BYTES = 1.5 * 1024 * 1024 * 1024
+
+/** refuse an oversized raw package before the central directory is parsed */
+function assertWithinOpenCap(bytes: Uint8Array): void {
+  if (bytes.byteLength <= MAX_OPEN_BYTES) return
+  throw new Error(
+    `pptx rejected: ${String(bytes.byteLength)} raw bytes exceeds the ` +
+      `${String(MAX_OPEN_BYTES)} open cap (512 MiB)`,
+  )
+}
+
+/**
+ * Reject a package whose central directory declares more uncompressed bytes
+ * than the budget allows, before any entry is materialized (the open loop
+ * inflates every part). Same numbers as the docx-engine and mcp-server
+ * fences, so every open path refuses the same bombs.
+ */
+function assertZipWithinLimits(zip: JSZip): void {
+  const files = Object.values(zip.files).filter((f) => !f.dir)
+  if (files.length > MAX_ZIP_PARTS) {
+    throw new Error(
+      `pptx rejected: ${String(files.length)} parts exceeds the ${String(MAX_ZIP_PARTS)} limit`,
+    )
+  }
+  let total = 0
+  for (const file of files) {
+    // JSZip keeps the declared size on the lazy compressed object without
+    // inflating the entry — same seam the docx-engine fence reads. The CD
+    // field is unsigned 32-bit but surfaces here as a signed int32, so a
+    // declared size ≥ 2 GiB wraps negative: normalize before comparing or
+    // the biggest bombs slip through both budgets.
+    const declared =
+      (file as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize ?? 0
+    const size = declared < 0 ? declared + 0x1_0000_0000 : declared
+    if (size > MAX_PART_UNCOMPRESSED_BYTES) {
+      throw new Error(
+        `pptx rejected: part ${file.name} declares ${String(size)} uncompressed bytes ` +
+          `(limit ${String(MAX_PART_UNCOMPRESSED_BYTES)})`,
+      )
+    }
+    if (size > 0) total += size
+  }
+  if (total > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+    throw new Error(
+      `pptx rejected: total uncompressed size ${String(total)} exceeds the ` +
+        `${String(MAX_TOTAL_UNCOMPRESSED_BYTES)} limit`,
+    )
+  }
+}
+
 export interface Relationship {
   id: string
   type: string
@@ -34,8 +94,12 @@ export class PackageArchive {
   ) {}
 
   static async open(bytes: Uint8Array): Promise<PackageArchive> {
+    // fences before anything is parsed or inflated (SEC-1304): raw cap first,
+    // then the central-directory budget while sizes are still declared-only
+    assertWithinOpenCap(bytes)
     const originalHash = createHash('sha256').update(bytes).digest('hex')
     const zip = await JSZip.loadAsync(bytes)
+    assertZipWithinLimits(zip)
     const entries = new Map<string, Uint8Array>()
     const names = Object.keys(zip.files)
     for (const name of names) {
