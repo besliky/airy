@@ -66,8 +66,14 @@ export function assertZipWithinLimits(zip: JSZip): void {
   }
   let total = 0
   for (const file of files) {
-    const size =
+    // JSZip keeps the declared size on the lazy compressed object without
+    // inflating the entry. The CD field is unsigned 32-bit but surfaces here
+    // as a signed int32, so a declared size ≥ 2 GiB wraps negative: normalize
+    // before comparing or the biggest bombs slip through both budgets (same
+    // seam the pptx-engine fence normalizes, SEC-1551).
+    const declared =
       (file as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize ?? 0
+    const size = declared < 0 ? declared + 0x1_0000_0000 : declared
     if (size > MAX_PART_UNCOMPRESSED_BYTES) {
       throw new Error(
         `docx rejected: part ${file.name} declares ${size} uncompressed bytes ` +

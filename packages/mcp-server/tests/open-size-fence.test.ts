@@ -24,6 +24,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { openDocument } from '../src/import/open.js'
 import { resetSofficeCache, SOFFICE_ENV } from '../src/import/soffice.js'
+import { assertPptxWithinZipBudget } from '../src/sessions/size-fence.js'
 import { DocxSession } from '../src/docx/session.js'
 import { SlidesSession } from '../src/slides/session.js'
 import { XlsxSession } from '../src/xlsx/session.js'
@@ -110,6 +111,25 @@ describe('open size fences (SEC-1102)', () => {
     await expect(SlidesSession.open(path, root)).rejects.toThrow(
       /pptx rejected: part .* declares \d+ uncompressed bytes/,
     )
+  })
+
+  it('slides fence normalizes a declared size that wraps negative in JSZip (>= 2 GiB)', async () => {
+    // SEC-1551: the CD field is unsigned 32-bit but JSZip surfaces it as a
+    // signed int32, so 3 GiB (0xC0000000) reads as -1073741824 and used to
+    // slip past both budgets; pin the fence itself, unit-level, before the
+    // session wraps the refusal
+    const bomb = patchCentralSizes(await buildFixturePptx(), 3 * 1024 * 1024 * 1024)
+    await expect(assertPptxWithinZipBudget(bomb)).rejects.toThrow(
+      /pptx rejected: part .* declares 3221225472 uncompressed bytes/,
+    )
+  })
+
+  it('slides fence keeps the JSZip -1 sentinel refusal for a 0xFFFFFFFF declared size', async () => {
+    // 0xFFFFFFFF reads as JSZip's "unknown size" sentinel (-1): loadAsync
+    // refuses it before the fence walks the directory — pinned so a JSZip
+    // bump cannot silently turn the sentinel into a pass
+    const bomb = patchCentralSizes(await buildFixturePptx(), 0xffffffff)
+    await expect(assertPptxWithinZipBudget(bomb)).rejects.toThrow(/didn't get enough information/)
   })
 
   it('slides refuse a zip bomb declared in the central directory (total)', async () => {
