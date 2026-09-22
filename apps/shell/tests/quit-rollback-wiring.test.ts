@@ -105,8 +105,29 @@ describe('quit snapshot write failure re-arm (BUG-1224)', () => {
     // and never throws); a failed quit-time write must disarm persist-once
     // so the NEXT confirmed close retries instead of leaving a stale
     // session that resurrects already-closed windows
-    expect(shellMain).toContain('const written = decision.excludeClosing')
+    expect(shellMain).toContain('let written = decision.excludeClosing')
     expect(shellMain).toContain('if (!written) quitFlow.markSnapshotWriteFailed()')
+  })
+
+  it('the last-close failure retries in place and will-quit flushes the rest (BUG-1307)', () => {
+    // on the LAST confirmed close the re-arm has no successor close to retry
+    // into, so finishWindowClose retries the write in place — the closing
+    // window is still registered there, making it the only point where the
+    // exact intended snapshot is writable
+    const finishBlock = shellMain.slice(
+      shellMain.indexOf('function finishWindowClose'),
+      shellMain.indexOf('function abortAppQuit'),
+    )
+    expect(finishBlock).toContain('written = decision.excludeClosing')
+    expect(finishBlock).toContain('quitFlow.markSnapshotWriteFailed()')
+    // a snapshot still pending at will-quit gets one final full write, and a
+    // failing one escalates loudly instead of exiting silently stale
+    const start = shellMain.indexOf("app.on('will-quit'")
+    expect(start).toBeGreaterThan(-1)
+    const willQuit = shellMain.slice(start, shellMain.indexOf('})', start))
+    expect(willQuit).toContain('quitFlow.snapshotWritePending()')
+    expect(willQuit).toContain('persistSessionState(false)')
+    expect(willQuit).toContain('console.error')
   })
 })
 

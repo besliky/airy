@@ -94,6 +94,9 @@ interface SidecarOpenInfo {
   readonly sessionId: string
   readonly sheets: readonly XlsxSheetSummary[]
   readonly activeTab: number
+  /** raw byte length the sidecar measured on the file handle it actually
+   * opened (BUG-1305); 0 when an older sidecar omits it */
+  readonly rawBytes: number
 }
 
 const CONVERSION_WARNING: Record<'xls' | 'ods', string> = {
@@ -135,7 +138,12 @@ function parseOpenResult(raw: unknown): SidecarOpenInfo {
       columnCount: numberOr(sheet.columnCount, 0),
     }
   })
-  return { sessionId, sheets, activeTab: numberOr(result.activeTab, 0) }
+  return {
+    sessionId,
+    sheets,
+    activeTab: numberOr(result.activeTab, 0),
+    rawBytes: numberOr(result.rawBytes, 0),
+  }
 }
 
 function numberOr(value: unknown, fallback: number): number {
@@ -303,8 +311,11 @@ export class XlsxSession {
     if (format === 'xls' || format === 'ods') {
       tempDir = await mkdtemp(join(tmpdir(), 'airy-import-'))
       backingPath = join(tempDir, `${siblingStem(basename(path))}.xlsx`)
+      let converted: { sourceBytes?: unknown }
       try {
-        await client.convertWorkbook({ path, targetPath: backingPath })
+        converted = (await client.convertWorkbook({ path, targetPath: backingPath })) as {
+          sourceBytes?: unknown
+        }
       } catch (e) {
         await rm(tempDir, { recursive: true, force: true })
         throw new Error(
@@ -312,11 +323,32 @@ export class XlsxSession {
           { cause: e },
         )
       }
+      // BUG-1305: the stat above ran before the sidecar read the file, so a
+      // source that grew past the cap in between slipped the raw fence —
+      // re-check against the size the converter itself saw (0 when an older
+      // sidecar omits it)
+      try {
+        assertWithinOpenCap(path, numberOr(converted.sourceBytes, 0), 'xlsx')
+      } catch (e) {
+        await rm(tempDir, { recursive: true, force: true })
+        throw e
+      }
       warnings.push(CONVERSION_WARNING[format])
     }
 
     try {
       const openInfo = parseOpenResult(await client.open(backingPath))
+      // BUG-1305: same race for the file the sidecar just opened — re-run
+      // the fence against the reply's served size, releasing the sidecar
+      // session when the open is refused
+      if (openInfo.rawBytes > 0) {
+        try {
+          assertWithinOpenCap(backingPath, openInfo.rawBytes, 'xlsx')
+        } catch (e) {
+          await client.close(openInfo.sessionId)
+          throw e
+        }
+      }
       const baseline = await statOrNull(backingPath)
       return new XlsxSession({
         handle: randomUUID(),

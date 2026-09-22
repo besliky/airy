@@ -155,4 +155,28 @@ describe('createQuitFlow', () => {
     // debounced save; there is no persist-once to re-arm)
     expect(flow.closeDecision(1).persist).toBe(true)
   })
+
+  it('snapshotWritePending tracks the quit snapshot through failures (BUG-1307)', () => {
+    const flow = createQuitFlow()
+    // outside a quit nothing is pending (the will-quit flush is a no-op)
+    expect(flow.snapshotWritePending()).toBe(false)
+    flow.begin()
+    // armed, but the one quit snapshot has not landed yet
+    expect(flow.snapshotWritePending()).toBe(true)
+    flow.closeDecision(2)
+    expect(flow.snapshotWritePending()).toBe(false)
+    // a failed write leaves the quit without its snapshot — exactly the
+    // residual the final will-quit flush retries when no later confirmed
+    // close exists to re-arm into
+    flow.markSnapshotWriteFailed()
+    expect(flow.snapshotWritePending()).toBe(true)
+    // the retried write lands it again
+    flow.closeDecision(1)
+    expect(flow.snapshotWritePending()).toBe(false)
+    // and a cancelled quit clears the pending state with the quit itself
+    flow.markSnapshotWriteFailed()
+    expect(flow.snapshotWritePending()).toBe(true)
+    flow.cancel()
+    expect(flow.snapshotWritePending()).toBe(false)
+  })
 })

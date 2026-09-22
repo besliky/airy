@@ -25,6 +25,12 @@ export interface StubIoOptions {
   sheets?: readonly StubSheet[]
   cells?: readonly StubRangeCell[]
   openError?: Error
+  /** raw byte length the stub open reply reports (real sidecars always
+   * send it; omitted → the reply has no rawBytes, the pre-BUG-1305 shape) */
+  openRawBytes?: number
+  /** raw source byte length the stub convert reply reports (same wire
+   * contract; omitted → no sourceBytes in the reply) */
+  convertSourceBytes?: number
 }
 
 export interface StubIo extends XlsxIo {
@@ -60,6 +66,7 @@ export function makeStubIo(options: StubIoOptions = {}): StubIo {
         entryCount: 2,
         sheets: sheets.map((sheet, index) => ({ ...sheet, index })),
         activeTab: 0,
+        ...(options.openRawBytes !== undefined ? { rawBytes: options.openRawBytes } : {}),
       }
     },
     async readRange(input: {
@@ -89,7 +96,13 @@ export function makeStubIo(options: StubIoOptions = {}): StubIo {
       // a real conversion writes a workbook; the stub writes placeholder
       // bytes (nothing parses them while the save module is mocked)
       await writeFile(input.targetPath, 'stub-xlsx-bytes')
-      return { sheets: 1, cells: 0 }
+      return {
+        sheets: 1,
+        cells: 0,
+        ...(options.convertSourceBytes !== undefined
+          ? { sourceBytes: options.convertSourceBytes }
+          : {}),
+      }
     },
     async archiveManifest() {
       return { entries: [] }

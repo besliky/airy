@@ -579,6 +579,32 @@ fn open_fixture(entries: &[(&str, &str)]) -> (tempfile::TempDir, PathBuf) {
     (dir, path)
 }
 
+/// BUG-1305: the open reply carries the raw byte length measured on the
+/// handle the sidecar itself read, so the session can re-run its open-size
+/// fence against the size actually served when the file grew between the
+/// host's stat and this open.
+#[test]
+fn open_reports_the_raw_bytes_it_actually_served() {
+    let (_dir, path) = open_fixture(&[
+        (
+            "xl/workbook.xml",
+            r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>"#,
+        ),
+        (
+            "xl/_rels/workbook.xml.rels",
+            r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#,
+        ),
+        (
+            "xl/worksheets/sheet1.xml",
+            r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>"#,
+        ),
+    ]);
+    let mut sessions = WorkbookSessions::new();
+    let metadata = sessions.open(&path).unwrap();
+    assert_eq!(metadata.raw_bytes, std::fs::metadata(&path).unwrap().len());
+    assert!(metadata.raw_bytes > 0);
+}
+
 /// Writers that never update `<dimension>` leave `ref="A1"` on sheets
 /// with real data (POI SXSSF et al.); the extent must be measured, not
 /// trusted, or every cell outside A1 is unreachable.

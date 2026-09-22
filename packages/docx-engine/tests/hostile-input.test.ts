@@ -52,6 +52,20 @@ describe('zip bomb protection', () => {
     await expect(parseDocx(bomb)).rejects.toThrow(/total uncompressed/)
   })
 
+  it('rejects a declared size of 2 GiB or more, which JSZip surfaces negative (BUG-1306)', async () => {
+    // JSZip reads the unsigned 32-bit central-directory field through a
+    // signed int32, so the biggest declarations a u32 can express arrive
+    // NEGATIVE at the declared-size seam: unnormalized they slip the
+    // per-part cap and are not counted into the total, letting the largest
+    // u32 bombs ride past the pre-inflate fence (only jszip's internal
+    // post-inflate "uncompressed data size mismatch" would stop them)
+    const bytes = await buildDocx({ bodyXml: PLAIN_PARA })
+    const bomb = patchCentralSizes(bytes, 0x80000004)
+    await expect(parseDocx(bomb)).rejects.toThrow(
+      /docx rejected: part .* declares 2147483652 uncompressed bytes/,
+    )
+  })
+
   it('rejects an archive with too many parts', async () => {
     const zip = await JSZip.loadAsync(await buildDocx({ bodyXml: PLAIN_PARA }))
     for (let i = 0; i < 10010; i++) zip.file(`junk/${i}.bin`, 'x')
