@@ -175,6 +175,15 @@ npm run dev          # all six editors + shell against Vite dev servers
 npm run dist:linux   # package Linux AppImage + deb + rpm (also dist:mac / dist:win)
 ```
 
+End-to-end tests run the real built Electron shell (`npm run build:all`
+first) under xvfb: `npm run test:e2e:xvfb`. The docs pixel baselines
+(`e2e/docs-visual.spec.ts`) require the font stack CI pins — one-time setup
+with `npm run setup:e2e-fonts` (Debian/Ubuntu). It installs the CI font
+packages and, when the distro ships different Carlito/Caladea builds, pins
+the exact CI builds under `e2e/.e2e-fonts/` which `npm run test:e2e:xvfb`
+applies automatically. Baselines remain Linux-CI-authoritative: distros with
+a different system FreeType can still show sub-pixel text drift.
+
 The sheets app additionally needs a Rust toolchain for its xlsx sidecar
 (`cargo` on PATH); `npm run build -w @airy-office/sheets` compiles it
 automatically. See [CONTRIBUTING.md](CONTRIBUTING.md) for the checks every

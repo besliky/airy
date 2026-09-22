@@ -28,6 +28,8 @@ electron-builder.env
 
 # Playwright artifacts
 /test-results/
+# Pinned CI font builds + fontconfig include downloaded by scripts/setup-e2e-fonts.sh
+/e2e/.e2e-fonts/
 
 .cursor/rules/git-remote.mdc
 __pycache__/
