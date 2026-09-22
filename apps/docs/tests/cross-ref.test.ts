@@ -2,16 +2,19 @@ import { Editor } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import JSZip from 'jszip'
 import {
+  bookmarkIdOf,
   generateCaptionXml,
   generateParagraphXml,
   parseDocx,
   saveDocx,
   type GenerateContext,
 } from '@airy-office/docx-engine'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
 import {
   REF_TARGET_GONE,
+  allBookmarkIds,
+  anchorIdOf,
   collectCrossRefSources,
   crossRefCache,
   crossRefInstr,
@@ -363,6 +366,75 @@ describe('cursor insertion via the editor', () => {
       .find((r) => r.refField === 'Conclusion')
     expect(run).toMatchObject({ text: '2', refInstr: ' REF Conclusion \\p \\h ' })
     expect(source).toBeTruthy()
+    editor.destroy()
+  })
+})
+
+describe('caption anchor w:id uniqueness (BUG-919)', () => {
+  it('collects every bookmark id the saved document will contain', async () => {
+    // a caption already carrying a stamped anchor keeps its literal w:id in the
+    // protected XML; the user bookmark's id is minted at save time from its
+    // name (parse keeps names only, save re-emits via the engine hash)
+    const anchoredCaption = generateCaptionXml('Figure', 1, 'Anchored', '_Ref135792468')
+    const { editor, parsed } = await open(
+      HEADING_XML + BOOKMARKED_XML + anchoredCaption + CAPTION2_XML + PLAIN_XML,
+    )
+    const ids = allBookmarkIds(editor.state.doc, parsed.blocks)
+    expect(ids.has(1135792468)).toBe(true) // anchorIdOf('_Ref135792468'), protected XML
+    expect(ids.has(bookmarkIdOf('Conclusion'))).toBe(true) // save-time hash id
+    editor.destroy()
+  })
+
+  it('stamps a caption anchor whose w:id avoids the document id pool', async () => {
+    // bookmarkIdOf('Budget2027') lands inside the 1e9 stamp range: a name-only
+    // anchor pick can mint the very same w:id the save will give this bookmark
+    expect(bookmarkIdOf('Budget2027')).toBe(1302386152)
+    const userBookmark =
+      '<w:p><w:bookmarkStart w:id="7" w:name="Budget2027"/><w:bookmarkEnd w:id="7"/>' +
+      '<w:r><w:t>Budget paragraph.</w:t></w:r></w:p>'
+    const { editor, parsed, endOf } = await open(
+      HEADING_XML + userBookmark + CAPTION_XML + CAPTION2_XML + PLAIN_XML,
+    )
+    const caption = collectCrossRefSources(editor, parsed.blocks).find(
+      (s) => s.kind === 'caption' && s.seqNumber === 1,
+    )!
+    // deterministic candidates: the colliding _Ref302386152 (id 1302386152)
+    // first, then the free _Ref550000000 (id 1550000000)
+    const random = vi
+      .spyOn(Math, 'random')
+      .mockReturnValueOnce((302386152 - 100000000 + 0.5) / 900000000)
+      .mockReturnValue((550000000 - 100000000 + 0.5) / 900000000)
+    const anchor = ensureCaptionAnchor(editor, parsed.blocks, caption)
+    random.mockRestore()
+    // the id-aware pick rejected the colliding name instead of stamping a
+    // duplicate w:id into the document
+    expect(anchor).toBe('_Ref550000000')
+    expect(anchorIdOf(anchor!)).not.toBe(bookmarkIdOf('Budget2027'))
+
+    let genXml = ''
+    editor.state.doc.descendants((node) => {
+      const xml = String(node.attrs?.genXml ?? '')
+      if (node.type.name === 'docProtected' && xml.includes('_Ref550000000')) {
+        genXml = xml
+        return false
+      }
+      return true
+    })
+    expect(genXml).toContain('<w:bookmarkStart w:id="1550000000" w:name="_Ref550000000"/>')
+
+    // full round trip: every bookmarkStart id in the saved document is unique
+    const saved = await insertAndSave(
+      editor,
+      parsed,
+      endOf('Plain paragraph.'),
+      anchor!,
+      'number',
+      '1',
+    )
+    const xml = await docXmlOf(saved)
+    const ids = [...xml.matchAll(/<w:bookmarkStart [^>]*w:id="(\d+)"/g)].map((m) => m[1])
+    expect(ids.length).toBeGreaterThan(1) // the anchor and the user bookmark both made it
+    expect(new Set(ids).size).toBe(ids.length)
     editor.destroy()
   })
 })
