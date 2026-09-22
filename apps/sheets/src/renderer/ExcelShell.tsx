@@ -63,6 +63,7 @@ import type { TextToColumnsConfig } from './text-to-columns'
 import type { TextToColumnsSourceResult } from './data-tools-actions'
 import { OutlineSettingsDialog, type OutlineSettingsValue } from './OutlineSettingsDialog'
 import type { PrintSetupOverrides } from './page-layout-actions'
+import type { PrintGuard } from './print-guard'
 import type { WorkbookExportPdfRequest } from '../shared/desktop-api'
 import type { CatalogFunction } from './function-catalog'
 import { SubtotalDialog, type SubtotalConfig } from './SubtotalDialog'
@@ -312,6 +313,8 @@ interface ExcelShellProps {
       fitToPage: boolean
       pageOrder: 'down-then-over' | 'over-then-down'
     }
+    /// The detected print pain (strips across / foreign paper) of the job.
+    guard: PrintGuard
   }>
   readonly onCreateSubtotal: (config: SubtotalConfig) => string | null
   readonly onCreateConsolidate: (config: ConsolidateConfig) => string | null
