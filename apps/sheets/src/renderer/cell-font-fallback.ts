@@ -11,6 +11,14 @@
  * names always fall to sans, matching Excel's substitution.
  */
 
+// Bundled faces (Vite resolves these to the same hashed assets the styles.css
+// @font-face rules reference). A relative new URL('./fonts/…', import.meta.url)
+// cannot work here: no ./fonts/ dir exists next to this module, so Vite emits
+// the URL verbatim and the browser resolves it against out/renderer/assets/
+// <chunk>.js — a guaranteed 404 on every launch (OBS-1604).
+import carlitoBoldUrl from '@airy-office/ui/fonts/Carlito-Bold.ttf'
+import carlitoRegularUrl from '@airy-office/ui/fonts/Carlito-Regular.ttf'
+
 const GENERIC_FAMILY =
   /(?:^|[\s,])(?:serif|sans-serif|monospace|cursive|fantasy|system-ui|math|ui-serif|ui-sans-serif|ui-monospace|ui-rounded)$/i
 
@@ -164,14 +172,8 @@ const KAI = ['KaiTi', 'Kaiti SC', 'STKaitiSC-Regular', 'STKaiti']
 const MING_TC = ['PMingLiU', 'Songti TC', 'Apple LiSung']
 const KR_SANS = ['Malgun Gothic', 'Apple SD Gothic Neo', 'AppleGothic']
 /// Carlito is bundled, not installed — local() alone can never resolve it.
-const CARLITO_SRC = [
-  'Carlito',
-  `url(${new URL('./fonts/Carlito-Regular.ttf', import.meta.url).href})`,
-]
-const CARLITO_BOLD_SRC = [
-  'Carlito Bold',
-  `url(${new URL('./fonts/Carlito-Bold.ttf', import.meta.url).href})`,
-]
+const CARLITO_SRC = ['Carlito', `url(${carlitoRegularUrl})`]
+const CARLITO_BOLD_SRC = ['Carlito Bold', `url(${carlitoBoldUrl})`]
 /// Malgun Gothic prints hangul at 1.0em — exactly AppleGothic — but digits at
 /// 0.6em vs AppleGothic's 0.68em, so number tails clipped while hangul was
 /// perfect. Latin/digit runs go to width-corrected Helvetica Neue instead.
