@@ -285,7 +285,10 @@ export class XlsxSession {
     // the declared-uncompressed (zip-bomb) budget for .xlsx runs inside the
     // sidecar itself (SEC-1103: it sums the central-directory sizes and
     // refuses over 1.5 GiB before decompressing), reaching this session as
-    // the open reply's error
+    // the open reply's error. The same budget also guards the .xls/.ods
+    // conversion below (SEC-1301: calamine reads .ods through the same ZIP
+    // container, so the sidecar runs the fence before convert_workbook
+    // decompresses anything), surfacing inside the "Cannot import" wrap.
     let rawSize = 0
     try {
       rawSize = (await stat(path)).size
