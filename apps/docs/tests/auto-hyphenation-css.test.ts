@@ -119,3 +119,49 @@ describe('autoHyphenation CSS', () => {
     expect(css).not.toContain('hyphens')
   })
 })
+
+describe('autoHyphenation CSS without Chromium hyphenation dictionaries (BUG-1541)', () => {
+  // stock Electron ships no hyphenation data, so hyphens:auto hyphenates
+  // nothing; the stylesheet then pins manual — identical rendering (soft
+  // hyphens keep breaking) and stable against an Electron that one day
+  // bundles dictionaries
+  const NO_DICTS = { cssHyphenation: false }
+
+  it('downgrades the document-wide rule to manual', () => {
+    const css = docStyleCss(parsedDoc({ autoHyphenation: true }), NO_DICTS)
+    expect(css).toContain('.doc-page { hyphens:manual; -webkit-hyphens:manual }')
+    expect(css).not.toContain('hyphens:auto')
+  })
+
+  it('downgrades per-style re-enables to manual while suppression stays manual', () => {
+    const css = docStyleCss(
+      parsedDoc({
+        autoHyphenation: true,
+        styles: [
+          {
+            styleId: 'NoHyph',
+            name: 'NoHyph',
+            type: 'paragraph',
+            display: { suppressAutoHyphens: true },
+          } as StyleInfo,
+          {
+            styleId: 'ReHyph',
+            name: 'ReHyph',
+            type: 'paragraph',
+            display: { suppressAutoHyphens: false },
+          } as StyleInfo,
+        ],
+      }),
+      NO_DICTS,
+    )
+    expect(css).toContain('[data-style="NoHyph"] { hyphens:manual;-webkit-hyphens:manual }')
+    expect(css).toContain('[data-style="ReHyph"] { hyphens:manual;-webkit-hyphens:manual }')
+    expect(css).not.toContain('hyphens:auto')
+  })
+
+  it('keeps auto when the probe reports working dictionaries', () => {
+    expect(docStyleCss(parsedDoc({ autoHyphenation: true }), { cssHyphenation: true })).toContain(
+      AUTO,
+    )
+  })
+})

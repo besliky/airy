@@ -452,6 +452,58 @@ describe('apply_ops', () => {
   })
 })
 
+// BUG-1501: setHeadingLevel used to be silently reverted on save — the op
+// mutates type/level but neither styleId nor the raw pPr passthrough, and the
+// serializer preferred the stale styleId over the level mapping, so heading→
+// heading and heading→plain edits disappeared after save+reopen.
+describe('setHeadingLevel survives save (BUG-1501)', () => {
+  it('heading→heading: the saved file reopens at the new level', async () => {
+    const session = await openSession()
+    session.applyOps([{ op: 'setHeadingLevel', target: { blockIndexes: [0] }, level: 2 }])
+    const target = join(root, 'retagged.docx')
+    await session.save(target)
+    const reopened = await reparseSaved(target)
+    expect(reopened.blocks[0]!.type).toBe('heading')
+    expect(reopened.blocks[0]!.level).toBe(2)
+    expect(reopened.blocks[0]!.styleId).toBe('Heading2')
+  })
+
+  it('heading→plain: the saved file reopens as a body paragraph', async () => {
+    const session = await openSession()
+    session.applyOps([{ op: 'setHeadingLevel', target: { blockIndexes: [0] }, level: 0 }])
+    const target = join(root, 'demoted.docx')
+    await session.save(target)
+    const reopened = await reparseSaved(target)
+    expect(reopened.blocks[0]!.type).toBe('paragraph')
+    expect(reopened.blocks[0]!.level).toBeUndefined()
+    expect(reopened.blocks[0]!.styleId).toBeUndefined()
+  })
+
+  it('plain→heading: the saved file reopens at the new level', async () => {
+    const session = await openSession()
+    session.applyOps([{ op: 'setHeadingLevel', target: { blockIndexes: [1] }, level: 2 }])
+    const target = join(root, 'promoted.docx')
+    await session.save(target)
+    const reopened = await reparseSaved(target)
+    expect(reopened.blocks[1]!.type).toBe('heading')
+    expect(reopened.blocks[1]!.level).toBe(2)
+    expect(reopened.blocks[1]!.styleId).toBe('Heading2')
+  })
+
+  it('saving the retag twice writes identical bytes (idempotent)', async () => {
+    const session = await openSession()
+    session.applyOps([{ op: 'setHeadingLevel', target: { blockIndexes: [0] }, level: 2 }])
+    await session.save(join(root, 'once.docx'))
+    await session.save(join(root, 'twice.docx'))
+    expect(
+      Buffer.compare(
+        await readFile(join(root, 'once.docx')),
+        await readFile(join(root, 'twice.docx')),
+      ),
+    ).toBe(0)
+  })
+})
+
 describe('save: byte preservation and fencing', () => {
   it('save with no edits returns the original bytes verbatim', async () => {
     const session = await openSession()

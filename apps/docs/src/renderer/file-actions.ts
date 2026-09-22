@@ -46,6 +46,7 @@ import {
   type PendingNumbering,
 } from './doc-state'
 import { docStyleCss } from './doc-style-css'
+import { cssHyphenationSupported } from './hyphenation-support'
 import { setDocNoteNumbering } from './note-format'
 import type { CompareEntry } from './editor/compare'
 import { applyChartEdits } from './editor/chart'
@@ -360,7 +361,7 @@ export async function loadFile(
     // opens files without replacing the current document.
     discardStalePasswordIntents()
     ctx.setAiPanelKey((k) => k + 1)
-    ctx.setDocCss(docStyleCss(parsed))
+    ctx.setDocCss(docStyleCss(parsed, { cssHyphenation: cssHyphenationSupported() }))
     ctx.setSection(readSectionSettings(parsed))
     ctx.setSections(readSections(parsed))
     ctx.setSectionDirty(false)
@@ -477,7 +478,7 @@ export async function newFile(ctx: FileActionContext): Promise<boolean | undefin
     // the previous draft (its DocState, including the encrypted flag, is gone)
     discardStalePasswordIntents()
     ctx.setAiPanelKey((k) => k + 1)
-    ctx.setDocCss(docStyleCss(parsed))
+    ctx.setDocCss(docStyleCss(parsed, { cssHyphenation: cssHyphenationSupported() }))
     ctx.setSection(readSectionSettings(parsed))
     ctx.setSections(readSections(parsed))
     ctx.setSectionDirty(false)
@@ -945,7 +946,7 @@ async function saveOnce(
       if (!auto) chain.scrollIntoView()
       chain.run()
     }
-    ctx.setDocCss(docStyleCss(reparsed))
+    ctx.setDocCss(docStyleCss(reparsed, { cssHyphenation: cssHyphenationSupported() }))
     ctx.setDoc((prev) =>
       prev
         ? {

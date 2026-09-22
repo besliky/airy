@@ -15,6 +15,14 @@ import { escapeXmlAttr, escapeXmlText } from './xml-utils'
 export interface GenerateContext {
   /** heading level -> styleId existing in the original styles.xml */
   headingStyleIds: Map<number, string>
+  /**
+   * styleId -> outline level of every paragraph style the document defines
+   * (undefined value = defined without a level; absent key = styles.xml does
+   * not know the id). Overlaid with this save's styleUpserts so Modify-Style
+   * retags keep their styleId. Lets the serializer tell a native heading
+   * styleId from one left stale by a heading-level retag (BUG-1501).
+   */
+  headingLevelOfStyles?: Map<string, number | undefined>
   /** styleId for list paragraphs, if present in the original doc */
   listParagraphStyleId?: string
   /**
@@ -27,6 +35,20 @@ export interface GenerateContext {
   numberedStyleIds?: Set<string>
   /** allocate a new relationship id for a hyperlink target; returns rId */
   allocateHyperlinkRel: (href: string) => string
+}
+
+/**
+ * Effective outline level of a paragraph style id, with the same precedence
+ * the parse side's headingLevelOf applies when CLASSIFYING a paragraph:
+ * the document's own styles first (a defined style without a level is body
+ * text, even when its id looks built-in), then the built-in HeadingN
+ * convention for ids styles.xml does not define.
+ */
+function headingStyleLevelOf(ctx: GenerateContext, styleId: string): number | undefined {
+  const inDoc = ctx.headingLevelOfStyles
+  if (inDoc?.has(styleId)) return inDoc.get(styleId)
+  const builtin = /^Heading([1-9])$/i.exec(styleId)
+  return builtin ? Number(builtin[1]) : undefined
 }
 
 const EMU_PER_PX = 9525
@@ -1845,6 +1867,54 @@ export function setPPrChange(rawPPr: string, changeJson: string): string {
 }
 
 /**
+ * BUG-1501: a heading retag (setHeadingLevel) changes type/level but leaves
+ * the block's styleId — and a raw pPr passthrough — pointing at the OLD
+ * level's style, so the saved file silently reverted the edit on reopen.
+ * When the raw pPr disagrees with the block's explicit level, retarget the
+ * w:pStyle val (and a direct w:outlineLvl) in place for the new level;
+ * every other byte of the raw slice (unmodeled pPr children) survives.
+ * Returns null when the raw pPr already agrees with the block (plain
+ * passthrough) — including levels authored by a direct w:outlineLvl that
+ * still matches, which must keep its bytes.
+ */
+function retargetRawHeadingStyle(
+  block: GeneratedBlock,
+  ctx: GenerateContext,
+  rawPPr: string,
+): string | null {
+  if (block.type !== 'heading' || block.outlineOnly || block.level === undefined) return null
+  if (block.styleId === undefined) return null
+  if (headingStyleLevelOf(ctx, block.styleId) === block.level) return null
+  // limit every probe to the outer pPr: a nested <w:pPrChange> also carries
+  // a <w:pPr><w:pStyle …> snapshot of the OLD properties that must not match
+  const outerEnd = rawPPr.indexOf('<w:pPrChange')
+  let pPr = outerEnd === -1 ? rawPPr : rawPPr.slice(0, outerEnd)
+  const tail = outerEnd === -1 ? '' : rawPPr.slice(outerEnd)
+  // a direct w:outlineLvl authors the level at paragraph level: while it
+  // still matches the block the bytes are intentional, after a retag it is
+  // rewritten to the new level
+  const direct = /<w:outlineLvl\s[^>]*\/>/.exec(pPr)
+  if (direct) {
+    const val = /w:val="(-?\d+)"/.exec(direct[0])
+    if (val && Number(val[1]) + 1 === block.level) return null
+    pPr =
+      pPr.slice(0, direct.index) +
+      `<w:outlineLvl w:val="${block.level - 1}"/>` +
+      pPr.slice(direct.index + direct[0].length)
+  }
+  const target = ctx.headingStyleIds.get(block.level)
+  if (!target || target === block.styleId) return pPr + tail
+  const styleTag = /<w:pStyle\s[^>]*\/>/.exec(pPr)
+  if (!styleTag) return pPr + tail
+  return (
+    pPr.slice(0, styleTag.index) +
+    `<w:pStyle w:val="${escapeXmlAttr(target)}"/>` +
+    pPr.slice(styleTag.index + styleTag[0].length) +
+    tail
+  )
+}
+
+/**
  * Generate an OOXML <w:p> fragment for an edited/new block.
  * Only references styles that already exist in the original document, so the
  * patched file never needs styles.xml modifications. When `rawPPr` is set the
@@ -1867,7 +1937,10 @@ export function generateParagraphXml(block: GeneratedBlock, ctx: GenerateContext
     crossStarts +
     generateRunsXml(block.runs, ctx) +
     crossEnds
-  if (block.rawPPr !== undefined) return `<w:p>${block.rawPPr}${content}</w:p>`
+  if (block.rawPPr !== undefined) {
+    const pPr = retargetRawHeadingStyle(block, ctx, block.rawPPr)
+    return `<w:p>${pPr ?? block.rawPPr}${content}</w:p>`
+  }
 
   const children: PPrChild[] = []
   let styleId: string | undefined
@@ -1876,9 +1949,26 @@ export function generateParagraphXml(block: GeneratedBlock, ctx: GenerateContext
     if (block.outlineOnly) {
       styleId = block.styleId
       children.push({ name: 'w:outlineLvl', xml: `<w:outlineLvl w:val="${level - 1}"/>` })
-    } else styleId = block.styleId ?? ctx.headingStyleIds.get(level)
+    } else if (
+      block.level !== undefined &&
+      block.styleId !== undefined &&
+      headingStyleLevelOf(ctx, block.styleId) !== level
+    ) {
+      // BUG-1501: the level was retagged while styleId still names the old
+      // level's style (or a non-heading style) — the explicit level wins and
+      // picks the level's own HeadingN style, like a freshly inserted heading
+      styleId = ctx.headingStyleIds.get(level)
+    } else {
+      styleId = block.styleId ?? ctx.headingStyleIds.get(level)
+    }
   } else if (block.type === 'listItem') {
+    // a heading styleId on a numbered paragraph is legitimate (numbered
+    // headings keep their pStyle), so list paragraphs keep theirs as-is
     styleId = block.styleId ?? ctx.listParagraphStyleId
+  } else if (block.styleId !== undefined && headingStyleLevelOf(ctx, block.styleId) !== undefined) {
+    // BUG-1501: demoted to a body paragraph while styleId still names a
+    // heading style — keeping it would resurrect the heading on reopen, so
+    // the stale pStyle is dropped
   } else {
     styleId = block.styleId
   }
