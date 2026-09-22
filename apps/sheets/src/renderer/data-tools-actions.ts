@@ -20,6 +20,7 @@ import {
   type OutputCell,
 } from './consolidate'
 import { isSheetRemoved, journalSize, recordPageSetup, recordStructuralOp } from './edit-journal'
+import { growSheetToRef } from './grid-grow'
 import { resolveGoToRef, type GoToNameEntry } from './goto'
 import { getLang, t } from './i18n/locale'
 import { appendSymbol } from './SymbolDialog'
@@ -167,7 +168,8 @@ export function activeCellLabel(ctx: DataToolsContext): string {
 /// another one. Returns null on success or a user-facing error message.
 /// Univer's parser yields NaN rows instead of throwing on garbage, so
 /// validity is decided by resolveGoToRef — the try/catch covers what
-/// getRange itself rejects: unknown sheet names and out-of-bounds ranges.
+/// getRange itself rejects: unknown sheet names (out-of-bounds targets are
+/// handled by the grid growth below rather than rejected — BUG-1615).
 export function goToReference(ctx: DataToolsContext, ref: string): string | null {
   const workbook = ctx.univerRef.current?.univerAPI.getActiveWorkbook()
   const worksheet = workbook?.getActiveSheet()
@@ -178,6 +180,11 @@ export function goToReference(ctx: DataToolsContext, ref: string): string | null
   if (resolved === null) {
     return t('appGoToUnresolved', { ref: trimmed })
   }
+  // BUG-1615: a jump below/right of the sheet's grid used to die with a
+  // silent "Range is out of bounds" on new books (pinned to 1000×26). Grow
+  // the target sheet's grid to fit first, exactly like the arrow-key edge
+  // growth does; unknown sheet prefixes keep their own error below.
+  if (ctx.univerRef.current) growSheetToRef(ctx.univerRef.current, resolved)
   try {
     // A jump must not leave an editor open on the previous cell — later
     // keystrokes would land there. Commit it before moving.
