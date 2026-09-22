@@ -84,6 +84,15 @@ async function openFixture(
   return String(opened.structuredContent?.handle)
 }
 
+// ISOLATION CONTRACT (TEST-705): this suite repoints the process-wide
+// workspace root (`process.env[WORKSPACE_ROOT_ENV]`) for its whole lifetime,
+// restoring the previous value in afterAll. That is only safe because vitest
+// runs test FILES in isolation — one file per worker by default. Do not run
+// this suite with `isolate: false`, `singleFork`, or any pool that shares one
+// process across files: another file reading the root concurrently (or the
+// mid-suite root-drift cases below) would race the shared env var. The CI
+// config keeps the default isolation; no describe.sequential needed because
+// each file owns its own temp root.
 beforeAll(async () => {
   previousRoot = process.env[WORKSPACE_ROOT_ENV]
   root = await mkdtemp(join(tmpdir(), 'airy-mcp-html-'))
