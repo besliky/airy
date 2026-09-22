@@ -1455,6 +1455,21 @@ describe('applyStructuralOps column moves', () => {
     )
   })
 
+  it('fails closed when a swapped row holds content other than cells (TEST-703)', () => {
+    // The in-row reorder (sortRowCells) models addressed <c> elements only; a
+    // row carrying anything else would silently lose that element when the
+    // cells were re-sorted. Unreachable for files Excel writes, but the guard
+    // must abort the whole move instead of corrupting the sheet.
+    const xml =
+      '<worksheet><sheetData>' +
+      '<row r="1"><c r="A1"><v>1</v></c><v>9</v><c r="B1"><v>2</v></c></row>' +
+      '</sheetData></worksheet>'
+    expect(() => applyStructuralOps(xml, [move(1, 1, 0)], SHEET)).toThrow(StructuralShiftError)
+    expect(() => applyStructuralOps(xml, [move(1, 1, 0)], SHEET)).toThrow(
+      /holds content other than cells/,
+    )
+  })
+
   it('moves a block left and renumbers the displaced columns', () => {
     const xml =
       '<worksheet><sheetData>' +
