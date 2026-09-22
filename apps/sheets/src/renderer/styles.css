@@ -5679,6 +5679,37 @@ textarea:focus {
   color: var(--text-dim);
   text-align: right;
 }
+/* Print guard (BUG-1603): the unobtrusive "prints N pages across / foreign
+   paper" suggestion with its one-click job overrides. */
+.print-guard {
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+  font-size: 12px;
+  color: var(--text);
+}
+.print-guard p {
+  margin: 0 0 6px;
+}
+.print-guard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.print-guard-actions button {
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.print-guard-actions button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 /* File tab dropdown (docs/slides pattern; non-mac ribbons only) */
 .ribbon-tabs .file-tab-wrap {

@@ -10,6 +10,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useI18n } from './i18n/locale'
 import type { PrintSetupOverrides } from './page-layout-actions'
+import type { PrintGuard } from './print-guard'
 import type { WorkbookExportPdfRequest } from '../shared/desktop-api'
 
 /// OOXML paper-size codes the print stack maps to Electron page sizes
@@ -51,6 +52,11 @@ interface EffectiveSetup {
 /// Workbook).
 export type PrintDialogScope = 'selection' | 'active-sheet' | 'workbook'
 
+/// The Scaling radio: a fixed percent, fit-to-width (all columns on one page
+/// across, height unconstrained), or the sheet's saved fit (Excel's "Fit
+/// sheet on one page" — the file's fitToWidth/fitToHeight budget).
+export type PrintFitMode = 'adjust' | 'fit-width' | 'fit-page'
+
 /// Initial dialog control values for a sheet's effective saved page setup:
 /// fit-to-page takes over the scale control at 100%, and the saved page
 /// order preselects (pageSetup@pageOrder, Excel-style).
@@ -76,10 +82,13 @@ export function PrintDialog({
   setStatus,
 }: {
   /// Lays the active sheet out with the dialog's per-job overrides; throws
-  /// with a localized message when there is nothing printable.
+  /// with a localized message when there is nothing printable. Also returns
+  /// the print guard: the detected "prints N pages across / foreign paper"
+  /// pain of the job as configured (BUG-1603).
   readonly buildRequest: (overrides: PrintSetupOverrides) => Promise<{
     request: WorkbookExportPdfRequest
     effective: EffectiveSetup
+    guard: PrintGuard
   }>
   readonly onClose: () => void
   readonly setStatus: ((message: string) => void) | null
@@ -94,29 +103,38 @@ export function PrintDialog({
   const [paperSize, setPaperSize] = useState(9)
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait')
   const [scale, setScale] = useState(100)
-  const [fitToPage, setFitToPage] = useState(false)
+  const [fitMode, setFitMode] = useState<PrintFitMode>('adjust')
   const [scope, setScope] = useState<PrintDialogScope>('active-sheet')
   const [pageOrder, setPageOrder] = useState<'down-then-over' | 'over-then-down'>('down-then-over')
   const [collate, setCollate] = useState(false)
   const [printing, setPrinting] = useState(false)
+  /// The pain the guard detected for the job as last built (null until the
+  /// first build resolves).
+  const [guard, setGuard] = useState<PrintGuard | null>(null)
+  /// The user picked a paper themselves: the file's paper no longer speaks
+  /// for them, so the paper suggestion stands down.
+  const [paperTouched, setPaperTouched] = useState(false)
   const frameRef = useRef<HTMLIFrameElement | null>(null)
   const paneRef = useRef<HTMLDivElement | null>(null)
   const printRequestRef = useRef<WorkbookExportPdfRequest | null>(null)
   const runRef = useRef(0)
 
   // EffectivePageSetup.scale is a percent (100 = 100%); the payload's
-  // computeScale turns it into the request fraction.
+  // computeScale turns it into the request fraction. Fit-to-width applies
+  // Excel's "1 page wide by [blank] tall" budget; fit-page keeps whatever
+  // the sheet saved (Excel's fit-sheet-on-one-page), exactly as before.
   const overrides: PrintSetupOverrides = useMemo(
     () => ({
       paperSize,
       orientation,
-      scale: fitToPage ? undefined : scale,
-      fitToPage,
+      scale: fitMode === 'adjust' ? scale : undefined,
+      fitToPage: fitMode !== 'adjust',
+      ...(fitMode === 'fit-width' ? { fitToWidth: 1, fitToHeight: 0 } : {}),
       scope,
       pageOrder,
       collate,
     }),
-    [paperSize, orientation, scale, fitToPage, scope, pageOrder, collate],
+    [paperSize, orientation, scale, fitMode, scope, pageOrder, collate],
   )
 
   useEffect(() => {
@@ -138,14 +156,15 @@ export function PrintDialog({
     let alive = true
     void (async () => {
       try {
-        const { effective } = await buildRequest({})
+        const { effective, guard: seededGuard } = await buildRequest({})
         if (!alive) return
         const seeded = controlsFromEffective(effective)
         setPaperSize(seeded.paperSize)
         setOrientation(seeded.orientation)
         setScale(seeded.scale)
-        setFitToPage(seeded.fitToPage)
+        setFitMode(seeded.fitToPage ? 'fit-page' : 'adjust')
         setPageOrder(seeded.pageOrder)
+        setGuard(seededGuard)
       } catch {
         // Nothing printable: the preview pass below reports the error.
       } finally {
@@ -173,6 +192,7 @@ export function PrintDialog({
           if (!alive || run !== runRef.current) return
           printRequestRef.current = built.request
           setPreviewHtml(built.request.html)
+          setGuard(built.guard)
           setError(null)
           setErrorDetail(null)
           const preview = await window.desktopApi.previewPrint(built.request)
@@ -186,6 +206,7 @@ export function PrintDialog({
           if (alive && run === runRef.current) {
             setPreviewHtml(null)
             setPageCount(null)
+            setGuard(null)
             setErrorDetail(null)
             // buildRequest throws localized messages when nothing is printable
             setError(reason instanceof Error ? reason.message : t('appPrintPreviewFailed'))
@@ -290,7 +311,10 @@ export function PrintDialog({
               <select
                 className="print-select"
                 value={paperSize}
-                onChange={(event) => setPaperSize(Number(event.target.value))}
+                onChange={(event) => {
+                  setPaperSize(Number(event.target.value))
+                  setPaperTouched(true)
+                }}
               >
                 {PRINT_PAPER_SIZES.map((paper) => (
                   <option key={paper.code} value={paper.code}>
@@ -326,12 +350,12 @@ export function PrintDialog({
                 <input
                   type="radio"
                   name="print-scaling"
-                  checked={!fitToPage}
-                  onChange={() => setFitToPage(false)}
+                  checked={fitMode === 'adjust'}
+                  onChange={() => setFitMode('adjust')}
                 />
                 {t('dlgPrintScaleAdjust')}
               </label>
-              {!fitToPage && (
+              {fitMode === 'adjust' && (
                 <label className="print-radio print-scale-row">
                   <input
                     type="number"
@@ -352,8 +376,17 @@ export function PrintDialog({
                 <input
                   type="radio"
                   name="print-scaling"
-                  checked={fitToPage}
-                  onChange={() => setFitToPage(true)}
+                  checked={fitMode === 'fit-width'}
+                  onChange={() => setFitMode('fit-width')}
+                />
+                {t('dlgPrintFitWidth')}
+              </label>
+              <label className="print-radio">
+                <input
+                  type="radio"
+                  name="print-scaling"
+                  checked={fitMode === 'fit-page'}
+                  onChange={() => setFitMode('fit-page')}
                 />
                 {t('dlgPrintFitSheet')}
               </label>
@@ -381,6 +414,38 @@ export function PrintDialog({
                 {t('dlgPrintCollate')}
               </label>
             </fieldset>
+            {(guard?.suggestFitToWidth === true ||
+              (guard?.suggestPaper === true && !paperTouched)) && (
+              <div className="print-guard" role="note">
+                {guard?.suggestFitToWidth === true && guard.stripsAcross !== null && (
+                  <p>{t('dlgPrintGuardStrips', { n: guard.stripsAcross })}</p>
+                )}
+                <div className="print-guard-actions">
+                  {guard?.suggestFitToWidth === true && (
+                    <button type="button" onClick={() => setFitMode('fit-width')}>
+                      {t('dlgPrintGuardFitWidth')}
+                    </button>
+                  )}
+                  {guard?.suggestPaper === true && !paperTouched && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (guard === null) return
+                        setPaperSize(guard.localePaperSize)
+                        setPaperTouched(true)
+                      }}
+                    >
+                      {t('dlgPrintGuardPaper', {
+                        paper: t(
+                          PRINT_PAPER_SIZES.find((p) => p.code === guard?.localePaperSize)
+                            ?.labelKey ?? 'dlgPaperA4',
+                        ),
+                      })}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="print-page-count" title={errorDetail ?? undefined}>
               {error ?? (pageCount !== null ? t('dlgPrintPageCount', { n: pageCount }) : '')}
             </div>
