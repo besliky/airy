@@ -3,7 +3,7 @@
 // the real word-extractor over the committed legacy sample fixture.
 // LibreOffice discovery is mocked to "absent" so routing is deterministic on
 // machines that do have soffice installed.
-import { copyFile, mkdtemp, rm } from 'node:fs/promises'
+import { copyFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -25,6 +25,13 @@ import { TextSession } from '../src/sessions/text.js'
 // committed binary Word 97-2003 sample from @airy-office/file-parse
 const DOC_SAMPLE = fileURLToPath(
   new URL('../../../packages/file-parse/tests/fixtures/legacy-sample.doc', import.meta.url),
+)
+
+// committed password-protected OOXML fixtures (ECMA-376 encrypted: an OLE2
+// container holding an EncryptedPackage stream) from the docs app suite
+const ENCRYPTED_FIXTURES = ['office-agile-password.docx', 'office-standard-password.docx'].map(
+  (name) =>
+    fileURLToPath(new URL(`../../../apps/docs/tests/encrypted-fixtures/${name}`, import.meta.url)),
 )
 
 let root: string
@@ -86,5 +93,50 @@ describe('openDocument routing', () => {
     await expect(openDocument('../../etc/hosts.docx', root)).rejects.toThrow(
       /outside the workspace root/,
     )
+  })
+})
+
+describe('encrypted Office containers refuse with a password hint (BUG-1504)', () => {
+  it('refuses an encrypted .docx naming password protection, not the raw-zip parse error', async () => {
+    for (const [index, fixture] of ENCRYPTED_FIXTURES.entries()) {
+      const docx = join(root, `protected-${String(index)}.docx`)
+      await copyFile(fixture, docx)
+      await expect(openDocument(docx, root)).rejects.toThrow(/password-protected/)
+      await expect(openDocument(docx, root)).rejects.not.toThrow(/central directory/)
+    }
+  })
+
+  it('refuses an encrypted .doc (no LibreOffice) instead of the word-extractor crash', async () => {
+    const doc = join(root, 'protected.doc')
+    await copyFile(ENCRYPTED_FIXTURES[0]!, doc)
+    await expect(openDocument(doc, root)).rejects.toThrow(
+      /Cannot open ".*protected\.doc": the file is password-protected/,
+    )
+    await expect(openDocument(doc, root)).rejects.not.toThrow(/memory outside buffer bounds/)
+  })
+
+  it('refuses an encrypted container on the xlsx route before the sidecar is spawned', async () => {
+    const book = join(root, 'protected.xlsx')
+    await copyFile(ENCRYPTED_FIXTURES[1]!, book)
+    await expect(openDocument(book, root)).rejects.toThrow(/password-protected/)
+  })
+
+  it('detects the legacy .doc FIB fEncrypted flag (no EncryptedPackage stream)', async () => {
+    // CFB magic + the fEncrypted bit in the FIB base flags (offset 0x0A,
+    // bit 0x0100) — a password-protected Word 97 document has no
+    // EncryptedPackage stream, so this signal must be checked separately
+    const bytes = new Uint8Array(4096)
+    bytes.set([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1], 0)
+    bytes[0x0b] = 0x01
+    const doc = join(root, 'legacy-encrypted.doc')
+    await writeFile(doc, bytes)
+    await expect(openDocument(doc, root)).rejects.toThrow(/password-protected/)
+  })
+
+  it('refuses a plain OLE document renamed to .docx as a wrong container, not a corrupt zip', async () => {
+    // the committed sample is a REAL unencrypted Word 97 OLE file
+    const docx = join(root, 'actually-doc.docx')
+    await copyFile(DOC_SAMPLE, docx)
+    await expect(openDocument(docx, root)).rejects.toThrow(/OLE2 compound document.*not a \.docx/)
   })
 })

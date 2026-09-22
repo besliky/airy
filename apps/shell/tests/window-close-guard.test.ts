@@ -176,3 +176,81 @@ describe('createWindowCloseGuard', () => {
     expect(deps.requestClose).toHaveBeenCalledTimes(4)
   })
 })
+
+describe('dirty-set recalc before the final close (BUG-410)', () => {
+  /** a guard whose dirty set and answers are driven by the test */
+  function makeRecalcGuard(
+    dirtyTabs: () => TestTab[],
+    requestClose: (tab: TestTab) => Promise<boolean> = async () => true,
+  ) {
+    const deps = {
+      dirtyTabs: vi.fn(dirtyTabs),
+      requestClose: vi.fn(requestClose),
+      finishClose: vi.fn(),
+      closeWindow: vi.fn(),
+      isWindowAlive: vi.fn(() => true),
+      abortQuit: vi.fn(),
+      logFailure: vi.fn(),
+    }
+    return { deps, guard: createWindowCloseGuard(deps) }
+  }
+
+  it('a tab that became dirty mid-cycle is prompted before the close confirms', async () => {
+    // tab 3 appears while the walk over tabs 1-2 is still prompting (a
+    // background edit, an AI flow opening a document) — the confirmed close
+    // used to swallow it silently
+    const tab3 = makeTab('3', 'pdf')
+    const dirty = vi.fn<() => TestTab[]>().mockReturnValueOnce([makeTab('1'), makeTab('2')])
+    dirty.mockReturnValueOnce([makeTab('1'), makeTab('2'), tab3])
+    dirty.mockReturnValue([makeTab('1'), makeTab('2'), tab3])
+    const { deps, guard } = makeRecalcGuard(dirty)
+    guard(closeEvent())
+    await flush()
+    expect(deps.requestClose).toHaveBeenCalledTimes(3)
+    expect(deps.requestClose).toHaveBeenLastCalledWith(tab3)
+    expect(deps.finishClose).toHaveBeenCalledTimes(1)
+    expect(deps.closeWindow).toHaveBeenCalledTimes(1)
+  })
+
+  it('tabs the cycle already walked are not re-prompted by the recalc pass', async () => {
+    // "Don't save" leaves a tab dirty by design: the stable dirty list must
+    // not make the second pass ask the same user the same question again
+    const { deps, guard } = makeRecalcGuard(() => [makeTab('1'), makeTab('2')])
+    guard(closeEvent())
+    await flush()
+    expect(deps.requestClose).toHaveBeenCalledTimes(2)
+    expect(deps.finishClose).toHaveBeenCalledTimes(1)
+    expect(deps.closeWindow).toHaveBeenCalledTimes(1)
+  })
+
+  it('the recalc is bounded at two passes when tabs keep dirtying', async () => {
+    const grows = [
+      [makeTab('1')],
+      [makeTab('1'), makeTab('2', 'pdf')],
+      [makeTab('1'), makeTab('2', 'pdf'), makeTab('3', 'docs')],
+      [makeTab('1'), makeTab('2', 'pdf'), makeTab('3', 'docs'), makeTab('4')],
+    ]
+    let call = 0
+    const { deps, guard } = makeRecalcGuard(() => grows[Math.min(call++, grows.length - 1)]!)
+    guard(closeEvent())
+    await flush()
+    // pass 1 walked tab 1, pass 2 walked tab 2 — then the close goes through
+    // instead of chasing the ever-growing set forever
+    expect(deps.requestClose).toHaveBeenCalledTimes(2)
+    expect(deps.finishClose).toHaveBeenCalledTimes(1)
+    expect(deps.closeWindow).toHaveBeenCalledTimes(1)
+  })
+
+  it('a Cancel on a mid-cycle-dirtied tab aborts the quit like any other', async () => {
+    const tab2 = makeTab('2', 'pdf')
+    const dirty = vi.fn<() => TestTab[]>().mockReturnValueOnce([makeTab('1')])
+    dirty.mockReturnValue([makeTab('1'), tab2])
+    const { deps, guard } = makeRecalcGuard(dirty, async (tab) => tab.id !== '2')
+    guard(closeEvent())
+    await flush()
+    expect(deps.requestClose).toHaveBeenCalledTimes(2)
+    expect(deps.abortQuit).toHaveBeenCalledTimes(1)
+    expect(deps.finishClose).not.toHaveBeenCalled()
+    expect(deps.closeWindow).not.toHaveBeenCalled()
+  })
+})

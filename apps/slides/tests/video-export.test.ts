@@ -404,6 +404,36 @@ describe('recordVideoTimeline', () => {
     expect(cancelled).toBeNull() // cancel is not a failure — no error thrown
   })
 
+  it('resolves null when a cancelled run races a hung encoder (BUG-1301)', async () => {
+    // a user Cancel that arrives before the encoder wedged must stay the quiet
+    // null abort: the stop-timeout rejection fires unconditionally, and before
+    // BUG-1301 it surfaced as "export failed" for a user-initiated cancel
+    const state: FakeHostState = {
+      draws: [],
+      requestedFrames: 0,
+      chunks: [],
+      recorderCalls: [],
+    }
+    const sinkTrace: SinkTrace = { writes: [], finish: [] }
+    const cancelled = await recordVideoTimeline(
+      {
+        timeline: twoSlideTimeline(),
+        fps: 10,
+        width: 320,
+        height: 180,
+        slideBitmaps: bitmapProvider(['s0', 's1'], { released: [], fetched: [] }),
+        sink: fakeSink(sinkTrace),
+        mimeType: 'video/webm',
+        cancel: { current: true },
+      },
+      fakeHost(state, { hangOnStop: true }),
+    )
+    expect(cancelled).toBeNull() // cancel wins over the hang — no error thrown
+    expect(state.recorderCalls).toEqual(['start:video/webm:1000', 'stop'])
+    // the aborted run discards the temp file like every other cancel path
+    expect(sinkTrace.finish).toEqual([true])
+  })
+
   it('aspect-fits each slide into the frame when slideSizes is provided', async () => {
     // BUG-1211: a 4:3 slide among 16:9 ones must pillarbox into the 16:9 frame
     // (240x180 centered) instead of stretching to 320x180. Hard cuts (no

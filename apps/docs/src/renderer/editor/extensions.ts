@@ -145,6 +145,7 @@ import {
 import {
   DropCapExtension,
   EaHintQuotesExtension,
+  EaSquareSymbolsExtension,
   MoveRevisionExtension,
   PPrChangeExtension,
   ParaBorderMergeExtension,
@@ -1765,13 +1766,16 @@ function substituteMarkerStyles(text: string): string[] {
 
 /** Word clips cell content at the cell's text area: a marker whose box ends before it
  *  (hanging deeper than the start indent) is never seen; ~0.5em stands in for the glyph advance.
- *  Centered / end-aligned lines shift the marker back inside, so only start-aligned items apply. */
+ *  Centered / end-aligned lines shift the marker back inside, so only start-aligned items apply.
+ *  effFirstTw: the marker's first-line offset already resolved against the flush case
+ *  (0 when no w:ind anywhere), so an explicit flush is not misread as a deep hang. */
 function markerClippedByCell(
   doc: PmNode,
   pos: number,
   attrs: Record<string, unknown>,
   level: NumberingLevel,
   szHalfPoints: number,
+  effFirstTw?: number,
 ): boolean {
   const align = attrs.align as string | null | undefined
   const startSide = attrs.bidi || attrs.bidiInferred ? 'right' : 'left'
@@ -1787,14 +1791,15 @@ function markerClippedByCell(
     attrs.indentLeft != null
       ? Number(attrs.indentLeft)
       : (level.indentLeft ?? 792 + 432 * Number(attrs.ilvl || 0))
-  const firstLine = specialIndentTw(attrs, level) ?? -360
+  const firstLine = effFirstTw ?? specialIndentTw(attrs, level) ?? -360
   return left + firstLine + szHalfPoints * 5 <= 0
 }
 
 /**
  * Word merges w:ind per attribute: the paragraph's own firstLine/hanging (an
  * explicit firstLine="0" included) replaces the level's special indent.
- * null = the level carries no indent at all and the CSS default hang applies.
+ * null = the level carries no indent at all; the caller then renders flush
+ * when no style-level w:ind feeds the CSS var fallback chain either.
  */
 function specialIndentTw(attrs: Record<string, unknown>, level: NumberingLevel): number | null {
   if (attrs.indentFirstLine != null) return Number(attrs.indentFirstLine)
@@ -1950,6 +1955,33 @@ export const ListNumberingExtension = Extension.create<object, ListNumberingStor
             styles.push('--li-hang:0pt')
             if (ownFirst == null && firstTw > 0) styles.push(`text-indent:${firstTw / 20}pt`)
           }
+          // Word takes list indents only from numbering.xml plus the paragraph's
+          // and the style's own w:ind: no w:left from any of those sources puts
+          // the text column at the margin. The old CSS per-level defaults
+          // (0.55in/0.85in/...) rendered a phantom indent ~0.3" wide there
+          // (BUG-1544; a level w:left="0" counts as "no left" too). The style
+          // check mirrors doc-style-css's --style-li-left/--style-li-hang
+          // emission: a style-level w:ind keeps feeding the CSS var fallback
+          // chain instead.
+          const styleDisplay =
+            typeof nodeAttrs.styleId === 'string'
+              ? storage.styles?.get(nodeAttrs.styleId)?.display
+              : undefined
+          const styleLeft = styleDisplay?.indentLeftTwips != null
+          const styleInd =
+            styleDisplay && (styleLeft || (styleDisplay.indentFirstLineTwips ?? 0) < 0)
+          if (nodeAttrs.indentLeft == null && !level.indentLeft && !styleLeft) {
+            styles.push('--li-left:0pt')
+          }
+          // no w:ind at all (paragraph, numbering level, style): nothing hangs
+          // either, so the 0.25in CSS default hang must go too
+          const flush =
+            nodeAttrs.indentLeft == null && ownFirst == null && firstTw == null && !styleInd
+          if (flush) styles.push('--li-hang:0pt')
+          // effective first-line offset: 0 in the flush case (the tab advance and
+          // the clip probe must not misread it as the old 360tw default hang);
+          // null = a style-level w:ind feeds the CSS chain, keep legacy behavior
+          const effFirst = firstTw ?? (flush ? 0 : null)
           const szHalf =
             level.szHalfPoints ??
             (stray
@@ -1958,17 +1990,27 @@ export const ListNumberingExtension = Extension.create<object, ListNumberingStor
             undefined
           if (szHalf) styles.push(`--li-marker-size:${szHalf / 2}pt`)
           if (level.suff === 'space' || level.suff === 'nothing') attrs['data-suff'] = level.suff
-          if (markerClippedByCell(doc, nodes[i].pos, nodeAttrs, level, szHalf ?? 20))
+          if (
+            markerClippedByCell(
+              doc,
+              nodes[i].pos,
+              nodeAttrs,
+              level,
+              szHalf ?? 20,
+              effFirst ?? undefined,
+            )
+          )
             attrs['data-marker-clip'] = ''
 
           // Word's default tab after the marker: a marker that escapes the hanging
-          // area (or one with no hanging area at all) pushes first-line text to
-          // the next default tab stop, not right up against the marker
+          // area (or one with no hanging area at all, the flush case included)
+          // pushes first-line text to the next default tab stop, not right up
+          // against the marker
           if (
             (level.suff === undefined || level.suff === 'tab') &&
             text &&
-            firstTw != null &&
-            (firstTw >= 0 || leftTw > 0)
+            effFirst != null &&
+            (effFirst >= 0 || leftTw > 0)
           ) {
             // no level/run size -> the marker renders at the li's 1em; family always
             // inherits from the li (level.font only applies to symbol bullets)
@@ -1980,7 +2022,7 @@ export const ListNumberingExtension = Extension.create<object, ListNumberingStor
               para.bold,
             )
             const adv =
-              widthTw !== null ? markerTabAdvance(leftTw + firstTw, widthTw, leftTw) : null
+              widthTw !== null ? markerTabAdvance(leftTw + effFirst, widthTw, leftTw) : null
             if (adv !== null) styles.push(`--li-tab:${adv / 20}pt`)
           }
         }
@@ -5677,6 +5719,7 @@ export const editorExtensions = [
   CjkPunctShrinkExtension,
   WsRunLineHeightExtension,
   EaHintQuotesExtension,
+  EaSquareSymbolsExtension,
   DropCapExtension,
   ParaBorderMergeExtension,
   SdtExtension,

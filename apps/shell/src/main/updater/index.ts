@@ -4,7 +4,7 @@
 // Electron. The shell menu integration (index.ts) renders the status via
 // updaterMenuItems() and re-runs its menu builder on every status change —
 // no dedicated renderer window, following the bridge/ glue split.
-import { Notification, dialog } from 'electron'
+import { Notification, app, dialog } from 'electron'
 import type { BrowserWindow, MenuItemConstructorOptions } from 'electron'
 import { autoUpdater } from 'electron-updater'
 
@@ -14,6 +14,7 @@ import {
   GITHUB_OWNER,
   GITHUB_REPO,
   UpdaterController,
+  createPendingInstaller,
   detectUpdatePolicy,
   type UpdaterClient,
   type UpdaterUi,
@@ -46,6 +47,26 @@ export interface UpdaterGlueOptions {
 
 let controller: UpdaterController | null = null
 let labelsProvider: (() => UpdaterMenuLabels) | null = null
+
+/**
+ * "Install now" goes through the app's own close flow instead of
+ * electron-updater's quitAndInstall directly (BUG-411): the request arms the
+ * gate and starts a plain app.quit(), every window walks its dirty-tab guard,
+ * and the install fires only from the flush points once no window can object.
+ * A cancelled guard disarms it (cancelPendingInstall from the shell's
+ * abortAppQuit) — the staged update then installs on a later natural quit.
+ */
+const pendingInstaller = createPendingInstaller()
+
+/** flush point: all windows are gone — hand over to the installer */
+export function flushPendingInstall(): void {
+  if (pendingInstaller.flush()) autoUpdater.quitAndInstall(true, true)
+}
+
+/** a dirty-guard Cancel aborted the quit the install was riding on */
+export function cancelPendingInstall(): void {
+  pendingInstaller.cancel()
+}
 
 /**
  * Configure the updater. Inactive (no menu item, no checks) when the app is
@@ -98,6 +119,12 @@ export function initUpdater(options: UpdaterGlueOptions): void {
     startDelayMs: options.startDelayMs,
   })
   controller.start()
+  // second flush point (the shell's window-all-closed handler is the first):
+  // a quit with zero windows left never emits window-all-closed, and the
+  // natural-quit path reaches this with nothing pending — a cheap no-op
+  app.on('will-quit', () => {
+    flushPendingInstall()
+  })
 }
 
 function log(message: string, error?: unknown): void {
@@ -113,7 +140,12 @@ function autoUpdaterClient(): UpdaterClient {
       return { available: result?.isUpdateAvailable === true && version !== null, version }
     },
     downloadUpdate: () => autoUpdater.downloadUpdate(),
-    quitAndInstall: () => autoUpdater.quitAndInstall(true, true),
+    // BUG-411: request the install through the app's own close flow — see
+    // pendingInstaller above; the flush points call quitAndInstall for real
+    quitAndInstall: () => {
+      pendingInstaller.request()
+      app.quit()
+    },
     onDownloadProgress: (callback) => {
       autoUpdater.on('download-progress', (progress) => callback(progress.percent))
     },

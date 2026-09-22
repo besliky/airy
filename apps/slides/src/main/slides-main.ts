@@ -57,6 +57,7 @@ import {
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
   toggleDevToolsItem,
+  truncateByCodePoints,
   voidLoad,
 } from '@airy-office/electron-utils'
 import {
@@ -864,7 +865,8 @@ function sanitizeDraftBaseName(raw: string | undefined): string | null {
     .replace(/^\.+|\.+$/g, '')
     .trim()
   if (!cleaned) return null
-  return cleaned.length > 40 ? cleaned.slice(0, 40).trim() : cleaned
+  // the cap counts code points (BUG-412): slice would split a surrogate pair
+  return truncateByCodePoints(cleaned, 40).trim()
 }
 
 /** Pick a draft path from deckName: append -2/-3… if a same-named file exists; fall back to timestamp naming without a valid deckName. */

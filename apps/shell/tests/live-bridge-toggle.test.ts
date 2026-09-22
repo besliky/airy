@@ -124,4 +124,55 @@ describe('createLiveBridgeToggle', () => {
     await expect(toggle(true)).resolves.toBe(false)
     expect(calls).toEqual([])
   })
+
+  it('runExclusive serializes against a pending toggle without persisting (BUG-1312)', async () => {
+    // the quit rollback's bridge restart must share the user-toggle order: a
+    // plain startLiveBridge() could interleave with a concurrent toggle-off
+    const calls: Call[] = []
+    let releaseStop: (() => void) | null = null
+    const deps = {
+      isEnabled: () => true,
+      toggleAllowed: () => true,
+      persist: (on: boolean) => calls.push({ op: 'persist', on }),
+      start: () => {
+        calls.push({ op: 'start' })
+        return Promise.resolve()
+      },
+      stop: () => {
+        calls.push({ op: 'stop' })
+        return new Promise<void>((resolve) => {
+          releaseStop = resolve
+        })
+      },
+    }
+    const toggle = createLiveBridgeToggle(deps)
+    const userOff = toggle(false) // hangs in stop until released
+    let restartRan = false
+    const restart = toggle.runExclusive(async () => {
+      calls.push({ op: 'start' }) // the rollback restart issues its own start
+      restartRan = true
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    // the restart has not jumped the in-flight toggle's stop
+    expect(restartRan).toBe(false)
+    expect(calls).toEqual([{ op: 'stop' }])
+    releaseStop!()
+    await userOff
+    await restart
+    // the restart ran after the stop and persisted nothing (the rollback must
+    // not overwrite the setting a concurrent toggle just wrote)
+    expect(restartRan).toBe(true)
+    expect(calls).toEqual([{ op: 'stop' }, { op: 'persist', on: false }, { op: 'start' }])
+  })
+
+  it('a failing runExclusive rejects to its caller and keeps the chain alive', async () => {
+    const { deps } = makeDeps()
+    const toggle = createLiveBridgeToggle(deps)
+    await expect(
+      toggle.runExclusive(async () => Promise.reject(new Error('boom'))),
+    ).rejects.toThrow('boom')
+    // the next toggle still runs
+    await expect(toggle(true)).resolves.toBe(true)
+  })
 })

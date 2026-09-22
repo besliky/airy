@@ -134,6 +134,21 @@ describe('bridge server over a live socket', () => {
     expect(statSync(server.info.socketPath).mode & 0o777).toBe(0o600)
   })
 
+  it('reuses a caller-supplied token across a stop→start restart (BUG-1313)', async () => {
+    if (process.platform === 'win32') return
+    const token = 'a'.repeat(64)
+    server = await startBridgeServer({ userDataDir: dir, methods: {}, token })
+    expect(server.info.token).toBe(token)
+    await server.stop()
+    // the restart (an aborted quit's rollback) must not rotate the token: an
+    // info-file rewrite would invalidate every connected client's token
+    const restarted = await startBridgeServer({ userDataDir: dir, methods: {}, token })
+    server = restarted
+    expect(restarted.info.token).toBe(token)
+    const info = JSON.parse(await readFile(bridgeInfoPath(dir), 'utf8')) as BridgeEndpointInfo
+    expect(info.token).toBe(token)
+  })
+
   it('answers hello + ping', async () => {
     server = await startBridgeServer({
       userDataDir: dir,

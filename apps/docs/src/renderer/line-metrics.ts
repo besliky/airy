@@ -62,6 +62,38 @@ export function monospaceAdvanceEm(fontFamily: string): number | null {
   return /consolas/i.test(head) ? 0.55 : 0.6
 }
 
+// ─── East Asian square symbols ────────────────────────────────────────────────
+// Word classifies the CJK-encoding geometric shapes (JIS X 0208 / GB2312 /
+// KS X 1001 all carry them as 1-em cells) as East Asian characters: they take
+// the run's eastAsia font and render fullwidth (doc 10 date line, U+25CB =
+// 12.00pt in LO/Word, 6.59pt when a Latin face wins the fallback — BUG-1543).
+// Scoped to the members the bundled Noto Serif CJK SC subset covers at exactly
+// 1em; U+25EF and the half circles stay on the Latin chain (no bundled glyph).
+const EA_SQUARE_SYMBOLS = new Set([
+  0x25a0, 0x25a1, 0x25b2, 0x25b3, 0x25c6, 0x25c7, 0x25cb, 0x25ce, 0x25cf, 0x2605, 0x2606,
+])
+
+/** the CJK-encoding geometric shapes Word renders through the eastAsia font */
+export function isEaSquareSymbol(cp: number): boolean {
+  return EA_SQUARE_SYMBOLS.has(cp)
+}
+
+/** UTF-16 ranges of East Asian square symbol stretches (all BMP; exported for tests) */
+export function eaSquareSymbolRanges(text: string): Array<{ from: number; to: number }> {
+  const out: Array<{ from: number; to: number }> = []
+  let start = -1
+  for (let i = 0; i < text.length; i++) {
+    if (EA_SQUARE_SYMBOLS.has(text.charCodeAt(i))) {
+      if (start < 0) start = i
+    } else if (start >= 0) {
+      out.push({ from: start, to: i })
+      start = -1
+    }
+  }
+  if (start >= 0) out.push({ from: start, to: text.length })
+  return out
+}
+
 function charAdvanceEm(code: number): number {
   if (
     isHangul(code) ||
@@ -74,6 +106,8 @@ function charAdvanceEm(code: number): number {
     return 1.0
   }
   if (code >= 0x1f000 || (code >= 0x2600 && code <= 0x27bf)) return 1.0
+  // EA square symbols render through the eastAsia font (see the set above)
+  if (EA_SQUARE_SYMBOLS.has(code)) return 1.0
   // Arabic joins cursively: isolated-form widths overshoot, so keep the estimate low
   if (
     (code >= 0x0600 && code <= 0x06ff) ||

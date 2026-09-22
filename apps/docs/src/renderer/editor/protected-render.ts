@@ -15,6 +15,7 @@ import {
   cssGridLineBase,
   cssGridSpacingPt,
   cssLineHeight,
+  eaSquareSymbolRanges,
   isCjk,
   isCjkFontName,
   lineHeightFactor,
@@ -1088,6 +1089,25 @@ export function textboxBoxStyle(box: TextboxDisplay): string {
 const AUTOSPACE_PAD_ATTRS = { class: 'doc-autospace-pad' }
 
 /**
+ * static-DOM counterpart of the editor's eaSquareSymbols decorations: the
+ * CJK-encoding geometric shapes render through the bundled CJK face at a
+ * fullwidth advance (BUG-1543), not the Latin head of the run's font chain
+ */
+function eaSymbolSegments(text: string): unknown[] {
+  const ranges = eaSquareSymbolRanges(text)
+  if (ranges.length === 0) return [text]
+  const out: unknown[] = []
+  let start = 0
+  for (const r of ranges) {
+    if (r.from > start) out.push(text.slice(start, r.from))
+    out.push(['span', { class: 'doc-ea-symbol' }, text.slice(r.from, r.to)])
+    start = r.to
+  }
+  if (start < text.length) out.push(text.slice(start))
+  return out
+}
+
+/**
  * static-DOM counterpart of the editor's autospace pad decorations: the
  * character after each CJK-Latin boundary (and the first one when leadPad)
  * carries the pad margin
@@ -1095,16 +1115,16 @@ const AUTOSPACE_PAD_ATTRS = { class: 'doc-autospace-pad' }
 function padSegments(text: string, leadPad = false): unknown[] {
   const cuts = autospaceBoundaries(text)
   if (leadPad && text) cuts.unshift(0)
-  if (cuts.length === 0) return [text]
+  if (cuts.length === 0) return eaSymbolSegments(text)
   const out: unknown[] = []
   let start = 0
   for (const cut of cuts) {
-    if (cut > start) out.push(text.slice(start, cut))
+    if (cut > start) out.push(...eaSymbolSegments(text.slice(start, cut)))
     const end = cut + codePointLengthAt(text, cut)
     out.push(['span', AUTOSPACE_PAD_ATTRS, text.slice(cut, end)])
     start = end
   }
-  if (start < text.length) out.push(text.slice(start))
+  if (start < text.length) out.push(...eaSymbolSegments(text.slice(start)))
   return out
 }
 
@@ -1164,7 +1184,7 @@ function textSpanSpec(run: Run, autoSpace?: boolean, leadPad = false): DomSpec {
   ]
     .filter(Boolean)
     .join(';')
-  const content = autoSpace === false ? [run.text] : padSegments(run.text, leadPad)
+  const content = autoSpace === false ? eaSymbolSegments(run.text) : padSegments(run.text, leadPad)
   // hyperlink runs keep the editable path's look (.doc-link) and real href;
   // App-level click handling prevents in-place navigation (jump on mod+click)
   if (run.link?.href) {

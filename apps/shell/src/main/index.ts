@@ -254,7 +254,7 @@ import { createShutdownEffects } from './shutdown-effects'
 import { createWindowCloseGuard } from './window-close-guard'
 import { ShellWindowRegistry, type ShellWindowEntry } from './shell-windows'
 import { startShellBridge, stopShellBridge } from './bridge/shell-bridge'
-import { initUpdater, updaterMenuItems } from './updater'
+import { cancelPendingInstall, flushPendingInstall, initUpdater, updaterMenuItems } from './updater'
 
 /**
  * Airy unified shell: ONE Electron app hosting the docs/sheets modules as
@@ -1122,7 +1122,16 @@ const shutdownEffects = createShutdownEffects({
   disposePdfWorkers: disposePdfConversionWorkers,
   bridgeEnabled: liveBridgeEnabled,
   stopBridge: stopShellBridge,
-  startBridge: startLiveBridge,
+  // BUG-1312: the rollback restart rides the same serialized chain as the
+  // Settings toggle (a plain startLiveBridge() could interleave with a
+  // concurrent toggle-off: stop settles first, the bridge ends up up while
+  // liveBridge=false). The setting is re-read inside the chain so a toggle
+  // that landed while this restart waited keeps the bridge down.
+  startBridge: async () => {
+    await setLiveBridgeEnabled.runExclusive(async () => {
+      if (liveBridgeEnabled()) await startLiveBridge()
+    })
+  },
   log: (message, err) => console.error(message, err),
 })
 
@@ -1178,7 +1187,24 @@ function abortAppQuit(): void {
   if (!quitFlow.quitting) return
   const restoreSession = quitFlow.cancel()
   shutdownEffects.rollback()
-  if (restoreSession) persistSessionState(false)
+  // a cancelled guard also disarms an updater install that was riding this
+  // quit (BUG-411): the staged update waits for a later natural quit instead
+  // of installing under the still-running app
+  cancelPendingInstall()
+  if (restoreSession) {
+    // BUG-1311: a failed rewrite leaves the quit-time snapshot on disk, and
+    // the next launch resurrects windows whose close had confirmed before the
+    // cancel (the BUG-1218 class). Retry once — a transient failure (AV scan,
+    // momentary lock) recovers — and escalate loudly when the retry fails too,
+    // so a stale snapshot is at least diagnosable instead of silently wrong.
+    if (!persistSessionState(false) && !persistSessionState(false)) {
+      console.error(
+        '[shell] recovery rewrite after the aborted quit failed twice; ' +
+          'the stale quit-time snapshot stays on disk and may restore ' +
+          'windows the user had already closed',
+      )
+    }
+  }
 }
 
 /** which editor's close prompt runs for a dirty-tab walk step */
@@ -3543,11 +3569,24 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
+  // an updater "Install now" rides the quit's close flow (BUG-411): every
+  // dirty guard has passed by here, so hand over to the installer before the
+  // final quit — never while windows that could still Cancel are alive
+  flushPendingInstall()
   if (process.platform !== 'darwin') app.quit()
 })
 
 app.on('before-quit', () => {
   quitFlow.begin()
+  // BUG-408: the tab-change session save is debounced by 800 ms, so a crash
+  // or hard kill once the quit has started (a renderer dying under an open
+  // dirty prompt, SIGKILL mid-shutdown) used to lose the last tab changes.
+  // Land a fresh full snapshot synchronously right away — every window is
+  // still registered here, so this write can only ever WIDEN the persisted
+  // set, never shrink it like a mid-quit write would. The quit-time
+  // persist-once still writes again at the first confirmed close (fresher,
+  // minus the windows that confirmed); neither write is counted as the other.
+  persistSessionState(false)
   // no close prompt may fall through to "Save" during shutdown, the sidecar
   // and pdf workers stop, and the live bridge closes its socket — the whole
   // set rolls back if a cancelled dirty-guard aborts the quit (BUG-1216)

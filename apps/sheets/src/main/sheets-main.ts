@@ -58,6 +58,7 @@ import {
   safeExternalUrl,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
+  truncateByCodePoints,
   viewMenuTemplate,
   windowMenuTemplate,
   voidLoad,
@@ -138,6 +139,7 @@ import {
 import { IPC_CHANNELS } from '../shared/ipc-channels'
 import { atomicWriteFile } from '@airy-office/electron-utils'
 import { CaptureConsentTracker } from './capture-consent'
+import { AiStreamRegistry } from './ai-streams'
 import { closeGuardDecision } from './close-guard'
 import { writeCsvBackAtomic } from './csv-save-back'
 import { checkMergeSourcePaths } from './merge-source-policy'
@@ -1749,9 +1751,10 @@ export function sanitizeGeneratedFileBase(title: string): string {
     // eslint-disable-next-line no-control-regex -- generated file names must reject controls
     .replace(/[/\\:*?"<>|\u0000-\u001f]/g, '_')
     .trim()
-    .slice(0, 80)
-    .trim()
-  return cleaned && cleaned !== '.' && cleaned !== '..' ? cleaned : 'Untitled'
+  // the cap counts code points: slice would split a surrogate pair and hand
+  // the filesystem a name it cannot encode (BUG-412)
+  const capped = truncateByCodePoints(cleaned, 80).trim()
+  return capped && capped !== '.' && capped !== '..' ? capped : 'Untitled'
 }
 
 /** first free path for fileName inside dir: name.ext, name-2.ext, name-3.ext… */
@@ -1808,7 +1811,7 @@ interface SheetsTabSession {
   readonly webContents: WebContents
   readonly client: XlsxSidecarClient
   readonly sessions: Map<string, SessionInfo>
-  readonly aiStreams: Map<string, AbortController>
+  readonly aiStreams: AiStreamRegistry
   /// Chunked uploads of large saves' cell edits, pending their save request.
   readonly saveTransfers: SaveEditsTransferStore
 }
@@ -1876,7 +1879,7 @@ function registerSheetsSession(webContents: WebContents, client: XlsxSidecarClie
     webContents,
     client,
     sessions: new Map(),
-    aiStreams: new Map(),
+    aiStreams: new AiStreamRegistry(),
     saveTransfers: new SaveEditsTransferStore(),
   })
   activeSheetsWebContents = webContents
@@ -1887,6 +1890,10 @@ function registerSheetsSession(webContents: WebContents, client: XlsxSidecarClie
     forgetWitnessedDrops(webContents.id)
     forgetRendererFileAccess(webContents.id)
     if (entry) {
+      // BUG-407: abort the tab's in-flight AI streams — without this the
+      // provider request keeps running (and streaming chunks) for a sender
+      // that no longer exists.
+      entry.aiStreams.abortAll()
       // Free pending chunked-save uploads with the tab (the sweep timer's
       // closure would otherwise keep them reachable until the idle expiry).
       entry.saveTransfers.dispose()
@@ -1961,7 +1968,8 @@ function sanitizeAutoRenameBase(raw: string): string | null {
     .replace(/^\.+|\.+$/g, '')
     .trim()
   if (!cleaned) return null
-  return cleaned.length > 40 ? cleaned.slice(0, 40).trim() : cleaned
+  // the cap counts code points (BUG-412): slice would split a surrogate pair
+  return truncateByCodePoints(cleaned, 40).trim()
 }
 
 /** shell hook: a tab opened a workbook (dialog or queued path) — used for tab titles/dedupe */
@@ -3600,8 +3608,7 @@ export function registerSheetsAiIpc(): void {
       send({ requestId, type: 'error', error: tm('errNoModel') })
       return
     }
-    const controller = new AbortController()
-    entry.aiStreams.set(requestId, controller)
+    const controller = entry.aiStreams.start(requestId)
     // wire-activity keepalive: lets the renderer's silence watchdog tell a slow turn from a dead one
     let lastPing = 0
     const ping = () => {
@@ -3651,13 +3658,13 @@ export function registerSheetsAiIpc(): void {
         })
       }
     } finally {
-      entry.aiStreams.delete(requestId)
+      entry.aiStreams.finish(requestId)
     }
   })
 
   ipcMain.handle(IPC_CHANNELS.aiStreamCancel, (event, requestId: unknown) => {
     const entry = sessionFor(event)
-    entry.aiStreams.get(z.string().min(1).parse(requestId))?.abort()
+    entry.aiStreams.cancel(z.string().min(1).parse(requestId))
   })
 
   // Shared search tools (content + images): Serper with DuckDuckGo fallback

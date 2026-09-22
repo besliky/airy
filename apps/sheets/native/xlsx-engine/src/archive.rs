@@ -290,9 +290,13 @@ fn validate_edit_sets(
         }
     }
     if source_names.len() + additions.len() > MAX_ENTRY_COUNT {
-        return Err(SidecarError::InvalidRequest(
-            "Saving would exceed the archive entry limit.".into(),
-        ));
+        // name the counter and the budget like every other zip-bomb refusal
+        // (BUG-1504 batch: the docx/pptx refusals do, this path did not)
+        return Err(SidecarError::InvalidRequest(format!(
+            "Saving would produce {} ZIP entries, above the {} entry save budget.",
+            source_names.len() + additions.len(),
+            MAX_ENTRY_COUNT
+        )));
     }
     Ok(())
 }
@@ -329,9 +333,15 @@ pub(crate) fn canonical_entry_name(raw: &str) -> Option<String> {
 
 pub(crate) fn validate_entries(archive: &mut ZipArchive<File>) -> Result<(), SidecarError> {
     if archive.len() > MAX_ENTRY_COUNT {
-        return Err(SidecarError::Workbook(
-            "Workbook contains too many ZIP entries.".into(),
-        ));
+        // name the counter and the budget, matching the declared-size refusal
+        // below and the docx-engine fence ("11001 parts exceeds the 10000
+        // limit") — the agent must see the shape of the bomb (BUG-1504 batch)
+        return Err(SidecarError::Workbook(format!(
+            "Workbook contains {} ZIP entries, above the {} entry open budget — \
+             the file may be a zip bomb.",
+            archive.len(),
+            MAX_ENTRY_COUNT
+        )));
     }
     // Declared sizes come straight from the central-directory records
     // (by_index_raw never inflates), so a zip bomb is refused before any

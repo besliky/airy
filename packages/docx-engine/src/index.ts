@@ -21,6 +21,7 @@ export {
   buildWordArtParagraphXml,
   type AnchoredTextboxOptions,
   type TextboxContentParagraph,
+  bookmarkIdOf,
   generateCaptionXml,
   generateIndexFieldXml,
   generateParagraphXml,

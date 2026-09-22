@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import { addRowAfter, deleteRow } from '@tiptap/pm/tables'
+import JSZip from 'jszip'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { parseDocx, saveDocx } from '@airy-office/docx-engine'
 import {
@@ -20,10 +21,12 @@ import {
 import {
   acceptAllRevisions,
   acceptCurrentRevision,
+  applyFieldCaches,
   collectRevisions,
   gotoRevision,
   rejectAllRevisions,
   rejectCurrentRevision,
+  type FieldCacheJob,
   type TrackChangesStorage,
 } from '../src/renderer/editor/revisions'
 
@@ -1022,6 +1025,87 @@ describe('repeated backspace under track changes', () => {
     // B (the live character before the struck run) is now struck as well
     expect(struck).toContain('B')
     expect(editor.state.doc.textContent).toBe('ABCD')
+    editor.destroy()
+  })
+})
+
+describe('field-cache refresh (F9)', () => {
+  // one paragraph whose only field is a PAGE field cached as "3"
+  const PAGE_FIELD_XML =
+    '<w:p>' +
+    '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+    '<w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+    '<w:r><w:t>3</w:t></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+    '</w:p>'
+
+  async function openFieldDoc() {
+    const source = await buildDocx({ bodyXml: PAGE_FIELD_XML })
+    const parsed = await parseDocx(source)
+    const editor = new Editor({
+      element: document.createElement('div'),
+      extensions: editorExtensions,
+      content: blocksToPmDoc(parsed.blocks) as never,
+    })
+    return { editor, parsed }
+  }
+
+  /** the refresh job updateFields would build for the cached PAGE result */
+  function pageCacheJob(editor: Editor): FieldCacheJob {
+    let job: FieldCacheJob | null = null
+    editor.state.doc.descendants((node, pos) => {
+      if (!node.isText) return true
+      const mark = node.marks.find((m) => m.type.name === 'instrField')
+      if (mark && node.text === '3') {
+        job = { from: pos, to: pos + node.nodeSize, text: '4', marks: node.marks }
+        return false
+      }
+      return true
+    })
+    if (!job) throw new Error('no cached PAGE field found in the fixture')
+    return job
+  }
+
+  it('refreshing a cached field result records no revisions with track changes on (BUG-917)', async () => {
+    const { editor, parsed } = await openFieldDoc()
+    const storage = editor.storage.trackChanges as TrackChangesStorage
+    storage.enabled = true
+
+    applyFieldCaches(editor, [pageCacheJob(editor)])
+
+    // the cached result is refreshed…
+    expect(editor.state.doc.textContent).toContain('4')
+    // …but nothing is recorded as a tracked change: a recomputed field result
+    // is not an authored edit (Word's F9 stays silent under Track Changes)
+    expect(collectRevisions(editor.state.doc)).toHaveLength(0)
+
+    // and no w:ins/w:del rides into the saved file
+    const plan = pmDocToSavePlan(editor.getJSON() as PmNode, parsed.blocks)
+    const saved = await saveDocx(parsed, plan.saveBlocks)
+    const zip = await JSZip.loadAsync(saved)
+    const xml = await zip.file('word/document.xml')!.async('string')
+    // w:ins\b cannot be used: <w:instrText shares the prefix
+    expect(xml).not.toMatch(/<w:(ins|del) /)
+    editor.destroy()
+  })
+
+  it('control: the same replace without the field-refresh path is recorded', async () => {
+    const { editor } = await openFieldDoc()
+    const storage = editor.storage.trackChanges as TrackChangesStorage
+    storage.enabled = true
+
+    const job = pageCacheJob(editor)
+    const tr = editor.state.tr.replaceWith(
+      job.from,
+      job.to,
+      editor.state.schema.text('4', [...job.marks]),
+    )
+    editor.view.dispatch(tr)
+
+    // proves the recorder was armed — the silent refresh above is the meta,
+    // not a coincidentally inactive Track Changes
+    expect(collectRevisions(editor.state.doc).length).toBeGreaterThan(0)
     editor.destroy()
   })
 })

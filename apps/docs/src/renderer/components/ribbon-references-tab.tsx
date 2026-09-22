@@ -17,7 +17,12 @@ import {
 } from '@airy-office/docx-engine'
 import { Dropdown, useModalDialog } from '@airy-office/ui'
 import { PromptModal } from './PromptModal'
-import { allRefAnchorNames, collectCrossRefSources, uniqueAnchor } from './cross-ref'
+import {
+  allBookmarkIds,
+  allRefAnchorNames,
+  collectCrossRefSources,
+  uniqueAnchor,
+} from './cross-ref'
 import { collectHeadings } from '../editor/headings'
 import { t, useI18n, type StringKey } from '../i18n/locale'
 import {
@@ -685,8 +690,13 @@ function CaptionModal({
   const insert = () => {
     const displayLabel = captionDisplayLabel(labelId, t)
     const number = nextNumber(labelId)
-    // hidden _Ref anchor wraps the SEQ field so cross-references can target this caption
-    const anchor = uniqueAnchor('_Ref', allRefAnchorNames(editor.state.doc, blocks))
+    // hidden _Ref anchor wraps the SEQ field so cross-references can target this
+    // caption; the pick is id-aware so its w:id stays unique (BUG-919)
+    const anchor = uniqueAnchor(
+      '_Ref',
+      allRefAnchorNames(editor.state.doc, blocks),
+      allBookmarkIds(editor.state.doc, blocks),
+    )
     // the SEQ instruction carries the canonical id; only the visible prefix
     // is the translated word (language-independent matching, UX-1011)
     const xml = generateCaptionXml(labelId, number, text.trim(), anchor, displayLabel)

@@ -46,6 +46,7 @@ import {
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
   toggleDevToolsItem,
+  truncateByCodePoints,
   ALL_OPEN_EXTENSIONS,
   OPEN_EXTENSION_GROUPS,
   voidLoad,
@@ -4086,9 +4087,10 @@ export function sanitizeAiDocFileBase(title: string): string {
     // eslint-disable-next-line no-control-regex
     .replace(/[/\\:*?"<>|\u0000-\u001f]/g, '_')
     .trim()
-    .slice(0, 80)
-    .trim()
-  return cleaned && cleaned !== '.' && cleaned !== '..' ? cleaned : 'Untitled'
+  // the cap counts code points: slice would split a surrogate pair and hand
+  // the filesystem a name it cannot encode (BUG-412)
+  const capped = truncateByCodePoints(cleaned, 80).trim()
+  return capped && capped !== '.' && capped !== '..' ? capped : 'Untitled'
 }
 
 /**

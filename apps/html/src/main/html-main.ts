@@ -40,6 +40,7 @@ import {
   safeExternalUrl,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
+  truncateByCodePoints,
   voidLoad,
   WITNESS_DROP_CHANNEL,
 } from '@airy-office/electron-utils'
@@ -963,11 +964,12 @@ function openExportedDocx(path: string, senderWcId?: number): void {
 }
 
 function exportFileName(suggested: unknown): string {
+  // the cap counts code points (BUG-412): slice would split a surrogate pair
   return (
-    String(suggested || tm('untitledFile'))
-      .replace(/[/\\:*?"<>|]/g, '_')
-      .slice(0, 80)
-      .trim() || tm('untitledFile')
+    truncateByCodePoints(
+      String(suggested || tm('untitledFile')).replace(/[/\\:*?"<>|]/g, '_'),
+      80,
+    ).trim() || tm('untitledFile')
   )
 }
 
@@ -1176,10 +1178,8 @@ async function writeTextAtomic(path: string, text: string): Promise<void> {
 }
 
 function fileNameBase(name: string | undefined): string {
-  return (name ?? '')
-    .replace(/[/\\:*?"<>|]/g, '_')
-    .slice(0, 80)
-    .trim()
+  // the cap counts code points (BUG-412): slice would split a surrogate pair
+  return truncateByCodePoints((name ?? '').replace(/[/\\:*?"<>|]/g, '_'), 80).trim()
 }
 
 async function resolveSaveTarget(
@@ -1742,7 +1742,8 @@ function registerHtmlIpc(): void {
 
   ipcMain.on(HTML_CHANNELS.provisionalTitle, (e, title: unknown) => {
     if (typeof title !== 'string' || savePathByWc.has(e.sender.id)) return
-    const clean = title.replace(/\s+/g, ' ').trim().slice(0, 80)
+    // tab-title cap counts code points (BUG-412): slice would split a pair
+    const clean = truncateByCodePoints(title.replace(/\s+/g, ' ').trim(), 80)
     if (clean) provisionalTitleHook?.(e.sender, clean)
   })
 

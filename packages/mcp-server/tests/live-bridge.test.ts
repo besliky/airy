@@ -215,6 +215,62 @@ describe('live tools over MCP', () => {
     }
   })
 
+  it('live_apply_ops rejects setImageProperties on a non-image target before any bridge call', async () => {
+    if (process.platform === 'win32') return
+    // the renderer skips non-image blocks silently ("applied 1 op(s)", changed
+    // 0) — the no-op must be refused up front instead (image blocks only)
+    const handle = await startBridge({
+      apply_ops: () => 'setImageProperties: matched 4, changed 0',
+    })
+    const { client, close } = await connectSession()
+    try {
+      const result = await call(client, 'live_apply_ops', {
+        ops: [{ op: 'setImageProperties', target: { nodeType: 'paragraph' }, align: 'center' }],
+      })
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('image blocks only')
+      expect(text(result)).toContain('nodeType "paragraph"')
+      expect(text(result)).toContain('not modified')
+      // refused before the document was touched: nothing reached the bridge
+      expect(handle.requests).toEqual([])
+    } finally {
+      await close()
+    }
+  })
+
+  it('live_apply_ops rejects a setImageProperties op with no usable target', async () => {
+    if (process.platform === 'win32') return
+    const handle = await startBridge({ apply_ops: () => 'unreachable' })
+    const { client, close } = await connectSession()
+    try {
+      const result = await call(client, 'live_apply_ops', {
+        ops: [{ op: 'setImageProperties', widthPx: 120 }],
+      })
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('no nodeType in target')
+      expect(handle.requests).toEqual([])
+    } finally {
+      await close()
+    }
+  })
+
+  it('live_apply_ops passes an image-targeted setImageProperties through to the bridge', async () => {
+    if (process.platform === 'win32') return
+    const handle = await startBridge({
+      apply_ops: () => 'setImageProperties: matched 1, changed 1',
+    })
+    const { client, close } = await connectSession()
+    try {
+      const op = { op: 'setImageProperties', target: { nodeType: 'image' }, widthPx: 320 }
+      const result = await call(client, 'live_apply_ops', { ops: [op] })
+      expect(result.isError).toBeFalsy()
+      expect(handle.requests.map((r) => r.method)).toEqual(['apply_ops'])
+      expect(handle.requests[0]?.params.ops).toEqual([op])
+    } finally {
+      await close()
+    }
+  })
+
   it('live_apply_ops surfaces a bridge error with its protocol code', async () => {
     if (process.platform === 'win32') return
     await startBridge({

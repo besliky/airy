@@ -287,9 +287,11 @@ same parser the Airy HTML editor builds on — and the full text; heading and
 link lists cap at 200 entries each and share the 30k read budget with the
 text (`blocks`/`range` select lines). `insert_content` splices the fragment
 **verbatim** (no reparse or rewrite — exactly what you send lands on disk,
-modulo the file's EOL style) after the first line containing `marker` (e.g.
-`</body>` to append rendered content) or after line `at` (`-1` = start;
-default: end). `afterHeading` is a markdown-session option — passing it to an
+modulo the file's EOL style) after the first line containing `marker` or
+after line `at` (`-1` = start; default: end). A line that is just a closing
+`</body>`/`</head>`/`</html>` tag inserts **before** it, so marker `</body>`
+appends rendered content inside the body element. `afterHeading` is a
+markdown-session option — passing it to an
 html session is an explicit error (html has no heading addressing; position
 via `marker` or `at`). Appending at the end preserves the file's
 trailing-newline shape (no blank line added, an empty file gains no leading
@@ -459,7 +461,11 @@ declares more than 10,000 entries or over 1.5 GiB total uncompressed is
 refused before a single entry is decompressed. There is deliberately no
 per-part cap for workbooks — worksheet reads stream in bounded chunks, so
 one large sheet stays openable — and the refusal names the declared total
-and the budget.
+and the budget. The same budget guards the legacy conversion path (SEC-1301):
+`.ods` imports go through the sidecar's calamine converter, which reads the
+same ZIP container, so the fence runs there too (content-based, by the zip
+magic — `.xls` is an OLE2 compound document and has no central directory)
+before calamine decompresses a single entry.
 
 ## Security model
 
