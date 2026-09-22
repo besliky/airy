@@ -149,13 +149,17 @@ export async function startBridgeServer(options: {
   timeoutMs?: number
   /** requests a connection may pipeline before it is closed as abusive */
   maxQueuedRequests?: number
+  /** reuse this token instead of generating one (BUG-1313: an aborted quit's
+   *  stop→start restart keeps the process token, so connected clients and
+   *  readers of the published info file stay valid across the restart) */
+  token?: string
   log?: (message: string) => void
 }): Promise<BridgeServerHandle> {
   const { userDataDir, methods, timeoutMs, log = () => {} } = options
   const maxQueuedRequests = options.maxQueuedRequests ?? 256
   const socketPath = bridgeSocketPath(userDataDir)
   const infoPath = bridgeInfoPath(userDataDir)
-  const token = generateBridgeToken()
+  const token = options.token ?? generateBridgeToken()
   // hello is always available: the handshake gate authorizes the connection,
   // this handler answers it (a caller-supplied hello cannot override it)
   const methodMap: Record<string, BridgeMethodHandler> = {

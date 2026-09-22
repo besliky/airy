@@ -94,11 +94,14 @@ export interface SlidePngRenderer {
  * every slide (same reuse discipline as renderSlidesToPngBase64), mounted
  * eagerly and disposed by the caller. renderPng is sequential by contract —
  * the recording loop awaits each call (plus at most one in-flight prefetch).
+ * `pixelRatio` may be per-slide (BUG-1211): in mixed-size decks each slide
+ * renders at its own fit scale, so no PNG is over- or under-sampled for its
+ * box (an index missing from the array falls back to the first entry).
  */
 export function createSlidePngRenderer(
   slides: ReadonlyArray<RenderSlide>,
   images: Map<string, HTMLImageElement>,
-  pixelRatio: number = EXPORT_PIXEL_RATIO,
+  pixelRatio: number | ReadonlyArray<number> = EXPORT_PIXEL_RATIO,
 ): SlidePngRenderer {
   const container = document.createElement('div')
   container.style.cssText = 'position:fixed;left:-100000px;top:0;pointer-events:none;'
@@ -111,9 +114,13 @@ export function createSlidePngRenderer(
       if (disposed || !slide) throw new Error('slide PNG renderer is disposed or out of range')
       const stage = await drawSlideStage(root, slide, images)
       await nextFrame()
+      const ratio =
+        typeof pixelRatio === 'number'
+          ? pixelRatio
+          : (pixelRatio[index] ?? pixelRatio[0] ?? EXPORT_PIXEL_RATIO)
       // toBlob lands the compressed PNG in blob storage — no base64 string is
       // ever built, so nothing deck-sized enters the JS heap
-      const blob = (await stage.toBlob({ mimeType: 'image/png', pixelRatio })) as Blob | null
+      const blob = (await stage.toBlob({ mimeType: 'image/png', pixelRatio: ratio })) as Blob | null
       if (!blob) throw new Error('slide PNG encode failed')
       return blob
     },

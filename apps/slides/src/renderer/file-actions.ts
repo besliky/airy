@@ -314,8 +314,12 @@ export async function exportVideo(
   // run (a minimized window would otherwise clamp frame timers to 1s)
   await window.slidesApi.setVideoExportActive(true)
   // on-demand slide renderer: mounted before anything can fail mid-run and
-  // torn down on every exit below
-  const renderer = createSlidePngRenderer(visible, ctx.images, dims.width / first.widthPx)
+  // torn down on every exit below. Per-slide fit scales (BUG-1211, restored
+  // after the render-cancel rework dropped the array back to a scalar —
+  // BUG-1302): in a mixed-size deck a slide smaller than the first one must
+  // not render under-sampled and drawImage-stretch into a blurry ghost.
+  const scales = visible.map((s) => Math.min(dims.width / s.widthPx, dims.height / s.heightPx))
+  const renderer = createSlidePngRenderer(visible, ctx.images, scales)
   try {
     // streaming output (BUG-1300): the temp file is opened up front and every
     // recorder chunk is appended as flushed — the container never exists as a
