@@ -371,6 +371,20 @@ describe('CELL_FONT_ALIASES', () => {
     }
   })
 
+  it('points the bundled-Carlito url() at the shipped TTF assets, never a bare relative path', () => {
+    // OBS-1604: a relative './fonts/…' URL survives the build verbatim and
+    // 404s against out/renderer/assets/fonts/ on every launch. The src tokens
+    // come from Vite asset imports, so they always name a Carlito TTF.
+    for (const family of ['Dosis', 'Aptos Narrow']) {
+      const alias = CELL_FONT_ALIASES.find((a) => a.family === family)
+      for (const src of [...(alias?.regular ?? []), ...(alias?.bold ?? [])]) {
+        if (!src.startsWith('url(')) continue
+        expect(src, family).toMatch(/^url\(.+Carlito-(?:Regular|Bold)\.ttf\)$/)
+        expect(src.includes('./fonts/'), family).toBe(false)
+      }
+    }
+  })
+
   it('maps the Office-for-Mac DFonts onto the stock macOS designs', () => {
     const baskerville = CELL_FONT_ALIASES.find((a) => a.family === 'Baskerville Old Face')
     expect(baskerville?.regular[0]).toBe('Baskerville Old Face')
