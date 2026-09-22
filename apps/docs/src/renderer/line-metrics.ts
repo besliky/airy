@@ -2468,3 +2468,18 @@ export function noteLineHeightPx(docGrid: DocGrid | undefined, style?: NoteStyle
 export function footnoteLineHeightPx(docGrid: DocGrid | undefined): number {
   return noteLineHeightPx(docGrid)
 }
+
+/**
+ * Reserved page-bottom height of one note entry whose rows were measured in
+ * the DOM (line boxes only, the renderers' CSS line-height): Word also charges
+ * the entry paragraph's spacing inside the note area — the same space
+ * before/after term estimateFootnoteHeight carries (BUG-1402: the bare DOM
+ * row under-reserved 10.7px per note on a Normal-chain document and doc06's
+ * page 1 pulled extra paragraphs past Word's break). The estimate already
+ * includes the spacing, so only DOM-measured heights are topped up.
+ */
+export function noteReservedHeightPx(measuredRowPx: number, style?: NoteStyleOpts): number {
+  return (
+    measuredRowPx + ((style?.spaceBeforeTwips ?? 0) + (style?.spaceAfterTwips ?? 0)) * TWIPS_TO_PX
+  )
+}

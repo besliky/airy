@@ -150,6 +150,7 @@ import {
   hfHeaderGeom,
   footnoteLineHeightPx,
   noteLineHeightPx,
+  noteReservedHeightPx,
   FOOTNOTE_SEPARATOR_H,
   textHasCjk,
 } from './line-metrics'
@@ -2332,27 +2333,33 @@ export function App() {
         const lineHeightPx = noteLineHeightPx(sec.docGrid, style)
         const fontSizePt = style.sizeHalfPoints ? style.sizeHalfPoints / 2 : 10
         const fontFamily = style.fontFamily ? cssFontFamily(style.fontFamily) : undefined
+        const measured = measureNoteHeightDom(
+          {
+            no: mark,
+            text: fn?.text ?? '',
+            ...(fn?.richParas ? { richParas: fn.richParas } : {}),
+            ...(fn?.noRefMark ? { noRefMark: true as const } : {}),
+          },
+          contentW,
+          lineHeightPx,
+          fontSizePt,
+          fontFamily,
+        )
+        // the DOM row is line boxes only: top it up with the entry paragraph's
+        // spacing, which Word charges in the note area too (the estimate
+        // fallback already carries the term; reserving the bare row lost
+        // 10.7px per note and doc06 pulled extra paragraphs onto page 1)
         const height =
-          measureNoteHeightDom(
-            {
-              no: mark,
-              text: fn?.text ?? '',
-              ...(fn?.richParas ? { richParas: fn.richParas } : {}),
-              ...(fn?.noRefMark ? { noRefMark: true as const } : {}),
-            },
-            contentW,
-            lineHeightPx,
-            fontSizePt,
-            fontFamily,
-          ) ??
-          estimateFootnoteHeight(
-            fn?.text ?? '',
-            contentW,
-            sec.docGrid,
-            undefined,
-            style,
-            fn?.richParas,
-          )
+          measured != null
+            ? noteReservedHeightPx(measured, style)
+            : estimateFootnoteHeight(
+                fn?.text ?? '',
+                contentW,
+                sec.docGrid,
+                undefined,
+                style,
+                fn?.richParas,
+              )
         v = { height, lineHeightPx, fontSizePt, ...(fontFamily ? { fontFamily } : {}) }
         cache.set(key, v)
       }
