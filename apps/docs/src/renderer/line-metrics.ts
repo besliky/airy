@@ -1499,12 +1499,15 @@ function isHangul(cp: number): boolean {
 }
 
 // ─── CJK-Latin autospace pads ────────────────────────────────────────────────
-// Word's autoSpaceDE/DN gap measures ~1/4em while Chromium's text-autospace is
-// fixed at 1/8em; the renderer wraps the character after each boundary in a
-// .doc-autospace-pad span whose start margin supplies the other 1/8em. Pads
-// only go between a directly adjacent CJK letter and a Latin letter/digit —
-// never next to spaces or punctuation — matching where Chromium applies its
-// native gap.
+// Word's autoSpaceDE/DN gap measures ~1/4em (3pt at 12pt). The renderer wraps
+// the character after each boundary in a .doc-autospace-pad span whose start
+// margin (--doc-autospace-pad, styles.css) carries the FULL gap: Chromium's
+// native text-autospace never applies across the span (the element boundary
+// ends the shaped run), so the old 1/8em "half gap" rendered half of Word's
+// spacing (BUG-1542). Pads only go between a directly adjacent CJK letter and
+// a Latin letter/digit — never next to spaces or punctuation — matching where
+// Word applies its gap. The simulateLines engine below measures raw text and
+// does not add pad widths (pre-existing; see the BUG-1542 report note).
 
 /** Han/kana/hangul letters; CJK punctuation and full/halfwidth forms get no gap */
 function isCjkAutospaceSide(cp: number): boolean {

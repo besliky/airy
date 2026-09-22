@@ -43,16 +43,29 @@ function payloadSetup(overrides: Partial<EffectivePageSetup> = {}): EffectivePag
 /// caller-set row height (default 20px = 15pt).
 function gridWorksheet(
   grid: string[][],
-  options: { rowHeight?: number; columnWidth?: number; lastRow?: number; lastColumn?: number } = {},
+  options: {
+    rowHeight?: number
+    columnWidth?: number
+    lastRow?: number
+    lastColumn?: number
+    hiddenRows?: readonly number[]
+    hiddenColumns?: readonly number[]
+  } = {},
 ): PrintWorksheet {
   const rowHeight = options.rowHeight ?? 20
   const columnWidth = options.columnWidth ?? 100
+  const hiddenRows = new Set(options.hiddenRows ?? [])
+  const hiddenColumns = new Set(options.hiddenColumns ?? [])
   return {
     getSheetName: () => 'Grid',
     getLastRow: () => options.lastRow ?? grid.length - 1,
     getLastColumn: () => options.lastColumn ?? Math.max(...grid.map((row) => row.length - 1), 0),
     getRowHeight: () => rowHeight,
     getColumnWidth: () => columnWidth,
+    getSheet: () => ({
+      getRowVisible: (row: number) => !hiddenRows.has(row),
+      getColVisible: (column: number) => !hiddenColumns.has(column),
+    }),
     getMergedRanges: () => [],
     getRange: ((row: number, column: number, numRows?: number, numColumns?: number) => ({
       getDisplayValues: () =>
@@ -317,6 +330,7 @@ describe('buildSheetsPrintPayload', () => {
       getLastColumn: () => 7,
       getRowHeight: () => 20,
       getColumnWidth: () => 100,
+      getSheet: () => ({ getRowVisible: () => true, getColVisible: () => true }),
       getMergedRanges: () => [
         { getRow: () => 0, getColumn: () => 0, getWidth: () => 7, getHeight: () => 1 },
       ],
@@ -358,6 +372,7 @@ describe('buildSheetsPrintPayload', () => {
       getLastColumn: () => 0,
       getRowHeight: () => 20, // 20px = 15pt saved
       getColumnWidth: () => 100,
+      getSheet: () => ({ getRowVisible: () => true, getColVisible: () => true }),
       getMergedRanges: () => [],
       getRange: ((row: number, column: number, numRows?: number, numColumns?: number) => ({
         getDisplayValues: () =>
@@ -393,6 +408,7 @@ describe('buildSheetsPrintPayload', () => {
       getLastColumn: () => 2,
       getRowHeight: () => 20,
       getColumnWidth: () => 100,
+      getSheet: () => ({ getRowVisible: () => true, getColVisible: () => true }),
       getMergedRanges: () => [
         { getRow: () => 0, getColumn: () => 0, getWidth: () => 3, getHeight: () => 3 },
       ],

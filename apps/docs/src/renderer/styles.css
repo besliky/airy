@@ -3351,20 +3351,27 @@ th.cell-rev-del {
   font-size: 11pt;
   line-height: 1.35;
   color: var(--docs-paper-ink);
-  /* Word's autoSpaceDE/DN (on by default): 1/8em gap between CJK and Latin/digits */
+  /* Word's autoSpaceDE/DN (on by default): ~1/4em gap between CJK and Latin/digits
+     (Word probe 2026-09-01: 3pt at 12pt; audit 2026-09-21 measured the shipped gap
+     at 1/8em — BUG-1542). text-autospace stays normal for the seams the pad system
+     does not cover; at pad-wrapped boundaries Chromium's native gap never applies
+     (the element boundary ends the shaped run), so the pad margin carries the full
+     Word gap. */
   text-autospace: normal;
-  /* the other half of Word's ~1/4em gap, delivered by .doc-autospace-pad spans */
-  --doc-autospace-pad: 0.125em;
+  --doc-autospace-pad: 0.25em;
 }
 
-/* CJK/Latin autospace pad: the character after the boundary carries the extra
-   1/8em as a start margin. Plain inline (not inline-block): an atomic inline
-   would suppress Chromium's own text-autospace gap. Not an empty span: when an
-   empty inline's margin is what no longer fits at the line end, Chromium rewinds
-   to the previous recorded break opportunity (the preceding pad) instead of
-   breaking inside the CJK run, dropping a third of the line (prod 003). */
+/* CJK/Latin autospace pad: the character after the boundary carries the full
+   ~1/4em Word gap as a start margin (Chromium's native text-autospace never
+   fires across the span — an element boundary ends the shaped run — so the
+   margin alone must deliver it, BUG-1542). Plain inline (not inline-block):
+   an atomic inline would suppress the native gap at the remaining seams. Not
+   an empty span: when an empty inline's margin is what no longer fits at the
+   line end, Chromium rewinds to the previous recorded break opportunity (the
+   preceding pad) instead of breaking inside the CJK run, dropping a third of
+   the line (prod 003). */
 .doc-autospace-pad {
-  margin-inline-start: var(--doc-autospace-pad, 0.125em);
+  margin-inline-start: var(--doc-autospace-pad, 0.25em);
 }
 
 /* dark page in the light theme: Word's gray band around the dark paper — one

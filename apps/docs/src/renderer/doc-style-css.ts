@@ -264,8 +264,14 @@ export function docBodyFont(parsed: ParsedDocFull): string | undefined {
   return normal?.fontAscii ?? normal?.font ?? parsed.docDefaults?.asciiFont
 }
 
-export function docStyleCss(parsed: ParsedDocFull): string {
+/**
+ * Stylesheet for one parsed document. `cssHyphenation` reports whether CSS
+ * hyphens:auto actually hyphenates in this build (hyphenation-support probe);
+ * when false every auto value downgrades to manual, see BUG-1541 there.
+ */
+export function docStyleCss(parsed: ParsedDocFull, opts?: { cssHyphenation?: boolean }): string {
   const rules: string[] = []
+  const hyphenationOff = opts?.cssHyphenation === false
   // Dark-page twins of every color rule below (editor/dark-page.ts): same
   // selectors under `.page-dark`, remapped values, emitted in one screen-only
   // block at the end so printToPDF and the pagination preview keep the
@@ -351,9 +357,18 @@ export function docStyleCss(parsed: ParsedDocFull): string {
   // except paragraphs opted out via w:suppressAutoHyphens (pPrDefault/Normal decide
   // the baseline here; explicit style values override per style below). Chromium
   // hyphenates only under an explicit lang; file-actions sets it on the editor root
-  // from docDefaults w:lang.
+  // from docDefaults w:lang. Stock Electron has no hyphenation dictionaries, so
+  // `auto` hyphenates nothing (BUG-1541): the renderer probes once and downgrades
+  // to manual — visually identical today (soft hyphens keep their break
+  // opportunities) and pinned against a future Electron that bundles
+  // dictionaries and would hyphenate by non-Word rules (no hyphenationZone,
+  // pagination-engine-blind).
   if (parsed.autoHyphenation && !(normal?.suppressAutoHyphens ?? dd?.suppressAutoHyphens)) {
-    rules.push('.doc-page { hyphens:auto; -webkit-hyphens:auto }')
+    rules.push(
+      hyphenationOff
+        ? '.doc-page { hyphens:manual; -webkit-hyphens:manual }'
+        : '.doc-page { hyphens:auto; -webkit-hyphens:auto }',
+    )
   }
   // kill both halves of the CJK-Latin gap (Chromium's native text-autospace and
   // the .doc-autospace-pad margins); .page-wrap/.pv-page reach the hf strips
@@ -792,7 +807,9 @@ export function docStyleCss(parsed: ParsedDocFull): string {
       info.type === 'paragraph' &&
       d.suppressAutoHyphens !== undefined
     ) {
-      const h = d.suppressAutoHyphens ? 'manual' : 'auto'
+      // explicit re-enable also downgrades to manual when the build cannot
+      // hyphenate (BUG-1541); suppression stays manual either way
+      const h = !d.suppressAutoHyphens && !hyphenationOff ? 'auto' : 'manual'
       decls.push(`hyphens:${h}`, `-webkit-hyphens:${h}`)
     }
     // style-level paragraph shading (explicit pPr w:shd is inline style and wins)
