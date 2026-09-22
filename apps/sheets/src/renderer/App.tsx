@@ -320,6 +320,7 @@ import { installCopyMaterialize } from './copy-materialize'
 import { applyUniverLocale, insertRowsBelowLocale, numberAsTextAlertLocale } from './univer-locales'
 import { installRuleDetail } from './univer-rule-detail'
 import { installActiveCellDataValidationChrome } from './data-validation-dropdown'
+import { installDvSourcePassThrough } from './data-validation-source-gate'
 import { installFormulaNullResultFix } from './formula-null-result'
 import { installNumberFormatFix } from './numfmt-fix'
 import { installIfsEmptySetFix } from './ifs-empty-set'
@@ -1558,6 +1559,9 @@ export function App(): React.JSX.Element {
     // Hold the formula engine's per-chunk recalculation while file data streams
     // in; one merged cycle follows once the chunks stop.
     installFormulaStreamHold(runtime)
+    // Validation rules whose source lives on another (often hidden) sheet must
+    // not block input while that source is still streaming in (BUG-1601).
+    installDvSourcePassThrough(runtime, lazyWorkbookRef)
     // The window always starts blank now; still consume the one-shot
     // new-blank flag so it doesn't leak into the next workbook open.
     void window.desktopApi?.consumeNewBlankWorkbook?.()
