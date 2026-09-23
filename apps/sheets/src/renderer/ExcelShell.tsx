@@ -230,6 +230,10 @@ interface ExcelShellProps {
   /// True when the edit journal has unsaved changes (enables the QAT Save).
   readonly canSave: boolean
   readonly onSave: () => void
+  /// True when printing is available. Deliberately separate from `canSave`
+  /// (OBS-1605): printing a freshly opened, unmodified workbook works, so
+  /// this must never be derived from the save journal.
+  readonly canPrint: boolean
   /// Save As remains available for a clean workbook, but requires a real
   /// file-backed session (the in-memory demo workbook has nowhere to copy).
   readonly canSaveAs: boolean
@@ -440,6 +444,7 @@ export function ExcelShell({
   zoomPercent,
   canSave,
   onSave,
+  canPrint,
   canSaveAs,
   onSaveAs,
   onRedo,
@@ -683,7 +688,9 @@ export function ExcelShell({
                     {t('appFileExportCsv')}
                   </button>
                   <button
-                    disabled={!canSave}
+                    // Print, unlike the export items above, is not gated by
+                    // the save journal: a clean workbook prints too.
+                    disabled={!canPrint}
                     onClick={() => {
                       setFileMenuOpen(false)
                       onOpenPrintDialog()
