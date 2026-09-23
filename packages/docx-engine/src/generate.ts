@@ -1877,39 +1877,87 @@ export function setPPrChange(rawPPr: string, changeJson: string): string {
  * passthrough) — including levels authored by a direct w:outlineLvl that
  * still matches, which must keep its bytes.
  */
+/**
+ * Insert a direct w:outlineLvl carrying `level` into a raw pPr slice. CT_PPr
+ * order puts outlineLvl after the formatting children and before the
+ * paragraph-mark rPr / sectPr (and the pPrChange tail, passed separately).
+ */
+function withDirectOutlineLvl(pPr: string, tail: string, level: number): string {
+  const xml = `<w:outlineLvl w:val="${level - 1}"/>`
+  // with a revision tail the outer slice is an INCOMPLETE pPr (its close tag
+  // lives after the pPrChange in the tail): append before the tail — rPr and
+  // sectPr would sit in the slice ahead of it anyway
+  if (tail) return pPr + xml + tail
+  const anchor = /<w:rPr[\s/>]|<w:sectPr[\s/>]/.exec(pPr)
+  if (anchor) return pPr.slice(0, anchor.index) + xml + pPr.slice(anchor.index)
+  const close = pPr.lastIndexOf('</w:pPr>')
+  if (close === -1) {
+    // a self-closing <w:pPr/> has no close tag to insert before: expand it
+    if (pPr.startsWith('<w:pPr') && pPr.endsWith('/>')) return `${pPr.slice(0, -2)}>${xml}</w:pPr>`
+    return pPr + xml
+  }
+  return pPr.slice(0, close) + xml + pPr.slice(close)
+}
+
 function retargetRawHeadingStyle(
   block: GeneratedBlock,
   ctx: GenerateContext,
   rawPPr: string,
 ): string | null {
-  if (block.type !== 'heading' || block.outlineOnly || block.level === undefined) return null
-  if (block.styleId === undefined) return null
-  if (headingStyleLevelOf(ctx, block.styleId) === block.level) return null
+  if (block.type !== 'heading' || block.level === undefined) return null
   // limit every probe to the outer pPr: a nested <w:pPrChange> also carries
   // a <w:pPr><w:pStyle …> snapshot of the OLD properties that must not match
   const outerEnd = rawPPr.indexOf('<w:pPrChange')
-  let pPr = outerEnd === -1 ? rawPPr : rawPPr.slice(0, outerEnd)
+  const pPr = outerEnd === -1 ? rawPPr : rawPPr.slice(0, outerEnd)
   const tail = outerEnd === -1 ? '' : rawPPr.slice(outerEnd)
+  const direct = /<w:outlineLvl\s[^>]*\/>/.exec(pPr)
+  if (block.outlineOnly) {
+    // an outline-only heading authors its level with the direct w:outlineLvl:
+    // after a retag the stale value would silently restore the old level on
+    // reopen (BUG-1631) — rewrite it. There is no pStyle to retarget (the
+    // style contributes no heading level, which is what outlineOnly means).
+    if (!direct) return null
+    const val = /w:val="(-?\d+)"/.exec(direct[0])
+    if (val && Number(val[1]) + 1 === block.level) return null
+    return (
+      pPr.slice(0, direct.index) +
+      `<w:outlineLvl w:val="${block.level - 1}"/>` +
+      pPr.slice(direct.index + direct[0].length) +
+      tail
+    )
+  }
+  if (block.styleId === undefined) return null
+  if (headingStyleLevelOf(ctx, block.styleId) === block.level) return null
   // a direct w:outlineLvl authors the level at paragraph level: while it
   // still matches the block the bytes are intentional, after a retag it is
   // rewritten to the new level
-  const direct = /<w:outlineLvl\s[^>]*\/>/.exec(pPr)
+  let updated = pPr
+  let directCarriesLevel = false
   if (direct) {
     const val = /w:val="(-?\d+)"/.exec(direct[0])
     if (val && Number(val[1]) + 1 === block.level) return null
-    pPr =
+    updated =
       pPr.slice(0, direct.index) +
       `<w:outlineLvl w:val="${block.level - 1}"/>` +
       pPr.slice(direct.index + direct[0].length)
+    directCarriesLevel = true
   }
   const target = ctx.headingStyleIds.get(block.level)
-  if (!target || target === block.styleId) return pPr + tail
-  const styleTag = /<w:pStyle\s[^>]*\/>/.exec(pPr)
-  if (!styleTag) return pPr + tail
+  if (!target) {
+    // BUG-1631: the document defines no style for the new level, so retagging
+    // the pStyle is impossible and the stale pStyle would silently restore
+    // the old level on reopen. Keep the pStyle (the paragraph keeps its
+    // current formatting) and carry the new level with a direct w:outlineLvl
+    // — Word's own outline-level override — so the retag survives save.
+    return directCarriesLevel ? updated + tail : withDirectOutlineLvl(pPr, tail, block.level)
+  }
+  if (target === block.styleId) return pPr + tail
+  const styleTag = /<w:pStyle\s[^>]*\/>/.exec(updated)
+  if (!styleTag) return updated + tail
   return (
-    pPr.slice(0, styleTag.index) +
+    updated.slice(0, styleTag.index) +
     `<w:pStyle w:val="${escapeXmlAttr(target)}"/>` +
-    pPr.slice(styleTag.index + styleTag[0].length) +
+    updated.slice(styleTag.index + styleTag[0].length) +
     tail
   )
 }
@@ -1957,9 +2005,26 @@ export function generateParagraphXml(block: GeneratedBlock, ctx: GenerateContext
       // BUG-1501: the level was retagged while styleId still names the old
       // level's style (or a non-heading style) — the explicit level wins and
       // picks the level's own HeadingN style, like a freshly inserted heading
-      styleId = ctx.headingStyleIds.get(level)
+      const mapped = ctx.headingStyleIds.get(level)
+      if (mapped !== undefined) {
+        styleId = mapped
+      } else {
+        // BUG-1631: no style exists for the level. Keeping the stale pStyle
+        // would restore the old level on reopen and dropping the pStyle would
+        // silently strip the heading — so keep the paragraph's current style
+        // (its formatting survives) and author the level with a direct
+        // w:outlineLvl, Word's own outline-level override.
+        styleId = block.styleId
+        children.push({ name: 'w:outlineLvl', xml: `<w:outlineLvl w:val="${level - 1}"/>` })
+      }
     } else {
       styleId = block.styleId ?? ctx.headingStyleIds.get(level)
+      if (styleId === undefined && block.level !== undefined) {
+        // BUG-1631: a fresh heading at a level the document has no style for
+        // becomes a genuine outline-only heading (direct outline level, no
+        // pStyle) instead of silently saving as a body paragraph
+        children.push({ name: 'w:outlineLvl', xml: `<w:outlineLvl w:val="${level - 1}"/>` })
+      }
     }
   } else if (block.type === 'listItem') {
     // a heading styleId on a numbered paragraph is legitimate (numbered

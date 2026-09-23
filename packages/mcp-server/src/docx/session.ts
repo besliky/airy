@@ -547,10 +547,12 @@ export class DocxSession {
     return {
       results: outcome.results,
       summary: outcome.results
-        .map(
-          (r) =>
-            `${r.op}: matched ${r.matched}, changed ${r.changed}${r.detail ? ` (${r.detail})` : ''}`,
-        )
+        .map((r) => {
+          const base = `${r.op}: matched ${r.matched}, changed ${r.changed}${r.detail ? ` (${r.detail})` : ''}`
+          // warnings ride the summary too: the text answer is what most
+          // agents quote, so a compromise must never hide in the JSON only
+          return r.warnings?.length ? `${base} — warning: ${r.warnings.join(' ')}` : base
+        })
         .join('; '),
       dryRun,
     }
