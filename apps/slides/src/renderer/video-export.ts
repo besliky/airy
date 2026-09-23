@@ -190,6 +190,37 @@ export interface RecordTimelineOptions {
 }
 
 /**
+ * What the pipeline needs from a capture stream. The browser host returns the
+ * real `MediaStream` from `canvas.captureStream()`; test hosts hand plain
+ * objects with the same shape. It MUST be the stream itself, never a
+ * re-wrapped lookalike: `MediaRecorder` rejects anything that is not a real
+ * `MediaStream` (BUG-1620).
+ */
+export interface RecorderStream {
+  /**
+   * Platform tracks are `MediaStreamTrack`s — for canvas capture, a
+   * `CanvasCaptureMediaStreamTrack` carrying `requestFrame()` (absent from
+   * plain `MediaStreamTrack`, hence the union); test stand-ins use the plain
+   * requestFrame shape.
+   */
+  getVideoTracks(): Array<MediaStreamTrack | { requestFrame?: () => void }>
+}
+
+/**
+ * Runtime guard for the MediaRecorder constructor argument (BUG-1620). The
+ * host used to hand the recorder a `{ getVideoTracks }` wrapper behind a blind
+ * `as MediaStream` cast, so Chromium failed every export at construction
+ * ("parameter 1 is not of type 'MediaStream'") while TypeScript and the
+ * mock-based unit tests saw nothing. Narrow with a real instanceof check
+ * instead of casting: a non-stream fails fast with an actionable error.
+ * (The `typeof` guard keeps the check usable where the global is absent, e.g.
+ * the jsdom unit environment.)
+ */
+export function isMediaStream(value: unknown): value is MediaStream {
+  return typeof MediaStream !== 'undefined' && value instanceof MediaStream
+}
+
+/**
  * Minimal surface of the recorder/canvas APIs the pipeline needs (mockable in tests).
  * onerror is part of the surface so encoder failures can never be silent: a
  * runtime MediaRecorder error (isTypeSupported said yes, the encoder still
@@ -202,12 +233,11 @@ export interface RecorderHost {
     height: number,
   ): {
     ctx: CanvasRenderingContext2D
-    captureStream(frameRequestRate: number): {
-      getVideoTracks(): Array<{ requestFrame?: () => void }>
-    }
+    /** The real MediaStream in the browser host; a structural stand-in in tests. */
+    captureStream(frameRequestRate: number): RecorderStream
   }
   createRecorder(
-    stream: unknown,
+    stream: RecorderStream,
     opts: { mimeType: string; videoBitsPerSecond: number },
   ): {
     /** timesliceMs: flush a dataavailable chunk every ~N ms (BUG-1300). */
@@ -231,17 +261,20 @@ export const browserRecorderHost: RecorderHost = {
     if (!ctx) throw new Error('2d canvas context unavailable')
     return {
       ctx,
-      // CanvasCaptureMediaStreamTrack carries requestFrame() (not on plain MediaStreamTrack)
-      captureStream: (rate: number) => {
-        const stream = canvas.captureStream(rate)
-        return {
-          getVideoTracks: () => stream.getVideoTracks() as CanvasCaptureMediaStreamTrack[],
-        }
-      },
+      // the REAL MediaStream, passed through unmodified. MediaRecorder rejects
+      // any lookalike, so a capture wrapper here fails every export at
+      // construction (BUG-1620); requestFrame() rides the stream's
+      // CanvasCaptureMediaStreamTrack video track.
+      captureStream: (rate: number) => canvas.captureStream(rate),
     }
   },
   createRecorder(stream, opts) {
-    const rec = new MediaRecorder(stream as MediaStream, opts)
+    if (!isMediaStream(stream)) {
+      throw new TypeError(
+        'video export: captureStream() did not yield a real MediaStream for MediaRecorder',
+      )
+    }
+    const rec = new MediaRecorder(stream, opts)
     return {
       start: (timesliceMs?: number) => rec.start(timesliceMs),
       stop: () => rec.stop(),
@@ -370,7 +403,11 @@ export async function recordVideoTimeline(
     await ensure(0)
     const { ctx, captureStream } = host.createCanvas(width, height)
     const stream = captureStream(0)
-    const requestFrame = stream.getVideoTracks()[0]?.requestFrame?.bind(stream.getVideoTracks()[0])
+    // requestFrame lives on the capture canvas's CanvasCaptureMediaStreamTrack
+    // (not on plain MediaStreamTrack) — manual frame push for captureStream(0)
+    const track = stream.getVideoTracks()[0]
+    const requestFrame =
+      track && 'requestFrame' in track ? track.requestFrame?.bind(track) : undefined
     let chunkBytes = 0
     let sinkError: unknown = null
     let sinkTail: Promise<void> = Promise.resolve()
