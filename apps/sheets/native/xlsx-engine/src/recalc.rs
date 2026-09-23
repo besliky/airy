@@ -1078,8 +1078,9 @@ mod tests {
 
     /// BUG-1659: the .ods conversion must reach the engine too — recalc used
     /// to answer workbook_error there on the same missing-`<cellStyles>`
-    /// panic. The verbatim ODF `of:=` formula syntax stays a known separate
-    /// gap, so this pins loading and the literal cells, not formula results.
+    /// panic. BUG-1661 translated the ODF `of:=` formulas, so the converted
+    /// formulas now compute: B2 (the ODF `=[.A1]*[.B1]`) evaluates to 10*4
+    /// and stays a live formula.
     #[test]
     fn a_converted_ods_book_loads_in_the_formula_engine() {
         let source = std::path::Path::new(concat!(
@@ -1111,10 +1112,103 @@ mod tests {
                 .cells
                 .iter()
                 .find(|cell| cell.row == row && cell.column == column)
-                .map(|cell| cell.formatted.as_str().to_owned())
+                .map(|cell| (cell.formatted.clone(), cell.is_formula, cell.number))
         };
-        assert_eq!(at(0, 0).as_deref(), Some("10"));
-        assert_eq!(at(0, 1).as_deref(), Some("4"));
-        assert_eq!(at(1, 0).as_deref(), Some("20"));
+        let (a1, b2) = (at(0, 0).unwrap(), at(1, 1).unwrap());
+        assert_eq!(a1, ("10".to_owned(), false, Some(10.0)));
+        // The translated formula computes: 10*4, still a live formula.
+        assert_eq!(b2, ("40".to_owned(), true, Some(40.0)));
+        assert_eq!(at(1, 0).unwrap().0, "20");
+    }
+
+    /// BUG-1661 end to end: the .ods conversion now yields formulas the
+    /// engine evaluates. The pinned numbers are the reference LibreOffice
+    /// itself produces for the same book (`libreoffice --headless
+    /// --convert-to xlsx` over the committed fixture, read from its cached
+    /// values): SUM over a range, absolute addressing, an IF with ODF `;`
+    /// separators and a cross-sheet reference all compute to exactly those
+    /// values. The 3-D range is beyond the translation grammar (carried
+    /// verbatim) and keeps the file's cached value through the recalc pin;
+    /// the translated cross-sheet sibling recomputes on edit.
+    #[test]
+    fn a_converted_ods_formula_book_computes_the_lo_reference_values() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/bug-1661-ods-formulas.ods"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+        crate::convert::convert_to_xlsx(source, &target).unwrap();
+
+        let mut cache = RecalcCache::new();
+        let result = recalc_cells(
+            &mut cache,
+            &target,
+            &[],
+            &[
+                RecalcRead {
+                    sheet: "Sheet1".into(),
+                    range: CellRange {
+                        start_row: 0,
+                        end_row: 2,
+                        start_column: 0,
+                        end_column: 2,
+                    },
+                },
+                RecalcRead {
+                    sheet: "Data".into(),
+                    range: CellRange {
+                        start_row: 0,
+                        end_row: 0,
+                        start_column: 1,
+                        end_column: 1,
+                    },
+                },
+            ],
+        )
+        .unwrap();
+        let at = |sheet: &str, row: u32, column: u32| {
+            result
+                .cells
+                .iter()
+                .find(|cell| cell.sheet == sheet && cell.row == row && cell.column == column)
+                .map(|cell| (cell.formatted.as_str().to_owned(), cell.is_formula))
+                .unwrap()
+        };
+        // The LO reference values, cell by cell.
+        assert_eq!(at("Sheet1", 0, 0), ("10".to_owned(), false));
+        assert_eq!(at("Sheet1", 0, 1), ("20".to_owned(), true)); // [$A$1]*2
+        // Beyond the grammar (3-D range), verbatim: pinned to the file's
+        // cached value, the same 130 LibreOffice computes for the book.
+        assert_eq!(at("Sheet1", 0, 2), ("130".to_owned(), false));
+        assert_eq!(at("Sheet1", 1, 0), ("32".to_owned(), false));
+        assert_eq!(at("Sheet1", 1, 1), ("big".to_owned(), true)); // IF(A3>25,"big","small")
+        assert_eq!(at("Sheet1", 2, 0), ("42".to_owned(), true)); // SUM(A1:A2)
+        assert_eq!(at("Sheet1", 2, 1), ("142".to_owned(), true)); // SUM(A1:A2)+Data!B1
+        assert_eq!(at("Data", 0, 1), ("100".to_owned(), false));
+
+        // The translated cross-sheet formula is live: editing its input
+        // recomputes it, exactly like a natively entered formula.
+        let edited = recalc_cells(
+            &mut cache,
+            &target,
+            &[RecalcEdit {
+                sheet: "Data".into(),
+                row: 0,
+                column: 1,
+                input: "200".into(),
+            }],
+            &[RecalcRead {
+                sheet: "Sheet1".into(),
+                range: CellRange {
+                    start_row: 2,
+                    end_row: 2,
+                    start_column: 1,
+                    end_column: 1,
+                },
+            }],
+        )
+        .unwrap();
+        assert_eq!(edited.cells[0].formatted, "242");
     }
 }

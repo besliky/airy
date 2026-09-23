@@ -24,6 +24,7 @@ mod visuals;
 mod xls_layout;
 
 mod cell_images;
+mod ods_formula;
 mod refs;
 mod sparklines;
 mod table_styles;

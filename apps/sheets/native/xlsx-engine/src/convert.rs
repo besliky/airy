@@ -103,9 +103,18 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
             let (start_row, start_col) = formula_range.start().unwrap_or((0, 0));
             for (row, column, formula) in formula_range.used_cells() {
                 if !formula.is_empty() {
+                    // BUG-1661: .ods formulas arrive in ODF syntax
+                    // (`of:=SUM([.A1:.A2])`), which no engine here parses.
+                    // Translate what has an OOXML equivalent; anything the
+                    // translator does not fully understand comes back None
+                    // and is carried verbatim, exactly as before — those
+                    // cells keep the file's cached value through the recalc
+                    // pin instead of showing dead ODF syntax.
+                    let translated =
+                        crate::ods_formula::translate(formula).unwrap_or_else(|| formula.clone());
                     formula_map.insert(
                         (start_row + row as u32, start_col + column as u32),
-                        formula.clone(),
+                        translated,
                     );
                 }
             }
@@ -927,11 +936,45 @@ mod tests {
             r#"<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>"#
         ));
         assert!(styles.ends_with("</cellStyles></styleSheet>"));
-        // Values and formulas came through the conversion (the verbatim
-        // ODF `of:=` syntax is a separate known gap).
+        // Values and formulas came through the conversion; the ODF syntax
+        // is translated into OOXML since BUG-1661.
         let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
         assert!(sheet.contains(r#"<c r="A1"><v>10</v></c>"#));
-        assert!(sheet.contains("<f>of:=SUM([.A1:.A2])</f>"));
+        assert!(sheet.contains("<f>SUM(A1:A2)</f>"));
+        assert!(sheet.contains("<f>A1*B1</f>"));
+    }
+
+    /// BUG-1661: a LibreOffice-written .ods with the formula shapes the
+    /// translation must cover — a SUM over a range, a cross-sheet
+    /// reference, absolute addresses, an IF with `;` separators —
+    /// converts into engine-computable OOXML formulas, while the 3-D range
+    /// beyond the grammar passes through verbatim, byte-identical to the
+    /// pre-BUG-1661 behavior, with its cached value.
+    #[test]
+    fn translates_ods_formulas_into_xlsx_syntax() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/bug-1661-ods-formulas.ods"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let result = convert_to_xlsx(source, &target).unwrap();
+        assert_eq!(result.sheets, 2);
+
+        let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
+        // The reference renderings LibreOffice itself writes for the same
+        // book (verified via `libreoffice --convert-to xlsx`).
+        assert!(sheet.contains("<f>$A$1*2</f>"));
+        assert!(sheet.contains("<f>SUM(A1:A2)</f>"));
+        assert!(sheet.contains("<f>SUM(A1:A2)+Data!B1</f>"));
+        // Quotes and comparison survive; only the separators change.
+        assert!(sheet.contains(r#"<f>IF(A3&gt;25,&quot;big&quot;,&quot;small&quot;)</f>"#));
+        // Beyond the grammar (a 3-D range): verbatim, cached value kept.
+        assert!(sheet.contains("<f>of:=SUM([Sheet1.A1:Data.B1])</f>"));
+        assert!(sheet.contains(r#"<c r="C1"><f>of:=SUM([Sheet1.A1:Data.B1])</f><v>130</v></c>"#));
+        let workbook = read_entry(&target, "xl/workbook.xml");
+        assert!(workbook.contains(r#"<sheet name="Data" sheetId="2" r:id="rId2"/>"#));
     }
 
     /// BUG-1659: an empty book (no cells, no styles) still converts with a
