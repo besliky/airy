@@ -285,15 +285,16 @@ fn run(
                 if formatted.is_empty() && !is_formula {
                     continue;
                 }
-                // Known engine gaps where the file's cached value beats the
-                // error: CELL("filename") is unimplemented (#175) and RATE's
-                // Newton solver dies near -100% where Excel converges (#185).
+                // Known engine gap where the file's cached value beats the
+                // error: RATE's Newton solver used to die near -100% where
+                // Excel converges (#185; the renderer computes RATE itself,
+                // the skip keeps a cached value alive if the engine still
+                // errors). CELL("filename") needed the same treatment until
+                // IronCalc implemented it in 0.8 (#175); it now computes, so
+                // only RATE is covered.
                 if formatted.starts_with('#') {
                     if let Some(text) = &formula {
                         let upper = text.to_uppercase();
-                        if upper.contains("CELL(") && upper.contains("\"FILENAME\"") {
-                            continue;
-                        }
                         if formatted == "#NUM!" && upper.contains("RATE(") {
                             continue;
                         }
@@ -337,7 +338,7 @@ enum PinnedValue {
 /// formula afterwards, so its own cached copy stays on screen.
 fn pin_unparsable_formulas(model: &mut Model) {
     use ironcalc::base::expressions::parser::Node;
-    use ironcalc::base::types::Cell;
+    use ironcalc::base::types::{Cell, FormulaValue};
     let mut pins = Vec::new();
     for (sheet, worksheet) in model.workbook.worksheets.iter().enumerate() {
         let Some(parsed) = model.parsed_formulas.get(sheet) else {
@@ -346,14 +347,26 @@ fn pin_unparsable_formulas(model: &mut Model) {
         for (row, columns) in &worksheet.sheet_data {
             for (column, cell) in columns {
                 let (formula, value) = match cell {
-                    Cell::CellFormulaNumber { f, v, .. } => (*f, PinnedValue::Number(*v)),
-                    Cell::CellFormulaString { f, v, .. } => (*f, PinnedValue::Text(v.clone())),
-                    Cell::CellFormulaBoolean { f, v, .. } => (*f, PinnedValue::Bool(*v)),
+                    Cell::CellFormula {
+                        f,
+                        v: FormulaValue::Number(value),
+                        ..
+                    } => (*f, PinnedValue::Number(*value)),
+                    Cell::CellFormula {
+                        f,
+                        v: FormulaValue::Text(value),
+                        ..
+                    } => (*f, PinnedValue::Text(value.clone())),
+                    Cell::CellFormula {
+                        f,
+                        v: FormulaValue::Boolean(value),
+                        ..
+                    } => (*f, PinnedValue::Bool(*value)),
                     _ => continue,
                 };
                 if matches!(
                     parsed.get(formula as usize),
-                    Some(Node::ParseErrorKind { .. })
+                    Some((Node::ParseErrorKind { .. }, _))
                 ) {
                     pins.push((sheet as u32, *row, *column, value));
                 }
@@ -1210,5 +1223,163 @@ mod tests {
         )
         .unwrap();
         assert_eq!(edited.cells[0].formatted, "242");
+    }
+
+    /// BUG-1660 reference suite against Excel 365 values. IronCalc 0.7.1 had
+    /// no SUMPRODUCT and no LET (both evaluated to #NAME?) and comparisons/IF
+    /// did not lift element-wise over ranges, so SUM(IF(A1:A3>10,1,0)) summed
+    /// a single implicit-intersection value (1 instead of Excel's 2). The
+    /// upgraded engine computes every case with Excel semantics: non-numeric
+    /// entries count as 0, dimension mismatches yield #VALUE!, and an unknown
+    /// function still yields #NAME? — which is Excel's own behavior for
+    /// unknown names, unlike the audit cases, which are valid Excel formulas.
+    #[test]
+    fn sumproduct_let_and_array_if_match_excel_semantics() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bug-1660.xlsx");
+        write_fixture(
+            &path,
+            &[
+                ("A1", "5"),
+                ("A2", "15"),
+                ("A3", "20"),
+                ("B1", "text"),
+                ("B2", "2"),
+                ("B3", "4"),
+                ("D1", "=SUMPRODUCT(A1:A3)"),
+                ("D2", "=SUMPRODUCT(A1:A3,A1:A3)"),
+                ("D3", "=SUMPRODUCT((A1:A3>10)*1)"),
+                ("D4", "=SUMPRODUCT((A1:A3>10)*A1:A3)"),
+                ("D5", "=SUMPRODUCT(A1:A3*2)"),
+                ("D6", "=SUMPRODUCT(A1:A3,B1:B3)"),
+                ("D7", "=SUMPRODUCT((A1:A3>10)*(A1:A3<18))"),
+                ("D8", "=SUMPRODUCT((A1:A3>10)*1,B1:B3)"),
+                ("D9", "=SUMPRODUCT(A1:A2,B1:B3)"),
+                ("D10", "=LET(x,5,x*2)"),
+                ("D11", "=LET(s,SUM(A1:A3),s+10)"),
+                ("D12", "=LET(r,A1:A3,SUMPRODUCT((r>10)*1))"),
+                ("D13", "=SUM(IF(A1:A3>10,1,0))"),
+                ("D14", "=THIS_IS_NOT_A_FUNCTION(1)"),
+            ],
+        );
+        let mut cache = RecalcCache::new();
+        let result = recalc_cells(
+            &mut cache,
+            &path,
+            &[],
+            &[RecalcRead {
+                sheet: "Sheet1".into(),
+                range: CellRange {
+                    start_row: 0,
+                    end_row: 13,
+                    start_column: 3,
+                    end_column: 3,
+                },
+            }],
+        )
+        .unwrap();
+        let at = |row: u32| {
+            result
+                .cells
+                .iter()
+                .find(|cell| cell.row == row && cell.column == 3)
+                .map(|cell| cell.formatted.clone())
+                .unwrap_or_else(|| String::from("<missing>"))
+        };
+        // SUMPRODUCT with ranges and conditions (Excel 365 values).
+        assert_eq!(at(0), "40"); // 5+15+20
+        assert_eq!(at(1), "650"); // 25+225+400
+        assert_eq!(at(2), "2"); // the audit repro: two cells above 10
+        assert_eq!(at(3), "35"); // 15+20
+        assert_eq!(at(4), "80"); // (5+15+20)*2
+        assert_eq!(at(5), "110"); // B1 text counts as 0: 15*2+20*4
+        assert_eq!(at(6), "1"); // only 15 satisfies both conditions
+        assert_eq!(at(7), "6"); // (0,1,1)·(0,2,4)
+        assert_eq!(at(8), "#VALUE!"); // 2x1 vs 3x1 dimension mismatch
+        // LET (the audit repro returned #NAME? for both spellings).
+        assert_eq!(at(9), "10");
+        assert_eq!(at(10), "50"); // s=40, s+10
+        assert_eq!(at(11), "2"); // a bound range feeds SUMPRODUCT
+        // Array-context IF: Excel 365 computes 2, the engine used to give 1.
+        assert_eq!(at(12), "2");
+        // Unknown names keep Excel's #NAME? — valid formulas no longer hit it.
+        assert_eq!(at(13), "#NAME?");
+    }
+
+    /// The audit's book was generated by a third-party tool (openpyxl), so
+    /// the formulas reach the engine through file import with no cached
+    /// values, and LET is stored under its `_xlfn.` compatibility prefix.
+    /// Both spellings must compute on that path too.
+    #[test]
+    fn a_third_party_book_with_xlfn_let_computes_through_the_file_path() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bug-1660-openpyxl.xlsx");
+        let entries: [(&str, &str); 6] = [
+            (
+                "[Content_Types].xml",
+                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>"#,
+            ),
+            (
+                "_rels/.rels",
+                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#,
+            ),
+            (
+                "xl/workbook.xml",
+                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>"#,
+            ),
+            (
+                "xl/_rels/workbook.xml.rels",
+                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>"#,
+            ),
+            (
+                "xl/styles.xml",
+                concat!(
+                    r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>"#,
+                    crate::xls_layout::default_cell_styles_xml!(),
+                    "</styleSheet>",
+                ),
+            ),
+            (
+                "xl/worksheets/sheet1.xml",
+                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:C3"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><sheetData><row r="1"><c r="A1"><v>5</v></c><c r="C1"><f>_xlfn.LET(x,5,x*2)</f></c></row><row r="2"><c r="A2"><v>15</v></c><c r="C2"><f>SUMPRODUCT((A1:A3&gt;10)*1)</f></c></row><row r="3"><c r="A3"><v>20</v></c><c r="C3"><f>SUM(IF(A1:A3&gt;10,1,0))</f></c></row></sheetData></worksheet>"#,
+            ),
+        ];
+        let mut writer = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        for (name, content) in entries {
+            writer.start_file(name, options).unwrap();
+            writer.write_all(content.as_bytes()).unwrap();
+        }
+        writer.finish().unwrap();
+
+        let mut cache = RecalcCache::new();
+        let result = recalc_cells(
+            &mut cache,
+            &path,
+            &[],
+            &[RecalcRead {
+                sheet: "Sheet1".into(),
+                range: CellRange {
+                    start_row: 0,
+                    end_row: 2,
+                    start_column: 2,
+                    end_column: 2,
+                },
+            }],
+        )
+        .unwrap();
+        let at = |row: u32| {
+            result
+                .cells
+                .iter()
+                .find(|cell| cell.row == row && cell.column == 2)
+                .map(|cell| cell.formatted.clone())
+                .unwrap()
+        };
+        assert_eq!(at(0), "10"); // _xlfn.LET stored form
+        assert_eq!(at(1), "2"); // SUMPRODUCT over a condition
+        assert_eq!(at(2), "2"); // array-context IF
     }
 }
