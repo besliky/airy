@@ -31,7 +31,8 @@ vi.mock('../src/import/soffice.js', () => ({
   }),
 }))
 
-import { XlsxSession, parseA1Range } from '../src/xlsx/session.js'
+import { XlsxSession } from '../src/xlsx/session.js'
+import { MAX_SHEET_COLUMNS, MAX_SHEET_ROWS, parseA1Range } from '../src/xlsx/refs.js'
 import { FencingError } from '../src/docx/session.js'
 import { makeStubIo } from './helpers/stub-sidecar.js'
 
@@ -72,6 +73,29 @@ describe('A1 notation', () => {
   it('rejects malformed specs', () => {
     expect(() => parseA1Range('A1:')).toThrow(/Invalid A1-style range/)
     expect(() => parseA1Range('banana')).toThrow(/Invalid A1-style range/)
+  })
+
+  it('rejects syntax-valid refs that address no cell (BUG-1632)', () => {
+    // "A0" parses to 0-based row -1: the audit repro that used to journal
+    expect(() => parseA1Range('A0')).toThrow(
+      /Ref "A0" addresses no cell: rows and columns start at 1 in A1 notation/,
+    )
+    expect(() => parseA1Range('A00')).toThrow(/addresses no cell/)
+    expect(() => parseA1Range('$A$0')).toThrow(/addresses no cell/)
+    expect(() => parseA1Range('A0:B2')).toThrow(/addresses no cell/)
+    // past the SpreadsheetML grid there is no cell either
+    expect(() => parseA1Range('A1048577')).toThrow(/past the sheet's last cell/)
+    expect(() => parseA1Range('XFE1')).toThrow(/past the sheet's last cell/)
+  })
+
+  it('accepts the grid boundary refs (A1 and the XFD1048576 corner)', () => {
+    expect(parseA1Range('A1')).toEqual({ startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 })
+    expect(parseA1Range('XFD1048576')).toEqual({
+      startRow: MAX_SHEET_ROWS - 1,
+      endRow: MAX_SHEET_ROWS - 1,
+      startColumn: MAX_SHEET_COLUMNS - 1,
+      endColumn: MAX_SHEET_COLUMNS - 1,
+    })
   })
 })
 
@@ -333,6 +357,85 @@ describe('XlsxSession journal + save matrix', () => {
     })
     // journal flushed after save
     expect(session.meta().dirty).toBe(false)
+  })
+
+  it('refuses the "A0" op without journaling; the session stays alive and saves (BUG-1632)', async () => {
+    const { session } = await nativeSession()
+    // audit repro: {"ref":"A0","value":1} used to journal row -1 ("Journaled
+    // 1 cell edit(s)") and every later save then died with "Invalid cell
+    // coordinates: -1,0", forcing a close that lost all unsaved edits
+    expect(() => session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A0', value: 1 }] })).toThrow(
+      /Ref "A0" addresses no cell/,
+    )
+    // the journal took nothing, so the next save works and writes nothing
+    expect(session.meta().dirty).toBe(false)
+    await expect(session.save()).resolves.toMatchObject({ unchanged: true })
+    expect(saveCalls[0]?.edits).toEqual([])
+  })
+
+  it('a batch containing a bad ref journals nothing; earlier valid edits survive (BUG-1632)', async () => {
+    const { session } = await nativeSession()
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 'good' }] })
+    expect(() =>
+      session.setCells({
+        sheet: 'Sheet1',
+        cells: [
+          { ref: 'B2', value: 1 },
+          { ref: 'A0', value: 2 },
+        ],
+      }),
+    ).toThrow(/Ref "A0" addresses no cell/)
+    // only the earlier good edit reaches the save — not the refused batch
+    await expect(session.save()).resolves.toMatchObject({ unchanged: false })
+    const edits = saveCalls[0]?.edits as Array<Record<string, unknown>>
+    expect(edits).toHaveLength(1)
+    expect(edits[0]).toMatchObject({
+      sheetName: 'Sheet1',
+      row: 0,
+      column: 0,
+      cell: { value: 'good' },
+    })
+  })
+
+  it('boundary refs journal cleanly (A1 and the XFD1048576 corner)', async () => {
+    const { session } = await nativeSession()
+    const { journaled, merged } = session.setCells({
+      sheet: 'Sheet1',
+      cells: [
+        { ref: 'A1', value: 'top-left' },
+        { ref: 'XFD1048576', value: 'bottom-right' },
+      ],
+    })
+    expect(journaled).toBe(2)
+    expect(merged).toBe(2)
+    expect(session.meta().dirty).toBe(true)
+    await expect(session.save()).resolves.toMatchObject({ unchanged: false })
+    const edits = saveCalls[0]?.edits as Array<Record<string, unknown>>
+    expect(edits[1]).toMatchObject({
+      row: MAX_SHEET_ROWS - 1,
+      column: MAX_SHEET_COLUMNS - 1,
+      cell: { value: 'bottom-right' },
+    })
+  })
+
+  it('reads refuse exactly the refs the write path refuses (one shared validator)', async () => {
+    const { session } = await nativeSession()
+    let writeError: Error | undefined
+    try {
+      session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A0', value: 1 }] })
+    } catch (e) {
+      writeError = e as Error
+    }
+    expect(writeError).toBeDefined()
+    // the read path produces the very message the write path refused with —
+    // both run the same parse/validate in refs.ts (the divergence that let
+    // "A0" journal while reads said "Range is outside sheet" is closed)
+    await expect(session.readWorkbook({ sheet: 'Sheet1', range: 'A0' })).rejects.toThrow(
+      writeError!.message,
+    )
+    await expect(session.readWorkbook({ sheet: 'Sheet1', range: 'A1048577' })).rejects.toThrow(
+      /past the sheet's last cell/,
+    )
   })
 
   it('saves in place by default, reopens the sidecar session afterwards', async () => {
