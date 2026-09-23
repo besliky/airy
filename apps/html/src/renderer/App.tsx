@@ -43,6 +43,7 @@ import {
   sourceText,
   type ParseMap,
 } from './document/parse-map'
+import { MapCache } from './document/map-cache'
 import { compileOps, type HtmlOp, type OpError } from './document/ops'
 import { injectBrief, parseBrief, type Brief } from './document/brief'
 import { applyPatches } from './document/patch'
@@ -67,6 +68,11 @@ const inTextField = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   !!target.closest('.cm-editor, input, textarea, [contenteditable=""], [contenteditable="true"]')
 const PREVIEW_DEBOUNCE_MS = 150
+/** idle delay before a stale parse map is rebuilt off the keystroke path */
+const MAP_REBUILD_DELAY_MS = 300
+/** sync parse5 rebuilds above this size would hitch the main thread (~0.5s/300KB):
+ * giant documents only refresh their map on demand (op compile, AI, preview push) */
+const MAP_AUTO_REBUILD_LIMIT = 262_144
 const DEFAULT_ENVELOPE: Envelope = { bom: false, eol: '\n', trailingNewline: true }
 /** live style pokes are written to the source as one set_style op this long after the last change */
 const STYLE_COMMIT_MS = 600
@@ -168,8 +174,6 @@ export default function App() {
   /** bumped on every text change; AI staleness checks compare against lastManualVersionRef */
   const versionRef = useRef(0)
   const lastManualVersionRef = useRef(0)
-  const mapRef = useRef<ParseMap | null>(null)
-  const mapSourceRef = useRef('')
   const pathRef = useRef<string | null>(null)
   const selectedSidRef = useRef<number | null>(null)
   const editQueueRef = useRef<EditQueueItem[]>([])
@@ -193,16 +197,29 @@ export default function App() {
   selectedSidRef.current = selectedSid
   const dirty = text !== savedText
 
-  const getMap = useCallback((): ParseMap => {
-    const cached = mapRef.current
-    // the initial load swaps the text without bumping the version, so the source itself is part of the key
-    if (cached && cached.version === versionRef.current && mapSourceRef.current === textRef.current)
-      return cached
-    const next = buildParseMap(textRef.current, versionRef.current, cached)
-    mapRef.current = next
-    mapSourceRef.current = textRef.current
-    return next
-  }, [])
+  // deferred parse-map rebuilds: bump a render tick so breadcrumb/selection catch up off the typing path
+  const [, setMapTick] = useState(0)
+  const [mapCache] = useState(
+    () =>
+      new MapCache<ParseMap>(
+        (t, v, prev) => buildParseMap(t, v, prev),
+        () => setMapTick((n) => n + 1),
+        MAP_REBUILD_DELAY_MS,
+        MAP_AUTO_REBUILD_LIMIT,
+      ),
+  )
+  useEffect(() => () => mapCache.dispose(), [mapCache])
+
+  /** best-effort map for render/cursor paths: may be one rebuild behind while typing */
+  const getMap = useCallback(
+    (): ParseMap => mapCache.get(textRef.current, versionRef.current).map,
+    [mapCache],
+  )
+  /** fresh map for readers that must not see shifted offsets (op compile, AI access, preview push) */
+  const getMapNow = useCallback(
+    (): ParseMap => mapCache.now(textRef.current, versionRef.current),
+    [mapCache],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -220,7 +237,7 @@ export default function App() {
         envelopeRef.current = doc.envelope
         textRef.current = doc.text
         // the frame must never race the first push: serve the buffer before the URL is known to React
-        const map0 = getMap()
+        const map0 = getMapNow()
         window.htmlApi.updatePreview(instrumentForPreview(doc.text, map0, inspectorSource))
         pushedTextRef.current = doc.text
         pushedVersionRef.current = map0.version
@@ -240,7 +257,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [getMap])
+  }, [getMapNow])
 
   // mirror dirtiness to the main process (close prompt) — untitled blank docs never count
   useEffect(() => {
@@ -280,20 +297,22 @@ export default function App() {
   const pushPreview = useCallback(
     (nextText: string) => {
       if (pushedTextRef.current === nextText) return
-      const map = getMap()
+      const map = getMapNow()
       window.htmlApi.updatePreview(instrumentForPreview(nextText, map, inspectorSource))
       pushedTextRef.current = nextText
       pushedVersionRef.current = map.version
       setPreviewNonce((n) => n + 1)
     },
-    [getMap],
+    [getMapNow],
   )
-  // push the instrumented buffer to html-preview:// and reload the frame, debounced per keystroke
+  // push the instrumented buffer to html-preview:// and reload the frame, debounced per keystroke;
+  // a hidden preview pane (source view) is not rebuilt on every keystroke — switching back pushes once
+  const previewVisible = view !== 'source'
   useEffect(() => {
-    if (status !== 'ready' || pushedTextRef.current === text) return
+    if (status !== 'ready' || !previewVisible || pushedTextRef.current === text) return
     const id = window.setTimeout(() => pushPreview(text), PREVIEW_DEBOUNCE_MS)
     return () => window.clearTimeout(id)
-  }, [text, status, pushPreview])
+  }, [text, status, previewVisible, pushPreview])
 
   useEffect(() => {
     localStorage.setItem('htmlapp.viewMode', view)
@@ -385,7 +404,7 @@ export default function App() {
       manual: boolean,
     ): { ok: true; ranges: Array<[number, number]> } | { ok: false; errors: OpError[] } => {
       const base = textRef.current
-      const compiled = compileOps(base, getMap(), ops)
+      const compiled = compileOps(base, getMapNow(), ops)
       if (compiled.errors.length > 0) return { ok: false, errors: compiled.errors }
       const editor = editorRef.current
       const ranges = editor
@@ -394,7 +413,7 @@ export default function App() {
       commitText(applyPatches(base, compiled.patches), manual)
       return { ok: true, ranges }
     },
-    [commitText, getMap],
+    [commitText, getMapNow],
   )
 
   const replaceAll = useCallback(
@@ -506,8 +525,8 @@ export default function App() {
   /** numbered pins for queued edits; stale items (element gone) get no pin */
   const postMarks = useCallback(() => {
     const items = canvasModeRef.current === 'present' ? [] : editQueueRef.current
-    // no getMap() before the document is loaded: it would cache an empty map under version 0
-    const map = items.length ? getMap() : null
+    // no map before the document is loaded: building one would cache an empty map under version 0
+    const map = items.length ? getMapNow() : null
     const src = textRef.current
     // one pin per element; several queued edits on the same element share it and list their ordinals
     const bySid = new Map<number, string[]>()
@@ -517,7 +536,7 @@ export default function App() {
     })
     const marks = [...bySid].map(([sid, ordinals]) => ({ sid, label: ordinals.join('·') }))
     previewRef.current?.post({ type: 'gx:mark', marks })
-  }, [getMap])
+  }, [getMapNow])
   useEffect(postMarks, [editQueue, canvasMode, postMarks])
 
   const onInspectorMessage = useCallback(
@@ -534,7 +553,7 @@ export default function App() {
           return
         }
         case 'gx:markClick': {
-          const map = getMap()
+          const map = getMapNow()
           // a shared pin opens the most recent edit on that element; the others stay reachable from the queue card
           const item = editQueueRef.current
             .filter((q) => resolveQueueItem(textRef.current, map, q).target?.sid === msg.sid)
@@ -660,7 +679,7 @@ export default function App() {
           return
       }
     },
-    [getMap, postMarks, runManual, selectSid, t, flushPending],
+    [getMap, getMapNow, postMarks, runManual, selectSid, t, flushPending],
   )
 
   // the source cursor picks the covering element (no reveal: the user is already there)
@@ -684,7 +703,7 @@ export default function App() {
   }
   const moveSelected = (dir: -1 | 1) => {
     if (!selectedEntry || selectedEntry.parentSid === null) return
-    const siblings = childrenOf(getMap(), selectedEntry.parentSid)
+    const siblings = childrenOf(getMapNow(), selectedEntry.parentSid)
     const i = siblings.findIndex((s) => s.sid === selectedEntry.sid)
     const ref = siblings[i + dir]
     if (!ref) return
@@ -708,7 +727,7 @@ export default function App() {
   }
   const setAttr = (name: string, value: string | null) => {
     // may run from the panel's unmount after the element was deleted
-    if (selectedEntry && getMap().bySid.has(selectedEntry.sid))
+    if (selectedEntry && getMapNow().bySid.has(selectedEntry.sid))
       runManual([{ op: 'set_attr', sid: selectedEntry.sid, name, value }])
   }
   /** picks a file, copies it into the document's assets/ and points src at it; needs a saved document */
@@ -745,7 +764,7 @@ export default function App() {
     const rel = await window.htmlApi.saveImage({ base64: png, ext: 'png' })
     // sids are matched by path, so after an edit during the write the sid may name another
     // element: the target must still be the <img> with the src the dialog was opened on
-    const entry = rel ? getMap().bySid.get(sid) : undefined
+    const entry = rel ? getMapNow().bySid.get(sid) : undefined
     // compare through the same attribute decoding the frame used (entities such as &amp; in the query)
     const authoredSrc =
       entry?.tag === 'img'
@@ -811,7 +830,7 @@ export default function App() {
     setEditQueue((prev) => prev.filter((q) => !qids.includes(q.qid)))
   const queueFocus = (qid: string) => {
     const item = editQueue.find((q) => q.qid === qid)
-    const target = item && resolveQueueItem(text, getMap(), item).target
+    const target = item && resolveQueueItem(text, getMapNow(), item).target
     if (target) selectSid(target.sid, { reveal: true })
   }
   const askSendNow = (instruction: string) => {
@@ -913,6 +932,10 @@ export default function App() {
         void window.htmlApi.presentInNewTab(path?.split(/[\\/]/).pop() ?? '')
         return
       }
+      // presenting shows the preview pane even from source view: land the latest text first
+      // (the keystroke push is suppressed while the pane is hidden)
+      flushPending()
+      pushPreview(textRef.current)
       setPresentFull(kind === 'fullscreen')
       setCanvasMode('present')
       // HTML fullscreen needs the click's user activation; macOS snaps via simpleFullScreen instead
@@ -961,7 +984,7 @@ export default function App() {
   }, [canvasMode, presentFull, setCanvasMode])
 
   const setRunText = (text: string) => {
-    if (!selectedEntry || selText.index < 0 || !getMap().bySid.has(selectedEntry.sid)) return
+    if (!selectedEntry || selText.index < 0 || !getMapNow().bySid.has(selectedEntry.sid)) return
     runManual([{ op: 'set_text_node', sid: selectedEntry.sid, index: selText.index, text }])
   }
 
@@ -1168,7 +1191,7 @@ export default function App() {
     access: {
       getText: () => textRef.current,
       getVersion: () => versionRef.current,
-      getMap,
+      getMap: getMapNow,
       getLastManualVersion: () => lastManualVersionRef.current,
       getFilePath: () => pathRef.current,
       getSelectedSid: () => selectedSidRef.current,
@@ -1199,7 +1222,7 @@ export default function App() {
     },
     previewDraft: setDraftHtml,
     navigateTo: (sid) => {
-      const e = getMap().bySid.get(sid)
+      const e = getMapNow().bySid.get(sid)
       if (!e) return
       selectSid(sid, { reveal: true })
     },
