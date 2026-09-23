@@ -327,6 +327,40 @@ describe('apply_workbook_ops over MCP', () => {
       await close()
     }
   })
+
+  it('rejects row-less refs ("A0") at the op; the session survives and saves (BUG-1632)', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const handle = await openBook(client)
+      const result = await call(client, 'apply_workbook_ops', {
+        handle,
+        edits: [{ sheet: 'Sheet1', ref: 'A0', value: 1 }],
+      })
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('addresses no cell')
+
+      // the audit repro: this op used to answer "Journaled 1 cell edit(s)"
+      // with row -1 in the journal, and every later save then died with
+      // "Invalid cell coordinates: -1,0" until close lost the unsaved edits.
+      // The refused op leaves the journal clean: the next save works.
+      const saved = await call(client, 'save_document', { handle })
+      expect(saved.isError).toBeFalsy()
+      expect(saved.structuredContent?.unchanged).toBe(true)
+      expect(saveCalls[0]?.edits).toEqual([])
+
+      // and the session is still fully usable for valid edits
+      const retry = await call(client, 'apply_workbook_ops', {
+        handle,
+        edits: [{ sheet: 'Sheet1', ref: 'A1', value: 'works again' }],
+      })
+      expect(retry.isError).toBeFalsy()
+      const savedAgain = await call(client, 'save_document', { handle })
+      expect(savedAgain.isError).toBeFalsy()
+      expect(saveCalls[1]?.edits).toHaveLength(1)
+    } finally {
+      await close()
+    }
+  })
 })
 
 describe('apply_workbook_ops journal semantics (session level)', () => {
