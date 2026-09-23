@@ -2253,6 +2253,9 @@ export function App() {
     const walk = (nodes: readonly RenderNode[]) => {
       for (const n of nodes) {
         if (n.type === 'picture' && n.dataUrl) urls.add(n.dataUrl)
+        // Raster fallback of an SVG-primary picture (svgBlip): preloaded so a broken
+        // SVG can swap to it without a second round-trip (BUG-1656)
+        if (n.type === 'picture' && n.fallbackDataUrl) urls.add(n.fallbackDataUrl)
         if ((n.type === 'shape' || n.type === 'text') && n.fill) addFillUrl(n.fill)
         if (n.type === 'chart') addFillUrl((n as { bgFill?: RenderFill }).bgFill)
         if (n.type === 'group' && Array.isArray(n.children)) walk(n.children)

@@ -871,6 +871,22 @@ function averageColor(img: HTMLImageElement | HTMLCanvasElement, cacheKey: strin
 const duotoneCache = new Map<string, HTMLCanvasElement>()
 const lumCache = new Map<string, HTMLCanvasElement>()
 
+/**
+ * Display image for a picture node: the primary dataUrl's decode, or — when the
+ * primary is an SVG (asvg:svgBlip picture) that failed to decode — the co-embedded
+ * raster fallback (BUG-1656). Returning the fallback keeps a broken SVG from
+ * degrading into a broken-image box while a usable raster sits in the file.
+ */
+export function pictureDisplayImage(
+  pic: Pick<PictureRenderNode, 'dataUrl' | 'fallbackDataUrl'>,
+  images: Map<string, HTMLImageElement>,
+): HTMLImageElement | undefined {
+  return (
+    (pic.dataUrl ? images.get(pic.dataUrl) : undefined) ??
+    (pic.fallbackDataUrl ? images.get(pic.fallbackDataUrl) : undefined)
+  )
+}
+
 type ClrChange = { from: string; to: string }
 type Lum = { bright: number; contrast: number }
 
