@@ -1,10 +1,13 @@
 /**
- * Headless end-to-end check of the delete→#REF! flow the BeforeCommandExecute
+ * Headless end-to-end check of the delete→#REF! flows the BeforeCommandExecute
  * gate drives: the remove-row command runs first (Univer relocates the
  * cross-sheet dependents but leaves their texts stale), then the gate's
  * finish step — after verifying the deletion landed — re-collects and applies
  * the rewrites as journaled commands, and undo walks them back item by item:
  * first the rewrite batch (texts), then the deletion (rows and positions).
+ * The remove-sheet describe covers the same flow for removing a whole sheet
+ * (BUG-1662): qualified references rewrite to bare #REF! tokens while the
+ * sheet's undo restores the formulas and then the sheet itself.
  */
 import {
   ICommandService,
@@ -22,9 +25,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { createUniver } from '../src/renderer/create-univer'
 import {
   applyCrossSheetRewrites,
+  collectRemovedSheetDependentRewrites,
   collectCrossSheetDependentRewrites,
   deleteSpanSpec,
   finishCrossSheetRewrites,
+  finishRemovedSheetRewrites,
+  removalLanded,
 } from '../src/renderer/delete-ref-rewrite'
 import type { LazyWorkbookState } from '../src/renderer/univer-state'
 
@@ -213,6 +219,151 @@ describe('cross-sheet #REF! rewrite around remove-row', () => {
     } finally {
       debug.mockRestore()
       disposable.dispose()
+    }
+  })
+})
+
+describe('cross-sheet #REF! rewrite around remove-sheet', () => {
+  /// withoutFormulaEngine mirrors the app's value mode: the sheets-formula
+  /// plugin's RefRange rewrite (which turns qualified references into #REF!
+  /// as part of the removal command) is absent, so the model keeps the stale
+  /// text — the exact state the fix's rewrite layer exists for.
+  function twoSheetRuntime(withFormulaEngine: boolean): ReturnType<typeof createUniver> {
+    const presets = [
+      ...(withFormulaEngine ? [{ plugins: [UniverFormulaEnginePlugin] }] : []),
+      { plugins: [UniverSheetsPlugin] },
+      ...(withFormulaEngine ? [{ plugins: [UniverSheetsFormulaPlugin] }] : []),
+    ]
+    const runtime = createUniver({ locale: LocaleType.EN_US, locales: {}, presets })
+    runtime.univer.createUnit(UniverInstanceType.UNIVER_SHEET, {
+      id: 'wb1',
+      sheetOrder: ['data', 'main'],
+      name: 'wb',
+      styles: {},
+      sheets: {
+        data: { id: 'data', name: 'Data', rowCount: 20, columnCount: 8, cellData: {} },
+        main: { id: 'main', name: 'Main', rowCount: 20, columnCount: 8, cellData: {} },
+      },
+    })
+    runtime.univer.__getInjector().get(IUniverInstanceService).focusUnit('wb1')
+    return runtime
+  }
+
+  async function prepare(runtime: ReturnType<typeof createUniver>) {
+    const commandService = runtime.univer.__getInjector().get(ICommandService)
+    await commandService.executeCommand('sheet.command.set-range-values', {
+      unitId: 'wb1',
+      subUnitId: 'main',
+      range: { startRow: 0, endRow: 9, startColumn: 0, endColumn: 7 },
+      value: {
+        4: { 0: { f: '=SUM(Data!B2:B3)', v: 3 }, 2: { f: '=B2+1' } },
+        1: { 1: { v: 5 } },
+      },
+    })
+    const workbook = runtime.univerAPI.getActiveWorkbook()!
+    const main = workbook.getSheetBySheetId('main')!
+    const formulaAt = () => main.getRange(4, 0).getFormulas()[0]?.[0]
+    const rewrites = collectRemovedSheetDependentRewrites(lazyState(), workbook, 'data', 'Data')
+    expect(rewrites).toEqual([{ sheetId: 'main', row: 4, column: 0, formula: '=SUM(#REF!)' }])
+    await commandService.executeCommand('sheet.command.remove-sheet', {
+      unitId: 'wb1',
+      subUnitId: 'data',
+    })
+    expect(removalLanded(workbook, 'data')).toBe(true)
+    return { workbook, main, formulaAt, rewrites }
+  }
+
+  function applyBatch(
+    runtime: ReturnType<typeof createUniver>,
+    rewrites: Parameters<typeof applyCrossSheetRewrites>[1],
+  ) {
+    const batching = runtime.univer
+      .__getInjector()
+      .get(IUndoRedoService)
+      .__tempBatchingUndoRedo('wb1')
+    try {
+      applyCrossSheetRewrites(runtime, rewrites)
+    } finally {
+      batching.dispose()
+    }
+  }
+
+  it('rewrites the stale dependents itself and undo walks them back item by item', async () => {
+    const runtime = twoSheetRuntime(false)
+    const { workbook, main, formulaAt, rewrites } = await prepare(runtime)
+
+    // Pure core (no formula plugins) leaves the qualified references stale —
+    // the silent empty/dangling state from the audit.
+    expect(formulaAt()).toBe('=SUM(Data!B2:B3)')
+    applyBatch(runtime, rewrites)
+    expect(formulaAt()).toBe('=SUM(#REF!)')
+    // Same-sheet references are never touched.
+    expect(main.getRange(4, 2).getFormulas()[0]?.[0]).toBe('=B2+1')
+
+    // ⌘Z #1 reverts the rewrite batch (original formula text returns while
+    // the sheet is still gone), ⌘Z #2 reinstates the sheet with its cells.
+    await runtime.univerAPI.undo()
+    expect(formulaAt()).toBe('=SUM(Data!B2:B3)')
+    await runtime.univerAPI.undo()
+    const data = workbook.getSheetBySheetId('data')
+    expect(data).toBeDefined()
+    expect(main.getRange(1, 1).getValue()).toBe(5)
+    expect(
+      workbook
+        .getSheets()
+        .map((sheet) => sheet.getSheetId())
+        .sort(),
+    ).toEqual(['data', 'main'])
+  })
+
+  it('keeps the #REF! state when Univer already rewrote the formulas natively', async () => {
+    // With the sheets-formula plugin the removal command itself rewrites the
+    // qualified references to #REF!; the gate's journaled write then lands on
+    // the same text (idempotent) so the save carries the rewrite even when
+    // Univer's own mutation is not journaled. The extra undo item is a
+    // visually-identical no-op step before the sheet's own restore.
+    const runtime = twoSheetRuntime(true)
+    const { formulaAt, rewrites } = await prepare(runtime)
+    expect(formulaAt()).toBe('=SUM(#REF!)')
+    applyBatch(runtime, rewrites)
+    expect(formulaAt()).toBe('=SUM(#REF!)')
+  })
+
+  it('drops the rewrite when the removal declines (the sheet never went away)', async () => {
+    const runtime = twoSheetRuntime(true)
+    const commandService = runtime.univer.__getInjector().get(ICommandService)
+    await commandService.executeCommand('sheet.command.set-range-values', {
+      unitId: 'wb1',
+      subUnitId: 'main',
+      range: { startRow: 4, endRow: 4, startColumn: 0, endColumn: 0 },
+      value: { 4: { 0: { f: '=SUM(Data!B2:B3)' } } },
+    })
+    const workbook = runtime.univerAPI.getActiveWorkbook()!
+    const main = workbook.getSheetBySheetId('main')!
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    try {
+      const applied = finishRemovedSheetRewrites({
+        runtime,
+        state: lazyState(),
+        workbook,
+        removedSheetId: 'data',
+        removedSheetName: 'Data',
+        rewrites: [{ sheetId: 'main', row: 4, column: 0, formula: '=SUM(#REF!)' }],
+        beginBatch: () => {
+          const batching = runtime.univer
+            .__getInjector()
+            .get(IUndoRedoService)
+            .__tempBatchingUndoRedo('wb1')
+          return { settle: () => batching.dispose() }
+        },
+      })
+      expect(applied).toBe(false)
+      expect(main.getRange(4, 0).getFormulas()[0]?.[0]).toBe('=SUM(Data!B2:B3)')
+      expect(debug).toHaveBeenCalledWith(
+        'cross-sheet #REF! rewrite skipped: the sheet removal did not land',
+      )
+    } finally {
+      debug.mockRestore()
     }
   })
 })

@@ -12,11 +12,16 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   applyCrossSheetRewrites,
   collectCrossSheetDependentRewrites,
+  collectRemovedSheetDependentRewrites,
   deletionLanded,
   deleteSpanSpec,
   finishCrossSheetRewrites,
+  finishRemovedSheetRewrites,
+  removalLanded,
   rewriteFormulaForDeletedSpan,
+  rewriteFormulaForRemovedSheet,
   rewriteHarvestedFormulaTexts,
+  rewriteHarvestedFormulaTextsForRemovedSheet,
   type RewriteWorkbook,
 } from '../src/renderer/delete-ref-rewrite'
 import type { LazyWorkbookState } from '../src/renderer/univer-state'
@@ -369,5 +374,167 @@ describe('deleteSpanSpec', () => {
       count: 1,
     })
     expect(spec.deletedSheetName).toBe('LiveName')
+  })
+})
+
+describe('rewriteFormulaForRemovedSheet', () => {
+  it('turns references to the removed sheet into bare #REF! tokens', () => {
+    expect(rewriteFormulaForRemovedSheet('=SUM(Data!C1:C50000)', 'Data')).toBe('=SUM(#REF!)')
+    expect(rewriteFormulaForRemovedSheet('=Data!A1*2', 'Data')).toBe('=#REF!*2')
+    expect(rewriteFormulaForRemovedSheet("='My Sheet'!A1&'My Sheet'!B2", 'My Sheet')).toBe(
+      '=#REF!&#REF!',
+    )
+  })
+
+  it('leaves formulas without references to the removed sheet untouched', () => {
+    expect(rewriteFormulaForRemovedSheet('=SUM(A1:B2)+C3', 'Data')).toBeNull()
+    expect(rewriteFormulaForRemovedSheet('=SUM(Other!A1:B2)+Other!A1', 'Data')).toBeNull()
+  })
+
+  it('keeps other sheets qualified and string literals verbatim', () => {
+    expect(rewriteFormulaForRemovedSheet('=SUM(Data!A1:B2)+Other!A1', 'Data')).toBe(
+      '=SUM(#REF!)+Other!A1',
+    )
+    expect(rewriteFormulaForRemovedSheet('="Data!A1"&Data!A1', 'Data')).toBe('="Data!A1"&#REF!')
+  })
+})
+
+describe('collectRemovedSheetDependentRewrites', () => {
+  it('collects qualified references on surviving sheets only', () => {
+    const rewrites = collectRemovedSheetDependentRewrites(
+      state(),
+      scanWorkbook({
+        sh1: [['=SUM(Data!A1:B2)']],
+        sh2: [
+          ['=Data!A1+1', '=SUM(A1:B2)'],
+          ['=Other!A1', '=SUM(Data!C1:C50000)'],
+        ],
+      }),
+      'sh1',
+      'Data',
+    )
+    expect(rewrites).toEqual([
+      { sheetId: 'sh2', row: 0, column: 0, formula: '=#REF!+1' },
+      { sheetId: 'sh2', row: 1, column: 1, formula: '=SUM(#REF!)' },
+    ])
+  })
+
+  it('skips journal-removed sheets', () => {
+    const removed = state({
+      editJournal: {
+        cells: new Map(),
+        structuralOps: new Map(),
+        sheets: { added: new Set(), removed: new Set(['sh2']) },
+      },
+    })
+    const rewrites = collectRemovedSheetDependentRewrites(
+      removed,
+      scanWorkbook({ sh2: [['=Data!A1']] }),
+      'sh1',
+      'Data',
+    )
+    expect(rewrites).toEqual([])
+  })
+})
+
+describe('removalLanded', () => {
+  it('is true once the removed sheet is gone from the model', () => {
+    expect(removalLanded(scanWorkbook({ sh2: [['=A1']] }), 'sh1')).toBe(true)
+  })
+
+  it('is false while the sheet is still present (declined command)', () => {
+    expect(removalLanded(scanWorkbook({ sh1: [], sh2: [] }), 'sh1')).toBe(false)
+  })
+})
+
+describe('finishRemovedSheetRewrites', () => {
+  function spyRuntime(): {
+    runtime: Parameters<typeof applyCrossSheetRewrites>[0]
+    commands: Array<{ id: string; params: Record<string, unknown> }>
+  } {
+    const commands: Array<{ id: string; params: Record<string, unknown> }> = []
+    return {
+      commands,
+      runtime: {
+        univer: {
+          __getInjector: () => ({
+            get: () => ({
+              syncExecuteCommand: (id: string, params?: Record<string, unknown>) => {
+                commands.push({ id, params: params ?? {} })
+              },
+            }),
+          }),
+        },
+        univerAPI: { getActiveWorkbook: () => ({ getId: () => 'file-sha' }) },
+      },
+    }
+  }
+
+  it('drops the rewrites when the removal never landed (declined command)', () => {
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    try {
+      const { runtime, commands } = spyRuntime()
+      const harvested = new Map([['sh2', new Map([['0:0', '=Data!A1']])]])
+      const st = state({ formulaText: harvested })
+      // the model still holds the sheet — the command was declined
+      const applied = finishRemovedSheetRewrites({
+        runtime: runtime as never,
+        state: st,
+        workbook: scanWorkbook({ sh1: [], sh2: [['=Data!A1']] }),
+        removedSheetId: 'sh1',
+        removedSheetName: 'Data',
+        rewrites: [{ sheetId: 'sh2', row: 0, column: 0, formula: '=#REF!' }],
+      })
+      expect(applied).toBe(false)
+      expect(commands).toEqual([])
+      expect(harvested.get('sh2')?.get('0:0')).toBe('=Data!A1')
+    } finally {
+      debug.mockRestore()
+    }
+  })
+
+  it('applies journaled rewrites and harvested-text updates once landed', () => {
+    const { runtime, commands } = spyRuntime()
+    const harvested = new Map([
+      ['sh1', new Map([['0:0', '=SUM(Data!A1:B2)']])],
+      [
+        'sh2',
+        new Map([
+          ['0:0', '=Data!A1'],
+          ['1:0', '=SUM(A1:A2)'],
+        ]),
+      ],
+    ])
+    const st = state({ formulaText: harvested })
+    const applied = finishRemovedSheetRewrites({
+      runtime: runtime as never,
+      state: st,
+      workbook: scanWorkbook({ sh2: [['', '=Data!A1']] }),
+      removedSheetId: 'sh1',
+      removedSheetName: 'Data',
+      rewrites: [{ sheetId: 'sh2', row: 0, column: 1, formula: '=#REF!' }],
+    })
+    expect(applied).toBe(true)
+    expect(commands.map((c) => c.id)).toEqual(['sheet.command.set-range-values'])
+    expect(harvested.get('sh2')?.get('0:0')).toBe('=#REF!')
+    // no external reference → untouched; the removed sheet's index goes dark
+    expect(harvested.get('sh2')?.get('1:0')).toBe('=SUM(A1:A2)')
+    expect(harvested.get('sh1')?.get('0:0')).toBe('=SUM(Data!A1:B2)')
+  })
+})
+
+describe('rewriteHarvestedFormulaTextsForRemovedSheet', () => {
+  it('leaves keys superseded by a journal entry alone', () => {
+    const harvested = new Map([['sh2', new Map([['0:0', '=Data!A1']])]])
+    const st = state({
+      formulaText: harvested,
+      editJournal: {
+        cells: new Map([['sh2', new Map([['0:0', { row: 0, column: 0, hasValue: false }]])]]),
+        structuralOps: new Map(),
+        sheets: { added: new Set(), removed: new Set() },
+      },
+    })
+    rewriteHarvestedFormulaTextsForRemovedSheet(st, 'sh1', 'Data')
+    expect(harvested.get('sh2')?.get('0:0')).toBe('=Data!A1')
   })
 })

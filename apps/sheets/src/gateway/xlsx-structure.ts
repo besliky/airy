@@ -2151,6 +2151,17 @@ export function shiftFormulaText(
   })
 }
 
+/// The sheet-removal counterpart of shiftFormulaText (Excel's delete-sheet
+/// semantics): every reference qualified with sheetName becomes a bare `#REF!`
+/// token — the qualifier drops, exactly like the row/column deletion
+/// convention and Univer's own rewrite. Unqualified references (which could
+/// not name the removed sheet) and other sheets' qualifiers are untouched, as
+/// are string literals. Null when the formula does not change.
+export function removeSheetFormulaText(formula: string, sheetName: string): string | null {
+  const rewritten = remapReferenceTokens(formula, sheetName, true, () => null)
+  return rewritten === formula ? null : rewritten
+}
+
 /// The rectangle-move counterpart of shiftFormulaText, with Excel's move
 /// rules: a reference fully inside the moved rectangle follows it ($ markers
 /// are irrelevant on a move); a reference onto the overwritten target

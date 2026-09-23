@@ -1,5 +1,5 @@
 /**
- * Excel-compatible #REF! handling for row/column deletion.
+ * Excel-compatible #REF! handling for structural deletions.
  *
  * Univer's live model already rewrites same-sheet references when a
  * remove-row/remove-col command executes (wholly-inside references become
@@ -22,11 +22,22 @@
  * ⌘Z the rows. The harvested file-coordinate formula index (streamed
  * workbooks' formula bar) is rewritten in place too; those keys live on
  * other sheets, which the deletion never moves.
+ *
+ * Removing a whole sheet rides the same module (finishRemovedSheetRewrites):
+ * Univer only detaches the worksheet and leaves every qualified reference to
+ * it pointing into a dead sheet — Excel rewrites them to bare #REF! tokens.
+ * The dependent cells never move, so the rewrites are collected from the
+ * pre-removal model and only need a landed check before applying.
  */
 import { ICommandService } from '@univerjs/core'
 
 import { columnIndex } from '../domain/cell-address'
-import { shiftFormulaText, type Axis, type Shift } from '../gateway/xlsx-structure'
+import {
+  removeSheetFormulaText,
+  shiftFormulaText,
+  type Axis,
+  type Shift,
+} from '../gateway/xlsx-structure'
 import { isSheetRemoved } from './edit-journal'
 import type { LazyWorkbookState } from './univer-state'
 
@@ -250,6 +261,118 @@ export function finishCrossSheetRewrites(args: FinishRewritesArgs): boolean {
   } catch {
     // Best-effort model polish; the save's own #REF! emission remains the
     // backstop for file correctness.
+  } finally {
+    batch?.settle()
+  }
+  return true
+}
+
+/// Excel's delete-sheet rewrite of one formula text: every reference
+/// qualified with the removed sheet's name becomes a bare #REF! token (the
+/// qualifier drops, matching the row/column convention — the recalc engine
+/// rejects `Sheet!#REF!`). Null when the formula does not reference the
+/// removed sheet.
+export function rewriteFormulaForRemovedSheet(formula: string, sheetName: string): string | null {
+  return removeSheetFormulaText(formula, sheetName)
+}
+
+/// Formulas on every SURVIVING sheet that reference the removed sheet (only
+/// sheet-qualified tokens can) and need a bare #REF! rewrite in the model.
+/// Collected from the pre-removal model: a sheet removal never relocates
+/// other sheets' cells, so the captured rewrites stay valid.
+export function collectRemovedSheetDependentRewrites(
+  state: LazyWorkbookState,
+  workbook: RewriteWorkbook,
+  removedSheetId: string,
+  removedSheetName: string,
+): CrossSheetRewrite[] {
+  const rewrites: CrossSheetRewrite[] = []
+  for (const sheet of workbook.getSheets()) {
+    const sheetId = sheet.getSheetId()
+    if (sheetId === removedSheetId) continue
+    if (isSheetRemoved(state.editJournal, sheetId)) continue
+    const formulas = sheet.getRange(0, 0, sheet.getMaxRows(), sheet.getMaxColumns()).getFormulas()
+    for (let row = 0; row < formulas.length; row += 1) {
+      const columns = formulas[row]
+      if (!columns) continue
+      for (let column = 0; column < columns.length; column += 1) {
+        const formula = columns[column]
+        if (!formula) continue
+        const rewritten = rewriteFormulaForRemovedSheet(formula, removedSheetName)
+        if (rewritten !== null) {
+          rewrites.push({ sheetId, row, column, formula: rewritten })
+        }
+      }
+    }
+  }
+  return rewrites
+}
+
+/// Whether the removal the rewrites were computed for actually landed: the
+/// sheet is gone from the model. Univer emits CommandExecuted even when the
+/// command handler declines (last-sheet refusal, a cancelled gate), and the
+/// safety-valve timeout reaches the same finish() path after a cancel —
+/// without this check a declined removal would rewrite formulas to #REF!
+/// for a sheet that still exists.
+export function removalLanded(workbook: RewriteWorkbook, removedSheetId: string): boolean {
+  return !workbook.getSheets().some((sheet) => sheet.getSheetId() === removedSheetId)
+}
+
+/// Rewrites the harvested file-coordinate formula index after a sheet
+/// removal: display-only (the keys never move), and the save rewrites the
+/// file's own formulas through the journal anyway. A journal entry at the
+/// same cell supersedes the harvested text, so those keys are left alone.
+export function rewriteHarvestedFormulaTextsForRemovedSheet(
+  state: LazyWorkbookState,
+  removedSheetId: string,
+  removedSheetName: string,
+): void {
+  for (const [sheetId, cells] of state.formulaText) {
+    if (sheetId === removedSheetId) continue
+    if (isSheetRemoved(state.editJournal, sheetId)) continue
+    const journalCells = state.editJournal.cells.get(sheetId)
+    for (const [key, text] of cells) {
+      if (journalCells?.has(key)) continue
+      const rewritten = rewriteFormulaForRemovedSheet(text, removedSheetName)
+      if (rewritten !== null) cells.set(key, rewritten)
+    }
+  }
+}
+
+/// Inputs of the finish step the remove-sheet gate runs once the removal
+/// settles (CommandExecuted, or the safety valve on cancel).
+export interface FinishRemovedSheetRewritesArgs {
+  runtime: RewriteRuntime
+  state: LazyWorkbookState
+  workbook: RewriteWorkbook
+  removedSheetId: string
+  removedSheetName: string
+  /// rewrites collected from the pre-removal model
+  rewrites: readonly CrossSheetRewrite[]
+  /// opens one undo item for all the rewrites; null/omitted while an AI bulk
+  /// edit owns its own batch (injected to keep this module import-light)
+  beginBatch?: (() => { settle(): void }) | null
+}
+
+/// The finish step of the remove-sheet #REF! flow: verify the removal
+/// actually landed, then apply the pre-collected rewrites as journaled
+/// commands under one undo item (on top of the removal's, so ⌘Z first
+/// restores the original formulas and a second ⌘Z the sheet) and refresh
+/// the harvested formula texts. Returns false — rewrites dropped, a
+/// console.debug note left — when the removal never executed.
+export function finishRemovedSheetRewrites(args: FinishRemovedSheetRewritesArgs): boolean {
+  const { runtime, state, workbook, removedSheetId, removedSheetName, rewrites, beginBatch } = args
+  if (!removalLanded(workbook, removedSheetId)) {
+    console.debug('cross-sheet #REF! rewrite skipped: the sheet removal did not land')
+    return false
+  }
+  const batch = beginBatch?.() ?? null
+  try {
+    applyCrossSheetRewrites(runtime, rewrites)
+    rewriteHarvestedFormulaTextsForRemovedSheet(state, removedSheetId, removedSheetName)
+  } catch {
+    // Best-effort model polish; the save's fail-closed refusal of referenced
+    // removals remains the backstop for file correctness.
   } finally {
     batch?.settle()
   }

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { applyCellEditsToXlsx, assertOnlyTouchedEntriesChanged } from '../src/gateway/xlsx-gateway'
 import {
   applyStructuralOps,
+  removeSheetFormulaText,
   shiftCellArea,
   shiftChartReferences,
   shiftCrossSheetFormulas,
@@ -89,6 +90,18 @@ describe('applyStructuralOps rows', () => {
       'row',
     )
     expect(shifted).toBe('SUM(A1:A8)')
+  })
+})
+
+describe('removeSheetFormulaText', () => {
+  it('replaces every reference qualified with the removed sheet by a bare #REF!', () => {
+    expect(removeSheetFormulaText('=SUM(Data!C1:C50000)', 'Data')).toBe('=SUM(#REF!)')
+    expect(removeSheetFormulaText('=Data!A1*2', 'Data')).toBe('=#REF!*2')
+    expect(removeSheetFormulaText('=SUM(Data!3:5)+Data!$A$1', 'Data')).toBe('=SUM(#REF!)+#REF!')
+  })
+
+  it('returns null when the formula does not reference the removed sheet', () => {
+    expect(removeSheetFormulaText('=SUM(A1:A2)+Other!A1', 'Data')).toBeNull()
   })
 })
 

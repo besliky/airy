@@ -95,6 +95,74 @@ async function buildRecalcFixture(): Promise<Buffer> {
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
 }
 
+// The post-delete-sheet shape (BUG-1662): a dependent formula whose sheet
+// qualifier was rewritten to the bare #REF! error token, cached as an error
+// exactly like Excel saves it. Reload must keep that semantics: the engine
+// parses the #REF! literal and the cell evaluates to the error, not to a
+// blank.
+async function buildRefErrorFormulaFixture(): Promise<Buffer> {
+  const zip = new JSZip()
+  zip.file(
+    '[Content_Types].xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      '</Types>',
+  )
+  zip.file(
+    '_rels/.rels',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+      '</Relationships>',
+  )
+  zip.file(
+    'xl/workbook.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<sheets><sheet name="Keep" sheetId="1" r:id="rId1"/></sheets>' +
+      '</workbook>',
+  )
+  zip.file(
+    'xl/_rels/workbook.xml.rels',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '</Relationships>',
+  )
+  zip.file(
+    'xl/styles.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>' +
+      '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
+      '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
+      '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+      '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>' +
+      '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
+      '</styleSheet>',
+  )
+  zip.file(
+    'xl/worksheets/sheet1.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      '<dimension ref="A1:B1"/>' +
+      '<sheetViews><sheetView workbookViewId="0"/></sheetViews>' +
+      '<sheetFormatPr defaultRowHeight="15"/>' +
+      '<sheetData>' +
+      '<row r="1"><c r="A1" t="e"><f>SUM(#REF!)</f><v>#REF!</v></c>' +
+      '<c r="B1"><v>7</v></c></row>' +
+      '</sheetData>' +
+      '</worksheet>',
+  )
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+}
+
 // Excel keeps the cached values of external-workbook references when the
 // source is unreachable; IronCalc cannot even parse them. Content types and
 // rels carry the externalLink part exactly as Excel writes it.
@@ -253,6 +321,37 @@ describe('sidecar IronCalc recalculation channel', () => {
       const third = recalcResultSchema.parse(await client.recalcCells({ path, edits: [], reads }))
       expect(third.cached).toBe(false)
       expect(third.cells.find((cell) => cell.row === 2)?.formatted).toBe('30')
+    } finally {
+      client.stop()
+    }
+  })
+
+  it('evaluates a delete-sheet #REF! formula to the error after reload (BUG-1662)', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'xlsx-recalc-test-'))
+    cleanups.push(directory)
+    const path = join(directory, 'ref-error.xlsx')
+    await writeFile(path, await buildRefErrorFormulaFixture())
+    const client = new XlsxSidecarClient(sidecarBinaryPath())
+    try {
+      const result = recalcResultSchema.parse(
+        await client.recalcCells({
+          path,
+          edits: [],
+          reads: [
+            { sheet: 'Keep', range: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 1 } },
+          ],
+        }),
+      )
+      expect(result.cached).toBe(false)
+      // SUM(#REF!) evaluates to the error — never a silent blank
+      expect(result.cells.find((cell) => cell.column === 0)).toMatchObject({
+        sheet: 'Keep',
+        row: 0,
+        column: 0,
+        formatted: '#REF!',
+        isFormula: true,
+      })
+      expect(result.cells.find((cell) => cell.column === 1)).toMatchObject({ number: 7 })
     } finally {
       client.stop()
     }
