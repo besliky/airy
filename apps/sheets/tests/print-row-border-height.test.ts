@@ -1,11 +1,15 @@
 /**
- * BUG-1504 phantom trailing page on bordered sheets: printedHeightPt counted
- * only the text line (fs x 1.25 + 2pt padding), but border-collapse grows
- * every rendered row by its border (a thin edge is ~0.75pt, the gridline net
- * 0.5pt). The accumulated drift (~0.5-0.75pt/row) spilled the table's tail
- * onto an extra, otherwise empty PDF page. The declared <tr> height now
- * includes the row's widest vertical border, keeping the pagination model
- * and the emitted tables in step.
+ * BUG-1504 phantom trailing page on bordered sheets: the declared <tr>
+ * height must carry the row's widest collapsed border (a thin edge is worth
+ * ~0.75pt per row, the gridline net 0.5pt) — border-collapse grows every
+ * rendered row by it, and an undeclared drift of ~0.5-0.75pt/row spilled
+ * the table's tail onto an extra, otherwise empty PDF page.
+ *
+ * BUG-1614 refines the declaration itself: the row's saved height is the
+ * authoritative printed height (Excel/LO print 15pt rows as 11.25pt at 75%
+ * scale), so the declared height is saved height + border, with the one-
+ * line text estimate clamped from below and the cell's line box clamped
+ * into the declaration instead of growing the row.
  */
 import { describe, expect, it } from 'vitest'
 
@@ -35,8 +39,8 @@ function payloadSetup(overrides: Partial<EffectivePageSetup> = {}): EffectivePag
   }
 }
 
-/// A one-column worksheet (text cells heighten every row to the text line:
-/// 11pt x 1.25 + 2pt = 15.75pt) with a per-cell bottom style.
+/// A one-column worksheet (text cells: the 11pt line estimate is 15.75pt,
+/// above the 15pt saved height) with a per-cell bottom style.
 function borderedWorksheet(style: Record<string, unknown> | null): PrintWorksheet {
   return {
     getSheetName: () => 'Bordered',
@@ -58,8 +62,9 @@ function borderedWorksheet(style: Record<string, unknown> | null): PrintWorkshee
 }
 
 describe('printedHeightPt collapsed-border contribution', () => {
-  it('declares the thin border on top of the text line height', () => {
-    // 15.75pt text line + 0.75pt thin bottom border.
+  it('declares the thin border on top of the saved height', () => {
+    // 15pt saved height + 0.75pt thin bottom border (not the 15.75pt text
+    // estimate — the declaration wins, BUG-1614).
     const payload = buildSheetsPrintPayload(
       [
         {
@@ -72,11 +77,11 @@ describe('printedHeightPt collapsed-border contribution', () => {
       'Book.pdf',
       'S',
     )
-    expect(payload.html).toContain('<tr style="height:16.5pt">')
+    expect(payload.html).toContain('<tr style="height:15.75pt">')
   })
 
   it('counts the widest vertical edge (medium beats thin)', () => {
-    // 15.75pt text line + 1.5pt medium border.
+    // 15pt saved height + 1.5pt medium border.
     const payload = buildSheetsPrintPayload(
       [
         {
@@ -89,28 +94,28 @@ describe('printedHeightPt collapsed-border contribution', () => {
       'Book.pdf',
       'S',
     )
-    expect(payload.html).toContain('<tr style="height:17.25pt">')
+    expect(payload.html).toContain('<tr style="height:16.5pt">')
   })
 
   it('counts the gridline net when gridlines print without cell borders', () => {
-    // 15.75pt text line + 0.5pt gridline border.
+    // 15pt saved height + 0.5pt gridline border.
     const payload = buildSheetsPrintPayload(
       [{ worksheet: borderedWorksheet(null), printAreas: [], printTitles: null }],
       payloadSetup({ printGridlines: true }),
       'Book.pdf',
       'S',
     )
-    expect(payload.html).toContain('<tr style="height:16.25pt">')
+    expect(payload.html).toContain('<tr style="height:15.5pt">')
   })
 
-  it('keeps the plain text-line height without borders or gridlines', () => {
+  it('keeps the saved height without borders or gridlines', () => {
     const payload = buildSheetsPrintPayload(
       [{ worksheet: borderedWorksheet(null), printAreas: [], printTitles: null }],
       payloadSetup(),
       'Book.pdf',
       'S',
     )
-    expect(payload.html).toContain('<tr style="height:15.75pt">')
+    expect(payload.html).toContain('<tr style="height:15pt">')
   })
 
   it('a cell borders the whole row even when a neighbour is unstyled', () => {
@@ -137,15 +142,14 @@ describe('printedHeightPt collapsed-border contribution', () => {
       'Book.pdf',
       'S',
     )
-    expect(payload.html).toContain('<tr style="height:16.5pt">')
+    expect(payload.html).toContain('<tr style="height:15.75pt">')
   })
 
   it('a borderline sheet now fits the page the model plans', () => {
-    // The audit's probe2 shape: enough thin-bordered rows to fill a page
-    // exactly under the old model. With the border counted, the simulated
-    // pagination and the declared row heights agree, so &N stops counting a
-    // phantom trailing page. Rows at 15.75+0.75 = 16.5pt on a 733.68pt
-    // printable height: 44 rows = 726pt fit, the 45th tips over.
+    // Rows render at their declared heights (15pt saved + 0.75pt border =
+    // 15.75pt, text clamped into the row), so the simulated pagination and
+    // the declared row heights agree: 46 rows = 724.5pt on a 733.68pt
+    // printable height fit one page, and &N stops counting a phantom tail.
     const rowCount = 46
     const worksheet: PrintWorksheet = {
       getSheetName: () => 'Tall',
@@ -176,8 +180,8 @@ describe('printedHeightPt collapsed-border contribution', () => {
       'Book.pdf',
       'Tall',
     )
-    // 46 rows at 16.5pt: 44 per page -> 2 pages; not 3 with an empty tail.
-    expect(payload.sheets!.map((sheet) => sheet.pages)).toEqual([2, 1])
+    // 46 rows at 15.75pt: 1 page; not 2 with an empty tail.
+    expect(payload.sheets!.map((sheet) => sheet.pages)).toEqual([1, 1])
     expect((payload.html.match(/<table>/g) ?? []).length).toBe(2)
   })
 })

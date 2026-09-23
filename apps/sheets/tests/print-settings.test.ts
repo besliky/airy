@@ -496,15 +496,16 @@ describe('buildSheetPrintPayload', () => {
   })
 
   it('shrinks to fit the height when fitToHeight is set', () => {
-    // 200 text rows: printed at ~15.75pt each (11pt line + padding) they
-    // need ~3150pt; A4 portrait leaves 733.5pt between 0.75in margins.
+    // 200 text rows at their saved 15pt height (BUG-1614: the declaration,
+    // not the text estimate, is the printed height) need 3000pt; A4
+    // portrait leaves 733.68pt between 0.75in margins.
     const onePage = buildSheetPrintPayload(
       tallWorksheet(200),
       payloadSetup({ fitToPage: true, fitToWidth: 0, fitToHeight: 1 }),
       'Book.pdf',
       'S1',
     )
-    expect(onePage.scale).toBeLessThan(0.24)
+    expect(onePage.scale).toBeLessThan(0.245)
     expect(onePage.scale).toBeGreaterThan(0.2)
     const twoPages = buildSheetPrintPayload(
       tallWorksheet(200),
@@ -513,7 +514,7 @@ describe('buildSheetPrintPayload', () => {
       'S1',
     )
     expect(twoPages.scale).toBeGreaterThan(onePage.scale)
-    expect(twoPages.scale).toBeLessThan(0.47)
+    expect(twoPages.scale).toBeLessThan(0.5)
     // Width alone is satisfied at 100%; the height axis decides.
     expect(
       buildSheetPrintPayload(

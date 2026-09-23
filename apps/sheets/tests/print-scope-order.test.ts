@@ -360,11 +360,14 @@ describe('buildSheetsPrintPayload', () => {
     expect(secondRows[0]).not.toContain('<td></td>')
   })
 
-  it('declares the text-boosted printed height the over-then-down bands count', () => {
-    // A 20pt font needs a 27pt line box (1.25x + 2pt padding); declaring
-    // the saved 15pt row height instead let the rendered row outrun the
-    // band's page capacity, so Chromium split a band and the page order
-    // silently stopped being over-then-down (BUG-1110).
+  it('keeps an oversized text line inside the declared height the bands count', () => {
+    // A 20pt font in a 15pt row: declaring the saved 15pt height alone let
+    // the rendered row (a ~24pt line box) outrun the band's page capacity,
+    // so Chromium split a band and the page order silently stopped being
+    // over-then-down (BUG-1110); the old fix grew the plan to the 27pt text
+    // estimate instead (BUG-1614). Now the row declares its saved 15pt
+    // height and the cell's line box is clamped into it — the rendered row
+    // obeys the band's unit and the text clips at the row edge like Excel.
     const grid = [['tall'], ['tall']]
     const worksheet: PrintWorksheet = {
       getSheetName: () => 'Grid',
@@ -389,8 +392,12 @@ describe('buildSheetsPrintPayload', () => {
       'Book.pdf',
       'S',
     )
-    expect(payload.html).toContain('<tr style="height:27pt">')
-    expect(payload.html).not.toContain('<tr style="height:15pt">')
+    expect(payload.html).toContain('<tr style="height:15pt">')
+    expect(payload.html).not.toContain('<tr style="height:27pt">')
+    // The line box clamps to the declaration minus the cell padding.
+    expect(payload.html).toContain('line-height:13pt')
+    // The oversized text still prints (clipped at the row edge, not dropped).
+    expect(payload.html).toContain('>tall<')
   })
 
   it('styles fillers of merges anchored above the print area', () => {
