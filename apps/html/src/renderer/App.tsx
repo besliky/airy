@@ -966,7 +966,7 @@ export default function App() {
   }
 
   const doSave = useCallback(
-    async (mode: SaveMode, suggestedName?: string): Promise<boolean> => {
+    async (mode: SaveMode, suggestedName?: string, auto = false): Promise<boolean> => {
       if (statusRef.current !== 'ready') return false
       // uncommitted live style pokes belong to the document being saved
       flushPending()
@@ -984,6 +984,7 @@ export default function App() {
           mode,
           suggestedName,
           defaultName: provisionalNameRef.current ?? undefined,
+          auto: auto || undefined,
         })
         if (result.ok && 'path' in result) {
           setPath((previous) => {
@@ -1154,7 +1155,8 @@ export default function App() {
       if (savingRef.current) return
       flushPending()
       if (textRef.current === savedTextRef.current) return
-      void doSave('save')
+      // auto saves are declined silently by the staleness fence (no modal)
+      void doSave('save', undefined, true)
     }
     const id = window.setInterval(tick, 30_000)
     window.addEventListener('blur', tick)

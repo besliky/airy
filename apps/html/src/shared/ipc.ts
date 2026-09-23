@@ -100,6 +100,12 @@ export interface SaveHtmlRequest {
   suggestedName?: string
   /** Default file name offered by the save dialog of an untitled document */
   defaultName?: string
+  /**
+   * Marks an automatic save (the autosave tick / window blur). When the
+   * staleness fence refuses the write, an auto save is declined without the
+   * external-change dialog instead of popping a modal every 30 seconds.
+   */
+  auto?: boolean
 }
 
 export type SaveHtmlResult =

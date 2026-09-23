@@ -294,52 +294,62 @@ export default function App() {
   }, [])
 
   /** Serialize and write to disk; false when canceled/failed (caller keeps the tab open) */
-  const doSave = useCallback(async (mode: SaveMode, suggestedName?: string): Promise<boolean> => {
-    const current = editorRef.current
-    if (!current || statusRef.current !== 'ready' || savingRef.current) return false
-    savingRef.current = true
-    setSaveState('saving')
-    try {
-      // edits landing while the write is in flight (AI streaming, fast typing)
-      // must keep the document dirty — compare doc identity after the await
-      const docAtSave = current.state.doc
-      const fmAtSave = envelopeRef.current.frontmatter
-      const body = current.getMarkdown()
-      const text = serializeDocText(envelopeRef.current, body)
-      const imageSources = imageSourcesFromEditor(current)
-      const result = await window.markdownApi.save({ text, imageSources, mode, suggestedName })
-      if (result.ok && 'path' in result) {
-        const unchanged =
-          editorRef.current?.state.doc === docAtSave && envelopeRef.current.frontmatter === fmAtSave
-        if (result.imageRewrites?.length && editorRef.current) {
-          applyImageRewrites(editorRef.current, result.imageRewrites)
+  const doSave = useCallback(
+    async (mode: SaveMode, suggestedName?: string, auto = false): Promise<boolean> => {
+      const current = editorRef.current
+      if (!current || statusRef.current !== 'ready' || savingRef.current) return false
+      savingRef.current = true
+      setSaveState('saving')
+      try {
+        // edits landing while the write is in flight (AI streaming, fast typing)
+        // must keep the document dirty — compare doc identity after the await
+        const docAtSave = current.state.doc
+        const fmAtSave = envelopeRef.current.frontmatter
+        const body = current.getMarkdown()
+        const text = serializeDocText(envelopeRef.current, body)
+        const imageSources = imageSourcesFromEditor(current)
+        const result = await window.markdownApi.save({
+          text,
+          imageSources,
+          mode,
+          suggestedName,
+          auto: auto || undefined,
+        })
+        if (result.ok && 'path' in result) {
+          const unchanged =
+            editorRef.current?.state.doc === docAtSave &&
+            envelopeRef.current.frontmatter === fmAtSave
+          if (result.imageRewrites?.length && editorRef.current) {
+            applyImageRewrites(editorRef.current, result.imageRewrites)
+          }
+          setImageBaseDir(dirOf(result.path))
+          setFilePath(result.path)
+          if (unchanged) {
+            dirtyRef.current = false
+            setDirty(false)
+            window.markdownApi.setDirty(false)
+            setSaveState('saved')
+          } else {
+            // the main process cleared its dirty flag on write — re-assert it
+            dirtyRef.current = true
+            setDirty(true)
+            window.markdownApi.setDirty(true)
+            setSaveState('idle')
+          }
+          return true
         }
-        setImageBaseDir(dirOf(result.path))
-        setFilePath(result.path)
-        if (unchanged) {
-          dirtyRef.current = false
-          setDirty(false)
-          window.markdownApi.setDirty(false)
-          setSaveState('saved')
-        } else {
-          // the main process cleared its dirty flag on write — re-assert it
-          dirtyRef.current = true
-          setDirty(true)
-          window.markdownApi.setDirty(true)
-          setSaveState('idle')
-        }
-        return true
+        setSaveState(result.ok ? 'idle' : 'failed')
+        return false
+      } catch (err) {
+        console.error('[markdown] save failed:', err)
+        setSaveState('failed')
+        return false
+      } finally {
+        savingRef.current = false
       }
-      setSaveState(result.ok ? 'idle' : 'failed')
-      return false
-    } catch (err) {
-      console.error('[markdown] save failed:', err)
-      setSaveState('failed')
-      return false
-    } finally {
-      savingRef.current = false
-    }
-  }, [])
+    },
+    [],
+  )
 
   const runExport = useCallback(async (format: ExportFormat) => {
     const current = editorRef.current
@@ -531,7 +541,8 @@ export default function App() {
     const tick = () => {
       if (!dirtyRef.current) return
       if (editorRef.current?.view.composing) return // don't interrupt IME input
-      void doSave('save')
+      // auto saves are declined silently by the staleness fence (no modal)
+      void doSave('save', undefined, true)
     }
     const id = window.setInterval(tick, 30_000)
     window.addEventListener('blur', tick)

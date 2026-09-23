@@ -96,6 +96,12 @@ export {
 } from './print-html-pdf'
 export { crashErrorPageUrl, isRecoverableRendererCrash, voidLoad } from './process-safety'
 export {
+  checkSaveStaleness,
+  statFileStamp,
+  type FileStamp,
+  type StalenessVerdict,
+} from './save-staleness'
+export {
   forgetRendererFileAccess,
   grantRendererDir,
   grantRendererFileAccess,
