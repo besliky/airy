@@ -255,6 +255,7 @@ import { createWindowCloseGuard } from './window-close-guard'
 import { ShellWindowRegistry, type ShellWindowEntry } from './shell-windows'
 import { startShellBridge, stopShellBridge } from './bridge/shell-bridge'
 import { cancelPendingInstall, flushPendingInstall, initUpdater, updaterMenuItems } from './updater'
+import { initShellDiagnostics } from './crash-diagnostics'
 
 /**
  * Airy unified shell: ONE Electron app hosting the docs/sheets modules as
@@ -289,6 +290,14 @@ if (app.isPackaged) {
     }
   }
 }
+
+// ---- crash diagnostics (UX-1628), BEFORE the heavy startup phases ----
+// Local-only Crashpad minidumps (userData/crash-dumps, uploadToServer:false)
+// and a size-capped ring log of the main process (userData/logs, with the
+// existing console.error diagnostics tee-ed into it), so an "the app closed
+// itself" report becomes diagnosable post-factum. Init never throws and the
+// diagnostics never touch the network; see crash-diagnostics.ts.
+initShellDiagnostics({ userDataDir: app.getPath('userData') })
 
 // module build outputs: packaged builds carry them as extraResources
 // (resources/modules/*, resources/native/*); dev/unpacked resolves them
