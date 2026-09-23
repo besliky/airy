@@ -490,8 +490,13 @@ function chartGeometry(chart: ChartRenderNode, defs: string[]): string {
       const rot = l.rotationDeg
         ? ` transform="rotate(${l.rotationDeg} ${l.x.toFixed(2)} ${y.toFixed(2)})"`
         : ''
+      // same chain the canvas draws chart labels with (ChartBody): the export
+      // window cannot resolve Calibri/Carlito by name on typical Linux, so the
+      // matching @font-face rides along (exportFontFaces keys off these very
+      // families — BUG-1621: a hardcoded OS stack drew every label with the
+      // default sans, embedding LiberationSans instead of Carlito)
       return `<text x="${l.x.toFixed(2)}" y="${y.toFixed(2)}" ${fontAttrs({
-        fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+        fontFamily: 'Calibri, Carlito, Arial, sans-serif',
         fontSizePx: l.fontSizePx,
         bold: l.bold,
         italic: l.italic,

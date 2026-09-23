@@ -10,13 +10,17 @@ import { describe, expect, it } from 'vitest'
 import {
   decideCjkHang,
   decideCjkShrinks,
+  failedHangStops,
   forbidsLineEnd,
   forbidsLineStart,
+  hangDecorationAttrs,
+  hangStyle,
   shrinkTargets,
   isCompressible,
   measuresAlignment,
   shrinkStyle,
   usesEastAsianRules,
+  type CharBox,
   type HangLineChars,
   type ShrinkLineChars,
 } from '../src/renderer/editor/cjk-punct-shrink'
@@ -162,6 +166,61 @@ describe('decideCjkHang', () => {
   it('keeps a hung stop while the rest of the line fits', () => {
     expect(decideCjkHang(hang({ natural: 644, hungWidth: EM }))).toBe('keep')
     expect(decideCjkHang(hang({ natural: 658, hungWidth: EM }))).toBeNull()
+  })
+})
+
+/**
+ * BUG-1608 live probes (Electron/Chromium, 2026-09-23): a stop whose advance
+ * is zeroed by letter-spacing paints its ink only while it is line-final; a
+ * pull Chromium refuses leaves the stop mid-line where the next glyph paints
+ * over it — an invisible comma (corporate doc 10, audit 2026-09-22 §4.1). The
+ * hang therefore keeps the zero-advance letter-spacing (the only inline
+ * reduction the breaker honors — a trailing negative margin leaves the break
+ * decision untouched), paints the glyph copy via .doc-cjkhang::after so the
+ * ink never depends on zero-advance painting, and withdraws refused pulls.
+ */
+describe('hang rendering', () => {
+  it('zeroes the advance for the breaker and hands the glyph to the ink copy', () => {
+    // letter-spacing only (no margin: it would not persuade the breaker); the
+    // ink copy in .doc-cjkhang::after paints the full glyph at the span's
+    // origin — the hang area past the text edge
+    expect(hangStyle(16.02, 0)).toBe('letter-spacing:-16.02px')
+    expect(hangStyle(16.02, 1)).toBe('letter-spacing:-15.02px')
+    const attrs = hangDecorationAttrs('，', 16.02, 0)
+    expect(attrs.class).toContain('doc-cjkhang')
+    expect(attrs['data-ch']).toBe('，')
+    expect(attrs.style).toBe('letter-spacing:-16.02px')
+  })
+
+  it('renders compression entries without the hang class', () => {
+    const attrs = hangDecorationAttrs('，', 2.5, 1)
+    expect(attrs['data-ch']).toBe('，')
+    expect(attrs.style).toBe('letter-spacing:-1.5px')
+    expect(shrinkStyle('，', 2.5, 1)).toBe('letter-spacing:-1.5px')
+  })
+
+  function char(from: number, ch: string, ea = true): CharBox {
+    return { ch, from, ea, width: EM, top: 0, bottom: EM, left: from * EM, right: (from + 1) * EM }
+  }
+
+  it('flags a decorated stop that a refused pull left mid-line', () => {
+    // line 1 ends with a body glyph: the pulled stop sits mid-line on line 2
+    const lines = [
+      [char(0, '一'), char(1, '变')],
+      [char(2, '变'), char(3, '，'), char(4, '一')],
+    ]
+    const decorated = (c: CharBox) => c.ch === '，'
+    expect(failedHangStops(lines, decorated)).toEqual([3])
+  })
+
+  it('keeps a line-final hung stop and ignores undecorated or non-stop glyphs', () => {
+    const lines = [
+      [char(0, '一'), char(1, '，')],
+      [char(2, '，'), char(3, '一'), char(4, '变')],
+    ]
+    // only the line-final stop (1) is decorated; the mid-line comma (2) is not
+    const decorated = (c: CharBox) => c.from === 1
+    expect(failedHangStops(lines, decorated)).toEqual([])
   })
 })
 

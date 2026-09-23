@@ -52,6 +52,24 @@ import { SettledParagraphCache } from './settled-measure'
  * compressible punctuation gets negative letter-spacing (opening brackets a
  * negative left margin, their blank half leads the glyph) so Chromium's greedy
  * breaker takes the same characters; pagination measures the decorated DOM.
+ *
+ * The hang path (no compressPunctuation) zeroes the stop's advance with a
+ * negative letter-spacing — the only inline reduction Blink's line breaker
+ * honors (a trailing negative margin leaves the break decision untouched,
+ * probed 2026-09-23) — so Chromium re-breaks and pulls the chain up exactly
+ * as before. Two defects around that zero advance are fixed here:
+ * - the ink is no longer trusted to Blink's zero-advance painting, which
+ *   vanishes when the stop is not line-final (the audit's invisible comma,
+ *   doc 10) and varies with zoom/hinting: the decoration span carries the
+ *   stop in data-ch and the .doc-cjkhang::after rule paints a positioned
+ *   copy of the glyph at the span's origin — the hang area past the text
+ *   edge — deterministically;
+ * - a pull Blink refuses (the canvas model's line budget drifts a few px
+ *   from the real layout) leaves the stop mid-line: the next pass detects
+ *   the stop off line-final position, withdraws the decoration and
+ *   blacklists it until the document changes. The paragraph settles into the
+ *   natural wrap — Word's drop-the-pair outcome for a line that cannot take
+ *   the pull — with the glyph plainly visible.
  */
 
 /** trailing-blank punctuation Word compresses (JIS stops and closing brackets) */
@@ -85,12 +103,52 @@ export function usesEastAsianRules(eastAsiaLang: string | null | undefined): boo
   return !eastAsiaLang || /^(ja|zh)(-|$)/i.test(eastAsiaLang)
 }
 
+const px = (v: number) => Math.round(v * 100) / 100
+
 /** decoration style compressing one glyph by perChar px (baseLs: inherited letter-spacing it replaces) */
 export function shrinkStyle(ch: string, perChar: number, baseLs: number): string {
-  const px = (v: number) => Math.round(v * 100) / 100
   return COMPRESSIBLE_OPEN.has(ch)
     ? `margin-left:${px(-perChar)}px`
     : `letter-spacing:${px(baseLs - perChar)}px`
+}
+
+/**
+ * Decoration style for a hung stop: zero the advance so Chromium's breaker
+ * pulls the chain up (same geometry as the compression path — the line's
+ * measured extent is unchanged), while the .doc-cjkhang::after rule paints
+ * the glyph copy at the span's origin, deterministically inking the hang area
+ * past the text edge regardless of Blink's zero-advance painting.
+ */
+export function hangStyle(perChar: number, baseLs: number): string {
+  return `letter-spacing:${px(baseLs - perChar)}px`
+}
+
+/**
+ * DOM attributes of the hang decoration span: the class switches on the
+ * .doc-cjkhang::after ink copy, data-ch feeds it the stop's glyph.
+ */
+export function hangDecorationAttrs(
+  ch: string,
+  perChar: number,
+  baseLs: number,
+): Record<string, string> {
+  return {
+    class: 'doc-cjkshrink doc-cjkhang',
+    style: hangStyle(perChar, baseLs),
+    'data-ch': ch,
+  }
+}
+
+/** Which rendering a measured entry gets: compression or hang (zero advance + ink copy) */
+export function decorationStyle(entry: {
+  ch: string
+  perChar: number
+  baseLs: number
+  hang?: boolean
+}): string {
+  return entry.hang
+    ? hangStyle(entry.perChar, entry.baseLs)
+    : shrinkStyle(entry.ch, entry.perChar, entry.baseLs)
 }
 const CJK_RE = /[⺀-〿぀-ヿㇰ-䶿一-鿿豈-﫿＀-￯]/
 
@@ -147,9 +205,34 @@ interface CharBox {
   right: number
 }
 
+export type { CharBox }
+
 const isPunct = (c: CharBox) => c.ea && COMPRESSIBLE.has(c.ch)
 const isClose = (c: CharBox) => c.ea && COMPRESSIBLE_CLOSE.has(c.ch)
 const isKinsokuClose = (c: CharBox) => c.ea && KINSOKU_CLOSE.has(c.ch)
+
+/**
+ * Hang stops that are decorated but no longer line-final: Blink refused the
+ * pull, and a stop left mid-line would have the next glyph painted over its
+ * cell (with the advance kept, its ink overlaps; with the old zeroing it
+ * vanished under the next glyph). The caller withdraws the decoration and
+ * blacklists the stop until the document changes, settling the paragraph into
+ * the natural wrap where Word also lands (a line that cannot take the pull
+ * drops the pair).
+ */
+export function failedHangStops(
+  lines: CharBox[][],
+  isDecorated: (c: CharBox) => boolean,
+): number[] {
+  const out: number[] = []
+  for (const line of lines) {
+    const last = line.length ? line[line.length - 1].from : -1
+    for (const c of line) {
+      if (c.from !== last && isClose(c) && isDecorated(c)) out.push(c.from)
+    }
+  }
+  return out
+}
 
 interface MeasuredShrink {
   from: number
@@ -158,6 +241,8 @@ interface MeasuredShrink {
   /** paragraph base letter-spacing (px, docGrid charSpace): the decoration's
    *  own letter-spacing replaces the inherited value, so it must fold it in */
   baseLs: number
+  /** hang path: zero advance for the breaker, ink painted by .doc-cjkhang::after */
+  hang?: boolean
 }
 
 export interface ShrinkLineChars {
@@ -266,7 +351,14 @@ function charAdvancePx(cs: CSSStyleDeclaration, ch: string): number {
 }
 
 function sameLine(a: { top: number; bottom: number }, b: { top: number; bottom: number }): boolean {
-  return a.top < b.bottom - 1 && a.bottom > b.top + 1
+  // caret boxes can be taller than the line pitch (docGrid snaps the pitch to
+  // 15.6pt while a 12pt CJK run's caret box is ~17.4pt), so adjacent lines'
+  // rects overlap by a sliver and a plain overlap test merges the whole
+  // paragraph into one "line". Same line = the rects overlap across at least
+  // half of the smaller box: superscripts keep grouping with their body while
+  // a sliver-overlapping neighbor line splits off.
+  const overlap = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)
+  return overlap > Math.min(a.bottom - a.top, b.bottom - b.top) / 2
 }
 
 class CjkPunctShrinkView {
@@ -278,6 +370,8 @@ class CjkPunctShrinkView {
   private retries = 0
   private resizeObserver?: ResizeObserver
   private lastDomWidth = -1
+  /** hang stops whose pull Blink refused: never re-pull until the doc changes */
+  private failedPulls = new Set<number>()
   private onFontsLoaded = () => {
     // canvas advances measured before a @font-face finished loading are stale
     advanceCache.clear()
@@ -312,6 +406,7 @@ class CjkPunctShrinkView {
   private invalidate() {
     this.seenSigs.clear()
     this.results.clear()
+    this.failedPulls.clear()
     this.frozen = false
     this.lastSig = ''
   }
@@ -414,10 +509,13 @@ class CjkPunctShrinkView {
 
     if (shrinks.length === 0 && (!old || old === DecorationSet.empty)) return
     const decos = shrinks.map((s) =>
-      Decoration.inline(s.from, s.from + 1, {
-        class: 'doc-cjkshrink',
-        style: shrinkStyle(s.ch, s.perChar, s.baseLs),
-      }),
+      Decoration.inline(
+        s.from,
+        s.from + 1,
+        s.hang
+          ? hangDecorationAttrs(s.ch, s.perChar, s.baseLs)
+          : { class: 'doc-cjkshrink', style: decorationStyle(s) },
+      ),
     )
     view.dispatch(
       view.state.tr.setMeta(cjkPunctShrinkPluginKey, decos).setMeta('addToHistory', false),
@@ -597,6 +695,9 @@ class CjkPunctShrinkView {
 
     const out: MeasuredShrink[] = []
     if (!this.storage.enabled) {
+      // a decorated stop that Blink left mid-line = a refused pull: withdraw it
+      // and keep the natural wrap (visible glyph) instead of a swallowed stop
+      for (const from of failedHangStops(lines, (c) => decorated(c))) this.failedPulls.add(from)
       lines.forEach((line, k) => {
         const decision = decideCjkHang(hangModels[k])
         if (decision === null) return
@@ -604,7 +705,8 @@ class CjkPunctShrinkView {
           decision === 'keep'
             ? line[line.length - 1]
             : lines[k + 1][hangModels[k].candWidths.length - 1]
-        out.push({ from: stop.from, ch: stop.ch, perChar: stop.width, baseLs })
+        if (this.failedPulls.has(stop.from)) return
+        out.push({ from: stop.from, ch: stop.ch, perChar: stop.width, baseLs, hang: true })
       })
       return out
     }
