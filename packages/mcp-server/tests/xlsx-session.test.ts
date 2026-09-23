@@ -31,7 +31,8 @@ vi.mock('../src/import/soffice.js', () => ({
   }),
 }))
 
-import { XlsxSession, parseA1Range } from '../src/xlsx/session.js'
+import { XlsxSession } from '../src/xlsx/session.js'
+import { parseA1Range } from '../src/xlsx/refs.js'
 import { FencingError } from '../src/docx/session.js'
 import { makeStubIo } from './helpers/stub-sidecar.js'
 
