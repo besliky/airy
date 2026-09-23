@@ -39,6 +39,7 @@ import {
   shiftSpecForOp,
   type ShiftSpec,
 } from './formula-shift'
+import { removeSheetFormulaText } from '../gateway/xlsx-structure'
 import type {
   CellChange,
   CellFormatState,
@@ -461,18 +462,22 @@ function applyStructuralOp(snapshot: WorkbookSnapshot, op: StructuralOperation):
       sheets.findIndex((candidate) => candidate.id === op.sheetId),
       1,
     )
-    // Formulas referencing the deleted sheet keep their text (Excel would
-    // show #REF!); surface them so the plan can warn.
+    // Excel semantics: formulas referencing the removed sheet rewrite to
+    // bare #REF! tokens (same rewriter the save path uses), so the cells
+    // show the error instead of silently keeping a dangling reference.
+    // Surface the rewritten cells so the plan can warn.
     const danglers: string[] = []
-    const namePattern = new RegExp(
-      `(?:'${sheet.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'|\\b${sheet.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})!`,
-    )
     for (const candidate of snapshot.sheets) {
+      let nextCells: Record<string, CellState> | null = null
       for (const [address, cell] of Object.entries(candidate.cells)) {
-        if (cell.formula && namePattern.test(cell.formula)) {
-          danglers.push(`${candidate.name}!${address}`)
-        }
+        if (!cell.formula) continue
+        const rewritten = removeSheetFormulaText(cell.formula, sheet.name)
+        if (rewritten === null) continue
+        nextCells ??= { ...candidate.cells }
+        nextCells[address] = { ...cell, formula: rewritten }
+        danglers.push(`${candidate.name}!${address}`)
       }
+      if (nextCells) replaceSheet(snapshot, { ...candidate, cells: nextCells })
     }
     return danglers
   }

@@ -50,8 +50,10 @@ import {
 } from './plan-operations'
 import {
   collectCrossSheetDependentRewrites,
+  collectRemovedSheetDependentRewrites,
   deleteSpanSpec,
   finishCrossSheetRewrites,
+  finishRemovedSheetRewrites,
 } from './delete-ref-rewrite'
 import { isNumericIdentifierText } from './cell-warning'
 import { consumePendingUndoCarry, undoStackDepth } from './undo-carry'
@@ -2713,6 +2715,67 @@ export function App(): React.JSX.Element {
         if (STRUCTURE_LOCK_COMMANDS.has(event.id) && workbookStructureLocked(state)) {
           event.cancel = true
           setMessage(t('appWorkbookStructureLocked'))
+          return
+        }
+        if (event.id === 'sheet.command.remove-sheet') {
+          // Excel semantics for removing a sheet: dependent formulas on every
+          // surviving sheet rewrite to bare #REF! tokens, so the cells show
+          // the error instead of silently emptying and the save carries
+          // SUM(#REF!) formulas instead of dangling references (which the
+          // save would refuse). Univer only detaches the worksheet — the
+          // cross-sheet rewrite is this app's job, like the row/column flow
+          // above. Dependent cells never move, so collect from the
+          // pre-removal model, then apply once the removal actually landed
+          // (CommandExecuted fires for declined commands too: the last-sheet
+          // refusal, a cancelled gate).
+          const params = event.params as { subUnitId?: string } | undefined
+          const uiWorkbook = runtime.univerAPI.getActiveWorkbook()
+          const target =
+            params?.subUnitId !== undefined
+              ? uiWorkbook?.getSheetBySheetId(params.subUnitId)
+              : undefined
+          if (target && uiWorkbook) {
+            const removedSheetId = target.getSheetId()
+            const removedSheetName = target.getSheetName()
+            const rewrites = collectRemovedSheetDependentRewrites(
+              state,
+              uiWorkbook,
+              removedSheetId,
+              removedSheetName,
+            )
+            if (rewrites.length > 0) {
+              let settled = false
+              const finish = () => {
+                if (settled) return
+                settled = true
+                disposable.dispose()
+                clearTimeout(safety)
+                // The rewrites batch into one undo item on top of the
+                // removal's: ⌘Z restores the original formulas, a second
+                // ⌘Z the sheet (the AI path's open batch already folds
+                // them into its own).
+                finishRemovedSheetRewrites({
+                  runtime,
+                  state,
+                  workbook: uiWorkbook,
+                  removedSheetId,
+                  removedSheetName,
+                  rewrites,
+                  beginBatch: aiBulkUndoGate.active ? null : () => beginUndoBatch(runtime),
+                })
+              }
+              const disposable = runtime.univerAPI.addEvent(
+                runtime.univerAPI.Event.CommandExecuted,
+                (executed) => {
+                  if (executed.id !== 'sheet.command.remove-sheet') return
+                  finish()
+                },
+              )
+              // Safety valve: dispose the one-shot listener if the command
+              // never completes (canceled by a later gate).
+              const safety = setTimeout(finish, 5000)
+            }
+          }
           return
         }
         if (event.id === COPY_SHEET_COMMAND) {

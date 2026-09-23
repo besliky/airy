@@ -20,6 +20,7 @@ import {
 } from '../src/gateway/xlsx-sheets'
 import {
   buildCompatibilityFixture,
+  buildDependentSheetFixture,
   buildSatelliteSheetFixture,
   buildSheetsFixture,
 } from './fixture-builder'
@@ -234,6 +235,33 @@ describe('sheet remove save', () => {
         order: ['Other', 'My Sheet'],
       }),
     ).rejects.toThrow('"Data"')
+  })
+
+  it('carries a #REF!-rewritten dependent formula through a referenced-sheet removal', async () => {
+    // The live model rewrote Keep!A1 before the removal (the BUG-1662 gate
+    // flow), so the referenced-sheet refusal no longer trips and the file
+    // stores the error formula exactly like Excel's own delete-sheet: the
+    // qualifier drops, the cell reads #REF! on reload.
+    const mutation = await applyCellEditsToXlsx(
+      await buildDependentSheetFixture(),
+      [
+        {
+          sheetName: 'Keep',
+          row: 0,
+          column: 0,
+          writeValue: true,
+          cell: { value: null, formula: '=SUM(#REF!)' },
+        },
+      ],
+      [],
+      [],
+      { renames: [], additions: [], removals: ['Data'], order: ['Keep'] },
+    )
+    expect(() => assertOnlyTouchedEntriesChanged(mutation)).not.toThrow()
+    const zip = await JSZip.loadAsync(mutation.buffer)
+    expect(zip.file('xl/worksheets/sheet2.xml')).toBeNull()
+    const keep = await zip.file('xl/worksheets/sheet1.xml')?.async('text')
+    expect(keep).toContain('<f>SUM(#REF!)</f>')
   })
 
   it('refuses to remove the last visible sheet', async () => {

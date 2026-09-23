@@ -140,6 +140,60 @@ const structureOtherWorksheet = `<?xml version="1.0" encoding="UTF-8"?>
   </sheetData>
 </worksheet>`
 
+/// Minimal two-sheet book for the delete-sheet #REF! save flow (BUG-1662):
+/// "Keep" holds a single formula qualified with the "Data" sheet; "Data"
+/// holds the source values. No charts, defined names, or satellite parts —
+/// only the formula reference can block (or, once rewritten to #REF!,
+/// allow) the removal.
+export async function buildDependentSheetFixture(): Promise<Buffer> {
+  const zip = new JSZip()
+  zip.file('[Content_Types].xml', dependentContentTypes)
+  zip.file('_rels/.rels', packageRelationships)
+  zip.file('xl/workbook.xml', dependentWorkbook)
+  zip.file('xl/_rels/workbook.xml.rels', dependentWorkbookRelationships)
+  zip.file('xl/worksheets/sheet1.xml', dependentKeepWorksheet)
+  zip.file('xl/worksheets/sheet2.xml', dependentDataWorksheet)
+  zip.file('xl/styles.xml', styles)
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+}
+
+const dependentContentTypes = `<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`
+
+const dependentWorkbook = `<?xml version="1.0" encoding="UTF-8"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="Keep" sheetId="1" r:id="rId1"/><sheet name="Data" sheetId="2" r:id="rId2"/></sheets>
+</workbook>`
+
+const dependentWorkbookRelationships = `<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`
+
+const dependentKeepWorksheet = `<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+    <row r="1"><c r="A1"><f>SUM(Data!A1:B2)</f><v>3</v></c></row>
+  </sheetData>
+</worksheet>`
+
+const dependentDataWorksheet = `<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+    <row r="1"><c r="A1"><v>1</v></c></row>
+    <row r="2"><c r="B2"><v>2</v></c></row>
+  </sheetData>
+</worksheet>`
+
 /// Exercises sheet rename/add/remove: three sheets (one with a quoted name),
 /// cross-sheet formulas, an internal hyperlink anchor, a chart series
 /// reference, scoped and global defined names, an active tab, and calcChain.
