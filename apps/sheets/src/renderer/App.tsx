@@ -55,6 +55,7 @@ import {
 } from './delete-ref-rewrite'
 import { isNumericIdentifierText } from './cell-warning'
 import { consumePendingUndoCarry, undoStackDepth } from './undo-carry'
+import { installEdgeNavigationGrowth } from './grid-grow'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useAutoSavePref, type AiScopeQuoteData } from '@airy-office/ui'
 
@@ -1497,6 +1498,10 @@ export function App(): React.JSX.Element {
     installInjectorResolutionGuard(runtime)
     // find-bar reveals share scrollToCell's broken freeze offset (r135)
     const findRevealDispose = installFindRevealFix(runtime)
+    // BUG-1615: arrow keys at the grid's edge grow the sheet instead of
+    // stopping at a new book's hardcoded 1000×26 (Name Box growth lives in
+    // goToReference).
+    const edgeGrowthDisposable = installEdgeNavigationGrowth(runtime)
     // Load-time wrap-row measures queue until Univer's auto-height
     // interceptor exists (lifecycle Rendered).
     const wrapMeasureDisposable = installWrapMeasureLifecycle(runtime)
@@ -2922,6 +2927,7 @@ export function App(): React.JSX.Element {
       offThemeChanged?.()
       undoRedoSub.unsubscribe()
       findRevealDispose()
+      edgeGrowthDisposable.dispose()
       wrapMeasureDisposable.dispose()
       prefersDark.removeEventListener('change', applyUniverDark)
       dateTextDisposable.dispose()
