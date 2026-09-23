@@ -1113,13 +1113,12 @@ function bundledFaceKeys(): Set<string> {
  *  - private faces of the open deck (Office DFonts / cloud fonts / user
  *    store / document embeds): Chromium cannot see those files at all;
  *  - the bundled metric substitute (Carlito, referenced directly as the
- *    drawing family 'Carlito GO' or reached through the alias chain when a
- *    deck's raw 'Calibri' met no system font — the same substitution the
- *    layout measured with).
+ *    drawing family 'Carlito GO' or reached through the alias chain from a
+ *    deck's raw 'Calibri' — the same substitute the layout measured with).
  *
- * Families that resolve to a normal installed font are omitted: the export
- * window resolves them by name, and inlining system fonts would bloat the
- * HTML by megabytes for no fidelity gain.
+ * Families outside the bundle are omitted: the export window resolves them
+ * by name, and inlining system fonts would bloat the HTML by megabytes for
+ * no fidelity gain.
  */
 export function exportFontFaces(families: readonly string[]): ExportFontFace[] {
   const out: ExportFontFace[] = []
@@ -1144,26 +1143,19 @@ export function exportFontFaces(families: readonly string[]): ExportFontFace[] {
         /* unreadable face: the export falls back, as before the fix */
       }
     }
-    // bundled substitute: the name itself (Carlito / Carlito GO) or an alias
-    // chain landing on a bundled file (raw Calibri without a system Calibri).
-    // Substituted hits (an absent family's same-script stand-in) do NOT
-    // count: the layout never drew the missing family with the substitute's
-    // name, and inlining it under the absent name would ship a font the
-    // pages never reference.
-    let resolvesToBundled: boolean
-    try {
-      const hit = getRegistry().resolve({
-        fontFamily: family,
-        fontSizePx: 100,
-        bold: false,
-        italic: false,
-      })
-      resolvesToBundled =
-        !!hit && hit.substituted !== true && BUNDLED_VARIANTS.some((v) => v.path === hit.path)
-    } catch {
-      resolvesToBundled = false
-    }
-    if (bundledFaceKeys().has(key) || resolvesToBundled) {
+    // Bundled substitute: the name itself (Carlito / Carlito GO) or a family the
+    // alias chain maps onto the bundle (raw 'Calibri' — PowerPoint decks alias it
+    // to Carlito, the substitute the layout measured with). The decision is
+    // deliberately static (BUG-1621): consulting the system resolve made the
+    // inline depend on installed fonts — wherever a system Carlito/Calibri file
+    // won the registry lookup the inline was skipped, yet the sandboxed export
+    // window (no app stylesheet, no such system font on typical Linux) fell back
+    // to the default sans. The SVG pages ask for these names, so the bundled
+    // bytes must answer to them regardless of what the system happens to have.
+    if (
+      bundledFaceKeys().has(key) ||
+      aliasesOf(family).some((a) => bundledFaceKeys().has(norm(a)))
+    ) {
       for (const variant of BUNDLED_VARIANTS) {
         try {
           emit({
