@@ -16,6 +16,7 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::SidecarError;
 use crate::legacy_xls::{self, SheetStrings};
+use crate::ole2::validate_ole2_header;
 use crate::xls_layout::{self, StyleInterner};
 
 #[derive(Debug)]
@@ -61,8 +62,16 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
         .map(|metadata| metadata.len())
         .unwrap_or(0);
     validate_zip_based_source(source)?;
-    let mut workbook = open_workbook_auto(source)
-        .map_err(|error| SidecarError::Workbook(format!("Unable to read the workbook: {error}")))?;
+    // BUG-1606: refuse truncated compound-file headers before calamine
+    // touches them — its CFB reader panics (index out of bounds) on that
+    // class instead of returning an error, and the panic kills the sidecar.
+    validate_ole2_header(source)?;
+    let mut workbook =
+        contain_calamine_panic(|| open_workbook_auto(source)).and_then(|opened| {
+            opened.map_err(|error| {
+                SidecarError::Workbook(format!("Unable to read the workbook: {error}"))
+            })
+        })?;
     // BUG-1600: calamine decodes legacy .xls strings through the workbook
     // codepage even when a string's own fHighByte flag selects UTF-16, so
     // single-byte-codepage books come out as mojibake. The overlay is the
@@ -81,10 +90,13 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
     let mut sheet_xmls: Vec<String> = Vec::new();
     let mut cells = 0usize;
     for (index, name) in names.iter().enumerate() {
-        let range = workbook
-            .worksheet_range(name)
-            .map_err(|error| SidecarError::Workbook(format!("Sheet {name}: {error}")))?;
-        let formulas = workbook.worksheet_formula(name).ok();
+        let range =
+            contain_calamine_panic(|| workbook.worksheet_range(name)).and_then(|range| {
+                range.map_err(|error| SidecarError::Workbook(format!("Sheet {name}: {error}")))
+            })?;
+        let formulas = contain_calamine_panic(|| workbook.worksheet_formula(name))
+            .ok()
+            .and_then(|formulas| formulas.ok());
         let mut formula_map: HashMap<(u32, u32), String> = HashMap::new();
         if let Some(formula_range) = formulas {
             let (start_row, start_col) = formula_range.start().unwrap_or((0, 0));
@@ -136,6 +148,27 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
         sheets: names.len(),
         cells,
         source_bytes,
+    })
+}
+
+/// BUG-1606: calamine panics instead of returning an error on some
+/// malformed compound files (slice indexing in its CFB reader, and any
+/// future panic on hostile input), and a panic takes the whole sidecar
+/// down with it. The header fence in `ole2` refuses the truncated-header
+/// class before calamine opens the file; this wrapper is the safety net
+/// for anything that slips past it — every calamine call on the convert
+/// path degrades to a normal workbook error. Mirrors the recalc path's
+/// containment of IronCalc panics.
+fn contain_calamine_panic<T>(read: impl FnOnce() -> T) -> Result<T, SidecarError> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(read)).map_err(|payload| {
+        let detail = payload
+            .downcast_ref::<&str>()
+            .map(|text| (*text).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "unexpected internal failure".to_owned());
+        SidecarError::Workbook(format!(
+            "Unable to read the workbook: malformed file stopped the reader ({detail})."
+        ))
     })
 }
 
@@ -426,6 +459,7 @@ fn workbook_rels_xml(sheet_count: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ole2::test_fixtures;
     use std::io::Read;
 
     fn read_entry(path: &Path, name: &str) -> String {
@@ -754,6 +788,93 @@ mod tests {
             let path = dir.path().join("cut.xls");
             std::fs::write(&path, &full[..cut]).unwrap();
             let _ = xls_layout::WorkbookLayout::extract(&path);
+        }
+    }
+
+    /// BUG-1606: the exact truncated-header shape behind the calamine panic
+    /// (slice index failure at cfb.rs:306): a well-formed magic and sector
+    /// shift, but the only FAT sector named by the header DIFAT lies beyond
+    /// the end of the file, so calamine slices past the bytes it read while
+    /// loading the FAT. Must refuse with a normal conversion error, not
+    /// crash the sidecar.
+    #[test]
+    fn refuses_a_header_whose_fat_sector_lies_beyond_eof() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("cut-fat.xls");
+        let mut bytes = test_fixtures::zeros(2);
+        bytes[76..80].copy_from_slice(&9u32.to_le_bytes()); // DIFAT[0] = 9
+        std::fs::write(&source, bytes).unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let error = convert_to_xlsx(&source, &target).unwrap_err();
+        let message = error.to_string();
+        assert!(
+            message.contains("truncated or corrupt"),
+            "expected the OLE2 fence refusal, got: {message}"
+        );
+        assert!(!target.exists());
+    }
+
+    /// BUG-1606: a header the fence accepts must still fail gracefully when
+    /// calamine finds nothing readable inside — this structurally valid
+    /// compound file has no Workbook stream, and that is an error, not a
+    /// crash. (The fixture is content-valid on purpose: an all-zero FAT
+    /// would trip the fence's empty-FAT refusal instead of exercising the
+    /// calamine path, and makes calamine 0.36 allocate without bound.)
+    #[test]
+    fn reports_a_streamless_valid_compound_file_as_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("empty.xls");
+        std::fs::write(&source, test_fixtures::valid_cfb(0)).unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let error = convert_to_xlsx(&source, &target).unwrap_err();
+        assert!(
+            error.to_string().contains("Unable to read the workbook"),
+            "{error}"
+        );
+        assert!(!target.exists());
+    }
+
+    /// BUG-1606: the smallest compound file calamine can actually convert —
+    /// built programmatically (header, FAT, directory, one 4096-byte
+    /// Workbook stream with a BIFF8 globals+sheet stub) — passes the fence
+    /// and converts end to end.
+    #[test]
+    fn converts_a_minimal_programmatic_legacy_book() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("minimal.xls");
+        std::fs::write(&source, test_fixtures::minimal_biff8_cfb()).unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let result = convert_to_xlsx(&source, &target).unwrap();
+        assert_eq!(result.sheets, 1);
+        let workbook = read_entry(&target, "xl/workbook.xml");
+        assert!(workbook.contains(r#"<sheet name="S" sheetId="1" r:id="rId1"/>"#));
+    }
+
+    /// BUG-1606: cutting a real legacy book at every 64-byte boundary —
+    /// including every header truncation that used to panic inside
+    /// calamine's CFB reader — must end in a converted file or a normal
+    /// conversion error, never in a panic that kills the sidecar. Cuts are
+    /// generated in the test; no truncated fixture is committed.
+    #[test]
+    fn truncated_legacy_books_never_panic_the_convert_path() {
+        let full = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/bug-1602-merges-widths-styles.xls"
+        ))
+        .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        for cut in (0..full.len()).step_by(64) {
+            let path = dir.path().join("cut.xls");
+            std::fs::write(&path, &full[..cut]).unwrap();
+            let target = dir.path().join("converted.xlsx");
+            let _ = std::fs::remove_file(&target);
+            match convert_to_xlsx(&path, &target) {
+                Ok(_) => assert!(target.exists()),
+                Err(_) => assert!(!target.exists()),
+            }
         }
     }
 
