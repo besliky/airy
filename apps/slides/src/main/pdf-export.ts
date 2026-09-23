@@ -28,8 +28,8 @@ export interface EmbeddedFontFace {
   bytes: Uint8Array
 }
 
-/** families that never need an @font-face: CSS generics plus the system UI
- *  stacks slide-svg's chrome text uses (those render with the OS default) */
+/** families that never need an @font-face: CSS generics plus OS UI faces
+ *  ('Segoe UI' themes, fallback stacks) — those render with the OS default */
 const GENERIC_FAMILIES = new Set([
   'serif',
   'sans-serif',
