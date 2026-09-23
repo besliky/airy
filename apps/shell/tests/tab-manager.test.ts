@@ -375,31 +375,56 @@ describe('closing tabs', () => {
     expect(view.webContents.close).toHaveBeenCalledTimes(1)
   })
 
-  it('detaches docs views without destroying the webContents (freeze workaround)', async () => {
+  it('detaches docs views without destroying the webContents synchronously (freeze workaround)', async () => {
     const id = manager.openDocsTab()
     const view = lastCreatedView(createDocsView)
     await manager.closeTab(id)
     expect(shellWindow.contentView.removeChildView).toHaveBeenCalledWith(view)
+    // close() is never issued on the LIVE editor renderer — that is the path
+    // that wedges Electron's UI thread (BUG-409); it may only run after the
+    // renderer has been navigated away from the document
     expect(view.webContents.close).not.toHaveBeenCalled()
     // the orphaned renderer must be told to go inert (recovery-copy resurrection guard)
     expect(teardownDocsRenderer).toHaveBeenCalledWith(view.webContents)
   })
 
-  it('navigates the orphaned docs renderer to about:blank to release its heap (BUG-409)', async () => {
+  it('navigates the orphaned docs renderer to about:blank, then reclaims the process (BUG-409 + PERF-1640)', async () => {
     const id = manager.openDocsTab('/tmp/thesis.docx')
     const view = lastCreatedView(createDocsView)
     await manager.closeTab(id)
-    // the renderer is never destroyed (freeze workaround), so the whole docs
-    // app heap would live until quit; the teardown navigation drops it
+    // the renderer is never destroyed while the document is live (freeze
+    // workaround), so the whole docs app heap would live until quit; the
+    // teardown navigation drops it
     expect(view.webContents.loadURL).toHaveBeenCalledWith('about:blank')
-    // ...and still without entering the wedged close()/destroy() path
+    // still inside the same tick: the wedged close path is not touched
     expect(view.webContents.close).not.toHaveBeenCalled()
+    // once the navigation landed, the empty about:blank webContents is closed
+    // so the orphaned Chromium renderer process is reclaimed (PERF-1640)
+    await vi.waitFor(() => expect(view.webContents.close).toHaveBeenCalledTimes(1))
     // non-docs tabs are destroyed outright — no teardown navigation there
     const sheetsId = manager.openSheetsTab()
     const sheetsView = lastCreatedView(createSheetsView)
     await manager.closeTab(sheetsId)
     expect(sheetsView.webContents.loadURL).not.toHaveBeenCalled()
     expect(sheetsView.webContents.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the docs webContents orphaned when the teardown navigation never lands', async () => {
+    const id = manager.openDocsTab()
+    const view = lastCreatedView(createDocsView)
+    // a crashed renderer cannot complete the navigation — closeTab must not
+    // destroy the webContents behind a possibly-unanswered teardown
+    view.webContents.loadURL.mockImplementation(() => Promise.reject(new Error('renderer gone')))
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await manager.closeTab(id)
+      await new Promise((resolve) => setImmediate(resolve))
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(teardownDocsRenderer).toHaveBeenCalledWith(view.webContents)
+      expect(view.webContents.close).not.toHaveBeenCalled()
+    } finally {
+      errSpy.mockRestore()
+    }
   })
 
   it('closes a clean docs tab after the async dirty query says clean', async () => {

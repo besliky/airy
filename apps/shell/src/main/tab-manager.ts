@@ -817,6 +817,9 @@ export class TabManager {
     }
     if (removed.view) {
       removed.view.setVisible(false)
+      // drop the closed wc id from the bleed set — nothing else removes it and
+      // the set would otherwise grow by one stale id per closed tab (PERF-1640)
+      this.bleedWcIds.delete(removed.view.webContents.id)
       this.shellWindow.contentView.removeChildView(removed.view)
       this.detachTabAccelerators(removed.view.webContents)
       // webContents.close() drops everything with the renderer; the docs
@@ -835,10 +838,20 @@ export class TabManager {
         // whole docs app heap (document model, undo history, editor bundles)
         // until quit. Navigating the torn-down renderer to about:blank drops
         // all of that at once; a navigation does not enter the wedged native
-        // modal run loop that close()/destroy() hit. The renderer stays
-        // orphaned (by design), but only as an empty about:blank shell.
+        // modal run loop that close()/destroy() hit.
+        const wc = removed.view.webContents
+        // PERF-1640: the orphaned about:blank webContents still pins an entire
+        // Chromium renderer process (~180MB RSS each), so open/close cycles
+        // snowball into a multi-process, multi-hundred-MB retention envelope.
+        // Once the teardown navigation has landed there is no live editor left
+        // to tear down — closing the empty webContents then reclaims the
+        // renderer process without touching the wedged path above.
         voidLoad(
-          removed.view.webContents.loadURL('about:blank'),
+          wc.loadURL('about:blank').then(() => {
+            setImmediate(() => {
+              if (!wc.isDestroyed()) wc.close()
+            })
+          }),
           `about:blank teardown for tab ${removed.id}`,
         )
       } else {
