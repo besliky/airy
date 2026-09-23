@@ -27,11 +27,6 @@ export interface ParseMap {
   errorCount: number
 }
 
-interface BuildState {
-  nextSid: number
-  previous: ParseMap | null
-}
-
 function isElement(node: T.Node): node is T.Element {
   return 'tagName' in node && typeof (node as T.Element).tagName === 'string'
 }
@@ -77,17 +72,19 @@ function collect(
   walk(root, null, 0)
 }
 
-/** Reuse the previous sid for an element with the same tag, same parent sid and the closest start offset. */
+/** Reuse the previous sid for an element with the same tag, same parent sid and the closest start offset.
+ * Candidates are bucketed by tag+path so the lookup stays linear in the element count
+ * (a linear scan of the previous map made every rebuild O(elements²)). */
 function matchSid(
   entry: Omit<ElementEntry, 'sid'>,
-  previous: ParseMap | null,
+  candidates: Array<ElementEntry> | undefined,
   used: Set<number>,
 ): number | null {
-  if (!previous) return null
+  if (!candidates) return null
   let best: ElementEntry | null = null
   let bestDist = Infinity
-  for (const old of previous.elements) {
-    if (used.has(old.sid) || old.tag !== entry.tag || old.path !== entry.path) continue
+  for (const old of candidates) {
+    if (used.has(old.sid)) continue
     const dist = Math.abs(old.startTag[0] - entry.startTag[0])
     if (dist < bestDist) {
       best = old
@@ -114,10 +111,17 @@ export function buildParseMap(
   const found: Array<{ node: T.Element; parent: T.Element | null; depth: number }> = []
   collect(doc, found)
 
-  const state: BuildState = {
-    nextSid: previous ? Math.max(0, ...previous.elements.map((e) => e.sid)) + 1 : 1,
-    previous,
-  }
+  let nextSid = previous ? Math.max(0, ...previous.elements.map((e) => e.sid)) + 1 : 1
+  // bucket the previous elements by tag+path; buckets keep document order so the
+  // closest-offset pick sees candidates exactly as the linear scan did
+  const byTagPath = new Map<string, Array<ElementEntry>>()
+  if (previous)
+    for (const old of previous.elements) {
+      const key = `${old.tag}\u0000${old.path}`
+      const bucket = byTagPath.get(key)
+      if (bucket) bucket.push(old)
+      else byTagPath.set(key, [old])
+    }
   const used = new Set<number>()
   const sidByNode = new Map<T.Element, number>()
   const pathByNode = new Map<T.Element, string>()
@@ -154,7 +158,8 @@ export function buildParseMap(
       inner,
       path,
     }
-    const sid = matchSid(partial, state.previous, used) ?? state.nextSid++
+    const sid =
+      matchSid(partial, byTagPath.get(`${partial.tag}\u0000${partial.path}`), used) ?? nextSid++
     sidByNode.set(node, sid)
     elements.push({ sid, ...partial })
   }
