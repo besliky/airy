@@ -119,7 +119,17 @@ async function normalizeOoxmlParts(zip: JSZip): Promise<void> {
 
 /** Load a docx/zip resolving part names the way Word does. */
 export async function loadDocxZip(bytes: Uint8Array): Promise<JSZip> {
-  const zip = await JSZip.loadAsync(neutralizeUnicodePathFields(bytes))
+  let zip: JSZip
+  try {
+    zip = await JSZip.loadAsync(neutralizeUnicodePathFields(bytes))
+  } catch (err) {
+    // BUG-1609: a truncated or non-zip payload must refuse loudly instead of
+    // dying with JSZip's cryptic text; the original message stays embedded
+    // for diagnosis ("Can't find end of central directory", ...).
+    throw new Error(`docx file is corrupted: not a readable zip package (${String(err)})`, {
+      cause: err,
+    })
+  }
   assertZipWithinLimits(zip)
   await normalizeOoxmlParts(zip)
   return zip

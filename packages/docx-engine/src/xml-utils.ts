@@ -1,4 +1,4 @@
-import { XMLParser } from 'fast-xml-parser'
+import { XMLParser, XMLValidator } from 'fast-xml-parser'
 
 /** preserveOrder node shape from fast-xml-parser */
 export type XNode = Record<string, unknown>
@@ -13,6 +13,19 @@ const parserOptions = {
 } as const
 
 export const xmlParser = new XMLParser(parserOptions)
+
+/**
+ * Well-formedness check only (not schema validity): null when the XML parses,
+ * else a short reason with position. Recoverable quirks pass — balanced deep
+ * nesting, undefined entity references, comments/CDATA, duplicate sibling
+ * bodies; truncation (a cut mid-tag or a missing tail) and mismatched or
+ * unclosed tags fail.
+ */
+export function xmlWellFormednessError(xml: string): string | null {
+  const verdict = XMLValidator.validate(xml)
+  if (verdict === true) return null
+  return `${verdict.err.msg} (line ${verdict.err.line}, col ${verdict.err.col})`
+}
 
 /**
  * Table XML only: deep nesting is legitimate there (POI stress files nest 5000 table
