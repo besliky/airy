@@ -928,13 +928,8 @@ export function sliceGroupChildXmls(grpXml: string): string[] {
 
 // ── p:pic (picture) ──────────────────────────────────────────────────
 
-/** r:embed of an <a:blip>, falling back to the Office 2016 <asvg:svgBlip> extension.
-    SVG-only pictures (e.g. PowerPoint 365 vector logos) can carry a bare <a:blip>
-    whose only image reference is the svgBlip inside a:extLst — without this
-    fallback such pictures resolve to no media and render as a broken-image box. */
-function blipEmbedId(blip: any): string | undefined {
-  const direct = blip?.['@_r:embed']
-  if (direct) return direct
+/** <asvg:svgBlip r:embed> inside the blip's a:extLst (Office 2016 vector extension). */
+function svgBlipEmbedId(blip: any): string | undefined {
   const exts = blip?.['a:extLst']?.['a:ext']
   for (const ext of Array.isArray(exts) ? exts : exts ? [exts] : []) {
     for (const [key, value] of Object.entries(ext as Record<string, any>)) {
@@ -945,6 +940,16 @@ function blipEmbedId(blip: any): string | undefined {
     }
   }
   return undefined
+}
+
+/** r:embed of an <a:blip>, falling back to the Office 2016 <asvg:svgBlip> extension.
+    SVG-only pictures (e.g. PowerPoint 365 vector logos) can carry a bare <a:blip>
+    whose only image reference is the svgBlip inside a:extLst — without this
+    fallback such pictures resolve to no media and render as a broken-image box. */
+function blipEmbedId(blip: any): string | undefined {
+  const direct = blip?.['@_r:embed']
+  if (direct) return direct
+  return svgBlipEmbedId(blip)
 }
 
 function parsePicture(
@@ -968,8 +973,15 @@ function parsePicture(
   }
   const blipFill = node['p:blipFill']
   const blip = blipFill?.['a:blip']
-  const embedId = blipEmbedId(blip)
-  const mediaRef = (embedId && ctx.mediaRels?.get(embedId)) || ''
+  // PowerPoint paints the vector asvg:svgBlip when present and only falls back to
+  // the co-embedded raster (often a tiny preview) when the SVG cannot be used —
+  // render from the SVG and keep the raster as the display fallback (BUG-1656),
+  // otherwise a 1x1 preview PNG stretches over the whole frame.
+  const directRef = blip?.['@_r:embed'] ? ctx.mediaRels?.get(blip['@_r:embed']) : undefined
+  const svgEmbedId = svgBlipEmbedId(blip)
+  const svgRef = svgEmbedId ? ctx.mediaRels?.get(svgEmbedId) : undefined
+  const mediaRef = svgRef ?? directRef ?? ''
+  const fallbackMediaRef = svgRef && directRef && directRef !== svgRef ? directRef : undefined
   const name = node['p:nvPicPr']?.['p:cNvPr']?.['@_name']
   const descr = node['p:nvPicPr']?.['p:cNvPr']?.['@_descr']
   const title = node['p:nvPicPr']?.['p:cNvPr']?.['@_title']
@@ -1032,6 +1044,7 @@ function parsePicture(
     ...(title ? { title } : {}),
     ...(descr ? { descr } : {}),
     mediaRef,
+    ...(fallbackMediaRef ? { fallbackMediaRef } : {}),
     ...(srcRect ? { srcRect } : {}),
     ...(picGeom && picGeom !== 'rect'
       ? { presetGeometry: picGeom, ...(picAdjust ? { adjust: picAdjust } : {}) }

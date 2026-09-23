@@ -31,6 +31,8 @@ function useSlideImages(slides: RenderSlide[] | null): Map<string, HTMLImageElem
     const walk = (nodes: readonly RenderNode[]) => {
       for (const n of nodes) {
         if (n.type === 'picture' && n.dataUrl) urls.add(n.dataUrl)
+        // Raster fallback of an SVG-primary picture (svgBlip), same as the editor (BUG-1656)
+        if (n.type === 'picture' && n.fallbackDataUrl) urls.add(n.fallbackDataUrl)
         if ((n.type === 'shape' || n.type === 'text') && n.fill) addFillUrl(n.fill)
         if (n.type === 'group' && Array.isArray(n.children)) walk(n.children)
         if (n.type === 'table' && Array.isArray(n.cells)) {

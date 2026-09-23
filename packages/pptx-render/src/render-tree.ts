@@ -330,6 +330,12 @@ export interface ShapeRenderNode extends RenderNodeBase {
 export interface PictureRenderNode extends RenderNodeBase {
   type: 'picture'
   dataUrl?: string
+  /**
+   * Raster fallback dataUrl (the blip's direct r:embed) resolved when the primary
+   * dataUrl is an SVG (asvg:svgBlip pictures): the renderer substitutes it when
+   * the SVG fails to decode instead of showing a broken-image box (BUG-1656).
+   */
+  fallbackDataUrl?: string
   /** Opaque backdrop behind the image (OLE previews render on a white canvas; metafiles are often transparent) */
   bgColor?: string
   /** Shape fill from the pic's own spPr, always drawn behind the (possibly translucent) image */

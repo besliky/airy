@@ -553,6 +553,13 @@ function buildPicture(
   media: MediaResolver | undefined,
 ): PictureRenderNode {
   const dataUrl = el.dataUrl ?? (el.mediaRef ? media?.(el.mediaRef) : undefined)
+  // SVG-primary picture (asvg:svgBlip): also resolve the co-embedded raster so the
+  // renderer can swap it in when the SVG fails to decode (BUG-1656). A raster
+  // primary needs no fallback, and a missing resolver simply leaves both unset.
+  const fallbackDataUrl =
+    el.fallbackMediaRef && typeof dataUrl === 'string' && dataUrl.startsWith('data:image/svg+xml')
+      ? media?.(el.fallbackMediaRef)
+      : undefined
   // custGeom picture frame: clip the bitmap to the freeform path (normalized 0..1 → local px)
   const geomPath = el.customGeometry
     ? (el.customGeometry.path ?? el.customGeometry.fillPath)
@@ -581,6 +588,7 @@ function buildPicture(
     box,
     sourceId: el.id,
     ...(dataUrl ? { dataUrl } : {}),
+    ...(fallbackDataUrl ? { fallbackDataUrl } : {}),
     ...(clip ? { clip } : {}),
     ...(el.srcRect ? { srcRect: el.srcRect } : {}),
     ...(el.opacity != null ? { opacity: el.opacity } : {}),

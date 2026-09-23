@@ -1020,3 +1020,52 @@ describe('durable ids on chart nodes', () => {
     expect(chart!.durableId).toMatch(/^e_[0-9a-f]{8}$/)
   })
 })
+
+describe('svgBlip pictures resolve the SVG plus a raster fallback (BUG-1656)', () => {
+  const picEl = (overrides: Record<string, unknown>): any => ({
+    id: 'pic_svg',
+    type: 'picture',
+    anchor: { spIndex: -1, originalXml: '', range: [0, 0] },
+    transform: {
+      offset: { x: 0, y: 0, cx: 1000000, cy: 1000000 },
+      rot: 0,
+      flipH: false,
+      flipV: false,
+    },
+    ...overrides,
+  })
+  const media = (ref: string) =>
+    ref === 'ppt/media/vector.svg'
+      ? 'data:image/svg+xml;base64,PHN2Zy8+'
+      : 'data:image/png;base64,AAAA'
+  const build = async (el: any) => {
+    const { deck } = await openPptx(enginePptx('01_standard_business.pptx'))
+    return buildRenderSlide({ ...deck.slides[0]!, elements: [el], decorations: [] }, deck.size, {
+      fitWidthPx: 1280,
+      media,
+    }).nodes[0] as any
+  }
+
+  it('svg primary keeps fallbackDataUrl pointing at the raster part', async () => {
+    const node = await build(
+      picEl({ mediaRef: 'ppt/media/vector.svg', fallbackMediaRef: 'ppt/media/raster.png' }),
+    )
+    expect(node.type).toBe('picture')
+    expect(node.dataUrl).toBe('data:image/svg+xml;base64,PHN2Zy8+')
+    expect(node.fallbackDataUrl).toBe('data:image/png;base64,AAAA')
+  })
+
+  it('raster primary never records a fallback even when fallbackMediaRef exists', async () => {
+    const node = await build(
+      picEl({ mediaRef: 'ppt/media/raster.png', fallbackMediaRef: 'ppt/media/vector.svg' }),
+    )
+    expect(node.dataUrl).toBe('data:image/png;base64,AAAA')
+    expect(node.fallbackDataUrl).toBeUndefined()
+  })
+
+  it('svg without a fallback part records no fallbackDataUrl', async () => {
+    const node = await build(picEl({ mediaRef: 'ppt/media/vector.svg' }))
+    expect(node.dataUrl).toBe('data:image/svg+xml;base64,PHN2Zy8+')
+    expect(node.fallbackDataUrl).toBeUndefined()
+  })
+})

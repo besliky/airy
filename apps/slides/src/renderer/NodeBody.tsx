@@ -34,6 +34,7 @@ import {
   shapeShadowOverlay,
   type ShadowGeom,
   cropToKonva,
+  pictureDisplayImage,
   presetToShapeKind,
   shapeGlyphs,
   layoutGlyphs,
@@ -129,7 +130,8 @@ export const NodeBody = React.memo(function NodeBody({
 
   if (node.type === 'picture') {
     const pic = node as PictureRenderNode
-    const rawImg = pic.dataUrl ? images.get(pic.dataUrl) : undefined
+    // SVG-primary pictures substitute the co-embedded raster when the SVG fails to decode (BUG-1656)
+    const rawImg = pictureDisplayImage(pic, images)
     // clrChange/duotone recolor the pixels; the derived key keeps processed variants out of raw cache slots
     const srcKey = processedImageKey(pic.dataUrl ?? '', pic.clrChange, pic.duotone, pic.lum)
     const procImg =

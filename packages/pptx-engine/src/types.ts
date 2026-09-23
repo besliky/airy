@@ -528,6 +528,12 @@ export interface PictureElement extends ElementBase {
   type: 'picture'
   /** Picture media path inside the zip (word/ppt/media/imageN.ext) */
   mediaRef: string
+  /**
+   * Raster fallback part (the blip's direct r:embed) recorded when the vector
+   * asvg:svgBlip extension drives the render; the renderer substitutes it when
+   * the SVG fails to decode (BUG-1656). Present only when it differs from mediaRef.
+   */
+  fallbackMediaRef?: string
   /** Decoded dataURL (for rendering, may be lazy-loaded) */
   dataUrl?: string
   /** Source crop <a:srcRect>: fraction cropped from each edge (0..1) */
