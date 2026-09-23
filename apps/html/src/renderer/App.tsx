@@ -210,11 +210,13 @@ export default function App() {
   )
   useEffect(() => () => mapCache.dispose(), [mapCache])
 
-  /** best-effort map for render/cursor paths: may be one rebuild behind while typing */
-  const getMap = useCallback(
-    (): ParseMap => mapCache.get(textRef.current, versionRef.current).map,
+  /** best-effort map plus whether it lags the committed text (its offsets are shifted) */
+  const getMapState = useCallback(
+    (): { map: ParseMap; stale: boolean } => mapCache.get(textRef.current, versionRef.current),
     [mapCache],
   )
+  /** best-effort map for render/cursor paths: may be one rebuild behind while typing */
+  const getMap = useCallback((): ParseMap => getMapState().map, [getMapState])
   /** fresh map for readers that must not see shifted offsets (op compile, AI access, preview push) */
   const getMapNow = useCallback(
     (): ParseMap => mapCache.now(textRef.current, versionRef.current),
@@ -453,7 +455,10 @@ export default function App() {
         return true
       }
       if (follow === 'reselect' && before !== null) {
-        const map = getMap()
+        // applyOps just committed the edited text: a stale map still holds the old
+        // offsets and elementCovering would reselect the wrong element (or a structural
+        // ancestor, resetting the selection)
+        const map = getMapNow()
         // sids are matched by path, so after a move / rename / replace the old sid may now name the
         // sibling that took the old position; re-derive the target from the largest applied range
         const relocates = ops.some(
@@ -486,7 +491,7 @@ export default function App() {
       }
       return true
     },
-    [applyOps, getMap, flushPending],
+    [applyOps, getMapNow, flushPending],
   )
 
   // ── selection model: one current element shared by the preview, the source pane, the toolbar and the AI ──
@@ -686,12 +691,16 @@ export default function App() {
   const onCursor = useCallback(
     (c: CursorInfo) => {
       setCursor(c)
+      // a stale serve carries shifted offsets and would reset the selection onto the
+      // wrong element; skip until the debounced rebuild (or a now() reader) catches up
+      const { map, stale } = getMapState()
+      if (stale) return
       // [pos, pos+1): a cursor sitting on a boundary belongs to the element that starts there
-      const e = elementCovering(getMap(), c.pos, Math.min(c.pos + 1, textRef.current.length))
+      const e = elementCovering(map, c.pos, Math.min(c.pos + 1, textRef.current.length))
       const sid = e && !STRUCTURAL.has(e.tag) ? e.sid : null
       if (sid !== selectedSidRef.current) selectSid(sid, { toPreview: true })
     },
-    [getMap, selectSid],
+    [getMapState, selectSid],
   )
 
   const selectedEntry = selectedSid !== null ? getMap().bySid.get(selectedSid) : undefined
