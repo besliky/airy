@@ -2430,6 +2430,24 @@ th.cell-rev-del {
   border-bottom: 2px solid currentColor;
 }
 
+/* ---- kinsoku hang (cjk-punct-shrink, settings without compressPunctuation) ---- */
+
+/* A hung line-end stop: the decoration span zeroes the stop's advance so the
+   breaker pulls it up, but a zero-advance glyph is not reliably painted — it
+   vanishes entirely when the pull is refused and the next glyph reuses its
+   cell. data-ch carries the stop and the positioned copy paints it at the
+   span's origin — the hang area past the text edge — deterministically, on
+   screen and in print, while the flow box (and so the line geometry) stays
+   exactly as the zero advance makes it. */
+.doc-cjkhang {
+  position: relative;
+}
+.doc-cjkhang::after {
+  content: attr(data-ch);
+  position: absolute;
+  letter-spacing: normal;
+}
+
 /* Drop cap: first-letter floats to 3 lines height */
 .has-drop-cap::first-letter {
   float: left;
