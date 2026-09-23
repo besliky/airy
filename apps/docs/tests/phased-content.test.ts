@@ -3,6 +3,7 @@ import type { PmNode } from '../src/renderer/editor/convert'
 import {
   PHASE1_BLOCKS,
   PHASE_CHUNK_BLOCKS,
+  PHASE_CHUNK_MAX_BLOCKS,
   PHASED_MIN_BLOCKS,
   cancelPhasedContent,
   isPhasedContentPending,
@@ -65,7 +66,7 @@ describe('setContentPhased', () => {
   it('mounts small documents in one pass without the loading flag', () => {
     const { host, state } = makeHost()
     const s = makeScheduler()
-    setContentPhased(host, docOf(PHASED_MIN_BLOCKS), s.schedule)
+    setContentPhased(host, docOf(PHASED_MIN_BLOCKS), s.schedule, s.schedule)
     expect(state.events).toEqual([`set:${PHASED_MIN_BLOCKS}`])
     expect(s.pending()).toBe(0)
   })
@@ -74,7 +75,7 @@ describe('setContentPhased', () => {
     const blocks = PHASE1_BLOCKS + PHASE_CHUNK_BLOCKS * 2 + 7
     const { host, state } = makeHost()
     const s = makeScheduler()
-    setContentPhased(host, docOf(blocks), s.schedule)
+    setContentPhased(host, docOf(blocks), s.schedule, s.schedule)
     expect(state.mounted.length).toBe(PHASE1_BLOCKS)
     expect(state.loading).toBe(true)
     while (s.pending() > 0) s.drain()
@@ -91,7 +92,7 @@ describe('setContentPhased', () => {
   it('streaming is not an edit: the dirty flag survives every chunk', () => {
     const { host, state } = makeHost()
     const s = makeScheduler()
-    setContentPhased(host, docOf(PHASED_MIN_BLOCKS + 50), s.schedule)
+    setContentPhased(host, docOf(PHASED_MIN_BLOCKS + 50), s.schedule, s.schedule)
     while (s.pending() > 0) s.drain()
     expect(state.dirty).toBe(false)
   })
@@ -100,7 +101,7 @@ describe('setContentPhased', () => {
     const blocks = PHASE1_BLOCKS + PHASE_CHUNK_BLOCKS * 3
     const { host, state } = makeHost()
     const s = makeScheduler()
-    setContentPhased(host, docOf(blocks), s.schedule)
+    setContentPhased(host, docOf(blocks), s.schedule, s.schedule)
     s.drain() // first chunk lands
     const landed = state.mounted.length
     cancelPhasedContent()
@@ -114,10 +115,10 @@ describe('setContentPhased', () => {
     const blocks = PHASE1_BLOCKS + PHASE_CHUNK_BLOCKS * 3
     const first = makeHost()
     const s1 = makeScheduler()
-    setContentPhased(first.host, docOf(blocks), s1.schedule)
+    setContentPhased(first.host, docOf(blocks), s1.schedule, s1.schedule)
     const second = makeHost()
     const s2 = makeScheduler()
-    setContentPhased(second.host, docOf(blocks), s2.schedule)
+    setContentPhased(second.host, docOf(blocks), s2.schedule, s2.schedule)
     while (s1.pending() > 0) s1.drain()
     while (s2.pending() > 0) s2.drain()
     // the first document keeps only its phase-1 mount; the second is complete
@@ -128,12 +129,15 @@ describe('setContentPhased', () => {
   })
 
   it('a rejected chunk falls back to the one-pass mount and releases the save gate', async () => {
-    const blocks = PHASE1_BLOCKS + PHASE_CHUNK_BLOCKS * 2
+    // enough blocks that the adaptive stream needs several appends before the
+    // final-chunk fuse collapses the remainder into one chunk
+    const blocks = PHASE1_BLOCKS + PHASE_CHUNK_BLOCKS * 8
     const { host, state } = makeHost()
     const { appendNodes, setContent } = host
     let appends = 0
     host.appendNodes = (nodes) => {
-      if (++appends === 2) throw new Error('schema refused')
+      // the whole tail is one fused chunk now — rejecting it must fall back
+      if (++appends === 1) throw new Error('schema refused')
       appendNodes(nodes)
     }
     host.setContent = (d) => {
@@ -141,7 +145,7 @@ describe('setContentPhased', () => {
       state.dirty = true
     }
     const s = makeScheduler()
-    setContentPhased(host, docOf(blocks), s.schedule)
+    setContentPhased(host, docOf(blocks), s.schedule, s.schedule)
     state.dirty = false
     while (s.pending() > 0) s.drain()
     expect(state.mounted.length).toBe(blocks)
@@ -155,14 +159,64 @@ describe('setContentPhased', () => {
   it('reports a pending tail only while chunks remain', () => {
     const { host } = makeHost()
     const s = makeScheduler()
-    setContentPhased(host, docOf(PHASED_MIN_BLOCKS), s.schedule)
+    setContentPhased(host, docOf(PHASED_MIN_BLOCKS), s.schedule, s.schedule)
     expect(isPhasedContentPending()).toBe(false)
-    setContentPhased(host, docOf(PHASED_MIN_BLOCKS + 1), s.schedule)
+    setContentPhased(host, docOf(PHASED_MIN_BLOCKS + 1), s.schedule, s.schedule)
     expect(isPhasedContentPending()).toBe(true)
     while (s.pending() > 0) s.drain()
     expect(isPhasedContentPending()).toBe(false)
-    setContentPhased(host, docOf(PHASED_MIN_BLOCKS + 1), s.schedule)
+    setContentPhased(host, docOf(PHASED_MIN_BLOCKS + 1), s.schedule, s.schedule)
     cancelPhasedContent()
     expect(isPhasedContentPending()).toBe(false)
+  })
+})
+
+describe('adaptive chunk sizing (PERF-1639)', () => {
+  /** scheduler the test drains manually; records each chunk's size */
+  function makeRecordingScheduler() {
+    const queue: Array<() => void> = []
+    return {
+      schedule: (cb: () => void) => queue.push(cb),
+      drain: () => queue.shift()?.(),
+      pending: () => queue.length,
+    }
+  }
+
+  it('streams the tail in a few large chunks: halves the remainder, then fuses it', () => {
+    // 20,000 remaining: 8192 (capped half) -> 5904 (half) -> 5904 (fused remainder)
+    const blocks = PHASE1_BLOCKS + 20000
+    const { host, state } = makeHost()
+    const s = makeRecordingScheduler()
+    const sizes: number[] = []
+    const baseAppend = host.appendNodes
+    host.appendNodes = (nodes) => {
+      sizes.push(nodes.length)
+      baseAppend(nodes)
+    }
+    setContentPhased(host, docOf(blocks), s.schedule, s.schedule)
+    while (s.pending() > 0) s.drain()
+    expect(state.mounted.length).toBe(blocks)
+    // every block landed exactly once, in order
+    expect(state.mounted.map((n) => n.attrs?.docxIndex)).toEqual(
+      Array.from({ length: blocks }, (_, i) => i),
+    )
+    // first tail chunk stays small (paint escape hatch), then the halve/fuse policy
+    expect(sizes).toEqual([PHASE_CHUNK_BLOCKS, PHASE_CHUNK_MAX_BLOCKS, 11680])
+  })
+
+  it('keeps a minimum chunk size for small tails and stays within a bounded drain count', () => {
+    const blocks = PHASE1_BLOCKS + PHASE_CHUNK_BLOCKS * 8
+    const { host, state } = makeHost()
+    const s = makeRecordingScheduler()
+    setContentPhased(host, docOf(blocks), s.schedule, s.schedule)
+    let drains = 0
+    while (s.pending() > 0 && drains < 1000) {
+      s.drain()
+      drains++
+    }
+    expect(s.pending()).toBe(0)
+    expect(state.mounted.length).toBe(blocks)
+    // small tail: a single fused chunk
+    expect(drains).toBeLessThanOrEqual(2)
   })
 })

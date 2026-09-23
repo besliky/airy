@@ -32,8 +32,11 @@ export interface PhasedContentHost {
 
 /** blocks in the first synchronous mount: overfills the first screens at any zoom */
 export const PHASE1_BLOCKS = 64
-/** blocks appended per scheduled chunk while the tail streams in */
+/** smallest tail chunk (small documents never get a bigger one) */
 export const PHASE_CHUNK_BLOCKS = 128
+/** upper bound for a tail chunk: every dispatch costs O(document) regardless
+ * of the chunk size above a few thousand blocks, so large chunks are cheap */
+export const PHASE_CHUNK_MAX_BLOCKS = 8192
 /** documents at or below this many top-level blocks mount in one pass as before */
 export const PHASED_MIN_BLOCKS = 192
 
@@ -60,15 +63,39 @@ export function cancelPhasedContent(): void {
   cancelPending = null
 }
 
-/** double-rAF: the browser paints the previous mount between the two callbacks */
+/** paint, then a macrotask boundary (pending CDP/input/React tasks get a
+ * slice), then paint again — the tail never monopolizes the main thread */
 const nextPaintedFrame = (cb: () => void): void => {
-  requestAnimationFrame(() => requestAnimationFrame(cb))
+  requestAnimationFrame(() => {
+    setTimeout(() => requestAnimationFrame(cb), 0)
+  })
+}
+
+/**
+ * The tail's first big chunk must not start before the editor pane is on
+ * screen: wait until the phase-1 mount is actually in the DOM (the read-only
+ * gate reflects the loading state), then two more frames to paint it. A
+ * bounded fallback keeps a stuck mount from cancelling the stream outright.
+ */
+const afterEditorPaint = (cb: () => void): void => {
+  let polls = 0
+  const step = () => {
+    const pm = document.querySelector('.ProseMirror')
+    const mounted = pm !== null && (pm as HTMLElement).getAttribute('contenteditable') === 'false'
+    if (mounted || ++polls > 300) {
+      requestAnimationFrame(() => requestAnimationFrame(cb))
+      return
+    }
+    requestAnimationFrame(step)
+  }
+  step()
 }
 
 export function setContentPhased(
   host: PhasedContentHost,
   pmDoc: PmNode,
   schedule: (cb: () => void) => void = nextPaintedFrame,
+  scheduleFirst: (cb: () => void) => void = afterEditorPaint,
 ): void {
   cancelPhasedContent()
   const content = pmDoc.content ?? []
@@ -86,6 +113,9 @@ export function setContentPhased(
     settle()
   }
   let index = PHASE1_BLOCKS
+  // the first tail chunk stays small: it gives the renderer its first paint
+  // and React its editor-pane commit before any long dispatch below
+  let firstTailChunk = true
   const finish = () => {
     if (my !== token) return
     cancelPending = null
@@ -96,7 +126,21 @@ export function setContentPhased(
   const appendChunk = () => {
     if (my !== token) return
     if (host.isDestroyed()) return finish()
-    const chunk = content.slice(index, index + PHASE_CHUNK_BLOCKS)
+    // PERF-1639 chunk sizing: every dispatch pays an O(document) cost (the
+    // view update walks all top-level blocks), so the tail's duration scales
+    // with the NUMBER of chunks. Halve the remaining tail (capped), and fold
+    // the whole remainder into one final chunk once it is close to the cap.
+    const remaining = content.length - index
+    let chunkBlocks: number
+    if (firstTailChunk) {
+      chunkBlocks = PHASE_CHUNK_BLOCKS
+      firstTailChunk = false
+    } else if (remaining <= (PHASE_CHUNK_MAX_BLOCKS * 3) / 2) {
+      chunkBlocks = remaining
+    } else {
+      chunkBlocks = Math.max(PHASE_CHUNK_BLOCKS, Math.min(PHASE_CHUNK_MAX_BLOCKS, remaining >> 1))
+    }
+    const chunk = content.slice(index, index + chunkBlocks)
     index += chunk.length
     const wasDirty = host.getDirty()
     try {
@@ -115,5 +159,5 @@ export function setContentPhased(
     if (index < content.length) schedule(appendChunk)
     else finish()
   }
-  schedule(appendChunk)
+  scheduleFirst(appendChunk)
 }

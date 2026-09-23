@@ -51,7 +51,7 @@ import { textColorValue } from './editor/text-color'
 import { AiAskPopover } from './components/AiAskPopover'
 import { EDIT_QUEUE_MAX, selectionForAnchor, type DocsEditQueueItem } from './ai/edit-queue'
 import { addQueueAnchor, clearQueueAnchors, removeQueueAnchors } from './editor/ai-queue-anchors'
-import { asianCharCount, countWords, nonAsianWordCount } from './word-count'
+import { asianCharCount, countWords, countWordsInDoc, nonAsianWordCount } from './word-count'
 import { CommentsPanel } from './components/CommentsPanel'
 import { EquationModal } from './components/EquationModal'
 import { HeaderFooterArea } from './components/HeaderFooterArea'
@@ -158,6 +158,8 @@ import {
 import { saveUntilPersisted } from './save-until-persisted'
 import { SPELLCHECK_KEY, spellcheckEnabled } from './spellcheck-pref'
 import { cachedByDoc } from './doc-cache'
+import { createRemeasureScheduler } from './remeasure-scheduler'
+import { isPhasedContentPending, waitForFullContent } from './phased-content'
 import { useShallowStable, useStableCallbacks } from './use-stable'
 import { FindPanel } from './components/FindPanel'
 import { refCacheOf } from './components/cross-ref'
@@ -217,7 +219,7 @@ import { setDkColor } from './editor/dark-page'
 import { useUiThemeIsDark } from './ui-theme'
 import { type InkAnnotation, type InkTool } from './editor/ink'
 import { InkOverlay } from './components/InkOverlay'
-import { collectRevisions, gotoRevision, type TrackChangesStorage } from './editor/revisions'
+import { countRevisionsInDoc, gotoRevision, type TrackChangesStorage } from './editor/revisions'
 import { NavPane } from './components/NavPane'
 import { Ruler } from './components/Ruler'
 import { docBodyFont, docLineFactor, docStyleCss, docThemeCss } from './doc-style-css'
@@ -291,9 +293,11 @@ function hashStr(str: string): number {
 const EMPTY_BLOCKS: Block[] = []
 
 // O(doc) derivations cached by PM doc reference: caret moves and unrelated
-// state updates reuse the last result instead of re-walking the whole document
-const wordCountOfDoc = cachedByDoc((d) => countWords(d.textContent))
-const revisionCountOfDoc = cachedByDoc((d) => collectRevisions(d).length)
+// state updates reuse the last result instead of re-walking the whole document.
+// Both are per-block memoized inside (PERF-1639): a streamed chunk changes a
+// few blocks, so the per-transaction cost stays bounded, not O(document).
+const wordCountOfDoc = cachedByDoc((d) => countWordsInDoc(d))
+const revisionCountOfDoc = cachedByDoc((d) => countRevisionsInDoc(d))
 
 /**
  * Document position of a measured line-start DOM anchor. posAtDOM works from the DOM
@@ -2894,7 +2898,6 @@ export function App() {
     const mTopPx = canvasTop
     const contentH = twipsToPx(section.pageHeight) - effTopSingle - effBottomSingle
     let slices: PageSlice[] = []
-    let timer: number | null = null
     let suppressSig = ''
     let secWidthSig = ''
     let charSpaceSig = ''
@@ -3850,9 +3853,24 @@ export function App() {
       }
       locate()
     }
+    // PERF-1639: the remeasure pass is O(document); it runs through a
+    // cost-adaptive scheduler and is held back while the phased open is still
+    // streaming chunks — the pass runs once when the tail lands, instead of
+    // once per 300ms over a document that keeps growing.
+    const scheduler = createRemeasureScheduler({ run: remeasure })
+    let settleWired = false
     const onUpdate = () => {
-      if (timer) window.clearTimeout(timer)
-      timer = window.setTimeout(remeasure, 300)
+      if (!isPhasedContentPending()) {
+        scheduler.request()
+        return
+      }
+      // every mid-stream trigger funnels into one post-settle remeasure
+      if (settleWired) return
+      settleWired = true
+      void waitForFullContent().then(() => {
+        settleWired = false
+        scheduler.request()
+      })
     }
     remeasure()
     // async @font-face loading triggers a full reflow (line-break points change); pagination
@@ -3877,7 +3895,7 @@ export function App() {
     scroller.addEventListener('scroll', locate, { passive: true })
     editor?.on('update', onUpdate)
     return () => {
-      if (timer) window.clearTimeout(timer)
+      scheduler.cancel()
       if (hfTimer) window.clearTimeout(hfTimer)
       document.fonts.removeEventListener('loadingdone', onLoadingDone)
       scroller.removeEventListener('scroll', locate)
