@@ -112,6 +112,90 @@ describe('decodeTextBytes', () => {
   })
 })
 
+describe('decodeTextBytes: GBK at sentence length (BUG-1646)', () => {
+  // windows-1250 soup used to win non-monotonically: scores flip on which
+  // GBK trail bytes happen to land in ASCII range and which lead bytes hit
+  // frequent Latin letters, so 8B read fine while 12B and 58B turned to mush.
+  // Sentence-length coverage for every shape: tiny phrases, full sentences,
+  // GBK-extension rows whose trail bytes are ASCII letters, and text mixed
+  // with real ASCII (digits, URLs, CSV separators).
+  const gbkVectors = [
+    '你好世界', // 8 bytes
+    '中文测试', // 8 bytes
+    '城市,人口\n', // 10 bytes, ASCII separators
+    '测试ABC数据', // 11 bytes, ASCII letters inside
+    '中文测试语句', // 12 bytes
+    '汉字编码标准', // 12 bytes
+    '中文測試：這是通用規範漢字的一句話。第二行：辦公室自動化。', // 58 bytes, the audit sample
+    '這是一段繁體中文的文字，用來測試編碼偵測的功能與正確性。', // 56 bytes, GBK-extension rows
+    '中华人民共和国成立于一九四九年，是一个拥有悠久历史和灿烂文化的国家。', // 68 bytes
+    '订单号:2024-0311,客户:张三,金额:1280.50元\n订单号:2024-0312,客户:李四,金额:980.00元\n',
+    '城市,人口\n北京,2154\n上海,2428\n广州,1868\n深圳,1756\n杭州,1036\n',
+    '欢迎访问 http://www.example.com 主页,如需帮助请联系客服。\n',
+    '在日常办公中，电子表格软件被广泛用于数据统计和财务分析。用户可以通过公式快速计算总和、平均值以及增长率，从而提高工作效率并减少人工错误的发生。', // 142 bytes
+    '这家公司成立于二十世纪九十年代，最初只是一家小型贸易办事处。经过三十年的发展，它已经成为一家拥有数千名员工、业务遍布全国各地的综合性企业集团，涉及制造、物流、金融服务等多个领域，并且在海外多个国家设有分支机构。', // 210 bytes
+  ]
+
+  it.each(gbkVectors)('decodes GBK text without a hint: %s', (text) => {
+    expect(decodeTextBytes(gbk(text))).toBe(text)
+  })
+
+  it('decodes the audit sample with the zh hint too', () => {
+    const text = '中文測試：這是通用規範漢字的一句話。第二行：辦公室自動化。'
+    expect(decodeTextBytes(gbk(text), 'gb18030')).toBe(text)
+  })
+
+  // the same sentence shapes in the single-byte charsets must keep winning:
+  // the soup tests must never cost a genuine file its script bonus
+  const controls: Array<[string, Buffer, string]> = [
+    [
+      'cp1250 Polish',
+      cp1250('Zażółć gęślą jaźń\nKraków, Wrocław, Łódź\n'),
+      'Zażółć gęślą jaźń\nKraków, Wrocław, Łódź\n',
+    ],
+    [
+      'cp1250 Czech sentence',
+      cp1250(
+        'Příliš žluťoučký kůň úpěl ďábelské ódy. Nástroj pro automatizované vyhledávání dokumentů byl otevřen ve čtvrtek.\n',
+      ),
+      'Příliš žluťoučký kůň úpěl ďábelské ódy. Nástroj pro automatizované vyhledávání dokumentů byl otevřen ve čtvrtek.\n',
+    ],
+    [
+      'cp1251 Russian sentence',
+      cp1251(
+        'Город Москва,житель\nОбзор рынка металлорежущего инструмента за первый квартал года.\n',
+      ),
+      'Город Москва,житель\nОбзор рынка металлорежущего инструмента за первый квартал года.\n',
+    ],
+    [
+      'cp1251 Russian CSV',
+      cp1251('"Артикул";"Наименование";"Количество";"Цена"\r\n"152025449";"Зенкер";9;10\r\n'),
+      '"Артикул";"Наименование";"Количество";"Цена"\r\n"152025449";"Зенкер";9;10\r\n',
+    ],
+    [
+      'cp1252 French sentence',
+      cp1252(
+        'Résumé très bien après le déjeuner à Paris, où les étudiants français étaient réunis.\n',
+      ),
+      'Résumé très bien après le déjeuner à Paris, où les étudiants français étaient réunis.\n',
+    ],
+    [
+      'cp1252 German sentence',
+      cp1252('Müller kam spät aus Köln zurück, denn die Züge fuhren nicht mehr nach Fürth.\n'),
+      'Müller kam spät aus Köln zurück, denn die Züge fuhren nicht mehr nach Fürth.\n',
+    ],
+    [
+      'cp1252 German caps header',
+      cp1252('GRÖSSE;ÄPFEL;SAFT\r\n12;3;4\r\n'),
+      'GRÖSSE;ÄPFEL;SAFT\r\n12;3;4\r\n',
+    ],
+  ]
+
+  it.each(controls)('still decodes %s at sentence length', (_label, bytes, text) => {
+    expect(decodeTextBytes(bytes)).toBe(text)
+  })
+})
+
 describe('legacyCharsetForLang', () => {
   it('maps UI languages to the legacy charset their locale writes', () => {
     expect(legacyCharsetForLang('ru')).toBe('windows-1251')
