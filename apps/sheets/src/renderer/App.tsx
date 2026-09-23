@@ -4391,6 +4391,10 @@ export function App(): React.JSX.Element {
         zoomPercent={zoomPercent}
         canSave={pendingEdits > 0}
         onSave={() => void handleSave('save')}
+        // Print never depends on the save journal (OBS-1605): a freshly
+        // opened, unmodified workbook prints just like a dirty one — the
+        // native application menu's Ctrl+P has always been ungated.
+        canPrint
         canSaveAs={workbookFile !== null}
         onSaveAs={() => void handleSave('save-as')}
         onRedo={handleRedo}
