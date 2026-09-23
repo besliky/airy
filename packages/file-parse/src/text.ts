@@ -134,7 +134,12 @@ interface Sample {
   common: number
   /** how many dominant-script letters `common` and the uppercase share are taken over */
   dominantCount: number
-  /** U+FFFD count — the decoder emits one per byte it cannot convert */
+  /**
+   * U+FFFD count — the decoder emits one per byte it cannot convert. Older
+   * ICU builds (Node 22) emit a private-use placeholder for a charset's
+   * unassigned bytes where newer builds emit U+FFFD; both count here, so the
+   * score does not depend on the ICU version the runtime ships.
+   */
   replacement: number
   /** capital-dominant extended script: the single-byte misread of double-byte data */
   soup: boolean
@@ -182,7 +187,14 @@ function scoreSample(text: string, byteLength: number): Sample {
 
   for (const character of text) {
     const code = character.codePointAt(0) ?? 0
-    if (character === '�') replacement += 1
+    if (character === '\uFFFD') replacement += 1
+    // Private-use placeholders are how older ICU builds (Node 22) decode a
+    // charset's unassigned bytes (windows-874 0xFC → U+F8C5) — newer builds
+    // emit U+FFFD for the same bytes. Either way the byte maps to no real
+    // character: scoring the placeholder as punctuation (its code point is
+    // outside every script range) would hand the misdecode a +1 per byte and
+    // make charset selection depend on the ICU version of the runtime.
+    else if (code >= 0xe000 && code <= 0xf8ff) replacement += 1
     else if (code < 0x20 && character !== '\n' && character !== '\r' && character !== '\t')
       control += 1
     else if (code < 0x7f) ascii += 1
@@ -336,10 +348,14 @@ export function decodeTextBytes(bytes: Uint8Array, preferred?: string): string {
   const total = (candidate: { charset: string | null; sample: Sample }): number =>
     candidate.sample.score + scriptBonus(candidate.sample, sample.length, denseCjk)
 
+  // candidates[0] (charset null — the replacement-decoded utf-8 read) is the
+  // baseline every legacy candidate must strictly beat, so the loop seeds the
+  // maximum from it: no indexed access, and null stays the winner unless a
+  // legacy candidate scores strictly higher.
   let bestCharset: string | null = null
-  let best = total(candidates[0])
+  let best = Number.NEGATIVE_INFINITY
   let preferredSample: Sample | undefined
-  for (const candidate of candidates.slice(1)) {
+  for (const candidate of candidates) {
     if (candidate.charset === preferred)
       preferredSample = { ...candidate.sample, score: total(candidate) }
     if (total(candidate) > best) {
