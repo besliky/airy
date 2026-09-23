@@ -803,6 +803,12 @@ mod tests {
         assert!(styles.contains(r#"<alignment horizontal="center" vertical="center"/>"#));
         // cellXfs 0-2 are the converter's fallback styles, unchanged.
         assert!(styles.contains(r#"<cellXfs count="7">"#));
+        // BUG-1659: the mandatory named style, after cellXfs in schema
+        // order — IronCalc's importer panics on a book without it.
+        assert!(styles.contains(
+            r#"<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>"#
+        ));
+        assert!(styles.find("</cellXfs>").unwrap() < styles.find("<cellStyles").unwrap());
     }
 
     /// BUG-1607: a book with custom row heights and hidden rows must keep
@@ -899,6 +905,53 @@ mod tests {
         assert!(!sheet.contains("<cols>"));
         let styles = read_entry(&target, "xl/styles.xml");
         assert!(styles.contains(r#"<cellXfs count="3">"#));
+    }
+
+    /// BUG-1659: a real .ods book converts with a complete styles.xml —
+    /// the BIFF walk finds nothing in a zip container, so this exercises
+    /// the BASE_STYLES_XML path the .ods import always takes.
+    #[test]
+    fn carries_cell_styles_from_an_ods_book() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/bug-1659-legacy-formulas.ods"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let result = convert_to_xlsx(source, &target).unwrap();
+        assert_eq!(result.sheets, 1);
+
+        let styles = read_entry(&target, "xl/styles.xml");
+        assert!(styles.contains(
+            r#"<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>"#
+        ));
+        assert!(styles.ends_with("</cellStyles></styleSheet>"));
+        // Values and formulas came through the conversion (the verbatim
+        // ODF `of:=` syntax is a separate known gap).
+        let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
+        assert!(sheet.contains(r#"<c r="A1"><v>10</v></c>"#));
+        assert!(sheet.contains("<f>of:=SUM([.A1:.A2])</f>"));
+    }
+
+    /// BUG-1659: an empty book (no cells, no styles) still converts with a
+    /// complete styles.xml — the minimal output must not skip the section
+    /// IronCalc's importer requires.
+    #[test]
+    fn an_empty_book_still_carries_cell_styles() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("empty.xlsx");
+        convert_empty_book_fixture(&source);
+        let target = dir.path().join("converted.xlsx");
+
+        let result = convert_to_xlsx(&source, &target).unwrap();
+        assert_eq!(result.cells, 0);
+        let styles = read_entry(&target, "xl/styles.xml");
+        assert!(styles.contains(r#"<cellXfs count="3">"#));
+        assert!(styles.contains(
+            r#"<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>"#
+        ));
+        assert!(styles.ends_with("</cellStyles></styleSheet>"));
     }
 
     /// BUG-1602: the layout walk must never panic, on truncated books just
@@ -1010,6 +1063,39 @@ mod tests {
                 Err(_) => assert!(!target.exists()),
             }
         }
+    }
+
+    /// Same minimal book as `convert_fixture`, but with an empty sheet —
+    /// the source shape behind the empty-book regression test.
+    fn convert_empty_book_fixture(path: &Path) {
+        let file = File::create(path).unwrap();
+        let mut writer = ZipWriter::new(file);
+        let options = SimpleFileOptions::default();
+        let mut add = |name: &str, content: &str| {
+            writer.start_file(name, options).unwrap();
+            writer.write_all(content.as_bytes()).unwrap();
+        };
+        add(
+            "[Content_Types].xml",
+            r#"<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>"#,
+        );
+        add(
+            "_rels/.rels",
+            r#"<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#,
+        );
+        add(
+            "xl/workbook.xml",
+            r#"<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets></workbook>"#,
+        );
+        add(
+            "xl/_rels/workbook.xml.rels",
+            r#"<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#,
+        );
+        add(
+            "xl/worksheets/sheet1.xml",
+            r#"<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>"#,
+        );
+        writer.finish().unwrap();
     }
 
     fn convert_fixture(path: &Path) {

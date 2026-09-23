@@ -35,6 +35,22 @@ use encoding_rs::Encoding;
 use crate::legacy_xls::{self, CompoundFile, Record};
 use crate::visuals::colors::INDEXED_COLORS;
 
+/// The one named cell style every SpreadsheetML styles.xml must carry. A
+/// macro, not a const, because every writer embeds it inside a `concat!`
+/// literal. IronCalc's importer indexes the `cellStyles` section
+/// unconditionally and panics on a book without it (BUG-1659), which used to
+/// leave every legacy-converted (.ods/.xls) workbook dead for the formula
+/// engine — the same books Excel flags as needing repair.
+macro_rules! default_cell_styles_xml {
+    () => {
+        r#"<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>"#
+    };
+}
+// The re-export serves the recalc.rs engine fixture (test-only today); the
+// in-module writers below reach the macro through its textual scope.
+#[allow(unused_imports)]
+pub(crate) use default_cell_styles_xml;
+
 /// BIFF8 cell records that carry an XF index at offset 4 (row @0, column @2).
 const CELL_XF_RECORDS: [u16; 8] = [
     0x0006, // FORMULA
@@ -1086,7 +1102,9 @@ impl<'a> StyleInterner<'a> {
                 alignment.unwrap_or_default(),
             ));
         }
-        xml.push_str("</cellXfs></styleSheet>");
+        xml.push_str("</cellXfs>");
+        xml.push_str(default_cell_styles_xml!());
+        xml.push_str("</styleSheet>");
         xml
     }
 
@@ -1207,8 +1225,9 @@ fn escape(text: &str) -> String {
         .replace('"', "&quot;")
 }
 
-/// The unchanged styles.xml of the minimal converter (no .xls styles found):
-/// xf 0 general, xf 1 short date (numFmt 14), xf 2 date+time (numFmt 22).
+/// The styles.xml of the minimal converter (no .xls styles found):
+/// xf 0 general, xf 1 short date (numFmt 14), xf 2 date+time (numFmt 22),
+/// closed by the mandatory `<cellStyles>` section (BUG-1659).
 const BASE_STYLES_XML: &str = concat!(
     r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 "#,
@@ -1219,7 +1238,9 @@ const BASE_STYLES_XML: &str = concat!(
     r#"<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>"#,
     r#"<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>"#,
     r#"<xf numFmtId="14" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>"#,
-    r#"<xf numFmtId="22" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs></styleSheet>"#,
+    r#"<xf numFmtId="22" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>"#,
+    default_cell_styles_xml!(),
+    "</styleSheet>",
 );
 
 /// The three fallback cellXfs entries (verbatim prefix of BASE_STYLES_XML).
@@ -1267,6 +1288,21 @@ mod tests {
                 },
             ]
         );
+    }
+
+    /// BUG-1659: styles.xml always carries the `<cellStyles>` section —
+    /// IronCalc's importer indexes it unconditionally and panics on a book
+    /// without it, dead-ending every converted workbook.
+    #[test]
+    fn styles_xml_always_carries_a_cell_styles_section() {
+        let layout = WorkbookLayout::for_test(Vec::new());
+        let styles = StyleInterner::new(&layout).styles_xml();
+        assert!(styles.contains(
+            r#"<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>"#
+        ));
+        assert!(styles.ends_with("</cellStyles></styleSheet>"));
+        // Schema order: the named styles come after cellXfs.
+        assert!(styles.find("</cellXfs>").unwrap() < styles.find("<cellStyles").unwrap());
     }
 
     /// A genuinely uniform sheet (every column at the same custom width) has
