@@ -13,9 +13,11 @@
 //! record walker). Workbook globals contribute FONT, XF, FORMAT and PALETTE
 //! records (the style tables) plus BOUNDSHEET offsets; each sheet substream
 //! contributes MERGEDCELLS, COLINFO and the XF index of every cell record
-//! (RK/MULRK/NUMBER/LABELSST/FORMULA/BLANK/MULBLANK/...). FONT names and
-//! FORMAT codes are decoded only after the walk: CODEPAGE is "last record
-//! wins", exactly like in the string overlay.
+//! (RK/MULRK/NUMBER/LABELSST/FORMULA/BLANK/MULBLANK/...), plus the ROW
+//! heights and hidden flags that keep a form's header rows tall and its
+//! filtered rows out of sight (BUG-1607). FONT names and FORMAT codes are
+//! decoded only after the walk: CODEPAGE is "last record wins", exactly
+//! like in the string overlay.
 //!
 //! Everything is best-effort, exactly like the string overlay: any structural
 //! surprise yields an empty layout and the conversion falls back to the plain
@@ -50,6 +52,8 @@ const REC_MULRK: u16 = 0x00BD;
 const REC_MULBLANK: u16 = 0x00BE;
 const REC_MERGEDCELLS: u16 = 0x00E5;
 const REC_COLINFO: u16 = 0x007D;
+const REC_ROW: u16 = 0x0208;
+const REC_DEFAULTROWHEIGHT: u16 = 0x0225;
 const REC_FONT: u16 = 0x0031;
 const REC_XF: u16 = 0x00E0;
 const REC_FORMAT: u16 = 0x041E;
@@ -64,6 +68,15 @@ const REC_BOF: u16 = 0x0809;
 const MAX_MERGES_PER_SHEET: usize = 65_536;
 const MAX_COLINFO_RECORDS_PER_SHEET: usize = 4_096;
 const MAX_CELLS_PER_SHEET: usize = 1_000_000;
+/// BIFF8 sheets have at most 65 536 rows, and one ROW record each.
+const MAX_ROWS_PER_SHEET: usize = 65_536;
+/// Excel's hard maximum row height, in twips (409.5 pt); anything larger
+/// is hostile input, not a form.
+const MAX_ROW_HEIGHT_TWIPS: u16 = 8_190;
+/// The converter's implicit xlsx default row height, in points. A book
+/// whose own default differs carries it into `<sheetFormatPr>`; a row
+/// whose custom height equals it has nothing to say.
+const DEFAULT_ROW_HEIGHT_PT: f64 = 15.0;
 const MAX_FONTS: usize = 65_536;
 const MAX_XFS: usize = 65_536;
 const MAX_FORMATS: usize = 65_536;
@@ -100,13 +113,40 @@ pub(crate) struct SheetLayout {
     /// Source XF index per styled cell. Plain unformatted cells are absent:
     /// they keep the converter's fallback look, which is what they had.
     pub(crate) cells: HashMap<(u32, u32), u16>,
+    /// Rows worth carrying over (custom height and/or hidden), ascending.
+    pub(crate) rows: Vec<(u32, RowSpec)>,
+    /// The sheet's default row height in points when the book states one
+    /// other than the converter's implicit 15pt.
+    pub(crate) default_row_height: Option<f64>,
 }
 
 impl SheetLayout {
     /// Nothing worth carrying over for this sheet.
     pub(crate) fn is_empty(&self) -> bool {
-        self.merges.is_empty() && self.cols.is_empty() && self.cells.is_empty()
+        self.merges.is_empty()
+            && self.cols.is_empty()
+            && self.cells.is_empty()
+            && self.rows.is_empty()
+            && self.default_row_height.is_none()
     }
+
+    /// What to carry over for one row, if anything.
+    pub(crate) fn row_spec(&self, row: u32) -> Option<&RowSpec> {
+        self.rows
+            .binary_search_by_key(&row, |(row, _)| *row)
+            .ok()
+            .map(|index| &self.rows[index].1)
+    }
+}
+
+/// ROW record subset worth carrying over for one row.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct RowSpec {
+    /// Manually-set row height in points, for the `ht=` attribute (always
+    /// with `customHeight="1"`). None keeps the sheet default — a hidden
+    /// row at the producer's default height needs only the flag.
+    pub(crate) height: Option<f64>,
+    pub(crate) hidden: bool,
 }
 
 /// One emitted `<col min max width hidden>` run.
@@ -207,6 +247,16 @@ impl WorkbookLayout {
 
     pub(crate) fn default_font(&self) -> u16 {
         self.default_font
+    }
+
+    /// A layout with the given sheets, for emission tests.
+    #[cfg(test)]
+    pub(crate) fn for_test(sheets: Vec<SheetLayout>) -> Self {
+        Self {
+            sheets,
+            styles: StyleTables::default(),
+            default_font: 0,
+        }
     }
 }
 
@@ -327,12 +377,18 @@ fn parse_stream(stream: &[u8]) -> Option<(Vec<SheetLayout>, StyleTables, u16)> {
     Some((sheets, styles, default_font))
 }
 
-/// Per-sheet record accumulator: merges, COLINFO spans and cell XF indexes.
+/// Per-sheet record accumulator: merges, COLINFO spans, cell XF indexes,
+/// and the ROW table.
 #[derive(Default)]
 struct SheetAccumulator {
     merges: Vec<([u16; 2], [u16; 2])>,
     colinfos: Vec<(u16, u16, u16, bool)>,
     cells: HashMap<(u32, u32), u16>,
+    /// Raw ROW records: row -> (height twips, grbit). One per row in
+    /// practice; a repeat simply overwrites.
+    rows: HashMap<u16, (u16, u16)>,
+    /// DEFAULTROWHEIGHT's height, in twips, when the sheet states one.
+    default_row_height_twips: Option<u16>,
     /// Font histogram over value cells only — blank/bordered decoration
     /// cells must not out-vote the body font.
     font_votes: HashMap<u16, u32>,
@@ -342,6 +398,8 @@ impl SheetAccumulator {
     fn accumulate(&mut self, id: u16, body: &[u8], styles: &StyleTables) {
         match id {
             REC_MERGEDCELLS => self.push_merges(body),
+            REC_ROW => self.push_row(body),
+            REC_DEFAULTROWHEIGHT => self.note_default_row_height(body),
             REC_COLINFO => {
                 if self.colinfos.len() < MAX_COLINFO_RECORDS_PER_SHEET
                     && let Some(span) = parse_colinfo(body)
@@ -455,18 +513,87 @@ impl SheetAccumulator {
         }
     }
 
+    /// ROW record (16 bytes): row number @0, height in twips @6 (its high
+    /// bit marks "the default height"), row flags @12 — bit 5 hides the
+    /// row, bit 6 marks a manually-set height (fUnsynced). Layout verified
+    /// against xlrd's ROW parsing and the fixture's raw records.
+    fn push_row(&mut self, body: &[u8]) {
+        if self.rows.len() >= MAX_ROWS_PER_SHEET {
+            return;
+        }
+        let Some(fields) = body.first_chunk::<14>() else {
+            return;
+        };
+        let row = u16_from_le(fields[0..2].try_into().expect("checked above"));
+        let height = u16_from_le(fields[6..8].try_into().expect("checked above"));
+        let flags = u16_from_le(fields[12..14].try_into().expect("checked above"));
+        self.rows.insert(row, (height, flags));
+    }
+
+    /// DEFAULTROWHEIGHT body: flags @0 (bit 0 fUnsynced, bit 4 fDyZero),
+    /// default height in twips @2 — order verified against xlrd's handling
+    /// and the fixture bytes.
+    fn note_default_row_height(&mut self, body: &[u8]) {
+        let Some(fields) = body.first_chunk::<4>() else {
+            return;
+        };
+        let height = u16_from_le(fields[2..4].try_into().expect("checked above"));
+        if height > 0 && height <= MAX_ROW_HEIGHT_TWIPS {
+            self.default_row_height_twips = Some(height);
+        }
+    }
+
     fn finish(mut self, styles: &StyleTables, default_font: u16) -> SheetLayout {
         self.cells
             .retain(|_, xf| styles.cell_is_interesting(*xf, Some(default_font)));
+        let default_twips = self.default_row_height_twips;
         let mut merges = self.merges;
         merges.sort_unstable();
         merges.dedup();
+        let mut rows: Vec<(u32, RowSpec)> = self
+            .rows
+            .into_iter()
+            .filter_map(|(row, (height, flags))| {
+                row_spec(height, flags, default_twips).map(|spec| (u32::from(row), spec))
+            })
+            .collect();
+        // HashMap order is arbitrary; the xlsx schema wants ascending rows.
+        rows.sort_unstable_by_key(|(row, _)| *row);
         SheetLayout {
             merges,
             cols: column_spans(&self.colinfos),
             cells: self.cells,
+            rows,
+            default_row_height: default_twips
+                .filter(|&twips| f64::from(twips) != DEFAULT_ROW_HEIGHT_PT * 20.0)
+                .map(|twips| f64::from(twips) / 20.0),
         }
     }
+}
+
+/// Which ROW records are worth carrying over: hidden rows always (they must
+/// not reappear in the conversion); a height only when it was manually set
+/// (fUnsynced) and says something the conversion cannot guess — equal to the
+/// sheet default or to our own implicit 15pt, or missing entirely, it would
+/// only add noise attributes.
+fn row_spec(height_twips: u16, flags: u16, default_twips: Option<u16>) -> Option<RowSpec> {
+    let hidden = flags & 0x0020 != 0;
+    let height = height_twips & 0x7FFF; // the high bit marks "default height"
+    let custom = flags & 0x0040 != 0
+        && height != 0
+        && height <= MAX_ROW_HEIGHT_TWIPS
+        && Some(height) != default_twips
+        && f64::from(height) / 20.0 != DEFAULT_ROW_HEIGHT_PT;
+    if custom {
+        return Some(RowSpec {
+            height: Some(f64::from(height) / 20.0),
+            hidden,
+        });
+    }
+    hidden.then_some(RowSpec {
+        height: None,
+        hidden: true,
+    })
 }
 
 fn u16_from_le(bytes: &[u8; 2]) -> u16 {
@@ -1251,5 +1378,146 @@ mod tests {
         body.extend_from_slice(&[2, 0, 3, 0, 0, 0, 1, 0]); // A3:B4 valid
         acc.push_merges(&body);
         assert_eq!(acc.merges, vec![([2, 3], [0, 1])]);
+    }
+
+    /// A ROW record body (16 bytes): row @0, height twips @6, flags @12 —
+    /// bit 5 hidden, bit 6 manually-set height. Truncated bodies are
+    /// ignored, and a later record for the same row overwrites the first.
+    #[test]
+    fn row_records_fill_the_table_last_write_wins() {
+        let mut acc = SheetAccumulator::default();
+        let body = |number: u16, height: u16, flags: u16| {
+            let mut bytes = number.to_le_bytes().to_vec();
+            bytes.extend_from_slice(&[0u8; 4]); // colMic, colMac
+            bytes.extend_from_slice(&height.to_le_bytes());
+            bytes.extend_from_slice(&[0u8; 4]); // irwMac, reserved
+            bytes.extend_from_slice(&flags.to_le_bytes());
+            bytes.extend_from_slice(&[0u8; 2]); // ixfe
+            bytes
+        };
+        acc.push_row(&body(3, 600, 0x0140));
+        acc.push_row(&body(3, 900, 0x0100));
+        acc.push_row(&body(3, 600, 0x0140)[..8]); // truncated: ignored
+        assert_eq!(acc.rows.get(&3), Some(&(900, 0x0100)));
+    }
+
+    /// Custom heights carry over with their points value; a custom height
+    /// equal to the sheet default (or to our implicit 15pt) is noise and
+    /// stays out.
+    #[test]
+    fn custom_heights_are_kept_only_when_they_differ_from_defaults() {
+        // The fixture's tall header: 600 twips = 30pt, fUnsynced.
+        assert_eq!(
+            row_spec(600, 0x0140, Some(300)),
+            Some(RowSpec {
+                height: Some(30.0),
+                hidden: false
+            })
+        );
+        // Custom but equal to the sheet default: nothing to add.
+        assert_eq!(row_spec(300, 0x0040, Some(300)), None);
+        // Custom but equal to the converter's implicit default.
+        assert_eq!(row_spec(300, 0x0040, None), None);
+        // No default height known: a differing custom height is kept.
+        assert_eq!(
+            row_spec(255, 0x0040, None),
+            Some(RowSpec {
+                height: Some(12.75),
+                hidden: false
+            })
+        );
+    }
+
+    /// Hidden rows survive even at the default height, without gaining a
+    /// customHeight; a custom height and hidden combine into one spec.
+    #[test]
+    fn hidden_rows_are_kept_with_or_without_a_height() {
+        assert_eq!(
+            row_spec(300, 0x0120, Some(300)),
+            Some(RowSpec {
+                height: None,
+                hidden: true
+            })
+        );
+        assert_eq!(
+            row_spec(600, 0x0160, Some(300)),
+            Some(RowSpec {
+                height: Some(30.0),
+                hidden: true
+            })
+        );
+    }
+
+    /// Auto-fit rows and hostile heights stay out: a zero height, a height
+    /// past Excel's 409.5pt maximum, and the plain default-height flag.
+    #[test]
+    fn plain_and_hostile_heights_are_dropped() {
+        // LibreOffice writes every row; untouched ones mean nothing.
+        assert_eq!(row_spec(300, 0x0100, Some(300)), None);
+        // Height bit unset, zero height: hidden would still carry, custom not.
+        assert_eq!(row_spec(0, 0x0040, Some(300)), None);
+        // Past the 409.5pt maximum: not a form, hostile input.
+        assert_eq!(row_spec(9_000, 0x0140, Some(300)), None);
+        // The "row has the default height" high bit on its own.
+        assert_eq!(row_spec(0x8300, 0x0100, Some(300)), None);
+    }
+
+    /// DEFAULTROWHEIGHT carries the sheet default (flags @0, height @2) but
+    /// only when it differs from the converter's implicit 15pt — 300 twips
+    /// (15pt, what both fixtures' producers write) means nothing to say,
+    /// 255 twips (12.75pt, the Excel 97-2003 default) does.
+    #[test]
+    fn the_book_default_row_height_is_kept_when_it_differs() {
+        let mut acc = SheetAccumulator::default();
+        acc.note_default_row_height(&[0x00, 0x00, 0xFF, 0x00]);
+        assert_eq!(acc.default_row_height_twips, Some(255));
+        let layout = acc.finish(&StyleTables::default(), 0);
+        assert_eq!(layout.default_row_height, Some(12.75));
+        assert!(!layout.is_empty());
+
+        let mut acc = SheetAccumulator::default();
+        acc.note_default_row_height(&[0x00, 0x00, 0x2C, 0x01]); // 300tw = 15pt
+        let layout = acc.finish(&StyleTables::default(), 0);
+        assert_eq!(layout.default_row_height, None);
+        assert!(layout.is_empty());
+    }
+
+    /// Carried rows come out sorted by row number whatever the record
+    /// order was, and empty rows keep the whole layout non-empty so the
+    /// conversion still emits them.
+    #[test]
+    fn carried_rows_are_sorted_and_keep_the_layout_interesting() {
+        let mut acc = SheetAccumulator::default();
+        let mut body = 7u16.to_le_bytes().to_vec();
+        body.extend_from_slice(&[0u8; 4]);
+        body.extend_from_slice(&600u16.to_le_bytes());
+        body.extend_from_slice(&[0u8; 4]);
+        body.extend_from_slice(&0x0140u16.to_le_bytes());
+        body.extend_from_slice(&[0u8; 2]);
+        acc.push_row(&body);
+        let mut body = 1u16.to_le_bytes().to_vec();
+        body.extend_from_slice(&[0u8; 4]);
+        body.extend_from_slice(&300u16.to_le_bytes());
+        body.extend_from_slice(&[0u8; 4]);
+        body.extend_from_slice(&0x0120u16.to_le_bytes()); // hidden
+        body.extend_from_slice(&[0u8; 2]);
+        acc.push_row(&body);
+        let layout = acc.finish(&StyleTables::default(), 0);
+        assert_eq!(
+            layout.rows,
+            vec![
+                (1, RowSpec {
+                    height: None,
+                    hidden: true
+                }),
+                (7, RowSpec {
+                    height: Some(30.0),
+                    hidden: false
+                }),
+            ]
+        );
+        assert_eq!(layout.row_spec(7).map(|spec| spec.height), Some(Some(30.0)));
+        assert!(layout.row_spec(2).is_none());
+        assert!(!layout.is_empty());
     }
 }
