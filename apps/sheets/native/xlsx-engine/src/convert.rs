@@ -1,9 +1,10 @@
 //! Legacy-format import: reads an .xls (or anything calamine understands)
 //! and writes a fresh .xlsx with values, formulas, date number formats and —
 //! for BIFF8 books — the layout that makes a form look like a form: merged
-//! ranges, column widths and basic cell styles (bold/size, fills, borders,
-//! alignments, number formats) via `xls_layout` (BUG-1602). The converted
-//! file is a fresh workbook, not a byte-preserving edit.
+//! ranges, column widths, row heights and hidden rows, and basic cell
+//! styles (bold/size, fills, borders, alignments, number formats) via
+//! `xls_layout` (BUG-1602, BUG-1607). The converted file is a fresh
+//! workbook, not a byte-preserving edit.
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -245,13 +246,31 @@ fn worksheet_xml(
         }
     }
 
+    // BUG-1607: rows the walk found interesting but that carry no cells —
+    // a hidden row, a sized spacer — still need their <row> element.
     let mut row_numbers: Vec<u32> = rows.keys().copied().collect();
+    if let Some(layout) = layout {
+        for &(row, _) in &layout.rows {
+            if !rows.contains_key(&row) {
+                row_numbers.push(row);
+            }
+        }
+    }
     row_numbers.sort_unstable();
     let mut body = String::new();
     for row in row_numbers {
+        // BUG-1607: carried heights and hidden flags become row attributes.
+        let attributes = layout
+            .and_then(|layout| layout.row_spec(row))
+            .map(row_attributes)
+            .unwrap_or_default();
         let mut line = rows.remove(&row).unwrap_or_default();
         line.sort_unstable_by_key(|(column, _)| *column);
-        body.push_str(&format!(r#"<row r="{}">"#, row + 1));
+        if line.is_empty() {
+            body.push_str(&format!(r#"<row r="{}"{attributes}/>"#, row + 1));
+            continue;
+        }
+        body.push_str(&format!(r#"<row r="{}"{attributes}>"#, row + 1));
         for (_, cell) in line {
             body.push_str(&cell);
         }
@@ -266,13 +285,14 @@ fn worksheet_xml(
         ),
         _ => "A1:A1".into(),
     };
-    // Schema order: dimension, cols, sheetData, mergeCells.
+    // Schema order: dimension, sheetFormatPr, cols, sheetData, mergeCells.
+    let format_pr = layout.map(sheet_format_pr_xml).unwrap_or_default();
     let cols = layout.map(columns_xml).unwrap_or_default();
     let merges = layout.map(merges_xml).unwrap_or_default();
     (
         format!(
             r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="{dimension}"/>{cols}<sheetData>{body}</sheetData>{merges}</worksheet>"#,
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="{dimension}"/>{format_pr}{cols}<sheetData>{body}</sheetData>{merges}</worksheet>"#,
         ),
         cells,
     )
@@ -305,6 +325,38 @@ fn format_width(width: f64) -> String {
     } else {
         format!("{rounded}")
     }
+}
+
+/// `<sheetFormatPr>` for a book whose default row height differs from the
+/// converter's implicit 15pt (Excel 97-2003 books say 12.75): rows without
+/// a height of their own keep the source's auto height, not ours.
+fn sheet_format_pr_xml(layout: &xls_layout::SheetLayout) -> String {
+    layout
+        .default_row_height
+        .map(|height| {
+            format!(
+                r#"<sheetFormatPr defaultRowHeight="{}"/>"#,
+                format_width(height)
+            )
+        })
+        .unwrap_or_default()
+}
+
+/// `ht`/`customHeight`/`hidden` attributes for a carried-over row. A kept
+/// height is by definition manually set (the walk drops auto-fit values),
+/// so it always brings customHeight.
+fn row_attributes(spec: &xls_layout::RowSpec) -> String {
+    let mut xml = String::new();
+    if let Some(height) = spec.height {
+        xml.push_str(&format!(
+            r#" ht="{}" customHeight="1""#,
+            format_width(height)
+        ));
+    }
+    if spec.hidden {
+        xml.push_str(r#" hidden="1""#);
+    }
+    xml
 }
 
 /// `<mergeCells>` for the walked ranges, sorted, deduplicated, clamped to
@@ -753,6 +805,84 @@ mod tests {
         assert!(styles.contains(r#"<cellXfs count="7">"#));
     }
 
+    /// BUG-1607: a book with custom row heights and hidden rows must keep
+    /// both through conversion — forms with non-standard header heights
+    /// used to arrive auto-height, and hidden rows reappeared. The
+    /// committed fixture is a LibreOffice-generated workbook whose row
+    /// table was verified against xlrd (heights, hidden flags) and against
+    /// LibreOffice's own xlsx conversion of the same file.
+    #[test]
+    fn carries_row_heights_and_hidden_rows_from_a_legacy_book() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/bug-1607-row-heights-hidden.xls"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let result = convert_to_xlsx(source, &target).unwrap();
+        assert_eq!(result.sheets, 1);
+        assert_eq!(result.cells, 4);
+
+        let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
+        // Manually-set heights become ht + customHeight.
+        assert!(sheet.contains(r#"<row r="1" ht="30" customHeight="1">"#));
+        assert!(sheet.contains(r#"<row r="4" ht="7.5" customHeight="1">"#));
+        // A hidden row keeps the flag and gains no customHeight (its height
+        // is the producer's default); default rows stay untouched.
+        assert!(sheet.contains(r#"<row r="2" hidden="1">"#));
+        assert!(sheet.contains(r#"<row r="3">"#));
+        // Heights and hidden flags on rows without any cells still emit
+        // their <row> stub — a sized spacer or a filtered empty row.
+        assert!(sheet.contains(r#"<row r="5" ht="45" customHeight="1"/>"#));
+        assert!(sheet.contains(r#"<row r="6" hidden="1"/>"#));
+        // The book's default row height (15pt) is our implicit default:
+        // nothing to carry into sheetFormatPr.
+        assert!(!sheet.contains("sheetFormatPr"));
+    }
+
+    /// BUG-1607: a book whose default row height differs from the
+    /// converter's implicit 15pt carries it as `<sheetFormatPr>` — placed
+    /// in schema order, before cols/sheetData — so its auto-fit rows keep
+    /// the source's height instead of inheriting ours.
+    #[test]
+    fn a_foreign_default_row_height_is_carried_into_sheet_format_pr() {
+        let layout = xls_layout::WorkbookLayout::for_test(vec![xls_layout::SheetLayout {
+            rows: vec![
+                (
+                    0,
+                    xls_layout::RowSpec {
+                        height: Some(30.0),
+                        hidden: false,
+                    },
+                ),
+                (
+                    3,
+                    xls_layout::RowSpec {
+                        height: None,
+                        hidden: true,
+                    },
+                ),
+            ],
+            default_row_height: Some(12.75),
+            ..Default::default()
+        }]);
+        let range =
+            calamine::Range::<Data>::from_sparse(vec![calamine::Cell::new((0, 0), Data::Float(1.0))]);
+        let mut styler = StyleInterner::new(&layout);
+        let (xml, cells) = worksheet_xml(&range, &HashMap::new(), None, layout.sheet(0), &mut styler);
+        assert_eq!(cells, 1);
+        assert!(xml.contains(r#"<sheetFormatPr defaultRowHeight="12.75"/>"#));
+        // A carried height lands on rows with cells too, attributes first.
+        assert!(xml.contains(r#"<row r="1" ht="30" customHeight="1"><c r="A1"><v>1</v></c></row>"#));
+        assert!(xml.contains(r#"<row r="4" hidden="1"/>"#));
+        // Schema order: sheetFormatPr between dimension and sheetData.
+        let format_pr = xml.find("sheetFormatPr").unwrap();
+        let sheet_data = xml.find("<sheetData>").unwrap();
+        let dimension = xml.find("<dimension").unwrap();
+        assert!(dimension < format_pr && format_pr < sheet_data);
+    }
+
     /// BUG-1602: zip-based sources have no BIFF walk; their conversion must
     /// stay byte-for-byte the minimal output — no merges, no cols, no extra
     /// styles.
@@ -778,16 +908,20 @@ mod tests {
     /// pre-existing upstream behavior, unchanged by this module.
     #[test]
     fn truncated_layout_fixture_never_panics_the_walk() {
-        let full = std::fs::read(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/fixtures/bug-1602-merges-widths-styles.xls"
-        ))
-        .unwrap();
+        let books = [
+            "bug-1602-merges-widths-styles.xls",
+            // BUG-1607: exercises the ROW/DEFAULTROWHEIGHT record paths.
+            "bug-1607-row-heights-hidden.xls",
+        ];
+        let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
         let dir = tempfile::tempdir().unwrap();
-        for cut in (0..full.len()).step_by(64) {
-            let path = dir.path().join("cut.xls");
-            std::fs::write(&path, &full[..cut]).unwrap();
-            let _ = xls_layout::WorkbookLayout::extract(&path);
+        for name in books {
+            let full = std::fs::read(manifest.join(name)).unwrap();
+            for cut in (0..full.len()).step_by(64) {
+                let path = dir.path().join("cut.xls");
+                std::fs::write(&path, &full[..cut]).unwrap();
+                let _ = xls_layout::WorkbookLayout::extract(&path);
+            }
         }
     }
 
