@@ -5,6 +5,7 @@
  * calls into, so they are injected first.
  */
 import stylesSource from './browser/core/styles.js?raw'
+import normalizeSource from './browser/core/normalize.js?raw'
 import runsScreenshotsSource from './browser/core/runs-screenshots.js?raw'
 import tablesListsSource from './browser/core/tables-lists.js?raw'
 import layoutsControlsSource from './browser/core/layouts-controls.js?raw'
@@ -18,6 +19,9 @@ import pagesHelperSource from './browser/pages.js?raw'
 
 const EXTRACTOR_BODY = [
   stylesSource,
+  // Runs right after the style helpers: it rewrites the parsed DOM (BUG-1650
+  // artifact of unclosed inline tags) before any classification walks it.
+  normalizeSource,
   runsScreenshotsSource,
   tablesListsSource,
   layoutsControlsSource,
