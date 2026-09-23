@@ -16,6 +16,7 @@ import {
 import type { WebContents } from 'electron'
 import {
   TextRecoveryStore,
+  checkSaveStaleness,
   configuredDefaultSaveDir,
   contextMenuLabels,
   installContextMenu,
@@ -23,10 +24,13 @@ import {
   safeExternalUrl,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
+  statFileStamp,
   truncateByCodePoints,
   voidLoad,
 } from '@airy-office/electron-utils'
+import type { FileStamp } from '@airy-office/electron-utils'
 import { createI18n, getUiLang } from '@airy-office/i18n'
+import type { Params } from '@airy-office/i18n'
 import { generateImageTool } from '@airy-office/ai-search'
 import { decodeTextBytes, legacyCharsetForLang } from '@airy-office/file-parse/text'
 import { atomicWriteFile } from '@airy-office/electron-utils'
@@ -63,6 +67,11 @@ const tDlg = createI18n({
     dlgPickImage: '选择图片',
     filterImages: '图片',
     untitledFile: '未命名文档',
+    externalChangeTitle: '文件已被外部修改',
+    externalChangeDetail:
+      '自上次保存后，“{name}”已被其他程序更改、重命名或删除。覆盖将丢弃外部更改；另存为会将您的版本写入新文件。',
+    btnOverwrite: '覆盖',
+    btnSaveAs: '另存为',
     closeUnsavedMsg: '此文档有未保存的更改。',
     autosaveFoundTitle: '发现自动恢复版本',
     autosaveFoundBody: '上次会话有未保存的更改。要恢复自动保存的版本吗?',
@@ -79,6 +88,11 @@ const tDlg = createI18n({
     dlgPickImage: 'Choose an Image',
     filterImages: 'Images',
     untitledFile: 'Untitled',
+    externalChangeTitle: 'File changed outside this app',
+    externalChangeDetail:
+      '"{name}" was changed, renamed, or deleted by another program since the last save. Overwriting discards the external changes; Save As writes your version to a new file.',
+    btnOverwrite: 'Overwrite',
+    btnSaveAs: 'Save As',
     closeUnsavedMsg: 'This document has unsaved changes.',
     autosaveFoundTitle: 'Recovered version found',
     autosaveFoundBody:
@@ -96,6 +110,11 @@ const tDlg = createI18n({
     dlgPickImage: '画像を選択',
     filterImages: '画像',
     untitledFile: '無題',
+    externalChangeTitle: 'ファイルが外部で変更されました',
+    externalChangeDetail:
+      '最後の保存後、「{name}」は他のプログラムによって変更・名前変更・削除されました。上書きすると外部の変更は失われます。名前を付けて保存すると新しいファイルに保存されます。',
+    btnOverwrite: '上書き保存',
+    btnSaveAs: '名前を付けて保存',
     closeUnsavedMsg: 'このドキュメントに未保存の変更があります。',
     autosaveFoundTitle: '自動回復バージョンがあります',
     autosaveFoundBody: '前回のセッションに未保存の変更があります。自動保存版を復元しますか?',
@@ -112,6 +131,11 @@ const tDlg = createI18n({
     dlgPickImage: '이미지 선택',
     filterImages: '이미지',
     untitledFile: '제목 없음',
+    externalChangeTitle: '파일이 외부에서 변경되었습니다',
+    externalChangeDetail:
+      '마지막 저장 후 "{name}"이(가) 다른 프로그램에 의해 변경, 이름 변경 또는 삭제되었습니다. 덮어쓰면 외부 변경 사항이 손실됩니다. 다른 이름으로 저장하면 새 파일에 저장됩니다.',
+    btnOverwrite: '덮어쓰기',
+    btnSaveAs: '다른 이름으로 저장',
     closeUnsavedMsg: '이 문서에 저장하지 않은 변경 사항이 있습니다.',
     autosaveFoundTitle: '자동 복구 버전 발견',
     autosaveFoundBody:
@@ -129,6 +153,11 @@ const tDlg = createI18n({
     dlgPickImage: 'Choisir une image',
     filterImages: 'Images',
     untitledFile: 'Sans titre',
+    externalChangeTitle: 'Fichier modifié à l’extérieur de l’application',
+    externalChangeDetail:
+      'Depuis le dernier enregistrement, « {name} » a été modifié, renommé ou supprimé par un autre programme. Écraser abandonne les modifications externes ; Enregistrer sous écrit votre version dans un nouveau fichier.',
+    btnOverwrite: 'Écraser',
+    btnSaveAs: 'Enregistrer sous',
     closeUnsavedMsg: 'Ce document contient des modifications non enregistrées.',
     autosaveFoundTitle: 'Version récupérée trouvée',
     autosaveFoundBody:
@@ -146,6 +175,11 @@ const tDlg = createI18n({
     dlgPickImage: 'Bild auswählen',
     filterImages: 'Bilder',
     untitledFile: 'Unbenannt',
+    externalChangeTitle: 'Datei außerhalb der App geändert',
+    externalChangeDetail:
+      '„{name}“ wurde seit dem letzten Speichern von einem anderen Programm geändert, umbenannt oder gelöscht. Überschreiben verwirft die externen Änderungen; Speichern unter schreibt Ihre Version in eine neue Datei.',
+    btnOverwrite: 'Überschreiben',
+    btnSaveAs: 'Speichern unter',
     closeUnsavedMsg: 'Dieses Dokument enthält ungespeicherte Änderungen.',
     autosaveFoundTitle: 'Wiederhergestellte Version gefunden',
     autosaveFoundBody:
@@ -163,6 +197,11 @@ const tDlg = createI18n({
     dlgPickImage: 'Elegir imagen',
     filterImages: 'Imágenes',
     untitledFile: 'Sin título',
+    externalChangeTitle: 'Archivo modificado fuera de la aplicación',
+    externalChangeDetail:
+      '«{name}» fue cambiado, renombrado o eliminado por otro programa desde el último guardado. Sobrescribir descarta los cambios externos; Guardar como escribe su versión en un archivo nuevo.',
+    btnOverwrite: 'Sobrescribir',
+    btnSaveAs: 'Guardar como',
     closeUnsavedMsg: 'Este documento tiene cambios sin guardar.',
     autosaveFoundTitle: 'Se encontró una versión recuperada',
     autosaveFoundBody:
@@ -180,6 +219,11 @@ const tDlg = createI18n({
     dlgPickImage: 'เลือกรูปภาพ',
     filterImages: 'รูปภาพ',
     untitledFile: 'ไม่มีชื่อ',
+    externalChangeTitle: 'ไฟล์ถูกแก้ไขจากภายนอกแอป',
+    externalChangeDetail:
+      '"{name}" ถูกเปลี่ยน เปลี่ยนชื่อ หรือลบโดยโปรแกรมอื่นตั้งแต่การบันทึกครั้งล่าสุด การเขียนทับจะละทิ้งการเปลี่ยนแปลงภายนอก ส่วนบันทึกเป็นจะเขียนเวอร์ชันของคุณลงไฟล์ใหม่',
+    btnOverwrite: 'เขียนทับ',
+    btnSaveAs: 'บันทึกเป็น',
     closeUnsavedMsg: 'เอกสารนี้มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก',
     autosaveFoundTitle: 'พบเวอร์ชันกู้คืนอัตโนมัติ',
     autosaveFoundBody: 'มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึกจากครั้งก่อน ต้องการกู้คืนหรือไม่?',
@@ -196,6 +240,11 @@ const tDlg = createI18n({
     dlgPickImage: 'Pilih gambar',
     filterImages: 'Gambar',
     untitledFile: 'Tanpa judul',
+    externalChangeTitle: 'File diubah dari luar aplikasi',
+    externalChangeDetail:
+      '"{name}" diubah, diganti nama, atau dihapus oleh program lain sejak penyimpanan terakhir. Timpa akan membuang perubahan eksternal; Simpan Sebagai menulis versi Anda ke file baru.',
+    btnOverwrite: 'Timpa',
+    btnSaveAs: 'Simpan Sebagai',
     closeUnsavedMsg: 'Dokumen ini memiliki perubahan yang belum disimpan.',
     autosaveFoundTitle: 'Versi pemulihan ditemukan',
     autosaveFoundBody:
@@ -213,6 +262,11 @@ const tDlg = createI18n({
     dlgPickImage: 'Выберите изображение',
     filterImages: 'Изображения',
     untitledFile: 'Без названия',
+    externalChangeTitle: 'Файл изменён вне приложения',
+    externalChangeDetail:
+      'С момента последнего сохранения «{name}» был изменён, переименован или удалён другой программой. Перезапись отменит внешние изменения; «Сохранить как» запишет вашу версию в новый файл.',
+    btnOverwrite: 'Перезаписать',
+    btnSaveAs: 'Сохранить как',
     closeUnsavedMsg: 'В этом документе есть несохранённые изменения.',
     autosaveFoundTitle: 'Найдена восстановленная версия',
     autosaveFoundBody:
@@ -230,6 +284,11 @@ const tDlg = createI18n({
     dlgPickImage: 'اختر صورة',
     filterImages: 'صور',
     untitledFile: 'بدون عنوان',
+    externalChangeTitle: 'تم تغيير الملف من خارج التطبيق',
+    externalChangeDetail:
+      'تم تغيير "{name}" أو إعادة تسميته أو حذفه بواسطة برنامج آخر منذ آخر حفظ. الكتابة فوق تتخلى عن التغييرات الخارجية؛ حفظ باسم يكتب نسختك في ملف جديد.',
+    btnOverwrite: 'الكتابة فوق',
+    btnSaveAs: 'حفظ باسم',
     closeUnsavedMsg: 'يحتوي هذا المستند على تغييرات غير محفوظة.',
     autosaveFoundTitle: 'تم العثور على نسخة مستردة',
     autosaveFoundBody:
@@ -247,6 +306,11 @@ const tDlg = createI18n({
     dlgPickImage: 'Escolher imagem',
     filterImages: 'Imagens',
     untitledFile: 'Sem título',
+    externalChangeTitle: 'Arquivo alterado fora do aplicativo',
+    externalChangeDetail:
+      '"{name}" foi alterado, renomeado ou excluído por outro programa desde o último salvamento. Sobrescrever descarta as alterações externas; Salvar como grava a sua versão em um novo arquivo.',
+    btnOverwrite: 'Sobrescrever',
+    btnSaveAs: 'Salvar como',
     closeUnsavedMsg: 'Este documento tem alterações não salvas.',
     autosaveFoundTitle: 'Versão recuperada encontrada',
     autosaveFoundBody:
@@ -264,6 +328,11 @@ const tDlg = createI18n({
     dlgPickImage: 'Scegli immagine',
     filterImages: 'Immagini',
     untitledFile: 'Senza titolo',
+    externalChangeTitle: 'File modificato al di fuori dell’app',
+    externalChangeDetail:
+      '"{name}" è stato modificato, rinominato o eliminato da un altro programma dall’ultimo salvataggio. Sovrascrivere scarta le modifiche esterne; Salva come scrive la tua versione in un nuovo file.',
+    btnOverwrite: 'Sovrascrivi',
+    btnSaveAs: 'Salva come',
     closeUnsavedMsg: 'Questo documento contiene modifiche non salvate.',
     autosaveFoundTitle: 'Trovata versione recuperata',
     autosaveFoundBody:
@@ -281,6 +350,11 @@ const tDlg = createI18n({
     dlgPickImage: 'Wybierz obraz',
     filterImages: 'Obrazy',
     untitledFile: 'Bez tytułu',
+    externalChangeTitle: 'Plik zmieniony poza aplikacją',
+    externalChangeDetail:
+      'Od ostatniego zapisu plik „{name}” został zmieniony, przemianowany lub usunięty przez inny program. Nadpisanie odrzuci zmiany zewnętrzne; Zapisz jako zapisze Twoją wersję w nowym pliku.',
+    btnOverwrite: 'Nadpisz',
+    btnSaveAs: 'Zapisz jako',
     closeUnsavedMsg: 'Ten dokument ma niezapisane zmiany.',
     autosaveFoundTitle: 'Znaleziono odzyskaną wersję',
     autosaveFoundBody:
@@ -298,6 +372,11 @@ const tDlg = createI18n({
     dlgPickImage: 'Vyberte obrázek',
     filterImages: 'Obrázky',
     untitledFile: 'Bez názvu',
+    externalChangeTitle: 'Soubor byl změněn mimo aplikaci',
+    externalChangeDetail:
+      'Od posledního uložení byl soubor „{name}“ změněn, přejmenován nebo smazán jiným programem. Přepsáním se zahodí externí změny; Uložit jako zapíše vaši verzi do nového souboru.',
+    btnOverwrite: 'Přepsat',
+    btnSaveAs: 'Uložit jako',
     closeUnsavedMsg: 'Tento dokument má neuložené změny.',
     autosaveFoundTitle: 'Nalezena obnovená verze',
     autosaveFoundBody:
@@ -315,6 +394,11 @@ const tDlg = createI18n({
     dlgPickImage: 'Kies een afbeelding',
     filterImages: 'Afbeeldingen',
     untitledFile: 'Naamloos',
+    externalChangeTitle: 'Bestand buiten de app gewijzigd',
+    externalChangeDetail:
+      '"{name}" is sinds de laatste opslag gewijzigd, hernoemd of verwijderd door een ander programma. Overschrijven staakt de externe wijzigingen; Opslaan als schrijft uw versie naar een nieuw bestand.',
+    btnOverwrite: 'Overschrijven',
+    btnSaveAs: 'Opslaan als',
     closeUnsavedMsg: 'Dit document bevat niet-opgeslagen wijzigingen.',
     autosaveFoundTitle: 'Herstelde versie gevonden',
     autosaveFoundBody:
@@ -332,6 +416,11 @@ const tDlg = createI18n({
     dlgPickImage: 'Pilih imej',
     filterImages: 'Imej',
     untitledFile: 'Tanpa tajuk',
+    externalChangeTitle: 'Fail diubah di luar aplikasi',
+    externalChangeDetail:
+      '"{name}" telah diubah, dinamakan semula atau dipadamkan oleh program lain sejak simpanan terakhir. Tulis ganti akan mengetepikan perubahan luaran; Simpan Sebagai menulis versi anda ke fail baharu.',
+    btnOverwrite: 'Tulis ganti',
+    btnSaveAs: 'Simpan Sebagai',
     closeUnsavedMsg: 'Dokumen ini mempunyai perubahan yang belum disimpan.',
     autosaveFoundTitle: 'Versi pulihan ditemui',
     autosaveFoundBody:
@@ -349,6 +438,11 @@ const tDlg = createI18n({
     dlgPickImage: 'בחרו תמונה',
     filterImages: 'תמונות',
     untitledFile: 'ללא שם',
+    externalChangeTitle: 'הקובץ השתנה מחוץ ליישום',
+    externalChangeDetail:
+      '"{name}" שונה, שונה שמו או נמחק על ידי תוכנית אחרת מאז השמירה האחרונה. דריסה מוותרת על השינויים החיצוניים; שמירה בשם כותבת את הגרסה שלך לקובץ חדש.',
+    btnOverwrite: 'דריסה',
+    btnSaveAs: 'שמירה בשם',
     closeUnsavedMsg: 'במסמך הזה יש שינויים שלא נשמרו.',
     autosaveFoundTitle: 'נמצאה גרסה משוחזרת',
     autosaveFoundBody: 'קיימים שינויים שלא נשמרו מהפעלה הקודמת. לשחזר את הגרסה שנשמרה אוטומטית?',
@@ -365,6 +459,11 @@ const tDlg = createI18n({
     dlgPickImage: 'छवि चुनें',
     filterImages: 'छवियाँ',
     untitledFile: 'शीर्षकहीन',
+    externalChangeTitle: 'फ़ाइल ऐप के बाहर बदली गई',
+    externalChangeDetail:
+      'पिछले सहेजने के बाद "{name}" को किसी अन्य प्रोग्राम ने बदला, नाम बदला या हटाया। ओवरराइट करने पर बाहरी बदलाव खो जाएंगे; इस रूप में सहेजें आपका संस्करण नई फ़ाइल में लिखेगा।',
+    btnOverwrite: 'ओवरराइट करें',
+    btnSaveAs: 'इस रूप में सहेजें',
     closeUnsavedMsg: 'इस दस्तावेज़ में सहेजे नहीं गए परिवर्तन हैं।',
     autosaveFoundTitle: 'पुनर्प्राप्त संस्करण मिला',
     autosaveFoundBody:
@@ -382,6 +481,11 @@ const tDlg = createI18n({
     dlgPickImage: '選擇圖片',
     filterImages: '圖片',
     untitledFile: '未命名文件',
+    externalChangeTitle: '檔案已被外部修改',
+    externalChangeDetail:
+      '自上次儲存後，「{name}」已被其他程式變更、重新命名或刪除。覆蓋將捨棄外部變更；另存新檔會將您的版本寫入新檔案。',
+    btnOverwrite: '覆蓋',
+    btnSaveAs: '另存新檔',
     closeUnsavedMsg: '此文件有未儲存的變更。',
     autosaveFoundTitle: '發現自動復原版本',
     autosaveFoundBody: '上次工作階段有未儲存的變更。要復原自動儲存的版本嗎?',
@@ -408,7 +512,11 @@ type DlgKey =
   | 'autosaveFoundBody'
   | 'autosaveRestore'
   | 'autosaveDiscard'
-const tm = (key: DlgKey) => tDlg(getUiLang(), key)
+  | 'externalChangeTitle'
+  | 'externalChangeDetail'
+  | 'btnOverwrite'
+  | 'btnSaveAs'
+const tm = (key: DlgKey, params?: Params) => tDlg(getUiLang(), key, params)
 
 interface RuntimePaths {
   preloadPath: string
@@ -445,6 +553,9 @@ const openPathByWc = new Map<number, string>()
 const allowedByWc = new Map<number, Set<string>>()
 /** Current save target per view; absent = untitled document */
 const savePathByWc = new Map<number, string>()
+/** Last seen on-disk identity (mtime+size) of each view's save target — the
+ * BUG-1654 staleness fence baseline, captured at open and after every save */
+const saveStampByWc = new Map<number, FileStamp | null>()
 /** Unsaved-changes flags mirrored from the renderer; drives the save prompt before closing a tab/window */
 const dirtyByWc = new Set<number>()
 const closeSaveWaiters = new Map<number, (ok: boolean) => void>()
@@ -535,7 +646,12 @@ export function markdownFilePath(webContentsId: number): string | undefined {
 /** The file was renamed on disk — re-grant the new path and tell the renderer */
 export function markdownFileRenamed(contents: WebContents, oldPath: string, newPath: string): void {
   const wcId = contents.id
-  if (savePathByWc.get(wcId) === oldPath) savePathByWc.set(wcId, newPath)
+  if (savePathByWc.get(wcId) === oldPath) {
+    savePathByWc.set(wcId, newPath)
+    // a rename keeps the file's identity — re-stamp at the new path so the
+    // staleness fence keeps comparing against the same file (BUG-1654)
+    saveStampByWc.set(wcId, statFileStamp(newPath))
+  }
   if (openPathByWc.get(wcId) === oldPath) openPathByWc.set(wcId, newPath)
   const allowed = allowedByWc.get(wcId)
   if (allowed?.has(oldPath)) allowed.add(newPath)
@@ -616,6 +732,34 @@ export function requestMarkdownSave(contents: WebContents, mode: SaveMode): Prom
 
 async function writeTextAtomic(path: string, text: string): Promise<void> {
   await atomicWriteFile(path, Buffer.from(text, 'utf8'))
+}
+
+type ExternalChangeChoice = 'saveAs' | 'overwrite' | 'cancel'
+
+/**
+ * BUG-1654: honest prompt when an in-place save hits a file that was changed,
+ * renamed, or deleted outside this window. Save As is the default (nothing can
+ * be lost); Overwrite deliberately replaces the external contents; Cancel
+ * abandons the write and keeps the document dirty.
+ */
+async function promptExternalChange(
+  win: BrowserWindow | undefined,
+  fileName: string,
+): Promise<ExternalChangeChoice> {
+  const options = {
+    type: 'warning' as const,
+    message: tm('externalChangeTitle'),
+    detail: tm('externalChangeDetail', { name: fileName }),
+    buttons: [tm('btnSaveAs'), tm('btnOverwrite'), tm('btnCancel')],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true,
+  }
+  const { response } =
+    win && !win.isDestroyed()
+      ? await dialog.showMessageBox(win, options)
+      : await dialog.showMessageBox(options)
+  return response === 0 ? 'saveAs' : response === 1 ? 'overwrite' : 'cancel'
 }
 
 async function resolveSaveTarget(
@@ -755,9 +899,36 @@ function registerMarkdownIpc(): void {
       try {
         const suggestedName =
           typeof request.suggestedName === 'string' ? request.suggestedName : undefined
-        const target = await resolveSaveTarget(e, mode, suggestedName)
+        let target = await resolveSaveTarget(e, mode, suggestedName)
         if (target === 'canceled') return done({ ok: true, canceled: true })
         if (!target) return done({ ok: false, error: 'markdown: no save target' })
+        // BUG-1654 staleness fence: an in-place save must not blindly
+        // resurrect a path that was renamed/deleted externally (silent fork)
+        // or clobber changes another window or program wrote since the last
+        // save (last-writer-wins). The stat runs as late as possible before
+        // the write; a writer racing between the stat and the atomic rename
+        // still wins — the fence narrows the window, it cannot close it.
+        if (pathAtRequest && resolve(pathAtRequest) === resolve(target)) {
+          const verdict = checkSaveStaleness(target, saveStampByWc.get(e.sender.id))
+          if (verdict !== 'fresh') {
+            // automatic saves are declined silently — a modal every autosave
+            // tick would hold the document hostage; the doc just stays dirty
+            if (request.auto === true) return done({ ok: true, canceled: true })
+            const win =
+              BrowserWindow.fromWebContents(e.sender) ??
+              BrowserWindow.getFocusedWindow() ??
+              undefined
+            const choice = await promptExternalChange(win, basename(target))
+            if (choice === 'cancel') return done({ ok: true, canceled: true })
+            if (choice === 'saveAs') {
+              const retry = await resolveSaveTarget(e, 'saveAs', suggestedName)
+              if (retry === 'canceled') return done({ ok: true, canceled: true })
+              if (!retry) return done({ ok: false, error: 'markdown: no save target' })
+              target = retry
+            }
+            // 'overwrite': the user deliberately replaces the external contents
+          }
+        }
         const currentPath = pathAtRequest
         const isNewPath = currentPath !== target
         const imageSources = [...(request.imageSources ?? [])]
@@ -780,6 +951,8 @@ function registerMarkdownIpc(): void {
           throw error
         }
         savePathByWc.set(e.sender.id, target)
+        // the write is ours — refresh the fence baseline from the fresh file
+        saveStampByWc.set(e.sender.id, statFileStamp(target))
         // keep the reload path in sync — a stale openPathByWc would make a
         // reloaded renderer load the OLD file and then save it over the new one
         openPathByWc.set(e.sender.id, target)
@@ -1014,6 +1187,8 @@ function grantAndTrack(wc: WebContents, openPath?: string | null): void {
   if (openPath && existsSync(openPath)) {
     openPathByWc.set(wcId, openPath)
     savePathByWc.set(wcId, openPath)
+    // fence baseline at open (BUG-1654): the renderer is about to read this file
+    saveStampByWc.set(wcId, statFileStamp(openPath))
     allowedByWc.set(wcId, new Set([openPath]))
   }
   wc.setWindowOpenHandler(({ url }) => {
@@ -1026,6 +1201,7 @@ function grantAndTrack(wc: WebContents, openPath?: string | null): void {
     openPathByWc.delete(wcId)
     allowedByWc.delete(wcId)
     savePathByWc.delete(wcId)
+    saveStampByWc.delete(wcId)
     dirtyByWc.delete(wcId)
     closeSaveWaiters.get(wcId)?.(false)
     closeSaveWaiters.delete(wcId)

@@ -186,6 +186,7 @@ const PINNED_AI_CHANNELS = `
 
 /** Frozen fields of the save-request wire payload (renderer -> main). */
 const PINNED_SAVE_REQUEST_FIELDS = `
+  auto
   defaultName
   imageSources
   mode

@@ -341,7 +341,7 @@ export default function App() {
 
   /** Serialize and write to disk; false when canceled/failed (caller keeps the tab open) */
   const doSave = useCallback(
-    async (mode: SaveMode, suggestedName?: string): Promise<boolean> => {
+    async (mode: SaveMode, suggestedName?: string, auto = false): Promise<boolean> => {
       const current = editorRef.current
       if (!current || statusRef.current !== 'ready' || savingRef.current) return false
       savingRef.current = true
@@ -357,7 +357,13 @@ export default function App() {
         const body = current.getMarkdown()
         const text = serializeDocText(envelopeRef.current, body)
         const imageSources = imageSourcesFromEditor(current)
-        const result = await window.markdownApi.save({ text, imageSources, mode, suggestedName })
+        const result = await window.markdownApi.save({
+          text,
+          imageSources,
+          mode,
+          suggestedName,
+          auto: auto || undefined,
+        })
         if (result.ok && 'path' in result) {
           const unchanged =
             editorRef.current?.state.doc === docAtSave &&
@@ -591,7 +597,8 @@ export default function App() {
     const tick = () => {
       if (!dirtyRef.current) return
       if (editorRef.current?.view.composing) return // don't interrupt IME input
-      void doSave('save')
+      // auto saves are declined silently by the staleness fence (no modal)
+      void doSave('save', undefined, true)
     }
     const id = window.setInterval(tick, 30_000)
     window.addEventListener('blur', tick)

@@ -53,6 +53,12 @@ export interface SaveMarkdownRequest {
    * Ignored when the document already has a path.
    */
   suggestedName?: string
+  /**
+   * Marks an automatic save (the autosave tick / window blur). When the
+   * staleness fence refuses the write, an auto save is declined without the
+   * external-change dialog instead of popping a modal every 30 seconds.
+   */
+  auto?: boolean
 }
 
 export type SaveMarkdownResult =
