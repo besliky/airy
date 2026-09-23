@@ -16,6 +16,7 @@ use zip::ZipArchive;
 pub mod archive;
 pub mod convert;
 mod legacy_xls;
+mod ole2;
 pub mod recalc;
 mod richdata;
 mod shared_formulas;
