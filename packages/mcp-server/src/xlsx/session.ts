@@ -38,6 +38,8 @@ import {
   type WorkbookRichRun,
   type WorkbookStyleEdit,
 } from './save.js'
+// one shared A1 parse/validate for reads and writes (BUG-1632)
+import { columnToLabel, parseA1Range } from './refs.js'
 import type { XlsxIo } from './sidecar-client.js'
 
 // ---- limits (kept inside the ~30k character MCP answer budget) ----
@@ -174,55 +176,6 @@ function parseRangeResult(raw: unknown): {
     }
   })
   return { cells, indexingComplete: result.indexingComplete === true }
-}
-
-// ---- A1 notation ----
-
-const CELL_RE = /^\$?([A-Za-z]{1,3})\$?([0-9]{1,7})$/
-const RANGE_RE = /^\$?([A-Za-z]{1,3})\$?([0-9]{1,7}):\$?([A-Za-z]{1,3})\$?([0-9]{1,7})$/
-
-export function columnFromLabel(label: string): number {
-  let value = 0
-  for (const char of label.toUpperCase()) value = value * 26 + (char.charCodeAt(0) - 64)
-  return value - 1
-}
-
-export function columnToLabel(index: number): string {
-  let label = ''
-  let value = index + 1
-  while (value > 0) {
-    const remainder = (value - 1) % 26
-    label = String.fromCharCode(65 + remainder) + label
-    value = Math.floor((value - 1) / 26)
-  }
-  return label
-}
-
-/** Parse "B2" or "A1:C10" into an inclusive 0-based range (unordered refs allowed). */
-export function parseA1Range(spec: string): {
-  startRow: number
-  endRow: number
-  startColumn: number
-  endColumn: number
-} {
-  const single = CELL_RE.exec(spec.trim())
-  if (single) {
-    const row = Number(single[2]) - 1
-    const column = columnFromLabel(single[1]!)
-    return { startRow: row, endRow: row, startColumn: column, endColumn: column }
-  }
-  const range = RANGE_RE.exec(spec.trim())
-  if (!range) throw new Error(`Invalid A1-style range "${spec}" (expected e.g. "A1:C10" or "B2").`)
-  const startColumn = columnFromLabel(range[1]!)
-  const endColumn = columnFromLabel(range[3]!)
-  const startRow = Number(range[2]) - 1
-  const endRow = Number(range[4]) - 1
-  return {
-    startRow: Math.min(startRow, endRow),
-    endRow: Math.max(startRow, endRow),
-    startColumn: Math.min(startColumn, endColumn),
-    endColumn: Math.max(startColumn, endColumn),
-  }
 }
 
 // ---- session ----
@@ -605,6 +558,12 @@ export class XlsxSession {
    * same present=set patch semantics as the docx ops. dryRun validates the
    * whole batch (sheet names, refs, edit shapes) without journaling.
    *
+   * The batch is validated in full before anything is journaled (BUG-1632):
+   * a bad ref — e.g. "A0", valid A1 syntax whose 0-based row is -1 — used to
+   * be journaled and then poisoned every later save ("Invalid cell
+   * coordinates: -1,0"). The shared parse/validate in refs.ts refuses such
+   * refs up front, so a rejected batch leaves the journal untouched.
+   *
    * The return distinguishes the input count (`journaled`: every edit the
    * batch spelled, including later edits to already-journaled cells) from
    * the journal growth (`merged`: entries this call added — several edits to
@@ -625,30 +584,34 @@ export class XlsxSession {
     dryRun = false,
   ): { journaled: number; merged: number } {
     const sheet = this.resolveSheet(input.sheet)
-    let journaled = 0
-    let merged = 0
-    for (const cell of input.cells) {
+    // pass 1 — resolve and validate every edit before journaling any, so a
+    // per-cell failure (bad sheet, non-addressable/range ref, edit without
+    // channels) refuses the whole batch atomically
+    const parsed = input.cells.map((cell) => {
       const address = parseA1Range(cell.ref)
       if (address.startRow !== address.endRow || address.startColumn !== address.endColumn) {
         throw new Error(`Cell ref "${cell.ref}" must be a single cell like "B2", not a range.`)
       }
-      const edit = toCellEdit(sheet.name, address.startRow, address.startColumn, cell)
-      if (!dryRun) {
-        const existing = this.edits.find(
-          (candidate) =>
-            candidate.sheetName === sheet.name &&
-            candidate.row === address.startRow &&
-            candidate.column === address.startColumn,
-        )
-        if (existing) mergeCellEdit(existing, edit)
-        else {
-          this.edits.push(edit)
-          merged += 1
-        }
+      const row = address.startRow
+      const column = address.startColumn
+      return { row, column, edit: toCellEdit(sheet.name, row, column, cell) }
+    })
+    if (dryRun) return { journaled: parsed.length, merged: 0 }
+    let merged = 0
+    for (const { row, column, edit } of parsed) {
+      const existing = this.edits.find(
+        (candidate) =>
+          candidate.sheetName === sheet.name &&
+          candidate.row === row &&
+          candidate.column === column,
+      )
+      if (existing) mergeCellEdit(existing, edit)
+      else {
+        this.edits.push(edit)
+        merged += 1
       }
-      journaled += 1
     }
-    return { journaled, merged }
+    return { journaled: parsed.length, merged }
   }
 
   // ---- saving ----
