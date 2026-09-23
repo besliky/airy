@@ -7,6 +7,146 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-09-23
+
+### Added
+
+- Slides: Ctrl+M inserts a slide, Tab cycles into and out of groups, JPEG export,
+  a Slide Size dialog, groups that contain tables, whole-body notes formatting, and
+  chartEx treemap/waterfall fallback rendering (PR #120).
+- Shell: local crash diagnostics — the crash reporter writes minidumps to
+  `userData/crash-dumps` (upload disabled, nothing leaves the machine) and the main
+  process keeps a 1 MiB ring-buffer log at `userData/logs/main.log` (3 backups) with
+  structured records for render-process-gone, child-process-gone and quit, so "the
+  app closed itself" reports can be diagnosed on the user's machine (PR #138).
+
+### Changed
+
+- docs/COPILOT.md documents an honest per-format zip budget matrix (what each format
+  fences on open and what remains unfenced), every row anchored to code (PR #119).
+- Focus-ring tokens across pdf/docs/markdown raised to WCAG ≥3:1 contrast via alpha
+  only (worst token 1.13 → 3.06; hue and geometry untouched), with a contrast
+  invariant test (PR #122).
+- Test infrastructure: local xvfb e2e pins byte-exact Carlito/Caladea 2013 CI font
+  builds via `setup:e2e-fonts` (removes five false pixel-baseline failures) and
+  sheets abort AI streams on tab teardown (PR #113); a tests-only coverage batch
+  adds 20 tests over sort edge branches, SmartArt gallery UI, Home file-search
+  wiring and mcp md/html suite isolation (PR #117).
+
+### Fixed
+
+- Sheets:
+  - Legacy .xls files no longer turn Cyrillic strings into garbage — the BIFF8
+    shared-string table is decoded as UTF-16 through a dedicated OLE2/BIFF reader
+    instead of a single-byte codepage (user-reported; PR #126).
+  - List validation pointing at a hidden sheet no longer blocks typing for ~20 s
+    until the whole workbook streams in — the validator gates to VALID while the
+    source range is not loaded and refreshes the sources after the sheet loads
+    (user-reported; PR #127).
+  - The Carlito-Regular/Bold.ttf 404 at every launch is gone — cell-font fallback
+    uses static font imports instead of a bare runtime URL (PR #128).
+  - Printing a wide sheet no longer surprises: a guard detects multi-strip jobs and
+    paper that mismatches the UI locale (file Letter vs expected A4) and offers
+    fit-to-width and a paper switch in the Print dialog; the file's print semantics
+    are untouched (user-reported; PR #129).
+  - .xls conversion fidelity: a second BIFF8 layout pass transfers merged cells,
+    column widths and cell styles (FONT/XF/FORMAT/PALETTE into styles.xml), so forms
+    stop falling apart; zip/BIFF5 output stays byte-identical (user-reported;
+    PR #130).
+  - A new workbook's grid grows on demand (Name Box/Go To, arrow keys at the edge;
+    5,000×64 steps up to Excel's 1,048,576×16,384 cap) — typing below row 1000 no
+    longer fails with "Range out of bounds"; new sheet tabs start at 1000×26
+    (PR #132).
+  - File → Print works on unmodified workbooks (it was gated on having pending
+    edits, unlike the native menu/Ctrl+P path); save/save-as/export guards are
+    untouched (PR #142).
+  - Print tails: header/footer positions account for the Chromium inset,
+    multi-section number formats round half-away like Excel, and General-format
+    dates stay dates after recalc (PR #112).
+- Docs:
+  - A trailing CJK comma on a document-grid line is visible again — the
+    punctuation-hang renderer plugin no longer zeroes the glyph advance and trusts
+    Blink with a zero-advance draw; hanging is grouped by box overlap, the inked
+    glyph is deterministic, and failed hangs are blacklisted (PR #140).
+  - A corrupt (truncated XML) .docx is refused with a "file is damaged" error
+    through the existing open-failure channel instead of silently opening as an
+    empty document; all 32 valid corpus files still open without false refusals
+    (PR #131).
+  - Glyph metrics: U+25CB gets a measured fallback width, and numbered lists without
+    w:ind no longer grow a phantom indent (PR #111).
+  - F9 refreshes field caches under TRACK_IGNORE without writing revisions, and
+    _Ref anchor ids are stamped from the document's free w:id pool (PR #114).
+  - Footnote pagination on the dense-notes doc-06 document: the page-1 paragraph
+    count now matches Word (PR #109).
+- Slides:
+  - Video export actually records: MediaRecorder receives a real
+    `canvas.captureStream()` stream instead of a wrapper object — a live export
+    produces a valid MP4 (ffprobe-verified under xvfb) where the feature silently
+    failed since it landed (PR #133).
+  - PDF export embeds the bundled fonts deterministically: the Calibri→Carlito
+    bundle mapping no longer depends on system-installed fonts, and chart labels in
+    the export SVG carry the same font stack the canvas draws — exported PDFs show
+    only Carlito where LiberationSans used to appear (PR #137).
+  - Recorder cancellation can no longer hang, per-slide PNG fit scales are restored,
+    recovery escalates after an aborted quit, the live bridge restart is serialized
+    per process under a token, Escape fires once, and desktop .pptx opens enforce
+    the headless zip fences with int32-normalized declared sizes (PR #116).
+- Shell:
+  - Quit hardening: the session persists in before-quit, closed docs tabs park on
+    about:blank, the dirty set is recomputed before the final close, quit-and-
+    install goes through a full `app.quit()`, and titles truncate on code points
+    without breaking surrogates (PR #118).
+  - App-settings persistence is written by a single writer, closing the window where
+    a burst of concurrent writes could drop keys in transit (fs.watch repro;
+    PR #108).
+- MCP:
+  - `setHeadingLevel` to a level with no style in the document now survives save and
+    reopen (direct `w:outlineLvl`, Word's native override) and reports a warning
+    instead of silently keeping the old style (PR #134).
+  - `apply_workbook_ops` validates A1 refs on write as well as read: "A0"-class and
+    beyond-grid refs are rejected per operation with a clear error instead of
+    poisoning the journal so every later save failed and unsaved edits were lost
+    (PR #136).
+  - Hardening batch: encrypted .docx is refused, insert markers must sit inside the
+    body, rich-text booleans are validated, the zip-bomb budget counts entries, and
+    `set_image_properties` validates inputs (PR #115).
+  - Infra batch: zip64 u64 saturation is pinned by a test, a stat→open TOCTOU on
+    xlsx opens is closed via rawBytes in the wire reply, negative declared zip sizes
+    are normalized in the docx fence, and quit snapshots retry with a will-quit
+    flush (PR #123).
+
+### Security
+
+- .ods conversion is fenced by the same central-directory zip budget as .xlsx
+  before the converter spawns; legacy OLE2 .xls bypasses it as before (PR #110).
+- JSZip declared sizes ≥2 GiB no longer wrap to negative int32 and slip past zip
+  budgets — normalized at docx zip-load and the MCP size fence (PR #121).
+- A hostile .xls can no longer crash the sidecar or drive it into an unbounded
+  allocation: OLE2 headers are validated before calamine (geometry no valid
+  [MS-CFB] container has), and the three calamine calls on the conversion path run
+  under catch_unwind (PR #139).
+
+### Performance
+
+- Big documents (18k paragraphs): the per-transaction O(n²) line-factor DecorationSet
+  rebuild is gone — opening is 10/10 runs ≤3 s (523–777 ms; the intermittent
+  multi-minute stalls are gone), scrolling went 7.2 → 60 fps with zero long-frame
+  gaps, and typing on giants dropped from 4.8 s to 1.1 s per keystroke (32 ms on
+  normal documents; block virtualization is a follow-up) (PR #135).
+- Closed tabs stop retaining renderer processes: a closed docs tab's webContents is
+  now destroyed after the about:blank teardown navigation — over 60 real close
+  cycles, orphan samples went 47/60 → 0/60 and the RSS envelope 1928 MB / 11
+  processes → 615–637 MB / 4 (baseline 607 MB) (PR #141).
+- CI wall time cut 10m56s → ~4m40s warm (2.34×): the pipeline is split into
+  parallel jobs without needs chains (test ×6 with vitest shards, e2e ×2 Playwright
+  shards) with electron/rust caches and build-once e2e artifacts (PR #124), then an
+  affected-only matrix and a third e2e shard (PR #125).
+
+<!-- Link refs to update at the bottom of CHANGELOG.md:
+[Unreleased]: https://github.com/besliky/airy/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/besliky/airy/compare/v0.15.0...v0.16.0
+-->
+
 ## [0.15.0] - 2026-09-22
 
 ### Added
