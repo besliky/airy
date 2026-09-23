@@ -291,9 +291,11 @@ describe('sidecar IronCalc recalculation channel', () => {
     }
   })
 
-  // IronCalc has no CELL("filename"); its error must not displace the
-  // cached sheet-name text the file already carries.
-  it('omits erroring CELL("filename") cells so the cached value survives', async () => {
+  // IronCalc used to have no CELL("filename") (#175): the MID/FIND idiom
+  // errored, and recalc omitted the cell so the file's cached sheet-name text
+  // survived. Since the 0.8 upgrade CELL("filename") computes, and the
+  // formula returns the sheet name as a live result matching the cache.
+  it('computes CELL("filename") sheet-name extraction instead of erroring', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'xlsx-recalc-test-'))
     cleanups.push(directory)
     const path = join(directory, 'recalc.xlsx')
@@ -312,7 +314,8 @@ describe('sidecar IronCalc recalculation channel', () => {
           ],
         }),
       )
-      expect(result.cells).toEqual([])
+      expect(result.cells).toHaveLength(1)
+      expect(result.cells[0]).toMatchObject({ formatted: 'Data', isFormula: true })
     } finally {
       client.stop()
     }

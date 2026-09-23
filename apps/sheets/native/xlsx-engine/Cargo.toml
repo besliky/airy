@@ -10,7 +10,7 @@ base64 = "0.22.1"
 calamine = "0.36.0"
 codepage = "0.1.2"
 encoding_rs = "0.8"
-ironcalc = "0.7.1"
+ironcalc = "0.8.3"
 quick-xml = { version = "0.38", features = ["encoding"] }
 roxmltree = "0.21.1"
 serde = { version = "1", features = ["derive"] }
