@@ -7,6 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-09-24
+
+### Added
+
+- Markdown & HTML: in-place saves are fenced against external changes — a per-view
+  stamp (mtime + size) taken at open (and refreshed after every save and shell-side
+  rename) is re-checked as late as possible before the atomic write; on mismatch a
+  native dialog offers Save As / Overwrite / Cancel, and autosave (tick/blur) is
+  rejected silently via an additive `auto` wire flag instead of popping a dialog
+  every 30 s (PR #151).
+
+### Changed
+
+- Breaking (formula semantics — shift to Excel 365): the sheets engine upgrades
+  ironcalc 0.7.1 → 0.8.3, so SUMPRODUCT, LET and dynamic arrays evaluate natively,
+  including file-level `_xlfn.LET(...)`. Comparisons lift element-wise over ranges,
+  `=A1:A3` spills, and non-CSE `SUM(IF(A1:A3>10,1,0))` returns Excel 365's 2 instead
+  of 1; SUMPRODUCT follows Excel exactly (text counts as 0, mismatched dimensions →
+  `#VALUE!`), and unknown names still give `#NAME?`. The lockfile gains a single new
+  transitive package (regex-lite); LAMBDA/FILTER/SORT/UNIQUE/SEQUENCE and spill UI
+  semantics are named follow-ups (PR #155).
+
+### Performance
+
+- Markdown: giant files hydrate in phases — the body is split at safe top-level block
+  boundaries, the first segment mounts synchronously and the rest hydrates in the
+  background with typing enabled throughout; save/export/print wait for hydration and
+  the result stays bit-identical to a monolithic parse. 20k-paragraph TTI
+  25.4–25.8 s → 0.87–1.04 s, settled 27.6–27.9 s → 5.3–5.4 s (PR #150).
+- HTML: on a 3 MB minified single-line document, TTI 39.7 s → 2.56 s and source typing
+  ~22 s per key → 43–75 ms — the instrumented preview copy is built in one O(N) pass
+  (the old splice loop copied ~96 GB of strings), sid matching is bucketed so
+  parse-map rebuilds stay linear instead of O(elements²), and rebuilds/preview pushes
+  leave the typing path behind a stale-serve map cache with a giant-document
+  auto-rebuild limit (PR #149).
+
+### Fixed
+
+- Sheets:
+  - Legacy .xls conversion carries row heights (ROW ht/fUnsynced, DEFAULTROWHEIGHT →
+    sheetFormatPr) and hidden rows, so forms with non-default header heights keep
+    their shape; zip/BIFF5 output stays byte-identical (PR #145).
+  - Printing honors the declared row height: the declaration is authoritative
+    (text-derived height only clamps from below, wrapped rows keep their text boost),
+    so a border-template sheet lays out 3 → 2 pages with plan == render and the
+    orphan stub page is gone (PR #146).
+  - Legacy .ods/.xls import works end to end again: both styles.xml writers emit
+    `<cellStyles>` from a single shared source, the ironcalc styles panic on import
+    is gone, and formulas of imported workbooks compute (PR #148).
+  - Deleting a source sheet applies Excel's #REF! semantics: dependent formulas are
+    rewritten (`SUM(#REF!)`) on both delete paths, a save/reload round-trip shows the
+    #REF! error instead of silently emptying, and undo restores the sheet (PR #156).
+  - .ods import translates a conservative ODF-formula subset to xlsx syntax (the
+    `of:=` prefix, bracketed `[.A1]`/`[Data.B1]` references, `;` → `,`,
+    `COM.MICROSOFT.*` aliases); unrecognized formulas pass through verbatim with
+    their cached value pinned, and .xlsx/.xls output stays byte-identical (PR #157).
+- Markdown & HTML:
+  - html2docx survives dirty HTML: an in-page normalize step splits inline elements
+    with block children into (clone, lifted blocks, clone) before classification, so
+    documents with unclosed p/li no longer collapse everything after the first h1
+    into one paragraph; valid documents are a no-op and `<a>` is deliberately
+    excluded (transparent content model) (PR #152).
+- Text import:
+  - GBK/gb18030 sentences no longer decode as windows-1250 soup: byte-honest script
+    coverage plus a "soup signature" withholds single-byte bonuses when the bytes
+    prove two-byte CJK, and scoring treats the newer ICU's PUA output as replacement
+    so the charset choice is ICU-version-independent (Thai cp874 and big5 TW fixed as
+    a bonus); on a 30-vector blind comparator the fix picks correctly 26/30 vs 16/30
+    on main, with zero regressions (PR #147).
+- Slides:
+  - svgBlip pictures render from the vector part in the author's own frame instead of
+    stretching a 1×1 PNG fallback across it; the embedded raster is kept as a
+    decode-failure fallback, preloaded by editor/master/audience views; figure fills
+    stay on the raster embed and save fidelity is untouched (PR #153).
+- Shell:
+  - Opening an unreadable file (EACCES/EPERM/ENOENT/EISDIR) via CLI, double-click or
+    macOS open-file shows a localized error dialog (errOpenFailed in all 20 locales)
+    instead of failing silently; session restore stays quiet (PR #154).
+
 ## [0.16.0] - 2026-09-23
 
 ### Added
