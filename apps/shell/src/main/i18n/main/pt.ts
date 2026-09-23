@@ -39,6 +39,7 @@ export const pt = {
   errRenameFailed: 'Falha ao renomear',
   errNewTabFailed: 'Falha ao criar o novo documento',
   errUnsupportedExt: 'arquivos .{ext} não são suportados',
+  errOpenFailed: 'Não foi possível abrir “{name}”',
   copySuffix: 'cópia',
   menuHelp: 'Ajuda',
   thirdPartyNotices: 'Avisos de software de terceiros',

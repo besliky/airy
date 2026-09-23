@@ -39,6 +39,7 @@ export const ms = {
   errRenameFailed: 'Gagal menamakan semula',
   errNewTabFailed: 'Gagal mencipta dokumen baharu',
   errUnsupportedExt: 'fail .{ext} tidak disokong',
+  errOpenFailed: 'Tidak dapat membuka “{name}”',
   copySuffix: 'salinan',
   menuHelp: 'Bantuan',
   thirdPartyNotices: 'Notis Perisian Pihak Ketiga',

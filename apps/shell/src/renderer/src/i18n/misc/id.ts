@@ -6,6 +6,7 @@ export const id = {
   closeTab: 'Tutup tab',
   errFileNotFound: 'Berkas tidak ada atau telah dipindahkan.',
   errPermissionDenied: 'Akses ke berkas ini ditolak.',
+  errIsADirectory: 'Ini adalah folder, bukan berkas dokumen.',
   errFileLocked: 'Berkas sedang dibuka di program lain. Tutup lalu coba lagi.',
   errTooManyFiles: 'Terlalu banyak berkas terbuka. Coba lagi sebentar lagi.',
   tabList: 'Semua tab',

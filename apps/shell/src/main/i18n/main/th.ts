@@ -39,6 +39,7 @@ export const th = {
   errRenameFailed: 'เปลี่ยนชื่อไม่สำเร็จ',
   errNewTabFailed: 'สร้างเอกสารใหม่ไม่สำเร็จ',
   errUnsupportedExt: 'ไม่รองรับไฟล์ .{ext}',
+  errOpenFailed: 'ไม่สามารถเปิด “{name}” ได้',
   copySuffix: 'สำเนา',
   menuHelp: 'วิธีใช้',
   thirdPartyNotices: 'ประกาศเกี่ยวกับซอฟต์แวร์ของบุคคลที่สาม',

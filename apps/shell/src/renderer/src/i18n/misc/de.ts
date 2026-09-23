@@ -6,6 +6,7 @@ export const de = {
   closeTab: 'Tab schließen',
   errFileNotFound: 'Die Datei ist nicht vorhanden oder wurde verschoben.',
   errPermissionDenied: 'Zugriff auf diese Datei verweigert.',
+  errIsADirectory: 'Dies ist ein Ordner, keine Dokumentdatei.',
   errFileLocked:
     'Die Datei ist in einem anderen Programm geöffnet. Schließen Sie es und versuchen Sie es erneut.',
   errTooManyFiles: 'Zu viele Dateien sind geöffnet. Versuchen Sie es bald erneut.',

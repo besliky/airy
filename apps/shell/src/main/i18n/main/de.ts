@@ -39,6 +39,7 @@ export const de = {
   errRenameFailed: 'Umbenennen fehlgeschlagen',
   errNewTabFailed: 'Neues Dokument konnte nicht erstellt werden',
   errUnsupportedExt: '.{ext}-Dateien werden nicht unterstützt',
+  errOpenFailed: '„{name}“ konnte nicht geöffnet werden',
   copySuffix: 'Kopie',
   menuHelp: 'Hilfe',
   thirdPartyNotices: 'Hinweise zu Drittanbietersoftware',

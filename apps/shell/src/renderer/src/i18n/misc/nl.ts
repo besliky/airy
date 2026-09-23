@@ -6,6 +6,7 @@ export const nl = {
   closeTab: 'Tabblad sluiten',
   errFileNotFound: 'Het bestand bestaat niet of is verplaatst.',
   errPermissionDenied: 'Toegang tot dit bestand geweigerd.',
+  errIsADirectory: 'Dit is een map, geen documentbestand.',
   errFileLocked: 'Het bestand is geopend in een ander programma. Sluit het en probeer opnieuw.',
   errTooManyFiles: 'Er zijn te veel bestanden open. Probeer het zo opnieuw.',
   tabList: 'Alle tabbladen',

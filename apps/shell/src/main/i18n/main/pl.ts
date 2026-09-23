@@ -39,6 +39,7 @@ export const pl = {
   errRenameFailed: 'Nie udało się zmienić nazwy',
   errNewTabFailed: 'Nie udało się utworzyć nowego dokumentu',
   errUnsupportedExt: 'pliki .{ext} nie są obsługiwane',
+  errOpenFailed: 'Nie można otworzyć pliku „{name}”',
   copySuffix: 'kopia',
   menuHelp: 'Pomoc',
   thirdPartyNotices: 'Informacje o oprogramowaniu innych firm',

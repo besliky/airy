@@ -39,6 +39,7 @@ export const hi = {
   errRenameFailed: 'नाम बदलने में विफल',
   errNewTabFailed: 'नया दस्तावेज़ बनाने में विफल',
   errUnsupportedExt: '.{ext} फ़ाइलें समर्थित नहीं हैं',
+  errOpenFailed: '“{name}” नहीं खोला जा सका',
   copySuffix: 'प्रतिलिपि',
   menuHelp: 'सहायता',
   thirdPartyNotices: 'तृतीय-पक्ष सॉफ़्टवेयर सूचनाएँ',

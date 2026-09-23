@@ -18,11 +18,15 @@ describe('friendlyErrorKey', () => {
     expect(friendlyErrorKey(err('EBUSY'))).toBe('ebusy')
     expect(friendlyErrorKey(err('ETXTBSY'))).toBe('ebusy')
     expect(friendlyErrorKey(err('EMFILE'))).toBe('emfile')
+    expect(friendlyErrorKey(err('EISDIR'))).toBe('eisdir')
   })
 
   it('maps errno tokens embedded in raw message strings', () => {
     expect(friendlyErrorKey('ENOENT: no such file or directory, open /tmp/x.docx')).toBe('enoent')
     expect(friendlyErrorKey('EPERM: operation not permitted')).toBe('eperm')
+    expect(friendlyErrorKey('EISDIR: illegal operation on a directory, open /tmp/x.md')).toBe(
+      'eisdir',
+    )
     expect(friendlyErrorKey('EBUSY: resource busy or locked')).toBe('ebusy')
   })
 

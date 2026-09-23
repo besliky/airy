@@ -219,6 +219,7 @@ import {
 import type { TabKind } from '../shared/tabs-api'
 import { TABS_CHANNELS } from '../shared/tabs-api'
 import { showErrorDialog } from './error-dialog'
+import { classifyOpenFailure, reportOpenFailure, type OpenFailureDeps } from './open-failure'
 import {
   isInsideDirectory,
   listStagedFiles,
@@ -1440,6 +1441,14 @@ const HTML_RE = /\.html?$/i
 /** document formats we recognize but don't open — surfaced as a dialog, not silently dropped */
 const UNSUPPORTED_DOC_RE = /\.(doc|rtf|odt|ppt|pps|odp|ods|xlsb|pages|key|numbers)$/i
 
+/** union of the per-module open regexes above, built from their sources so the
+ *  two cannot drift (unreadable-path guard in routeDocumentPath, missing-file
+ *  launch probe in missingFileIn) */
+const SUPPORTED_DOC_RE = new RegExp(
+  [DOCX_RE, XLSX_RE, PPTX_RE, PDF_RE, MD_RE, HTML_RE].map((re) => re.source).join('|'),
+  'i',
+)
+
 /**
  * The suite-wide open-dialog filter list: one entry per document type plus the
  * combined "all supported" filter, shared by the Home browse, every shell File
@@ -1477,6 +1486,20 @@ function supportedFileIn(argv: string[]): string | null {
 
 function unsupportedFileIn(argv: string[]): string | null {
   return argv.find((arg) => UNSUPPORTED_DOC_RE.test(arg) && existsSync(arg)) ?? null
+}
+
+/**
+ * argv entry naming a supported document that cannot be stat'ed — EACCES on a
+ * parent directory or a file that has vanished. supportedFileIn and
+ * unsupportedFileIn drop such paths (their existsSync guard also filters argv
+ * junk), so an inaccessible double-click/CLI launch used to be silent
+ * (BUG-1655); switch-looking arguments (always leading "-") are ignored.
+ */
+function missingFileIn(argv: string[]): string | null {
+  return (
+    argv.find((arg) => !arg.startsWith('-') && SUPPORTED_DOC_RE.test(arg) && !existsSync(arg)) ??
+    null
+  )
 }
 
 function notifyUnsupportedFile(filePath: string): void {
@@ -1543,9 +1566,27 @@ function openGeneratedDocument(filePath: string, into?: TabManager | null): bool
   return openDocumentPath(filePath, into ?? undefined)
 }
 
+/** localized dialog channel for a user-intended open that produced no tab
+ *  (BUG-1655); the window is resolved at call time */
+const openFailureDeps: OpenFailureDeps = {
+  showErrorDialog: (message, err) => showErrorDialog(focusedShellWindow(), message, err),
+  openFailedMessage: (name) => tm('errOpenFailed', { name }),
+}
+
 function routeDocumentPath(filePath: string, into?: TabManager): boolean {
   const manager = into ?? focusedManager()
-  if (!existsSync(filePath) || !manager) return false
+  if (!manager) return false
+  if (SUPPORTED_DOC_RE.test(filePath)) {
+    // BUG-1655: a document tab is only worth opening for a path that exists
+    // AND is readable — an unreadable file (EACCES/EPERM), a vanished one
+    // (ENOENT) or a directory wearing a document extension (EISDIR) used to
+    // open a dead tab or fall back to Home in silence. User-intended callers
+    // surface the dialog via reportOpenFailure; session restore stays
+    // deliberately silent here.
+    if (classifyOpenFailure(filePath)) return false
+  } else if (!existsSync(filePath)) {
+    return false
+  }
   // every shell-routed open is user-intended: its folder becomes readable
   // for the renderer of the tab that will load it (per-sender allowlist).
   // `existing`/openXTab return tab ids; grantTabFile resolves the tab's
@@ -3418,7 +3459,8 @@ async function installMainProcessProxy(): Promise<void> {
 
 // ---- lifecycle (the shell is the only owner) ----
 
-let pendingLaunchPath = supportedFileIn(process.argv) ?? unsupportedFileIn(process.argv)
+let pendingLaunchPath =
+  supportedFileIn(process.argv) ?? unsupportedFileIn(process.argv) ?? missingFileIn(process.argv)
 
 // show() does not un-minimize, and on macOS ⌘W destroys the shell window while the
 // app keeps running — either way a file opened from Finder would land out of sight.
@@ -3441,16 +3483,29 @@ app.on('open-file', (event, filePath) => {
     return
   }
   revealShellWindow()
-  if (!openDocumentPath(filePath)) focusedManager()?.openHomeTab()
+  if (!openDocumentPath(filePath)) {
+    // an intended open that produced no tab must explain itself (BUG-1655)
+    reportOpenFailure(filePath, openFailureDeps)
+    focusedManager()?.openHomeTab()
+  }
 })
 
 app.on('second-instance', (_event, argv, _cwd, additionalData) => {
   const file =
     supportedFileIn(argv) ??
     unsupportedFileIn(argv) ??
+    missingFileIn(argv) ??
     (additionalData as { launchPath?: string } | null)?.launchPath
   revealShellWindow()
-  if (!file || !openDocumentPath(file)) focusedManager()?.openHomeTab()
+  if (!file) {
+    focusedManager()?.openHomeTab()
+    return
+  }
+  if (!openDocumentPath(file)) {
+    // an intended open that produced no tab must explain itself (BUG-1655)
+    reportOpenFailure(file, openFailureDeps)
+    focusedManager()?.openHomeTab()
+  }
 })
 
 installNavigationGuard(app)
@@ -3573,6 +3628,9 @@ app.whenReady().then(async () => {
 
   const restoredTabs = restorePreviousSession()
   if (!pendingLaunchPath || !openDocumentPath(pendingLaunchPath)) {
+    // a launch path that cannot be read explains itself (BUG-1655) instead of
+    // quietly doing nothing
+    if (pendingLaunchPath) reportOpenFailure(pendingLaunchPath, openFailureDeps)
     // nothing to open and no session to fall back on → Home
     if (restoredTabs === 0) focusedManager()?.openHomeTab()
   }

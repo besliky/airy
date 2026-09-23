@@ -6,6 +6,7 @@ export const ja = {
   closeTab: 'タブを閉じる',
   errFileNotFound: 'ファイルが存在しないか、移動されました。',
   errPermissionDenied: 'このファイルへのアクセスが拒否されました。',
+  errIsADirectory: 'これはフォルダーであり、ドキュメントファイルではありません。',
   errFileLocked: 'ファイルが他のプログラムで開いています。閉じてから再試行してください。',
   errTooManyFiles: '開いているファイルが多すぎます。しばらくしてから再試行してください。',
   tabList: 'すべてのタブ',

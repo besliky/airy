@@ -39,6 +39,7 @@ export const ar = {
   errRenameFailed: 'فشلت إعادة التسمية',
   errNewTabFailed: 'تعذّر إنشاء المستند الجديد',
   errUnsupportedExt: 'ملفات .{ext} غير مدعومة',
+  errOpenFailed: 'تعذّر فتح “{name}”',
   copySuffix: 'نسخة',
   menuHelp: 'تعليمات',
   thirdPartyNotices: 'إشعارات برامج الجهات الخارجية',

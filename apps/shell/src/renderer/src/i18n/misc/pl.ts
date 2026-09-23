@@ -6,6 +6,7 @@ export const pl = {
   closeTab: 'Zamknij kartę',
   errFileNotFound: 'Plik nie istnieje lub został przeniesiony.',
   errPermissionDenied: 'Brak dostępu do tego pliku.',
+  errIsADirectory: 'To jest folder, a nie plik dokumentu.',
   errFileLocked: 'Plik jest otwarty w innym programie. Zamknij go i spróbuj ponownie.',
   errTooManyFiles: 'Otwarto zbyt wiele plików. Spróbuj ponownie za chwilę.',
   tabList: 'Wszystkie karty',

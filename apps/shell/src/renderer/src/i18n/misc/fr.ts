@@ -6,6 +6,7 @@ export const fr = {
   closeTab: "Fermer l'onglet",
   errFileNotFound: "Le fichier n'existe pas ou a été déplacé.",
   errPermissionDenied: 'Accès refusé à ce fichier.',
+  errIsADirectory: 'Ceci est un dossier, pas un fichier de document.',
   errFileLocked: 'Le fichier est ouvert dans un autre programme. Fermez-le puis réessayez.',
   errTooManyFiles: 'Trop de fichiers sont ouverts. Réessayez dans un instant.',
   tabList: 'Tous les onglets',

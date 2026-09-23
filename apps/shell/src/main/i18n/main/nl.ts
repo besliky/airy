@@ -39,6 +39,7 @@ export const nl = {
   errRenameFailed: 'Naam wijzigen mislukt',
   errNewTabFailed: 'Kan het nieuwe document niet maken',
   errUnsupportedExt: '.{ext}-bestanden worden niet ondersteund',
+  errOpenFailed: 'Kan “{name}” niet openen',
   copySuffix: 'kopie',
   menuHelp: 'Help',
   thirdPartyNotices: 'Kennisgevingen over software van derden',
