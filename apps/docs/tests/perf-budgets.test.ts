@@ -43,7 +43,7 @@ describe('countWordsInDoc', () => {
       content: [para('first'), para('second'), para('中文 分词')],
     })
     // 'first' + 'second' are two Latin words; each CJK character counts one by
-    // one (2 + 2 for 分词's two words worth of characters)
+    // one (2 + 2 characters for the two CJK words worth of characters)
     expect(countWordsInDoc(editor.state.doc)).toBe(6)
     // per-block semantics: a trailing word of block A and a leading word of
     // block B stay two words (the old whole-doc textContent merged them)
