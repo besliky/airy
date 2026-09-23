@@ -154,6 +154,30 @@ function formatSnapshot(node: PmNode): Record<string, unknown> {
   return snapshot
 }
 
+/** per-block revision counts for the status-bar figure (revisions never span blocks) */
+const blockRevisionCountCache = new WeakMap<PmNode, number>()
+
+/**
+ * Whole-document revision count with per-block memoization; exactly
+ * `collectRevisions(doc).length` (rPrChange runs in adjacent blocks are never
+ * position-adjacent, so the merge path cannot cross a block boundary and the
+ * per-block sum is the same count). PERF-1639: the per-document walk ran on
+ * every transaction, O(document) per streamed chunk on large files.
+ */
+export function countRevisionsInDoc(doc: PmNode): number {
+  let total = 0
+  doc.forEach((block) => {
+    let n = blockRevisionCountCache.get(block)
+    if (n === undefined) {
+      const revision = block.attrs?.blockRevision as { kind?: string } | null | undefined
+      n = (revision?.kind ? 1 : 0) + collectRevisions(block).length
+      blockRevisionCountCache.set(block, n)
+    }
+    total += n
+  })
+  return total
+}
+
 /** contiguous revision ranges in document order (adjacent same-kind ranges merged) */
 export function collectRevisions(doc: PmNode): RevisionRange[] {
   const out: RevisionRange[] = []
