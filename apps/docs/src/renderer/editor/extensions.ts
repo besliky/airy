@@ -2,7 +2,7 @@ import { Editor, Extension, Node } from '@tiptap/core'
 import type { ChainedCommands, RawCommands } from '@tiptap/core'
 import { Gapcursor, UndoRedo } from '@tiptap/extensions'
 import { DOMSerializer } from '@tiptap/pm/model'
-import type { DOMOutputSpec, Node as PmNode } from '@tiptap/pm/model'
+import type { DOMOutputSpec, Fragment, Node as PmNode } from '@tiptap/pm/model'
 import {
   AllSelection,
   NodeSelection,
@@ -12,6 +12,7 @@ import {
   type EditorState,
   type Transaction,
 } from '@tiptap/pm/state'
+import { ReplaceStep } from '@tiptap/pm/transform'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { EditorView } from '@tiptap/pm/view'
 import {
@@ -1556,84 +1557,101 @@ function hostsAnchoredPicture(node: PmNode): boolean {
 
 function lineFactorDecos(doc: PmNode): DecorationSet {
   const decos: Decoration[] = []
-  doc.descendants((node, pos) => {
-    if (!LINE_FACTOR_BLOCKS.has(node.type.name)) return true
-    // a class decoration instead of a stylesheet :has(): Blink's :has()
-    // invalidation crashed the renderer (OOM) on long picture-heavy documents
-    if (hostsAnchoredPicture(node)) {
-      decos.push(Decoration.node(pos, pos + node.nodeSize, { class: 'doc-anchor-origin' }))
-    }
-    if (node.textContent) {
-      let cached = lineFactorCache.get(node)
-      if (cached === undefined) {
-        const perLine = perLineFactors(node)
-        let style = `--doc-line-factor:${perLine ? perLine.strut : paraLineFactor(node)}`
-        let cls: string | undefined
-        const fam = paraDeclaredFontFamily(node)
-        if (fam) style += `;font-family:${fam}`
-        else if (paraMixedDeclaredCjk(node)) cls = 'doc-grid-strut'
-        const strut = explicitStrutHalfPoints(node)
-        if (strut) style += `;${strutFontCss(strut).join(';')}`
-        cached = { style, ...(cls ? { cls } : {}), ...(perLine ? { runs: perLine.runs } : {}) }
-        lineFactorCache.set(node, cached)
-      }
-      decos.push(
-        Decoration.node(pos, pos + node.nodeSize, {
-          style: cached.style,
-          ...(cached.cls ? { class: cached.cls } : {}),
-        }),
-      )
-      if (cached.runs) {
-        for (const r of cached.runs) {
-          decos.push(
-            Decoration.inline(pos + 1 + r.from, pos + 1 + r.to, {
-              class: 'doc-run-lf',
-              style: r.style,
-            }),
-          )
-        }
-      }
-      if (node.attrs.autoSpace !== false) {
-        for (const r of autospaceRanges(node)) {
-          decos.push(
-            Decoration.inline(pos + 1 + r.from, pos + 1 + r.to, { class: 'doc-autospace-pad' }),
-          )
-        }
-      }
-      // ・/〜 in SimSun-substituted runs: Word lifts the whole line to 1.7143 ×
-      // size (probe 2026-08-13); a taller inline strut reproduces the row lift.
-      // exact lineRule pins the line, so no lift there.
-      if (node.attrs.lineRule !== 'exact') {
-        const ranges = simsunGapRanges(node)
-        if (ranges.length > 0) {
-          const m =
-            Number(node.attrs.lineSpacing) ||
-            (node.attrs.lineRule === 'auto' && node.attrs.lineRawTwips
-              ? Number(node.attrs.lineRawTwips) / 240
-              : 1)
-          const gapStyle = `line-height:${cssSimsunGapLineExpr(m)}`
-          for (const r of ranges) {
-            decos.push(Decoration.inline(pos + 1 + r.from, pos + 1 + r.to, { style: gapStyle }))
-          }
-        }
-      }
-      // symbols Chromium justifies like ideographs stay unstretched in non-CJK
-      // paragraphs (Word stretches only their spaces); CJK paragraphs keep
-      // Chromium's inter-ideograph distribution around them
-      if (
-        (node.attrs.align === 'justify' || node.attrs.align === 'distribute') &&
-        !textHasCjk(node.textContent)
-      ) {
-        for (const r of justifySymbolOffsets(node)) {
-          decos.push(
-            Decoration.inline(pos + 1 + r.from, pos + 1 + r.to, { class: 'doc-justify-symbol' }),
-          )
-        }
-      }
-    }
-    return false
+  doc.forEach((block, offset) => {
+    decos.push(...collectBlockLineFactorDecos(doc, offset, offset + block.nodeSize))
+    lineFactorBlockCollected.add(block)
   })
   return DecorationSet.create(doc, decos)
+}
+
+/**
+ * Collect one top-level block's line-factor decorations (absolute positions).
+ * The per-node caches (lineFactorCache and friends) make repeated collection
+ * cheap; the walk itself only touches the block's subtree.
+ */
+function collectBlockLineFactorDecos(doc: PmNode, from: number, to: number): Decoration[] {
+  const decos: Decoration[] = []
+  doc.nodesBetween(from, to, (node, pos) => visitLineFactorNodes(node, pos, decos))
+  return decos
+}
+
+/** per-node body of the line-factor walk; returns true to descend into the node */
+function visitLineFactorNodes(node: PmNode, pos: number, decos: Decoration[]): boolean {
+  if (!LINE_FACTOR_BLOCKS.has(node.type.name)) return true
+  // a class decoration instead of a stylesheet :has(): Blink's :has()
+  // invalidation crashed the renderer (OOM) on long picture-heavy documents
+  if (hostsAnchoredPicture(node)) {
+    decos.push(Decoration.node(pos, pos + node.nodeSize, { class: 'doc-anchor-origin' }))
+  }
+  if (node.textContent) {
+    let cached = lineFactorCache.get(node)
+    if (cached === undefined) {
+      const perLine = perLineFactors(node)
+      let style = `--doc-line-factor:${perLine ? perLine.strut : paraLineFactor(node)}`
+      let cls: string | undefined
+      const fam = paraDeclaredFontFamily(node)
+      if (fam) style += `;font-family:${fam}`
+      else if (paraMixedDeclaredCjk(node)) cls = 'doc-grid-strut'
+      const strut = explicitStrutHalfPoints(node)
+      if (strut) style += `;${strutFontCss(strut).join(';')}`
+      cached = { style, ...(cls ? { cls } : {}), ...(perLine ? { runs: perLine.runs } : {}) }
+      lineFactorCache.set(node, cached)
+    }
+    decos.push(
+      Decoration.node(pos, pos + node.nodeSize, {
+        style: cached.style,
+        ...(cached.cls ? { class: cached.cls } : {}),
+      }),
+    )
+    if (cached.runs) {
+      for (const r of cached.runs) {
+        decos.push(
+          Decoration.inline(pos + 1 + r.from, pos + 1 + r.to, {
+            class: 'doc-run-lf',
+            style: r.style,
+          }),
+        )
+      }
+    }
+    if (node.attrs.autoSpace !== false) {
+      for (const r of autospaceRanges(node)) {
+        decos.push(
+          Decoration.inline(pos + 1 + r.from, pos + 1 + r.to, { class: 'doc-autospace-pad' }),
+        )
+      }
+    }
+    // ・/〜 in SimSun-substituted runs: Word lifts the whole line to 1.7143 ×
+    // size (probe 2026-08-13); a taller inline strut reproduces the row lift.
+    // exact lineRule pins the line, so no lift there.
+    if (node.attrs.lineRule !== 'exact') {
+      const ranges = simsunGapRanges(node)
+      if (ranges.length > 0) {
+        const m =
+          Number(node.attrs.lineSpacing) ||
+          (node.attrs.lineRule === 'auto' && node.attrs.lineRawTwips
+            ? Number(node.attrs.lineRawTwips) / 240
+            : 1)
+        const gapStyle = `line-height:${cssSimsunGapLineExpr(m)}`
+        for (const r of ranges) {
+          decos.push(Decoration.inline(pos + 1 + r.from, pos + 1 + r.to, { style: gapStyle }))
+        }
+      }
+    }
+    // symbols Chromium justifies like ideographs stay unstretched in non-CJK
+    // paragraphs (Word stretches only their spaces); CJK paragraphs keep
+    // Chromium's inter-ideograph distribution around them
+    if (
+      (node.attrs.align === 'justify' || node.attrs.align === 'distribute') &&
+      !textHasCjk(node.textContent)
+    ) {
+      for (const r of justifySymbolOffsets(node)) {
+        decos.push(
+          Decoration.inline(pos + 1 + r.from, pos + 1 + r.to, { class: 'doc-justify-symbol' }),
+        )
+      }
+    }
+  }
+  return false
 }
 
 /** ranges (relative to the block's content start) of Chromium's justification symbols */
@@ -1651,28 +1669,171 @@ function justifySymbolOffsets(node: PmNode): Array<{ from: number; to: number }>
   return found
 }
 
+/**
+ * Whether a transaction's steps insert content (the only way new node types
+ * enter the doc). Used by the cheap-skip guards of the whole-document
+ * decoration plugins: while a document contains no candidate nodes at all,
+ * only inserted content can introduce one, so scanning the inserted slices
+ * replaces an O(doc) walk per transaction on large plain documents.
+ */
+function insertsNodeOfType(tr: Transaction, types: ReadonlySet<string>): boolean {
+  const scan = (fragment: Fragment): boolean => {
+    let found = false
+    fragment.descendants((child) => {
+      if (types.has(child.type.name)) {
+        found = true
+        return false
+      }
+      return true
+    })
+    return found
+  }
+  for (const step of tr.steps) {
+    if (step instanceof ReplaceStep && scan(step.slice.content)) return true
+  }
+  return false
+}
+
+/**
+ * Plugin state for the live line-factor decorations: the doc the set was built
+ * against (needed to resolve old block positions on removal) plus the set.
+ */
+interface LineFactorState {
+  doc: PmNode
+  decos: DecorationSet
+}
+
+/**
+ * Top-level blocks whose decorations are already reflected in the current set
+ * (PM nodes are immutable, so a surviving node object keeps its decorations;
+ * transactions invalidate entries for every touched old block).
+ */
+const lineFactorBlockCollected = new WeakSet<PmNode>()
+
+/** top-level blocks overlapping [from-1, to+1]: a block's identity changes only when a step touches its closed range */
+function blocksOverlapping(
+  doc: PmNode,
+  from: number,
+  to: number,
+): Array<{ node: PmNode; start: number }> {
+  const lo = Math.max(0, from - 1)
+  const hi = Math.min(doc.content.size, to + 1)
+  const out: Array<{ node: PmNode; start: number }> = []
+  doc.nodesBetween(lo, hi, (node, pos, parent) => {
+    if (parent === null) return true // the doc itself
+    out.push({ node, start: pos })
+    return false // top-level blocks only, no descent
+  })
+  return out
+}
+
+/** changed ranges per step, split into pre-transaction (old) and final-doc (new) coordinates */
+function changedRanges(tr: Transaction): {
+  oldRanges: Array<[number, number]>
+  newRanges: Array<[number, number]>
+} {
+  const oldRanges: Array<[number, number]> = []
+  const newRanges: Array<[number, number]> = []
+  for (let i = 0; i < tr.steps.length; i++) {
+    const rest = tr.mapping.slice(i + 1)
+    const step = tr.steps[i]
+    const map = step.getMap()
+    const stepOld: Array<[number, number]> = []
+    const stepNew: Array<[number, number]> = []
+    map.forEach((oFrom, oTo, nFrom, nTo) => {
+      stepOld.push([oFrom, oTo])
+      stepNew.push([rest.map(nFrom, 1), rest.map(nTo, -1)])
+    })
+    if (stepOld.length === 0) {
+      // mark / attribute steps change decorations without moving positions;
+      // their own target range is the affected region (both docs same coords)
+      const s = step as unknown as { from?: number; to?: number; pos?: number }
+      const from = s.from ?? s.pos ?? null
+      const to = s.to ?? s.pos ?? null
+      if (from != null && to != null) {
+        oldRanges.push([from, to])
+        newRanges.push([rest.map(from, 1), rest.map(to, -1)])
+      }
+      continue
+    }
+    oldRanges.push(...stepOld)
+    newRanges.push(...stepNew)
+  }
+  return { oldRanges, newRanges }
+}
+
+/**
+ * O(affected) rebuild of the line-factor set: map surviving decorations through
+ * the transaction, drop the ones in touched old blocks, recompute touched new
+ * blocks. Equivalence with the full walk is pinned by line-factor-incremental
+ * tests (edit sequences compare the incremental set against a full rebuild).
+ */
+function incrementalLineFactorDecos(tr: Transaction, old: LineFactorState): LineFactorState {
+  const { oldRanges, newRanges } = changedRanges(tr)
+  if (newRanges.length === 0) return { doc: tr.doc, decos: old.decos.map(tr.mapping, tr.doc) }
+  // Pure appends at the document end (the phased-open stream) shift nothing:
+  // reuse the previous set instead of mapping O(spans) through the transaction
+  const oldSize = old.doc.content.size
+  const pureAppendAtEnd =
+    oldRanges.length > 0 &&
+    oldRanges.every(([f, t]) => f === t && f === oldSize) &&
+    newRanges.every(([f]) => f === oldSize)
+  let decos = pureAppendAtEnd ? old.decos : old.decos.map(tr.mapping, tr.doc)
+  // stale decorations of every touched old block, looked up in CURRENT-doc
+  // coordinates (the set was mapped first, so the block's bounds move too)
+  for (const [from, to] of oldRanges) {
+    for (const { node, start } of blocksOverlapping(old.doc, from, to)) {
+      lineFactorBlockCollected.delete(node)
+      const newStart = tr.mapping.map(start, 1)
+      const newEnd = tr.mapping.map(start + node.nodeSize, -1)
+      const inside = decos
+        .find(newStart, newEnd)
+        .filter((d) => d.from >= newStart && d.to <= newEnd)
+      if (inside.length > 0) decos = decos.remove(inside)
+    }
+  }
+  // recompute touched new blocks (pad overlaps may hit unchanged neighbors —
+  // the collected-set skip keeps those cheap on the next touch)
+  const fresh: Decoration[] = []
+  for (const [from, to] of newRanges) {
+    for (const { node, start } of blocksOverlapping(tr.doc, from, to)) {
+      if (lineFactorBlockCollected.has(node)) continue
+      const blockDecos = collectBlockLineFactorDecos(tr.doc, start, start + node.nodeSize)
+      lineFactorBlockCollected.add(node)
+      fresh.push(...blockDecos)
+    }
+  }
+  if (fresh.length > 0) decos = decos.add(tr.doc, fresh)
+  return { doc: tr.doc, decos }
+}
+
+function lineFactorState(doc: PmNode): LineFactorState {
+  return { doc, decos: lineFactorDecos(doc) }
+}
+
 export const LineFactorExtension = Extension.create({
   name: 'lineFactorLive',
   addProseMirrorPlugins() {
-    const key = new PluginKey<DecorationSet>('lineFactorLive')
+    const key = new PluginKey<LineFactorState>('lineFactorLive')
     const editor = this.editor
     return [
-      new Plugin<DecorationSet>({
+      new Plugin<LineFactorState>({
         key,
         state: {
-          init: (_config, state) => lineFactorDecos(state.doc),
+          init: (_config, state) => lineFactorState(state.doc),
           apply: (tr, old) => {
-            if (tr.getMeta(key)) return lineFactorDecos(tr.doc)
+            if (tr.getMeta(key)) return lineFactorState(tr.doc)
             if (!tr.docChanged) return old
             // inserting pad widgets next to an active IME composition aborts it;
             // keep the old set mapped and refresh on compositionend
-            if (editor?.view?.composing) return old.map(tr.mapping, tr.doc)
-            return lineFactorDecos(tr.doc)
+            if (editor?.view?.composing)
+              return { doc: tr.doc, decos: old.decos.map(tr.mapping, tr.doc) }
+            return incrementalLineFactorDecos(tr, old)
           },
         },
         props: {
           decorations(state) {
-            return key.getState(state)
+            return key.getState(state)?.decos ?? null
           },
           handleDOMEvents: {
             compositionend: (view) => {
@@ -1842,7 +2003,7 @@ export function anchorLineSpec(line: Record<string, unknown>): DomSpec {
 export const AnchorLineExtension = Extension.create({
   name: 'anchorLine',
   addProseMirrorPlugins() {
-    const build = (doc: PmNode): DecorationSet => {
+    const build = (doc: PmNode): { decos: DecorationSet; candidates: boolean } => {
       const decos: Decoration[] = []
       doc.descendants((node, pos) => {
         if (node.type.name !== 'docProtected') return true
@@ -1862,17 +2023,24 @@ export const AnchorLineExtension = Extension.create({
         }
         return false
       })
-      return DecorationSet.create(doc, decos)
+      return { decos: DecorationSet.create(doc, decos), candidates: decos.length > 0 }
     }
+    const PROTECTED = new Set(['docProtected'])
     return [
-      new Plugin({
+      new Plugin<{ decos: DecorationSet; candidates: boolean }>({
         state: {
           init: (_, state) => build(state.doc),
-          apply: (tr, old) => (tr.docChanged ? build(tr.doc) : old),
+          apply: (tr, old) => {
+            if (!tr.docChanged) return old
+            // PERF-1639: without docProtected nodes in the document, new ones can
+            // only arrive through inserted content — scan that, not the whole doc
+            if (!old.candidates && !insertsNodeOfType(tr, PROTECTED)) return old
+            return build(tr.doc)
+          },
         },
         props: {
           decorations(state) {
-            return this.getState(state)
+            return this.getState(state)?.decos ?? DecorationSet.empty
           },
         },
       }),
@@ -2032,21 +2200,38 @@ export const ListNumberingExtension = Extension.create<object, ListNumberingStor
       return DecorationSet.create(doc, decos)
     }
 
+    const LIST_CANDIDATE_TYPES = new Set(['docListItem', 'docProtected'])
     interface CachedMarkers {
       defs: Map<string, NumberingDef>
       decos: DecorationSet | null
+      /** whether the document currently contains any node that can host a marker */
+      candidates: boolean
     }
     const key = new PluginKey<CachedMarkers>('listNumbering')
     return [
       new Plugin<CachedMarkers>({
         key,
         state: {
-          init: (_config, state) => ({ defs: storage.defs, decos: compute(state.doc) }),
+          init: (_config, state) => {
+            const decos = compute(state.doc)
+            return { defs: storage.defs, decos, candidates: decos !== null }
+          },
           apply(tr, old) {
             // defs is replaced (never mutated) on open/reparse and marker overlay
-            if (tr.docChanged || old.defs !== storage.defs)
-              return { defs: storage.defs, decos: compute(tr.doc) }
-            return old.decos ? { defs: old.defs, decos: old.decos.map(tr.mapping, tr.doc) } : old
+            if (tr.docChanged || old.defs !== storage.defs) {
+              // PERF-1639: while the document has no list items at all, new ones
+              // can only arrive through inserted content — scan that instead of
+              // walking every block of a potentially huge document per transaction
+              if (
+                !old.candidates &&
+                old.defs === storage.defs &&
+                !insertsNodeOfType(tr, LIST_CANDIDATE_TYPES)
+              )
+                return old
+              const decos = compute(tr.doc)
+              return { defs: storage.defs, decos, candidates: decos !== null }
+            }
+            return old.decos ? { ...old, decos: old.decos.map(tr.mapping, tr.doc) } : old
           },
         },
         props: {
