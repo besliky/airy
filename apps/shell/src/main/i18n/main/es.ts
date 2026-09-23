@@ -39,6 +39,7 @@ export const es = {
   errRenameFailed: 'No se pudo cambiar el nombre',
   errNewTabFailed: 'No se pudo crear el nuevo documento',
   errUnsupportedExt: 'los archivos .{ext} no son compatibles',
+  errOpenFailed: 'No se pudo abrir «{name}»',
   copySuffix: 'copia',
   menuHelp: 'Ayuda',
   thirdPartyNotices: 'Avisos de software de terceros',

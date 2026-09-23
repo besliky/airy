@@ -39,6 +39,7 @@ export const cs = {
   errRenameFailed: 'Přejmenování se nezdařilo',
   errNewTabFailed: 'Nový dokument se nepodařilo vytvořit',
   errUnsupportedExt: 'Soubory .{ext} nejsou podporovány',
+  errOpenFailed: 'Nelze otevřít soubor „{name}“',
   copySuffix: 'kopie',
   menuHelp: 'Nápověda',
   thirdPartyNotices: 'Informace o softwaru třetích stran',

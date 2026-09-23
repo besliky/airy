@@ -39,6 +39,7 @@ export const fr = {
   errRenameFailed: 'Échec du renommage',
   errNewTabFailed: 'Impossible de créer le nouveau document',
   errUnsupportedExt: 'les fichiers .{ext} ne sont pas pris en charge',
+  errOpenFailed: 'Impossible d’ouvrir « {name} »',
   copySuffix: 'copie',
   menuHelp: 'Aide',
   thirdPartyNotices: 'Mentions relatives aux logiciels tiers',

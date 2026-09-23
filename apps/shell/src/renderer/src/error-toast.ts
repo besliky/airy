@@ -9,6 +9,7 @@ const KEY_TO_STRING: Record<FriendlyErrorKey, StringKey> = {
   eperm: 'errPermissionDenied',
   ebusy: 'errFileLocked',
   emfile: 'errTooManyFiles',
+  eisdir: 'errIsADirectory',
 }
 
 /**

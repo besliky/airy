@@ -39,6 +39,7 @@ export const ko = {
   errRenameFailed: '이름 바꾸기에 실패했습니다',
   errNewTabFailed: '새 문서를 만들지 못했습니다',
   errUnsupportedExt: '.{ext} 형식은 지원되지 않습니다',
+  errOpenFailed: '"{name}"을(를) 열 수 없습니다',
   copySuffix: '복사본',
   menuHelp: '도움말',
   thirdPartyNotices: '타사 소프트웨어 고지',

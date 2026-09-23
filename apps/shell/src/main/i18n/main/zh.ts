@@ -38,6 +38,7 @@ export const zh = {
   errRenameFailed: '重命名失败',
   errNewTabFailed: '新建文档失败',
   errUnsupportedExt: '暂不支持 .{ext} 类型',
+  errOpenFailed: '无法打开“{name}”',
   copySuffix: '副本',
   menuHelp: '帮助',
   thirdPartyNotices: '第三方软件声明',

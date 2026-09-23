@@ -39,6 +39,7 @@ export const he = {
   errRenameFailed: 'שינוי השם נכשל',
   errNewTabFailed: 'יצירת המסמך החדש נכשלה',
   errUnsupportedExt: 'קובצי .{ext} אינם נתמכים',
+  errOpenFailed: 'לא ניתן לפתוח את “{name}”',
   copySuffix: 'עותק',
   menuHelp: 'עזרה',
   thirdPartyNotices: 'הודעות על תוכנות צד שלישי',

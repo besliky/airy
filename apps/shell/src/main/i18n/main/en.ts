@@ -39,6 +39,7 @@ export const en = {
   errRenameFailed: 'Rename failed',
   errNewTabFailed: 'Could not create the new document',
   errUnsupportedExt: '.{ext} files are not supported',
+  errOpenFailed: 'Could not open “{name}”',
   copySuffix: 'copy',
   menuHelp: 'Help',
   thirdPartyNotices: 'Third-Party Notices',

@@ -39,6 +39,7 @@ export const ja = {
   errRenameFailed: '名前の変更に失敗しました',
   errNewTabFailed: '新規ドキュメントを作成できませんでした',
   errUnsupportedExt: '.{ext} 形式には対応していません',
+  errOpenFailed: '「{name}」を開けません',
   copySuffix: 'コピー',
   menuHelp: 'ヘルプ',
   thirdPartyNotices: 'サードパーティソフトウェアに関する通知',

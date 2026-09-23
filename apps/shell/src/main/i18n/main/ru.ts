@@ -39,6 +39,7 @@ export const ru = {
   errRenameFailed: 'Не удалось переименовать',
   errNewTabFailed: 'Не удалось создать новый документ',
   errUnsupportedExt: 'файлы .{ext} не поддерживаются',
+  errOpenFailed: 'Не удалось открыть «{name}»',
   copySuffix: 'копия',
   menuHelp: 'Справка',
   thirdPartyNotices: 'Уведомления о стороннем ПО',

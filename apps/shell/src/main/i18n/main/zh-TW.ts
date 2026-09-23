@@ -39,6 +39,7 @@ export const zhTW = {
   errRenameFailed: '重新命名失敗',
   errNewTabFailed: '新建文件失敗',
   errUnsupportedExt: '暫不支援 .{ext} 類型',
+  errOpenFailed: '無法開啟「{name}」',
   copySuffix: '副本',
   menuHelp: '說明',
   thirdPartyNotices: '第三方軟體聲明',

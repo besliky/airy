@@ -39,6 +39,7 @@ export const id = {
   errRenameFailed: 'Gagal mengganti nama',
   errNewTabFailed: 'Gagal membuat dokumen baru',
   errUnsupportedExt: 'file .{ext} tidak didukung',
+  errOpenFailed: 'Tidak dapat membuka “{name}”',
   copySuffix: 'salinan',
   menuHelp: 'Bantuan',
   thirdPartyNotices: 'Pemberitahuan Perangkat Lunak Pihak Ketiga',

@@ -4,7 +4,7 @@
  * resolved from `err.code` when present and from the leading errno token in
  * the message otherwise (raw strings from IPC results carry it there).
  */
-export type FriendlyErrorKey = 'enoent' | 'eperm' | 'ebusy' | 'emfile'
+export type FriendlyErrorKey = 'enoent' | 'eperm' | 'ebusy' | 'emfile' | 'eisdir'
 
 const CODE_TO_KEY: Record<string, FriendlyErrorKey> = {
   ENOENT: 'enoent',
@@ -13,10 +13,11 @@ const CODE_TO_KEY: Record<string, FriendlyErrorKey> = {
   EBUSY: 'ebusy',
   ETXTBSY: 'ebusy',
   EMFILE: 'emfile',
+  EISDIR: 'eisdir',
 }
 
 /** leading errno token as Node prints it: "ENOENT: no such file or directory, …" */
-const ERRNO_IN_MESSAGE = /\b(ENOENT|EACCES|EPERM|EBUSY|ETXTBSY|EMFILE):/
+const ERRNO_IN_MESSAGE = /\b(ENOENT|EACCES|EPERM|EBUSY|ETXTBSY|EMFILE|EISDIR):/
 
 export function friendlyErrorKey(error: unknown): FriendlyErrorKey | null {
   if (!error) return null
