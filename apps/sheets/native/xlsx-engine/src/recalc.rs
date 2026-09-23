@@ -948,7 +948,11 @@ mod tests {
             ),
             (
                 "xl/styles.xml",
-                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>"#,
+                concat!(
+                    r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>"#,
+                    crate::xls_layout::default_cell_styles_xml!(),
+                    "</styleSheet>",
+                ),
             ),
             (
                 "xl/externalLinks/externalLink1.xml",
@@ -1023,5 +1027,94 @@ mod tests {
             (at(1, 1).formatted.as_str(), at(1, 1).is_formula),
             ("94", true)
         );
+    }
+
+    /// BUG-1659 end to end: a legacy-converted workbook reaches the formula
+    /// engine and its formulas compute. The converter used to emit styles.xml
+    /// without the mandatory `<cellStyles>` section, IronCalc's importer
+    /// panicked on the empty section, and every imported .ods/.xls book
+    /// answered workbook_error — formulas silently empty in the UI.
+    #[test]
+    fn a_converted_legacy_book_computes_formulas_in_the_engine() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/bug-1659-legacy-formulas.xls"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+        crate::convert::convert_to_xlsx(source, &target).unwrap();
+
+        let mut cache = RecalcCache::new();
+        // B2 is =A1*B1 (10*4): an edit to A1 must recompute it live.
+        let result = recalc_cells(
+            &mut cache,
+            &target,
+            &[edit("A1", "100")],
+            &[RecalcRead {
+                sheet: "Sheet1".into(),
+                range: CellRange {
+                    start_row: 0,
+                    end_row: 1,
+                    start_column: 0,
+                    end_column: 1,
+                },
+            }],
+        )
+        .unwrap();
+        let at = |row: u32, column: u32| {
+            result
+                .cells
+                .iter()
+                .find(|cell| cell.row == row && cell.column == column)
+                .unwrap()
+        };
+        assert_eq!(at(0, 0).formatted.as_str(), "100");
+        assert_eq!(
+            (at(1, 1).formatted.as_str(), at(1, 1).is_formula),
+            ("400", true)
+        );
+        assert_eq!(at(1, 1).number, Some(400.0));
+    }
+
+    /// BUG-1659: the .ods conversion must reach the engine too — recalc used
+    /// to answer workbook_error there on the same missing-`<cellStyles>`
+    /// panic. The verbatim ODF `of:=` formula syntax stays a known separate
+    /// gap, so this pins loading and the literal cells, not formula results.
+    #[test]
+    fn a_converted_ods_book_loads_in_the_formula_engine() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/bug-1659-legacy-formulas.ods"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+        crate::convert::convert_to_xlsx(source, &target).unwrap();
+
+        let mut cache = RecalcCache::new();
+        let result = recalc_cells(
+            &mut cache,
+            &target,
+            &[],
+            &[RecalcRead {
+                sheet: "Sheet1".into(),
+                range: CellRange {
+                    start_row: 0,
+                    end_row: 1,
+                    start_column: 0,
+                    end_column: 1,
+                },
+            }],
+        )
+        .unwrap();
+        let at = |row: u32, column: u32| {
+            result
+                .cells
+                .iter()
+                .find(|cell| cell.row == row && cell.column == column)
+                .map(|cell| cell.formatted.as_str().to_owned())
+        };
+        assert_eq!(at(0, 0).as_deref(), Some("10"));
+        assert_eq!(at(0, 1).as_deref(), Some("4"));
+        assert_eq!(at(1, 0).as_deref(), Some("20"));
     }
 }
