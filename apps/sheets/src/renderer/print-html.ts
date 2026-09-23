@@ -43,14 +43,16 @@ export interface SectionPictures {
 type PageVariant = 'odd' | 'even' | 'first'
 
 /// Chromium lays the print body out with Calibri 11pt unless the cell says
-/// otherwise; a text row is at least one line plus the cell padding tall,
-/// which can exceed Excel's saved row height by a point or so — the
-/// fit-to-page pagination must count the printed height, not the saved one.
-/// On top of that, border-collapse grows every bordered row by its border
-/// (a thin edge is worth ~0.75pt per row), which the saved height never
-/// carries — a 40-row bordered sheet drifted ~30pt past the model and
-/// pushed a phantom trailing page into the PDF (BUG-1504), so the declared
-/// <tr> height includes the border too.
+/// otherwise. Excel prints every row at its saved height — a text line
+/// taller than the row clips at the row edge instead of growing it — so the
+/// declared row height is the authoritative printed height (BUG-1614: the
+/// one-line text estimate used to dominate it and turned 15pt rows into
+/// 16.5pt printed ones, planning orphan pages LibreOffice never produces).
+/// On top of the declaration, border-collapse grows every bordered row by
+/// its border (a thin edge is worth ~0.75pt per row), which the saved
+/// height never carries — a 40-row bordered sheet drifted ~30pt past the
+/// model and pushed a phantom trailing page into the PDF (BUG-1504), so the
+/// declared <tr> height includes the border too.
 const LINE_HEIGHT_FACTOR = 1.25
 const CELL_VERTICAL_PADDING_PT = 2
 const DEFAULT_FONT_SIZE_PT = 11
@@ -516,26 +518,30 @@ interface LayoutRow {
   readonly row: number
   /// Saved row height in print points.
   readonly heightPt: number
-  /// Height the printed row needs — the forced <tr> height: the saved
-  /// height (or the taller text line), plus the row's widest collapsed
-  /// border, which border-collapse adds on top of the content box when the
-  /// sheet prints borders or gridlines (BUG-1504: without it, 82 thin-
-  /// bordered rows drifted ~0.5-0.75pt each and spilled a phantom trailing
-  /// page). The over-then-down banding and fit-to-page pagination count
-  /// this same value, so declaring it on the <tr> keeps Chromium's own
-  /// pagination (rows never split) in step with the planned bands instead
-  /// of letting a text-boosted row silently overflow its band's page.
-  /// Known residual (BUG-1214 recheck, headless Chromium): the model counts
-  /// ONE text line at 1.25 x font size, but a rendered row still grows past
-  /// the declared height when (a) wrap-text cells (`tb: 3`, or embedded
-  /// newlines under `white-space: pre`) lay out on several lines, or (b) the
-  /// resolved font's line box tops 1.25 x (CJK fallback stacks measure
-  /// ~1.4 x, e.g. 17.75pt rendered vs 15.75pt declared for 11pt CJK) —
-  /// `overflow: hidden` does not stop table rows from growing. Chromium then
-  /// paginates past the simulated count (measured: a 50-row wrap-text sheet
-  /// printed 5 pages against a predicted 2). Excel clips such rows at the
-  /// saved height; matching that means pinning the row's content height,
-  /// which changes what wrapped prints look like and is left as follow-up.
+  /// Height the printed row needs — the forced <tr> height: the declared
+  /// row height (BUG-1614: Excel/LO print rows at their saved heights — a
+  /// 15pt row prints as 11.25pt at 75% scale; the one-line text estimate
+  /// only clamps from below, it never lifts the row past its declaration),
+  /// plus the row's widest collapsed border, which border-collapse adds on
+  /// top of the content box when the sheet prints borders or gridlines
+  /// (BUG-1504: without it, 82 thin-bordered rows drifted ~0.5-0.75pt each
+  /// and spilled a phantom trailing page). The over-then-down banding and
+  /// fit-to-page pagination count this same value, so declaring it on the
+  /// <tr> keeps Chromium's own pagination (rows never split) in step with
+  /// the planned bands instead of letting a grown row silently overflow
+  /// its band's page. Keeping the render on the declaration is what makes
+  /// the mirror hold: when a text line cannot fit the declared height, the
+  /// cell's line box is clamped into the row (Excel clips it at the row
+  /// edge the same way), so Chromium has no reason to grow the row.
+  /// Known residuals (BUG-1214 recheck, headless Chromium): wrap-text rows
+  /// (`tb: 3`, or embedded newlines under `white-space: pre`) keep the
+  /// text-boosted height because they lay out on several lines and a
+  /// rendered row still grows past any declared height — `overflow: hidden`
+  /// does not stop table rows from growing; and a row whose declaration
+  /// sits inside the narrow window between the 1.25x estimate and a
+  /// fallback font's taller normal line box (CJK stacks measure ~1.4x,
+  /// e.g. 17.75pt rendered vs 15.75pt declared for 11pt CJK) can still grow
+  /// a fraction of a point past the plan.
   readonly printedHeightPt: number
   /// The row's cells (merge anchors included), ascending by column.
   readonly cells: readonly LayoutCell[]
@@ -626,9 +632,26 @@ function layoutPrintArea(
   })
 
   const buildRow = (row: number): LayoutRow => {
-    const cells: LayoutCell[] = []
+    // First pass reads every printed cell of the row: the row's declared
+    // height is known up front, but its widest border and wrap state are
+    // only known once every cell has been seen, and the per-cell css (which
+    // clamps the text line into the declared height) needs both — so cells
+    // are built in a second pass.
+    const drafts: {
+      column: number
+      rowspan: number
+      colspan: number
+      endRow: number
+      endColumn: number
+      text: string
+      style: PrintCellStyle | null
+      rawValue: unknown
+      conditional: PrintConditionalFormatStyle | null
+      fontSizePt: number
+    }[] = []
     let textHeightPt = 0
     let borderHeightPt = 0
+    let wraps = false
     for (let column = area.startColumn; column <= area.endColumn; column += 1) {
       // Hidden columns never print, not even as merge fillers.
       if (!columnPrints(column)) continue
@@ -654,11 +677,16 @@ function layoutPrintArea(
         ? raw[sourceRow - area.startRow]?.[sourceColumn - area.startColumn]
         : undefined
       const style = worksheet.getRange(sourceRow, sourceColumn).getCellStyleData()
+      const fontSizePt = style?.fs ?? DEFAULT_FONT_SIZE_PT
       if (text !== '' && !anchor) {
         textHeightPt = Math.max(
           textHeightPt,
-          (style?.fs ?? DEFAULT_FONT_SIZE_PT) * LINE_HEIGHT_FACTOR + CELL_VERTICAL_PADDING_PT,
+          fontSizePt * LINE_HEIGHT_FACTOR + CELL_VERTICAL_PADDING_PT,
         )
+        // A wrap-text cell (tb: 3) or an embedded newline lays out on
+        // several lines: those rows keep the text-boosted height model (the
+        // rendered row grows past any declared height, BUG-1214 residual).
+        if (style?.tb === 3 || text.includes('\n')) wraps = true
       }
       // Collapsed table borders grow the rendered row beyond its content
       // box (a thin bottom border adds ~0.75pt per row); take the row's
@@ -668,23 +696,54 @@ function layoutPrintArea(
         return border ? printBorderWidthPt(border.s) : gridlines ? GRIDLINE_BORDER_PT : 0
       }
       borderHeightPt = Math.max(borderHeightPt, verticalBorder('t'), verticalBorder('b'))
-      cells.push({
+      drafts.push({
         column,
         rowspan: anchor ? anchor.rows : 1,
         colspan: anchor ? anchor.columns : 1,
         endRow: anchor ? anchor.endRow : row,
         endColumn: anchor ? anchor.endColumn : column,
         text,
-        css: cellCss(style, rawValue, gridlines, conditional),
+        style,
+        rawValue,
+        conditional,
+        fontSizePt,
       })
     }
     const heightPt = Math.max(worksheet.getRowHeight(row) * 0.75, 10)
-    return {
-      row,
-      heightPt,
-      printedHeightPt: Math.max(heightPt, textHeightPt) + borderHeightPt,
-      cells,
-    }
+    // Excel prints every row at its saved height: a text line taller than
+    // the row clips/overlaps at the row edge instead of growing it. The
+    // one-line text estimate therefore only clamps from below — it never
+    // lifts the printed height past the declaration (BUG-1614: fs x 1.25 +
+    // 2pt used to dominate the saved height and printed 15pt rows as 16.5pt
+    // ones, planning orphan pages LibreOffice never produces). Wrap-text
+    // rows keep the estimate as their lower-bound model: Chromium grows
+    // them past any declared height (BUG-1214 residual), so the plan has
+    // to lean tall like the render does.
+    const printedHeightPt =
+      Math.max(heightPt, wraps ? textHeightPt : Math.min(textHeightPt, heightPt)) + borderHeightPt
+    // The pagination only mirrors Chromium while every row renders at its
+    // declared printedHeightPt: when the text line cannot fit under the
+    // declaration (estimate vs declaration minus the border), the cell's
+    // line box is clamped to what remains (padding included) — the glyphs
+    // clip at the row edge exactly like Excel's oversized text, and the
+    // rendered row stays at the planned height instead of growing.
+    const cells = drafts.map((draft) => {
+      const lineClampPt =
+        !wraps &&
+        draft.fontSizePt * LINE_HEIGHT_FACTOR + CELL_VERTICAL_PADDING_PT > heightPt - borderHeightPt
+          ? Math.max(heightPt - borderHeightPt - CELL_VERTICAL_PADDING_PT, 1)
+          : undefined
+      return {
+        column: draft.column,
+        rowspan: draft.rowspan,
+        colspan: draft.colspan,
+        endRow: draft.endRow,
+        endColumn: draft.endColumn,
+        text: draft.text,
+        css: cellCss(draft.style, draft.rawValue, gridlines, draft.conditional, lineClampPt),
+      }
+    })
+    return { row, heightPt, printedHeightPt, cells }
   }
 
   const titleRows: LayoutRow[] = []
@@ -902,9 +961,10 @@ function columnStripesOf(
 /// breaks (with an infinite capacity, so ONLY the manual edges cut — rows
 /// between two breaks stay one flowing table Chromium paginates itself).
 /// The mirror holds only while every <tr> renders at its declared
-/// printedHeightPt — see the printedHeightPt doc for the wrap-text /
-/// tall-font residuals that can still shift Chromium's page breaks off the
-/// simulated ones.
+/// printedHeightPt — see the printedHeightPt doc for the wrap-text rows
+/// (whose plan leans tall with the render) and the narrow CJK line-box
+/// window that can still shift Chromium's page breaks off the simulated
+/// ones.
 function rowBandsOf(
   area: LayoutArea,
   capacityPt: number,
@@ -1364,6 +1424,7 @@ function cellCss(
   rawValue: unknown,
   gridlines: boolean,
   conditional: PrintConditionalFormatStyle | null = null,
+  lineClampPt?: number,
 ): string {
   // A matched CF rule's dxf replaces the static style's fill and font fields
   // (borders per edge) like Excel layers conditional formatting on print.
@@ -1403,6 +1464,10 @@ function cellCss(
   rules.push(`text-align:${align}`)
   if (style?.vt === 1) rules.push('vertical-align:top')
   else if (style?.vt === 2) rules.push('vertical-align:middle')
+  // The row's declared height cannot fit this text line (BUG-1614): pin the
+  // line box so the row renders at the declaration and the text clips at
+  // the row edge like Excel's, instead of growing the row past the plan.
+  if (lineClampPt !== undefined) rules.push(`line-height:${round(lineClampPt)}pt`)
   rules.push(style?.tb === 3 ? 'white-space:pre-wrap;word-break:break-word' : 'white-space:pre')
   const defaultBorder = gridlines ? '0.5pt solid #c0c0c0' : 'none'
   for (const [edge, css] of [
