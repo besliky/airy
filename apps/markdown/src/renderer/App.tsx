@@ -12,6 +12,13 @@ import {
   stripLegacyFencedDivs,
   type DocEnvelope,
 } from './markdown/docText'
+import { splitBodyForHydration } from './markdown/segments'
+import {
+  HYDRATION_META,
+  hydrateSegments,
+  mountFirstSegment,
+  type HydrationProgress,
+} from './markdown/hydration'
 import { buildExtensions } from './editor/extensions'
 import { tiptapFindTarget } from './editor/findTarget'
 import { buildSlashItems } from './editor/slashCommand'
@@ -135,6 +142,9 @@ export default function App() {
   const [showFind, setShowFind] = useState(false)
   const [findFocus, setFindFocus] = useState<FindFocusRequest>({ field: 'find', nonce: 0 })
   const [zoom, setZoom] = useState(100)
+  // progressive hydration of a giant file (PERF-1647): shown as a counter in
+  // the status bar while background chunks are appended
+  const [hydration, setHydration] = useState<HydrationProgress | null>(null)
 
   const statusRef = useRef<LoadStatus>('loading')
   const dirtyRef = useRef(false)
@@ -144,6 +154,17 @@ export default function App() {
   const filePathRef = useRef<string | null>(null)
   const slashMenuRef = useRef<SlashMenuHandle>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  // in-flight hydration promise; serializers (save/export/print) wait for it
+  // so they never persist a partially hydrated body
+  const hydrationRef = useRef<Promise<boolean> | null>(null)
+
+  /** resolves once no background hydration is appending document chunks */
+  const whenHydrated = useCallback(async (): Promise<void> => {
+    let guard = 0
+    while (hydrationRef.current && guard++ < 6000) {
+      await hydrationRef.current
+    }
+  }, [])
 
   const zoomOut = useCallback(
     () => setZoom((value) => Math.max(MIN_ZOOM, Math.round(value) - ZOOM_STEP)),
@@ -189,9 +210,10 @@ export default function App() {
     content: '',
     autofocus: true,
     editorProps: { attributes: { class: 'doc-editor' } },
-    // uiOnly transactions (toggle fold state) never reach the file — not dirty
+    // uiOnly transactions (toggle fold state) never reach the file — not dirty;
+    // hydration re-assembles the just-read file content — not dirty either
     onUpdate: ({ transaction }) => {
-      if (!transaction.getMeta('uiOnly')) markDirty()
+      if (!transaction.getMeta('uiOnly') && !transaction.getMeta(HYDRATION_META)) markDirty()
     },
   })
   editorRef.current = editor
@@ -220,15 +242,37 @@ export default function App() {
           setImageBaseDir(dirOf(path))
           // the initial load must not be undoable — Cmd+Z right after opening
           // would otherwise blank the document (and Cmd+S overwrite the file)
-          editor
-            .chain()
-            .setMeta('addToHistory', false)
-            .setContent(stripLegacyFencedDivs(envelope.body), { contentType: 'markdown' })
-            .run()
+          // PERF-1647: mount only the first segment synchronously (markdown
+          // parse is quadratic in input size) and append the rest in the
+          // background so the first screen is interactive fast
+          const body = stripLegacyFencedDivs(envelope.body)
+          const segments = splitBodyForHydration(body)
+          // raw-transaction mount: unlike setContent it never lets the
+          // TrailingNode fill paragraph land after a non-paragraph tail,
+          // which would stay mid-document once the next chunks arrive
+          mountFirstSegment(editor, segments[0])
           setFilePath(path)
           const inner = frontmatterInner(envelope.frontmatter)
           setFmText(inner)
           if (inner) setFmOpen(true)
+          if (segments.length > 1) {
+            setHydration({ done: 1, total: segments.length })
+            hydrationRef.current = hydrateSegments(editor, segments, {
+              onProgress: (progress) => {
+                if (!cancelled) setHydration(progress)
+              },
+            }).then((ok) => {
+              hydrationRef.current = null
+              if (!cancelled) {
+                setHydration(null)
+                // a partially hydrated body must never be serialized; a failed
+                // hydration leaves the on-disk file as the source of truth and
+                // the document dirty so a reopen recovers it
+                if (!ok) markDirty()
+              }
+              return ok
+            })
+          }
         } else {
           envelopeRef.current = { ...EMPTY_ENVELOPE }
         }
@@ -272,7 +316,9 @@ export default function App() {
         !current ||
         !dirtyRef.current ||
         !filePathRef.current ||
-        statusRef.current !== 'ready'
+        statusRef.current !== 'ready' ||
+        // a recovery copy mid-hydration would store a truncated body
+        hydrationRef.current
       )
         return
       writing = true
@@ -294,94 +340,106 @@ export default function App() {
   }, [])
 
   /** Serialize and write to disk; false when canceled/failed (caller keeps the tab open) */
-  const doSave = useCallback(async (mode: SaveMode, suggestedName?: string): Promise<boolean> => {
-    const current = editorRef.current
-    if (!current || statusRef.current !== 'ready' || savingRef.current) return false
-    savingRef.current = true
-    setSaveState('saving')
-    try {
-      // edits landing while the write is in flight (AI streaming, fast typing)
-      // must keep the document dirty — compare doc identity after the await
-      const docAtSave = current.state.doc
-      const fmAtSave = envelopeRef.current.frontmatter
-      const body = current.getMarkdown()
-      const text = serializeDocText(envelopeRef.current, body)
-      const imageSources = imageSourcesFromEditor(current)
-      const result = await window.markdownApi.save({ text, imageSources, mode, suggestedName })
-      if (result.ok && 'path' in result) {
-        const unchanged =
-          editorRef.current?.state.doc === docAtSave && envelopeRef.current.frontmatter === fmAtSave
-        if (result.imageRewrites?.length && editorRef.current) {
-          applyImageRewrites(editorRef.current, result.imageRewrites)
+  const doSave = useCallback(
+    async (mode: SaveMode, suggestedName?: string): Promise<boolean> => {
+      const current = editorRef.current
+      if (!current || statusRef.current !== 'ready' || savingRef.current) return false
+      savingRef.current = true
+      setSaveState('saving')
+      try {
+        // background hydration must finish first: saving a partially hydrated
+        // body would truncate the file on disk
+        await whenHydrated()
+        // edits landing while the write is in flight (AI streaming, fast typing)
+        // must keep the document dirty — compare doc identity after the await
+        const docAtSave = current.state.doc
+        const fmAtSave = envelopeRef.current.frontmatter
+        const body = current.getMarkdown()
+        const text = serializeDocText(envelopeRef.current, body)
+        const imageSources = imageSourcesFromEditor(current)
+        const result = await window.markdownApi.save({ text, imageSources, mode, suggestedName })
+        if (result.ok && 'path' in result) {
+          const unchanged =
+            editorRef.current?.state.doc === docAtSave &&
+            envelopeRef.current.frontmatter === fmAtSave
+          if (result.imageRewrites?.length && editorRef.current) {
+            applyImageRewrites(editorRef.current, result.imageRewrites)
+          }
+          setImageBaseDir(dirOf(result.path))
+          setFilePath(result.path)
+          if (unchanged) {
+            dirtyRef.current = false
+            setDirty(false)
+            window.markdownApi.setDirty(false)
+            setSaveState('saved')
+          } else {
+            // the main process cleared its dirty flag on write — re-assert it
+            dirtyRef.current = true
+            setDirty(true)
+            window.markdownApi.setDirty(true)
+            setSaveState('idle')
+          }
+          return true
         }
-        setImageBaseDir(dirOf(result.path))
-        setFilePath(result.path)
-        if (unchanged) {
-          dirtyRef.current = false
-          setDirty(false)
-          window.markdownApi.setDirty(false)
-          setSaveState('saved')
-        } else {
-          // the main process cleared its dirty flag on write — re-assert it
-          dirtyRef.current = true
-          setDirty(true)
-          window.markdownApi.setDirty(true)
-          setSaveState('idle')
-        }
-        return true
+        setSaveState(result.ok ? 'idle' : 'failed')
+        return false
+      } catch (err) {
+        console.error('[markdown] save failed:', err)
+        setSaveState('failed')
+        return false
+      } finally {
+        savingRef.current = false
       }
-      setSaveState(result.ok ? 'idle' : 'failed')
-      return false
-    } catch (err) {
-      console.error('[markdown] save failed:', err)
-      setSaveState('failed')
-      return false
-    } finally {
-      savingRef.current = false
-    }
-  }, [])
+    },
+    [whenHydrated],
+  )
 
-  const runExport = useCallback(async (format: ExportFormat) => {
-    const current = editorRef.current
-    if (!current || statusRef.current !== 'ready') return
-    const suggestedName =
-      (filePathRef.current
-        ? filePathRef.current.replace(/^.*[/\\]/, '').replace(/\.(md|markdown)$/i, '')
-        : deriveAutoFileName(current)) || 'Untitled'
-    try {
-      if (format === 'pdf') {
-        const html = buildPrintHtml(current.view.dom, suggestedName)
-        const result = await window.markdownApi.exportPdf({ html, suggestedName })
-        if (!result.ok) console.error('[markdown] pdf export failed:', result.error)
-        return
-      }
-      const loadImage = async (src: string) => {
-        const data = await window.markdownApi.readImage(src)
-        if (!data) return null
-        const dims = await measureImage(resolveImageSrc(src))
-        let width = dims?.width || 400
-        let height = dims?.height || 300
-        if (width > DOCX_MAX_IMAGE_PX) {
-          height = Math.round((height * DOCX_MAX_IMAGE_PX) / width)
-          width = DOCX_MAX_IMAGE_PX
+  const runExport = useCallback(
+    async (format: ExportFormat) => {
+      const current = editorRef.current
+      if (!current || statusRef.current !== 'ready') return
+      // export serializes the whole document — hydration must be complete
+      await whenHydrated()
+      const suggestedName =
+        (filePathRef.current
+          ? filePathRef.current.replace(/^.*[/\\]/, '').replace(/\.(md|markdown)$/i, '')
+          : deriveAutoFileName(current)) || 'Untitled'
+      try {
+        if (format === 'pdf') {
+          const html = buildPrintHtml(current.view.dom, suggestedName)
+          const result = await window.markdownApi.exportPdf({ html, suggestedName })
+          if (!result.ok) console.error('[markdown] pdf export failed:', result.error)
+          return
         }
-        return { base64: data.base64, mime: data.mime, widthPx: width, heightPx: height }
+        const loadImage = async (src: string) => {
+          const data = await window.markdownApi.readImage(src)
+          if (!data) return null
+          const dims = await measureImage(resolveImageSrc(src))
+          let width = dims?.width || 400
+          let height = dims?.height || 300
+          if (width > DOCX_MAX_IMAGE_PX) {
+            height = Math.round((height * DOCX_MAX_IMAGE_PX) / width)
+            width = DOCX_MAX_IMAGE_PX
+          }
+          return { base64: data.base64, mime: data.mime, widthPx: width, heightPx: height }
+        }
+        const renderDiagram = async (source: string) => {
+          const result = await renderMermaid(source)
+          return result.ok ? mermaidSvgToPng(result.svg, DOCX_MAX_IMAGE_PX) : null
+        }
+        const bytes = await exportDocxBytes(current.getJSON(), loadImage, renderDiagram)
+        const result = await window.markdownApi.exportDocx({
+          base64: bytesToBase64(bytes),
+          suggestedName,
+          mode: format === 'docs' ? 'openInDocs' : 'dialog',
+        })
+        if (!result.ok) console.error('[markdown] docx export failed:', result.error)
+      } catch (err) {
+        console.error('[markdown] export failed:', err)
       }
-      const renderDiagram = async (source: string) => {
-        const result = await renderMermaid(source)
-        return result.ok ? mermaidSvgToPng(result.svg, DOCX_MAX_IMAGE_PX) : null
-      }
-      const bytes = await exportDocxBytes(current.getJSON(), loadImage, renderDiagram)
-      const result = await window.markdownApi.exportDocx({
-        base64: bytesToBase64(bytes),
-        suggestedName,
-        mode: format === 'docs' ? 'openInDocs' : 'dialog',
-      })
-      if (!result.ok) console.error('[markdown] docx export failed:', result.error)
-    } catch (err) {
-      console.error('[markdown] export failed:', err)
-    }
-  }, [])
+    },
+    [whenHydrated],
+  )
 
   /**
    * Print through the same self-contained HTML the PDF export uses, loaded into a
@@ -394,6 +452,8 @@ export default function App() {
     const current = editorRef.current
     if (!current || statusRef.current !== 'ready' || printingRef.current) return
     printingRef.current = true
+    // print serializes the whole document — hydration must be complete
+    await whenHydrated()
     const title =
       (filePathRef.current
         ? filePathRef.current.replace(/^.*[/\\]/, '').replace(/\.(md|markdown)$/i, '')
@@ -430,7 +490,7 @@ export default function App() {
       frame.remove()
       printingRef.current = false
     }
-  }, [])
+  }, [whenHydrated])
 
   useEffect(() => {
     const offExport = window.markdownApi.onExportRequest((format) => void runExport(format))
@@ -726,6 +786,11 @@ export default function App() {
           <footer className="status-bar">
             <div className="status-left">
               {fileName && <span className="status-item status-file">{fileName}</span>}
+              {hydration && (
+                <span className="status-item">
+                  {t('loading')} {hydration.done}/{hydration.total}
+                </span>
+              )}
             </div>
             <div className="status-right">
               {statusText && (
