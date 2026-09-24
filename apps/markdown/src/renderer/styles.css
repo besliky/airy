@@ -340,6 +340,22 @@ button {
   color: var(--md-link);
 }
 
+/* link/anchor diagnostics (UX-1701): unobtrusive markers for links the
+ * markdown parser cannot resolve — decoration-only, model and file untouched */
+.doc-editor .md-link-empty,
+.doc-editor .md-link-unresolved-ref,
+.doc-editor .md-link-dead-anchor {
+  text-decoration: underline wavy var(--danger);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* `[^1]` footnotes stay literal text (no footnote extension) — hint, not error */
+.doc-editor .md-footnote-hint {
+  text-decoration: underline dotted var(--text-muted);
+  text-underline-offset: 3px;
+}
+
 .doc-editor img {
   max-width: 100%;
   height: auto;

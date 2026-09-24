@@ -180,6 +180,10 @@ export const strings = {
     zoom: '缩放',
     zoomIn: '放大',
     zoomOut: '缩小',
+    linkEmpty: '空链接:没有目标地址',
+    linkUnresolvedRef: '引用未定义:链接指向的引用标签(如 [a])无法解析',
+    linkDeadAnchor: '锚点不存在:文档中没有匹配的标题',
+    footnoteUnsupported: '暂不支持脚注([^1] 语法),将按普通文本显示',
   },
   en: {
     aiToolReadFm: 'Read document properties',
@@ -368,6 +372,11 @@ export const strings = {
     zoom: 'Zoom',
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
+    linkEmpty: 'Empty link — no target URL',
+    linkUnresolvedRef:
+      'Unresolved reference — the label this link points to is not defined (or is circular)',
+    linkDeadAnchor: 'Dead anchor — no heading in this document matches it',
+    footnoteUnsupported: 'Footnotes ([^1]) are not supported yet — they stay as plain text',
   },
   ja: {
     aiToolReadFm: 'ドキュメントのプロパティを読み取り',
@@ -554,6 +563,10 @@ export const strings = {
     zoom: 'ズーム',
     zoomIn: '拡大',
     zoomOut: '縮小',
+    linkEmpty: '空のリンク:リンク先URLがありません',
+    linkUnresolvedRef: '未解決の参照:リンク先の参照ラベルが定義されていないか循環しています',
+    linkDeadAnchor: '存在しないアンカー:一致する見出しが文書内にありません',
+    footnoteUnsupported: '脚注([^1])には未対応です。普通のテキストとして表示されます',
   },
   ko: {
     aiToolReadFm: '문서 속성 읽기',
@@ -740,6 +753,11 @@ export const strings = {
     zoom: '줌',
     zoomIn: '확대',
     zoomOut: '축소',
+    linkEmpty: '빈 링크:대상 URL이 없습니다',
+    linkUnresolvedRef:
+      '확인되지 않은 참조:링크가 가리키는 참조 레이블이 정의되지 않았거나 순환합니다',
+    linkDeadAnchor: '존재하지 않는 앵커:문서에 일치하는 제목이 없습니다',
+    footnoteUnsupported: '각주([^1])는 아직 지원되지 않으며 일반 텍스트로 표시됩니다',
   },
   fr: {
     aiToolReadFm: 'Lecture des propriétés du document',
@@ -932,6 +950,12 @@ export const strings = {
     zoom: 'Zoom',
     zoomIn: 'Zoom avant',
     zoomOut: 'Zoom arrière',
+    linkEmpty: 'Lien vide — aucune URL cible',
+    linkUnresolvedRef:
+      'Référence non résolue — le libellé visé par ce lien n’est pas défini (ou est cyclique)',
+    linkDeadAnchor: 'Ancre morte — aucun titre du document ne correspond',
+    footnoteUnsupported:
+      'Les notes de bas de page ([^1]) ne sont pas encore prises en charge — elles restent du texte brut',
   },
   de: {
     aiToolReadFm: 'Dokumenteigenschaften lesen',
@@ -1123,6 +1147,12 @@ export const strings = {
     zoom: 'Zoom',
     zoomIn: 'Vergrößern',
     zoomOut: 'Verkleinern',
+    linkEmpty: 'Leerer Link — keine Ziel-URL',
+    linkUnresolvedRef:
+      'Unaufgelöste Referenz — das Ziel-Label dieses Links ist nicht definiert (oder zirkulär)',
+    linkDeadAnchor: 'Toter Anker — keine Überschrift des Dokuments passt dazu',
+    footnoteUnsupported:
+      'Fußnoten ([^1]) werden noch nicht unterstützt — sie bleiben einfacher Text',
   },
   es: {
     aiToolReadFm: 'Leer propiedades del documento',
@@ -1315,6 +1345,12 @@ export const strings = {
     zoom: 'Zoom',
     zoomIn: 'Acercar',
     zoomOut: 'Alejar',
+    linkEmpty: 'Enlace vacío: sin URL de destino',
+    linkUnresolvedRef:
+      'Referencia sin resolver: la etiqueta a la que apunta este enlace no está definida (o es circular)',
+    linkDeadAnchor: 'Ancla rota: ningún encabezado del documento coincide',
+    footnoteUnsupported:
+      'Las notas al pie ([^1]) aún no son compatibles: se muestran como texto normal',
   },
   th: {
     aiToolReadFm: 'อ่านคุณสมบัติเอกสาร',
@@ -1499,6 +1535,11 @@ export const strings = {
     zoom: 'ซูม',
     zoomIn: 'ขยาย',
     zoomOut: 'ย่อ',
+    linkEmpty: 'ลิงก์ว่าง — ไม่มี URL ปลายทาง',
+    linkUnresolvedRef:
+      'การอ้างอิงที่แก้ไม่ได้ — ป้ายชื่อที่ลิงก์ชี้ไปยังไม่ได้ถูกกำหนด (หรือวนซ้ำ)',
+    linkDeadAnchor: 'แองเกอร์เสีย — ไม่มีหัวข้อในเอกสารที่ตรงกัน',
+    footnoteUnsupported: 'ยังไม่รองรับเชิงอรรถ ([^1]) — จะแสดงเป็นข้อความธรรมดา',
   },
   id: {
     aiToolReadFm: 'Baca properti dokumen',
@@ -1686,6 +1727,12 @@ export const strings = {
     zoom: 'Zum',
     zoomIn: 'Perbesar',
     zoomOut: 'Perkecil',
+    linkEmpty: 'Tautan kosong — tanpa URL tujuan',
+    linkUnresolvedRef:
+      'Referensi tak terurai — label yang dituju tautan ini tidak terdefinisi (atau melingkar)',
+    linkDeadAnchor: 'Jangkar mati — tidak ada judul di dokumen ini yang cocok',
+    footnoteUnsupported:
+      'Catatan kaki ([^1]) belum didukung — tetap ditampilkan sebagai teks biasa',
   },
   ru: {
     aiToolReadFm: 'Чтение свойств документа',
@@ -1874,6 +1921,11 @@ export const strings = {
     zoom: 'Масштаб',
     zoomIn: 'Увеличить',
     zoomOut: 'Уменьшить',
+    linkEmpty: 'Пустая ссылка — нет адреса',
+    linkUnresolvedRef:
+      'Неопределённая ссылка — метка, на которую указывает ссылка, не определена (или циклична)',
+    linkDeadAnchor: 'Битый якорь — в документе нет заголовка с таким именем',
+    footnoteUnsupported: 'Сноски ([^1]) пока не поддерживаются — они остаются обычным текстом',
   },
   ar: {
     aiToolReadFm: 'قراءة خصائص المستند',
@@ -2059,6 +2111,10 @@ export const strings = {
     zoom: 'التكبير',
     zoomIn: 'تكبير',
     zoomOut: 'تصغير',
+    linkEmpty: 'رابط فارغ — لا يوجد عنوان URL هدف',
+    linkUnresolvedRef: 'مرجع غير محلول — التسمية التي يشير إليها هذا الرابط غير معرّفة (أو دائرية)',
+    linkDeadAnchor: 'مرساة ميتة — لا يوجد عنوان في المستند يطابقها',
+    footnoteUnsupported: 'الحواشي السفلية ([^1]) غير مدعومة بعد — تبقى كنص عادي',
   },
   pt: {
     aiToolReadFm: 'Ler propriedades do documento',
@@ -2249,6 +2305,12 @@ export const strings = {
     zoom: 'Zoom',
     zoomIn: 'Ampliar',
     zoomOut: 'Reduzir',
+    linkEmpty: 'Link vazio — sem URL de destino',
+    linkUnresolvedRef:
+      'Referência não resolvida — o rótulo apontado por este link não está definido (ou é circular)',
+    linkDeadAnchor: 'Âncora morta — nenhum título do documento corresponde',
+    footnoteUnsupported:
+      'Notas de rodapé ([^1]) ainda não são compatíveis — permanecem como texto simples',
   },
   it: {
     aiToolReadFm: 'Lettura delle proprietà del documento',
@@ -2439,6 +2501,12 @@ export const strings = {
     zoom: 'Zoom',
     zoomIn: 'Ingrandisci',
     zoomOut: 'Riduci',
+    linkEmpty: 'Link vuoto — nessun URL di destinazione',
+    linkUnresolvedRef:
+      'Riferimento non risolto — l’etichetta puntata da questo link non è definita (o è circolare)',
+    linkDeadAnchor: 'Ancora morta — nessun titolo del documento corrisponde',
+    footnoteUnsupported:
+      'Le note a piè di pagina ([^1]) non sono ancora supportate — restano testo normale',
   },
   pl: {
     aiToolReadFm: 'Odczyt właściwości dokumentu',
@@ -2627,6 +2695,11 @@ export const strings = {
     zoom: 'Zoom',
     zoomIn: 'Powiększ',
     zoomOut: 'Pomniejsz',
+    linkEmpty: 'Pusty link — brak adresu URL',
+    linkUnresolvedRef:
+      'Nierozwiązane odniesienie — etykieta wskazywana przez ten link nie jest zdefiniowana (lub jest cykliczna)',
+    linkDeadAnchor: 'Martwa kotwica — żaden nagłówek dokumentu nie pasuje',
+    footnoteUnsupported: 'Przypisy ([^1]) nie są jeszcze obsługiwane — pozostają zwykłym tekstem',
   },
   cs: {
     aiToolReadFm: 'Číst vlastnosti dokumentu',
@@ -2799,6 +2872,12 @@ export const strings = {
     zoom: 'Lupa',
     zoomIn: 'Přiblížit',
     zoomOut: 'Oddálit',
+    linkEmpty: 'Prázdný odkaz — chybí cílová adresa',
+    linkUnresolvedRef:
+      'Nevyřešený odkaz — značka, na niž tento odkaz míří, není definována (nebo je cyklická)',
+    linkDeadAnchor: 'Mrtvá kotva — žádný nadpis dokumentu neodpovídá',
+    footnoteUnsupported:
+      'Poznámky pod čarou ([^1]) nejsou zatím podporovány — zůstávají obyčejným textem',
     findPlaceholder: 'Najít',
     replacePlaceholder: 'Nahradit za',
     matchCase: 'Rozlišovat velikost písmen',
@@ -3003,6 +3082,11 @@ export const strings = {
     zoom: 'Zoom',
     zoomIn: 'Inzoomen',
     zoomOut: 'Uitzoomen',
+    linkEmpty: 'Lege link — geen doel-URL',
+    linkUnresolvedRef:
+      'Onopgeloste verwijzing — het label waar deze link naar wijst is niet gedefinieerd (of circulair)',
+    linkDeadAnchor: 'Dood anker — geen kop in dit document komt overeen',
+    footnoteUnsupported: 'Voetnoten ([^1]) worden nog niet ondersteund — ze blijven gewone tekst',
   },
   ms: {
     aiToolReadFm: 'Baca sifat dokumen',
@@ -3190,6 +3274,11 @@ export const strings = {
     zoom: 'Zum',
     zoomIn: 'Zum masuk',
     zoomOut: 'Zum keluar',
+    linkEmpty: 'Pautan kosong — tiada URL sasaran',
+    linkUnresolvedRef:
+      'Rujukan tidak diselesaikan — label yang ditunjuk pautan ini tidak ditakrif (atau berkitar)',
+    linkDeadAnchor: 'Sauh mati — tiada pengepala dalam dokumen ini sepadan',
+    footnoteUnsupported: 'Nota kaki ([^1]) belum disokong — kekal sebagai teks biasa',
   },
   he: {
     aiToolReadFm: 'קריאת מאפייני המסמך',
@@ -3373,6 +3462,10 @@ export const strings = {
     zoom: 'זום',
     zoomIn: 'הגדלה',
     zoomOut: 'הקטנה',
+    linkEmpty: 'קישור ריק — אין כתובת יעד',
+    linkUnresolvedRef: 'הפניה שאינה פתורה — התווית אליה מפנה הקישור אינה מוגדרת (או מעגלית)',
+    linkDeadAnchor: 'עוגן שבור — אין כותרת במסמך שתואמת',
+    footnoteUnsupported: 'הערות שוליים ([^1]) עדיין אינן נתמכות — הן נשארות טקסט רגיל',
   },
   hi: {
     aiToolReadFm: 'दस्तावेज़ गुण पढ़ें',
@@ -3561,6 +3654,10 @@ export const strings = {
     zoom: 'ज़ूम',
     zoomIn: 'ज़ूम इन',
     zoomOut: 'ज़ूम आउट',
+    linkEmpty: 'खाली लिंक — कोई लक्ष्य URL नहीं',
+    linkUnresolvedRef: 'अनिर्दिष्ट संदर्भ — इस लिंक के लक्ष्य लेबल परिभाषित नहीं है (या चक्रीय है)',
+    linkDeadAnchor: 'टूटा एंकर — दस्तावेज़ में कोई शीर्षक मेल नहीं खाता',
+    footnoteUnsupported: 'फ़ुटनोट ([^1]) अभी समर्थित नहीं हैं — ये सादे पाठ के रूप में रहते हैं',
   },
   'zh-TW': {
     aiToolReadFm: '讀取文件屬性',
@@ -3743,5 +3840,9 @@ export const strings = {
     zoom: '縮放',
     zoomIn: '放大',
     zoomOut: '縮小',
+    linkEmpty: '空連結:沒有目標網址',
+    linkUnresolvedRef: '未定義的參照:連結指向的參照標籤無法解析',
+    linkDeadAnchor: '錨點不存在:文件中沒有相符的標題',
+    footnoteUnsupported: '暫不支援腳註([^1] 語法),將以純文字顯示',
   },
 } as const
