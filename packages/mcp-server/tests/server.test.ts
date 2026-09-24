@@ -66,6 +66,27 @@ describe('airy mcp server', () => {
     }
   })
 
+  it('discloses the docx save deltas in the save_document description', async () => {
+    const { client, close } = await connectSession()
+    try {
+      const { tools } = await client.listTools()
+      const save = tools.find((tool) => tool.name === 'save_document')
+      // OBS-1692: "untouched parts byte-identical" needs its docx exceptions
+      // spelled out next to the promise, like the xlsx workbook.xml one —
+      // core.xml is rewritten on purpose and the zip gains directory entries
+      expect(save?.description).toContain('docProps/core.xml')
+      expect(save?.description).toContain('cp:revision')
+      expect(save?.description).toContain('dcterms:modified')
+      expect(save?.description).toContain('directory entries')
+      // the zero-edit guarantee stays intact next to the caveat
+      expect(save?.description).toContain(
+        'docx saves keep untouched parts byte-identical and a zero-edit save writes the original bytes back verbatim',
+      )
+    } finally {
+      await close()
+    }
+  })
+
   it('returns structured content from ping', async () => {
     const { client, close } = await connectSession()
     try {

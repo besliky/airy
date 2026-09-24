@@ -731,7 +731,9 @@ export function registerTools(server: McpServer): void {
         'back to the original .doc/.odt/.ods through LibreOffice (best-effort; .xls output is ' +
         'not supported — use the default .xlsx save). Byte preservation differs by format: docx ' +
         'saves keep untouched parts byte-identical and a zero-edit save writes the original bytes ' +
-        'back verbatim; markdown and html sessions behave the same at line granularity ' +
+        'back verbatim (an edited save deliberately rewrites docProps/core.xml — bumps ' +
+        'cp:revision, refreshes dcterms:modified — and the rebuilt zip gains explicit directory ' +
+        'entries, one per folder, when the source had none); markdown and html sessions behave the same at line granularity ' +
         '(untouched lines keep their exact bytes, EOLs included, and a zero-edit save round-trips ' +
         'the file verbatim; an edited save writes UTF-8 with the original BOM flag re-applied, ' +
         'html additionally rewriting a legacy charset declaration to utf-8, and the format ' +
