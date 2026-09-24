@@ -16,6 +16,7 @@ export const ru = {
   menuNewHtml: 'AI HTML',
   menuNewPdf: 'AI PDF',
   menuExportPdf: 'Экспортировать в PDF…',
+  menuExportHtml: 'Экспортировать в HTML…',
   menuOpenInDocs: 'Преобразовать и открыть в Docs',
   menuPrint: 'Печать…',
   menuOpen: 'Открыть…',

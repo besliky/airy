@@ -16,6 +16,7 @@ export const hi = {
   menuNewHtml: 'AI HTML',
   menuNewPdf: 'AI PDF',
   menuExportPdf: 'PDF के रूप में निर्यात…',
+  menuExportHtml: 'HTML के रूप में निर्यात…',
   menuOpenInDocs: 'Docs में बदलें और खोलें',
   menuPrint: 'प्रिंट करें…',
   menuOpen: 'खोलें…',

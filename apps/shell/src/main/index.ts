@@ -2776,6 +2776,13 @@ function buildMarkdownMenu(): void {
           },
         },
         {
+          label: tm('menuExportHtml'),
+          click: () => {
+            const tab = focusedManager()?.activeMarkdownTab()
+            if (tab) sendMarkdownExportRequest(tab.webContents, 'html')
+          },
+        },
+        {
           label: tm('menuOpenInDocs'),
           click: () => {
             const tab = focusedManager()?.activeMarkdownTab()

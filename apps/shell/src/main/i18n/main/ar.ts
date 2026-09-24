@@ -16,6 +16,7 @@ export const ar = {
   menuNewHtml: 'AI HTML',
   menuNewPdf: 'AI PDF',
   menuExportPdf: 'تصدير بتنسيق PDF…',
+  menuExportHtml: 'تصدير بتنسيق HTML…',
   menuOpenInDocs: 'التحويل والفتح في Docs',
   menuPrint: 'طباعة…',
   menuOpen: 'فتح…',

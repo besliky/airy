@@ -20,6 +20,7 @@ export const MARKDOWN_CHANNELS = {
   exportRequest: 'markdown:export-request',
   exportDocx: 'markdown:export-docx',
   exportPdf: 'markdown:export-pdf',
+  exportHtml: 'markdown:export-html',
   printRequest: 'markdown:print-request',
   aiGenerateImage: 'markdown:ai-generate-image',
   getLanguage: 'app:get-language',
@@ -127,7 +128,7 @@ export interface ImageSearchResult {
   error?: string
 }
 
-export type ExportFormat = 'pdf' | 'docx' | 'docs'
+export type ExportFormat = 'pdf' | 'docx' | 'docs' | 'html'
 
 export interface ExportDocxRequest {
   /** .docx bytes, base64 */
@@ -140,6 +141,12 @@ export interface ExportDocxRequest {
 
 export interface ExportPdfRequest {
   /** self-contained print HTML */
+  html: string
+  suggestedName: string
+}
+
+export interface ExportHtmlRequest {
+  /** standalone HTML document (inline CSS, offline-openable) */
   html: string
   suggestedName: string
 }
@@ -206,6 +213,8 @@ export interface MarkdownApi {
   onPrintRequest(handler: () => void): () => void
   exportDocx(request: ExportDocxRequest): Promise<ExportResult>
   exportPdf(request: ExportPdfRequest): Promise<ExportResult>
+  /** Standalone HTML export: save-dialog path, written atomically by main */
+  exportHtml(request: ExportHtmlRequest): Promise<ExportResult>
   getLanguage(): Promise<Lang>
   onLanguageChanged(handler: (lang: Lang) => void): () => void
   getTheme(): Promise<UiTheme>
