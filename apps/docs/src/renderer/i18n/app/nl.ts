@@ -44,6 +44,7 @@ export const nl = {
   appUntitledDocx: 'Naamloos.docx',
   appOpenedFile: '{name} geopend',
   appOpenFailed: 'Openen mislukt: {error}',
+  appOpenCorrupted: 'Bestand is beschadigd: {part}, positie {position}',
   appFontsMissing: 'Ontbrekende documentlettertypen: {names} (vervangingen weergegeven)',
   appVerticalTextNotice:
     'Dit document bevat verticale tekst (voorlopig horizontaal weergegeven; opslaan wordt niet beïnvloed)',

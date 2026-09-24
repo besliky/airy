@@ -44,6 +44,7 @@ export const hi = {
   appUntitledDocx: 'शीर्षकहीन.docx',
   appOpenedFile: '{name} खोला गया',
   appOpenFailed: 'खोलने में विफल: {error}',
+  appOpenCorrupted: 'फ़ाइल दूषित है: {part}, स्थिति {position}',
   appFontsMissing: 'दस्तावेज़ के फ़ॉन्ट इंस्टॉल नहीं हैं: {names} (विकल्प फ़ॉन्ट दिखाए गए)',
   appVerticalTextNotice:
     'इस दस्तावेज़ में लंबवत पाठ है (फ़िलहाल क्षैतिज रूप में दिखाया गया है; सहेजने पर असर नहीं)',

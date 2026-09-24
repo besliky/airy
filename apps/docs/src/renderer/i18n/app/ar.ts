@@ -44,6 +44,7 @@ export const ar = {
   appUntitledDocx: 'مستند بلا عنوان.docx',
   appOpenedFile: 'تم فتح {name}',
   appOpenFailed: 'فشل الفتح: {error}',
+  appOpenCorrupted: 'الملف تالف: {part}، الموضع {position}',
   appFontsMissing: 'خطوط المستند غير مثبتة: {names} (تُعرض بخطوط بديلة)',
   appVerticalTextNotice: 'يحتوي المستند على نص عمودي (يُعرض أفقيًا حاليًا؛ لا يؤثر ذلك على الحفظ)',
   appNewDocCreated:

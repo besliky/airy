@@ -44,6 +44,7 @@ export const zhTW = {
   appUntitledDocx: '未命名文件.docx',
   appOpenedFile: '已開啟 {name}',
   appOpenFailed: '開啟失敗: {error}',
+  appOpenCorrupted: '檔案已損毀: {part}，位置 {position}',
   appFontsMissing: '文件字型未安裝：{names}（已以替代字型顯示）',
   appVerticalTextNotice: '文件包含直排文字（暫以橫排顯示，儲存不受影響）',
   appNewDocCreated: '已建立空白文件,可在左側 AI 面板直接描述要產生的內容',

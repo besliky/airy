@@ -68,6 +68,7 @@ import {
   underlineProp,
   deepXmlParser,
   xmlParser,
+  CorruptXmlError,
   xmlWellFormednessError,
   type XNode,
 } from './xml-utils'
@@ -278,7 +279,10 @@ export async function parseDocx(bytes: Uint8Array): Promise<ParsedDoc & { extras
   // surfaces the thrown error through its standard open-failure toast.
   const malformed = xmlWellFormednessError(documentXml)
   if (malformed) {
-    throw new Error(`docx file is corrupted: ${docPath} is not well-formed XML (${malformed})`)
+    // CorruptXmlError carries the structured fields (shortPart/position/detail)
+    // the renderer needs for the short UX-1652 refusal; message keeps the full
+    // validator output for logs.
+    throw new CorruptXmlError(docPath, malformed)
   }
 
   const theme = await parseTheme(zip)

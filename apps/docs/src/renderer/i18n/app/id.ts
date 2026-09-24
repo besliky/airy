@@ -44,6 +44,7 @@ export const id = {
   appUntitledDocx: 'Dokumen tanpa judul.docx',
   appOpenedFile: '{name} dibuka',
   appOpenFailed: 'Gagal membuka: {error}',
+  appOpenCorrupted: 'Berkas rusak: {part}, posisi {position}',
   appFontsMissing: 'Font dokumen tidak tersedia: {names} (ditampilkan dengan font pengganti)',
   appVerticalTextNotice:
     'Dokumen ini berisi teks vertikal (sementara ditampilkan horizontal; penyimpanan tidak terpengaruh)',

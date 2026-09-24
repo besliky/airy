@@ -14,6 +14,7 @@ import {
   BLANK_BULLET_NUM_ID,
   BLANK_ORDERED_NUM_ID,
   buildBlankDocx,
+  CorruptXmlError,
   parseDocx,
   readPageColor,
   readSections,
@@ -446,6 +447,16 @@ export async function loadFile(
     return 'ok'
   } catch (err) {
     if (generation !== openGeneration) return 'superseded'
+    if (err instanceof CorruptXmlError) {
+      // UX-1652: raw validator internals (expected-tag arrays, raw snippets)
+      // never belong in user-facing text — show a short localized refusal and
+      // keep the full validator output on the console for diagnosis.
+      console.error('Open failed:', err)
+      const short = t('appOpenCorrupted', { part: err.shortPart, position: err.position })
+      ctx.setStatus(short)
+      showToast(short, 'error')
+      return 'failed'
+    }
     // visible failure: the status-bar line alone is easy to miss under the start screen
     ctx.setStatus(t('appOpenFailed', { error: String(err) }))
     showToast(t('appOpenFailed', { error: String(err) }), 'error')

@@ -1,6 +1,6 @@
 import JSZip from 'jszip'
 import { describe, expect, it } from 'vitest'
-import { parseDocx } from '../src/index'
+import { CorruptXmlError, parseDocx } from '../src/index'
 import { xmlWellFormednessError } from '../src/xml-utils'
 import { buildDocx } from './helpers/build-docx'
 
@@ -144,5 +144,44 @@ describe('BUG-1609: files with recoverable quirks still open (no false refusals)
     const allText = JSON.stringify(doc.blocks)
     expect(allText).toContain('second')
     expect(allText).toContain('hello')
+  })
+})
+
+describe('UX-1652: the refusal carries short-form fields so the toast stays friendly', () => {
+  it('throws CorruptXmlError with structured part/position/detail fields', async () => {
+    const full = await baseDocumentXml()
+    const bytes = await withDocumentXml(full.slice(0, full.length - 5)) // "</w:documen"
+    let caught: unknown
+    try {
+      await parseDocx(bytes)
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(CorruptXmlError)
+    const err = caught as CorruptXmlError
+    expect(err.part).toBe('word/document.xml')
+    expect(err.shortPart).toBe('document.xml')
+    expect(err.position).toMatch(/^\d+:\d+$/)
+    // the raw validator output stays on the error for console logging
+    expect(err.detail).toMatch(/\(line \d+, col \d+\)$/)
+    expect(err.message).toContain(err.detail)
+  })
+
+  it('parses the position tail and the bare part name from constructed details', () => {
+    const err = new CorruptXmlError(
+      'word/document.xml',
+      'Invalid \'[    "w:document"]\' found. (line 1, col 1)',
+    )
+    expect(err.position).toBe('1:1')
+    expect(err.shortPart).toBe('document.xml')
+    expect(err.message).toBe(
+      'docx file is corrupted: word/document.xml is not well-formed XML ' +
+        '(Invalid \'[    "w:document"]\' found. (line 1, col 1))',
+    )
+  })
+
+  it('falls back to an "unknown" position when the validator tail is missing', () => {
+    const err = new CorruptXmlError('word/document.xml', 'no position tail')
+    expect(err.position).toBe('unknown')
   })
 })

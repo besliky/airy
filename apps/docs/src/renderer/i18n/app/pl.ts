@@ -44,6 +44,7 @@ export const pl = {
   appUntitledDocx: 'Bez tytułu.docx',
   appOpenedFile: 'Otwarto {name}',
   appOpenFailed: 'Otwieranie nie powiodło się: {error}',
+  appOpenCorrupted: 'Plik jest uszkodzony: {part}, pozycja {position}',
   appFontsMissing: 'Brak czcionek dokumentu: {names} (wyświetlane zamienniki)',
   appVerticalTextNotice:
     'Ten dokument zawiera tekst pionowy (na razie wyświetlany poziomo; zapis pozostaje bez zmian)',
