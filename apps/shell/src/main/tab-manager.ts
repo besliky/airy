@@ -71,6 +71,13 @@ interface TabRecord {
   present?: boolean
   /** renderer crashed (oom/crashed): awaiting the user's Reload/Close decision */
   crashed?: boolean
+  /**
+   * renderer process died while the tab still lives (killed/crashed/…): the
+   * webContents is NOT destroyed, so the tab cannot serve bridge calls or
+   * answer open-by-path dedupe until it is revived (reloadTab / a fresh open
+   * of the same file). BUG-1697.
+   */
+  dead?: boolean
 }
 
 /**
@@ -87,6 +94,7 @@ export interface DetachedTab {
   filePath?: string
   present?: boolean
   crashed?: boolean
+  dead?: boolean
   /** the view covered its window's tab strip (slides show bleed) — re-applied by the adopter */
   bleed?: boolean
 }
@@ -207,27 +215,47 @@ export class TabManager {
    * blank zombie tab. Replace its content with an error page and hand the
    * decision to the shell (Reload restarts the renderer, Close drops the
    * tab). Intentional teardown reasons never prompt.
+   *
+   * BUG-1697: ANY renderer death while the tab still lives first marks the
+   * tab dead. An external kill -9 reports 'killed' — deliberately outside
+   * the oom/crashed prompt — yet the killed webContents is NOT destroyed:
+   * 'destroyed' never fires, the bridge kept listing the corpse as
+   * active:true, open-by-path re-activated it, and every call into it burned
+   * the full 30s dispatcher timeout. Marking dead is pure tab-record state
+   * (no window/menu traffic) so it stays safe while the app is quitting.
    */
   private watchRendererCrash(id: string, view: WebContentsView): void {
     const onGone = (_event: unknown, details: { reason: string }): void => {
-      if (!isRecoverableRendererCrash(details.reason)) return
       const tab = this.tabs.find((t) => t.id === id)
-      if (!tab || tab.crashed) return
-      tab.crashed = true
+      if (!tab) return
+      // 'clean-exit' is the graceful exit of a view being torn down; every
+      // other reason means the renderer died under a live tab
+      if (details.reason !== 'clean-exit') tab.dead = true
       if (this.htmlFullScreenId === id) {
         this.htmlFullScreenId = null
         this.layout()
       }
+      if (!isRecoverableRendererCrash(details.reason) || tab.crashed) return
+      tab.crashed = true
       voidLoad(
         view.webContents.loadURL(crashErrorPageUrl(this.crashUi?.errorPageBody() ?? '')),
         `crash error page for tab ${id}`,
       )
       this.crashUi?.onCrash({ id, kind: tab.kind, title: tab.title, reason: details.reason })
     }
+    // defensive twin: a destroyed webContents whose tab is still in the strip
+    // is dead the same way (closeTab removes the tab before its view dies, so
+    // this only fires for tabs that outlived their renderer some other way)
+    const onWcDestroyed = (): void => {
+      const tab = this.tabs.find((t) => t.id === id)
+      if (tab) tab.dead = true
+    }
     view.webContents.on('render-process-gone', onGone)
+    view.webContents.on('destroyed', onWcDestroyed)
     this.addViewWatcher(view.webContents, () => {
       if (view.webContents.isDestroyed()) return
       view.webContents.removeListener('render-process-gone', onGone)
+      view.webContents.removeListener('destroyed', onWcDestroyed)
     })
   }
 
@@ -248,6 +276,11 @@ export class TabManager {
   /** whether a tab's renderer crashed and is awaiting recovery (observability for tests) */
   isTabCrashed(id: string): boolean {
     return this.tabs.find((t) => t.id === id)?.crashed === true
+  }
+
+  /** whether a tab's renderer died while the tab still lives (BUG-1697 observability) */
+  isTabDead(id: string): boolean {
+    return this.tabs.find((t) => t.id === id)?.dead === true
   }
 
   /**
@@ -430,6 +463,7 @@ export class TabManager {
       filePath: removed.filePath,
       present: removed.present,
       crashed: removed.crashed,
+      dead: removed.dead,
       bleed,
     }
   }
@@ -451,6 +485,7 @@ export class TabManager {
       filePath: detached.filePath,
       present: detached.present,
       crashed: detached.crashed,
+      dead: detached.dead,
     })
     this.activateTab(id)
     return id
@@ -463,7 +498,7 @@ export class TabManager {
 
   /** the tab showing this file for a given kind, if any (session restore activation) */
   findTabIdByPath(kind: TabKind, path: string): string | undefined {
-    return this.tabs.find((t) => t.kind === kind && t.filePath === path)?.id
+    return this.tabs.find((t) => !t.dead && t.kind === kind && t.filePath === path)?.id
   }
 
   openHomeTab(): void {
@@ -551,13 +586,16 @@ export class TabManager {
   }
 
   /** Remount the tab's renderer so it re-reads its file from disk (View > Reload;
-   *  also the crash-recovery "Reload" action — clears the crashed state). */
+   *  also the crash-recovery "Reload" action — clears the crashed state). The
+   *  reload restarts the renderer process, so a dead tab (BUG-1697) comes back
+   *  fully bridge-targetable here too. */
   reloadTab(id: string): void {
     const tab = this.tabs.find((t) => t.id === id)
     const wc = tab?.view?.webContents
     if (!wc || wc.isDestroyed()) return
     if (tab.kind === 'pdf') clearPdfDirty(wc.id)
     tab.crashed = false
+    tab.dead = false
     wc.reload()
   }
 
@@ -729,14 +767,18 @@ export class TabManager {
       .map((t) => ({ id: t.id, webContents: t.view!.webContents }))
   }
 
-  /** all live docs tabs — dirtiness lives renderer-side, caller queries async (shell-close guard) */
+  /** all LIVE docs tabs — dirtiness lives renderer-side, caller queries async (shell-close guard).
+   *  A dead tab can never answer the dirty query; including it would stall quit for the query
+   *  timeout and then raise a pointless "close anyway" prompt (BUG-1697). */
   docsTabs(): Array<{ id: string; webContents: WebContents }> {
     return this.tabs
-      .filter((t) => t.kind === 'docs' && t.view)
+      .filter((t) => t.kind === 'docs' && t.view && !t.dead)
       .map((t) => ({ id: t.id, webContents: t.view!.webContents }))
   }
 
-  /** open docs tabs with their files, for the external bridge's list method */
+  /** open LIVE docs tabs with their files, for the external bridge's list method.
+   *  A tab whose renderer died is not listed: the corpse would otherwise keep
+   *  advertising itself (active:true) to auto-clients (BUG-1697). */
   docsTabSummaries(): Array<{
     id: string
     title: string
@@ -744,7 +786,7 @@ export class TabManager {
     active: boolean
   }> {
     return this.tabs
-      .filter((t) => t.kind === 'docs' && t.view)
+      .filter((t) => t.kind === 'docs' && t.view && !t.dead)
       .map((t) => ({
         id: t.id,
         title: t.title,
@@ -753,11 +795,13 @@ export class TabManager {
       }))
   }
 
-  /** the active tab's docs view, when the active tab is a docs document (live-bridge target) */
-  activeDocsTab(): { id: string; webContents: WebContents } | undefined {
+  /** the active tab's docs view, when the active tab is a docs document (live-bridge target).
+   *  A dead tab is still returned, with dead:true — the bridge turns that into a fast typed
+   *  error instead of waiting out the dispatcher timeout on a corpse (BUG-1697). */
+  activeDocsTab(): { id: string; webContents: WebContents; dead: boolean } | undefined {
     const tab = this.tabs.find((t) => t.id === this.activeId)
     return tab?.kind === 'docs' && tab.view
-      ? { id: tab.id, webContents: tab.view.webContents }
+      ? { id: tab.id, webContents: tab.view.webContents, dead: tab.dead === true }
       : undefined
   }
 
@@ -860,8 +904,12 @@ export class TabManager {
     }
   }
 
+  // find*TabByPath skip dead tabs (BUG-1697): a tab whose renderer died must
+  // not satisfy open-by-path dedupe — matching it would re-activate the corpse
+  // instead of building the fresh webContents that revives the document
+
   findDocsTabByPath(path: string): string | undefined {
-    return this.tabs.find((t) => t.kind === 'docs' && t.filePath === path)?.id
+    return this.tabs.find((t) => !t.dead && t.kind === 'docs' && t.filePath === path)?.id
   }
 
   findSheetsTab(): string | undefined {
@@ -869,23 +917,23 @@ export class TabManager {
   }
 
   findSheetsTabByPath(path: string): string | undefined {
-    return this.tabs.find((t) => t.kind === 'sheets' && t.filePath === path)?.id
+    return this.tabs.find((t) => !t.dead && t.kind === 'sheets' && t.filePath === path)?.id
   }
 
   findSlidesTabByPath(path: string): string | undefined {
-    return this.tabs.find((t) => t.kind === 'slides' && t.filePath === path)?.id
+    return this.tabs.find((t) => !t.dead && t.kind === 'slides' && t.filePath === path)?.id
   }
 
   findPdfTabByPath(path: string): string | undefined {
-    return this.tabs.find((t) => t.kind === 'pdf' && t.filePath === path)?.id
+    return this.tabs.find((t) => !t.dead && t.kind === 'pdf' && t.filePath === path)?.id
   }
 
   findMarkdownTabByPath(path: string): string | undefined {
-    return this.tabs.find((t) => t.kind === 'markdown' && t.filePath === path)?.id
+    return this.tabs.find((t) => !t.dead && t.kind === 'markdown' && t.filePath === path)?.id
   }
 
   findHtmlTabByPath(path: string): string | undefined {
-    return this.tabs.find((t) => t.kind === 'html' && t.filePath === path)?.id
+    return this.tabs.find((t) => !t.dead && t.kind === 'html' && t.filePath === path)?.id
   }
 
   /** the active tab's html view, if the active tab is html (html menu target) */
