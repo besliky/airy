@@ -88,6 +88,51 @@ describe('parseDocText', () => {
     expect(doc.trailingNewline).toBe(false)
   })
 
+  it('parses CR-only lines as line separators and keeps the CR style (UX-1702)', () => {
+    const doc = parseDocText('# Title\rsecond\rthird\r')
+    expect(doc.eol).toBe('\r')
+    // the editor sees real separate lines, not one merged line
+    expect(doc.body).toBe('# Title\nsecond\nthird\n')
+    expect(doc.trailingNewline).toBe(true)
+  })
+
+  it('canonicalizes stray CRs inside a CRLF file to the dominant CRLF style', () => {
+    const doc = parseDocText('# Hi\r\nsecond\rlast\r\n')
+    expect(doc.eol).toBe('\r\n')
+    expect(doc.body).toBe('# Hi\nsecond\nlast\n')
+    // documented behavior: save re-applies CRLF everywhere
+    expect(serializeDocText(doc, doc.body)).toBe('# Hi\r\nsecond\r\nlast\r\n')
+  })
+
+  it('strips a mid-file BOM while real content spaces survive (UX-1702)', () => {
+    // NBSP and ZWSP are content and must survive the mid-BOM filter
+    const doc = parseDocText('# A\uFEFFmid line\n\uFEFFsecond\nnbsp\u00A0and\u200Bzwsp\n')
+    expect(doc.bom).toBe(false)
+    expect(doc.body).toBe('# Amid line\nsecond\nnbsp\u00A0and\u200Bzwsp\n')
+  })
+
+  it('handles the full EOL/BOM audit fixture shape (head BOM, CRLF, CR-only, mid-BOM, NUBs)', () => {
+    // explicit escapes: head BOM, NBSP, ZWSP, mid-file BOM, U+3000 — the
+    // patho-eol-nub audit fixture byte-for-byte
+    const raw =
+      '\uFEFF# Mixed EOL\r\nLine2 with\u00A0nbsp and\u200Bzwsp\nCR-only\rtab\there\n' +
+      '\uFEFFmid-BOM line\nfull\u3000width space\n'
+    const doc = parseDocText(raw)
+    expect(doc.bom).toBe(true)
+    expect(doc.eol).toBe('\r\n')
+    expect(doc.body).toBe(
+      '# Mixed EOL\nLine2 with\u00A0nbsp and\u200Bzwsp\nCR-only\ntab\there\n' +
+        'mid-BOM line\nfull\u3000width space\n',
+    )
+    // save: head BOM re-emitted and the dominant CRLF re-applied to every line
+    // (the stray CR joined the CRLF style — documented canonicalization); the
+    // mid-file BOM is gone
+    expect(serializeDocText(doc, doc.body)).toBe(
+      '\uFEFF# Mixed EOL\r\nLine2 with\u00A0nbsp and\u200Bzwsp\r\nCR-only\r\ntab\there\r\n' +
+        'mid-BOM line\r\nfull\u3000width space\r\n',
+    )
+  })
+
   it('empty file', () => {
     const doc = parseDocText('')
     expect(doc.frontmatter).toBe('')
@@ -110,6 +155,8 @@ describe('serializeDocText', () => {
       '---\ntitle: Test\ntags: [a, b]\n---\n\n# Title\n\nBody\n',
       '---\ntitle: x\n---',
       '# Hi\r\n\r\n- a\r\n- b\r\n',
+      // CR-only (classic Mac) files keep their line-ending style on save
+      '# A\rsecond\rthird\r',
       '﻿---\ntitle: bom\n---\n\nBody\n',
       '',
     ]
