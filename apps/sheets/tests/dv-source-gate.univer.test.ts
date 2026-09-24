@@ -18,8 +18,9 @@ import {
   UniverInstanceType,
 } from '@univerjs/core'
 import { DataValidatorRegistryService, UniverDataValidationPlugin } from '@univerjs/data-validation'
-import { UniverFormulaEnginePlugin } from '@univerjs/engine-formula'
+import { FormulaResultStatus, UniverFormulaEnginePlugin } from '@univerjs/engine-formula'
 import {
+  DataValidationFormulaService,
   SheetsDataValidationValidatorService,
   SheetDataValidationModel,
   UniverSheetsDataValidationPlugin,
@@ -144,9 +145,37 @@ async function validate(runtime: UniverRuntime, row: number): Promise<DataValida
     .validatorCell(UNIT_ID, MAIN, row, 1)
 }
 
-/// One wait covers the formula engine's 100 ms debounce plus a calculation
-/// cycle margin.
-const settle = (ms = 600) => new Promise((resolve) => setTimeout(resolve, ms))
+/// The engine registers the rule's formula in a debounced background cycle
+/// (100 ms); poll the same mirror the gate itself consults — registered, with
+/// every present formula result computed (no WAIT, no missing result) —
+/// instead of sleeping a fixed window (PERF-1642: the old 600 ms settle per
+/// test was pure wall). The mirror carries a slot per formula (formula2 stays
+/// null here), so the check mirrors the gate's own vouchable predicate rather
+/// than demanding both slots. Literal-list rules never reach the formula
+/// engine, so they take no wait; if registration ever went missing, the
+/// assertions below fail loudly instead of passing vacuously.
+interface FormulaMirrorResult {
+  status?: number
+  result?: unknown
+}
+
+async function waitForRuleComputed(runtime: UniverRuntime): Promise<void> {
+  const formulaService = runtime.univer.__getInjector().get(DataValidationFormulaService)
+  await vi.waitFor(
+    () => {
+      const results = formulaService.getRuleFormulaResultSync(UNIT_ID, MAIN, 'dv-rule-1') as
+        (FormulaMirrorResult | undefined)[] | undefined
+      const computed =
+        results != null &&
+        !results.some(
+          (item) =>
+            item != null && (item.status === FormulaResultStatus.WAIT || item.result === undefined),
+        )
+      expect(computed, 'rule formula result not computed by the engine yet').toBe(true)
+    },
+    { timeout: 5_000, interval: 50 },
+  )
+}
 
 /// The engine recomputes registered data-validation formulas in a debounced
 /// background cycle; poll the resolved list (via the stock validator, exactly
@@ -173,7 +202,7 @@ describe('data-validation source gate (BUG-1601)', () => {
     const state = lazyState()
     const runtime = createRuntime(state)
     await installListRule(runtime, 'List!$C$1:$C$46')
-    await settle()
+    await waitForRuleComputed(runtime)
     await setCell(runtime, MAIN, 1, 1, 'CIF')
     // Stock validation resolves the reference to an empty list and would stop
     // the input; the gate reports VALID until the source is honest to check.
@@ -184,7 +213,6 @@ describe('data-validation source gate (BUG-1601)', () => {
     const state = lazyState()
     const runtime = createRuntime(state)
     await installListRule(runtime, '"CFR,CIF,CIP,CPT"')
-    await settle()
     await setCell(runtime, MAIN, 1, 1, 'BOGUS')
     await expect(validate(runtime, 1)).resolves.toBe(DataValidationStatus.INVALID)
   }, 20_000)
@@ -193,7 +221,7 @@ describe('data-validation source gate (BUG-1601)', () => {
     const state = lazyState()
     const runtime = createRuntime(state)
     await installListRule(runtime, 'List!$C$1:$C$46')
-    await settle()
+    await waitForRuleComputed(runtime)
     // The preload block for the hidden List sheet completes: its values land
     // and the coverage ledger declares the sheet materialized.
     await setCell(runtime, LIST, 0, 2, 'CFR')
@@ -213,7 +241,7 @@ describe('data-validation source gate (BUG-1601)', () => {
     const state = lazyState()
     const runtime = createRuntime(state)
     await installListRule(runtime, 'List!$C$1:$C$46')
-    await settle()
+    await waitForRuleComputed(runtime)
     const registry = runtime.univer.__getInjector().get(DataValidatorRegistryService)
     const listValidator = registry.getValidatorItem('list') as unknown as {
       getList(rule: unknown, unitId: string, subUnitId: string): string[]

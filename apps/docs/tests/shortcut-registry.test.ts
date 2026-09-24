@@ -43,12 +43,16 @@ describe('shortcut registry', () => {
 
   // PERF-904: dictionaries load per locale on demand, so the full 20-language
   // sweep fetches each lazy dictionary through the same loader bootstrap uses.
+  // PERF-1642: the fetches are independent dynamic imports (2.7s→5s+ of serial
+  // wall as the registry and dictionaries grew), so load them concurrently and
+  // keep the per-row assertions unchanged.
   it('labels every row in every language', async () => {
-    for (const lang of LANGS) {
-      const dict = await loadStrings(lang)
+    const dicts = await Promise.all(LANGS.map((lang) => loadStrings(lang)))
+    for (let i = 0; i < LANGS.length; i++) {
+      const dict = dicts[i]
       for (const entry of [...SHORTCUTS, ...SHORTCUT_GROUPS]) {
         const value = dict[entry.labelKey as keyof typeof dict]
-        expect(value, `${entry.labelKey} missing in ${lang}`).toBeTruthy()
+        expect(value, `${entry.labelKey} missing in ${LANGS[i]}`).toBeTruthy()
       }
     }
   })
