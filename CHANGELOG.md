@@ -7,6 +7,116 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-24
+
+### Added
+
+- Markdown & HTML: a manually chosen text encoding is remembered per file and
+  survives reopen — `encoding-memory.ts` in the markdown and html main processes
+  (shared app-settings single-writer, LRU cap 200) behind path-fenced
+  `markdown:set-encoding` / `html:set-encoding` IPC; on open the precedence is
+  BOM > explicit pick > auto-detection/meta charset. The in-renderer
+  "Reopen with encoding" picker remains a named follow-up (PR #167).
+- Docs: a pulsing "Loading…" badge (role=status, `appDocLoading`, 20 locales)
+  appears in the status bar next to the counters while the tail of a large docx
+  is still loading in phases, so in-progress "Page 1 of 4, 832 words" is no
+  longer mistaken for truncation (PR #169).
+
+### Changed
+
+- Test infrastructure: the unit serial wall drops 172.6 s → 151.5/156.8 s (two
+  consecutive warm runs, under the ≤160 s goal) via a bulk vitest project
+  (`isolate: false`, module-graph reuse in workers) with a `NEED_ISOLATION`
+  quarantine grown 22 → 25 files (global Univer DI graph conflicts under CI
+  sharding); the shortcut-registry regression (2.42 → 5.15 s) is fixed with
+  `Promise.all` over its 20 lazy imports, and PERF_BASELINE is updated (PR #164).
+- Test infrastructure: local `test:e2e:xvfb` works again — the host's Wayland
+  environment (WAYLAND_DISPLAY/XDG_SESSION_TYPE/GDK_BACKEND) leaked into
+  `electron.launch`, Electron 43's ozone autodetect picked wayland and hung in
+  the mojo handshake before `main.js`, timing out all 68 e2e specs;
+  `scripts/run-e2e-xvfb.sh` now unsets the variables under xvfb, pins
+  `ELECTRON_OZONE_PLATFORM_HINT=x11` and warns if the environment re-leaks:
+  68/68 timeouts → 62 passed / 6 failed in 3.1 min with zero timeouts (the
+  remainder is environmental freetype/docs-visual drift, verified independent);
+  CI scripts untouched (PR #176).
+- Test infrastructure, test-only: two pin tests lock the markdown/html `closeTab`
+  renderer-reclamation contract after the PERF-1657 check returned "not
+  reproducible / covered by #141" — multi-open of 15 md files returns exactly to
+  baseline 4 processes / 615 MB (PR #170); the flaky sidecar prewarm test is
+  determinized (the wait_for predicate waits for `!prewarm_active` beside the
+  resident insert, 30 s poll deadline) — production code untouched, assertion
+  not weakened (PR #171).
+
+### Performance
+
+- Sheets: the first edit after opening a large workbook lands in 0.59–0.91 s
+  (was 5.3–7.5 s; the audit's 100k×20 book: 13.8 s → ~1 s) — a resident formula
+  model is prewarmed in the background right after open (size gate 1–64 MB
+  compressed, cache-lock held for the whole build, purge-epoch guard against the
+  close×prewarm race); books over 64 MB (the 26.4 GB incident class) are never
+  prewarmed (PR #161).
+- Sheets: importing a 500k-row CSV (28.5 MB, 500,001×8) drops from
+  16.5/16.3/20.2 s to 9.2/9.7/9.3 s engine-level (median 9.3 s, goal ≤15 s) —
+  JSZip DEFLATE (6.5–8.7 s, ~50% of the wall) leaves the import path: a minimal
+  OPC zip writer on `node:zlib` plus a single-pass cell XML escape cut the
+  conversion itself from ~10.5 s to 2.9–3.4 s; a JSZip fallback keeps browser
+  builds working (PR #163).
+
+### Fixed
+
+- Slides:
+  - LibreOffice Impress accepts app-saved pptx again: the streaming zip writer
+    (`generateNodeStream` with `streamFiles: true`) emitted data descriptors
+    (general-purpose bit 3, zeroed crc/sizes in local headers), which strict
+    loaders reject while python-pptx tolerates them — the same node stream now
+    runs with `streamFiles: false`, the bytes are identical to the proven
+    `savePptx` path (hash-verified on 180 MB of media), an integration test
+    converts four saved decks (including a media-heavy one) to PDF through a
+    real soffice, and peak memory is unchanged (one compressed entry in
+    transit, not the deck) (PR #174).
+  - Copy Slide carries the slide's speaker notes: the transfer bundle includes
+    the notesSlide part and its relationships (minus the slide back-ref and
+    notesMaster rel), the receiving deck materializes a fresh part and
+    re-parents the target's notesMaster; slides without notes leave no tails,
+    and duplicateSlide is untouched (PR #177).
+  - Video export stops littering the destination folder: a single-owner module
+    sweeps orphaned `.<name>.<12hex>.tmp` files older than one hour (by mtime)
+    at the next export's stream-begin — main-only and fire-and-forget, so a
+    killed export no longer leaves debris the startup sweeper never covered
+    (PR #160).
+- PDF:
+  - A corrupt `/Rotate` value (a name instead of a number, some producers) no
+    longer fails every annotate-save with a bare "Save failed": `pageRotation()`
+    is a safe getter (never throws, snaps to multiples of 90, resolves indirect
+    refs) at all seven read sites, and broken rotations are repaired at load;
+    output is verified through pdf-lib reload, pdf.js and poppler (PR #172).
+  - XMP metadata (catalog `/Metadata`) survives saves with content edits — text
+    edit/insert, image edit and annotation deletion used to drop the stream:
+    `applySaveRequest` extracts it from the source bytes before the pdfium
+    stages and re-registers it byte-for-byte after the final load; plain rewrite
+    saves never lost XMP (PR #175).
+- Docs:
+  - A refused PDF export (the read-only `canPdfWrite` gate) settles the status
+    bar in a localized `appExportPdfFailed` message instead of leaving
+    "Exporting PDF…" forever (PR #165).
+  - Opening a docx with corrupt XML shows a short localized refusal ("File is
+    corrupted: document.xml, position 1:1", 20 locales) instead of the raw
+    fast-xml-parser validator dump; the full text goes to the console (PR #168).
+  - The two color caret buttons in the ribbon (highlight / font color) carry
+    aria-labels and tooltips via i18n keys in all 20 locales, pinned by a
+    contract test (PR #166).
+- Shell:
+  - Renaming a file in Home reaches every window, not just the focused one: a
+    rename broadcast walks all tab managers with per-editor renamed hooks
+    (docs/sheets/slides/markdown/html), so a second window no longer keeps the
+    old title and save path — Ctrl+S from it can no longer write to the old
+    path (PR #173).
+- Sheets:
+  - The sidecar failure reply echoes the `requestId` recovered from the raw wire
+    line (best-effort, string form; non-JSON keeps the legacy empty id), so
+    direct protocol clients no longer wait out a 120 s timeout on an unparseable
+    request — the `invalid_json` failure code is preserved (PR #162).
+
 ## [0.17.0] - 2026-09-24
 
 ### Added
