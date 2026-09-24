@@ -219,6 +219,7 @@ export const cs = {
   appZoomOut: 'Oddálit',
   appZoomLabel: 'Lupa',
   appWordCountN: 'Slov: {n}',
+  appDocLoading: 'Načítání…',
   appStatPages: 'Stránky',
   appStatWords: 'Slova',
   appStatAsianChars: 'Asijské znaky (čínské, japonské, korejské)',

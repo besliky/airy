@@ -223,6 +223,7 @@ export const it = {
   appZoomOut: 'Riduci',
   appZoomLabel: 'Zoom',
   appWordCountN: '{n} parole',
+  appDocLoading: 'Caricamento…',
   appStatPages: 'Pagine',
   appStatWords: 'Parole',
   appStatAsianChars: 'Caratteri asiatici (cinese, giapponese, coreano)',

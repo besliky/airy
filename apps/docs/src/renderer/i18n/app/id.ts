@@ -221,6 +221,7 @@ export const id = {
   appZoomOut: 'Perkecil',
   appZoomLabel: 'Zoom',
   appWordCountN: '{n} kata',
+  appDocLoading: 'Memuat…',
   appStatPages: 'Halaman',
   appStatWords: 'Kata',
   appStatAsianChars: 'Karakter Asia (Tionghoa, Jepang, Korea)',

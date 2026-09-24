@@ -215,6 +215,7 @@ export const en = {
   appZoomOut: 'Zoom out',
   appZoomLabel: 'Zoom',
   appWordCountN: '{n} words',
+  appDocLoading: 'Loading…',
   appStatPages: 'Pages',
   appStatWords: 'Words',
   appStatAsianChars: 'Asian characters (Chinese, Japanese, Korean)',

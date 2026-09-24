@@ -219,6 +219,7 @@ export const th = {
   appZoomOut: 'ย่อ',
   appZoomLabel: 'ย่อ/ขยาย',
   appWordCountN: '{n} คำ',
+  appDocLoading: 'กำลังโหลด…',
   appStatPages: 'จำนวนหน้า',
   appStatWords: 'จำนวนคำ',
   appStatAsianChars: 'อักขระเอเชีย (จีน ญี่ปุ่น เกาหลี)',

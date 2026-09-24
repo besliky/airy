@@ -224,6 +224,7 @@ export const pl = {
   appZoomOut: 'Pomniejsz',
   appZoomLabel: 'Powiększenie',
   appWordCountN: 'Wyrazów: {n}',
+  appDocLoading: 'Wczytywanie…',
   appStatPages: 'Strony',
   appStatWords: 'Wyrazy',
   appStatAsianChars: 'Znaki azjatyckie (chińskie, japońskie, koreańskie)',

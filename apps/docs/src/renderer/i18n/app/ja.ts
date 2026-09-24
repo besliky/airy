@@ -236,6 +236,7 @@ export const ja = {
   appZoomOut: '縮小',
   appZoomLabel: 'ズーム',
   appWordCountN: '{n} 文字',
+  appDocLoading: '読み込み中…',
   appStatPages: 'ページ数',
   appStatWords: '単語数',
   appStatAsianChars: 'アジア言語の文字数（日中韓）',

@@ -216,6 +216,7 @@ export const ar = {
   appZoomOut: 'تصغير',
   appZoomLabel: 'تكبير/تصغير',
   appWordCountN: '{n} كلمة',
+  appDocLoading: 'جارٍ التحميل…',
   appStatPages: 'الصفحات',
   appStatWords: 'الكلمات',
   appStatAsianChars: 'الأحرف الآسيوية (الصينية واليابانية والكورية)',

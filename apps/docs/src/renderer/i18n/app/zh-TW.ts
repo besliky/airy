@@ -209,6 +209,7 @@ export const zhTW = {
   appZoomOut: '縮小',
   appZoomLabel: '縮放',
   appWordCountN: '{n} 個字',
+  appDocLoading: '載入中…',
   appStatPages: '頁數',
   appStatWords: '字數',
   appStatAsianChars: '亞洲字元（中日韓）',

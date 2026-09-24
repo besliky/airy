@@ -221,6 +221,7 @@ export const ru = {
   appZoomOut: 'Уменьшить',
   appZoomLabel: 'Масштаб',
   appWordCountN: 'Слов: {n}',
+  appDocLoading: 'Загрузка…',
   appStatPages: 'Страницы',
   appStatWords: 'Слова',
   appStatAsianChars: 'Азиатские символы (китайские, японские, корейские)',

@@ -225,6 +225,7 @@ export const zh = {
   appZoomOut: '缩小',
   appZoomLabel: '缩放',
   appWordCountN: '{n} 个字',
+  appDocLoading: '加载中…',
   appStatPages: '页数',
   appStatWords: '字数',
   appStatAsianChars: '亚洲字符（中日韩）',

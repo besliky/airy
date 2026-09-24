@@ -214,6 +214,7 @@ export const he = {
   appZoomOut: 'התרחקות',
   appZoomLabel: 'זום',
   appWordCountN: '{n} מילים',
+  appDocLoading: 'טוען…',
   appStatPages: 'עמודים',
   appStatWords: 'מילים',
   appStatAsianChars: 'תווים אסייתיים (סינית, יפנית, קוריאנית)',

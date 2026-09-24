@@ -229,6 +229,7 @@ export const fr = {
   appZoomOut: 'Zoom arrière',
   appZoomLabel: 'Zoom',
   appWordCountN: '{n} mots',
+  appDocLoading: 'Chargement…',
   appStatPages: 'Pages',
   appStatWords: 'Mots',
   appStatAsianChars: 'Caractères asiatiques (chinois, japonais, coréen)',
