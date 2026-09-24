@@ -296,6 +296,24 @@ button {
   padding: 0.15em 0.35em;
 }
 
+/* raw-HTML chips (BUG-1685): markup the schema cannot express is kept
+ * verbatim and shown as escaped source, never rendered/executed */
+.doc-editor .raw-html-chip {
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.875em;
+  background: var(--md-code-inline-bg);
+  border-radius: 4px;
+  padding: 0.15em 0.35em;
+  white-space: pre-wrap;
+}
+
+/* a chunk captured at block level sits directly between blocks — give it
+ * block layout so it does not glue onto the neighboring block's edge */
+.doc-editor > .raw-html-chip {
+  display: block;
+  margin: 0.8em 0;
+}
+
 .doc-editor pre {
   background: var(--md-code-bg);
   border: 1px solid var(--border);

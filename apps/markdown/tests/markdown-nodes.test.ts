@@ -186,7 +186,7 @@ describe('only pure markdown syntax is ever produced', () => {
   })
 })
 
-describe('legacy HTML content degrades to plain markdown, keeping the text', () => {
+describe('legacy HTML content the schema cannot express is preserved verbatim', () => {
   const editor = createEditor()
 
   function parseAndSerialize(md: string): string {
@@ -194,10 +194,9 @@ describe('legacy HTML content degrades to plain markdown, keeping the text', () 
     return manager.serialize(manager.parse(md))
   }
 
-  it('a styled span drops the styling but keeps the text', () => {
+  it('a styled span keeps its markup verbatim (BUG-1685)', () => {
     const out = parseAndSerialize('a <span style="color: #ff0000">red text</span> b')
-    expect(out).not.toContain('<span')
-    expect(out).toContain('red text')
+    expect(out).toBe('a <span style="color: #ff0000">red text</span> b')
   })
 
   it('an aligned paragraph becomes a plain paragraph with marks intact', () => {
@@ -218,8 +217,8 @@ describe('legacy HTML content degrades to plain markdown, keeping the text', () 
     expect(out).toBe('![d](assets/d.png)')
   })
 
-  it('u and mark tags drop the tag but keep the text', () => {
+  it('u and mark tags keep the markup verbatim (BUG-1685)', () => {
     const out = parseAndSerialize('a <u>underlined</u> and <mark>marked</mark> b')
-    expect(out).toBe('a underlined and marked b')
+    expect(out).toBe('a <u>underlined</u> and <mark>marked</mark> b')
   })
 })

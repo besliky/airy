@@ -143,16 +143,18 @@ describe('apply_ops batches', () => {
   })
 })
 
-describe('model output is sanitized to pure GFM', () => {
-  it('raw HTML in tool input degrades to plain text', () => {
+describe('model output keeps raw HTML verbatim (inert in the editor)', () => {
+  it('raw HTML in tool input is preserved, not degraded', () => {
     const editor = createEditor()
     executeTool(
       editor,
       insert(-1, '<p style="text-align: center"><span style="color: red">note</span> here</p>'),
     )
     const md = editor.getMarkdown()
-    expect(md).toContain('note here')
-    expect(md).not.toContain('<')
+    // the styled span is preserved verbatim (BUG-1685 contract); the plain
+    // paragraph around it still degrades to markdown
+    expect(md).toContain('<span style="color: red">note</span>')
+    expect(md).toContain('here')
   })
 
   it('legacy ::: fenced divs in tool input are stripped, keeping the body', () => {
