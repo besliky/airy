@@ -414,6 +414,10 @@ deliberate choice) and its result says whose turn it was (`anotherClient`).
 
 Byte preservation differs by format. `docx` saves keep untouched parts
 byte-identical, and a zero-edit save writes the original bytes back verbatim.
+An edited save deliberately rewrites `docProps/core.xml` (bumps `cp:revision`,
+refreshes `dcterms:modified`) and rebuilds the zip, which gains explicit
+directory entries (one per folder) when the source lacked them; every other
+part keeps its content byte-identical.
 `markdown` and `html` sessions behave the same at line granularity: untouched lines keep
 their exact bytes (EOLs included) and a zero-edit save round-trips the file
 verbatim; an edited save writes UTF-8 with the original BOM re-applied (html
