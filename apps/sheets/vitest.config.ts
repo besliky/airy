@@ -39,6 +39,16 @@ const NEED_ISOLATION = [
   // fs spies only, kept isolated for the same reason
   'tests/delete-ref-rewrite.test.ts',
   'tests/delete-ref-rewrite.univer.test.ts',
+  // PERF-1642 FIX ROUND 2: fail only under CI sharding (--shard=n/2), green
+  // without it. When one of these files runs after certain bulk neighbors in
+  // the same isolate:false worker, the global Univer DI graph is left broken
+  // (`[redi]: Expect 1 dependency item(s) for id
+  // "engine-render.render-manager.service" but get 0` at `new FUniver`) —
+  // which neighbors matter depends on the shard's file split, so a local
+  // full run cannot reproduce it. Quarantined per the documented protocol.
+  'tests/dv-source-gate.univer.test.ts',
+  'tests/grid-grow.univer.test.ts',
+  'tests/function-catalog.registry.test.ts',
 ]
 
 export default defineConfig({
