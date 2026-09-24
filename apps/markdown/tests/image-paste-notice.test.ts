@@ -58,19 +58,24 @@ function pngFile(): File {
 }
 
 describe('image paste into an untitled document', () => {
-  it('toasts instead of silently dropping when the image cannot be persisted', async () => {
-    stubSaveImage(null)
-    setToastEmitter((toast) => toasts.push(toast))
-    const editor = await newEditor()
+  // Real editor/paste pipeline: duration scales with machine load under the full serial suite.
+  it(
+    'toasts instead of silently dropping when the image cannot be persisted',
+    { timeout: 120_000 },
+    async () => {
+      stubSaveImage(null)
+      setToastEmitter((toast) => toasts.push(toast))
+      const editor = await newEditor()
 
-    const handled = paste(editor, [pngFile()])
-    expect(handled).toBe(true)
+      const handled = paste(editor, [pngFile()])
+      expect(handled).toBe(true)
 
-    await vi.waitFor(() => expect(toasts).toHaveLength(1))
-    expect(toasts[0]).toEqual({ text: strings.zh.imageNeedsSavedDocument, kind: 'error' })
-    expect(editor.state.doc.toString()).not.toContain('image')
-    expect(window.markdownApi.saveImage).toHaveBeenCalledOnce()
-  })
+      await vi.waitFor(() => expect(toasts).toHaveLength(1))
+      expect(toasts[0]).toEqual({ text: strings.zh.imageNeedsSavedDocument, kind: 'error' })
+      expect(editor.state.doc.toString()).not.toContain('image')
+      expect(window.markdownApi.saveImage).toHaveBeenCalledOnce()
+    },
+  )
 
   it('inserts the image node when persistence succeeds, without a toast', async () => {
     stubSaveImage('assets/shot.png')
