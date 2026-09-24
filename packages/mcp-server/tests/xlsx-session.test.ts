@@ -13,6 +13,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // the session's post-save stat works
 const saveCalls: Array<Record<string, unknown>> = []
 vi.mock('../src/xlsx/save.js', () => ({
+  // the session's save catch tests its rejections against this class, so the
+  // mock must carry it (never instantiated in unit tests)
+  SaveTargetExistsError: class extends Error {},
   saveWorkbookViaSidecar: vi.fn(async (request: Record<string, unknown>) => {
     saveCalls.push(request)
     await writeFile(String(request.targetPath), 'saved-xlsx-bytes')
@@ -32,6 +35,7 @@ vi.mock('../src/import/soffice.js', () => ({
 }))
 
 import { XlsxSession } from '../src/xlsx/session.js'
+import { saveWorkbookViaSidecar } from '../src/xlsx/save.js'
 import { MAX_SHEET_COLUMNS, MAX_SHEET_ROWS, parseA1Range } from '../src/xlsx/refs.js'
 import { FencingError } from '../src/docx/session.js'
 import { makeStubIo } from './helpers/stub-sidecar.js'
@@ -458,6 +462,24 @@ describe('XlsxSession journal + save matrix', () => {
     await expect(session.save()).rejects.toThrow(/changed on disk/)
     // the refusal left the external writer's file untouched
     expect(await readFile(join(root, 'book.xlsx'), 'utf8')).toBe('externally rewritten bytes')
+  })
+
+  it('names a read-only workspace when the sidecar write refuses (UX-1690)', async () => {
+    const { session } = await nativeSession()
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 'edit' }] })
+    // the save writes through the Rust sidecar, so the refusal arrives as
+    // plain error text without a Node errno `.code` (the audit repro: a 0555
+    // workspace answered with the raw errno / sidecar io text)
+    vi.mocked(saveWorkbookViaSidecar).mockImplementationOnce(async () => {
+      throw new Error('failed to create target: Permission denied (os error 13)')
+    })
+    const outcome = session.save()
+    await expect(outcome).rejects.toThrow(/Cannot write ".*": permission denied/)
+    await expect(outcome).rejects.toThrow(/may be read-only/)
+    // the sidecar's raw errno text no longer leaks
+    await expect(outcome).rejects.not.toThrow(/os error 13/)
+    // the failed save kept the journal so the edits can be retried elsewhere
+    expect(session.meta().dirty).toBe(true)
   })
 
   it('refreshes the fence after a successful in-place save (chained saves work)', async () => {

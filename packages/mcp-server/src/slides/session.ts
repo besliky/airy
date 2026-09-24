@@ -40,6 +40,7 @@ import {
 } from '@airy-office/pptx-engine'
 
 import {
+  asWorkspaceWriteError,
   assertSaveTargetFree,
   countWords,
   FencingError,
@@ -534,27 +535,33 @@ export class SlidesSession {
     // in the temp name and writeFile fails on the colons/backslashes
     const tmp = join(dirname(target), `.${basename(target) || 'deck'}.airy-${randomUUID()}`)
     let unchanged = false
-    await withSaveTmpCleanup(tmp, async () => {
-      if (!this.edited) {
-        // zero-edit save: the original bytes round-trip verbatim (the engine's
-        // regenerated zip container would re-compress identical entries)
-        await writeFile(tmp, this.originalBytes)
-        unchanged = true
-      } else {
-        // savePptxToFile lands the deck at tmp atomically (its own temp +
-        // rename); the promote below carries the docx session's ownership rules
-        await savePptxToFile(this.opened, tmp)
-        commitSaved(this.opened)
-      }
-      // a fresh (guarded) target promotes exclusively: a file created between
-      // the guard's stat and this write surfaces the clobber error instead of
-      // being silently replaced; targets this session owns replace by intent
-      if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
-        await rename(tmp, target)
-      } else {
-        await promoteNewFileExclusively(tmp, target)
-      }
-    })
+    try {
+      await withSaveTmpCleanup(tmp, async () => {
+        if (!this.edited) {
+          // zero-edit save: the original bytes round-trip verbatim (the engine's
+          // regenerated zip container would re-compress identical entries)
+          await writeFile(tmp, this.originalBytes)
+          unchanged = true
+        } else {
+          // savePptxToFile lands the deck at tmp atomically (its own temp +
+          // rename); the promote below carries the docx session's ownership rules
+          await savePptxToFile(this.opened, tmp)
+          commitSaved(this.opened)
+        }
+        // a fresh (guarded) target promotes exclusively: a file created between
+        // the guard's stat and this write surfaces the clobber error instead of
+        // being silently replaced; targets this session owns replace by intent
+        if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
+          await rename(tmp, target)
+        } else {
+          await promoteNewFileExclusively(tmp, target)
+        }
+      })
+    } catch (e) {
+      // UX-1690: a read-only workspace/target fails the tmp write with a raw
+      // errno naming the dot-temp file; name the actual cause instead
+      throw asWorkspaceWriteError(e, target)
+    }
 
     // refresh the fence so chained saves keep working
     if (target === this.path) {
