@@ -41,6 +41,7 @@ export const ko = {
   filterAria: '유형별 필터',
   fileCount: '파일 {n}개',
   fileCountOne: '파일 {n}개',
+  fileCountOver: '파일 {n}+개',
   selectedCount: '{n}개 선택됨',
   selectAll: '모두 선택',
   selectFile: '{name} 선택',

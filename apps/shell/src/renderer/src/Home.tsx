@@ -13,12 +13,14 @@ import type {
   ProjectSummaryEntry,
   RecentEntry,
 } from '../../shared/home-api'
+import { HOME_PATHS_CAP } from '../../shared/home-paths'
 import { useDismissablePopover } from '@airy-office/ui'
 import { fileCountKey, visiblePageCount } from './counts'
 import { showErrorToast } from './error-toast'
 import { filterFileEntries, isSearchActive, mergeFileLists } from './home-search'
 import { useI18n } from './locale'
 import type { I18n, StringKey } from './locale'
+import { projectCountKey, statPathsChunked } from './project-files'
 import { SettingsModal } from './SettingsModal'
 
 declare global {
@@ -888,6 +890,9 @@ export function Home() {
   // ── Project files state ────────────────────────────────
 
   const [projectFileEntries, setProjectFileEntries] = useState<RecentEntry[]>([])
+  // the open project's catalog exceeds HOME_PATHS_CAP: the loaded list is a
+  // clamp, so the counter shows "{n}+ files" instead of a silently short total
+  const [projectFilesOverCap, setProjectFilesOverCap] = useState(false)
   const [moveFileMenu, setMoveFileMenu] = useState<string | null>(null)
   // submenu opens rightward by default; flips left when the window edge is too close
   const [moveMenuFlip, setMoveMenuFlip] = useState(false)
@@ -927,14 +932,20 @@ export function Home() {
   useEffect(() => {
     if (!projectMode || !selectedProjectId) {
       setProjectFileEntries([])
+      setProjectFilesOverCap(false)
       return
     }
     let active = true
     const api = window.aiOfficeProject!
     void api.listFiles(selectedProjectId).then(async (paths) => {
-      const stats = await window.aiOffice.statPaths(paths)
-      if (!active) return
-      setProjectFileEntries(stats.sort((a, b) => b.mtimeMs - a.mtimeMs))
+      // chunked load (BUG-1676): a whole project catalog is stat-ed in small
+      // batches so the window stays interactive and rows fill in progressively;
+      // the loader clamps at HOME_PATHS_CAP, same bound main enforces per call
+      setProjectFilesOverCap(paths.length > HOME_PATHS_CAP)
+      await statPathsChunked(paths, { statPaths: window.aiOffice.statPaths }, (loaded) => {
+        if (!active) return
+        setProjectFileEntries(loaded)
+      })
     })
     return () => {
       active = false
@@ -1466,7 +1477,9 @@ export function Home() {
           <div className="recents-toolbar">
             <div className="recents-heading">
               <span className="section-label">{t('secProjectFiles')}</span>
-              <span className="file-count">{t(fileCountKey(shownCount), { n: shownCount })}</span>
+              <span className="file-count">
+                {t(projectCountKey(shownCount, projectFilesOverCap), { n: shownCount })}
+              </span>
             </div>
             {projSelectedPaths.length > 0 && (
               <div className="selection-bar">

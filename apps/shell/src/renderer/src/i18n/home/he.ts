@@ -41,6 +41,7 @@ export const he = {
   filterAria: 'סינון לפי סוג',
   fileCount: '{n} קבצים',
   fileCountOne: 'קובץ אחד',
+  fileCountOver: '{n}+ קבצים',
   selectedCount: 'נבחרו {n}',
   selectAll: 'בחירת הכול',
   selectFile: 'בחירת {name}',

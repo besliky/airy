@@ -40,6 +40,7 @@ export const zh = {
   filterAria: '按类型筛选',
   fileCount: '{n} 个文件',
   fileCountOne: '{n} 个文件',
+  fileCountOver: '{n}+ 个文件',
   selectedCount: '已选 {n} 项',
   selectAll: '全选',
   selectFile: '选择 {name}',

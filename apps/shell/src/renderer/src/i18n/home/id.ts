@@ -41,6 +41,7 @@ export const id = {
   filterAria: 'Filter menurut jenis',
   fileCount: '{n} file',
   fileCountOne: '{n} file',
+  fileCountOver: '{n}+ file',
   selectedCount: '{n} dipilih',
   selectAll: 'Pilih semua',
   selectFile: 'Pilih {name}',

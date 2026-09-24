@@ -41,6 +41,7 @@ export const ru = {
   filterAria: 'Фильтр по типу',
   fileCount: 'Файлов: {n}',
   fileCountOne: '{n} файл',
+  fileCountOver: 'Файлов: {n}+',
   selectedCount: 'Выбрано: {n}',
   selectAll: 'Выбрать все',
   selectFile: 'Выбрать {name}',
