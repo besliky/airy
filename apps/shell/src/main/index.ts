@@ -26,7 +26,7 @@ import {
 import type { MenuItemConstructorOptions, NativeImage, Rectangle, WebContents } from 'electron'
 import { homeChannelAccess } from './home-channel-access'
 import { createLiveBridgeToggle } from './live-bridge-toggle'
-import { stringPathsCapped } from './home-paths'
+import { stringPathsCapped } from '../shared/home-paths'
 import {
   bridgeEnvDisabled,
   effectiveLiveBridgeEnabled,
@@ -1875,7 +1875,10 @@ function registerHomeIpc(): void {
   })
 
   handleHome(HOME_CHANNELS.statPaths, async (_event, paths: unknown): Promise<RecentEntry[]> => {
-    // bounded: the Home screen stats hand-picked lists, never thousands
+    // bounded per call: the renderer loads project catalogs in small chunks
+    // (see renderer project-files loader), so this cap only clamps absurd
+    // single payloads; a whole catalog larger than HOME_PATHS_CAP is shown
+    // with an honest "{n}+ files" counter, never silently truncated
     return statEntries(stringPathsCapped(paths))
   })
 

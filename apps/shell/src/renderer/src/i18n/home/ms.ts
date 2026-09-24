@@ -41,6 +41,7 @@ export const ms = {
   filterAria: 'Tapis mengikut jenis',
   fileCount: '{n} fail',
   fileCountOne: '{n} fail',
+  fileCountOver: '{n}+ fail',
   selectedCount: '{n} dipilih',
   selectAll: 'Pilih semua',
   selectFile: 'Pilih {name}',

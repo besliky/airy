@@ -41,6 +41,7 @@ export const ja = {
   filterAria: '種類で絞り込み',
   fileCount: '{n} 個のファイル',
   fileCountOne: '{n} 個のファイル',
+  fileCountOver: '{n}+ 個のファイル',
   selectedCount: '{n} 件選択中',
   selectAll: 'すべて選択',
   selectFile: '{name} を選択',

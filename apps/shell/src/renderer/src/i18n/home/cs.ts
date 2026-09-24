@@ -41,6 +41,7 @@ export const cs = {
   filterAria: 'Filtrovat podle typu',
   fileCount: '{n} souborů',
   fileCountOne: '{n} soubor',
+  fileCountOver: '{n}+ souborů',
   selectedCount: 'Vybráno: {n}',
   selectAll: 'Vybrat vše',
   selectFile: 'Vybrat {name}',

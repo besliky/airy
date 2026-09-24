@@ -41,6 +41,7 @@ export const zhTW = {
   filterAria: '依類型篩選',
   fileCount: '{n} 個檔案',
   fileCountOne: '{n} 個檔案',
+  fileCountOver: '{n}+ 個檔案',
   selectedCount: '已選 {n} 項',
   selectAll: '全選',
   selectFile: '選取 {name}',
