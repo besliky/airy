@@ -8,6 +8,7 @@ import { ReactNodeViewRenderer } from '@tiptap/react'
 import { Placeholder } from '@tiptap/extensions'
 import { CodeBlockView } from './CodeBlockView'
 import { LocalImage } from './localImage'
+import { RawHtml } from './rawHtml'
 import { BlockDragHandle } from './blockDragHandle'
 import { BlockKeymap } from './blockKeymap'
 import { AiHighlight } from './aiHighlight'
@@ -51,6 +52,9 @@ export function buildExtensions(options: BuildExtensionsOptions): AnyExtension[]
     // KaTeX-rendered $...$ / $$...$$ formulas (issue #100)
     ...buildMathExtensions(),
     LocalImage,
+    // verbatim raw-HTML preservation (BUG-1685) — must come after the schema
+    // extensions it falls back from; see rawHtml.ts
+    RawHtml,
     BlockDragHandle,
     BlockKeymap,
     AiHighlight,

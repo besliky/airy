@@ -168,14 +168,17 @@ describe('docx export', () => {
   })
 })
 
-describe('legacy HTML content degrades to plain runs in docx export', () => {
-  it('legacy styled HTML keeps its text without the styling', async () => {
+describe('raw-HTML chips export as literal source runs in docx', () => {
+  it('chip markup stays visible, styling is not applied', async () => {
     const parsed = await exportAndParse(
       '<p style="text-align: center"><span style="color: #e11d48">red</span> mid</p>\n\n' +
         'plain <span style="background-color: #ffff00">lit</span> end',
     )
+    // the chips' markup is exported verbatim (nothing silently disappears);
+    // the plain words around them export as normal runs
     const texts = parsed.blocks.map((b) => (b.runs ?? []).map((r) => r.text).join(''))
-    expect(texts.some((t) => t.includes('red') && t.includes('mid'))).toBe(true)
+    expect(texts.some((t) => t.includes('<span style="color: #e11d48">red</span>'))).toBe(true)
+    expect(texts.some((t) => t.includes('mid'))).toBe(true)
     expect(texts.some((t) => t.includes('lit'))).toBe(true)
     const runs = parsed.blocks.flatMap((b) => b.runs ?? [])
     expect(runs.every((r) => !r.color && !r.highlight)).toBe(true)

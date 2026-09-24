@@ -57,6 +57,12 @@ function runsFromInline(content: JSONContent[] | undefined): Run[] {
       if (latex) runs.push({ text: `$${latex}$`, font: CODE_FONT })
       continue
     }
+    if (child.type === 'rawHtml') {
+      // a raw-HTML chip has no text children — keep its markup source visible
+      const html = String(child.attrs?.html ?? '')
+      if (html) runs.push({ text: html, font: CODE_FONT })
+      continue
+    }
     if (child.type !== 'text' || !child.text) continue
     const run: Run = { text: child.text }
     for (const mark of child.marks ?? []) {
@@ -75,6 +81,7 @@ function runsFromInline(content: JSONContent[] | undefined): Run[] {
 
 function plainText(node: JSONContent): string {
   if (node.type === 'text') return node.text ?? ''
+  if (node.type === 'rawHtml') return String(node.attrs?.html ?? '')
   return (node.content ?? []).map(plainText).join('')
 }
 

@@ -72,10 +72,14 @@ function parseSegmentNodes(
   if (trimTrail) {
     while (content.length > 0) {
       const last = content[content.length - 1]
-      if (
-        last.type === 'paragraph' &&
-        !(last.content ?? []).some((inline) => (inline.text ?? '').trim() !== '')
-      ) {
+      const hasVisibleContent = (last.content ?? []).some(
+        (inline) =>
+          // whitespace-only text paragraphs are the segment-edge artifact this
+          // trim exists for; any inline atom (raw-HTML chip BUG-1685, image,
+          // hard break, math) is real content the monolithic parse keeps
+          (inline.text ?? '').trim() !== '' || inline.type !== 'text',
+      )
+      if (last.type === 'paragraph' && !hasVisibleContent) {
         content = content.slice(0, -1)
       } else {
         break
