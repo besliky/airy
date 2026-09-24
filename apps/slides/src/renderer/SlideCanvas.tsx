@@ -2,6 +2,7 @@
  * 3.1/3.2 Konva canvas — renders one RenderSlide + selection/transform + text-edit triggering.
  */
 import React, {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -41,6 +42,7 @@ import {
   type SpacingIndicator,
 } from './snap'
 import { NodeBody, StaticNode } from './NodeBody'
+import { dragEndTransform, sameGuides, sameSpacing } from './drag-gesture'
 import { ZOOM_PREVIEW_EVENT } from './zoom-preview'
 import { useI18n } from './i18n/locale'
 import {
@@ -323,6 +325,24 @@ interface Props {
  */
 export const CANVAS_BLEED = 160
 
+/** Cache padding for the slide-base rects: the decorative shadow blur must not clip. */
+export const BG_CACHE_PAD = 48
+
+/**
+ * PERF-1671: raster decimation while a node drag gesture is live. Konva redraws the
+ * whole content layer per dragmove; under software rasterization that full redraw
+ * costs O(painted pixels) (~80ms at full raster on a 1280x960 slide — measured p95
+ * 100ms frame gaps on a 200-slide deck). Drag is the one gesture where the layer
+ * re-rasters every frame, so while it is live the layer rasters drop to
+ * DRAG_RASTER_FACTOR of the settled resolution and snap back at gesture end — the
+ * same trade the settledZoom mechanism already makes for live zoom gestures. The
+ * shape's screen size is unchanged; at typical zooms the decimated raster still
+ * covers the displayed pixels.
+ */
+export const DRAG_RASTER_FACTOR = 0.3
+/** Never raster a drag frame below this ratio (keeps far-zoomed-out decks legible). */
+export const DRAG_RASTER_MIN = 0.25
+
 /* Screenshot-automation hook (fidelity-compare): window.__airyHidePhPrompts = true +
  * dispatching 'airy:hide-ph-prompts' hides empty-placeholder hints on the edit canvas. */
 const hidePhPromptsListeners = new Set<() => void>()
@@ -550,6 +570,78 @@ export function SlideCanvas({
     return () => window.clearTimeout(t)
   }, [zoom, settledZoom])
 
+  // PERF-1671: cache the slide-base rects (white + fill). The non-dense white rect carries a
+  // canvas shadow, which routes EVERY content-layer redraw through Konva's full-size buffer
+  // canvas (offscreen alloc + draw + blit per frame) — per dragmove that dominated the frame.
+  // With the cache the redraw blits a prepared bitmap; the cache re-bakes only when the
+  // background actually changes (zoom settle, slide switch, background edit), never per move.
+  const bgWhiteRef = useRef<Konva.Rect>(null)
+  const bgFillRef = useRef<Konva.Rect>(null)
+  const recacheBg = useCallback(
+    (ratio: number) => {
+      const w = slide.widthPx
+      const h = slide.heightPx
+      if (!(w > 0) || !(h > 0)) return
+      for (const ref of [bgWhiteRef, bgFillRef]) {
+        const n = ref.current
+        if (!n) continue
+        n.clearCache()
+        n.cache({
+          x: -BG_CACHE_PAD,
+          y: -BG_CACHE_PAD,
+          width: w + BG_CACHE_PAD * 2,
+          height: h + BG_CACHE_PAD * 2,
+          pixelRatio: ratio,
+        })
+      }
+    },
+    // The extra deps (dense/background/images/nodeCount) don't appear in the body: the
+    // callback identity re-arms the re-raster effect below when the baked background's
+    // inputs change, so the cache re-bakes with the current ratio.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nodeCount, slide.widthPx, slide.heightPx, dense, slide.background, images],
+  )
+  // Re-bake the bg cache when its inputs change: recacheBg's identity already encodes
+  // the slide size / density / background / images tuple, so this list is complete.
+  useEffect(() => {
+    recacheBg(canvasPixelRatio(window.devicePixelRatio, settledZoom, nodeCount))
+  }, [recacheBg, settledZoom, nodeCount])
+
+  // PERF-1671: true while a node drag gesture is live (see DRAG_RASTER_FACTOR).
+  const [dragRaster, setDragRaster] = useState(false)
+  const chromeLayerRef = useRef<Konva.Layer>(null)
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage) return
+    const onStart = () => {
+      setDragRaster(true)
+      // PowerPoint-style: the selection frame/anchors hide while the shape is being
+      // dragged (they reappear at drop). Besides the UX, this keeps the second
+      // full-size layer out of the per-dragmove redraw entirely — its redraw cost
+      // is fixed (clear + commit) and pushed the move frame over budget.
+      const chrome = chromeLayerRef.current
+      if (chrome) {
+        chrome.visible(false)
+        chrome.batchDraw()
+      }
+    }
+    const onEnd = () => {
+      setDragRaster(false)
+      const chrome = chromeLayerRef.current
+      if (chrome) {
+        chrome.visible(true)
+        chrome.batchDraw()
+      }
+      trRef.current?.forceUpdate()
+    }
+    stage.on('dragstart', onStart)
+    stage.on('dragend', onEnd)
+    return () => {
+      stage.off('dragstart', onStart)
+      stage.off('dragend', onEnd)
+    }
+  }, [])
+
   // Bundled @font-face fonts (Carlito) and Office-private FontFaces (doc-fonts.ts) may finish
   // loading after the first draw; canvas text drawn with a fallback face must be redrawn once
   // the real font is available. 'loadingdone' covers faces added at any later point.
@@ -570,15 +662,20 @@ export function SlideCanvas({
   // Re-rasterize on settled zoom changes. The slide dep covers layers (re)created between
   // zoom changes; the resolution media query covers devicePixelRatio changes (window dragged
   // to another display) — it matches the current dpr, so it must be re-armed after each change.
+  // PERF-1671: while dragRaster is live the rasters decimate (DRAG_RASTER_FACTOR) so the
+  // per-dragmove full-layer redraw stays inside the frame budget; the effect snaps the
+  // rasters (and the bg cache) back to full resolution at gesture end.
   useEffect(() => {
     const apply = () => {
-      const ratio = canvasPixelRatio(window.devicePixelRatio, settledZoom, nodeCount)
+      const base = canvasPixelRatio(window.devicePixelRatio, settledZoom, nodeCount)
+      const ratio = dragRaster ? Math.max(base * DRAG_RASTER_FACTOR, DRAG_RASTER_MIN) : base
       for (const l of stageRef.current?.getLayers() ?? []) {
         if (l.getCanvas().getPixelRatio() !== ratio) {
           l.getCanvas().setPixelRatio(ratio)
           l.batchDraw()
         }
       }
+      recacheBg(ratio)
     }
     apply()
     let mq: MediaQueryList | null = null
@@ -593,10 +690,18 @@ export function SlideCanvas({
     }
     arm()
     return () => mq?.removeEventListener('change', onDprChange)
-  }, [settledZoom, slide, nodeCount])
+  }, [settledZoom, slide, nodeCount, recacheBg, dragRaster])
   const [guides, setGuides] = useState<Guide[]>([])
   // Equal-spacing double-headed arrows (while dragging); same-size matched elements (while resizing, listed per dimension)
   const [spacing, setSpacing] = useState<SpacingIndicator[]>([])
+  // PERF-1671: dragmove fires per pointer event with a FRESH guides/spacing array each time.
+  // Setting state with a new identity re-rendered the whole SlideCanvas (every NodeView) and
+  // re-batched the layers on every move even when the chrome content was unchanged. Value-
+  // comparing keeps the identity stable, so React bails out on the typical move (no snap).
+  const handleDragGuides = useCallback((g: Guide[], sp?: SpacingIndicator[]) => {
+    setGuides((prev) => (sameGuides(prev, g) ? prev : g))
+    setSpacing((prev) => (sameSpacing(prev, sp ?? []) ? prev : (sp ?? [])))
+  }, [])
   const [sizeMatch, setSizeMatch] = useState<{ w: string[]; h: string[] } | null>(null)
   const sizeMatchKeyRef = useRef('')
   // A marquee drag just ended on this gesture: swallow the trailing click so it doesn't select the node under the cursor
@@ -879,8 +984,11 @@ export function SlideCanvas({
       <Layer ref={layerRef} x={CANVAS_BLEED} y={CANVAS_BLEED} listening={!drawMode}>
         {/* Slide base: white background + shadow (used to be the Stage's CSS background; the bleed area must show the gray workspace behind).
             Dense slides drop the decorative blur: a canvas shadow re-rasterizes on every full-layer
-            redraw and is pure GPU pressure on exactly the pages where the freeze bites. */}
+            redraw and is pure GPU pressure on exactly the pages where the freeze bites.
+            PERF-1671: both base rects are cached below (bgCache effect) — the shadowed one
+            otherwise routes every layer redraw through Konva's full-size buffer canvas. */}
         <Rect
+          ref={bgWhiteRef}
           name="slide-bg"
           x={0}
           y={0}
@@ -892,6 +1000,7 @@ export function SlideCanvas({
             : { shadowColor: 'rgba(0,0,0,0.15)', shadowBlur: 16, shadowOffsetY: 2 })}
         />
         <Rect
+          ref={bgFillRef}
           name="slide-bg"
           x={0}
           y={0}
@@ -908,10 +1017,7 @@ export function SlideCanvas({
             onTransform={onTransform}
             onEditTableCell={onEditTableCell}
             onPlayMedia={onPlayMedia}
-            onDragGuides={(g, sp) => {
-              setGuides(g)
-              setSpacing(sp ?? [])
-            }}
+            onDragGuides={handleDragGuides}
             snapTargets={snapTargets}
             images={images}
             editingText={editingText}
@@ -1194,8 +1300,10 @@ export function SlideCanvas({
           only redraws these few nodes — redrawing the content layer per frame is what
           made the gesture stutter. The Transformer tracks nodes across layers fine.
           Mirrors the content layer's draw-mode listening switch so the crosshair
-          gesture isn't swallowed by the transformer handles. */}
-      <Layer x={CANVAS_BLEED} y={CANVAS_BLEED} listening={!drawMode}>
+          gesture isn't swallowed by the transformer handles.
+          PERF-1671: hidden imperatively for the duration of a node drag (see the
+          dragstart/dragend handler above). */}
+      <Layer ref={chromeLayerRef} x={CANVAS_BLEED} y={CANVAS_BLEED} listening={!drawMode}>
         <Transformer
           ref={trRef}
           rotateEnabled
@@ -1698,13 +1806,7 @@ function NodeView({
       }
       onTransform(
         node.sourceId,
-        {
-          x: dropX,
-          y: dropY,
-          w: box.w,
-          h: box.h,
-          rotationDeg: box.rotationDeg,
-        },
+        dragEndTransform(box, e.target.x(), e.target.y()),
         undefined,
         insideGroupId,
       )
