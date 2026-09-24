@@ -7,6 +7,173 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-09-24
+
+### Added
+
+- Markdown:
+  - Broken links, anchors and unsupported footnotes stop looking valid in the
+    editor: a `[b]` backed by a circular/undefined reference definition
+    (`[b]: [a]`) parses to the literal href `[a]` and used to render like any
+    other link — it is now marked as an unresolved reference (wavy underline +
+    tooltip); `[text](#no-such-anchor)` with no matching target is marked as a
+    dead anchor (targets are GitHub-style heading slugs, unicode-aware and
+    percent-decoded, plus `id=`/`name=` inside rawHtml nodes kept verbatim by
+    the RawHtml extension); `[empty]()` (href "") is marked as an empty link;
+    `[^1]` footnotes remain unsupported (a separate feature) and now say so —
+    a subtle dotted hint with a tooltip plus one toast on first appearance per
+    document instead of silence. Diagnostics are view-only decorations capped
+    at 500 painted markers (same rationale as find highlights): the document
+    model, the serializer and saved files are untouched, and serialization
+    round-trips are pinned by tests; 4 new i18n keys in all 20 locales
+    (PR #198).
+- Markdown & HTML editors:
+  - "Reopen with encoding…" becomes reachable: the `set-encoding` IPC channel
+    shipped in #167 (UX-1653) could remember a file's charset, but no preload
+    pass-through, no renderer caller and no menu entry existed — the channel
+    was dead. Both plain-text editors now grow a status-bar encoding picker
+    (auto-detect plus every selectable charset, one `SELECTABLE_ENCODINGS`
+    list shared via `shared/ipc.ts`); the channel moves into the pinned
+    channel registries and the preloads pass it through; picking remembers the
+    charset, re-reads the file through the normal open path (the markdown load
+    body is extracted into `loadDocument` and reused; the html reopen swaps
+    both the CodeMirror source and the preview buffer) and confirms with an
+    "opened as X" toast/status notice; a `null` pick ("Auto") forgets a
+    remembered charset through the same single-writer settings queue, so
+    auto-detection resumes; a dirty document (or pending AI style pokes in
+    html) is refused with a message instead of silently discarding edits.
+    5 new i18n keys in all 20 locales of both apps; per-app wiring suites pin
+    the renderer → API → preload → main chain (PR #199).
+
+### Changed
+
+- MCP & automation:
+  - The `save_document` tool description stops overpromising "untouched parts
+    byte-identical" for docx without disclosing two intentional deltas
+    observed on every edited save: `docProps/core.xml` is deliberately
+    rewritten (`cp:revision` bumped, `dcterms:modified` refreshed — the
+    docx-engine `patchCoreProps`), and the rebuilt zip gains explicit
+    directory entries (one per folder) when the source document had none; a
+    zero-edit save still round-trips the original bytes verbatim. Both deltas
+    are now disclosed next to the promise — mirroring the existing xlsx
+    `xl/workbook.xml` exception — in the tool description and in
+    docs/COPILOT.md's byte-preservation paragraph, locked by a
+    description-contract regression test. No save logic changed (PR #197).
+
+### Fixed
+
+- Markdown:
+  - An indented code block (8+ spaces) separated from a list by a blank line
+    is no longer absorbed into the last list item as a plain paragraph
+    (CommonMark/GitHub render code; the model then treated the code as item
+    text, including edits and docx export). The block is lifted into a real
+    top-level code block at parse time via a deliberately narrow transform —
+    two 4-space nesting units, a preceding blank line at the list tail,
+    uniform deep indent — so ordinary one-unit loose-list continuation
+    paragraphs keep their CommonMark shape; the lift materializes as a fenced
+    block on the next save (there is no indented-code serializer), and
+    parse → serialize → parse is stable. An empty paragraph nested in a list
+    item no longer serializes as a line of indentation spaces (`"    "`):
+    whitespace-only lines are blanked at serialization, except inside literal
+    regions (fenced code, raw HTML containers, HTML comments, block math);
+    hard-break trailing spaces after text survive; tabs at save are
+    intentionally unchanged.
+  - CR-only (classic Mac) files no longer merge into a single line on open:
+    CR is parsed as a line separator. Canonicalization follows CommonMark
+    (a lone CR is a line ending): a CR-only file round-trips byte-for-byte
+    preserving its CR style, and a CRLF file with stray CRs canonicalizes to
+    its dominant CRLF style on save (documented in `DocEnvelope`). A U+FEFF in
+    the middle of a file is filtered on open; the head-BOM contract is
+    unchanged and NBSP/U+200B/U+3000 content survives (PR #196).
+- MCP & automation:
+  - `save_document` into a read-only workspace no longer answers with the raw
+    errno of a temp dotfile the agent never created ("EACCES: permission
+    denied, open '…docx.airy-<uuid>'"): every save write path (docx in-place
+    and origin-export, xlsx — whose failure arrives from the Rust sidecar as
+    errno text and is matched too — pptx, md/html) maps permission-shaped
+    failures (EACCES/EROFS; EPERM deliberately unmapped to avoid mislabeling
+    Windows file locks as read-only) onto a clear refusal naming the target
+    directory and the likely cause ("Cannot write "<dir>": permission denied —
+    the workspace directory or the target file may be read-only. Fix the
+    permissions or save to another path."). Fences, clobber guards and drift
+    refusals keep their exact messages.
+  - A plain OLE2 compound document renamed to .xlsx/.xlsm is refused by name
+    instead of dying inside the zip parser ("invalid Zip archive: Could not
+    find EOCD") like a corrupt file: the xlsx/xlsm open route classifies the
+    container head with one sniff and answers "Open it as .xls — LibreOffice
+    converts it — or re-save it as .xlsx from the source app", mirroring the
+    docx session's plain-OLE refusal. The .xls conversion route and the
+    encrypted-container refusal are unchanged (PR #192).
+- Shell:
+  - The dev-mode single-instance takeover kills a wedged previous instance
+    regardless of binary spelling: the guard checked
+    `cmd.includes('Electron')` case-sensitively over the whole command line,
+    which never matched the linux dev binary
+    `node_modules/electron/dist/electron` — the zombie kept the SingletonLock
+    and every later dev launch on that userData died with "Target closed". The
+    guard now delegates to a matcher (`dev-takeover.ts`): the executable — the
+    first command-line token — must have a basename of `electron`, compared
+    case-insensitively, with a windows `.exe` suffix stripped and both `/` and
+    `\` separators accepted. Arguments are no longer scanned, so a recycled
+    pid running e.g. `vim electron-notes.md` can never be killed (PR #195).
+- PDF:
+  - A kill -9 in the middle of a PDF save no longer leaves a permanent
+    `.<name>.<12hex>.tmp` orphan next to the user's document: `atomicWriteFile`
+    unlinks its temp only on error paths, a killed process bypasses them, and
+    nothing ever revisited a user-picked directory to clean up. Each
+    `savePdfToPath` now sweeps the target directory's expired temps (the exact
+    atomicWriteFile temp signature, 1-hour mtime cutoff) right before creating
+    its own fresh temp, mirroring the slides video-export sweep (#160): age
+    alone decides, so the save's own temp and any concurrent save's temp are
+    never candidates; non-matching files, directories, symlinks and a missing
+    target directory are untouched — the sweep never throws and never blocks
+    the save it precedes (PR #191).
+
+### Performance
+
+- HTML:
+  - Replace All in the html source editor stops freezing the app for minutes
+    on giant files: measured at the function level on a 3 MB / 200k-match /
+    100k-element corpus, the replace dispatch falls 142 s → 0.7–0.8 s and the
+    parse-map rebuild 40–66 s → 0.34–0.47 s (~100–200×; the audited 1.25 MB /
+    83k-match case froze for 21.2 s). Two quadratic costs compounded — both in
+    the app's own layers, which honestly corrects the audit's working
+    hypothesis (parse5 itself sat at its usual seconds-level floor all along):
+    the find-highlight field mapped each of N decorated ranges through each of
+    N changes (O(hits × changes) in RangeSet.map) — hits are now unpainted
+    before the dispatch and the html language is suspended via a compartment
+    for the run and restored lazily; and nth-of-type was recomputed by walking
+    every element's siblings (O(n²) ≈ 10¹⁰ iterations on a flat 100k-`<p>`
+    document) — the indexes now come from one pass over the tree, with an
+    equivalence test pinning `p:nth-of-type(k)` paths to the sibling-counting
+    reference. Like CodeMirror's own replace-all, all ranges go out in ONE
+    transaction: one undo step, one app commit, one debounced parse-map
+    rebuild and one preview push per replace; selection/cursor are mapped by
+    the transaction and sid/path/depth stability is pinned; search answers the
+    announced count unpainted while a replace is in flight (PR #193).
+- Markdown:
+  - Typing and undo on giant single-paragraph documents stop rewriting
+    megabytes of DOM per keystroke: prosemirror-view mirrors one PM text node
+    as one DOM text node and resets its `nodeValue` wholesale, so a 4 MB
+    one-liner paid 5.6–5.9 s per character end-to-end (the PERF-1647 tail).
+    The new GiantTextChunking extension plants zero-impact `<wbr>` widget
+    decorations inside paragraphs over 100k chars, mirroring the giant text
+    node as ~16 KiB DOM pieces through the same `iterDeco` path that renders
+    mark runs; boundaries are mapped through transactions, so pieces keep
+    byte-identical text and reuse their DOM wherever the edit lands, a piece
+    outgrowing 2×16 KiB re-grids from the paragraph start, and the widgets are
+    view-only — getJSON/getMarkdown/saved file untouched, and normal documents
+    never see a single decoration. Measured live under xvfb (N=3): typing
+    5.6–5.9 s → 2.2–2.3 s per character end-to-end, undo ×5 26 s → ~11.5 s,
+    TTI 5.4 s → 3.0 s; in-page main-thread latency is now 125–185 ms per
+    keystroke and 83–100 ms per undo (the ≤300 ms target met). The residual
+    ~2 s is named, not hidden: a software-compositor re-raster of the giant
+    paragraph's single paint chunk (scales with painted area; a 1 MB one-liner
+    types at 43–350 ms end-to-end) plus a ~1.9 s accessibility-tree update
+    Electron only pays when renderer accessibility is auto-enabled — both
+    outside the renderer JS, tracked as follow-ups. A live save of the edited
+    4 MB one-liner is byte-identical (original + typed char) (PR #194).
+
 ## [0.19.0] - 2026-09-24
 
 ### Added
