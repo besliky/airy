@@ -220,6 +220,7 @@ import type { TabKind } from '../shared/tabs-api'
 import { TABS_CHANNELS } from '../shared/tabs-api'
 import { showErrorDialog } from './error-dialog'
 import { classifyOpenFailure, reportOpenFailure, type OpenFailureDeps } from './open-failure'
+import { openFromHome } from './home-open'
 import {
   isInsideDirectory,
   listStagedFiles,
@@ -1883,7 +1884,13 @@ function registerHomeIpc(): void {
   })
 
   handleHome(HOME_CHANNELS.openPath, (_event, path: unknown) => {
-    if (typeof path === 'string') openDocumentPath(path)
+    // BUG-1677: a click on an unreadable file, a vanished one or a directory
+    // used to end in silence — the false routing result was dropped. The
+    // shared decision raises the same #154 dialog the launch paths show.
+    openFromHome(path, {
+      openDocument: openDocumentPath,
+      openFailure: openFailureDeps,
+    })
   })
 
   handleHome(HOME_CHANNELS.browse, async (event) => {
