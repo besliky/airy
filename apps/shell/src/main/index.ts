@@ -248,6 +248,7 @@ import {
 import { normalizeRecentQuery, pageRecentPaths, statPathEntries } from './recent-files'
 import { createQueuedWorkbookDelivery } from './queued-workbook-delivery'
 import { isSameFile, isValidRenameName } from './rename-validation'
+import { renameFileInAllWindows } from './rename-broadcast'
 import { TabManager } from './tab-manager'
 import type { DetachedTab } from './tab-manager'
 import { createQuitFlow } from './quit-flow'
@@ -1979,15 +1980,23 @@ function registerHomeIpc(): void {
     projectFileRenamed(path, target)
     // the slides module's own recent list switches to the new path as well (used by the start screen)
     if (/\.pptx$/i.test(target)) void replaceSlidesRecentFile(path, target)
-    // open tabs sync their title/path; each editor then syncs its internal save path and title bar
-    const affected = focusedManager()?.renameTabFile(path, target) ?? []
-    for (const t of affected) {
-      if (t.kind === 'slides') slidesFileRenamed(t.webContents, path, target)
-      else if (t.kind === 'docs') docsFileRenamed(t.webContents, path, target)
-      else if (t.kind === 'sheets') sheetsFileRenamed(t.webContents, path, target)
-      else if (t.kind === 'markdown') markdownFileRenamed(t.webContents, path, target)
-      else if (t.kind === 'html') htmlFileRenamed(t.webContents, path, target)
-    }
+    // open tabs sync their title/path in EVERY window — the file's identity
+    // changed globally, and routing through the focused window alone left a
+    // second window's tab on the stale save path (Ctrl+S would write to the
+    // pre-rename name, BUG-1675); each editor then syncs its internal save
+    // path and title bar
+    renameFileInAllWindows(
+      shellWindows.list().map((entry) => entry.manager),
+      path,
+      target,
+      {
+        docs: docsFileRenamed,
+        sheets: sheetsFileRenamed,
+        slides: slidesFileRenamed,
+        markdown: markdownFileRenamed,
+        html: htmlFileRenamed,
+      },
+    )
     return { ok: true, path: target }
   })
 
