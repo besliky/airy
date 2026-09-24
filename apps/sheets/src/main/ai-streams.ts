@@ -10,6 +10,11 @@
 export class AiStreamRegistry {
   private readonly streams = new Map<string, AbortController>()
 
+  /** Number of in-flight streams (0 → per-sender teardown hooks can detach). */
+  get size(): number {
+    return this.streams.size
+  }
+
   /** Registers the abort controller of one starting stream. */
   start(requestId: string): AbortController {
     const controller = new AbortController()

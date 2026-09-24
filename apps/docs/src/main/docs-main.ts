@@ -92,6 +92,7 @@ import {
   registerAiSettingsCodec,
   saveAiSettings,
 } from './ai-settings-store'
+import { RendererAiStreams } from './ai-streams'
 import {
   isCodexCliCandidatePath,
   listCodexModels,
@@ -2915,7 +2916,7 @@ const TWIPS_PER_INCH = 1440
 
 const SETTINGS_PATH = () => userDataPath('ai-settings.json')
 
-const activeAiStreams = new Map<string, AbortController>()
+const rendererAiStreams = new RendererAiStreams()
 
 /**
  * AI settings + chat/stream proxy handlers. Split out so the shell can
@@ -2977,8 +2978,11 @@ export function registerAiIpc(): void {
       send({ requestId, type: 'error', error: tm('errNoModel') })
       return
     }
-    const controller = new AbortController()
-    activeAiStreams.set(requestId, controller)
+    // BUG-1698: registering under the per-sender registry also wires the
+    // sender's death (render-process-gone / destroyed) to abort this stream —
+    // a renderer killed mid-turn never sends ai:stream-cancel, so without it
+    // main keeps draining the provider into the dead frame (zombie stream).
+    const controller = rendererAiStreams.start(event.sender, requestId)
     // wire-activity keepalive: lets the renderer's silence watchdog tell a slow turn from a dead one
     let lastPing = 0
     const ping = () => {
@@ -3021,12 +3025,12 @@ export function registerAiIpc(): void {
         })
       }
     } finally {
-      activeAiStreams.delete(requestId)
+      rendererAiStreams.finish(event.sender, requestId)
     }
   })
 
   ipcMain.handle('ai:stream-cancel', (_event, requestId: string) => {
-    activeAiStreams.get(requestId)?.abort()
+    rendererAiStreams.cancel(requestId)
   })
 
   // shared search tools (content + images): Serper with DuckDuckGo fallback (same source as slides/sheets)
