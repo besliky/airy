@@ -1,4 +1,5 @@
 import type { AnyExtension } from '@tiptap/core'
+import { Extension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
 import { TableKit } from '@tiptap/extension-table'
@@ -19,12 +20,32 @@ import { GiantTextChunking } from './giantTextChunking'
 import { buildMathExtensions } from './math'
 import { SlashCommand } from './slashCommand'
 import type { SlashController, SlashItem } from './slashCommand'
+import { liftIndentedCodeAfterLists, stripBlankLinePadding } from '../markdown/parseContext'
 import { t } from '../i18n/locale'
 
 export interface BuildExtensionsOptions {
   slashController: SlashController
   slashItems: () => SlashItem[]
 }
+
+/**
+ * App-level parse/serialize context for the markdown manager (BUG-1703). The
+ * manager has no pre/post hooks, so the two pure transforms are wrapped
+ * around its methods once it exists — this extension must stay AFTER the
+ * `Markdown` extension in the list, because the manager is created in the
+ * Markdown extension's own onBeforeCreate.
+ */
+const MarkdownParseContext = Extension.create({
+  name: 'markdownParseContext',
+  onBeforeCreate() {
+    const manager = this.editor.markdown
+    if (!manager) return
+    const parse = manager.parse.bind(manager)
+    manager.parse = (markdown: string) => parse(liftIndentedCodeAfterLists(markdown))
+    const serialize = manager.serialize.bind(manager)
+    manager.serialize = (doc) => stripBlankLinePadding(serialize(doc))
+  },
+})
 
 export function buildExtensions(options: BuildExtensionsOptions): AnyExtension[] {
   return [
@@ -45,6 +66,8 @@ export function buildExtensions(options: BuildExtensionsOptions): AnyExtension[]
     // ordered items ("1. " = 3), so strict CommonMark parsers (GitHub) would
     // flatten sub-lists in the saved file. 4 is safe for every marker width.
     Markdown.configure({ indentation: { style: 'space', size: 4 } }),
+    // BUG-1703 parse/serialize context fixes; must follow `Markdown` (above)
+    MarkdownParseContext,
     // column widths are not expressible in GFM tables — no resizable columns;
     // the wrapper div gives wide tables a horizontal scrollbar
     TableKit.configure({ table: { resizable: false, renderWrapper: true } }),
