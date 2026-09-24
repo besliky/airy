@@ -176,7 +176,7 @@ export function buildWorksheetXml(rows: readonly (readonly string[])[]): string 
   )
 }
 
-export async function csvToXlsxBuffer(csvText: string, sheetName = 'Sheet1'): Promise<Buffer> {
+export async function csvToXlsxBuffer(csvText: string, sheetName = 'Sheet1'): Promise<Uint8Array> {
   const rows = parseCsv(csvText)
   if (rows.length === 0) throw new Error('The CSV file has no data rows.')
   return xlsxBufferFromRows(rows, sheetName)
@@ -189,27 +189,32 @@ export async function csvToXlsxBuffer(csvText: string, sheetName = 'Sheet1'): Pr
  * neither), and sniffing would then split the wrong columns — and an
  * all-empty grid becomes a valid blank workbook instead of an import error.
  */
-export async function sheetCsvToXlsxBuffer(csvText: string, sheetName = 'Sheet1'): Promise<Buffer> {
+export function sheetCsvToXlsxBuffer(csvText: string, sheetName = 'Sheet1'): Promise<Uint8Array> {
   return xlsxBufferFromRows(parseCsv(csvText, ','), sheetName)
 }
 
 /** minimal empty workbook: the backing file for a "new blank spreadsheet" tab */
-export async function blankXlsxBuffer(sheetName = 'Sheet1'): Promise<Buffer> {
+export function blankXlsxBuffer(sheetName = 'Sheet1'): Promise<Uint8Array> {
   return xlsxBufferFromRows([], sheetName)
 }
+
+// The part data must build in the sandboxed renderer too (this module rides
+// the lazy csv-import chunk): TextEncoder instead of Buffer.from.
+const textEncoder = new TextEncoder()
 
 async function xlsxBufferFromRows(
   rows: readonly (readonly string[])[],
   sheetName: string,
-): Promise<Buffer> {
-  // Hand-rolled zip container (see xlsx-minizip): JSZip's pure-JS deflate
-  // dominated the 500k-row CSV import profile, node:zlib does the same
-  // DEFLATE an order of magnitude faster, and the package layout here is
-  // fixed and tiny.
+): Promise<Uint8Array> {
+  // Hand-rolled zip container on Node (see xlsx-minizip): JSZip's pure-JS
+  // deflate dominated the 500k-row CSV import profile, node:zlib does the
+  // same DEFLATE an order of magnitude faster, and the package layout here
+  // is fixed and tiny. The sandboxed renderer (no node builtins) falls back
+  // to JSZip inside xlsx-minizip.
   return zipFiles([
     {
       name: '[Content_Types].xml',
-      data: Buffer.from(
+      data: textEncoder.encode(
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
           '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
           '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
@@ -217,41 +222,37 @@ async function xlsxBufferFromRows(
           '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
           '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
           '</Types>',
-        'utf8',
       ),
     },
     {
       name: '_rels/.rels',
-      data: Buffer.from(
+      data: textEncoder.encode(
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
           '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
           '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
           '</Relationships>',
-        'utf8',
       ),
     },
     {
       name: 'xl/workbook.xml',
-      data: Buffer.from(
+      data: textEncoder.encode(
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
           '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
           `<sheets><sheet name="${escapeXml(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
-        'utf8',
       ),
     },
     {
       name: 'xl/_rels/workbook.xml.rels',
-      data: Buffer.from(
+      data: textEncoder.encode(
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
           '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
           '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
           '</Relationships>',
-        'utf8',
       ),
     },
     {
       name: 'xl/worksheets/sheet1.xml',
-      data: Buffer.from(buildWorksheetXml(rows), 'utf8'),
+      data: textEncoder.encode(buildWorksheetXml(rows)),
     },
   ])
 }
