@@ -20,6 +20,7 @@ import { basename, dirname, extname, join } from 'node:path'
 import {
   saveTargetExistsError,
   FencingError,
+  asWorkspaceWriteError,
   assertSaveTargetFree,
   withSaveTmpCleanup,
 } from '../docx/session.js'
@@ -663,7 +664,10 @@ export class XlsxSession {
       })
     } catch (e) {
       if (e instanceof SaveTargetExistsError) throw saveTargetExistsError(target)
-      throw e
+      // UX-1690: a read-only workspace fails inside the sidecar/gateway write
+      // and surfaces as a raw errno or the sidecar's errno text; name the
+      // actual cause instead (non-permission errors pass through unchanged)
+      throw asWorkspaceWriteError(e, target)
     }
     const bytes = await statOrNull(target)
     const unchanged = this.edits.length === 0
@@ -743,10 +747,16 @@ export class XlsxSession {
       // guard at the top of saveToOrigin does not reach inside the closure)
       const originPath = this.originPath
       const tmpTarget = join(dirname(originPath), `.${basename(originPath)}.airy-${randomUUID()}`)
-      await withSaveTmpCleanup(tmpTarget, async () => {
-        await copyFile(output, tmpTarget)
-        await rename(tmpTarget, originPath)
-      })
+      try {
+        await withSaveTmpCleanup(tmpTarget, async () => {
+          await copyFile(output, tmpTarget)
+          await rename(tmpTarget, originPath)
+        })
+      } catch (e) {
+        // UX-1690: same friendly mapping as the workbook save — the origin
+        // export fails the same way in a read-only workspace
+        throw asWorkspaceWriteError(e, originPath)
+      }
       const bytes = await statOrNull(this.originPath)
       this.edits.length = 0
       this.savedPath = this.originPath

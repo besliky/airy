@@ -25,6 +25,7 @@ import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname, basename, join } from 'node:path'
 
 import {
+  asWorkspaceWriteError,
   assertSaveTargetFree,
   FencingError,
   promoteNewFileExclusively,
@@ -871,14 +872,20 @@ export class LineDocument {
       dirname(target),
       `.${basename(target) || this.hooks.kind}.airy-${randomUUID()}`,
     )
-    await withSaveTmpCleanup(tmp, async () => {
-      await writeFile(tmp, bytes)
-      if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
-        await rename(tmp, target)
-      } else {
-        await promoteNewFileExclusively(tmp, target)
-      }
-    })
+    try {
+      await withSaveTmpCleanup(tmp, async () => {
+        await writeFile(tmp, bytes)
+        if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
+          await rename(tmp, target)
+        } else {
+          await promoteNewFileExclusively(tmp, target)
+        }
+      })
+    } catch (e) {
+      // UX-1690: a read-only workspace/target fails the tmp write with a raw
+      // errno naming the dot-temp file; name the actual cause instead
+      throw asWorkspaceWriteError(e, target)
+    }
     if (target === this.path) {
       try {
         const info = await stat(this.path)

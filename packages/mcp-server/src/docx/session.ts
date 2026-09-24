@@ -332,6 +332,52 @@ export async function withSaveTmpCleanup<T>(tmp: string, body: () => Promise<T>)
   }
 }
 
+/**
+ * Permission-shaped failure of a save's file write (UX-1690): the raw error
+ * ("EACCES: permission denied, open '<...>.airy-<uuid>'") names a temp
+ * dotfile the agent never created and says nothing about the cause. Name the
+ * actual cause instead: the target directory or the target file refuses
+ * writes — a read-only workspace, file, or volume.
+ */
+export class WorkspaceWriteError extends Error {
+  constructor(target: string, cause: unknown) {
+    super(
+      `Cannot write "${dirname(target)}": permission denied — the workspace directory or the ` +
+        'target file may be read-only. Fix the permissions or save to another path.',
+      { cause },
+    )
+    this.name = 'WorkspaceWriteError'
+  }
+}
+
+/** errno codes that mean the save could not write: denied or read-only volume */
+const WRITE_PERMISSION_CODES = new Set(['EACCES', 'EROFS'])
+
+/**
+ * True when a save failure is a permission refusal. The xlsx save writes
+ * through the Rust sidecar, so its refusal arrives as a plain error without
+ * a `.code` — match the errno text the sidecar relays too ("Permission
+ * denied (os error 13)", "Read-only file system (os error 30)").
+ */
+export function isWritePermissionError(e: unknown): boolean {
+  const code = (e as NodeJS.ErrnoException | null)?.code
+  if (typeof code === 'string' && WRITE_PERMISSION_CODES.has(code)) return true
+  return (
+    e instanceof Error &&
+    /EACCES|EROFS|permission denied|read-only file system|os error 13|os error 30/i.test(e.message)
+  )
+}
+
+/**
+ * Map a save-path failure to a WorkspaceWriteError when it is
+ * permission-shaped (UX-1690); every other error passes through unchanged so
+ * the established save contracts (fences, clobber guards, drift refusals)
+ * keep their exact messages.
+ */
+export function asWorkspaceWriteError(e: unknown, target: string): unknown {
+  return isWritePermissionError(e) ? new WorkspaceWriteError(target, e) : e
+}
+
 interface FileStamp {
   mtimeMs: number
   size: number
@@ -691,17 +737,23 @@ export class DocxSession {
     // basename, not a '/'-split: on Windows the split leaves the whole path
     // in the temp name and writeFile fails on the colons/backslashes
     const tmp = join(dirname(target), `.${basename(target) || 'doc'}.airy-${randomUUID()}`)
-    await withSaveTmpCleanup(tmp, async () => {
-      await writeFile(tmp, bytes)
-      // a fresh (guarded) target promotes exclusively: a file created between
-      // the guard's stat and this write surfaces the clobber error instead of
-      // being silently replaced; targets this session owns replace by intent
-      if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
-        await rename(tmp, target)
-      } else {
-        await promoteNewFileExclusively(tmp, target)
-      }
-    })
+    try {
+      await withSaveTmpCleanup(tmp, async () => {
+        await writeFile(tmp, bytes)
+        // a fresh (guarded) target promotes exclusively: a file created between
+        // the guard's stat and this write surfaces the clobber error instead of
+        // being silently replaced; targets this session owns replace by intent
+        if (options.overwrite === true || target === this.path || this.savedTargets.has(target)) {
+          await rename(tmp, target)
+        } else {
+          await promoteNewFileExclusively(tmp, target)
+        }
+      })
+    } catch (e) {
+      // UX-1690: a read-only workspace/target fails the tmp write with a raw
+      // errno naming the dot-temp file; name the actual cause instead
+      throw asWorkspaceWriteError(e, target)
+    }
 
     // refresh the fence so chained saves keep working
     if (target === this.path) {
@@ -802,10 +854,16 @@ export class DocxSession {
       // closure, and the promote must target exactly the checked origin path
       const originPath = this.origin.path
       const tmpTarget = join(dirname(originPath), `.${basename(originPath)}.airy-${randomUUID()}`)
-      await withSaveTmpCleanup(tmpTarget, async () => {
-        await copyFile(output, tmpTarget)
-        await rename(tmpTarget, originPath)
-      })
+      try {
+        await withSaveTmpCleanup(tmpTarget, async () => {
+          await copyFile(output, tmpTarget)
+          await rename(tmpTarget, originPath)
+        })
+      } catch (e) {
+        // UX-1690: same friendly mapping as the docx save — the origin export
+        // fails the same way in a read-only workspace
+        throw asWorkspaceWriteError(e, originPath)
+      }
       this.savedPath = this.origin.path
       this.savedTargets.add(this.origin.path)
       const info = await stat(this.origin.path)

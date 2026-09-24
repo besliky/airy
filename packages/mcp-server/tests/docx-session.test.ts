@@ -1,7 +1,17 @@
 // Unit tests for the headless docx session: parse model, read formats,
 // insert_content, apply_ops semantics (validation-forward, atomicity),
 // byte-preservation, mtime fencing and path confinement.
-import { mkdtemp, readFile, readdir, writeFile, rm, mkdir, stat, rename } from 'node:fs/promises'
+import {
+  mkdtemp,
+  chmod,
+  readFile,
+  readdir,
+  writeFile,
+  rm,
+  mkdir,
+  stat,
+  rename,
+} from 'node:fs/promises'
 import { existsSync, readdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -32,10 +42,12 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 })
 
 import {
+  asWorkspaceWriteError,
   assertSaveTargetFree,
   DocxSession,
   FencingError,
   promoteNewFileExclusively,
+  WorkspaceWriteError,
 } from '../src/docx/session.js'
 import { resolveConfined, WORKSPACE_ROOT_ENV } from '../src/docx/paths.js'
 import type { Target } from '../src/docx/ops.js'
@@ -656,6 +668,39 @@ describe('save: byte preservation and fencing', () => {
     expect(existsSync(join(root, 'ws2', 'out.docx'))).toBe(false)
   })
 
+  it('names a read-only workspace when the save cannot write (UX-1690)', async () => {
+    // root ignores directory permissions: the chmod fence would not hold
+    if (process.platform === 'win32' || process.getuid?.() === 0) return
+    // the audit repro: workspace dir 0555 holding a 0444 document — open and
+    // edit work, but the save's tmp write fails with a raw EACCES that names
+    // a dot-temp file the agent never created
+    const roDir = join(root, 'ro-workspace')
+    await mkdir(roDir)
+    const roDoc = join(roDir, 'report.docx')
+    await writeFile(roDoc, await buildFixtureDocx())
+    await chmod(roDoc, 0o444)
+    await chmod(roDir, 0o555)
+    try {
+      const session = await DocxSession.open(roDoc, roDir)
+      session.insertContent('<p>edit</p>', 0)
+      const outcome = session.save()
+      await expect(outcome).rejects.toThrow(/Cannot write ".*ro-workspace": permission denied/)
+      await expect(outcome).rejects.toThrow(/may be read-only/)
+      // the raw errno no longer leaks ("EACCES: permission denied, open ...")
+      await expect(outcome).rejects.not.toThrow(/EACCES/)
+      // a save-as to a fresh path in the same read-only directory refuses too
+      const fresh = session.save(join(roDir, 'fresh.docx'))
+      await expect(fresh).rejects.toThrow(/Cannot write ".*ro-workspace": permission denied/)
+      await expect(fresh).rejects.toThrow(/may be read-only/)
+      // the failed saves orphaned no temp dotfiles
+      expect((await readdir(roDir)).sort()).toEqual(['report.docx'])
+    } finally {
+      // restore write permission so afterEach cleanup can remove the tree
+      await chmod(roDir, 0o700).catch(() => undefined)
+      await chmod(roDoc, 0o644).catch(() => undefined)
+    }
+  })
+
   it('cleans the tmp dotfile when the save fails after writing it (BUG-1111)', async () => {
     const session = await openSession()
     session.insertContent('<p>edit</p>', 0)
@@ -669,6 +714,35 @@ describe('save: byte preservation and fencing', () => {
     await expect(session.save(target, 'docx', { overwrite: true })).rejects.toThrow()
     const leftovers = (await readdir(root)).filter((name) => name.startsWith('.blocked.docx.airy-'))
     expect(leftovers).toEqual([])
+  })
+})
+
+describe('asWorkspaceWriteError (UX-1690 mapping)', () => {
+  it('wraps permission-shaped failures and passes everything else through', () => {
+    const target = join(root, 'doc.docx')
+    // Node errno shape (docx/slides/line writes carry .code)
+    const eacces = Object.assign(new Error('EACCES: permission denied, open x'), { code: 'EACCES' })
+    const erofs = Object.assign(new Error('EROFS: read-only file system, write'), { code: 'EROFS' })
+    for (const errno of [eacces, erofs]) {
+      const mapped = asWorkspaceWriteError(errno, target)
+      expect(mapped).toBeInstanceOf(WorkspaceWriteError)
+      expect((mapped as Error).message).toMatch(/Cannot write ".*": permission denied/)
+      expect((mapped as Error).message).toMatch(/may be read-only/)
+      // the raw error rides along as the cause for debugging
+      expect((mapped as Error).cause).toBe(errno)
+    }
+    // sidecar-relayed shape (the xlsx write failure arrives as message text)
+    expect(
+      asWorkspaceWriteError(
+        new Error('failed to create target: Permission denied (os error 13)'),
+        target,
+      ),
+    ).toBeInstanceOf(WorkspaceWriteError)
+    // established save contracts keep their errors untouched
+    const fence = new FencingError(target)
+    expect(asWorkspaceWriteError(fence, target)).toBe(fence)
+    const unrelated = new Error('The workbook changed on disk while saving — aborted.')
+    expect(asWorkspaceWriteError(unrelated, target)).toBe(unrelated)
   })
 })
 

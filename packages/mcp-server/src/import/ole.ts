@@ -74,6 +74,21 @@ export function encryptedOfficeRefusal(path: string, format: string): EncryptedO
   return new EncryptedOfficeError(path, format)
 }
 
+/**
+ * Refusal for a plain (unencrypted) OLE2 container saved with a zip-family
+ * extension (UX-1691): a legacy .xls renamed to .xlsx. Left alone it dies
+ * inside the zip parser with "invalid Zip archive: Could not find EOCD",
+ * which reads like a corrupt file. Mirrors the docx session's plain-OLE
+ * refusal (docx/session.ts), which names the container and the way out.
+ */
+export function oleAsZipRefusal(path: string, format: string): Error {
+  return new Error(
+    `Cannot open "${path}": the file is an OLE2 compound document (a legacy .xls or other ` +
+      `non-zip container), not a .${format} package. Open it as .xls — LibreOffice converts ` +
+      `it — or re-save it as .${format} from the source app.`,
+  )
+}
+
 /** Read at most `max` bytes from the start of a file (head sniffing). */
 export async function readHead(path: string, max: number): Promise<Uint8Array> {
   const handle = await open(path, 'r')
