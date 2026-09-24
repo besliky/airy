@@ -1,5 +1,6 @@
 import { SearchQuery } from '@codemirror/search'
-import { StateEffect, StateField, type Text } from '@codemirror/state'
+import { html } from '@codemirror/lang-html'
+import { Compartment, StateEffect, StateField, type Text } from '@codemirror/state'
 import { Decoration, EditorView, type DecorationSet } from '@codemirror/view'
 import type { FindOptions } from '@airy-office/ui'
 
@@ -9,6 +10,47 @@ export interface FindRange {
 }
 
 export const setFindHits = StateEffect.define<{ ranges: FindRange[]; active: number }>()
+
+/**
+ * Holds the html language so a bulk replace can swap it out for the duration of
+ * the run: thousands of scattered changed ranges invalidate the syntax tree
+ * doc-wide, and reparsing between the chunk transactions would redo that work
+ * on every chunk. Set once in buildExtensions, reconfigured by setSyntaxSuspended.
+ */
+export const syntaxCompartment = new Compartment()
+
+/** swap the html language out (suspended) or back in; the tree re-parses lazily */
+export function setSyntaxSuspended(view: EditorView, suspended: boolean): void {
+  view.dispatch({ effects: syntaxCompartment.reconfigure(suspended ? [] : html()) })
+}
+
+/** progress of a running bulk replace; `null` while no replace is in flight */
+export interface BulkReplaceProgress {
+  total: number
+  done: number
+}
+
+let bulkReplaceState: BulkReplaceProgress | null = null
+const bulkReplaceListeners = new Set<(progress: BulkReplaceProgress | null) => void>()
+
+/**
+ * Subscribe to bulk-replace progress. The current state is echoed to every new
+ * subscriber first, so a UI subscribing mid-run learns the in-flight totals and
+ * an idle UI learns `null`.
+ */
+export function onBulkReplaceProgress(
+  listener: (progress: BulkReplaceProgress | null) => void,
+): () => void {
+  bulkReplaceListeners.add(listener)
+  listener(bulkReplaceState)
+  return () => bulkReplaceListeners.delete(listener)
+}
+
+/** advance the shared progress state; called by the find target's bulk replace */
+export function emitBulkReplaceProgress(progress: BulkReplaceProgress | null): void {
+  bulkReplaceState = progress
+  for (const listener of bulkReplaceListeners) listener(progress)
+}
 
 const hit = Decoration.mark({ class: 'search-hit' })
 const activeHit = Decoration.mark({ class: 'search-hit search-hit-active' })

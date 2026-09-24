@@ -31,17 +31,35 @@ function isElement(node: T.Node): node is T.Element {
   return 'tagName' in node && typeof (node as T.Element).tagName === 'string'
 }
 
-function nthOfType(node: T.Element): number {
-  const parent = node.parentNode
-  if (!parent || !('childNodes' in parent)) return 1
-  let n = 0
-  for (const sibling of parent.childNodes) {
-    if (isElement(sibling) && sibling.tagName === node.tagName) {
-      n++
-      if (sibling === node) return n
+/**
+ * One pass over the tree that records every element's nth-of-type index among
+ * its same-tag siblings. Done here instead of per element because a flat
+ * document (tens of thousands of paragraphs under one body) makes the per-node
+ * sibling walk quadratic — seconds to minutes on giant files — while the
+ * numbers are identical to counting siblings node by node.
+ */
+function collectNthOfType(root: T.Node): Map<T.Element, number> {
+  const nth = new Map<T.Element, number>()
+  const counters = new Map<T.Element, Map<string, number>>()
+  const walk = (node: T.Node, parent: T.Element | null) => {
+    if (isElement(node)) {
+      if (parent) {
+        const counts = counters.get(parent)
+        const n = (counts?.get(node.tagName) ?? 0) + 1
+        if (counts) counts.set(node.tagName, n)
+        else counters.set(parent, new Map([[node.tagName, n]]))
+        nth.set(node, n)
+      }
+      parent = node
+    }
+    if ('childNodes' in node) for (const child of node.childNodes) walk(child, parent)
+    if (isElement(node) && node.tagName === 'template') {
+      const content = (node as T.Template).content
+      if (content) for (const child of content.childNodes) walk(child, node)
     }
   }
-  return n
+  walk(root, null)
+  return nth
 }
 
 /** Elements with a source location, in document order, deduped by start-tag offset
@@ -108,6 +126,7 @@ export function buildParseMap(
       errorCount++
     },
   })
+  const nthByNode = collectNthOfType(doc)
   const found: Array<{ node: T.Element; parent: T.Element | null; depth: number }> = []
   collect(doc, found)
 
@@ -139,7 +158,7 @@ export function buildParseMap(
     const segment =
       node.tagName === 'html' || node.tagName === 'head' || node.tagName === 'body'
         ? node.tagName
-        : `${node.tagName}:nth-of-type(${nthOfType(node)})`
+        : `${node.tagName}:nth-of-type(${nthByNode.get(node) ?? 1})`
     const path = parentPath ? `${parentPath} > ${segment}` : segment
     pathByNode.set(node, path)
     const textNodes: Array<[number, number]> = []

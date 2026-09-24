@@ -25,7 +25,7 @@ import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
 import { html } from '@codemirror/lang-html'
 import { tags } from '@lezer/highlight'
 import { aiHighlight } from './cm-highlight'
-import { findHighlight } from './cm-find'
+import { findHighlight, syntaxCompartment } from './cm-find'
 
 /** Marks transactions that replace the document from outside the editor (load, patches) */
 export const External = Annotation.define<boolean>()
@@ -100,7 +100,9 @@ export function buildExtensions(onDocChanged: (view: EditorView) => void): Exten
       ...foldKeymap,
       indentWithTab,
     ]),
-    html(),
+    // the language sits in a compartment so a bulk replace can suspend reparsing
+    // for the duration of the run (see setSyntaxSuspended in cm-find)
+    syntaxCompartment.of(html()),
     aiHighlight(),
     findHighlight,
     EditorView.lineWrapping,

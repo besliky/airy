@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parse } from 'parse5'
 import { buildParseMap, type ElementEntry, type ParseMap } from '../src/renderer/document/parse-map'
 
 /** the pre-optimization sid matching: linear scan of the previous map in document order */
@@ -101,5 +102,86 @@ describe('sid matching across rebuilds', () => {
     const second = buildParseMap(doubled, 2, first)
     const sids = second.elements.map((e) => e.sid)
     expect(new Set(sids).size).toBe(sids.length)
+  })
+})
+
+describe('nth-of-type paths', () => {
+  // the pre-optimization semantics: for every element, walk its parent's
+  // childNodes and count same-tag elements up to the node itself
+  function referencePaths(text: string): string[] {
+    interface El {
+      tagName: string
+      childNodes?: unknown[]
+      sourceCodeLocation?: { startTag?: { startOffset: number } }
+    }
+    const isEl = (n: unknown): n is El => typeof (n as { tagName?: unknown }).tagName === 'string'
+    const tree = parse(text, { sourceCodeLocationInfo: true })
+    const out: string[] = []
+    const segmentOf = (node: El, siblings: unknown[]): string => {
+      if (node.tagName === 'html' || node.tagName === 'head' || node.tagName === 'body')
+        return node.tagName
+      let n = 0
+      for (const sibling of siblings) {
+        if (isEl(sibling) && sibling.tagName === node.tagName) {
+          n++
+          if (sibling === node) return `${node.tagName}:nth-of-type(${n})`
+        }
+      }
+      return `${node.tagName}:nth-of-type(1)`
+    }
+    const walk = (node: unknown, siblings: unknown[], path: string): void => {
+      let own = path
+      if (isEl(node)) {
+        const loc = node.sourceCodeLocation
+        if (loc?.startTag) {
+          own = path ? `${path} > ${segmentOf(node, siblings)}` : segmentOf(node, siblings)
+          out.push(own)
+        }
+      }
+      const kids = (node as { childNodes?: unknown[] }).childNodes ?? []
+      for (const child of kids) walk(child, kids, own)
+      // template content lives outside childNodes
+      const content = (node as { content?: { childNodes?: unknown[] } }).content
+      if (content)
+        for (const child of content.childNodes ?? []) walk(child, content.childNodes, own)
+    }
+    walk(tree, [], '')
+    return out
+  }
+
+  it('matches the sibling-counting reference on nested and mixed markup', () => {
+    const text = `
+      <html><body>
+        <section><p>one</p><p>two</p><span>x</span><p>three</p></section>
+        <section><p>four</p></section>
+        <table><tr><td>a</td><td>b</td></tr><tr><td>c</td></tr></table>
+        <ul><li>1</li><li>2</li></ul>
+        <template><div>t</div><div>t2</div></template>
+      </body></html>`
+    const first = buildParseMap(text, 1, null)
+    expect(first.elements.map((e) => e.path)).toEqual(referencePaths(text))
+    expect(first.elements.map((e) => e.path)).toEqual([
+      'html',
+      'html > body',
+      'html > body > section:nth-of-type(1)',
+      'html > body > section:nth-of-type(1) > p:nth-of-type(1)',
+      'html > body > section:nth-of-type(1) > p:nth-of-type(2)',
+      'html > body > section:nth-of-type(1) > span:nth-of-type(1)',
+      'html > body > section:nth-of-type(1) > p:nth-of-type(3)',
+      'html > body > section:nth-of-type(2)',
+      'html > body > section:nth-of-type(2) > p:nth-of-type(1)',
+      'html > body > table:nth-of-type(1)',
+      'html > body > table:nth-of-type(1) > tr:nth-of-type(1)',
+      'html > body > table:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(1)',
+      'html > body > table:nth-of-type(1) > tr:nth-of-type(1) > td:nth-of-type(2)',
+      'html > body > table:nth-of-type(1) > tr:nth-of-type(2)',
+      'html > body > table:nth-of-type(1) > tr:nth-of-type(2) > td:nth-of-type(1)',
+      'html > body > ul:nth-of-type(1)',
+      'html > body > ul:nth-of-type(1) > li:nth-of-type(1)',
+      'html > body > ul:nth-of-type(1) > li:nth-of-type(2)',
+      'html > body > template:nth-of-type(1)',
+      'html > body > template:nth-of-type(1) > div:nth-of-type(1)',
+      'html > body > template:nth-of-type(1) > div:nth-of-type(2)',
+    ])
   })
 })
