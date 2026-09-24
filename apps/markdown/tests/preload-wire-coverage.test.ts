@@ -110,6 +110,7 @@ const PINNED_API_MEMBERS = `
   sendCloseSaveResult
   sendSaveRequestAck
   setDirty
+  setEncoding
   webSearch
   writeRecovery
 `
@@ -143,6 +144,7 @@ const PINNED_MARKDOWN_CHANNELS = `
   saveImage
   saveRequest
   saveRequestAck
+  setEncoding
   themeChanged
   writeRecovery
 `
