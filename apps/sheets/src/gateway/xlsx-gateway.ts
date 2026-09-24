@@ -370,7 +370,7 @@ async function addDefaultStylesheet(
   }
 }
 
-export async function createBufferEntrySource(buffer: Buffer): Promise<EntrySource> {
+export async function createBufferEntrySource(buffer: Uint8Array): Promise<EntrySource> {
   const zip = await loadSafeZip(buffer)
   return {
     paths: async () =>
@@ -386,7 +386,10 @@ export async function createBufferEntrySource(buffer: Buffer): Promise<EntrySour
 /// Every entry is recompressed, so it stays subject to the whole-package
 /// decompression limit — the sidecar streaming assembler is the large-file
 /// path.
-export async function assembleWithJsZip(source: Buffer, plan: MutationPlan): Promise<XlsxMutation> {
+export async function assembleWithJsZip(
+  source: Uint8Array,
+  plan: MutationPlan,
+): Promise<XlsxMutation> {
   const zip = await loadSafeZip(source)
   const beforeEntries = await inventoryXlsx(source)
   for (const path of plan.removedEntries) zip.remove(path)
@@ -439,7 +442,7 @@ export async function readBasicWorkbook(buffer: Buffer): Promise<ImportedXlsx> {
   }
 }
 
-export async function inventoryXlsx(buffer: Buffer): Promise<readonly PackageEntry[]> {
+export async function inventoryXlsx(buffer: Uint8Array): Promise<readonly PackageEntry[]> {
   const zip = await loadSafeZip(buffer)
   const entries: PackageEntry[] = []
   let totalSize = 0
@@ -456,7 +459,7 @@ export async function inventoryXlsx(buffer: Buffer): Promise<readonly PackageEnt
 }
 
 export async function applyPlanToXlsx(
-  source: Buffer,
+  source: Uint8Array,
   plan: ChangePlan,
   sheetNamesById: Readonly<Record<string, string>>,
 ): Promise<XlsxMutation> {
@@ -494,7 +497,7 @@ export async function applyPlanToXlsx(
 /// there is no per-cell before-check: the caller gates on the whole-file
 /// SHA-256 recorded at open time, which the streamed originals came from.
 export async function applyCellEditsToXlsx(
-  source: Buffer,
+  source: Uint8Array,
   edits: readonly CellEdit[],
   structuralOps: readonly SheetStructuralOps[] = [],
   chartEdits: readonly WorkbookChartEdit[] = [],
@@ -1699,7 +1702,7 @@ function canonicalEntryName(raw: string): string | null {
   return name && /[/\\]$/.test(raw) ? `${name}/` : name
 }
 
-async function loadSafeZip(buffer: Buffer): Promise<JSZip> {
+async function loadSafeZip(buffer: Uint8Array): Promise<JSZip> {
   const zip = await JSZip.loadAsync(buffer, { checkCRC32: true })
   const paths = Object.keys(zip.files)
   // name the counter and the budget like the sidecar's open-path refusal does
