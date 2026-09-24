@@ -236,6 +236,7 @@ export const ko = {
   appZoomOut: '축소',
   appZoomLabel: '확대/축소',
   appWordCountN: '단어 {n}개',
+  appDocLoading: '불러오는 중…',
   appStatPages: '페이지 수',
   appStatWords: '단어 수',
   appStatAsianChars: '아시아 문자 수(한중일)',

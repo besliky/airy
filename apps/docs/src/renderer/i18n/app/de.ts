@@ -229,6 +229,7 @@ export const de = {
   appZoomOut: 'Verkleinern',
   appZoomLabel: 'Zoom',
   appWordCountN: '{n} Wörter',
+  appDocLoading: 'Wird geladen…',
   appStatPages: 'Seiten',
   appStatWords: 'Wörter',
   appStatAsianChars: 'Asiatische Zeichen (Chinesisch, Japanisch, Koreanisch)',

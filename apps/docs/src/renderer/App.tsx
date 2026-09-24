@@ -583,6 +583,51 @@ export function PgNumFormatModal({
   )
 }
 
+/**
+ * UX-1612: the document counters in the status bar. While a phased open is
+ * still streaming the tail (PERF-1502/1639) the page/word counts grow as
+ * chunks land; without a marker the intermediate values read like a truncated
+ * file. A "Loading…" badge next to the counters marks the state as transient
+ * and disappears once the tail has fully landed.
+ */
+export function StatusBarCounters({
+  current,
+  total,
+  wordCount,
+  loading,
+  onOpenStats,
+}: {
+  /** visible page number (1-based) */
+  readonly current: number
+  /** total visible pages measured so far */
+  readonly total: number
+  /** word count of the content mounted so far */
+  readonly wordCount: number
+  /** true while the phased open is still appending the document tail */
+  readonly loading: boolean
+  /** opens the word-count dialog (click on the word counter) */
+  readonly onOpenStats: () => void
+}): React.JSX.Element {
+  const { t } = useI18n()
+  return (
+    <>
+      <span className="status-item">{t('appPageOf', { current, total })}</span>
+      <button
+        className="status-item status-wordcount"
+        data-tip={t('appWordCountTitle')}
+        onClick={onOpenStats}
+      >
+        {t('appWordCountN', { n: wordCount })}
+      </button>
+      {loading && (
+        <span className="status-item status-loading" role="status">
+          {t('appDocLoading')}
+        </span>
+      )}
+    </>
+  )
+}
+
 export function App() {
   // subscribe to language switches for re-render; strings all go through module-level t, so memoized callbacks never capture stale closures
   const { lang } = useI18n()
@@ -5365,18 +5410,13 @@ export function App() {
           <footer className="status-bar">
             <div className="status-left">
               {doc && (
-                <>
-                  <span className="status-item">
-                    {t('appPageOf', { current: pageInfo.current, total: pageInfo.total })}
-                  </span>
-                  <button
-                    className="status-item status-wordcount"
-                    data-tip={t('appWordCountTitle')}
-                    onClick={openStats}
-                  >
-                    {t('appWordCountN', { n: wordCount })}
-                  </button>
-                </>
+                <StatusBarCounters
+                  current={pageInfo.current}
+                  total={pageInfo.total}
+                  wordCount={wordCount}
+                  loading={docLoading}
+                  onOpenStats={openStats}
+                />
               )}
               {!doc && t('appReady')}
               {status && (

@@ -220,6 +220,7 @@ export const pt = {
   appZoomOut: 'Reduzir',
   appZoomLabel: 'Zoom',
   appWordCountN: '{n} palavras',
+  appDocLoading: 'Carregando…',
   appStatPages: 'Páginas',
   appStatWords: 'Palavras',
   appStatAsianChars: 'Caracteres asiáticos (chinês, japonês, coreano)',

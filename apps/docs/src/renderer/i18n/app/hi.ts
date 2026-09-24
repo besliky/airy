@@ -219,6 +219,7 @@ export const hi = {
   appZoomOut: 'ज़ूम आउट',
   appZoomLabel: 'ज़ूम',
   appWordCountN: '{n} शब्द',
+  appDocLoading: 'लोड हो रहा है…',
   appStatPages: 'पृष्ठ',
   appStatWords: 'शब्द',
   appStatAsianChars: 'एशियाई वर्ण (चीनी, जापानी, कोरियाई)',

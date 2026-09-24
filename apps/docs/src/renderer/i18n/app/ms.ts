@@ -223,6 +223,7 @@ export const ms = {
   appZoomOut: 'Zum keluar',
   appZoomLabel: 'Zum',
   appWordCountN: '{n} perkataan',
+  appDocLoading: 'Memuatkan…',
   appStatPages: 'Halaman',
   appStatWords: 'Perkataan',
   appStatAsianChars: 'Aksara Asia (Cina, Jepun, Korea)',

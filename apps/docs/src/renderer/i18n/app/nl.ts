@@ -229,6 +229,7 @@ export const nl = {
   appZoomOut: 'Uitzoomen',
   appZoomLabel: 'In-/uitzoomen',
   appWordCountN: '{n} woorden',
+  appDocLoading: 'Laden…',
   appStatPages: "Pagina's",
   appStatWords: 'Woorden',
   appStatAsianChars: 'Aziatische tekens (Chinees, Japans, Koreaans)',

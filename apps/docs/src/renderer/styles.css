@@ -8187,6 +8187,23 @@ body.docs-crop-active
   text-decoration: underline;
 }
 
+/* UX-1612: "Loading…" marker shown while a phased open streams the document
+ * tail — the page/word counters grow until it lands, so label the state */
+.status-loading {
+  color: var(--text-tertiary);
+  animation: status-loading-pulse 1500ms linear infinite;
+}
+
+@keyframes status-loading-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
 .status-msg {
   opacity: 0.85;
   overflow: hidden;
