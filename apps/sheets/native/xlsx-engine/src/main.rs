@@ -310,6 +310,23 @@ impl CancelledRequests {
     }
 }
 
+/// Best-effort recovery of the client's request id from a line that failed to
+/// parse. The failure reply echoes it (BUG-1666): clients dispatch replies by
+/// requestId, so an unattributable error reply is dropped by the client and
+/// its request waits out the full timeout — indistinguishable from the
+/// sidecar never answering. Empty when the line is not even valid JSON with
+/// a string requestId (nothing recoverable).
+fn recovered_request_id(line: &str) -> String {
+    match serde_json::from_str::<Value>(line) {
+        Ok(value) => value
+            .get("requestId")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned(),
+        Err(_) => String::new(),
+    }
+}
+
 fn main() {
     let stdin = io::stdin();
     let output: SharedOutput = Arc::new(Mutex::new(BufWriter::new(io::stdout())));
@@ -345,10 +362,11 @@ fn main() {
                 let request: Request = match serde_json::from_str(&line) {
                     Ok(request) => request,
                     Err(error) => {
+                        let request_id = recovered_request_id(&line);
                         if write_response(
                             &reader_output,
                             &Response::failure(
-                                String::new(),
+                                request_id,
                                 "invalid_json",
                                 format!("Invalid sidecar request: {error}"),
                             ),
@@ -410,7 +428,7 @@ fn handle_line(
         Ok(request) => request,
         Err(error) => {
             return Some(Response::failure(
-                String::new(),
+                recovered_request_id(line),
                 "invalid_json",
                 format!("Invalid sidecar request: {error}"),
             ));
@@ -769,5 +787,44 @@ mod tests {
             .unwrap();
         assert!(!response.ok);
         assert_eq!(response.error.unwrap().code, "recalc_busy");
+    }
+
+    /// BUG-1666: a request violating the wire shape (read_range with the
+    /// range as a string) must get an immediate failure reply that echoes the
+    /// client's requestId — clients dispatch replies by requestId, so an
+    /// unattributable error is dropped and the request waits out its timeout,
+    /// which looks exactly like the sidecar staying silent.
+    #[test]
+    fn wire_shape_violation_replies_with_the_clients_request_id() {
+        let output: SharedOutput = Arc::new(Mutex::new(BufWriter::new(io::stdout())));
+        let response = handle_line(
+            r#"{"version":1,"requestId":"bad1","command":"read_range","sessionId":"s","sheetId":"sh","range":"A1:B2"}"#,
+            &mut WorkbookSessions::new(),
+            &RecalcWorker::new(),
+            &CancelledRequests::new(),
+            &output,
+        )
+        .unwrap();
+        assert!(!response.ok);
+        assert_eq!(response.request_id, "bad1");
+        assert_eq!(response.error.unwrap().code, "invalid_json");
+    }
+
+    /// A line that is not JSON at all still fails immediately; there is no id
+    /// to recover, so the reply keeps the legacy empty requestId.
+    #[test]
+    fn non_json_line_fails_closed_with_an_empty_request_id() {
+        let output: SharedOutput = Arc::new(Mutex::new(BufWriter::new(io::stdout())));
+        let response = handle_line(
+            "not json at all",
+            &mut WorkbookSessions::new(),
+            &RecalcWorker::new(),
+            &CancelledRequests::new(),
+            &output,
+        )
+        .unwrap();
+        assert!(!response.ok);
+        assert_eq!(response.request_id, "");
+        assert_eq!(response.error.unwrap().code, "invalid_json");
     }
 }
