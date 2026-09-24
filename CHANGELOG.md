@@ -7,6 +7,138 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-09-24
+
+### Added
+
+- Shell (Home): project catalogs stop silently truncating at 256 files — the
+  `home:stat-paths` cap rises to a production level (`HOME_PATHS_CAP = 20,000`,
+  one number shared by main and renderer in `shared/home-paths.ts`), the catalog
+  loads through a chunked loader (500-path `statPaths` round-trips with a
+  main-thread yield between chunks, so rows appear progressively and the window
+  never blocks in one long task), and a catalog beyond the cap shows an honest
+  localized "{n}+ files" counter (new `fileCountOver` key in all 20 locales)
+  instead of a silently short total; client-side search now finds files beyond
+  the old cap (a 300-file project indexes fully and "p0280" is found) (PR #179).
+
+### Performance
+
+- Slides: a shape drag on a 200-slide deck holds 60fps — frame p95 drops
+  100 → 16.8 ms, gaps >33 ms fall 24–27 → 5–8 per gesture (the raster
+  transitions at the gesture boundaries plus the drop commit; mid-drag frames
+  hold 16.7 ms), drag wall 2.4 s → 0.97 s, RSS flat ~1.1 GB. The cost was
+  per-dragmove full-layer redraws (O(painted pixels), ~80 ms/frame under
+  software rasterization); four scoped measures cut it: snap guides/spacing
+  state is value-compared so an unsnapped move re-renders nothing, the slide
+  base rects are cached, layer rasters decimate to 0.3× while the drag is live
+  and snap back at gesture end, and the selection Transformer hides for the
+  gesture (PowerPoint-style); move history still commits exactly once per
+  gesture, now pinned by 14 new unit tests (PR #183).
+
+### Fixed
+
+- Markdown:
+  - Saving a .md file no longer silently destroys raw HTML the GFM schema has
+    no node for: Ctrl+S without edits shrank a 298-byte file (div/script/style
+    blocks, an inline script, a script inside a table cell) to 155 bytes, and
+    `kbd`/`mark`/`details`/`span` degraded to bare text — the badges and
+    `<details>` sections of real READMEs. A new `rawHtml` atom node with a
+    low-priority catch-all parseDOM rule captures anything unclaimed, stores
+    its `outerHTML` verbatim and writes it back on save; dedicated rules keep
+    winning (`<br>` → hard break, `<img>` → image), chips render as escaped
+    text so stored scripts stay inert, docx export keeps chips as literal
+    source runs, and the segmented parse (#150) stays bit-identical to the
+    monolithic one; reopen is a fixed point (PR #189).
+  - Find/replace on a giant single-paragraph document stops freezing and
+    killing the renderer (a 1 MB one-paragraph .md with 43,479 matches):
+    Replace All crashed the renderer in 4/4 runs and typing in the find panel
+    blocked >30 s — painted search hits are capped at 500 (active match, then
+    the visible viewport, then the earliest) while the counter stays honest and
+    every match stays navigable/replacable, the status bar shows a localized
+    "+N more matches not highlighted" plus live Replace All progress (20
+    locales), Replace All rebuilds each textblock as precomputed slab steps in
+    ONE transaction (O(block) instead of O(matches × block), marks preserved,
+    cancellable by closing the panel), and the search no longer builds a
+    per-character position array. Renderer crashes 4/4 → 0/4; search max
+    continuous main-thread block ~8.7 s → ~3.4 s (the residual giant-paragraph
+    rebuild wall is tracked as PERF-1700) (PR #185).
+- MCP & automation:
+  - `read_document` on a docx session keeps its declared ~30k answer budget,
+    which was breached 27–97× on any sizeable document: the default read's
+    elide pass ran only once (2/3 of overview lines survived — an 857 KB answer
+    for a 42k-block document) and the blocks/range path appended the FULL
+    overview before the selected HTML (a five-block range read cost ~1.57 MB).
+    The overview now goes through a repeated-elide `fitOverview` ladder (kept
+    lines halve each round, one honest elided-count marker, block numbering
+    verifiable at both ends), selection reads cap the overview at 4 KB and give
+    the selected blocks' HTML the rest with an explicit truncation note,
+    budgets are measured in UTF-8 bytes (char counting underestimated CJK
+    threefold), and a final guard makes the budget unreachable-proof:
+    857,103 → 19,783 bytes default, 1,574,163 → 2,850 bytes for a 5-block
+    range; the response shape for small documents is unchanged (PR #186).
+  - A renderer killed mid-AI-turn no longer leaves a zombie stream: the killed
+    webContents survives with `isDestroyed() === false`, so the app-wide
+    `ai:stream` handler kept draining the provider SSE to the end of the turn —
+    minutes of paid tokens nobody receives, plus one "Render frame was
+    disposed" error per delta. Every stream now registers under a per-sender
+    registry (reusing the sheets BUG-407 `AiStreamRegistry`) that aborts that
+    sender's whole registry on `render-process-gone` or `destroyed`; per-stream
+    cancel semantics are unchanged and the graceful-teardown tests stay green
+    (PR #188).
+- Shell:
+  - A click on an unreadable Home row (chmod 000, a missing path, or a
+    directory wearing a document extension) reports the #154 localized error
+    dialog instead of ending in total silence — no tab, no dialog, no toast:
+    the Home open decision lives in a dependency-injected `home-open.ts`, and a
+    failed open routes through the same classify/`reportOpenFailure` pair as
+    the argv/second-instance paths (EACCES/EPERM/ENOENT/EISDIR, eisdir getting
+    the "This is a folder" message); valid files open exactly as before
+    (PR #180).
+  - A failed forwarded open no longer cascades into ~21 identical "Could not
+    open" dialogs: an unpacked launch whose single-instance lock request fails
+    retries it 20×, and every `requestSingleInstanceLock` re-emitted
+    `second-instance` with the same launchPath. Failure dialogs now dedupe per
+    path while one is on screen (a different path keeps its own dialog;
+    dismissing releases the path), and the retry loop no longer re-sends the
+    launchPath additionalData — the first request already delivered it, so the
+    source of the storm is gone, not just its echo (PR #181).
+  - Zombie tabs self-heal: a kill -9'd docs renderer left a tab whose
+    webContents is NOT destroyed, so `destroyed` never fired, the bridge list
+    kept advertising the corpse (`active:true`), every bridge call into it
+    burned the full 30 s timeout, and re-opening the file re-activated the
+    corpse without a new webContents. Any renderer death under a live tab now
+    marks the tab dead: it leaves the bridge list and every
+    `find*TabByPath`, bridge calls fail in milliseconds with a typed
+    `tab_closed` (30,024 ms → 0 ms live), and re-opening the file revives the
+    document as a NEW tab with a fresh renderer (View > Reload also revives);
+    verified live under xvfb (PR #184).
+- Slides:
+  - Vertical text in table cells renders rotated instead of horizontal:
+    `a:tcPr vert="vert270"` (rotated column headers — a WYSIWYG break with
+    PowerPoint on every such table), plus `vert`/`eaVert`/`wordArtVert`, was
+    never mapped by the table parser while the whole vertical-layout render
+    path already existed for shape text. `parseTableCell` now maps `tcPr@vert`
+    onto the cell text body (tcPr wins over an unusual bodyPr@vert; unknown
+    values stay horizontal), and the shared consumers apply it for free —
+    Konva glyph rotation on canvas, rotate transforms in the SVG/PDF export,
+    row auto-growth; save keeps the attribute byte-for-byte, and
+    `wordArtVertRtl` stays intentionally unsupported (horizontal, as for shape
+    text) (PR #182).
+- Platform:
+  - Atomic saves stop forking documents saved through a symlink path:
+    `atomicWriteFile`/`renameDurably` wrote a temp next to the given path and
+    `rename(2)`d it over — and rename does not follow symlinks, so saving
+    through a link silently replaced the link with a regular file while the
+    destination kept the old bytes: the document forked in two (confirmed live
+    on the markdown editor via the staleness-fence Overwrite and on the html
+    editor with no dialog at all). Both helpers now resolve a live symlink
+    first and land temp+rename on the REAL target — the link survives and
+    readers through it see the save. A dangling link is written through in
+    place by `atomicWriteFile` (exactly like a plain write) and refused with
+    the new `BrokenSymlinkTargetError` by `renameDurably` instead of silently
+    destroying the link; out-of-root symlink escapes stay refused by the
+    existing MCP `resolveConfined` gate (PR #187).
+
 ## [0.18.0] - 2026-09-24
 
 ### Added
