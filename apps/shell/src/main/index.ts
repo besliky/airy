@@ -1568,9 +1568,11 @@ function openGeneratedDocument(filePath: string, into?: TabManager | null): bool
 }
 
 /** localized dialog channel for a user-intended open that produced no tab
- *  (BUG-1655); the window is resolved at call time */
+ *  (BUG-1655); the window is resolved at call time, and the close callback
+ *  releases the per-path dedupe entry once the dialog is dismissed */
 const openFailureDeps: OpenFailureDeps = {
-  showErrorDialog: (message, err) => showErrorDialog(focusedShellWindow(), message, err),
+  showErrorDialog: (message, err, onClosed) =>
+    showErrorDialog(focusedShellWindow(), message, err, onClosed),
   openFailedMessage: (name) => tm('errOpenFailed', { name }),
 }
 
@@ -3535,6 +3537,13 @@ const devPidFile = () => join(app.getPath('userData'), 'dev-instance.pid')
 
 app.whenReady().then(async () => {
   const lockData = () => (pendingLaunchPath ? { launchPath: pendingLaunchPath } : {})
+  // The launch path rides along ONLY on the first lock request: every failed
+  // requestSingleInstanceLock re-emits 'second-instance' in the lock holder
+  // with the same additionalData, so the unpacked retry loop below multiplied
+  // one forwarded-open failure into ~21 identical error dialogs (BUG-1678).
+  // Retries exist only to wait out the doomed previous instance; if one of
+  // them acquires the lock, this instance reports pendingLaunchPath itself
+  // right after ready, so nothing is lost by not re-sending it.
   let hasLock = app.requestSingleInstanceLock(lockData())
   if (!hasLock && !app.isPackaged) {
     // Dev watch restart: electron-vite SIGTERMs the previous instance and spawns this
@@ -3556,7 +3565,8 @@ app.whenReady().then(async () => {
     }
     for (let i = 0; i < 20 && !hasLock; i++) {
       await new Promise((r) => setTimeout(r, 150))
-      hasLock = app.requestSingleInstanceLock(lockData())
+      // no additionalData on retries — see the BUG-1678 comment above
+      hasLock = app.requestSingleInstanceLock()
     }
   }
   if (!hasLock) {
