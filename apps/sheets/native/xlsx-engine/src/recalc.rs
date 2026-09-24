@@ -31,6 +31,17 @@ const MAX_RESIDENT_MODELS: usize = 2;
 /// Source files above this size (compressed bytes) count as heavy for the
 /// residency rule in `evict_beyond_cap`.
 const HEAVY_SOURCE_BYTES: u64 = 8_000_000;
+/// Background prewarm after open (PERF-1664): books whose compressed source
+/// is at least this size get their IronCalc model built on a worker thread
+/// right after a successful open, so the first user edit pays evaluate()
+/// (~0.5s on a 100k×20 book) instead of a full file import (~5s; 13.8s on
+/// the audit's book). Below the threshold the on-demand cold import at the
+/// first edit is fast enough not to warrant the speculative work.
+pub const PREWARM_MIN_SOURCE_BYTES: u64 = 1_000_000;
+/// Mega-books (the known model-blowup class — a multi-GB model killed the
+/// machine once) keep today's on-demand behavior: their import only ever
+/// runs for a real recalc, not speculatively on every open.
+pub const PREWARM_MAX_SOURCE_BYTES: u64 = 64_000_000;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,14 +54,14 @@ pub struct RecalcEdit {
     pub input: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecalcRead {
     pub sheet: String,
     pub range: CellRange,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecalcCell {
     pub sheet: String,
@@ -70,6 +81,39 @@ pub struct RecalcResult {
     pub cells: Vec<RecalcCell>,
     /// True when a resident model served this request (no file re-import).
     pub cached: bool,
+    /// Per-phase wall times in ms, present only when the sidecar runs with
+    /// XLSX_SIDECAR_RECALC_PROFILE=1 (engine-level perf probing, PERF-1664).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile: Option<RecalcProfile>,
+}
+
+/// Phase timings for one recalc request, in milliseconds.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecalcProfile {
+    /// IronCalc file import of a cold request (absent on a resident hit).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub import: Option<u64>,
+    /// Pinning unparsable formulas to their cached values (cold only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pin: Option<u64>,
+    /// Applying the request's edits to the model.
+    pub edits: u64,
+    /// IronCalc's full-book evaluation.
+    pub evaluate: u64,
+    /// Formatting the requested read range.
+    pub reads: u64,
+}
+
+/// Whether phase profiling was requested for this process.
+fn profiling() -> bool {
+    use std::sync::OnceLock;
+    static PROFILE: OnceLock<bool> = OnceLock::new();
+    *PROFILE.get_or_init(|| {
+        std::env::var("XLSX_SIDECAR_RECALC_PROFILE").is_ok_and(|value| {
+            value == "1" || value.eq_ignore_ascii_case("true")
+        })
+    })
 }
 
 type EditKey = (String, u32, u32);
@@ -89,6 +133,11 @@ struct ResidentModel {
 pub struct RecalcCache {
     entries: HashMap<PathBuf, ResidentModel>,
     tick: u64,
+    /// Bumped by every `purge()`. The background prewarm compares it across
+    /// the model build: any purge in between (a close of this workbook, a
+    /// save over it — possibly for an unrelated path, which merely costs a
+    /// rebuild later) means the just-built model must not stay resident.
+    purge_epoch: u64,
 }
 
 impl RecalcCache {
@@ -99,7 +148,24 @@ impl RecalcCache {
     /// Drop the model for a path whose bytes are about to change (save) or
     /// whose session closed.
     pub fn purge(&mut self, path: &Path) {
+        self.purge_epoch += 1;
         self.entries.remove(&cache_key(path));
+    }
+
+    /// Current purge epoch (read by the prewarm around the model build).
+    pub fn purge_epoch(&self) -> u64 {
+        self.purge_epoch
+    }
+
+    /// Whether any resident model is held (used by the sidecar's tests).
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Whether a resident model is held for this exact path spelling,
+    /// canonicalized the way `recalc_cells` keys its entries.
+    pub fn has_resident(&self, path: &Path) -> bool {
+        self.entries.contains_key(&cache_key(path))
     }
 
     fn evict_beyond_cap(&mut self) {
@@ -196,7 +262,7 @@ pub fn recalc_cells(
 
     // IronCalc's importer is strict and can panic on non-Excel producers
     // (missing cellStyles, whitespace nodes); contain that to this request.
-    let (entry, cells) = catch_unwind(AssertUnwindSafe(|| {
+    let (entry, cells, profile) = catch_unwind(AssertUnwindSafe(|| {
         run(resident, path, mtime, size, edits, reads)
     }))
     .map_err(|_| {
@@ -209,7 +275,11 @@ pub fn recalc_cells(
     cache.entries.insert(key, entry);
     cache.evict_beyond_cap();
 
-    Ok(RecalcResult { cells, cached })
+    Ok(RecalcResult {
+        cells,
+        cached,
+        profile: if profiling() { Some(profile) } else { None },
+    })
 }
 
 fn run(
@@ -219,17 +289,32 @@ fn run(
     size: u64,
     edits: &[RecalcEdit],
     reads: &[RecalcRead],
-) -> Result<(ResidentModel, Vec<RecalcCell>), SidecarError> {
+) -> Result<(ResidentModel, Vec<RecalcCell>, RecalcProfile), SidecarError> {
+    let mut profile = RecalcProfile {
+        import: None,
+        pin: None,
+        edits: 0,
+        evaluate: 0,
+        reads: 0,
+    };
     let mut entry = match resident {
         Some(entry) => entry,
         None => {
             let path_text = path.to_str().ok_or_else(|| {
                 SidecarError::InvalidRequest("Workbook path is not valid UTF-8.".into())
             })?;
+            let import_started = std::time::Instant::now();
             let mut model = load_from_xlsx(path_text, "en", "UTC", "en").map_err(|error| {
                 SidecarError::Workbook(format!("Formula engine import failed: {error}"))
             })?;
+            if profiling() {
+                profile.import = Some(import_started.elapsed().as_millis() as u64);
+            }
+            let pin_started = std::time::Instant::now();
             pin_unparsable_formulas(&mut model);
+            if profiling() {
+                profile.pin = Some(pin_started.elapsed().as_millis() as u64);
+            }
             ResidentModel {
                 model,
                 mtime,
@@ -241,6 +326,7 @@ fn run(
     };
 
     let mut dirty = false;
+    let edits_started = std::time::Instant::now();
     for edit in edits {
         let key = (edit.sheet.clone(), edit.row, edit.column);
         if entry.applied.get(&key) == Some(&edit.input) {
@@ -261,10 +347,18 @@ fn run(
         entry.applied.insert(key, edit.input.clone());
         dirty = true;
     }
+    if profiling() {
+        profile.edits = edits_started.elapsed().as_millis() as u64;
+    }
     if dirty || entry.last_used == 0 {
+        let evaluate_started = std::time::Instant::now();
         entry.model.evaluate();
+        if profiling() {
+            profile.evaluate = evaluate_started.elapsed().as_millis() as u64;
+        }
     }
 
+    let reads_started = std::time::Instant::now();
     let mut cells = Vec::new();
     for read in reads {
         let sheet = sheet_index(&entry.model, &read.sheet)?;
@@ -321,7 +415,10 @@ fn run(
             }
         }
     }
-    Ok((entry, cells))
+    if profiling() {
+        profile.reads = reads_started.elapsed().as_millis() as u64;
+    }
+    Ok((entry, cells, profile))
 }
 
 enum PinnedValue {
@@ -769,9 +866,59 @@ mod tests {
         assert!(!result.cached);
     }
 
+    /// PERF-1664 regression: the first (cold, file-importing) computation of
+    /// a workbook must produce exactly the values a repeat computation
+    /// produces — the resident model is an optimization, never a second
+    /// semantic. Checked cell-by-cell (formatted text, raw number, formula
+    /// flag) against both the resident repeat and an independent rebuild.
     #[test]
-    fn reuses_the_resident_model_and_applies_edits_incrementally() {
+    fn first_and_repeat_computation_agree() {
         let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("recalc.xlsx");
+        write_fixture(
+            &path,
+            &[
+                ("A1", "10"),
+                ("A2", "20"),
+                ("A3", "=SUM(A1:A2)"),
+                ("B1", "4"),
+                ("B2", "=A3*B1+IF(A1>5,100,0)"),
+            ],
+        );
+        let edits = [edit("A1", "100")];
+        let reads = [RecalcRead {
+            sheet: "Sheet1".into(),
+            range: CellRange {
+                start_row: 0,
+                end_row: 1,
+                start_column: 1,
+                end_column: 1,
+            },
+        }];
+        let mut reads = reads.to_vec();
+        reads.push(read_a1_a3());
+
+        let mut cache = RecalcCache::new();
+        let cold = recalc_cells(&mut cache, &path, &edits, &reads).unwrap();
+        assert!(!cold.cached);
+        let warm = recalc_cells(&mut cache, &path, &edits, &reads).unwrap();
+        assert!(warm.cached);
+        assert_eq!(cold.cells, warm.cells);
+
+        // An independent rebuild from the file (the path a purged cache or a
+        // mtime change takes) reaches the same values again.
+        cache.purge(&path);
+        let rebuilt = recalc_cells(&mut cache, &path, &edits, &reads).unwrap();
+        assert!(!rebuilt.cached);
+        assert_eq!(cold.cells, rebuilt.cells);
+        // Spot-check the math behind the comparison: A3=120, B2=120*4+100.
+        let b2 = cold.cells.iter().find(|cell| cell.row == 1).unwrap();
+        assert_eq!(b2.formatted, "580");
+        assert_eq!(b2.number, Some(580.0));
+    }
+
+    #[test]
+    fn reuses_the_resident_model_and_applies_edits_incrementally() {        let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("recalc.xlsx");
         fixture(&path);
         let mut cache = RecalcCache::new();
