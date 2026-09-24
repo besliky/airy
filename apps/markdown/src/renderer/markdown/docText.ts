@@ -9,7 +9,16 @@ export interface DocEnvelope {
   frontmatter: string
   /** markdown body, \n line endings */
   body: string
-  eol: '\n' | '\r\n'
+  /**
+   * Line-ending style of the original file, re-applied verbatim on save.
+   * Lone CR (classic Mac) files keep their CR-only style: CommonMark counts a
+   * carriage return not followed by a newline as a line ending, so the
+   * round-trip contract ("another tool's file survives open→save without
+   * envelope churn") extends to them. A file mixing CRLF with stray CRs is
+   * canonicalized to its dominant CRLF style — per-line EOL tracking is not
+   * worth the envelope complexity.
+   */
+  eol: '\n' | '\r\n' | '\r'
   /** whether the original file ended with a newline (new documents: true) */
   trailingNewline: boolean
   /** the original file started with a UTF-8 BOM (Windows Notepad) — re-emitted on save */
@@ -21,8 +30,13 @@ const FENCE = '---'
 export function parseDocText(raw: string): DocEnvelope {
   const bom = raw.startsWith('\uFEFF')
   if (bom) raw = raw.slice(1)
-  const eol: DocEnvelope['eol'] = raw.includes('\r\n') ? '\r\n' : '\n'
-  const text = raw.replace(/\r\n/g, '\n')
+  const eol: DocEnvelope['eol'] = raw.includes('\r\n') ? '\r\n' : raw.includes('\r') ? '\r' : '\n'
+  // CRLF and lone CR both become \n for the editor (the parser treats CR as a
+  // line ending; without the normalization CR-only lines would merge into one);
+  // the original style is re-applied on save. A U+FEFF left in the middle of
+  // the file is an encoding artifact, not content (UX-1702) — strip it; real
+  // content spaces (NBSP/U+200B/U+3000) are untouched.
+  const text = raw.replace(/\r\n?/g, '\n').replace(/\uFEFF/g, '')
   const trailingNewline = text === '' || text.endsWith('\n')
 
   let frontmatter = ''
@@ -113,6 +127,6 @@ export function serializeDocText(envelope: DocEnvelope, body: string): string {
   } else {
     text = text.replace(/\n+$/, '')
   }
-  if (envelope.eol === '\r\n') text = text.replace(/\n/g, '\r\n')
+  if (envelope.eol !== '\n') text = text.replace(/\n/g, envelope.eol)
   return envelope.bom ? `\uFEFF${text}` : text
 }
