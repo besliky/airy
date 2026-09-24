@@ -131,6 +131,8 @@ export const fr = {
   ribbonHighlightColors: 'Couleurs de surlignage',
   ribbonNoColor: 'Aucune couleur',
   ribbonFontColor: 'Couleur de police',
+  ribbonFontColorOptions: 'Options de couleur de police',
+  ribbonHighlightColorOptions: 'Options de couleur de surlignage',
   ribbonThemeColorsSection: 'Couleurs du thème',
   ribbonThemeColorShadeTip: 'Couleur du thème {r}-{c}',
   ribbonStandardColors: 'Couleurs standard',

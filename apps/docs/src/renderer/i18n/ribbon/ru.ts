@@ -130,6 +130,8 @@ export const ru = {
   ribbonHighlightColors: 'Цвета выделения',
   ribbonNoColor: 'Нет цвета',
   ribbonFontColor: 'Цвет шрифта',
+  ribbonFontColorOptions: 'Параметры цвета шрифта',
+  ribbonHighlightColorOptions: 'Параметры цвета выделения',
   ribbonThemeColorsSection: 'Цвета темы',
   ribbonThemeColorShadeTip: 'Цвет темы {r}-{c}',
   ribbonStandardColors: 'Стандартные цвета',

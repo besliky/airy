@@ -3668,6 +3668,8 @@ function RibbonInner({
                     <button
                       className={`rb-caret rb-color-caret${dropdown === 'highlight' ? ' active' : ''}`}
                       disabled={!canEdit}
+                      data-tip={t('ribbonHighlightColorOptions')}
+                      aria-label={t('ribbonHighlightColorOptions')}
                       onClick={() => setDropdown((v) => (v === 'highlight' ? null : 'highlight'))}
                     >
                       <IconCaret />
@@ -3722,6 +3724,8 @@ function RibbonInner({
                     <button
                       className={`rb-caret rb-color-caret${dropdown === 'color' ? ' active' : ''}`}
                       disabled={!canEdit}
+                      data-tip={t('ribbonFontColorOptions')}
+                      aria-label={t('ribbonFontColorOptions')}
                       onClick={() => setDropdown((v) => (v === 'color' ? null : 'color'))}
                     >
                       <IconCaret />

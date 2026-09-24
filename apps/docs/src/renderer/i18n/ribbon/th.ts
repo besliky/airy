@@ -128,6 +128,8 @@ export const th = {
   ribbonHighlightColors: 'สีเน้น',
   ribbonNoColor: 'ไม่มีสี',
   ribbonFontColor: 'สีฟอนต์',
+  ribbonFontColorOptions: 'ตัวเลือกสีฟอนต์',
+  ribbonHighlightColorOptions: 'ตัวเลือกสีเน้น',
   ribbonThemeColorsSection: 'สีของธีม',
   ribbonThemeColorShadeTip: 'สีของธีม {r}-{c}',
   ribbonStandardColors: 'สีมาตรฐาน',

@@ -132,6 +132,8 @@ export const ko = {
   ribbonHighlightColors: '강조 색',
   ribbonNoColor: '색 없음',
   ribbonFontColor: '글꼴 색',
+  ribbonFontColorOptions: '글꼴 색 옵션',
+  ribbonHighlightColorOptions: '강조 색 옵션',
   ribbonThemeColorsSection: '테마 색',
   ribbonThemeColorShadeTip: '테마 색 {r}-{c}',
   ribbonStandardColors: '표준 색',

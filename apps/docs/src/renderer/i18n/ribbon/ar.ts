@@ -127,6 +127,8 @@ export const ar = {
   ribbonHighlightColors: 'ألوان التمييز',
   ribbonNoColor: 'بلا لون',
   ribbonFontColor: 'لون الخط',
+  ribbonFontColorOptions: 'خيارات لون الخط',
+  ribbonHighlightColorOptions: 'خيارات لون التمييز',
   ribbonThemeColorsSection: 'ألوان النسق',
   ribbonThemeColorShadeTip: 'لون النسق {r}-{c}',
   ribbonStandardColors: 'الألوان القياسية',

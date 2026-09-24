@@ -131,6 +131,8 @@ export const hi = {
   ribbonHighlightColors: 'हाइलाइट रंग',
   ribbonNoColor: 'कोई रंग नहीं',
   ribbonFontColor: 'फ़ॉन्ट रंग',
+  ribbonFontColorOptions: 'फ़ॉन्ट रंग विकल्प',
+  ribbonHighlightColorOptions: 'हाइलाइट रंग विकल्प',
   ribbonThemeColorsSection: 'थीम रंग',
   ribbonThemeColorShadeTip: 'थीम रंग {r}-{c}',
   ribbonStandardColors: 'मानक रंग',

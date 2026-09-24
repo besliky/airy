@@ -128,6 +128,8 @@ export const en = {
   ribbonHighlightColors: 'Highlight Colors',
   ribbonNoColor: 'No Color',
   ribbonFontColor: 'Font Color',
+  ribbonFontColorOptions: 'Font Color Options',
+  ribbonHighlightColorOptions: 'Highlight Color Options',
   ribbonThemeColorsSection: 'Theme Colors',
   ribbonThemeColorShadeTip: 'Theme color {r}-{c}',
   ribbonStandardColors: 'Standard Colors',

@@ -131,6 +131,8 @@ export const zh = {
   ribbonHighlightColors: '突出显示颜色',
   ribbonNoColor: '无颜色',
   ribbonFontColor: '字体颜色',
+  ribbonFontColorOptions: '字体颜色选项',
+  ribbonHighlightColorOptions: '突出显示颜色选项',
   ribbonThemeColorsSection: '主题颜色',
   ribbonThemeColorShadeTip: '主题颜色 {r}-{c}',
   ribbonStandardColors: '标准色',
