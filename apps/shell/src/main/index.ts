@@ -25,6 +25,7 @@ import {
 } from 'electron'
 import type { MenuItemConstructorOptions, NativeImage, Rectangle, WebContents } from 'electron'
 import { homeChannelAccess } from './home-channel-access'
+import { isElectronProcessCommand } from './dev-takeover'
 import { createLiveBridgeToggle } from './live-bridge-toggle'
 import { stringPathsCapped } from '../shared/home-paths'
 import {
@@ -3566,9 +3567,11 @@ app.whenReady().then(async () => {
     try {
       const oldPid = Number(readFileSync(devPidFile(), 'utf-8').trim())
       if (Number.isFinite(oldPid) && oldPid > 0 && oldPid !== process.pid) {
-        // pid-recycling guard: only kill if that pid is still an Electron process
+        // pid-recycling guard: only kill if that pid still runs an Electron
+        // executable — basename match, case-insensitive, so the lowercase
+        // linux dev binary `…/dist/electron` is caught too (BUG-1680)
         const cmd = execSync(`ps -o command= -p ${oldPid}`).toString()
-        if (cmd.includes('Electron')) process.kill(oldPid, 'SIGKILL')
+        if (isElectronProcessCommand(cmd)) process.kill(oldPid, 'SIGKILL')
       }
     } catch {
       // no previous instance recorded / already gone (ps exits non-zero)
