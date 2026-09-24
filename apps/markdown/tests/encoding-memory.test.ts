@@ -91,7 +91,6 @@ vi.mock('electron', () => ({
 const PRIVET_1251 = Buffer.from([0xcf, 0xf0, 0xe8, 0xe2, 0xe5, 0xf2, 0x2c, 0x20, 0xec, 0xe8, 0xf0])
 
 let markdownMain: typeof import('../src/main/markdown-main')
-let setEncodingChannel: string
 let settingsPath: string
 const temporaryDirectories: string[] = []
 
@@ -111,10 +110,16 @@ function readFileFor(filePath: string, sender: FakeWebContents): Promise<{ text:
 
 function pickEncoding(
   filePath: string,
-  encoding: string,
+  encoding: string | null,
   sender: FakeWebContents,
 ): Promise<boolean> {
-  return handlers.get(setEncodingChannel)?.({ sender }, filePath, encoding) as Promise<boolean>
+  // UX-1696: the channel moved into the shared registry once the preload
+  // grew its pass-through; null is the "Auto" pick (forget, back to detect)
+  return handlers.get(MARKDOWN_CHANNELS.setEncoding)?.(
+    { sender },
+    filePath,
+    encoding,
+  ) as Promise<boolean>
 }
 
 beforeAll(async () => {
@@ -124,7 +129,6 @@ beforeAll(async () => {
   temporaryDirectories.push(userData.current)
   settingsPath = join(userData.current, 'app-settings.json')
   markdownMain = await import('../src/main/markdown-main')
-  setEncodingChannel = markdownMain.MARKDOWN_SET_ENCODING_CHANNEL
 })
 
 afterEach(async () => {
@@ -314,6 +318,22 @@ describe('markdown reopen with remembered encoding', () => {
     const result = await readFileFor(plainPath, plainView.webContents as unknown as FakeWebContents)
     expect(result.text).toBe('Русский текст')
     expect(readRememberedFileEncoding(settingsPath, plainPath)).toBeUndefined()
+  })
+
+  it('drops the pick again when the Auto option forgets it (UX-1696)', async () => {
+    const filePath = await makeFile('auto.md', PRIVET_1251)
+    const view = markdownMain.createMarkdownView(filePath)
+    const sender = view.webContents as unknown as FakeWebContents
+
+    await pickEncoding(filePath, 'windows-1251', sender)
+    expect(readRememberedFileEncoding(settingsPath, filePath)).toBe('windows-1251')
+
+    await pickEncoding(filePath, null, sender)
+    expect(readRememberedFileEncoding(settingsPath, filePath)).toBeUndefined()
+
+    // without the pick the open path is back to plain auto-detection
+    const reopened = await readFileFor(filePath, sender)
+    expect(reopened.text).toBe('Привет, мир')
   })
 
   it('rejects ungranted paths and unknown charsets without persisting anything', async () => {

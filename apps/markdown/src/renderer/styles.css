@@ -1983,6 +1983,19 @@ html.airy-popover-open .ribbon-tabs {
   color: var(--text-dim);
 }
 
+/* UX-1696: status-bar "Reopen with encoding" picker (same chrome as the html
+   app's device dropdown; token colors only) */
+.encoding-dd.gs-dd {
+  min-width: 92px;
+}
+
+.encoding-dd .gs-dd-btn {
+  height: 18px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
 .status-right {
   display: flex;
   align-items: center;

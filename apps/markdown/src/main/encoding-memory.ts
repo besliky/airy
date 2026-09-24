@@ -16,32 +16,11 @@
 /// invalidate.
 import { queueAppSettingsUpdate, readAppSettingsFile } from '@airy-office/electron-utils'
 
-/**
- * Charsets a manual pick may name. Mirrors the detector's candidate set
- * (LEGACY_CHARSETS in packages/file-parse/src/text.ts) plus the UTF-8/16
- * family a user may want to force over a wrong legacy guess. Keep in sync
- * with that list; a persisted entry whose encoding is not listed here is
- * dropped on read and the file falls back to auto-detection.
- */
-export const SELECTABLE_ENCODINGS = [
-  'utf-8',
-  'utf-16le',
-  'utf-16be',
-  'gb18030',
-  'shift_jis',
-  'big5',
-  'euc-kr',
-  'windows-1252',
-  'windows-1251',
-  'koi8-r',
-  'windows-1250',
-  'windows-1253',
-  'windows-1255',
-  'windows-1256',
-  'windows-874',
-] as const
+import { SELECTABLE_ENCODINGS } from '../shared/ipc'
+import type { SelectableEncoding } from '../shared/ipc'
 
-export type SelectableEncoding = (typeof SELECTABLE_ENCODINGS)[number]
+export { SELECTABLE_ENCODINGS }
+export type { SelectableEncoding }
 
 const SELECTABLE_ENCODING_SET: ReadonlySet<string> = new Set(SELECTABLE_ENCODINGS)
 
@@ -122,6 +101,25 @@ export function rememberFileEncoding(
       parseFileEncodings(current[FILE_ENCODINGS_KEY]),
       filePath,
       encoding,
+    ),
+  }))
+}
+
+/** drop a path's pick so the file falls back to auto-detection (the "Auto" pick). Pure — unit-tested */
+export function removeFileEncoding(
+  entries: FileEncodingEntry[],
+  filePath: string,
+): FileEncodingEntry[] {
+  return entries.filter((entry) => entry.path !== filePath)
+}
+
+/** Forget a pick through the shared single-writer queue (same discipline as rememberFileEncoding). */
+export function forgetFileEncoding(settingsPath: string, filePath: string): Promise<void> {
+  return queueAppSettingsUpdate(settingsPath, (current) => ({
+    ...current,
+    [FILE_ENCODINGS_KEY]: removeFileEncoding(
+      parseFileEncodings(current[FILE_ENCODINGS_KEY]),
+      filePath,
     ),
   }))
 }

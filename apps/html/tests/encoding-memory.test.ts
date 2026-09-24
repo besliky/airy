@@ -24,6 +24,7 @@ import {
   readRememberedFileEncoding,
   recordFileEncoding,
   rememberFileEncoding,
+  removeFileEncoding,
 } from '../src/main/encoding-memory'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -79,6 +80,20 @@ describe('recordFileEncoding', () => {
     // /f0.html — the oldest pick — fell off the end
     expect(entries.some((entry) => entry.path === '/f0.html')).toBe(false)
     expect(entries.some((entry) => entry.path === '/f1.html')).toBe(true)
+  })
+})
+
+describe('removeFileEncoding', () => {
+  it('drops the path pick and keeps the rest of the LRU (the Auto option)', () => {
+    const entries = [
+      { path: '/a.html', encoding: 'windows-1251' },
+      { path: '/b.html', encoding: 'koi8-r' },
+    ]
+    expect(removeFileEncoding(entries, '/a.html')).toEqual([
+      { path: '/b.html', encoding: 'koi8-r' },
+    ])
+    // forgetting an unknown path is a no-op
+    expect(removeFileEncoding(entries, '/missing.html')).toEqual(entries)
   })
 })
 
@@ -165,9 +180,13 @@ describe('html-main encoding-memory wiring', () => {
     expect(sourceContains('if (remembered) return decodeBytesAsEncoding(bytes, remembered)'))
   })
 
-  it('the set-encoding channel fences the path and validates the charset', () => {
-    expect(sourceContains("export const HTML_SET_ENCODING_CHANNEL = 'html:set-encoding'"))
+  it('the set-encoding channel fences the path, validates the charset and forgets on null', () => {
+    // UX-1696 moved the channel into the pinned HTML_CHANNELS registry (the
+    // preload passes it through); null is the "Auto" pick (back to detect)
+    expect(sourceContains('HTML_CHANNELS.setEncoding,'))
     expect(sourceContains('html: path not granted to this view'))
+    expect(sourceContains('if (encoding === null)'))
+    expect(sourceContains('await forgetFileEncoding(appSettingsPath(), path)'))
     expect(sourceContains('if (!isSelectableEncoding(encoding))'))
     expect(sourceContains('rememberFileEncoding(appSettingsPath(), path, encoding)'))
   })

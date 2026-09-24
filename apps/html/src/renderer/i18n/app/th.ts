@@ -3,6 +3,11 @@ import type { zh } from './zh'
 export const th = {
   loading: 'กำลังโหลด…',
   loadFailed: 'ไม่สามารถเปิดไฟล์ได้',
+  encodingAuto: 'ตรวจจับอัตโนมัติ',
+  reopenEncoding: 'เปิดใหม่ด้วยการเข้ารหัส',
+  openedAs: 'เปิดเป็น {encoding} แล้ว',
+  openedAuto: 'เปิดใหม่ด้วยการเข้ารหัสแบบตรวจจับอัตโนมัติแล้ว',
+  reopenDirty: 'บันทึกหรือยกเลิกการเปลี่ยนแปลงก่อนเปิดใหม่ด้วยการเข้ารหัสอื่น',
   untitled: 'ไม่มีชื่อ',
   saveFailed: 'บันทึกไม่สำเร็จ: {error}',
   saveFailedStatus: 'บันทึกไม่สำเร็จ',

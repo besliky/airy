@@ -3,6 +3,12 @@ import type { zh } from './zh'
 export const de = {
   loading: 'Wird geladen…',
   loadFailed: 'Datei konnte nicht geöffnet werden',
+  encodingAuto: 'Automatisch erkennen',
+  reopenEncoding: 'Mit Kodierung neu öffnen',
+  openedAs: 'Geöffnet als {encoding}',
+  openedAuto: 'Mit automatisch erkannter Kodierung neu geöffnet',
+  reopenDirty:
+    'Speichern oder verwerfen Sie Ihre Änderungen, bevor Sie mit einer anderen Kodierung neu öffnen',
   untitled: 'Unbenannt',
   saveFailed: 'Speichern fehlgeschlagen: {error}',
   saveFailedStatus: 'Speichern fehlgeschlagen',

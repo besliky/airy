@@ -3,6 +3,11 @@ import type { zh } from './zh'
 export const ms = {
   loading: 'Memuatkan…',
   loadFailed: 'Tidak dapat membuka fail',
+  encodingAuto: 'Pengesanan automatik',
+  reopenEncoding: 'Buka semula dengan pengekodan',
+  openedAs: 'Dibuka sebagai {encoding}',
+  openedAuto: 'Dibuka semula dengan pengekodan yang dikesan secara automatik',
+  reopenDirty: 'Simpan atau batalkan perubahan anda sebelum membuka semula dengan pengekodan lain',
   untitled: 'Tanpa tajuk',
   saveFailed: 'Gagal menyimpan: {error}',
   saveFailedStatus: 'Gagal menyimpan',

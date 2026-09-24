@@ -3,6 +3,11 @@ import type { zh } from './zh'
 export const es = {
   loading: 'Cargando…',
   loadFailed: 'No se pudo abrir el archivo',
+  encodingAuto: 'Detección automática',
+  reopenEncoding: 'Volver a abrir con codificación',
+  openedAs: 'Abierto como {encoding}',
+  openedAuto: 'Reabierto con la codificación detectada automáticamente',
+  reopenDirty: 'Guarda o descarta los cambios antes de volver a abrir con otra codificación',
   untitled: 'Sin título',
   saveFailed: 'Error al guardar: {error}',
   saveFailedStatus: 'Error al guardar',

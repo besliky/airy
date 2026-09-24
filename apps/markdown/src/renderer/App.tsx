@@ -26,7 +26,9 @@ import type { SlashController, SlashMenuState } from './editor/slashCommand'
 import { setImageBaseDir } from './editor/localImage'
 import { Ribbon } from './components/Ribbon'
 import { SlashMenu, type SlashMenuHandle } from './components/SlashMenu'
+import { EncodingPicker, type EncodingPick } from './components/EncodingPicker'
 import { ToastHost } from '@airy-office/ui'
+import { showToast } from '@airy-office/ui/toast-bus'
 import { TableMenu } from './components/TableMenu'
 import { FrontmatterPanel } from './components/FrontmatterPanel'
 import { AiAskPopover } from './components/AiAskPopover'
@@ -39,6 +41,8 @@ import { mermaidSvgToPng, renderMermaid } from './editor/mermaid'
 import { resolveImageSrc } from './editor/localImage'
 import type { ExportFormat, SaveMode } from '../shared/ipc'
 import { uiOp } from './editor/ops'
+// module-level t: toasts fired from callbacks outliving a render closure
+import { t as moduleT } from './i18n/locale'
 
 type LoadStatus = 'loading' | 'ready' | 'error'
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
@@ -150,6 +154,9 @@ export default function App() {
   // progressive hydration of a giant file (PERF-1647): shown as a counter in
   // the status bar while background chunks are appended
   const [hydration, setHydration] = useState<HydrationProgress | null>(null)
+  // UX-1696: the encoding override picked in this session ('auto' until then;
+  // a pick persisted by an earlier session still decodes the file at open)
+  const [encodingPick, setEncodingPick] = useState<EncodingPick>('auto')
 
   const statusRef = useRef<LoadStatus>('loading')
   const dirtyRef = useRef(false)
@@ -242,6 +249,58 @@ export default function App() {
     setImageBaseDir(filePath ? dirOf(filePath) : null)
   }, [filePath])
 
+  /**
+   * Read a file and mount it into the editor — the shared body of the initial
+   * open and the UX-1696 reopen-with-encoding flow. Returns the open's
+   * recovered flag; background hydration keeps running after the resolve.
+   */
+  const loadDocument = useCallback(
+    async (path: string, isCancelled: () => boolean): Promise<boolean> => {
+      const current = editorRef.current
+      if (!current) return false
+      const opened = await window.markdownApi.readFile(path)
+      if (isCancelled()) return false
+      const envelope = parseDocText(opened.text)
+      envelopeRef.current = envelope
+      setImageBaseDir(dirOf(path))
+      // the load must not be undoable — Cmd+Z right after opening
+      // would otherwise blank the document (and Cmd+S overwrite the file)
+      // PERF-1647: mount only the first segment synchronously (markdown
+      // parse is quadratic in input size) and append the rest in the
+      // background so the first screen is interactive fast
+      const body = stripLegacyFencedDivs(envelope.body)
+      const segments = splitBodyForHydration(body)
+      // raw-transaction mount: unlike setContent it never lets the
+      // TrailingNode fill paragraph land after a non-paragraph tail,
+      // which would stay mid-document once the next chunks arrive
+      mountFirstSegment(current, segments[0])
+      setFilePath(path)
+      const inner = frontmatterInner(envelope.frontmatter)
+      setFmText(inner)
+      if (inner) setFmOpen(true)
+      if (segments.length > 1) {
+        setHydration({ done: 1, total: segments.length })
+        hydrationRef.current = hydrateSegments(current, segments, {
+          onProgress: (progress) => {
+            if (!isCancelled()) setHydration(progress)
+          },
+        }).then((ok) => {
+          hydrationRef.current = null
+          if (!isCancelled()) {
+            setHydration(null)
+            // a partially hydrated body must never be serialized; a failed
+            // hydration leaves the on-disk file as the source of truth and
+            // the document dirty so a reopen recovers it
+            if (!ok) markDirty()
+          }
+          return ok
+        })
+      }
+      return opened.recovered
+    },
+    [markDirty],
+  )
+
   useEffect(() => {
     if (!editor) return
     let cancelled = false
@@ -251,46 +310,8 @@ export default function App() {
         if (cancelled) return
         let recovered = false
         if (path) {
-          const opened = await window.markdownApi.readFile(path)
+          recovered = await loadDocument(path, () => cancelled)
           if (cancelled) return
-          recovered = opened.recovered
-          const raw = opened.text
-          const envelope = parseDocText(raw)
-          envelopeRef.current = envelope
-          setImageBaseDir(dirOf(path))
-          // the initial load must not be undoable — Cmd+Z right after opening
-          // would otherwise blank the document (and Cmd+S overwrite the file)
-          // PERF-1647: mount only the first segment synchronously (markdown
-          // parse is quadratic in input size) and append the rest in the
-          // background so the first screen is interactive fast
-          const body = stripLegacyFencedDivs(envelope.body)
-          const segments = splitBodyForHydration(body)
-          // raw-transaction mount: unlike setContent it never lets the
-          // TrailingNode fill paragraph land after a non-paragraph tail,
-          // which would stay mid-document once the next chunks arrive
-          mountFirstSegment(editor, segments[0])
-          setFilePath(path)
-          const inner = frontmatterInner(envelope.frontmatter)
-          setFmText(inner)
-          if (inner) setFmOpen(true)
-          if (segments.length > 1) {
-            setHydration({ done: 1, total: segments.length })
-            hydrationRef.current = hydrateSegments(editor, segments, {
-              onProgress: (progress) => {
-                if (!cancelled) setHydration(progress)
-              },
-            }).then((ok) => {
-              hydrationRef.current = null
-              if (!cancelled) {
-                setHydration(null)
-                // a partially hydrated body must never be serialized; a failed
-                // hydration leaves the on-disk file as the source of truth and
-                // the document dirty so a reopen recovers it
-                if (!ok) markDirty()
-              }
-              return ok
-            })
-          }
         } else {
           envelopeRef.current = { ...EMPTY_ENVELOPE }
         }
@@ -310,8 +331,40 @@ export default function App() {
     return () => {
       cancelled = true
     }
-    // markDirty is a stable callback; listing it would re-run the load
-  }, [editor, markDirty])
+    // all three deps are stable callbacks; the load must run once per editor
+  }, [editor, loadDocument, markDirty])
+
+  // UX-1696: remember the picked charset, then re-read the file from disk so
+  // the editor swaps to the new decoding. A dirty (or still-hydrating) document
+  // is refused — the reopen discards in-memory edits, so the user saves or
+  // reverts first.
+  const reopenWithEncoding = useCallback(
+    (pick: EncodingPick) => {
+      const path = filePathRef.current
+      if (!path || statusRef.current !== 'ready' || hydrationRef.current) return
+      if (savingRef.current) return
+      if (dirtyRef.current) {
+        showToast(moduleT('reopenDirty'), 'error')
+        return
+      }
+      void (async () => {
+        try {
+          await window.markdownApi.setEncoding(path, pick === 'auto' ? null : pick)
+          const recovered = await loadDocument(path, () => false)
+          setEncodingPick(pick)
+          setSaveState('idle')
+          if (recovered) markDirty()
+          showToast(
+            pick === 'auto' ? moduleT('openedAuto') : moduleT('openedAs', { encoding: pick }),
+          )
+        } catch (err) {
+          console.error('[markdown] reopen failed:', err)
+          showToast(moduleT('loadError'), 'error')
+        }
+      })()
+    },
+    [loadDocument, markDirty],
+  )
 
   const onFrontmatterChange = useCallback(
     (inner: string) => {
@@ -811,6 +864,14 @@ export default function App() {
           <footer className="status-bar">
             <div className="status-left">
               {fileName && <span className="status-item status-file">{fileName}</span>}
+              {/* UX-1696: reopen the file with a manually picked charset */}
+              {filePath && (
+                <EncodingPicker
+                  pick={encodingPick}
+                  disabled={status !== 'ready'}
+                  onPick={reopenWithEncoding}
+                />
+              )}
               {hydration && (
                 <span className="status-item">
                   {t('loading')} {hydration.done}/{hydration.total}

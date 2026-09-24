@@ -3,6 +3,11 @@ import type { zh } from './zh'
 export const ko = {
   loading: '불러오는 중…',
   loadFailed: '파일을 열 수 없습니다',
+  encodingAuto: '자동 감지',
+  reopenEncoding: '인코딩을 지정하여 다시 열기',
+  openedAs: '{encoding}(으)로 열렸습니다',
+  openedAuto: '자동 감지된 인코딩으로 다시 열렸습니다',
+  reopenDirty: '다른 인코딩으로 다시 열기 전에 변경 사항을 저장하거나 취소하세요',
   untitled: '제목 없음',
   saveFailed: '저장 실패: {error}',
   saveFailedStatus: '저장 실패',

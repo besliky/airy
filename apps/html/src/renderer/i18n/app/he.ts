@@ -3,6 +3,11 @@ import type { zh } from './zh'
 export const he = {
   loading: 'טוען…',
   loadFailed: 'לא ניתן לפתוח את הקובץ',
+  encodingAuto: 'זיהוי אוטומטי',
+  reopenEncoding: 'פתיחה מחדש בקידוד',
+  openedAs: 'נפתח בקידוד {encoding}',
+  openedAuto: 'נפתח מחדש עם הקידוד שזוהה אוטומטית',
+  reopenDirty: 'יש לשמור או לבטל את השינויים לפני פתיחה מחדש בקידוד אחר',
   untitled: 'ללא שם',
   saveFailed: 'השמירה נכשלה: {error}',
   saveFailedStatus: 'השמירה נכשלה',

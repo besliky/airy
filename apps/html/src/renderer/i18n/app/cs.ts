@@ -3,6 +3,11 @@ import type { zh } from './zh'
 export const cs = {
   loading: 'Načítání…',
   loadFailed: 'Soubor nelze otevřít',
+  encodingAuto: 'Automaticky rozpoznat',
+  reopenEncoding: 'Znovu otevřít v kódování',
+  openedAs: 'Otevřeno jako {encoding}',
+  openedAuto: 'Znovu otevřeno v automaticky rozpoznaném kódování',
+  reopenDirty: 'Před znovuotevřením v jiném kódování uložte nebo zrušte změny',
   untitled: 'Bez názvu',
   saveFailed: 'Uložení se nezdařilo: {error}',
   saveFailedStatus: 'Uložení se nezdařilo',

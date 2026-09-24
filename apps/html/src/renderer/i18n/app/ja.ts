@@ -3,6 +3,11 @@ import type { zh } from './zh'
 export const ja = {
   loading: '読み込み中…',
   loadFailed: 'ファイルを開けませんでした',
+  encodingAuto: '自動判定',
+  reopenEncoding: 'エンコーディングを指定して開き直す',
+  openedAs: '{encoding} として開きました',
+  openedAuto: '自動判定のエンコーディングで開き直しました',
+  reopenDirty: '異なるエンコーディングで開き直す前に、変更を保存するか破棄してください',
   untitled: '無題',
   saveFailed: '保存に失敗しました: {error}',
   saveFailedStatus: '保存に失敗しました',

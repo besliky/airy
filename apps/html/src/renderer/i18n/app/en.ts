@@ -3,6 +3,11 @@ import type { zh } from './zh'
 export const en = {
   loading: 'Loading…',
   loadFailed: 'Could not open the file',
+  encodingAuto: 'Auto detect',
+  reopenEncoding: 'Reopen with encoding',
+  openedAs: 'Opened as {encoding}',
+  openedAuto: 'Reopened with auto-detected encoding',
+  reopenDirty: 'Save or revert your changes before reopening with a different encoding',
   untitled: 'Untitled',
   saveFailed: 'Save failed: {error}',
   saveFailedStatus: 'Save failed',

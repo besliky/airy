@@ -117,6 +117,7 @@ const PINNED_API_MEMBERS = `
   sendCloseSaveResult
   sendSaveRequestAck
   setDirty
+  setEncoding
   setPresentFullScreen
   setProvisionalTitle
   updatePreview
@@ -164,6 +165,7 @@ const PINNED_HTML_CHANNELS = `
   saveImage
   saveRequest
   saveRequestAck
+  setEncoding
   themeChanged
   writeRecovery
 `

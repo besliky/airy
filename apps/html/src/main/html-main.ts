@@ -56,6 +56,7 @@ import { atomicWriteFile } from '@airy-office/electron-utils'
 import { ElectronBrowserDriver } from './html2docx-driver'
 import {
   decodeBytesAsEncoding,
+  forgetFileEncoding,
   isSelectableEncoding,
   readRememberedFileEncoding,
   rememberFileEncoding,
@@ -1170,13 +1171,6 @@ export function htmlIsDirty(webContentsId: number): boolean {
 // ── Crash recovery: dirty renderers push a copy every 30s
 // (html:write-recovery); a normal save cleans it up; open offers Restore/Discard ──
 
-/**
- * UX-1653 channel for the reopen-with-encoding affordance: main-only for now
- * (the renderer UI is a follow-up), kept outside the pinned HTML_CHANNELS
- * registry until the preload grows its pass-through.
- */
-export const HTML_SET_ENCODING_CHANNEL = 'html:set-encoding'
-
 /** the shared workspace settings file — remembered per-file encodings live here */
 const appSettingsPath = () => join(app.getPath('userData'), 'app-settings.json')
 
@@ -1530,14 +1524,19 @@ function registerHtmlIpc(): void {
     )
   })
 
-  // UX-1653: remember a manual encoding pick for an open file. The reopen
-  // affordance calls this before re-reading; the next readFile decodes with
-  // the pick (readTextDecoded), so the choice survives tab close and relaunch.
+  // UX-1653/1696: the reopen-with-encoding picker remembers (encoding) or
+  // forgets (null, back to auto-detection) the charset for an open file; the
+  // renderer re-reads right after, so the next readFile decodes with the pick
+  // (readTextDecoded) and the choice survives tab close and relaunch.
   ipcMain.handle(
-    HTML_SET_ENCODING_CHANNEL,
+    HTML_CHANNELS.setEncoding,
     async (e, path: unknown, encoding: unknown): Promise<boolean> => {
       if (typeof path !== 'string' || !allowedByWc.get(e.sender.id)?.has(path)) {
         throw new Error('html: path not granted to this view')
+      }
+      if (encoding === null) {
+        await forgetFileEncoding(appSettingsPath(), path)
+        return true
       }
       if (!isSelectableEncoding(encoding)) {
         throw new Error('html: unknown encoding')

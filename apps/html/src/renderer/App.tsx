@@ -9,6 +9,8 @@ import {
   type FindTarget,
 } from '@airy-office/ui'
 import { useI18n } from './i18n/locale'
+// module-level t: status notices fired from callbacks outliving a render closure
+import { t as moduleT } from './i18n/locale'
 import { parseDocText, serializeDocText, type Envelope } from './document/envelope'
 import { SourceEditor, type CursorInfo, type SourceEditorHandle } from './source/SourceEditor'
 import { PreviewFrame, type PreviewFrameHandle } from './preview/PreviewFrame'
@@ -17,6 +19,7 @@ import type { ComputedSnapshot, ElementRect, FromInspector } from './preview/ins
 import inspectorSource from './preview/inspector.js?raw'
 import { AiPanel, AiryMark, type AiPreset, type HtmlAiDeps } from './ai/AiPanel'
 import { AiAskPopover, type AnchorRect, type AskMode } from './components/AiAskPopover'
+import { EncodingPicker, type EncodingPick } from './components/EncodingPicker'
 import {
   EDIT_QUEUE_MAX,
   buildSelectionInstruction,
@@ -153,6 +156,9 @@ export default function App() {
   )
   const [panelDismissedSid, setPanelDismissedSid] = useState<number | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  // UX-1696: the encoding override picked in this session ('auto' until then;
+  // a pick persisted by an earlier session still decodes the file at open)
+  const [encodingPick, setEncodingPick] = useState<EncodingPick>('auto')
   const [pictureDialog, setPictureDialog] = useState<{
     kind: 'crop' | 'cutout'
     sid: number
@@ -260,6 +266,50 @@ export default function App() {
       cancelled = true
     }
   }, [getMapNow])
+
+  // UX-1696: remember the picked charset, then re-read the file from disk and
+  // swap the source buffer and the preview to the new decoding. Refused while
+  // dirty (the reopen discards in-memory edits, so the user saves or reverts
+  // first) or while AI style pokes are still pending.
+  const reopenWithEncoding = useCallback(
+    (pick: EncodingPick) => {
+      const current = pathRef.current
+      if (!current || statusRef.current !== 'ready' || pendingCount > 0) return
+      if (textRef.current !== savedTextRef.current) {
+        setNotice(moduleT('reopenDirty'))
+        return
+      }
+      void (async () => {
+        try {
+          await window.htmlApi.setEncoding(current, pick === 'auto' ? null : pick)
+          const opened = await window.htmlApi.readFile(current)
+          const doc = parseDocText(opened.text)
+          envelopeRef.current = doc.envelope
+          textRef.current = doc.text
+          const map = getMapNow()
+          // the frame must not race the swap: serve the new buffer before React commits
+          window.htmlApi.updatePreview(instrumentForPreview(doc.text, map, inspectorSource))
+          pushedTextRef.current = doc.text
+          pushedVersionRef.current = map.version
+          editorRef.current?.setDoc(doc.text)
+          setText(doc.text)
+          // a restored recovery copy differs from the disk file on purpose —
+          // keep the document dirty so a close still prompts (open-path parity)
+          setSavedText(opened.recovered ? '' : doc.text)
+          setPreviewNonce((n) => n + 1)
+          setSaveState('idle')
+          setEncodingPick(pick)
+          setNotice(
+            pick === 'auto' ? moduleT('openedAuto') : moduleT('openedAs', { encoding: pick }),
+          )
+        } catch (err) {
+          console.error('[html] reopen failed:', err)
+          setNotice(moduleT('loadFailed'))
+        }
+      })()
+    },
+    [getMapNow, pendingCount],
+  )
 
   // mirror dirtiness to the main process (close prompt) — untitled blank docs never count
   useEffect(() => {
@@ -1472,6 +1522,8 @@ export default function App() {
                 </span>
               )}
               <span className="status-item">{t('charCount', { n: text.length })}</span>
+              {/* UX-1696: reopen the file with a manually picked charset */}
+              {path && <EncodingPicker pick={encodingPick} onPick={reopenWithEncoding} />}
               <Dropdown
                 className="device-dd"
                 value={device}

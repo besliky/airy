@@ -3,6 +3,11 @@ import type { zh } from './zh'
 export const hi = {
   loading: 'लोड हो रहा है…',
   loadFailed: 'फ़ाइल नहीं खोली जा सकी',
+  encodingAuto: 'स्वतः पहचान',
+  reopenEncoding: 'एनकोडिंग के साथ पुनः खोलें',
+  openedAs: '{encoding} के रूप में खोला गया',
+  openedAuto: 'स्वतः पहचानी गई एनकोडिंग के साथ पुनः खोला गया',
+  reopenDirty: 'किसी अन्य एनकोडिंग के साथ पुनः खोलने से पहले अपने परिवर्तन सहेजें या रद्द करें',
   untitled: 'शीर्षकहीन',
   saveFailed: 'सहेजना विफल: {error}',
   saveFailedStatus: 'सहेजना विफल',
