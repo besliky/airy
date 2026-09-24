@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import {
   PDFArray,
   PDFBool,
@@ -31,6 +32,7 @@ import type {
   TextInsertFailure,
 } from '../shared/ipc'
 import { atomicWriteFile } from '@airy-office/electron-utils'
+import { sweepStaleSaveTemps } from './save-temp-sweep'
 
 const num = (v: number) => Math.round(v * 100) / 100
 const STATIC_FORM_FILLS_KEY = PDFName.of('GenOfficeStaticFormFills')
@@ -938,6 +940,12 @@ export async function savePdfToPath(
     request,
   )
   await verifyContentEdits(bytes, request, skips)
+  // OBS-1670: a kill -9 mid atomicWriteFile bypasses every error-path unlink
+  // and orphans the dot-temp next to the target forever. Sweep expired
+  // siblings right before the fresh temp is created — the sweep never throws,
+  // and the 1h mtime cutoff protects the temp this save is about to write
+  // (and any concurrent save's temp) from being swept.
+  await sweepStaleSaveTemps(dirname(targetPath))
   await atomicWriteFile(targetPath, bytes)
   return skips
 }
