@@ -9,9 +9,14 @@
 /// paste does.
 
 import { PackageArchive, relsPathFor, resolveTarget, type Relationship } from './zip'
+import { ensureNotesMaster } from './notes'
 
 const LAYOUT_REL = '/slideLayout'
 const NOTES_REL = '/notesSlide'
+const NOTES_MASTER_REL_SUFFIX = '/notesMaster'
+const SLIDE_REL_SUFFIX = '/slide'
+const NOTES_SLIDE_CT = 'application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml'
+const REL_BASE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 
 export interface SlideBundleRel {
   readonly id: string
@@ -45,6 +50,19 @@ export interface SlideBundle {
   /** source deck's slide size, so the caller can warn about a mismatch */
   readonly slideSize?: { cx: number; cy: number }
   readonly chain?: SlideBundleChain
+  /**
+   * The slide's speaker-notes part, when it has one. The notesSlide XML itself
+   * travels in `parts` under its source path; this records the path plus the
+   * part's own rels minus the ones the destination rebuilds (the owning-slide
+   * back-reference and the notesMaster, which is re-pointed at the target's —
+   * "use destination theme", like the layout).
+   */
+  readonly notesSlide?: {
+    /** source part path, e.g. ppt/notesSlides/notesSlide2.xml */
+    readonly path: string
+    /** the kept notesSlide rels (images etc. referenced by the notes XML) */
+    readonly rels: readonly SlideBundleRel[]
+  }
 }
 
 function extOf(path: string): string {
@@ -102,6 +120,44 @@ function layoutNameOf(archive: PackageArchive, layoutPath: string): string | und
 }
 
 /**
+ * Bundle the slide's notesSlide part, so speaker notes survive a copy: the XML
+ * lands in `parts` (the destination materializes a fresh copy), its own rels
+ * are kept minus the two the destination rebuilds — the owning-slide
+ * back-reference and the notesMaster, which is re-pointed at the target's
+ * ("use destination theme", like the layout). Media the notes reference (rare)
+ * are collected like any other dependency.
+ */
+function collectNotesSlide(
+  archive: PackageArchive,
+  slidePath: string,
+  rel: Relationship,
+  parts: Record<string, string>,
+  contentTypes: Record<string, string>,
+): SlideBundle['notesSlide'] {
+  if (rel.targetMode === 'External') return undefined
+  const notesPath = resolveTarget(slidePath, rel.target)
+  const xml = archive.readText(notesPath)
+  if (!xml) return undefined
+  parts[notesPath] = Buffer.from(xml, 'utf8').toString('base64')
+  contentTypes[notesPath] =
+    overrideContentType(archive.readText('[Content_Types].xml'), notesPath) ?? NOTES_SLIDE_CT
+
+  const rels: SlideBundleRel[] = []
+  for (const r of archive.readRels(notesPath).values()) {
+    if (r.targetMode === 'External') {
+      rels.push({ id: r.id, type: r.type, target: r.target, external: true })
+      continue
+    }
+    if (r.type.endsWith(SLIDE_REL_SUFFIX) || r.type.endsWith(NOTES_MASTER_REL_SUFFIX)) continue
+    const absolute = resolveTarget(notesPath, r.target)
+    if (absolute === slidePath) continue
+    collectPart(archive, absolute, parts, contentTypes)
+    rels.push({ id: r.id, type: r.type, target: absolute })
+  }
+  return { path: notesPath, rels }
+}
+
+/**
  * Snapshot a slide and its dependencies. `slideXml` is passed in so callers can
  * hand over the patched (unsaved-edits-included) XML.
  */
@@ -114,9 +170,13 @@ export function collectSlideBundle(
   const contentTypes: Record<string, string> = {}
   const rels: SlideBundleRel[] = []
   let layoutName: string | undefined
+  let notesSlide: SlideBundle['notesSlide'] | undefined
 
   for (const rel of archive.readRels(slidePath).values()) {
-    if (rel.type.endsWith(NOTES_REL)) continue
+    if (rel.type.endsWith(NOTES_REL)) {
+      notesSlide = collectNotesSlide(archive, slidePath, rel, parts, contentTypes)
+      continue
+    }
     if (rel.targetMode === 'External') {
       rels.push({ id: rel.id, type: rel.type, target: rel.target, external: true })
       continue
@@ -162,6 +222,7 @@ export function collectSlideBundle(
     layoutName,
     ...(slideSize ? { slideSize } : {}),
     ...(chain ? { chain } : {}),
+    ...(notesSlide ? { notesSlide } : {}),
   }
 }
 
@@ -338,11 +399,75 @@ export function materializeSlideBundle(
     const mapped = pathMap.get(rel.target) ?? rel.target
     return `<Relationship Id="${rel.id}" Type="${rel.type}" Target="${escapeAttr(relative(slidePath, mapped))}"/>`
   })
+  const notesRelLine = bundle.notesSlide
+    ? materializeNotesSlide(archive, bundle.notesSlide, pathMap, slidePath, bundle.rels)
+    : null
+  if (notesRelLine) relLines.push(notesRelLine)
   return (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
     `${relLines.join('')}</Relationships>`
   )
+}
+
+/** Highest numeric suffix among `rId<n>` ids, 0 when none matches. */
+function maxRelId(ids: readonly string[]): number {
+  let max = 0
+  for (const id of ids) {
+    const n = /^rId(\d+)$/.exec(id)
+    if (n) max = Math.max(max, Number(n[1]))
+  }
+  return max
+}
+
+/**
+ * Finish landing the bundled notesSlide (writeParts already placed its XML and
+ * media): build its rels fresh — kept deps at their mapped paths, plus a
+ * notesMaster (the target's, created minimally when absent) and the
+ * owning-slide back-reference — and return the rel line with which the pasted
+ * slide points at it. Null when the part never landed or the target cannot
+ * host a notesMaster; the paste then simply has no notes.
+ */
+function materializeNotesSlide(
+  archive: PackageArchive,
+  notes: NonNullable<SlideBundle['notesSlide']>,
+  pathMap: Map<string, string>,
+  slidePath: string,
+  slideRelIds: readonly SlideBundleRel[],
+): string | null {
+  const notesPath = pathMap.get(notes.path)
+  if (!notesPath) return null
+  const masterPath = ensureNotesMaster(archive)
+  if (!masterPath) return null
+
+  let maxRid = maxRelId(notes.rels.map((rel) => rel.id))
+  const lines = notes.rels.map((rel) => {
+    if (rel.external) {
+      return `<Relationship Id="${rel.id}" Type="${rel.type}" Target="${escapeAttr(rel.target)}" TargetMode="External"/>`
+    }
+    const mapped = pathMap.get(rel.target) ?? rel.target
+    return `<Relationship Id="${rel.id}" Type="${rel.type}" Target="${escapeAttr(relative(notesPath, mapped))}"/>`
+  })
+  maxRid += 1
+  lines.push(
+    `<Relationship Id="rId${maxRid}" Type="${REL_BASE}/notesMaster" Target="${escapeAttr(relative(notesPath, masterPath))}"/>`,
+  )
+  lines.push(
+    `<Relationship Id="rId${maxRid + 1}" Type="${REL_BASE}/slide" Target="${escapeAttr(relative(notesPath, slidePath))}"/>`,
+  )
+  archive.entries.set(
+    relsPathFor(notesPath),
+    Buffer.from(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        `${lines.join('')}</Relationships>`,
+      'utf8',
+    ),
+  )
+
+  // the pasted slide gains one rel: → its notesSlide (fresh rId above its own)
+  const rid = `rId${maxRelId(slideRelIds.map((rel) => rel.id)) + 1}`
+  return `<Relationship Id="${rid}" Type="${REL_BASE}/notesSlide" Target="${escapeAttr(relative(slidePath, notesPath))}"/>`
 }
 
 function ensureContentTypes(

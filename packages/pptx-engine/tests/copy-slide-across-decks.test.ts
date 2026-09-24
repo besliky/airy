@@ -10,6 +10,8 @@ import {
   listLayouts,
   chooseLayout,
   materializeSlideBundle,
+  getSlideNotes,
+  setSlideNotes,
 } from '../src/index'
 import type { SlideBundle } from '../src/index'
 
@@ -254,5 +256,71 @@ describe('copySlide / pasteSlide across decks', () => {
     const reopened = await openPptx(await savePptx(target))
     expect(reopened.deck.slides.length).toBe(target.deck.slides.length)
     expect(slideText(reopened.deck.slides[1])).toBe(slideText(reopened.deck.slides[2]))
+  })
+
+  it(
+    'carries speaker notes into the pasted slide and survives save → reopen',
+    { timeout: 120_000 },
+    async () => {
+      const source = await openPptx(fx('05_unicode_cjk_emoji.pptx'))
+      expect(setSlideNotes(source, 0, 'Speaker note <M3> & second line')).toBe(true)
+      const target = await openPptx(fx('01_standard_business.pptx'))
+
+      const bundle = copySlide(source, 0)!
+      expect(bundle.notesSlide).toBeDefined()
+      const pasted = pasteSlide(target, 0, bundle)!
+      expect(getSlideNotes(target.archive, pasted.path)).toBe('Speaker note <M3> & second line')
+
+      // the pasted slide's rels point at a notesSlide part that exists in the target
+      const notesRel = [...target.archive.readRels(pasted.path).values()].find((rel) =>
+        rel.type.endsWith('/notesSlide'),
+      )
+      expect(notesRel).toBeDefined()
+      const notesPath = `ppt/${notesRel!.target.replace('../', '')}`
+      expect(target.archive.has(notesPath)).toBe(true)
+      expect(target.archive.readText('[Content_Types].xml')).toContain(notesPath)
+
+      // the notesSlide's own rels: a notesMaster that exists + the owning-slide back-reference
+      const notesRels = [...target.archive.readRels(notesPath).values()]
+      const masterRel = notesRels.find((rel) => rel.type.endsWith('/notesMaster'))
+      expect(masterRel).toBeDefined()
+      expect(target.archive.has(`ppt/${masterRel!.target.replace('../', '')}`)).toBe(true)
+      const backRef = notesRels.find((rel) => rel.type.endsWith('/slide'))
+      expect(backRef).toBeDefined()
+      expect(`ppt/${backRef!.target.replace('../', '')}`).toBe(pasted.path)
+
+      const reopened = await openPptx(await savePptx(target))
+      expect(getSlideNotes(reopened.archive, reopened.deck.slides[1]!.path)).toBe(
+        'Speaker note <M3> & second line',
+      )
+    },
+  )
+
+  it('copying a slide without notes creates no notesSlide parts in the target', async () => {
+    const source = await openPptx(fx('05_unicode_cjk_emoji.pptx'))
+    const target = await openPptx(fx('01_standard_business.pptx'))
+    const notesParts = () =>
+      [...target.archive.entries.keys()].filter((p) => p.startsWith('ppt/notesSlides/')).length
+    const before = notesParts()
+
+    const bundle = copySlide(source, 0)!
+    expect(bundle.notesSlide).toBeUndefined()
+    expect(pasteSlide(target, 0, bundle)).not.toBeNull()
+    expect(notesParts()).toBe(before)
+  })
+
+  it('pasting a noted slide back into its own deck gives the copy its own notesSlide', async () => {
+    const opened = await openPptx(fx('05_unicode_cjk_emoji.pptx'))
+    expect(setSlideNotes(opened, 0, 'own deck note')).toBe(true)
+    const bundle = copySlide(opened, 0)!
+
+    const pasted = pasteSlide(opened, 0, bundle)!
+    expect(getSlideNotes(opened.archive, opened.deck.slides[0]!.path)).toBe('own deck note')
+    expect(getSlideNotes(opened.archive, pasted.path)).toBe('own deck note')
+    // a fresh notesSlide part, not the source's shared one
+    const parts = [...opened.archive.entries.keys()].filter((p) =>
+      /^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(p),
+    )
+    expect(parts.length).toBe(2)
   })
 })
