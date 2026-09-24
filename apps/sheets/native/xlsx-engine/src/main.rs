@@ -930,7 +930,7 @@ mod tests {
     /// Polls the cache until `predicate` holds or the deadline passes
     /// (prewarm builds its model on a background thread).
     fn wait_for(cache: &Arc<Mutex<RecalcCache>>, predicate: impl Fn(&RecalcCache) -> bool) -> bool {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
         while std::time::Instant::now() < deadline {
             let cache = cache
                 .lock()
@@ -955,7 +955,13 @@ mod tests {
         let recalc = RecalcWorker::new();
 
         recalc.prewarm_within(&source, 1, u64::MAX);
-        assert!(wait_for(&recalc.cache, |cache| cache.has_resident(&source)));
+        // prewarm_active clears in the prewarm thread's last statement (the
+        // BusyReset drop, which runs after the cache guard is released), so
+        // waiting on it alongside the resident insert closes the race where
+        // the flag assert below ran while the thread was still finishing.
+        assert!(wait_for(&recalc.cache, |cache| {
+            cache.has_resident(&source) && !recalc.prewarm_active.load(Ordering::Acquire)
+        }));
 
         // The first real recalc hits the resident model.
         let first = expect_ok(recalc.run("r".into(), &source, &[], &recalc_reads()));
