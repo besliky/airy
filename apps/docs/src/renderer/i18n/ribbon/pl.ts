@@ -129,6 +129,8 @@ export const pl = {
   ribbonHighlightColors: 'Kolory wyróżnienia',
   ribbonNoColor: 'Brak koloru',
   ribbonFontColor: 'Kolor czcionki',
+  ribbonFontColorOptions: 'Opcje koloru czcionki',
+  ribbonHighlightColorOptions: 'Opcje koloru wyróżnienia',
   ribbonThemeColorsSection: 'Kolory motywu',
   ribbonThemeColorShadeTip: 'Kolor motywu {r}-{c}',
   ribbonStandardColors: 'Kolory standardowe',

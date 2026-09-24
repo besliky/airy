@@ -126,6 +126,8 @@ export const zhTW = {
   ribbonHighlightColors: '醒目提示色彩',
   ribbonNoColor: '無色彩',
   ribbonFontColor: '字型色彩',
+  ribbonFontColorOptions: '字型色彩選項',
+  ribbonHighlightColorOptions: '醒目提示色彩選項',
   ribbonThemeColorsSection: '佈景主題色彩',
   ribbonThemeColorShadeTip: '佈景主題色彩 {r}-{c}',
   ribbonStandardColors: '標準色彩',

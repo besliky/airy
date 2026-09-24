@@ -132,6 +132,8 @@ export const nl = {
   ribbonHighlightColors: 'Markeringskleuren',
   ribbonNoColor: 'Geen kleur',
   ribbonFontColor: 'Tekstkleur',
+  ribbonFontColorOptions: 'Opties voor tekstkleur',
+  ribbonHighlightColorOptions: 'Opties voor markeringskleur',
   ribbonThemeColorsSection: 'Themakleuren',
   ribbonThemeColorShadeTip: 'Themakleur {r}-{c}',
   ribbonStandardColors: 'Standaardkleuren',

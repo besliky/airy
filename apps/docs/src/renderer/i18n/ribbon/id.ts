@@ -129,6 +129,8 @@ export const id = {
   ribbonHighlightColors: 'Warna Sorotan',
   ribbonNoColor: 'Tanpa Warna',
   ribbonFontColor: 'Warna Font',
+  ribbonFontColorOptions: 'Opsi Warna Font',
+  ribbonHighlightColorOptions: 'Opsi Warna Sorot',
   ribbonThemeColorsSection: 'Warna Tema',
   ribbonThemeColorShadeTip: 'Warna tema {r}-{c}',
   ribbonStandardColors: 'Warna Standar',

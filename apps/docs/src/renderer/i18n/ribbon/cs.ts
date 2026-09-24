@@ -128,6 +128,8 @@ export const cs = {
   ribbonHighlightColors: 'Barvy zvýraznění',
   ribbonNoColor: 'Bez barvy',
   ribbonFontColor: 'Barva písma',
+  ribbonFontColorOptions: 'Možnosti barvy písma',
+  ribbonHighlightColorOptions: 'Možnosti barvy zvýraznění',
   ribbonThemeColorsSection: 'Barvy motivu',
   ribbonThemeColorShadeTip: 'Barva motivu {r}-{c}',
   ribbonStandardColors: 'Standardní barvy',

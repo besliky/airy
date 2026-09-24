@@ -131,6 +131,8 @@ export const de = {
   ribbonHighlightColors: 'Hervorhebungsfarben',
   ribbonNoColor: 'Keine Farbe',
   ribbonFontColor: 'Schriftfarbe',
+  ribbonFontColorOptions: 'Schriftfarbenoptionen',
+  ribbonHighlightColorOptions: 'Hervorhebungsfarbenoptionen',
   ribbonThemeColorsSection: 'Designfarben',
   ribbonThemeColorShadeTip: 'Designfarbe {r}-{c}',
   ribbonStandardColors: 'Standardfarben',

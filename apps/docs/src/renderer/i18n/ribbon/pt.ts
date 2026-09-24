@@ -130,6 +130,8 @@ export const pt = {
   ribbonHighlightColors: 'Cores de Realce',
   ribbonNoColor: 'Sem Cor',
   ribbonFontColor: 'Cor da Fonte',
+  ribbonFontColorOptions: 'Opções de Cor da Fonte',
+  ribbonHighlightColorOptions: 'Opções de Cor de Realce',
   ribbonThemeColorsSection: 'Cores do Tema',
   ribbonThemeColorShadeTip: 'Cor do tema {r}-{c}',
   ribbonStandardColors: 'Cores Padrão',

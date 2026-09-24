@@ -127,6 +127,8 @@ export const he = {
   ribbonHighlightColors: 'צבעי סימון',
   ribbonNoColor: 'ללא צבע',
   ribbonFontColor: 'צבע גופן',
+  ribbonFontColorOptions: 'אפשרויות צבע גופן',
+  ribbonHighlightColorOptions: 'אפשרויות צבע סימון',
   ribbonThemeColorsSection: 'צבעי ערכת נושא',
   ribbonThemeColorShadeTip: 'צבע ערכת נושא {r}-{c}',
   ribbonStandardColors: 'צבעים רגילים',

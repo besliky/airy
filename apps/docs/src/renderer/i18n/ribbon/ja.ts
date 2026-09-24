@@ -134,6 +134,8 @@ export const ja = {
   ribbonHighlightColors: '蛍光ペンの色',
   ribbonNoColor: '色なし',
   ribbonFontColor: 'フォントの色',
+  ribbonFontColorOptions: 'フォントの色のオプション',
+  ribbonHighlightColorOptions: '蛍光ペンの色のオプション',
   ribbonThemeColorsSection: 'テーマの色',
   ribbonThemeColorShadeTip: 'テーマの色 {r}-{c}',
   ribbonStandardColors: '標準の色',

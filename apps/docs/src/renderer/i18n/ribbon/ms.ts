@@ -129,6 +129,8 @@ export const ms = {
   ribbonHighlightColors: 'Warna Penyerlahan',
   ribbonNoColor: 'Tiada Warna',
   ribbonFontColor: 'Warna Fon',
+  ribbonFontColorOptions: 'Pilihan Warna Fon',
+  ribbonHighlightColorOptions: 'Pilihan Warna Penyerlahan',
   ribbonThemeColorsSection: 'Warna Tema',
   ribbonThemeColorShadeTip: 'Warna tema {r}-{c}',
   ribbonStandardColors: 'Warna Piawai',

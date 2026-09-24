@@ -131,6 +131,8 @@ export const it = {
   ribbonHighlightColors: 'Colori evidenziatore',
   ribbonNoColor: 'Nessun colore',
   ribbonFontColor: 'Colore carattere',
+  ribbonFontColorOptions: 'Opzioni colore carattere',
+  ribbonHighlightColorOptions: 'Opzioni colore evidenziatore',
   ribbonThemeColorsSection: 'Colori tema',
   ribbonThemeColorShadeTip: 'Colore tema {r}-{c}',
   ribbonStandardColors: 'Colori standard',
