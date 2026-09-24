@@ -48,6 +48,12 @@ import {
   writeImageIntoOwnedAssets,
 } from './asset-lifecycle'
 import { createMarkdownConversionSession, writeMarkdownConversion } from './conversion-lifecycle'
+import {
+  decodeBytesAsEncoding,
+  isSelectableEncoding,
+  readRememberedFileEncoding,
+  rememberFileEncoding,
+} from './encoding-memory'
 import { MARKDOWN_CHANNELS } from '../shared/ipc'
 import type {
   ExportDocxRequest,
@@ -605,8 +611,24 @@ export function markdownIsDirty(webContentsId: number): boolean {
 // ── Crash recovery: dirty renderers push a copy every 30s
 // (markdown:write-recovery); a normal save cleans it up; open offers Restore/Discard ──
 
-const readTextDecoded = async (path: string) =>
-  decodeTextBytes(await readFile(path), legacyCharsetForLang(getUiLang()))
+/**
+ * UX-1653 channel for the reopen-with-encoding affordance: main-only for now
+ * (the renderer UI is a follow-up), kept outside the pinned MARKDOWN_CHANNELS
+ * registry until the preload grows its pass-through.
+ */
+export const MARKDOWN_SET_ENCODING_CHANNEL = 'markdown:set-encoding'
+
+/** the shared workspace settings file — remembered per-file encodings live here */
+const appSettingsPath = () => join(app.getPath('userData'), 'app-settings.json')
+
+const readTextDecoded = async (path: string) => {
+  const bytes = await readFile(path)
+  // UX-1653: a manual pick for this path outruns the detector — reopening
+  // must not re-run the very guess the user already corrected.
+  const remembered = readRememberedFileEncoding(appSettingsPath(), path)
+  if (remembered) return decodeBytesAsEncoding(bytes, remembered)
+  return decodeTextBytes(bytes, legacyCharsetForLang(getUiLang()))
+}
 
 const recoveryStore = new TextRecoveryStore(join(app.getPath('userData'), 'markdown-autosave'), {
   write: (target, text) => atomicWriteFile(target, Buffer.from(text, 'utf8')),
@@ -858,6 +880,23 @@ function registerMarkdownIpc(): void {
       promptMarkdownRecovery(BrowserWindow.fromWebContents(e.sender)),
     )
   })
+
+  // UX-1653: remember a manual encoding pick for an open file. The reopen
+  // affordance calls this before re-reading; the next readFile decodes with
+  // the pick (readTextDecoded), so the choice survives tab close and relaunch.
+  ipcMain.handle(
+    MARKDOWN_SET_ENCODING_CHANNEL,
+    async (e, path: unknown, encoding: unknown): Promise<boolean> => {
+      if (typeof path !== 'string' || !allowedByWc.get(e.sender.id)?.has(path)) {
+        throw new Error('markdown: path not granted to this view')
+      }
+      if (!isSelectableEncoding(encoding)) {
+        throw new Error('markdown: unknown encoding')
+      }
+      await rememberFileEncoding(appSettingsPath(), path, encoding)
+      return true
+    },
+  )
 
   // crash-recovery copy push: dirty renderers serialize and send every ~30s
   ipcMain.handle(MARKDOWN_CHANNELS.writeRecovery, async (e, path: unknown, text: unknown) => {
