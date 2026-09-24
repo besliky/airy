@@ -44,6 +44,7 @@ export const ru = {
   appUntitledDocx: 'Документ без названия.docx',
   appOpenedFile: 'Открыт файл {name}',
   appOpenFailed: 'Не удалось открыть: {error}',
+  appOpenCorrupted: 'Файл повреждён: {part}, позиция {position}',
   appFontsMissing: 'Отсутствуют шрифты документа: {names} (показаны заменители)',
   appVerticalTextNotice:
     'Документ содержит вертикальный текст (пока отображается горизонтально; на сохранение это не влияет)',

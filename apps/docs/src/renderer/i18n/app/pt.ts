@@ -44,6 +44,7 @@ export const pt = {
   appUntitledDocx: 'Sem título.docx',
   appOpenedFile: '{name} aberto',
   appOpenFailed: 'Falha ao abrir: {error}',
+  appOpenCorrupted: 'Arquivo corrompido: {part}, posição {position}',
   appFontsMissing: 'Fontes do documento ausentes: {names} (substitutas exibidas)',
   appVerticalTextNotice:
     'Este documento contém texto vertical (exibido horizontalmente por enquanto; o salvamento não é afetado)',

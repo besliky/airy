@@ -44,6 +44,7 @@ export const cs = {
   appUntitledDocx: 'Bez názvu.docx',
   appOpenedFile: 'Otevřeno: {name}',
   appOpenFailed: 'Otevření se nezdařilo: {error}',
+  appOpenCorrupted: 'Soubor je poškozený: {part}, pozice {position}',
   appFontsMissing: 'Chybějící písma dokumentu: {names} (zobrazena náhradní)',
   appVerticalTextNotice:
     'Tento dokument obsahuje svislý text (zatím se zobrazuje vodorovně; ukládání není ovlivněno)',

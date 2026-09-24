@@ -83,6 +83,7 @@ export {
   ommlToMathML,
 } from './math'
 export { scanBody, type BodyElement, type BodyScan } from './scan'
+export { CorruptXmlError } from './xml-utils'
 export { buildDiagramDisplay, diagramDefaultExtentEmu, freshDiagramGuid } from './smartart-diagram'
 export { SMARTART_PRESET_PARTS } from './smartart-vendor'
 export {

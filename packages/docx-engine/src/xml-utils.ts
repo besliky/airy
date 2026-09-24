@@ -28,6 +28,33 @@ export function xmlWellFormednessError(xml: string): string | null {
 }
 
 /**
+ * Raised when a docx part fails the well-formedness gate (BUG-1609). The
+ * `message` keeps the full validator output for logs and tests; the structured
+ * fields (`shortPart`, `position`, `detail`) let the renderer show a short,
+ * friendly refusal (UX-1652) instead of raw fast-xml-parser internals.
+ */
+export class CorruptXmlError extends Error {
+  /** zip path of the offending part, e.g. "word/document.xml" */
+  readonly part: string
+  /** bare file name of the offending part, e.g. "document.xml" */
+  readonly shortPart: string
+  /** validator position as "line:col", e.g. "1:1"; "unknown" if absent */
+  readonly position: string
+  /** raw validator reason (message snippet included), for console logging */
+  readonly detail: string
+
+  constructor(part: string, detail: string) {
+    super(`docx file is corrupted: ${part} is not well-formed XML (${detail})`)
+    this.name = 'CorruptXmlError'
+    this.part = part
+    this.shortPart = part.slice(part.lastIndexOf('/') + 1)
+    const at = /\(line (\d+), col (\d+)\)\s*$/.exec(detail)
+    this.position = at ? `${at[1]}:${at[2]}` : 'unknown'
+    this.detail = detail
+  }
+}
+
+/**
  * Table XML only: deep nesting is legitimate there (POI stress files nest 5000 table
  * levels, far past the default 100-tag cap). fxp parses iteratively, but callers must
  * cap their own recursion when walking the result.

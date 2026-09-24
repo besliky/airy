@@ -46,6 +46,7 @@ export const ko = {
   appUntitledDocx: '제목 없는 문서.docx',
   appOpenedFile: '{name}을(를) 열었습니다',
   appOpenFailed: '열기 실패: {error}',
+  appOpenCorrupted: '파일이 손상되었습니다: {part}, 위치 {position}',
   appFontsMissing: '문서 글꼴이 설치되어 있지 않습니다: {names} (대체 글꼴로 표시)',
   appVerticalTextNotice:
     '세로쓰기 텍스트가 포함된 문서입니다(현재 가로쓰기로 표시되며 저장에는 영향이 없습니다)',

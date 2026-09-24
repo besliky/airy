@@ -44,6 +44,7 @@ export const de = {
   appUntitledDocx: 'Unbenanntes Dokument.docx',
   appOpenedFile: '{name} geöffnet',
   appOpenFailed: 'Öffnen fehlgeschlagen: {error}',
+  appOpenCorrupted: 'Datei ist beschädigt: {part}, Position {position}',
   appFontsMissing: 'Fehlende Dokumentschriftarten: {names} (Ersatzschriften werden angezeigt)',
   appVerticalTextNotice:
     'Dieses Dokument enthält vertikalen Text (vorerst horizontal angezeigt; das Speichern ist nicht betroffen)',

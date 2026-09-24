@@ -44,6 +44,7 @@ export const ms = {
   appUntitledDocx: 'Tanpa tajuk.docx',
   appOpenedFile: '{name} dibuka',
   appOpenFailed: 'Gagal membuka: {error}',
+  appOpenCorrupted: 'Fail rosak: {part}, kedudukan {position}',
   appFontsMissing: 'Fon dokumen tiada: {names} (dipaparkan dengan fon ganti)',
   appVerticalTextNotice:
     'Dokumen ini mengandungi teks menegak (dipaparkan mendatar buat masa ini; penyimpanan tidak terjejas)',

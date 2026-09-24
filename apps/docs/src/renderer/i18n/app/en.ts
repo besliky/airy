@@ -44,6 +44,7 @@ export const en = {
   appUntitledDocx: 'Untitled.docx',
   appOpenedFile: 'Opened {name}',
   appOpenFailed: 'Open failed: {error}',
+  appOpenCorrupted: 'File is corrupted: {part}, position {position}',
   appFontsMissing: 'Missing document fonts: {names} (substitutes shown)',
   appVerticalTextNotice:
     'This document contains vertical text (shown horizontally for now; saving is unaffected)',

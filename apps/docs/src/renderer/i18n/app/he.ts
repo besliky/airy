@@ -44,6 +44,7 @@ export const he = {
   appUntitledDocx: 'ללא שם.docx',
   appOpenedFile: '{name} נפתח',
   appOpenFailed: 'הפתיחה נכשלה: {error}',
+  appOpenCorrupted: 'הקובץ פגום: {part}, מיקום {position}',
   appFontsMissing: 'גופני המסמך חסרים: {names} (מוצגים גופנים חלופיים)',
   appVerticalTextNotice: 'המסמך מכיל טקסט אנכי (מוצג אופקית בינתיים; השמירה אינה מושפעת)',
   appNewDocCreated: 'נוצר מסמך ריק. תארו בחלונית ה-AI משמאל מה ליצור.',
