@@ -20,7 +20,7 @@ import {
   type HydrationProgress,
 } from './markdown/hydration'
 import { buildExtensions } from './editor/extensions'
-import { tiptapFindTarget } from './editor/findTarget'
+import { tiptapFindTarget, type FindStatus } from './editor/findTarget'
 import { buildSlashItems } from './editor/slashCommand'
 import type { SlashController, SlashMenuState } from './editor/slashCommand'
 import { setImageBaseDir } from './editor/localImage'
@@ -141,6 +141,11 @@ export default function App() {
   const [autoSave, setAutoSave] = useAutoSavePref('mdapp.autoSave', window.markdownApi)
   const [showFind, setShowFind] = useState(false)
   const [findFocus, setFindFocus] = useState<FindFocusRequest>({ field: 'find', nonce: 0 })
+  // BUG-1694: honest find feedback for giant documents — how many matches are
+  // not painted (decoration cap) and how many are left during a bulk replace
+  const [findHint, setFindHint] = useState<
+    { kind: 'overflow'; unpainted: number } | { kind: 'replace'; remaining: number } | null
+  >(null)
   const [zoom, setZoom] = useState(100)
   // progressive hydration of a giant file (PERF-1647): shown as a counter in
   // the status bar while background chunks are appended
@@ -219,6 +224,19 @@ export default function App() {
   editorRef.current = editor
   filePathRef.current = filePath
   const findTarget = useMemo(() => (editor ? tiptapFindTarget(editor) : null), [editor])
+
+  useEffect(() => {
+    if (!findTarget) return
+    return findTarget.onStatus((s: FindStatus) => {
+      if (s.kind === 'overflow') {
+        setFindHint(s.unpainted > 0 ? { kind: 'overflow', unpainted: s.unpainted } : null)
+      } else if (s.kind === 'replace') {
+        setFindHint(s.remaining > 0 ? { kind: 'replace', remaining: s.remaining } : null)
+      } else {
+        setFindHint(null)
+      }
+    })
+  }, [findTarget])
 
   useEffect(() => {
     setImageBaseDir(filePath ? dirOf(filePath) : null)
@@ -796,6 +814,13 @@ export default function App() {
               {hydration && (
                 <span className="status-item">
                   {t('loading')} {hydration.done}/{hydration.total}
+                </span>
+              )}
+              {findHint && (
+                <span className="status-item find-hint" data-kind={findHint.kind} role="status">
+                  {findHint.kind === 'overflow'
+                    ? t('findOverflow', { n: findHint.unpainted })
+                    : t('replaceRemaining', { n: findHint.remaining })}
                 </span>
               )}
             </div>
