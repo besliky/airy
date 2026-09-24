@@ -694,10 +694,22 @@ export async function savePptx(opened: OpenedPptx): Promise<Uint8Array> {
  *
  * Prefer this for anything that lands on disk: savePptx has to assemble the whole
  * package into one contiguous buffer, which on a large deck fails outright with
- * "Array buffer allocation failed". Streaming keeps peak memory to a chunk at a
- * time. JSZip throws stream errors from inside its own scheduled callbacks, so the
+ * "Array buffer allocation failed". The node stream keeps the whole package out
+ * of memory — output reaches the file a chunk at a time.
+ * JSZip throws stream errors from inside its own scheduled callbacks, so the
  * stream's 'error' event — not just the returned promise — has to be handled or the
  * throw escapes as an uncaught exception and takes the process down.
+ *
+ * `streamFiles` must stay false (the default). With it enabled JSZip emits every
+ * entry with general-purpose bit 3 set: a local header whose crc/sizes are zeroed
+ * plus a trailing data descriptor. LibreOffice Impress refuses the whole package
+ * for exactly that reason ("source file could not be loaded"), so streaming per
+ * entry would break "save, then open in another editor" for every deck. The
+ * memory cost of buffering an entry is bounded: per-entry content is fully
+ * compressed before its local header is written, so the transient buffer is the
+ * compressed size of a single part (media parts are STOREd verbatim — bounded by
+ * the largest media blob, not by the deck), while the package itself still
+ * streams to disk entry by entry.
  *
  * The stream lands in a same-directory `.<name>.<rand>.tmp` file (same naming
  * scheme as atomicWriteFile in electron-utils — this package can't depend on it,
@@ -720,7 +732,7 @@ export async function savePptxToFile(opened: OpenedPptx, filePath: string): Prom
     type: 'nodebuffer',
     compression: 'DEFLATE',
     compressionOptions: { level: 6 },
-    streamFiles: true,
+    streamFiles: false,
   })
   try {
     await pipeline(source, createWriteStream(tempPath))
