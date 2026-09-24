@@ -1940,6 +1940,15 @@ html.airy-popover-open .ribbon-tabs {
   flex-shrink: 0;
 }
 
+/* BUG-1694: giant-document find feedback (unpainted matches / replace progress) */
+.find-hint {
+  color: var(--accent);
+}
+
+.find-hint[data-kind='replace'] {
+  color: var(--text-dim);
+}
+
 .status-right {
   display: flex;
   align-items: center;
