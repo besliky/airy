@@ -3,6 +3,11 @@ import type { zh } from './zh'
 export const id = {
   loading: 'Memuat…',
   loadFailed: 'Tidak dapat membuka file',
+  encodingAuto: 'Deteksi otomatis',
+  reopenEncoding: 'Buka ulang dengan pengodean',
+  openedAs: 'Dibuka sebagai {encoding}',
+  openedAuto: 'Dibuka ulang dengan pengodean yang terdeteksi otomatis',
+  reopenDirty: 'Simpan atau batalkan perubahan Anda sebelum membuka ulang dengan pengodean lain',
   untitled: 'Tanpa judul',
   saveFailed: 'Gagal menyimpan: {error}',
   saveFailedStatus: 'Gagal menyimpan',

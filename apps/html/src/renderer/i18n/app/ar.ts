@@ -3,6 +3,11 @@ import type { zh } from './zh'
 export const ar = {
   loading: 'جارٍ التحميل…',
   loadFailed: 'تعذر فتح الملف',
+  encodingAuto: 'كشف تلقائي',
+  reopenEncoding: 'إعادة الفتح بترميز',
+  openedAs: 'فُتح بترميز {encoding}',
+  openedAuto: 'أُعيد الفتح بالترميز المكتشف تلقائيًا',
+  reopenDirty: 'احفظ تغييراتك أو تراجع عنها قبل إعادة الفتح بترميز مختلف',
   untitled: 'بدون عنوان',
   saveFailed: 'فشل الحفظ: {error}',
   saveFailedStatus: 'فشل الحفظ',

@@ -3,6 +3,11 @@ import type { zh } from './zh'
 export const zhTW = {
   loading: '載入中…',
   loadFailed: '無法開啟檔案',
+  encodingAuto: '自動偵測',
+  reopenEncoding: '以指定編碼重新開啟',
+  openedAs: '已按 {encoding} 開啟',
+  openedAuto: '已用自動偵測的編碼重新開啟',
+  reopenDirty: '文件有未儲存的變更，請先儲存或放棄，再以其他編碼重新開啟',
   untitled: '未命名文件',
   saveFailed: '儲存失敗：{error}',
   saveFailedStatus: '儲存失敗',

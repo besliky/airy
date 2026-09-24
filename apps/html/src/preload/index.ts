@@ -10,6 +10,7 @@ import type { AutoSaveDefault, ExportFormat, HtmlApi, SaveMode, UiTheme } from '
 const api: HtmlApi = {
   consumePending: () => ipcRenderer.invoke(HTML_CHANNELS.consumePending),
   readFile: (path) => ipcRenderer.invoke(HTML_CHANNELS.readFile, path),
+  setEncoding: (path, encoding) => ipcRenderer.invoke(HTML_CHANNELS.setEncoding, path, encoding),
   writeRecovery: (path, text) => ipcRenderer.invoke(HTML_CHANNELS.writeRecovery, path, text),
   updatePreview: (text) => ipcRenderer.send(HTML_CHANNELS.previewUpdate, text),
   getPreviewInfo: () => ipcRenderer.invoke(HTML_CHANNELS.previewInfo),

@@ -3,6 +3,11 @@ import type { zh } from './zh'
 export const pl = {
   loading: 'Wczytywanie…',
   loadFailed: 'Nie można otworzyć pliku',
+  encodingAuto: 'Wykryj automatycznie',
+  reopenEncoding: 'Otwórz ponownie w kodowaniu',
+  openedAs: 'Otwarto jako {encoding}',
+  openedAuto: 'Otwarto ponownie w automatycznie wykrytym kodowaniu',
+  reopenDirty: 'Zapisz lub odrzuć zmiany przed ponownym otwarciem w innym kodowaniu',
   untitled: 'Bez tytułu',
   saveFailed: 'Zapis nie powiódł się: {error}',
   saveFailedStatus: 'Zapis nie powiódł się',

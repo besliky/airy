@@ -3,6 +3,11 @@ import type { zh } from './zh'
 export const fr = {
   loading: 'Chargement…',
   loadFailed: "Impossible d'ouvrir le fichier",
+  encodingAuto: 'Détection auto',
+  reopenEncoding: 'Réouvrir avec un encodage…',
+  openedAs: 'Ouvert en {encoding}',
+  openedAuto: "Réouvert avec l'encodage détecté automatiquement",
+  reopenDirty: 'Enregistrez ou annulez vos modifications avant de rouvrir avec un autre encodage',
   untitled: 'Sans titre',
   saveFailed: "Échec de l'enregistrement : {error}",
   saveFailedStatus: "Échec de l'enregistrement",

@@ -3,6 +3,12 @@ import type { zh } from './zh'
 export const nl = {
   loading: 'Laden…',
   loadFailed: 'Kan het bestand niet openen',
+  encodingAuto: 'Automatisch detecteren',
+  reopenEncoding: 'Opnieuw openen met codering',
+  openedAs: 'Geopend als {encoding}',
+  openedAuto: 'Opnieuw geopend met automatisch gedetecteerde codering',
+  reopenDirty:
+    'Sla uw wijzigingen op of maak ze ongedaan voordat u met een andere codering opnieuw opent',
   untitled: 'Naamloos',
   saveFailed: 'Opslaan mislukt: {error}',
   saveFailedStatus: 'Opslaan mislukt',

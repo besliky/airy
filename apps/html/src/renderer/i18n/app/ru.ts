@@ -3,6 +3,11 @@ import type { zh } from './zh'
 export const ru = {
   loading: 'Загрузка…',
   loadFailed: 'Не удалось открыть файл',
+  encodingAuto: 'Определить автоматически',
+  reopenEncoding: 'Открыть в кодировке…',
+  openedAs: 'Открыто в кодировке {encoding}',
+  openedAuto: 'Повторно открыто в автоматически определённой кодировке',
+  reopenDirty: 'Сохраните или отмените изменения, прежде чем переоткрыть файл в другой кодировке',
   untitled: 'Без названия',
   saveFailed: 'Не удалось сохранить: {error}',
   saveFailedStatus: 'Не удалось сохранить',

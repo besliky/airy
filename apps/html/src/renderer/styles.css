@@ -3316,6 +3316,18 @@ html.airy-popover-open .ribbon-tabs {
   color: var(--text-muted);
 }
 
+/* UX-1696: status-bar "Reopen with encoding" picker (same chrome as the device dropdown) */
+.encoding-dd.gs-dd {
+  min-width: 92px;
+}
+
+.encoding-dd .gs-dd-btn {
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
 /* ── canvas modes (Comment / Edit / Present) in the QAT row ─────────────── */
 /* ── Present: chrome-free preview, only the QAT row stays ── */
 .app.present .ribbon-body,

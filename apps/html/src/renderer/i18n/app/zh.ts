@@ -2,6 +2,11 @@
 export const zh = {
   loading: '加载中…',
   loadFailed: '无法打开文件',
+  encodingAuto: '自动检测',
+  reopenEncoding: '以指定编码重新打开',
+  openedAs: '已按 {encoding} 打开',
+  openedAuto: '已用自动检测的编码重新打开',
+  reopenDirty: '文档有未保存更改，请先保存或放弃，再以其他编码重新打开',
   untitled: '未命名文档',
   saveFailed: '保存失败：{error}',
   saveFailedStatus: '保存失败',

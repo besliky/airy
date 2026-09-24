@@ -9,6 +9,7 @@ export const HTML_CHANNELS = {
   presentFullScreen: 'html:present-fullscreen',
   presentNewTab: 'html:present-new-tab',
   readFile: 'html:read-file',
+  setEncoding: 'html:set-encoding',
   writeRecovery: 'html:write-recovery',
   save: 'html:save',
   saveRequest: 'html:save-request',
@@ -43,6 +44,35 @@ export const HTML_CHANNELS = {
 } as const
 
 export type UiTheme = 'light' | 'dark' | 'system'
+
+/**
+ * Charsets a manual "Reopen with encoding" pick may name (UX-1696). Mirrors
+ * the detector's candidate set (LEGACY_CHARSETS in
+ * packages/file-parse/src/text.ts) plus the UTF-8/16 family a user may want
+ * to force over a wrong legacy guess. One list shared by the renderer (picker
+ * options), the preload (pass-through) and main (persistence + validation).
+ * Keep in sync with LEGACY_CHARSETS; a persisted entry whose encoding is not
+ * listed here is dropped on read and the file falls back to auto-detection.
+ */
+export const SELECTABLE_ENCODINGS = [
+  'utf-8',
+  'utf-16le',
+  'utf-16be',
+  'gb18030',
+  'shift_jis',
+  'big5',
+  'euc-kr',
+  'windows-1252',
+  'windows-1251',
+  'koi8-r',
+  'windows-1250',
+  'windows-1253',
+  'windows-1255',
+  'windows-1256',
+  'windows-874',
+] as const
+
+export type SelectableEncoding = (typeof SELECTABLE_ENCODINGS)[number]
 
 /** shell-wide AutoSave default; updatedAt is 0 until the user has ever set it */
 export interface AutoSaveDefault {
@@ -173,6 +203,13 @@ export interface HtmlApi {
   consumePending(): Promise<string | null>
   /** Read the file as UTF-8 text. Only paths granted to this view are allowed */
   readFile(path: string): Promise<{ text: string; recovered: boolean }>
+  /**
+   * Remember (encoding) or forget (null, back to auto-detection) the charset
+   * this file decodes with; the caller re-reads via readFile afterwards
+   * (UX-1696 "Reopen with encoding"). Only paths granted to this view are
+   * allowed; the pick survives tab close and relaunch (UX-1653).
+   */
+  setEncoding(path: string, encoding: string | null): Promise<boolean>
   /** crash-recovery copy push (dirty renderers, every ~30s and on blur) */
   writeRecovery(path: string, text: string): Promise<void>
   /** Push the current buffer so html-preview:// serves it to the preview iframe */
