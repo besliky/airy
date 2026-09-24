@@ -112,6 +112,28 @@ vi.mock('../../slides/src/main/slides-main', () => ({
   slidesIsDirty: (...args: unknown[]) => slidesIsDirty(...(args as [])),
 }))
 
+const createMarkdownView = vi.fn(() => makeFakeView())
+const markdownIsDirty = vi.fn(() => false)
+const requestMarkdownClose = vi.fn(() => Promise.resolve(true))
+
+vi.mock('../../markdown/src/main/markdown-main', () => ({
+  createMarkdownView: (...args: unknown[]) => createMarkdownView(...(args as [])),
+  markdownIsDirty: (...args: unknown[]) => markdownIsDirty(...(args as [])),
+  requestMarkdownClose: (...args: unknown[]) => requestMarkdownClose(...(args as [])),
+}))
+
+const createHtmlView = vi.fn(() => makeFakeView())
+const createHtmlPresentView = vi.fn(() => makeFakeView())
+const htmlIsDirty = vi.fn(() => false)
+const requestHtmlClose = vi.fn(() => Promise.resolve(true))
+
+vi.mock('../../html/src/main/html-main', () => ({
+  createHtmlView: (...args: unknown[]) => createHtmlView(...(args as [])),
+  createHtmlPresentView: (...args: unknown[]) => createHtmlPresentView(...(args as [])),
+  htmlIsDirty: (...args: unknown[]) => htmlIsDirty(...(args as [])),
+  requestHtmlClose: (...args: unknown[]) => requestHtmlClose(...(args as [])),
+}))
+
 import { TabManager } from '../src/main/tab-manager'
 
 const TAB_STRIP_HEIGHT = 40
@@ -373,6 +395,28 @@ describe('closing tabs', () => {
     await manager.closeTab(id)
     expect(shellWindow.contentView.removeChildView).toHaveBeenCalledWith(view)
     expect(view.webContents.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('reclaims a closed markdown tab webContents outright (PERF-1657)', async () => {
+    const id = manager.openMarkdownTab('/tmp/notes.md')
+    const view = lastCreatedView(createMarkdownView)
+    await manager.closeTab(id)
+    expect(shellWindow.contentView.removeChildView).toHaveBeenCalledWith(view)
+    // markdown tabs take the direct close path: the renderer process is
+    // reclaimed deterministically, with no docs-style teardown navigation
+    // leaving an orphaned webContents behind (BUG-409 / PERF-1640 do not apply)
+    expect(view.webContents.close).toHaveBeenCalledTimes(1)
+    expect(view.webContents.loadURL).not.toHaveBeenCalled()
+  })
+
+  it('reclaims a closed html tab webContents outright (PERF-1657)', async () => {
+    const id = manager.openHtmlTab('/tmp/page.html')
+    const view = lastCreatedView(createHtmlView)
+    await manager.closeTab(id)
+    expect(shellWindow.contentView.removeChildView).toHaveBeenCalledWith(view)
+    // same non-docs path as markdown: close() is issued on the spot
+    expect(view.webContents.close).toHaveBeenCalledTimes(1)
+    expect(view.webContents.loadURL).not.toHaveBeenCalled()
   })
 
   it('detaches docs views without destroying the webContents synchronously (freeze workaround)', async () => {
