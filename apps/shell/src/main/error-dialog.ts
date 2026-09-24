@@ -159,9 +159,22 @@ const tFriendly = createI18n({
  * Known filesystem errors (ENOENT, EACCES/EPERM, EBUSY/ETXTBSY, EMFILE) are
  * prefixed with a friendly localized explanation; the raw error text stays
  * visible as the dialog's detail section.
+ *
+ * `onClosed` fires once the dialog is dismissed. When the single-dialog guard
+ * swallows the call (another dialog owns the screen) nothing is shown, so it
+ * fires immediately — a caller that tracks "this dialog is open" (the
+ * open-failure dedupe, BUG-1678) must not wait on a dialog that never was.
  */
-export function showErrorDialog(win: BrowserWindow | null, message: string, err: unknown): void {
-  if (showing) return
+export function showErrorDialog(
+  win: BrowserWindow | null,
+  message: string,
+  err: unknown,
+  onClosed?: () => void,
+): void {
+  if (showing) {
+    onClosed?.()
+    return
+  }
   showing = true
   const raw = err instanceof Error ? err.message : String(err)
   const friendly = friendlyErrorKey(err)
@@ -174,5 +187,6 @@ export function showErrorDialog(win: BrowserWindow | null, message: string, err:
     win && !win.isDestroyed() ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options)
   void shown.finally(() => {
     showing = false
+    onClosed?.()
   })
 }

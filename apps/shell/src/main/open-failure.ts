@@ -36,22 +36,47 @@ export function classifyOpenFailure(filePath: string): Error | null {
 
 /** the existing main-process error-dialog channel plus its localized title */
 export interface OpenFailureDeps {
-  /** showErrorDialog from error-dialog.ts; the window is resolved by the caller */
-  showErrorDialog: (message: string, err: Error) => void
+  /**
+   * showErrorDialog from error-dialog.ts; the window is resolved by the caller.
+   * `onClosed` fires when the raised dialog is dismissed (or immediately when
+   * the channel swallows the call because another dialog owns the screen), so
+   * the per-path dedupe below can release its entry.
+   */
+  showErrorDialog: (message: string, err: Error, onClosed?: () => void) => void
   /** localized dialog title; receives the failing file's basename */
   openFailedMessage: (name: string) => string
 }
 
 /**
+ * Paths whose failure dialog is currently on screen (BUG-1678). The unpacked
+ * single-instance retry loop re-broadcasts the forwarded open up to 21 times,
+ * and each broadcast re-reported the failure — a cascade of identical dialogs
+ * for one path. While a path's dialog is still up, repeat failures of the SAME
+ * path are swallowed; different paths keep their own dialogs, and once the
+ * dialog is dismissed the path may report again.
+ */
+const activeDialogPaths = new Set<string>()
+
+/** forget every active-dialog marker; test teardown only */
+export function resetOpenFailureDedupe(): void {
+  activeDialogPaths.clear()
+}
+
+/**
  * Surface WHY an intended open (CLI argument, double-click, macOS open-file)
  * produced no tab: classify the path and raise the friendly error dialog.
- * Returns true when a dialog was raised; a null classification (the failure
- * is invisible to this preflight, e.g. no window yet) stays silent so the
- * caller keeps its existing home-tab fallback either way.
+ * Returns true when a dialog was raised — or is already on screen for this
+ * exact path (the duplicate is swallowed, BUG-1678); a null classification
+ * (the failure is invisible to this preflight, e.g. no window yet) stays
+ * silent so the caller keeps its existing home-tab fallback either way.
  */
 export function reportOpenFailure(filePath: string, deps: OpenFailureDeps): boolean {
   const failure = classifyOpenFailure(filePath)
   if (!failure) return false
-  deps.showErrorDialog(deps.openFailedMessage(basename(filePath)), failure)
+  if (activeDialogPaths.has(filePath)) return true
+  activeDialogPaths.add(filePath)
+  deps.showErrorDialog(deps.openFailedMessage(basename(filePath)), failure, () => {
+    activeDialogPaths.delete(filePath)
+  })
   return true
 }

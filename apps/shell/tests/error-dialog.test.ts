@@ -95,4 +95,28 @@ describe('showErrorDialog', () => {
     })
     expect(showErrorBox).not.toHaveBeenCalled()
   })
+
+  it('fires onClosed exactly once, when the shown dialog is dismissed', async () => {
+    let dismiss!: (v: unknown) => void
+    showMessageBox.mockImplementation(() => new Promise((resolve) => (dismiss = resolve)))
+    const onClosed = vi.fn()
+    showErrorDialog(fakeWindow(), 'fail', new Error('x'), onClosed)
+    expect(onClosed).not.toHaveBeenCalled()
+    dismiss({ response: 0 })
+    await Promise.resolve()
+    expect(onClosed).toHaveBeenCalledTimes(1)
+  })
+
+  it('fires onClosed immediately when the guard swallows the call (BUG-1678)', () => {
+    // a dedupe entry keyed on a dialog that never shows must be released at
+    // once, not parked until some unrelated dialog is dismissed
+    showMessageBox.mockImplementation(() => new Promise(() => {}))
+    const first = vi.fn()
+    const swallowed = vi.fn()
+    showErrorDialog(fakeWindow(), 'first', new Error('1'), first)
+    showErrorDialog(fakeWindow(), 'second', new Error('2'), swallowed)
+    expect(showMessageBox).toHaveBeenCalledTimes(1)
+    expect(swallowed).toHaveBeenCalledTimes(1)
+    expect(first).not.toHaveBeenCalled()
+  })
 })
