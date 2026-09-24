@@ -2,11 +2,9 @@
 /// that look like plain numbers become numeric, everything else stays text
 /// (leading zeros survive). The converted file is a fresh workbook.
 
-import JSZip from 'jszip'
-
 import { decodeTextBytes } from '@airy-office/file-parse/text'
 
-import { encodeXlsxEscapes } from './xlsx-escapes'
+import { zipFiles } from './xlsx-minizip'
 
 const DELIMITERS = [',', ';', '\t'] as const
 
@@ -112,6 +110,36 @@ function escapeXml(value: string): string {
     .replaceAll('"', '&quot;')
 }
 
+/**
+ * Cell-text escape for the worksheet part: XML metacharacters plus the
+ * OOXML `_xHHHH_` escape set handled by encodeXlsxEscapes (a literal `_x…_`
+ * re-escapes its underscore; freshly emitted escapes are never rescanned).
+ * Fusing the passes matters at import scale — 500k rows x 8 columns scan
+ * this four million times.
+ */
+function escapeXmlCellText(value: string): string {
+  return value.replace(
+    // eslint-disable-next-line no-control-regex -- the control range is the thing being escaped
+    /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF\r]|_(?=x[0-9A-Fa-f]{4}_)|[&<>"]/g,
+    (character) => {
+      switch (character) {
+        case '&':
+          return '&amp;'
+        case '<':
+          return '&lt;'
+        case '>':
+          return '&gt;'
+        case '"':
+          return '&quot;'
+        case '_':
+          return '_x005F_'
+        default:
+          return `_x${character.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}_`
+      }
+    },
+  )
+}
+
 function columnLabel(column: number): string {
   let label = ''
   let remaining = column + 1
@@ -135,7 +163,7 @@ export function buildWorksheetXml(rows: readonly (readonly string[])[]): string 
       cells.push(
         isNumericCell(value)
           ? `<c r="${reference}"><v>${value}</v></c>`
-          : `<c r="${reference}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(encodeXlsxEscapes(value))}</t></is></c>`,
+          : `<c r="${reference}" t="inlineStr"><is><t xml:space="preserve">${escapeXmlCellText(value)}</t></is></c>`,
       )
     })
     if (cells.length > 0) lines.push(`<row r="${rowIndex + 1}">${cells.join('')}</row>`)
@@ -148,7 +176,7 @@ export function buildWorksheetXml(rows: readonly (readonly string[])[]): string 
   )
 }
 
-export async function csvToXlsxBuffer(csvText: string, sheetName = 'Sheet1'): Promise<Buffer> {
+export async function csvToXlsxBuffer(csvText: string, sheetName = 'Sheet1'): Promise<Uint8Array> {
   const rows = parseCsv(csvText)
   if (rows.length === 0) throw new Error('The CSV file has no data rows.')
   return xlsxBufferFromRows(rows, sheetName)
@@ -161,50 +189,70 @@ export async function csvToXlsxBuffer(csvText: string, sheetName = 'Sheet1'): Pr
  * neither), and sniffing would then split the wrong columns — and an
  * all-empty grid becomes a valid blank workbook instead of an import error.
  */
-export async function sheetCsvToXlsxBuffer(csvText: string, sheetName = 'Sheet1'): Promise<Buffer> {
+export function sheetCsvToXlsxBuffer(csvText: string, sheetName = 'Sheet1'): Promise<Uint8Array> {
   return xlsxBufferFromRows(parseCsv(csvText, ','), sheetName)
 }
 
 /** minimal empty workbook: the backing file for a "new blank spreadsheet" tab */
-export async function blankXlsxBuffer(sheetName = 'Sheet1'): Promise<Buffer> {
+export function blankXlsxBuffer(sheetName = 'Sheet1'): Promise<Uint8Array> {
   return xlsxBufferFromRows([], sheetName)
 }
+
+// The part data must build in the sandboxed renderer too (this module rides
+// the lazy csv-import chunk): TextEncoder instead of Buffer.from.
+const textEncoder = new TextEncoder()
 
 async function xlsxBufferFromRows(
   rows: readonly (readonly string[])[],
   sheetName: string,
-): Promise<Buffer> {
-  const zip = new JSZip()
-  zip.file(
-    '[Content_Types].xml',
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-      '<Default Extension="xml" ContentType="application/xml"/>' +
-      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
-      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
-      '</Types>',
-  )
-  zip.file(
-    '_rels/.rels',
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
-      '</Relationships>',
-  )
-  zip.file(
-    'xl/workbook.xml',
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
-      `<sheets><sheet name="${escapeXml(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
-  )
-  zip.file(
-    'xl/_rels/workbook.xml.rels',
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
-      '</Relationships>',
-  )
-  zip.file('xl/worksheets/sheet1.xml', buildWorksheetXml(rows))
-  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+): Promise<Uint8Array> {
+  // Hand-rolled zip container on Node (see xlsx-minizip): JSZip's pure-JS
+  // deflate dominated the 500k-row CSV import profile, node:zlib does the
+  // same DEFLATE an order of magnitude faster, and the package layout here
+  // is fixed and tiny. The sandboxed renderer (no node builtins) falls back
+  // to JSZip inside xlsx-minizip.
+  return zipFiles([
+    {
+      name: '[Content_Types].xml',
+      data: textEncoder.encode(
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+          '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Default Extension="xml" ContentType="application/xml"/>' +
+          '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+          '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+          '</Types>',
+      ),
+    },
+    {
+      name: '_rels/.rels',
+      data: textEncoder.encode(
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+          '</Relationships>',
+      ),
+    },
+    {
+      name: 'xl/workbook.xml',
+      data: textEncoder.encode(
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+          '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+          `<sheets><sheet name="${escapeXml(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+      ),
+    },
+    {
+      name: 'xl/_rels/workbook.xml.rels',
+      data: textEncoder.encode(
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+          '</Relationships>',
+      ),
+    },
+    {
+      name: 'xl/worksheets/sheet1.xml',
+      data: textEncoder.encode(buildWorksheetXml(rows)),
+    },
+  ])
 }
