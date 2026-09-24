@@ -1263,6 +1263,14 @@ export async function exportPdf(ctx: FileActionContext, outPath?: string): Promi
     // direct print of a heavy canvas failed: reroute through the preview so the
     // retry can print in chunks; the failed attempt already authorized result.path
     return deferExportToPreview(ctx, outPath ?? result.path)
+  } catch (err) {
+    // A rejected IPC call (main-process handler threw, window tearing down
+    // mid-export) must not leave "Exporting PDF…" up forever: settle the
+    // status with the failure, like every non-throwing exit branch does.
+    ctx.setStatus(
+      t('appExportPdfFailed', { error: err instanceof Error ? err.message : String(err) }),
+    )
+    return false
   } finally {
     clearPrintZoom()
     printJobActive = false
