@@ -15,6 +15,7 @@ import {
   rgb,
 } from 'pdf-lib'
 import type { PDFPage } from 'pdf-lib'
+import { pageRotation, repairBrokenPageRotations } from './page-rotation'
 import { VISUAL_SIGNATURE_CONTENT_PREFIX } from '../shared/ipc'
 import type {
   DrawingInput,
@@ -152,7 +153,7 @@ function addMarkup(pdfDoc: PDFDocument, page: PDFPage, m: MarkupInput): void {
   const xs = m.quads.flatMap((q) => [q[0]!, q[2]!, q[4]!, q[6]!])
   const ys = m.quads.flatMap((q) => [q[1]!, q[3]!, q[5]!, q[7]!])
   const rect = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]
-  const pageRot = ((page.getRotation().angle % 360) + 360) % 360
+  const pageRot = pageRotation(page)
   const apRef = pdfDoc.context.register(markupAppearance(pdfDoc, m, rect, pageRot))
   const annot = pdfDoc.context.obj({
     Type: 'Annot',
@@ -209,7 +210,7 @@ async function addImageStamp(
   const [x1, y1, x2, y2] = d.rect
   const rw = x2 - x1
   const rh = y2 - y1
-  const rot = ((page.getRotation().angle % 360) + 360) % 360
+  const rot = pageRotation(page)
   // cm matrix mapping the image unit square into the BBox, pre-counter-rotated for the page
   const cm =
     rot === 90
@@ -530,7 +531,8 @@ export async function insertBlankPageBytes(
   const ref = doc.getPage(Math.min(Math.max(afterPageIndex, 0), doc.getPageCount() - 1))
   const page = doc.insertPage(at, [ref.getWidth(), ref.getHeight()])
   // Match the neighbor's /Rotate too, or the blank page displays sideways next to it
-  page.setRotation(ref.getRotation())
+  // (safe read: a malformed neighbor /Rotate becomes 0 instead of crashing the insert)
+  page.setRotation(degrees(pageRotation(ref)))
   return doc.save({ useObjectStreams: false })
 }
 
@@ -677,7 +679,7 @@ export async function setPageSizeBytes(
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.load(bytes, { updateMetadata: false })
   for (const page of doc.getPages()) {
-    const rot = ((page.getRotation().angle % 360) + 360) % 360
+    const rot = pageRotation(page)
     const tw = rot === 90 || rot === 270 ? targetH : targetW
     const th = rot === 90 || rot === 270 ? targetW : targetH
     const { x, y, width: w, height: h } = page.getMediaBox()
@@ -735,7 +737,7 @@ export async function splitPagesBytes(bytes: Uint8Array, perPage: 2 | 4 | 9): Pr
     )
     for (let c = 0; c < perPage; c++) {
       const page = copies[c]!
-      const rot = ((page.getRotation().angle % 360) + 360) % 360
+      const rot = pageRotation(page)
       const col = c % cols
       const row = Math.floor(c / cols)
       const rect = displayFracToUserRect(
@@ -781,7 +783,7 @@ export async function cropPagesBytes(
   for (const idx of pages) {
     if (idx < 0 || idx >= doc.getPageCount()) continue
     const page = doc.getPage(idx)
-    const rot = ((page.getRotation().angle % 360) + 360) % 360
+    const rot = pageRotation(page)
     const rect = displayFracToUserRect(rot, page.getCropBox(), l, t, r, b)
     page.setCropBox(rect.x, rect.y, rect.w, rect.h)
   }
@@ -964,12 +966,16 @@ export async function applySaveRequest(
     skippedImageEdits = applied.skipped
   }
   const pdfDoc = await PDFDocument.load(bytes, { updateMetadata: false })
+  // Malformed /Rotate values (names from broken producers) must not crash the
+  // save below or leak into the output; repair them to numeric 0 first (viewers
+  // ignored them anyway, so this changes nothing visually)
+  repairBrokenPageRotations(pdfDoc)
   if (request.formValues.length > 0) applyFormValues(pdfDoc, request.formValues)
   const pages = pdfDoc.getPages()
   // Apply rotations first so markup appearances draw lines for the page's final orientation
   for (const r of request.rotations ?? []) {
     const page = pages[r.pageIndex]
-    if (page) page.setRotation(degrees((page.getRotation().angle + r.delta) % 360))
+    if (page) page.setRotation(degrees((pageRotation(page) + r.delta) % 360))
   }
   for (const m of request.markups) {
     const page = pages[m.pageIndex]
