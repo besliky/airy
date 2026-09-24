@@ -73,7 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     paragraphs keep their CommonMark shape; the lift materializes as a fenced
     block on the next save (there is no indented-code serializer), and
     parse → serialize → parse is stable. An empty paragraph nested in a list
-    item no longer serializes as a line of indentation spaces ("    "):
+    item no longer serializes as a line of indentation spaces (`"    "`):
     whitespace-only lines are blanked at serialization, except inside literal
     regions (fenced code, raw HTML containers, HTML comments, block math);
     hard-break trailing spaces after text survive; tabs at save are
