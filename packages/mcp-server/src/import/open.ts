@@ -32,7 +32,13 @@ import { DocxSession, type SessionOrigin } from '../docx/session.js'
 import { resolveConfined } from '../docx/paths.js'
 import { HtmlSession } from '../html/session.js'
 import { MarkdownSession } from '../markdown/session.js'
-import { classifyOleContent, encryptedOfficeRefusal, OLE_SNIFF_MAX_BYTES, readHead } from './ole.js'
+import {
+  classifyOleContent,
+  encryptedOfficeRefusal,
+  OLE_SNIFF_MAX_BYTES,
+  oleAsZipRefusal,
+  readHead,
+} from './ole.js'
 import { SlidesSession } from '../slides/session.js'
 import { assertWithinOpenCap } from '../sessions/size-fence.js'
 import { TextSession } from '../sessions/text.js'
@@ -110,9 +116,22 @@ export async function openDocument(rawPath: string, root?: string): Promise<Open
     case 'xlsx':
     case 'xlsm':
     case 'xls':
-    case 'ods':
-      await refuseEncryptedContainer(path, ext)
+    case 'ods': {
+      // one head sniff serves both container refusals
+      const ole = classifyOleContent(await readHead(path, OLE_SNIFF_MAX_BYTES))
+      if (ole === 'encrypted-ooxml' || ole === 'encrypted-legacy') {
+        throw encryptedOfficeRefusal(path, ext)
+      }
+      // UX-1691: a plain (unencrypted) OLE2 container saved as .xlsx/.xlsm is
+      // a renamed legacy workbook — refuse naming the class instead of the
+      // sidecar's raw zip parse failure ("invalid Zip archive: Could not find
+      // EOCD"). A plain OLE .xls is the legitimate conversion route and .ods
+      // is out of scope here, so only the OOXML extensions refuse.
+      if ((ext === 'xlsx' || ext === 'xlsm') && ole === 'plain') {
+        throw oleAsZipRefusal(path, ext)
+      }
       return XlsxSession.open(rawPath, root)
+    }
     case 'doc': {
       const tool = await findSoffice()
       if (!tool) {

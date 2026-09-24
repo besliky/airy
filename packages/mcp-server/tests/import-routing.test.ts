@@ -139,4 +139,18 @@ describe('encrypted Office containers refuse with a password hint (BUG-1504)', (
     await copyFile(DOC_SAMPLE, docx)
     await expect(openDocument(docx, root)).rejects.toThrow(/OLE2 compound document.*not a \.docx/)
   })
+
+  it('refuses a plain OLE workbook renamed to .xlsx/.xlsm by naming the container (UX-1691)', async () => {
+    // a legacy .xls re-saved with an .xlsx extension used to surface the
+    // sidecar's raw zip parse failure ("invalid Zip archive: Could not find
+    // EOCD"); the open route now names the OLE2 class and the way out
+    for (const ext of ['xlsx', 'xlsm'] as const) {
+      const book = join(root, `actually-xls.${ext}`)
+      await copyFile(DOC_SAMPLE, book)
+      await expect(openDocument(book, root)).rejects.toThrow(
+        new RegExp(`OLE2 compound document.*not a \\.${ext} package.*Open it as \\.xls`),
+      )
+      await expect(openDocument(book, root)).rejects.not.toThrow(/EOCD|central directory/)
+    }
+  })
 })
