@@ -682,26 +682,32 @@ describe('tab-switch accelerators', () => {
   })
 })
 
+/** manager with the shell-provided crash UI (prompt + error page) wired in */
+function makeCrashManager(): {
+  manager: TabManager
+  onCrash: ReturnType<typeof vi.fn>
+  errorPageBody: ReturnType<typeof vi.fn>
+} {
+  const onCrash = vi.fn()
+  const errorPageBody = vi.fn(() => 'This tab stopped unexpectedly.')
+  const manager = new TabManager(
+    shellWindow as never,
+    () => onChanged(),
+    (kind) => applyMenuFor(kind),
+    undefined,
+    { errorPageBody, onCrash },
+  )
+  return { manager, onCrash, errorPageBody }
+}
+
+/** fire render-process-gone on a fake view's webContents */
+function emitCrash(view: FakeView, reason: string): void {
+  const handler = view.webContents.listeners.get('render-process-gone')
+  expect(handler).toBeDefined()
+  handler!({}, { reason })
+}
+
 describe('renderer crash recovery', () => {
-  function makeCrashManager() {
-    const onCrash = vi.fn()
-    const errorPageBody = vi.fn(() => 'This tab stopped unexpectedly.')
-    const manager = new TabManager(
-      shellWindow as never,
-      () => onChanged(),
-      (kind) => applyMenuFor(kind),
-      undefined,
-      { errorPageBody, onCrash },
-    )
-    return { manager, onCrash, errorPageBody }
-  }
-
-  function emitCrash(view: FakeView, reason: string): void {
-    const handler = view.webContents.listeners.get('render-process-gone')
-    expect(handler).toBeDefined()
-    handler!({}, { reason })
-  }
-
   it('marks a crashed tab, shows the error page and notifies the shell', () => {
     const { manager, onCrash } = makeCrashManager()
     const id = manager.openDocsTab('/tmp/report.docx')
@@ -756,6 +762,117 @@ describe('renderer crash recovery', () => {
 
     expect(onCrash).toHaveBeenCalledTimes(1)
     expect(manager.isTabCrashed(id)).toBe(true)
+  })
+})
+
+describe('zombie tabs — renderer killed while the tab lives (BUG-1697)', () => {
+  /** a kill -9 reports reason 'killed'; the webContents is NOT destroyed */
+  function killRenderer(manager: TabManager, view: FakeView): void {
+    const handler = view.webContents.listeners.get('render-process-gone')
+    expect(handler).toBeDefined()
+    handler!({}, { reason: 'killed' })
+  }
+
+  it('marks the tab dead for the bridge without running the crash prompt', () => {
+    const { manager, onCrash } = makeCrashManager()
+    const id = manager.openDocsTab('/tmp/report.docx')
+    const view = lastCreatedView(createDocsView)
+
+    killRenderer(manager, view)
+
+    expect(manager.isTabDead(id)).toBe(true)
+    // killed is not an oom/crashed prompt: no error page, no dialog
+    expect(manager.isTabCrashed(id)).toBe(false)
+    expect(onCrash).not.toHaveBeenCalled()
+    expect(view.webContents.loadURL).not.toHaveBeenCalled()
+    // the bridge surface stops advertising the corpse
+    expect(manager.docsTabSummaries()).toEqual([])
+    expect(manager.activeDocsTab()).toMatchObject({ id, dead: true })
+    expect(manager.findDocsTabByPath('/tmp/report.docx')).toBeUndefined()
+    expect(manager.docsTabs()).toEqual([])
+  })
+
+  it('open-by-path after a kill revives the document as a NEW tab', () => {
+    const { manager } = makeCrashManager()
+    const deadId = manager.openDocsTab('/tmp/report.docx')
+    const deadView = lastCreatedView(createDocsView)
+    killRenderer(manager, deadView)
+
+    const revivedId = manager.openDocsTab('/tmp/report.docx')
+    const revivedView = lastCreatedView(createDocsView)
+
+    expect(createDocsView).toHaveBeenCalledTimes(2)
+    expect(revivedId).not.toBe(deadId)
+    expect(revivedView.webContents.id).not.toBe(deadView.webContents.id)
+    // the revived tab is the only document the bridge sees, and it is active
+    expect(manager.docsTabSummaries()).toEqual([
+      { id: revivedId, title: 'report.docx', filePath: '/tmp/report.docx', active: true },
+    ])
+    expect(manager.findDocsTabByPath('/tmp/report.docx')).toBe(revivedId)
+  })
+
+  it('an oom crash is both dead for the bridge and crashed for the prompt', () => {
+    const { manager, onCrash } = makeCrashManager()
+    const id = manager.openDocsTab('/tmp/report.docx')
+    const view = lastCreatedView(createDocsView)
+
+    emitCrash(view, 'oom')
+
+    expect(manager.isTabDead(id)).toBe(true)
+    expect(manager.isTabCrashed(id)).toBe(true)
+    expect(onCrash).toHaveBeenCalledTimes(1)
+    expect(manager.docsTabSummaries()).toEqual([])
+  })
+
+  it('clean-exit (intentional teardown) keeps the tab alive for the bridge', () => {
+    const { manager } = makeCrashManager()
+    manager.openDocsTab('/tmp/report.docx')
+    const view = lastCreatedView(createDocsView)
+
+    emitCrash(view, 'clean-exit')
+
+    expect(manager.docsTabSummaries()).toHaveLength(1)
+    expect(manager.activeDocsTab()).toMatchObject({ dead: false })
+  })
+
+  it('a destroyed webContents marks a still-listed tab dead', () => {
+    const { manager } = makeCrashManager()
+    const id = manager.openDocsTab('/tmp/report.docx')
+    const view = lastCreatedView(createDocsView)
+
+    const onDestroyed = view.webContents.listeners.get('destroyed')
+    expect(onDestroyed).toBeDefined()
+    onDestroyed!()
+
+    expect(manager.isTabDead(id)).toBe(true)
+    expect(manager.docsTabSummaries()).toEqual([])
+  })
+
+  it('reloadTab revives a dead tab (the reload restarts the renderer)', () => {
+    const { manager } = makeCrashManager()
+    const id = manager.openDocsTab('/tmp/report.docx')
+    const view = lastCreatedView(createDocsView)
+    killRenderer(manager, view)
+
+    manager.reloadTab(id)
+
+    expect(manager.isTabDead(id)).toBe(false)
+    expect(view.webContents.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('other per-path finders skip dead tabs too', () => {
+    const sheetsId = manager.openSheetsTab('/tmp/budget.xlsx')
+    const sheetsView = lastCreatedView(createSheetsView)
+    const pdfId = manager.openPdfTab('/tmp/scan.pdf')
+    const pdfView = lastCreatedView(createPdfView)
+
+    killRenderer(manager, sheetsView)
+    killRenderer(manager, pdfView)
+
+    expect(manager.findSheetsTabByPath('/tmp/budget.xlsx')).toBeUndefined()
+    expect(manager.findPdfTabByPath('/tmp/scan.pdf')).toBeUndefined()
+    expect(manager.isTabDead(sheetsId)).toBe(true)
+    expect(manager.isTabDead(pdfId)).toBe(true)
   })
 })
 

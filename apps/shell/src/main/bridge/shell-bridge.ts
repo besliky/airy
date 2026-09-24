@@ -61,8 +61,12 @@ function ensureResultChannel(): void {
 
 /**
  * Send one command to a docs renderer and await its envelope. The signal
- * aborts on bridge timeout; a destroyed tab resolves as tab_closed so no
- * waiter can hang past the call's lifetime (SA3 §orphan-tab risk).
+ * aborts on bridge timeout; a dying tab settles the call as tab_closed so no
+ * waiter can hang past the call's lifetime (SA3 §orphan-tab risk). Both death
+ * signals are watched: 'destroyed' covers a graceful teardown, while
+ * 'render-process-gone' covers a killed renderer, whose webContents is NOT
+ * destroyed — without it every call into a corpse burned the full dispatcher
+ * timeout (BUG-1697).
  */
 function callRenderer(
   webContents: WebContents,
@@ -79,19 +83,21 @@ function callRenderer(
     const requestId = nextRequestId++
     const settle = (result: BridgeCommandResult) => {
       pendingCalls.delete(requestId)
-      webContents.off('destroyed', onDestroyed)
+      webContents.off('destroyed', onDeath)
+      webContents.off('render-process-gone', onDeath)
       signal.removeEventListener('abort', onAbort)
       resolve(result)
     }
-    const onDestroyed = () =>
+    const onDeath = () =>
       settle({
         ok: false,
-        error: { code: 'tab_closed', message: 'the document tab was closed mid-call' },
+        error: { code: 'tab_closed', message: 'the document tab renderer is gone' },
       })
     const onAbort = () =>
       settle({ ok: false, error: { code: 'timeout', message: 'the renderer call was aborted' } })
     pendingCalls.set(requestId, { resolve: settle, webContentsId: webContents.id })
-    webContents.once('destroyed', onDestroyed)
+    webContents.once('destroyed', onDeath)
+    webContents.once('render-process-gone', onDeath)
     signal.addEventListener('abort', onAbort, { once: true })
     // the connection identity rides along so the renderer can attribute
     // bridge turns to the client that made them
@@ -112,6 +118,16 @@ async function callActiveDocs(
     throw new BridgeMethodError(
       'not_docs_tab',
       'the active tab is not a docs document (live bridge v1 targets docs tabs only)',
+    )
+  }
+  if (tab.dead) {
+    // BUG-1697: fast typed failure — reopening the file (openPath) builds a
+    // fresh webContents and revives the document; calling into the corpse
+    // would otherwise wait out the whole dispatcher timeout for a renderer
+    // that no longer exists
+    throw new BridgeMethodError(
+      'tab_closed',
+      'the active docs tab renderer is gone; open the file again to restore the tab',
     )
   }
   if (tab.webContents.isDestroyed()) {
