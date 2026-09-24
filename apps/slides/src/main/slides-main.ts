@@ -22,11 +22,12 @@ import type { WebContents } from 'electron'
 import { execFile } from 'node:child_process'
 import { readFile, writeFile, rm, stat, mkdir, open } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
-import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, realpathSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { cleanupExpiredGeneratedPages } from './generated-page-temp'
+import { sweepStaleVideoExportTemps, videoExportTempPath } from './video-export-temp'
 import {
   exportDirInsidePick,
   exportFileMatchesPick,
@@ -4374,11 +4375,14 @@ export function registerSlidesIpc(): void {
       if (!pickedFile || !exportFileMatchesPick(pickedFile, filePath, (p) => realpathSync(p))) {
         return { ok: false, error: tm('errExportDestNotPicked') }
       }
+      // OBS-1658: kill -9 mid-export bypasses every cleanup hook and orphans
+      // the dot-temp in this user-owned directory, which nothing else ever
+      // revisits — sweep expired siblings before opening the fresh temp.
+      // Fire-and-forget: age alone decides, so the temp created below (and
+      // any live export's continuously appended temp) is never a candidate.
+      void sweepStaleVideoExportTemps(dirname(filePath))
       try {
-        const tmp = join(
-          dirname(filePath),
-          `.${basename(filePath)}.${randomBytes(6).toString('hex')}.tmp`,
-        )
+        const tmp = videoExportTempPath(filePath)
         const handle = await open(tmp, 'w')
         const token = nextVideoFileStreamToken++
         // renderer death must not leak the temp (BUG-1220 ownership pattern)

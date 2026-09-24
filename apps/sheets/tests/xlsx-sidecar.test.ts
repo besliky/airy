@@ -30,6 +30,57 @@ const openResultSchema = z.object({
 })
 
 describe('XLSX Rust sidecar', () => {
+  it('answers a wire-shape-violating read_range with an attributable error (BUG-1666)', async () => {
+    const child = spawn(sidecarBinaryPath(), [], { stdio: ['pipe', 'pipe', 'pipe'] })
+    try {
+      const lines = createInterface({ input: child.stdout })
+      const reply = new Promise<{ requestId: string; ok: boolean; error?: { code: string } }>(
+        (resolve) => {
+          lines.once('line', (line) => resolve(JSON.parse(line)))
+        },
+      )
+      child.stdin.write(
+        `${JSON.stringify({
+          version: 1,
+          requestId: 'bad1',
+          command: 'read_range',
+          sessionId: 'nope',
+          sheetId: 'sheet-1',
+          // Wrong wire shape on purpose (range as a string): the sidecar must
+          // answer immediately with an error reply that echoes the client's
+          // requestId, never leave the request to time out in silence.
+          range: 'A1:B2',
+        })}\n`,
+      )
+      const answer = await reply
+      expect(answer.requestId).toBe('bad1')
+      expect(answer.ok).toBe(false)
+      expect(answer.error?.code).toBe('invalid_json')
+    } finally {
+      child.kill()
+    }
+  })
+
+  it('rejects a malformed read_range through the client instead of timing out (BUG-1666)', async () => {
+    const client = new XlsxSidecarClient(sidecarBinaryPath())
+    try {
+      await expect(
+        client.readRange({
+          sessionId: 'nope',
+          sheetId: 'sheet-1',
+          range: 'A1:B2' as unknown as {
+            startRow: number
+            endRow: number
+            startColumn: number
+            endColumn: number
+          },
+        }),
+      ).rejects.toThrow(/Invalid sidecar request/)
+    } finally {
+      client.stop()
+    }
+  })
+
   it('opens a workbook and reads a sparse cell range', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'xlsx-sidecar-test-'))
     const path = join(directory, 'fixture.xlsx')
