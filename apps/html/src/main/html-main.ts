@@ -55,6 +55,12 @@ import { convertHtmlToDocx } from '../../../../packages/html2docx/src'
 import { atomicWriteFile } from '@airy-office/electron-utils'
 import { ElectronBrowserDriver } from './html2docx-driver'
 import {
+  decodeBytesAsEncoding,
+  isSelectableEncoding,
+  readRememberedFileEncoding,
+  rememberFileEncoding,
+} from './encoding-memory'
+import {
   copyImageIntoOwnedAssets,
   discardPendingOwnedAssets,
   extractHtmlImageSources,
@@ -1164,8 +1170,25 @@ export function htmlIsDirty(webContentsId: number): boolean {
 // ── Crash recovery: dirty renderers push a copy every 30s
 // (html:write-recovery); a normal save cleans it up; open offers Restore/Discard ──
 
-const readTextDecoded = async (path: string) =>
-  decodeHtmlText(await readFile(path), legacyCharsetForLang(getUiLang()))
+/**
+ * UX-1653 channel for the reopen-with-encoding affordance: main-only for now
+ * (the renderer UI is a follow-up), kept outside the pinned HTML_CHANNELS
+ * registry until the preload grows its pass-through.
+ */
+export const HTML_SET_ENCODING_CHANNEL = 'html:set-encoding'
+
+/** the shared workspace settings file — remembered per-file encodings live here */
+const appSettingsPath = () => join(app.getPath('userData'), 'app-settings.json')
+
+const readTextDecoded = async (path: string) => {
+  const bytes = await readFile(path)
+  // UX-1653: a manual pick for this path outruns both the declared
+  // <meta charset> and the detector — reopening must not re-run the very
+  // guess the user already corrected.
+  const remembered = readRememberedFileEncoding(appSettingsPath(), path)
+  if (remembered) return decodeBytesAsEncoding(bytes, remembered)
+  return decodeHtmlText(bytes, legacyCharsetForLang(getUiLang()))
+}
 
 const recoveryStore = new TextRecoveryStore(join(app.getPath('userData'), 'html-autosave'), {
   write: (target, text) => atomicWriteFile(target, Buffer.from(text, 'utf8')),
@@ -1506,6 +1529,23 @@ function registerHtmlIpc(): void {
       promptHtmlRecovery(BrowserWindow.fromWebContents(e.sender)),
     )
   })
+
+  // UX-1653: remember a manual encoding pick for an open file. The reopen
+  // affordance calls this before re-reading; the next readFile decodes with
+  // the pick (readTextDecoded), so the choice survives tab close and relaunch.
+  ipcMain.handle(
+    HTML_SET_ENCODING_CHANNEL,
+    async (e, path: unknown, encoding: unknown): Promise<boolean> => {
+      if (typeof path !== 'string' || !allowedByWc.get(e.sender.id)?.has(path)) {
+        throw new Error('html: path not granted to this view')
+      }
+      if (!isSelectableEncoding(encoding)) {
+        throw new Error('html: unknown encoding')
+      }
+      await rememberFileEncoding(appSettingsPath(), path, encoding)
+      return true
+    },
+  )
 
   // crash-recovery copy push: dirty renderers serialize and send every ~30s
   ipcMain.handle(HTML_CHANNELS.writeRecovery, async (e, path: unknown, text: unknown) => {
