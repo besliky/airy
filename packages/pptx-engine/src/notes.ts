@@ -223,8 +223,13 @@ export function appendRelationship(
   return rid
 }
 
-/** Ensure a notesMaster exists and return its part path. Created and registered in the presentation if missing. */
-function ensureNotesMaster(archive: PackageArchive): string | null {
+/**
+ * Ensure a notesMaster exists and return its part path. Created and registered
+ * in the presentation if missing. Also used by slide-transfer: a pasted
+ * notesSlide is re-pointed at the destination's notesMaster ("use destination
+ * theme", like the slide's layout).
+ */
+export function ensureNotesMaster(archive: PackageArchive): string | null {
   for (const path of archive.entries.keys()) {
     if (/^ppt\/notesMasters\/notesMaster\d+\.xml$/.test(path)) return path
   }
