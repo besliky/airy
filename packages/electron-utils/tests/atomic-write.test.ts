@@ -1,4 +1,13 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,6 +16,7 @@ import { afterEach, beforeAll, afterAll, describe, expect, it, vi } from 'vitest
 import {
   _setRenameRetryDelayForTests,
   atomicWriteFile,
+  BrokenSymlinkTargetError,
   looksLikeZip,
   renameDurably,
 } from '../src/atomic-write'
@@ -71,7 +81,10 @@ let dir = ''
 afterEach(() => {
   if (dir) rmSync(dir, { recursive: true, force: true })
   dir = ''
-  vi.mocked(rename).mockClear()
+  // mockReset, not mockClear: the retry-exhaustion test pins a PERSISTENT
+  // EPERM rejection, which mockClear leaves armed for every test that runs
+  // after it (the BUG-1695 symlink tests do) — reset also drops implementations
+  vi.mocked(rename).mockReset()
   setInPlaceWriteError(null)
   order.length = 0
 })
@@ -236,6 +249,122 @@ describe('renameDurably', () => {
     // initial attempt + RENAME_RETRIES retries
     expect(vi.mocked(rename)).toHaveBeenCalledTimes(5)
     // the surviving temp is the caller's fallback input, not ours to delete
+    expect(readFileSync(temporary, 'utf-8')).toBe('new')
+  })
+})
+
+// BUG-1695: rename(2) replaces a symlink instead of following it, so a save
+// through a link path used to fork the document — the link became a regular
+// file holding the new bytes while the shared destination kept the old ones,
+// with the save reporting success. Every save must write THROUGH the link.
+describe('symlink targets (BUG-1695)', () => {
+  // creating symlinks needs privileges on some platforms (Windows without
+  // developer mode); the pinned semantics is POSIX link-following behavior
+  const makeSymlink = (target: string, linkPath: string): boolean => {
+    try {
+      symlinkSync(target, linkPath, 'file')
+      return true
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'EPERM' || code === 'EACCES') return false
+      throw error
+    }
+  }
+
+  it('saves through a file symlink: destination updated, link intact, no fork', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'aw-'))
+    const real = join(dir, 'real.md')
+    const link = join(dir, 'alias.md')
+    writeFileSync(real, 'old')
+    if (!makeSymlink('real.md', link)) return
+
+    await atomicWriteFile(link, Buffer.from('new'))
+
+    // readers through BOTH paths see the save; the link is still a link
+    expect(readFileSync(real, 'utf-8')).toBe('new')
+    expect(readFileSync(link, 'utf-8')).toBe('new')
+    expect(lstatSync(link).isSymbolicLink()).toBe(true)
+    // exactly the two entries: no regular-file fork, no leftover temp
+    expect(readdirSync(dir).sort()).toEqual(['alias.md', 'real.md'])
+  })
+
+  it('creates the temp next to the DESTINATION when the link lives elsewhere', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'aw-'))
+    const linkDir = join(dir, 'links')
+    const realDir = join(dir, 'real')
+    mkdirSync(linkDir)
+    mkdirSync(realDir)
+    const real = join(realDir, 'real.md')
+    const link = join(linkDir, 'alias.md')
+    writeFileSync(real, 'old')
+    if (!makeSymlink(real, link)) return
+
+    await atomicWriteFile(link, Buffer.from('new'))
+
+    expect(readFileSync(real, 'utf-8')).toBe('new')
+    expect(lstatSync(link).isSymbolicLink()).toBe(true)
+    expect(readdirSync(linkDir)).toEqual(['alias.md'])
+    expect(readdirSync(realDir)).toEqual(['real.md'])
+  })
+
+  it('dangling link: creates the destination through the link, link stays a link', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'aw-'))
+    const link = join(dir, 'alias.md')
+    if (!makeSymlink('missing.md', link)) return
+
+    await atomicWriteFile(link, Buffer.from('new'))
+
+    // documented honest rule: a link with no destination cannot be resolved
+    // for a rename, so the save rides the durable in-place write, where
+    // open('w') follows the link and creates the destination — exactly what
+    // a plain write would do (non-atomic like any first-ever create)
+    expect(lstatSync(link).isSymbolicLink()).toBe(true)
+    expect(readFileSync(link, 'utf-8')).toBe('new')
+    expect(readFileSync(join(dir, 'missing.md'), 'utf-8')).toBe('new')
+    expect(readdirSync(dir).sort()).toEqual(['alias.md', 'missing.md'])
+    expect(order).not.toContain('rename')
+  })
+
+  it('keeps the plain-file fast path (temp + rename) untouched', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'aw-'))
+    const target = join(dir, 'a.md')
+    writeFileSync(target, 'old')
+
+    await atomicWriteFile(target, Buffer.from('new'))
+
+    expect(readFileSync(target, 'utf-8')).toBe('new')
+    expect(readdirSync(dir)).toEqual(['a.md'])
+    expect(order).toContain('rename')
+  })
+
+  it('renameDurably follows a symlink target instead of replacing it', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'aw-'))
+    const real = join(dir, 'book.xlsx')
+    const link = join(dir, 'alias.xlsx')
+    const temporary = join(dir, '.new.tmp.xlsx')
+    writeFileSync(real, 'old')
+    writeFileSync(temporary, 'new')
+    if (!makeSymlink('book.xlsx', link)) return
+
+    await renameDurably(temporary, link)
+
+    expect(readFileSync(real, 'utf-8')).toBe('new')
+    expect(lstatSync(link).isSymbolicLink()).toBe(true)
+    expect(readdirSync(dir).sort()).toEqual(['alias.xlsx', 'book.xlsx'])
+  })
+
+  it('renameDurably refuses a dangling link target instead of destroying it', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'aw-'))
+    const link = join(dir, 'alias.xlsx')
+    const temporary = join(dir, '.new.tmp.xlsx')
+    writeFileSync(temporary, 'new')
+    if (!makeSymlink('book.xlsx', link)) return
+
+    // a rename cannot follow a link and there are no bytes here for an
+    // in-place write — the honest refusal beats silently replacing the link
+    await expect(renameDurably(temporary, link)).rejects.toThrow(BrokenSymlinkTargetError)
+    expect(lstatSync(link).isSymbolicLink()).toBe(true)
+    // the temp survives for the caller's own fallback (promoteFileAtomically)
     expect(readFileSync(temporary, 'utf-8')).toBe('new')
   })
 })

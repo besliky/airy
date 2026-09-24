@@ -14,7 +14,12 @@ export {
   type AppMenuLabels,
 } from './app-menu'
 export { COPILOT_GUIDE_URL, DOCS_README_URL, GITHUB_REPO_URL, openHelpUrl } from './github-menu'
-export { atomicWriteFile, looksLikeZip, renameDurably } from './atomic-write'
+export {
+  atomicWriteFile,
+  BrokenSymlinkTargetError,
+  looksLikeZip,
+  renameDurably,
+} from './atomic-write'
 export {
   queueAppSettingsUpdate,
   readAppSettingsFile,
