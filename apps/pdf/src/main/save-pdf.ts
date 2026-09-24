@@ -9,6 +9,7 @@ import {
   PDFName,
   PDFNumber,
   PDFOptionList,
+  PDFRawStream,
   PDFRef,
   PDFString,
   degrees,
@@ -821,6 +822,31 @@ function applyMetadata(pdfDoc: PDFDocument, meta: MetadataInput): void {
   pdfDoc.setModificationDate(new Date())
 }
 
+const METADATA_KEY = PDFName.of('Metadata')
+
+/**
+ * The document XMP stream (catalog /Metadata: dc:title, xmp:CreateDate, pdf:Producer, ...)
+ * survives pdf-lib load/save untouched, but pdfium's SaveAsCopy — used by the text,
+ * image and annotation rewrite stages — drops it while keeping the Info dict, so the
+ * loss is silent. Capture the stream from the source bytes before those stages run and
+ * re-attach the byte-identical object to the saved document.
+ */
+async function readCatalogMetadata(bytes: Uint8Array): Promise<PDFRawStream | undefined> {
+  const doc = await PDFDocument.load(bytes, { updateMetadata: false, ignoreEncryption: true })
+  // Encrypted documents are rejected later by the main load anyway; their stream bytes
+  // are still encrypted, so they cannot be re-attached verbatim.
+  if (doc.isEncrypted) return undefined
+  const entry = doc.catalog.get(METADATA_KEY)
+  if (!(entry instanceof PDFRef)) return undefined
+  const stream = doc.context.lookup(entry)
+  return stream instanceof PDFRawStream ? stream : undefined
+}
+
+/** Re-attach the source XMP stream (registers it as a new object in the output context) */
+function restoreCatalogMetadata(pdfDoc: PDFDocument, stream: PDFRawStream): void {
+  pdfDoc.catalog.set(METADATA_KEY, pdfDoc.context.register(stream))
+}
+
 /**
  * Apply the request to the PDF at sourcePath and atomically write the result to targetPath
  * (temp file next to the target + rename, so a mid-write crash can't corrupt it).
@@ -933,6 +959,14 @@ export async function applySaveRequest(
   let skippedTextEdits: TextEditFailure[] = []
   let skippedTextInserts: TextInsertFailure[] = []
   let skippedImageEdits: ImageEditFailure[] = []
+  // The pdfium rewrite stages below drop the catalog XMP stream; capture it while the
+  // bytes are still the original ones, so the final document can carry it again
+  const runsPdfiumRewrite =
+    (request.annotDeletes?.length ?? 0) > 0 ||
+    (request.textEdits?.length ?? 0) > 0 ||
+    (request.textInserts?.length ?? 0) > 0 ||
+    (request.imageEdits?.length ?? 0) > 0
+  const sourceXmp = runsPdfiumRewrite ? await readCatalogMetadata(bytes) : undefined
   if (request.annotDeletes && request.annotDeletes.length > 0) {
     // First stage: the object numbers address the on-disk bytes; later pdfium
     // rewrites (text/image edits) may renumber objects
@@ -970,6 +1004,10 @@ export async function applySaveRequest(
   // save below or leak into the output; repair them to numeric 0 first (viewers
   // ignored them anyway, so this changes nothing visually)
   repairBrokenPageRotations(pdfDoc)
+  // pdfium's rewrites dropped the XMP: put the byte-identical source stream back.
+  // UI metadata edits below intentionally stay Info-only: the original XMP is kept
+  // as authored, so Info and XMP may diverge after an explicit edit (see applyMetadata).
+  if (sourceXmp) restoreCatalogMetadata(pdfDoc, sourceXmp)
   if (request.formValues.length > 0) applyFormValues(pdfDoc, request.formValues)
   const pages = pdfDoc.getPages()
   // Apply rotations first so markup appearances draw lines for the page's final orientation
