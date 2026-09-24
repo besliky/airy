@@ -25,23 +25,28 @@ const slideText = (slide: any): string =>
     .join('')
 
 describe('copySlide / pasteSlide across decks', () => {
-  it('carries a slide into another deck and survives save → reopen', async () => {
-    const source = await openPptx(fx('05_unicode_cjk_emoji.pptx'))
-    const target = await openPptx(fx('01_standard_business.pptx'))
-    const sourceText = slideText(source.deck.slides[0])
-    const targetCount = target.deck.slides.length
+  // Real pptx pipeline (open, copy, save, reopen): duration scales with machine load under the full serial suite.
+  it(
+    'carries a slide into another deck and survives save → reopen',
+    { timeout: 120_000 },
+    async () => {
+      const source = await openPptx(fx('05_unicode_cjk_emoji.pptx'))
+      const target = await openPptx(fx('01_standard_business.pptx'))
+      const sourceText = slideText(source.deck.slides[0])
+      const targetCount = target.deck.slides.length
 
-    const bundle = copySlide(source, 0)
-    expect(bundle).not.toBeNull()
-    const pasted = pasteSlide(target, 0, bundle!)
-    expect(pasted).not.toBeNull()
-    expect(target.deck.slides.length).toBe(targetCount + 1)
-    expect(target.deck.slides[1]).toBe(pasted)
+      const bundle = copySlide(source, 0)
+      expect(bundle).not.toBeNull()
+      const pasted = pasteSlide(target, 0, bundle!)
+      expect(pasted).not.toBeNull()
+      expect(target.deck.slides.length).toBe(targetCount + 1)
+      expect(target.deck.slides[1]).toBe(pasted)
 
-    const reopened = await openPptx(await savePptx(target))
-    expect(reopened.deck.slides.length).toBe(targetCount + 1)
-    expect(slideText(reopened.deck.slides[1])).toBe(sourceText)
-  })
+      const reopened = await openPptx(await savePptx(target))
+      expect(reopened.deck.slides.length).toBe(targetCount + 1)
+      expect(slideText(reopened.deck.slides[1])).toBe(sourceText)
+    },
+  )
 
   it('points the pasted slide at a layout that exists in the destination', async () => {
     const source = await openPptx(fx('05_unicode_cjk_emoji.pptx'))
