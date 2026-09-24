@@ -15,6 +15,7 @@ import { AiHighlight } from './aiHighlight'
 import { AiQueueAnchors } from './aiQueueAnchors'
 import { InactiveSelection } from './inactiveSelection'
 import { SearchHighlight } from './searchHighlight'
+import { GiantTextChunking } from './giantTextChunking'
 import { buildMathExtensions } from './math'
 import { SlashCommand } from './slashCommand'
 import type { SlashController, SlashItem } from './slashCommand'
@@ -61,6 +62,8 @@ export function buildExtensions(options: BuildExtensionsOptions): AnyExtension[]
     AiQueueAnchors,
     InactiveSelection,
     SearchHighlight,
+    // DOM text-node chunking for giant single paragraphs (PERF-1700); view-only
+    GiantTextChunking,
     Placeholder.configure({ placeholder: () => t('placeholder') }),
     SlashCommand.configure({
       controller: options.slashController,
