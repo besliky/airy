@@ -59,10 +59,24 @@ import { assertWithinOpenCap, OpenSizeError } from '../sessions/size-fence.js'
 
 // ---- limits (mirror the embedded agent, scaled to the MCP 30k answer budget) ----
 
-const CONTEXT_MAX_CHARS = 30_000
 const PREVIEW_MAX_CHARS = 60
 const PREVIEW_TIGHT_CHARS = 20
-const READ_MAX_CHARS = 30_000
+/**
+ * Read-answer budget in UTF-8 bytes — the honest, documented limit (BUG-1684:
+ * the budget is byte-shaped for the host that frames the answer, and char
+ * counting underestimates CJK text threefold; the audit measured the old
+ * answers at 800KB..2.9MB against this 30k budget).
+ */
+const READ_BUDGET_BYTES = 30_000
+/**
+ * Overview budget a SELECTION read (blocks/range) spends on the index
+ * listing: the payload of such a read is the selected blocks' HTML, so the
+ * overview is capped well below the full budget and the HTML takes the rest
+ * (BUG-1684 — the selection path used to append the full overview of ALL
+ * blocks, so a five-block range into a 42k-block document answered with
+ * ~2.9MB against the 30k budget).
+ */
+const SELECTION_OVERVIEW_MAX_BYTES = 4_000
 /**
  * Largest range span a read materializes: the request schema does not bound
  * `end`, so the session must reject a huge span BEFORE building the index
@@ -81,6 +95,81 @@ export function countWords(text: string): number {
 
 function clip(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1))}…`
+}
+
+/** UTF-8 byte length — the read-answer budget is measured in bytes */
+function byteLen(text: string): number {
+  return Buffer.byteLength(text, 'utf8')
+}
+
+/**
+ * Longest char-prefix of `text` whose UTF-8 bytes stay within `maxBytes`
+ * (binary search over prefix length — prefix byte length is monotonic).
+ * `reserve` holds room for a truncation note appended after the prefix.
+ */
+function bytePrefixLimit(text: string, maxBytes: number, reserve: number): number {
+  const allowed = Math.max(0, maxBytes - reserve)
+  let lo = 0
+  let hi = text.length
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi + 1) / 2)
+    if (byteLen(text.slice(0, mid)) <= allowed) lo = mid
+    else hi = mid - 1
+  }
+  return lo
+}
+
+/**
+ * Fit the overview (header + `index|type|preview` lines + stats) into
+ * `budget` bytes: full previews first, then tightened previews, then
+ * repeated middle elision — each round keeps half the lines (head from the
+ * start, tail from the end, one marker naming the elided count) until the
+ * output fits. The single-pass elide this loop replaces still left 2/3 of
+ * the lines in, so a 42k-block document answered a default read with ~800k
+ * characters against the 30k budget (BUG-1684). Termination: the kept count
+ * halves each round down to a floor of two lines, where the assembled
+ * overview is a few hundred bytes — always inside any budget the callers
+ * pass.
+ */
+function fitOverview(
+  header: string,
+  stats: string,
+  render: (bodyMax: number) => string[],
+  budget: number,
+): string {
+  let body = render(PREVIEW_MAX_CHARS)
+  let out = [header, ...body, stats].join('\n')
+  if (byteLen(out) > budget) {
+    // tighten previews first, then elide the middle (numbering stays verifiable)
+    body = render(PREVIEW_TIGHT_CHARS)
+    out = [header, ...body, stats].join('\n')
+    let keep = body.length
+    while (byteLen(out) > budget && keep > 2) {
+      keep = Math.max(2, Math.floor(keep / 2))
+      const head = Math.ceil(keep / 2)
+      const tail = keep - head
+      out = [
+        header,
+        ...body.slice(0, head),
+        `…(${body.length - keep} blocks elided here; numbering is continuous)…`,
+        ...body.slice(body.length - tail),
+        stats,
+      ].join('\n')
+    }
+  }
+  return out
+}
+
+/**
+ * Final guard for an assembled read answer, in the shape the line sessions
+ * use (line-core clip): an honest hard cap with a truncation note. The
+ * callers size their parts to fit by construction; this only bounds a
+ * pathological part so no read answer can ever exceed the budget.
+ */
+function finalClip(text: string, hint: string): string {
+  if (byteLen(text) <= READ_BUDGET_BYTES) return text
+  const note = `\n…(output truncated; the read budget is ${READ_BUDGET_BYTES} bytes — ${hint})`
+  return `${text.slice(0, bytePrefixLimit(text, READ_BUDGET_BYTES, byteLen(note)))}${note}`
 }
 
 // ---- session ----
@@ -398,8 +487,9 @@ export class DocxSession {
   /**
    * Document overview for the agent: `index|type|preview` lines plus stats.
    * With blocks/range selected, the full restricted-HTML content of those
-   * blocks is appended instead (same shape the embedded agent's read_blocks
-   * returns). Output stays under ~30k characters.
+   * blocks is appended after an overview fitted into a bounded slice (the
+   * same tighten+elide ladder). The whole answer stays under the 30k-byte
+   * budget on both paths (BUG-1684).
    */
   readDocument(options: ReadOptions = {}): string {
     const blocks = this.view()
@@ -420,40 +510,28 @@ export class DocxSession {
 
     const selected = this.selectedIndexes(options)
     if (selected === null) {
-      let body = render(PREVIEW_MAX_CHARS)
-      let out = [header, ...body, stats].join('\n')
-      if (out.length > CONTEXT_MAX_CHARS) {
-        // tighten previews first, then elide the middle (numbering stays verifiable)
-        body = render(PREVIEW_TIGHT_CHARS)
-        out = [header, ...body, stats].join('\n')
-        if (out.length > CONTEXT_MAX_CHARS) {
-          const dropStart = Math.floor(body.length / 3)
-          const dropEnd = body.length - Math.floor(body.length / 3)
-          out = [
-            header,
-            ...body.slice(0, dropStart),
-            `…(${dropEnd - dropStart} blocks elided here; numbering is continuous)…`,
-            ...body.slice(dropEnd),
-            stats,
-          ].join('\n')
-        }
-      }
-      return out
+      return finalClip(
+        fitOverview(header, stats, render, READ_BUDGET_BYTES),
+        'request specific blocks/range',
+      )
     }
 
     const html = blocksToHtml(selected.map((i) => blocks[i]!))
+    const label = 'Selected block content (restricted HTML):'
+    // the overview rides along in a bounded slice so it can never crowd out
+    // the selected content; the HTML payload takes the rest of the budget.
+    // join('\n') below adds three separators between the four parts.
+    const overview = fitOverview(header, stats, render, SELECTION_OVERVIEW_MAX_BYTES)
+    const note = `\n…(output truncated; the read budget is ${READ_BUDGET_BYTES} bytes — request a narrower block range)`
+    const htmlBudget = Math.max(
+      1_000,
+      READ_BUDGET_BYTES - byteLen(overview) - byteLen(label) - 3 - byteLen(note),
+    )
     const clipped =
-      html.length > READ_MAX_CHARS
-        ? `${html.slice(0, READ_MAX_CHARS)}\n…(output truncated at ${READ_MAX_CHARS} characters; request a narrower block range)`
-        : html
-    return [
-      header,
-      ...render(PREVIEW_MAX_CHARS),
-      stats,
-      '',
-      'Selected block content (restricted HTML):',
-      clipped,
-    ].join('\n')
+      byteLen(html) <= htmlBudget
+        ? html
+        : `${html.slice(0, bytePrefixLimit(html, htmlBudget, 0))}${note}`
+    return finalClip([overview, '', label, clipped].join('\n'), 'request a narrower block range')
   }
 
   private selectedIndexes(options: ReadOptions): number[] | null {

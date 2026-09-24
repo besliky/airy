@@ -110,6 +110,46 @@ export async function buildFixtureDocx(): Promise<Uint8Array> {
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
 }
 
+/**
+ * Synthetic overview-flood document: `blockCount` plain paragraphs ("Block N
+ * …" text), for the read-budget regression that needs a document whose
+ * overview alone dwarfs the 30k answer budget (BUG-1684 mirrors the audited
+ * 42k-block corpus). Each paragraph is index-addressable and keeps a stable,
+ * greppable text.
+ */
+export async function buildManyBlocksDocx(blockCount: number): Promise<Uint8Array> {
+  const paragraphs: string[] = []
+  for (let i = 0; i < blockCount; i++) {
+    paragraphs.push(`<w:p><w:r><w:t>Block ${i} lorem ipsum dolor</w:t></w:r></w:p>`)
+  }
+  const zip = new JSZip()
+  addPinned(
+    zip,
+    '[Content_Types].xml',
+    `${XML_DECL}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '</Types>',
+  )
+  addPinned(
+    zip,
+    '_rels/.rels',
+    `${XML_DECL}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '</Relationships>',
+  )
+  addPinned(
+    zip,
+    'word/document.xml',
+    `${XML_DECL}<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraphs.join('')}` +
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
+      '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>' +
+      '</w:body></w:document>',
+  )
+  return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
+}
+
 // BUG-1502 fixture: the list numbering lives on the ListBullet/ListNumber
 // styles (w:numPr inside the style's w:pPr), and the body paragraphs carry
 // only the pStyle — no direct w:numPr. This is how Word writes documents
