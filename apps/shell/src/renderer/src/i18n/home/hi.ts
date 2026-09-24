@@ -41,6 +41,7 @@ export const hi = {
   filterAria: 'प्रकार के अनुसार फ़िल्टर करें',
   fileCount: '{n} फ़ाइलें',
   fileCountOne: '{n} फ़ाइल',
+  fileCountOver: '{n}+ फ़ाइलें',
   selectedCount: '{n} चयनित',
   selectAll: 'सभी चुनें',
   selectFile: '{name} चुनें',

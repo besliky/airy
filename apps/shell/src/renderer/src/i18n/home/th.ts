@@ -41,6 +41,7 @@ export const th = {
   filterAria: 'กรองตามชนิด',
   fileCount: '{n} ไฟล์',
   fileCountOne: '{n} ไฟล์',
+  fileCountOver: '{n}+ ไฟล์',
   selectedCount: 'เลือกแล้ว {n} รายการ',
   selectAll: 'เลือกทั้งหมด',
   selectFile: 'เลือก {name}',

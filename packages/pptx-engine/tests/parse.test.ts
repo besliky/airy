@@ -700,6 +700,61 @@ describe('table (p:graphicFrame a:tbl) parsing', () => {
   })
 })
 
+describe('table cell text direction (tcPr@vert → text.vert, BUG-1673)', () => {
+  const cell = (vert?: string, text = 'X') =>
+    `<a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:t>${text}</a:t></a:r></a:p></a:txBody>` +
+    `<a:tcPr${vert ? ` vert="${vert}"` : ''}/></a:tc>`
+  const tableXmlWith = (...cells: string[]) =>
+    '<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="9" name="T"/></p:nvGraphicFramePr>' +
+    '<p:xfrm><a:off x="914400" y="914400"/><a:ext cx="3657600" cy="914400"/></p:xfrm>' +
+    '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl>' +
+    '<a:tblPr/><a:tblGrid><a:gridCol w="914400"/></a:tblGrid>' +
+    `<a:tr h="914400">${cells.join('')}</a:tr>` +
+    '</a:tbl></a:graphicData></a:graphic></p:graphicFrame>'
+  const parseCells = (...cells: string[]) => {
+    const slideXml =
+      '<?xml version="1.0"?><p:sld xmlns:p="p" xmlns:a="a"><p:cSld>' +
+      '<p:spTree><p:nvGrpSpPr/><p:grpSpPr/>' +
+      tableXmlWith(...cells) +
+      '</p:spTree></p:cSld></p:sld>'
+    const slide = parseSlide({ path: 'ppt/slides/slide1.xml', slideXml, ctx: {} })
+    return (slide.elements[0] as any).rows[0] as any[]
+  }
+
+  it('maps the supported ST_TextVertType values onto the cell text body', () => {
+    const cells = parseCells(cell('vert270'), cell('eaVert'), cell('wordArtVert'), cell('vert'))
+    expect(cells[0].text.vert).toBe('vert270')
+    expect(cells[1].text.vert).toBe('eaVert')
+    expect(cells[2].text.vert).toBe('wordArtVert')
+    expect(cells[3].text.vert).toBe('vert')
+  })
+
+  it('no vert attribute (or an unsupported value) keeps horizontal text', () => {
+    const cells = parseCells(cell(undefined), cell('wordArtVertRtl'), cell('bogusVert'))
+    expect(cells[0].text.vert).toBeUndefined()
+    expect(cells[1].text.vert).toBeUndefined()
+    expect(cells[2].text.vert).toBeUndefined()
+  })
+
+  it('tcPr@vert wins over an unusual bodyPr@vert on the cell text body', () => {
+    const tc =
+      '<a:tc><a:txBody><a:bodyPr vert="eaVert"/><a:p><a:r><a:t>X</a:t></a:r></a:p></a:txBody>' +
+      '<a:tcPr vert="vert270"/></a:tc>'
+    const cells = parseCells(tc)
+    expect(cells[0].text.vert).toBe('vert270')
+  })
+
+  it('byte fidelity: vert attributes survive slide reassembly (save keeps the data)', () => {
+    const slideXml =
+      '<?xml version="1.0"?><p:sld xmlns:p="p" xmlns:a="a"><p:cSld>' +
+      '<p:spTree><p:nvGrpSpPr/><p:grpSpPr/>' +
+      tableXmlWith(cell('vert270', 'H'), cell('eaVert', 'V')) +
+      '</p:spTree></p:cSld></p:sld>'
+    const slide = parseSlide({ path: 'ppt/slides/slide1.xml', slideXml, ctx: {} })
+    expect(reassembleSlideXml(slide)).toBe(slideXml)
+  })
+})
+
 describe('tableRowGridCols', () => {
   it('plain row: one tc per column', () => {
     expect(tableRowGridCols([{}, {}, {}])).toEqual([0, 1, 2])

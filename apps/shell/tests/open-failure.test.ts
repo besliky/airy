@@ -4,7 +4,11 @@ import type { PathLike } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { friendlyErrorKey } from '../src/shared/error-codes'
-import { classifyOpenFailure, reportOpenFailure } from '../src/main/open-failure'
+import {
+  classifyOpenFailure,
+  reportOpenFailure,
+  resetOpenFailureDedupe,
+} from '../src/main/open-failure'
 
 /**
  * classifyOpenFailure / reportOpenFailure (src/main/open-failure.ts): an
@@ -39,6 +43,9 @@ beforeEach(() => {
     fsReal.statSync(path)) as typeof statSync)
   vi.mocked(accessSync).mockImplementation(((path: PathLike) =>
     fsReal.accessSync(path)) as typeof accessSync)
+  // the active-dialog dedupe is module state (BUG-1678): a leaked marker from
+  // one test must never swallow the dialog of the next
+  resetOpenFailureDedupe()
   root = mkdtempSync(join(tmpdir(), 'bug1655-'))
 })
 
@@ -105,9 +112,14 @@ describe('classifyOpenFailure', () => {
 describe('reportOpenFailure', () => {
   function deps() {
     return {
-      showErrorDialog: vi.fn<(message: string, err: Error) => void>(),
+      showErrorDialog: vi.fn<(message: string, err: Error, onClosed?: () => void) => void>(),
       openFailedMessage: vi.fn<(name: string) => string>((name) => `Could not open “${name}”`),
     }
+  }
+
+  /** a vanished path: the cheapest deterministic failure for the dedupe tests */
+  function missing(name: string): string {
+    return join(root, name)
   }
 
   it.each(['EACCES', 'EPERM', 'ENOENT', 'EISDIR'])(
@@ -143,5 +155,60 @@ describe('reportOpenFailure', () => {
     // e.g. no window yet: the caller keeps its home-tab fallback, no dialog
     expect(reportOpenFailure(file, d)).toBe(false)
     expect(d.showErrorDialog).not.toHaveBeenCalled()
+  })
+
+  describe('active-dialog dedupe (BUG-1678)', () => {
+    it('N failures of the same path while its dialog is open raise exactly one dialog', () => {
+      const target = missing('looped.docx')
+      const d = deps()
+      // the unpacked lock-retry loop re-broadcasts one forwarded open ~21x
+      for (let i = 0; i < 21; i++) expect(reportOpenFailure(target, d)).toBe(true)
+      expect(d.showErrorDialog).toHaveBeenCalledTimes(1)
+      expect(d.openFailedMessage).toHaveBeenCalledTimes(1)
+    })
+
+    it('failures of different paths each raise their own dialog', () => {
+      const d = deps()
+      expect(reportOpenFailure(missing('a.docx'), d)).toBe(true)
+      expect(reportOpenFailure(missing('b.pdf'), d)).toBe(true)
+      expect(reportOpenFailure(missing('c.pptx'), d)).toBe(true)
+      expect(d.showErrorDialog).toHaveBeenCalledTimes(3)
+    })
+
+    it('a dismissed dialog releases the path: the next failure shows again', () => {
+      const target = missing('again.docx')
+      const d = deps()
+      let onClosed!: () => void
+      d.showErrorDialog.mockImplementation((_m, _e, close) => {
+        if (close) onClosed = close
+      })
+      expect(reportOpenFailure(target, d)).toBe(true)
+      expect(d.showErrorDialog).toHaveBeenCalledTimes(1)
+      // repeats while the dialog is up are swallowed…
+      expect(reportOpenFailure(target, d)).toBe(true)
+      expect(d.showErrorDialog).toHaveBeenCalledTimes(1)
+      // …but the marker must not stick forever: dismissing the dialog lets a
+      // later failure of the same path surface again
+      onClosed()
+      expect(reportOpenFailure(target, d)).toBe(true)
+      expect(d.showErrorDialog).toHaveBeenCalledTimes(2)
+    })
+
+    it('dismissing one path never releases a still-open dialog of another', () => {
+      const first = missing('first.docx')
+      const second = missing('second.docx')
+      const d = deps()
+      const closers: Array<() => void> = []
+      d.showErrorDialog.mockImplementation((_m, _e, close) => closers.push(close!))
+      expect(reportOpenFailure(first, d)).toBe(true)
+      expect(reportOpenFailure(second, d)).toBe(true)
+      expect(d.showErrorDialog).toHaveBeenCalledTimes(2)
+      closers[0]()
+      expect(reportOpenFailure(first, d)).toBe(true)
+      expect(d.showErrorDialog).toHaveBeenCalledTimes(3)
+      expect(reportOpenFailure(second, d)).toBe(true)
+      // second's dialog is still on screen — still deduped
+      expect(d.showErrorDialog).toHaveBeenCalledTimes(3)
+    })
   })
 })

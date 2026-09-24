@@ -41,6 +41,7 @@ export const ar = {
   filterAria: 'تصفية حسب النوع',
   fileCount: '{n} ملفات',
   fileCountOne: 'ملف واحد',
+  fileCountOver: '{n}+ ملفات',
   selectedCount: 'تم تحديد {n}',
   selectAll: 'تحديد الكل',
   selectFile: 'تحديد {name}',

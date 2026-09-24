@@ -41,6 +41,7 @@ export const pt = {
   filterAria: 'Filtrar por tipo',
   fileCount: '{n} arquivos',
   fileCountOne: '{n} arquivo',
+  fileCountOver: '{n}+ arquivos',
   selectedCount: '{n} selecionados',
   selectAll: 'Selecionar tudo',
   selectFile: 'Selecionar {name}',

@@ -26,7 +26,7 @@ import {
 import type { MenuItemConstructorOptions, NativeImage, Rectangle, WebContents } from 'electron'
 import { homeChannelAccess } from './home-channel-access'
 import { createLiveBridgeToggle } from './live-bridge-toggle'
-import { stringPathsCapped } from './home-paths'
+import { stringPathsCapped } from '../shared/home-paths'
 import {
   bridgeEnvDisabled,
   effectiveLiveBridgeEnabled,
@@ -220,6 +220,7 @@ import type { TabKind } from '../shared/tabs-api'
 import { TABS_CHANNELS } from '../shared/tabs-api'
 import { showErrorDialog } from './error-dialog'
 import { classifyOpenFailure, reportOpenFailure, type OpenFailureDeps } from './open-failure'
+import { openFromHome } from './home-open'
 import {
   isInsideDirectory,
   listStagedFiles,
@@ -1568,9 +1569,11 @@ function openGeneratedDocument(filePath: string, into?: TabManager | null): bool
 }
 
 /** localized dialog channel for a user-intended open that produced no tab
- *  (BUG-1655); the window is resolved at call time */
+ *  (BUG-1655); the window is resolved at call time, and the close callback
+ *  releases the per-path dedupe entry once the dialog is dismissed */
 const openFailureDeps: OpenFailureDeps = {
-  showErrorDialog: (message, err) => showErrorDialog(focusedShellWindow(), message, err),
+  showErrorDialog: (message, err, onClosed) =>
+    showErrorDialog(focusedShellWindow(), message, err, onClosed),
   openFailedMessage: (name) => tm('errOpenFailed', { name }),
 }
 
@@ -1874,7 +1877,10 @@ function registerHomeIpc(): void {
   })
 
   handleHome(HOME_CHANNELS.statPaths, async (_event, paths: unknown): Promise<RecentEntry[]> => {
-    // bounded: the Home screen stats hand-picked lists, never thousands
+    // bounded per call: the renderer loads project catalogs in small chunks
+    // (see renderer project-files loader), so this cap only clamps absurd
+    // single payloads; a whole catalog larger than HOME_PATHS_CAP is shown
+    // with an honest "{n}+ files" counter, never silently truncated
     return statEntries(stringPathsCapped(paths))
   })
 
@@ -1883,7 +1889,13 @@ function registerHomeIpc(): void {
   })
 
   handleHome(HOME_CHANNELS.openPath, (_event, path: unknown) => {
-    if (typeof path === 'string') openDocumentPath(path)
+    // BUG-1677: a click on an unreadable file, a vanished one or a directory
+    // used to end in silence — the false routing result was dropped. The
+    // shared decision raises the same #154 dialog the launch paths show.
+    openFromHome(path, {
+      openDocument: openDocumentPath,
+      openFailure: openFailureDeps,
+    })
   })
 
   handleHome(HOME_CHANNELS.browse, async (event) => {
@@ -3535,6 +3547,13 @@ const devPidFile = () => join(app.getPath('userData'), 'dev-instance.pid')
 
 app.whenReady().then(async () => {
   const lockData = () => (pendingLaunchPath ? { launchPath: pendingLaunchPath } : {})
+  // The launch path rides along ONLY on the first lock request: every failed
+  // requestSingleInstanceLock re-emits 'second-instance' in the lock holder
+  // with the same additionalData, so the unpacked retry loop below multiplied
+  // one forwarded-open failure into ~21 identical error dialogs (BUG-1678).
+  // Retries exist only to wait out the doomed previous instance; if one of
+  // them acquires the lock, this instance reports pendingLaunchPath itself
+  // right after ready, so nothing is lost by not re-sending it.
   let hasLock = app.requestSingleInstanceLock(lockData())
   if (!hasLock && !app.isPackaged) {
     // Dev watch restart: electron-vite SIGTERMs the previous instance and spawns this
@@ -3556,7 +3575,8 @@ app.whenReady().then(async () => {
     }
     for (let i = 0; i < 20 && !hasLock; i++) {
       await new Promise((r) => setTimeout(r, 150))
-      hasLock = app.requestSingleInstanceLock(lockData())
+      // no additionalData on retries — see the BUG-1678 comment above
+      hasLock = app.requestSingleInstanceLock()
     }
   }
   if (!hasLock) {
