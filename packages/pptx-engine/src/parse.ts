@@ -2836,6 +2836,18 @@ function parseTableCell(
     // Cell vertical alignment and insets come from tcPr (bodyPr is usually empty in tables)
     const anchorMap: Record<string, TextBody['anchor']> = { t: 'top', ctr: 'middle', b: 'bottom' }
     if (tcPr['@_anchor']) text.anchor = anchorMap[tcPr['@_anchor']]
+    // tcPr@vert carries the cell text direction (same ST_TextVertType values as bodyPr@vert);
+    // tcPr wins over an (unusual) bodyPr@vert. Unknown values fall through unchanged
+    // (horizontal) — the same graceful mapping parseTextBody applies to shape bodies.
+    const vertRaw = tcPr['@_vert']
+    if (
+      vertRaw === 'eaVert' ||
+      vertRaw === 'vert' ||
+      vertRaw === 'vert270' ||
+      vertRaw === 'wordArtVert'
+    ) {
+      text.vert = vertRaw
+    }
     text.insets = {
       l: intOr(tcPr['@_marL'], 91440),
       r: intOr(tcPr['@_marR'], 91440),

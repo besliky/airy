@@ -553,6 +553,65 @@ describe('buildRenderSlide (end-to-end on real fixture)', () => {
     expect(grown.box.h).toBeGreaterThan(plain.box.h)
   })
 
+  it('vertical cell text (vert270) lays out rotated: rotate270 glyphs read bottom→top (BUG-1673)', async () => {
+    const { deck } = await openPptx(enginePptx('01_standard_business.pptx'))
+    const slide = deck.slides[0]!
+    const cellText = (vert?: string) => ({
+      ...(vert ? { vert } : {}),
+      paragraphs: [
+        {
+          runs: [
+            { text: 'A', fontSize: 18 },
+            { text: 'B', fontSize: 18 },
+          ],
+        },
+      ],
+      anchor: 'middle' as const,
+      insets: { l: 91440, r: 91440, t: 45720, b: 45720 },
+    })
+    // Tall narrow single cell — the shape of a rotated header column
+    const mkTable = (vert?: string): any => ({
+      id: 'tbl_vert',
+      type: 'table',
+      anchor: { spIndex: -1, originalXml: '', range: [0, 0] },
+      transform: {
+        offset: { x: 0, y: 0, cx: 952500, cy: 1905000 },
+        rot: 0,
+        flipH: false,
+        flipV: false,
+      },
+      colWidths: [952500],
+      rowHeights: [1905000],
+      rows: [[{ text: cellText(vert) }]],
+    })
+    const build = (el: any) =>
+      buildRenderSlide({ ...slide, elements: [el], decorations: [] }, deck.size, {
+        fitWidthPx: 1280,
+      }).nodes[0] as any
+
+    const rotated = build(mkTable('vert270'))
+    const cell = rotated.cells[0]
+    expect(cell.text.vert).toBe('vert270')
+    const runs = cell.text.lines.flatMap((l: any) => l.runs)
+    expect(runs.map((r: any) => r.text).join('')).toBe('AB')
+    // Whole-block rotation: every glyph carries the rotate270 flag (Konva rotation −90)
+    expect(runs.every((r: any) => r.rotate270 === true)).toBe(true)
+    // vert270 maps layout x onto −real y: the first glyph sits BELOW the second (reads bottom→top)
+    expect(runs[0].baselineY).toBeGreaterThan(runs[1].baselineY)
+    // Glyph origins stay inside the cell's horizontal extent
+    for (const r of runs) {
+      expect(r.x).toBeGreaterThanOrEqual(-0.5)
+      expect(r.x).toBeLessThanOrEqual(cell.w + 0.5)
+    }
+
+    // Control: the same cell without vert keeps the previous horizontal behavior
+    const horizontal = build(mkTable())
+    const runsH = horizontal.cells[0].text.lines.flatMap((l: any) => l.runs)
+    expect(horizontal.cells[0].text.vert).toBeUndefined()
+    expect(runsH.every((r: any) => !r.rotate90 && !r.rotate270)).toBe(true)
+    expect(runsH[0].x).toBeLessThan(runsH[1].x)
+  })
+
   it('maps group children into group-local coords (chOff subtracted, chExt scale baked into child boxes)', async () => {
     const { deck } = await openPptx(enginePptx('01_standard_business.pptx'))
     const slide = deck.slides[0]!
