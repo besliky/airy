@@ -7,6 +7,148 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-09-25
+
+### Added
+
+- Markdown:
+  - File→Export→HTML produces a single standalone .html file that opens
+    offline in any browser: the same preview pipeline as the PDF export (print
+    stylesheet plus inlined KaTeX CSS) with all CSS inline and no `<base>` tag,
+    so no dead references to the app's renderer URL; local document images
+    (`md-asset://`) are inlined as `data:` URIs through the main process's
+    readImage grant while remote images keep their URLs; link hrefs run through
+    the docs BUG-406 scheme whitelist (http/https/mailto, `#fragment`,
+    scheme-less) and a rejected href degrades the anchor to plain text;
+    `<script>` elements, `on*` handlers and the raw-HTML chip's
+    `data-raw-html` carrier attribute are stripped from the clone; the
+    user-picked path is written atomically (stage + rename); menu label in all
+    20 locales (PR #201).
+- Word documents:
+  - Formulas in tables with Word semantics: a Formula dialog prefilled with
+    `=SUM(ABOVE)` / `=SUM(LEFT)`, a `w:fldSimple` round-trip (the complex form
+    normalizes on save), an evaluation engine for ABOVE/BELOW/LEFT/RIGHT plus
+    A1 references, `\#` numeric format codes, and F9 recalculation (PR #204).
+- Sheets:
+  - Threaded comments: workbooks gain the modern Excel comment model —
+    `xl/threadedComments` + `xl/persons` are read by the sidecar and written
+    by the gateway (relationships, content-types, part deletion on resolve,
+    round-trip against openpyxl and the sidecar), a Comments panel with cell
+    indicators joins the app, and the legacy note button becomes New Note; all
+    20 locales. Honest limits, disclosed up front: at ship there is no
+    undo/redo for comment operations, and row/column structural edits did not
+    yet shift thread anchors — the anchor remap lands later in this same
+    release (see Fixed); no legacy shadow comment is written for old readers
+    (PR #205).
+  - Sheet protection with Excel semantics and legacy password hashes:
+    - A Protect/Unprotect dialog (password plus the per-action attributes)
+      drives an `effectiveSheetProtection` emulation that refuses locked edits
+      with Excel's own refusal texts; the legacy ECMA-376 hash is implemented
+      and verified bitwise against openpyxl (`'password'` → 83AF, `''` → CE4B,
+      Cyrillic and CJK included), with cargo tests against real Excel fixtures
+      carrying `password="83AF"` and openpyxl round-trips proving the file
+      shape (protection attribute polarity, unprotect = a clean sheet).
+    - The feature's fix rounds are part of the story: a value-import of the
+      shared desktop API pulled zod into the sandboxed preload (bundle
+      222.88 kB, "module not found: zod", dead preload, e2e shards in
+      timeouts) — validation moved into the main process and the bundle
+      returned to 127.10 kB with electron as the only external require, and
+      the openpyxl round-trip proofs run behind skipIf with a pure-JS CI layer
+      (PR #203).
+  - A pre-flight banner warns before a workbook that cannot fully save is
+    built: a non-blocking `role="status"` banner between the formula bar and
+    the grid lists the fail-closed constructs present in the book right now —
+    from a 20-scenario inventory (multi-select list validations, tables and
+    pivots stranded on session-added sheets, moves that tear a file-side
+    table, merges over tables, range moves over auto-filters, sheet
+    duplicates that carry parts, CSV flattening) — with the sheet/item
+    detail; findings recompute on every edit-journal bump and session swap,
+    the banner disappears when the construct is resolved, dismisses per
+    session (a different construct re-shows it) and never blocks: the save
+    pipeline remains the only authoritative verdict; 10 new i18n keys in all
+    20 locales. A fix round pinned the banner into the sheet grid with
+    layout-contract tests after it reflowed the canvas (the red e2e CSV save
+    went from a 30 s timeout to 4.3–4.5 s) (PR #202).
+- HTML editor:
+  - Optional scroll-sync and a word-wrap toggle for the split view:
+    proportional source↔preview sync is off by default, active only in split
+    view, and gated by a 150 ms echo window plus epsilon so the loop cannot
+    close from either side; word-wrap re-configures the live CodeMirror
+    through a compartment (no recreation; undo history and scroll position
+    survive); both preferences persist as `htmlEditorPrefs` in the shared
+    app-settings via the single-writer queue; 4 new i18n keys in all 20
+    locales (PR #206).
+
+### Fixed
+
+- Word documents:
+  - A docx whose tables arrive as loose rows — bare `w:tr` blocks without a
+    wrapping `w:tbl`, a structurally broken shape some generators emit — no
+    longer collapses the whole table into raw `w:tr` chips with zero editable
+    cells in the DOM: `mergeLooseTableRowBlocks` lifts the loose rows into a
+    native, editable table block at parse time, and save emits a valid
+    `w:tbl`, so the file heals on save (live repro: 0 chips → 2,129 tds). The
+    audit's "≥2 table formulas" hypothesis is honestly corrected: valid
+    1/2/3-formula tables were already native — the trigger was the broken
+    corpus, not the formula count (PR #209).
+- Sheets:
+  - A structural save (row insert) on a workbook with a table no longer
+    aborts with "Workbook is missing xl/worksheets/xl/tables/table1.xml",
+    silently losing the edit: Excel and openpyxl write the
+    worksheet→table relationship as a package-absolute target
+    (`Target="/xl/tables/table1.xml"`), and the shared resolver glued it onto
+    the source part's directory; a leading `/` now resolves from the package
+    root (the same fix covers drawing/VML shifts and sheet-deletion cascades).
+  - A structural save on a workbook with a dangling persons part no longer
+    aborts with "Cannot add entry xl/persons/person.xml — it already exists":
+    producers that leave the persons part in the zip without a workbook
+    relationship made the threaded-comments writer declare it as a new entry;
+    an existing part is now reused (author entries merged, the missing
+    relationship added), and two consecutive saves produce exactly one zip
+    entry (PR #208).
+  - A sheet protected with a legacy password streams again: the sidecar
+    serializes `password` while the strict read schema demanded
+    `passwordHash`, so every read failed on `unrecognized_keys` — the grid
+    stalled behind the first chunk and the status bar filled with a raw zod
+    dump; a `z.preprocess` alias maps `password` → `passwordHash` (strict
+    kept, a double key is rejected) and the read path validates through
+    `parseSidecarReadResult`, answering with a human-readable error instead
+    of schema internals (PR #210).
+  - The protection gate learns the two cell-level cases it got wrong:
+    - Unlocked cells (cell xf `locked="0"`) are editable again while the
+      sheet is protected — the main point of protection (templates with input
+      fields): the flag is now read from the raw cell matrix (`getCellRaw`)
+      instead of the composed `getCell`, whose interceptor chain could drop
+      the `custom` bag that carries it.
+    - `insertRows="0"` (structure changes allowed) is honored: the insert
+      itself passed the action check but Univer's descendant
+      `set-range-values` mutations (rewriting the shifted neighbors) were
+      re-gated by the locked-cell scan; descendants of an allowed structural
+      command now skip the scan inside a sheet-scoped window. ECMA-376
+      CT_SheetProtection polarity re-verified end to end ("1" = prevented,
+      absent = prevented except `selectLockedCells`/`selectUnlockedCells`)
+      (PR #211).
+  - Threaded-comment anchors follow row and column edits, closing the
+    disclosed PAR-212 tail: inserting a row above a thread no longer leaves
+    the ref stale with the thread hanging on the inserted empty cell —
+    anchors remap with the same line-shift rule the edit journal uses;
+    deleting the anchor row/column buries the thread (Excel deletes it with
+    the cell), and undoing the deletion resurrects it from a LIFO tombstone
+    stack (PR #212).
+
+### Performance
+
+- Build:
+  - `check:preload` guards the sandboxed preload bundles at build time: any
+    external `require`/`import` other than `electron` fails the check, and
+    every bundle must stay under a 300 kB ceiling — the exact class of the
+    #203 zod regression, which previously surfaced only as a dead preload and
+    runtime e2e timeouts; 13 node:test parser tests over synthetic
+    mini-bundles pin the detection (ESM, dynamic imports, scoped packages,
+    lookalike `foo.require(` calls, the size boundary), and all seven app
+    preloads measure green (docs 19.0, html 10.5, markdown 9.5, pdf 10.9,
+    sheets 127.1, shell 34.6, slides 22.5 kB) (PR #207).
+
 ## [0.20.0] - 2026-09-24
 
 ### Added
