@@ -19,6 +19,13 @@ const en = {
   ribbonFixedColumnWidth: 'Fixed Column Width',
   ribbonRepeatHeaderRows: 'Repeat Header Rows',
   ribbonTableProperties: 'Table Properties',
+  ribbonFormula: 'Formula',
+  ribbonFormulaDialogTitle: 'Formula',
+  ribbonFormulaField: 'Formula',
+  ribbonFormulaNumberFormat: 'Number format',
+  ribbonFormulaNumberFormatNone: '(none)',
+  ribbonFormulaHint:
+    'Positional arguments (ABOVE, BELOW, LEFT, RIGHT) scan the neighboring cells; results update on F9.',
   ribbonTableData: 'Table',
   ribbonHorizontalPosition: 'Horizontal position',
   ribbonVerticalPosition: 'Vertical position',

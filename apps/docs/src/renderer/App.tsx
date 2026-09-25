@@ -19,6 +19,7 @@ import { wordRangeAtCaret } from './editor/comments'
 import { markdownPasteHtml } from './editor/markdown-paste'
 import { pasteTextSlice, singleCellPasteText } from './editor/paste-text'
 import { applyFieldCaches } from './editor/revisions'
+import { collectTableFormulaJobs } from './editor/table-formulas'
 import {
   BLANK_BULLET_NUM_ID,
   BLANK_ORDERED_NUM_ID,
@@ -2898,6 +2899,9 @@ export function App() {
         })
       }
     })
+    // table formulas (=SUM(ABOVE)…): recomputed against the current cells, like
+    // Word's F9 over table fields; directions re-scan, headers stay ignored
+    jobs.push(...collectTableFormulaJobs(editor))
     // pagination only when a \p reference actually needs it (measuring is not free)
     let pageOf: ((pos: number) => number | null) | null = null
     for (const r of refs) {

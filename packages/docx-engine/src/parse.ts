@@ -116,6 +116,7 @@ import {
   type ResolvedAnchorPos,
 } from './parse-drawing-geometry'
 import {
+  FORMULA_INSTR_RE,
   IMAGE_RUN_CHILDREN,
   JC_ALIGN,
   SIMPLE_INLINE_FIELD_RE,
@@ -3120,6 +3121,11 @@ function extractRuns(
           else if (ref) {
             const name = ref[1] ?? ref[2]
             pushRun({ text: fieldCached || name, refField: name, refInstr: fieldInstr }, rev)
+          } else if (FORMULA_INSTR_RE.test(fieldInstr)) {
+            // Table formula (=SUM(ABOVE)…) written as a complex field: the run
+            // keeps the full instruction and re-emits as a w:fldSimple, the
+            // cached result stays the display text (Word shows it until F9)
+            pushRun({ text: fieldCached || ' ', formulaField: fieldInstr.trim() }, rev)
           } else if (hyper) {
             // fold the field into plain link runs (the cached result keeps its
             // formatting); regeneration emits w:hyperlink + a fresh rel
@@ -3317,7 +3323,30 @@ function extractRuns(
         // (Word shows them until the field refreshes) — MERGEFIELD address
         // labels, DATE stamps... Dropping them blanks mail-merge documents.
         // Skip only inside an enclosing complex field's instruction phase.
-        if (fieldDepth === 0 || fieldSeparated) walk(childrenOf(node), link, rev)
+        if (fieldDepth === 0 || fieldSeparated) {
+          const instr = decodeNumericCharRefs(attrsOf(node)['w:instr'] ?? '')
+          if (FORMULA_INSTR_RE.test(instr)) {
+            // Word's Formula field (Table Layout → Formula): keep the full
+            // instruction on the run; the cached children are the last-computed
+            // result shown until the field updates (F9)
+            let cached = ''
+            for (const child of childrenOf(node)) {
+              const r = buildRun(
+                child,
+                link,
+                ctx.themeColors,
+                ctx.themeFonts,
+                undefined,
+                ctx.styles,
+                paraRtl,
+                ctx.xmlSpacePreserve,
+                paraVanish,
+              )
+              if (r) cached += r.text
+            }
+            pushRun({ text: cached || ' ', formulaField: instr.trim() }, rev)
+          } else walk(childrenOf(node), link, rev)
+        }
       } else if (name === 'w:br') {
         // Word honors a <w:br> sitting outside any <w:r> (direct child of w:p / w:ins)
         pushRun({ text: BREAK_CHAR[attrsOf(node)['w:type'] ?? ''] ?? '\n' }, rev)

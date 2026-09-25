@@ -39,6 +39,7 @@ export const de = {
   editorFormatChangeBy: 'Formatiert: {author}',
   editorUnknownAuthor: 'Unbekannter Autor',
   editorFieldHint: 'Feld: {instr} (F9 zum Aktualisieren)',
+  editorTableFormulaHint: 'Tabellenformel: {instr} (F9 zum Aktualisieren)',
   editorContentControl: 'Inhaltssteuerelement',
   editorDefaultAuthor: 'Benutzer',
   editorCoverTitle: 'Dokumenttitel',

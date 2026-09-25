@@ -1306,6 +1306,8 @@ function runMarks(run: Run): PmMark[] {
       type: 'instrField',
       attrs: { instr: run.instrField, beginXml: run.fldBeginXml ?? null },
     })
+  if (run.formulaField !== undefined)
+    marks.push({ type: 'tableFormula', attrs: { instr: run.formulaField } })
   if (run.commentIds?.length)
     marks.push({ type: 'comment', attrs: { ids: run.commentIds.join(' ') } })
   if (run.ins) {
@@ -2749,6 +2751,8 @@ function runFromMarks(text: string, marks: PmMark[]): Run {
     } else if (mark.type === 'instrField') {
       run.instrField = String(mark.attrs?.instr ?? '')
       if (mark.attrs?.beginXml) run.fldBeginXml = String(mark.attrs.beginXml)
+    } else if (mark.type === 'tableFormula') {
+      run.formulaField = String(mark.attrs?.instr ?? '')
     } else if (mark.type === 'comment') {
       const ids = String(mark.attrs?.ids ?? '')
         .split(' ')
@@ -2806,12 +2810,14 @@ function mergeRuns(runs: Run[]): Run[] {
       run.noteRef ||
       run.xeTerm !== undefined ||
       run.instrField !== undefined ||
+      run.formulaField !== undefined ||
       run.math ||
       run.ruby ||
       run.image ||
       prev?.noteRef ||
       prev?.xeTerm !== undefined ||
       prev?.instrField !== undefined ||
+      prev?.formulaField !== undefined ||
       prev?.math ||
       prev?.ruby ||
       prev?.image
@@ -2845,6 +2851,7 @@ function runStyleKey(run: Run): string {
     run.refField ?? null,
     run.refInstr ?? null,
     run.instrField ?? null,
+    run.formulaField ?? null,
     run.fldBeginXml ?? null,
     run.math?.omml ?? null,
     run.ruby?.xml ?? null,
@@ -2893,6 +2900,7 @@ function normalizedRuns(runs: Run[]): unknown[] {
           r.refField ?? null,
           r.refInstr ?? null,
           r.instrField ?? null,
+          r.formulaField ?? null,
           r.fldBeginXml ?? null,
           r.math?.omml ?? null,
           r.ruby?.xml ?? null,

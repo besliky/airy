@@ -39,6 +39,7 @@ export const ar = {
   editorFormatChangeBy: 'تغيير التنسيق: {author}',
   editorUnknownAuthor: 'كاتب غير معروف',
   editorFieldHint: 'حقل: {instr} (F9 للتحديث)',
+  editorTableFormulaHint: 'صيغة الجدول: {instr} (F9 للتحديث)',
   editorContentControl: 'عنصر تحكم في المحتوى',
   editorDefaultAuthor: 'المستخدم',
   editorCoverTitle: 'عنوان المستند',
