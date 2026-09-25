@@ -936,6 +936,12 @@ export async function planCellEditsToXlsx(
       ),
     )
   }
+  // Formula cells the recalc overlay did not name keep the file's own cache;
+  // an EMPTY one carries nothing and reads as None for cache readers, so
+  // dropped form beats re-serialized `<v></v>` (SC-09/OBS-1719).
+  for (const [sheetName, worksheetXml] of worksheetXmls) {
+    worksheetXmls.set(sheetName, dropEmptyFormulaCachedValues(worksheetXml))
+  }
   // Columns inserted inside a table got generated names during the structural
   // pass. Excel requires each header cell to spell its column's name, so
   // reconcile against the final cell content: adopt a header the same save
@@ -2096,6 +2102,27 @@ function patchFormulaCachedValue(
   const kept = body.replace(/<v\b[^>]*\/>|<v\b[^>]*>[\s\S]*?<\/v>/g, '')
   const replacement = `<c r="${address}"${stripped}${typeAttr}>${kept}${valueXml}</c>`
   return worksheetXml.replace(cellPattern, () => replacement)
+}
+
+/// A formula cell whose recalculation is unknown keeps whatever cache the file
+/// had — including the EMPTY `<v></v>`/`<v/>` form, which carries no
+/// information for anyone (openpyxl data_only / pandas read None either way,
+/// fullCalcOnLoad recomputes) and is not a form Excel writes. Drop it so a
+/// saved formula cell either carries a real value (the recalc overlay) or no
+/// cache at all (SC-09/OBS-1719). Cells typed t="str" are left alone: an empty
+/// `<v></v>` there is a legitimate cached empty-string result.
+function dropEmptyFormulaCachedValues(worksheetXml: string): string {
+  // `[^/]>` skips self-closing `<c .../>` cells: pairing one into the open tag
+  // would swallow the following real cell as this match's body
+  return worksheetXml.replace(
+    /(<c\b(?:[^>]*[^/])?>)([\s\S]*?)(<\/c>)/g,
+    (cell, openTag: string, body: string, closeTag: string) => {
+      if (!/<f[\s/>]/.test(body)) return cell
+      if (/\st="str"/.test(openTag)) return cell
+      const kept = body.replace(/<v\s*\/>|<v><\/v>/g, '')
+      return kept === body ? cell : `${openTag}${kept}${closeTag}`
+    },
+  )
 }
 
 /// Row number (1-based, as in <row r=…>) → column (0-based) → the pending
