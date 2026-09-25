@@ -83,6 +83,7 @@ const PINNED_API_MEMBERS = `
   aiStreamCancel
   consumePending
   exportDocx
+  exportHtml
   exportPdf
   fetchImage
   getAiPanelPrefs
@@ -128,6 +129,7 @@ const PINNED_MARKDOWN_CHANNELS = `
   consumePending
   dirtyChanged
   exportDocx
+  exportHtml
   exportPdf
   exportRequest
   fileRenamed

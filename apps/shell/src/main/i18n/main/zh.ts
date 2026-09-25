@@ -15,6 +15,7 @@ export const zh = {
   menuNewHtml: 'AI HTML',
   menuNewPdf: 'AI PDF',
   menuExportPdf: '导出为 PDF…',
+  menuExportHtml: '导出为 HTML…',
   menuOpenInDocs: '转换为 Docs 文档并打开',
   menuPrint: '打印…',
   menuOpen: '打开…',
