@@ -625,10 +625,27 @@ const readTextDecoded = async (path: string) => {
   return decodeTextBytes(bytes, legacyCharsetForLang(getUiLang()))
 }
 
-const recoveryStore = new TextRecoveryStore(join(app.getPath('userData'), 'markdown-autosave'), {
-  write: (target, text) => atomicWriteFile(target, Buffer.from(text, 'utf8')),
-  readOriginal: readTextDecoded,
-})
+// BUG-1738: the autosave dir must be resolved at call time, not at module
+// evaluation. The shell redirects userData (app.setPath, AIRY_USER_DATA or the
+// unpacked "Airy Dev" profile) only after this module's top-level code has
+// run, so an eager capture would anchor every recovery copy to the default
+// profile (~/.config/Airy) — copies silently lost (ENOENT) or leaked into an
+// installed Airy's profile and offered back on unrelated launches.
+const markdownRecoveryDir = () => join(app.getPath('userData'), 'markdown-autosave')
+
+let recoveryStore: TextRecoveryStore | null = null
+/** Built on first use — every call site runs after the shell's setPath (or standalone startup). */
+function getRecoveryStore(): TextRecoveryStore {
+  recoveryStore ??= new TextRecoveryStore(markdownRecoveryDir(), {
+    write: async (target, text) => {
+      // the store itself must not depend on the caller pre-creating the dir
+      mkdirSync(markdownRecoveryDir(), { recursive: true })
+      await atomicWriteFile(target, Buffer.from(text, 'utf8'))
+    },
+    readOriginal: readTextDecoded,
+  })
+  return recoveryStore
+}
 
 /** Restore/Discard prompt for a recovery copy newer than the opened file */
 async function promptMarkdownRecovery(
@@ -653,7 +670,7 @@ async function promptMarkdownRecovery(
 function clearMarkdownRecoveryFor(wcId: number): void {
   if (dirtyByWc.has(wcId)) return
   const path = savePathByWc.get(wcId)
-  if (path) recoveryStore.clear(path)
+  if (path) getRecoveryStore().clear(path)
 }
 
 export function markdownFilePath(webContentsId: number): string | undefined {
@@ -711,7 +728,7 @@ export async function requestMarkdownClose(
       }
       // the user explicitly declined to keep the edits — the crash-recovery
       // copy must not resurrect them on the next open
-      recoveryStore.clear(documentPath)
+      getRecoveryStore().clear(documentPath)
     }
     return true
   }
@@ -871,7 +888,7 @@ function registerMarkdownIpc(): void {
     }
     // A recovery copy newer than the file (crash with unsaved edits) is
     // offered as Restore/Discard before the file's own bytes are served.
-    return recoveryStore.maybeRecover(path, () =>
+    return getRecoveryStore().maybeRecover(path, () =>
       promptMarkdownRecovery(BrowserWindow.fromWebContents(e.sender)),
     )
   })
@@ -899,6 +916,8 @@ function registerMarkdownIpc(): void {
   )
 
   // crash-recovery copy push: dirty renderers serialize and send every ~30s
+  // (the store's write creates the autosave dir — BUG-1738 keeps the dir
+  // resolution lazy so it lands in the profile the shell actually installed)
   ipcMain.handle(MARKDOWN_CHANNELS.writeRecovery, async (e, path: unknown, text: unknown) => {
     if (
       typeof path !== 'string' ||
@@ -907,8 +926,7 @@ function registerMarkdownIpc(): void {
     ) {
       return
     }
-    mkdirSync(join(app.getPath('userData'), 'markdown-autosave'), { recursive: true })
-    await recoveryStore.writeCopy(path, text)
+    await getRecoveryStore().writeCopy(path, text)
   })
 
   ipcMain.handle(
@@ -1022,9 +1040,9 @@ function registerMarkdownIpc(): void {
         }
         // the persisted file now carries these edits — its recovery copy must
         // not re-offer them; a save-as also retires the old file's copy
-        recoveryStore.clear(target)
+        getRecoveryStore().clear(target)
         if (currentPath && resolve(currentPath) !== resolve(target))
-          recoveryStore.clear(currentPath)
+          getRecoveryStore().clear(currentPath)
         if (isNewPath) fileSavedHook?.(e.sender, target)
         return done({
           ok: true,
