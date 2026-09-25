@@ -1571,10 +1571,26 @@ export function App() {
     [brushMode, applyBrushToElement, setSelectedId, enteredGroupId, enteredGroupNode],
   )
 
-  const handleEnterGroup = useCallback((groupId: string, childId: string | null) => {
-    setEnteredGroupId(groupId)
-    setSelectedIds(childId ? [childId] : [])
-  }, [])
+  const handleEnterGroup = useCallback(
+    (
+      groupId: string,
+      childId: string | null,
+      opts?: { editText?: boolean; caret?: { x: number; y: number } },
+    ) => {
+      setEnteredGroupId(groupId)
+      setSelectedIds(childId ? [childId] : [])
+      // One-gesture text edit (BUG-1725): startEdit() resolves the group from the
+      // enteredGroupNode state, which is not yet updated inside this gesture —
+      // bind the overlay to the child through the explicit groupId instead.
+      if (childId && opts?.editText)
+        setEditing({
+          sourceId: childId,
+          groupId,
+          ...(opts.caret ? { caret: opts.caret } : {}),
+        })
+    },
+    [],
+  )
 
   const insertTable = useCallback(
     (rows: number, cols: number) => insertActions.insertTable(ctxRef.current, rows, cols),
