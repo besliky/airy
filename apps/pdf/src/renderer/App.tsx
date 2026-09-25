@@ -24,10 +24,12 @@ import {
   quadSetsMatch,
   quadToRect,
   selectionQuadsByPage,
+  selectionUnionRect,
   viewToPdf,
 } from './annotations'
 import type { LocalMarkup, PageGeom } from './annotations'
 import { groupLineSpans } from './text-line'
+import { watchColumnSelection } from './column-selection'
 import { DRAW_COLORS, DrawLayer, cssRgb } from './DrawLayer'
 import { ColorPickerPopover } from './ColorPicker'
 import type { DrawTool, LocalDrawing, SavedNotePin } from './DrawLayer'
@@ -1233,6 +1235,15 @@ export default function App() {
   /** pdf-lib cannot write encrypted files, including owner-protected files that open without a password. */
   const readOnly = status === 'ready' && (passwordRef.current !== undefined || documentEncrypted)
 
+  // BUG-1729: on multi-column pages a native selection follows DOM (column) order, so a
+  // narrow diagonal drag can swallow whole columns. The watcher rewrites only such
+  // over-reaching selections into the visual band; single-column pages are never touched.
+  // Suppressed while edit-text mode owns the text layer.
+  useEffect(
+    () => watchColumnSelection(() => !(editTextMode && !readOnly)),
+    [editTextMode, readOnly],
+  )
+
   useEffect(() => {
     if (
       activeFormWidgetId &&
@@ -2020,11 +2031,14 @@ export default function App() {
         setAiSelection(null)
         return
       }
-      // Selection lives outside the document (e.g. panel text): leave the scope alone
-      if (!el.contains(sel.getRangeAt(0).commonAncestorContainer)) return
-      const box = sel.getRangeAt(0).getBoundingClientRect()
-      const quads = box.width >= 1 || box.height >= 1 ? selectionQuads() : null
-      if (!quads) {
+      // Selection lives outside the document (e.g. panel text): leave the scope alone.
+      // The box unions every range so the markup bar centers over a whole column-band,
+      // not just its first line.
+      const ranges = [...Array(sel.rangeCount)].map((_, i) => sel.getRangeAt(i))
+      if (!ranges.every((range) => el.contains(range.commonAncestorContainer))) return
+      const box = selectionUnionRect()
+      const quads = box && (box.width >= 1 || box.height >= 1) ? selectionQuads() : null
+      if (!box || !quads) {
         // A live document selection the scope can't represent must not leave a stale chip
         setAiSelection(null)
         return
@@ -2121,10 +2135,8 @@ export default function App() {
       to this click; the popover input will collapse it) */
   const openAskPopover = () => {
     const sel = window.getSelection()
-    const box =
-      sel && !sel.isCollapsed && sel.rangeCount > 0
-        ? sel.getRangeAt(0).getBoundingClientRect()
-        : null
+    // Union over all ranges: for a column-band selection the anchor is the whole band
+    const box = selectionUnionRect()
     const rect: AskAnchorRect | null = box
       ? { left: box.left, top: box.top, right: box.right, bottom: box.bottom }
       : selPopup
