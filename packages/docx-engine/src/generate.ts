@@ -2925,6 +2925,15 @@ function runFragmentXml(run: Run, insideLink: boolean): string {
       '<w:r><w:fldChar w:fldCharType="end"/></w:r>'
     )
   }
+  if (run.formulaField !== undefined) {
+    // Table formula field (Word's Formula dialog form): a w:fldSimple whose
+    // child run is the cached result shown until the field updates (F9).
+    // The instruction (including a \# numeric picture switch) is verbatim.
+    const result =
+      generateRunXml({ ...run, formulaField: undefined }, insideLink) ||
+      '<w:r><w:t xml:space="preserve"> </w:t></w:r>'
+    return `<w:fldSimple w:instr="${escapeXmlAttr(run.formulaField)}">${result}</w:fldSimple>`
+  }
   if (run.instrField !== undefined) {
     // Generic inline field: run text is the cached result; the instruction is written back verbatim.
     // A preserved begin run (form fields: w:ffData) replaces the bare begin, and the run text is a

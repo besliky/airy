@@ -126,3 +126,17 @@ export {
   type ListItemRef,
   type ListMarkerInfo,
 } from './list-markers'
+export {
+  FORMULA_DIV_ZERO_ERROR,
+  FORMULA_EMPTY_ERROR,
+  FORMULA_SYNTAX_ERROR,
+  collectDirectionOperands,
+  evaluateFormulaInGrid,
+  formatNumericPicture,
+  parseCellNumber,
+  parseFormulaInstruction,
+  proposeTableFormula,
+  type FormulaDirection,
+  type FormulaGrid,
+  type FormulaGridTexts,
+} from './table-formulas'

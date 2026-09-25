@@ -344,6 +344,9 @@ export function ptabDisplayStops(pNode: XNode): import('./types').TabStop[] {
 export const SIMPLE_INLINE_FIELD_RE =
   /^\s*(DATE|TIME|CREATEDATE|SAVEDATE|NUMPAGES|FILENAME|AUTHOR|PAGE)\b/
 
+/** table formula (=SUM(ABOVE)…) instructions, foldable into a formula-field run */
+export const FORMULA_INSTR_RE = /^\s*=/
+
 /** HYPERLINK "url" (optional \o "tip"): the only field form folded into an editable link run;
  * any other switch (\l bookmark, \t frame...) keeps the protected-passthrough path */
 export function convertibleHyperlink(instr: string): { href: string; tooltip?: string } | null {
@@ -809,6 +812,7 @@ function sameStyle(a: Run, b: Run): boolean {
   if (a.noteRef || b.noteRef || a.xeTerm !== undefined || b.xeTerm !== undefined) return false
   if (a.refField !== undefined || b.refField !== undefined) return false
   if (a.instrField !== undefined || b.instrField !== undefined) return false
+  if (a.formulaField !== undefined || b.formulaField !== undefined) return false
   if (a.math || b.math) return false
   if (a.ruby || b.ruby) return false
   if (a.image || b.image) return false

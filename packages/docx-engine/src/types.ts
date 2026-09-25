@@ -110,6 +110,12 @@ export interface Run {
   refInstr?: string
   /** Generic inline field (DATE/TIME/NUMPAGES/FILENAME etc.): full instruction text; run text is the cached result */
   instrField?: string
+  /**
+   * Table formula field (Word's Table Layout → Formula, e.g. "=SUM(ABOVE) \# \"#,##0.00\""):
+   * full instruction text including switches; run text is the last-computed
+   * result Word shows until the field updates. Regenerates as a w:fldSimple.
+   */
+  formulaField?: string
   /** Original field-begin run XML (w:fldChar + w:ffData), written back verbatim so form-field
    * definitions survive; when set, the run text is a synthesized glyph (☐/☒), not a cached result */
   fldBeginXml?: string
