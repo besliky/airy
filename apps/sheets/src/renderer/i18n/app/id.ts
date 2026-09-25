@@ -598,6 +598,21 @@ export const id = {
     'Jenis bagan ini tidak mendukung pengeditan tersebut; penyimpanan dibatalkan — urungkan perubahan bagan itu.',
   appSaveErrMoveOverlap:
     'Ada rumus, rentang berformat, bentuk, atau tabel yang melintasi baris yang dipindahkan; penyimpanan dibatalkan — urungkan pemindahan itu.',
+  appSaveCompatTitle: 'Sebagian isi buku kerja ini tidak akan tersimpan ke berkas',
+  appSaveCompatDetail: ' — {item}',
+  appSaveCompatDismiss: 'Tutup peringatan',
+  appSaveCompatCsv:
+    'Menyimpan sebagai CSV hanya menyimpan nilai polos lembar aktif — rumus, pemformatan, dan lembar lain tidak akan tersimpan.',
+  appSaveCompatMultiSelectDv:
+    'Validasi daftar multi-pilih tidak dapat disimpan ke xlsx — hapus aturan sebelum menyimpan.',
+  appSaveCompatStranded:
+    'Tabel atau Tabel Pivot baru pada lembar tambahan bertentangan dengan perubahan baris/kolom atau lembar yang tertunda — simpan sekali untuk menyelesaikan, atau batalkan perubahannya.',
+  appSaveCompatStructureConflict:
+    'Perpindahan baris/kolom, perpindahan rentang, atau penggabungan sel yang tertunda bertentangan dengan tabel atau filter pada lembar — batalkan atau simpan lebih dulu.',
+  appSaveCompatDuplicateParts:
+    'Lembar yang disalin memuat grafik, gambar, tabel, atau Tabel Pivot yang belum dapat disimpan ke dalam salinannya.',
+  appSaveCompatX14Cf: 'Perubahan pemformatan bersyarat tingkat lanjut (x14) belum dapat disimpan.',
+  appSaveCompatX14Dv: 'Perubahan validasi data tingkat lanjut (x14) belum dapat disimpan.',
   appFromTextCsvTitle: 'Impor file CSV/teks ke pilihan saat ini',
   appCsvImported: 'Mengimpor {rows} baris × {columns} kolom dari file ke {cell}.',
   appCsvEmpty: 'File CSV tidak berisi data.',

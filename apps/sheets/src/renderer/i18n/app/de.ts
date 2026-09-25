@@ -643,6 +643,23 @@ export const de = {
     'Dieser Diagrammtyp unterstützt diese Bearbeitung nicht; Speichern abgebrochen — machen Sie die Diagrammänderung rückgängig.',
   appSaveErrMoveOverlap:
     'Eine Formel, ein formatierter Bereich, eine Form oder eine Tabelle erstreckt sich über die verschobenen Zeilen; Speichern abgebrochen — machen Sie die Verschiebung rückgängig.',
+  appSaveCompatTitle: 'Einige Inhalte dieser Arbeitsmappe werden nicht in die Datei gespeichert',
+  appSaveCompatDetail: ' — {item}',
+  appSaveCompatDismiss: 'Warnung ausblenden',
+  appSaveCompatCsv:
+    'Beim Speichern als CSV bleiben nur die reinen Werte des aktiven Blatts erhalten — Formeln, Formatierung und andere Blätter werden nicht gespeichert.',
+  appSaveCompatMultiSelectDv:
+    'Mehrfachauswahl-Listenüberprüfung kann nicht als xlsx gespeichert werden — löschen Sie die Regel vor dem Speichern.',
+  appSaveCompatStranded:
+    'Eine neue Tabelle oder PivotTable auf einem hinzugefügten Blatt kollidiert mit ausstehenden Zeilen-/Spalten- oder Blattänderungen — speichern Sie einmal zur Auflösung oder machen Sie die Änderungen rückgängig.',
+  appSaveCompatStructureConflict:
+    'Eine ausstehende Zeilen-/Spaltenverschiebung, Bereichsverschiebung oder Zellzusammenführung kollidiert mit einer Tabelle oder einem Filter des Blatts — erst rückgängig machen oder speichern.',
+  appSaveCompatDuplicateParts:
+    'Das kopierte Blatt enthält Diagramme, Bilder, Tabellen oder PivotTables, die noch nicht in die Kopie gespeichert werden können.',
+  appSaveCompatX14Cf:
+    'Änderungen an erweiterter (x14) bedingter Formatierung können noch nicht gespeichert werden.',
+  appSaveCompatX14Dv:
+    'Änderungen an erweiterter (x14) Datenüberprüfung können noch nicht gespeichert werden.',
   appFromTextCsvTitle: 'CSV-/Textdatei in die aktuelle Auswahl importieren',
   appCsvImported: '{rows} Zeilen × {columns} Spalten aus der Datei nach {cell} importiert.',
   appCsvEmpty: 'Die CSV-Datei enthält keine Daten.',

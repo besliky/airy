@@ -631,6 +631,23 @@ export const it = {
     'Questo tipo di grafico non supporta tale modifica; salvataggio interrotto — annulla la modifica del grafico.',
   appSaveErrMoveOverlap:
     'Una formula, un intervallo formattato, una forma o una tabella attraversa le righe spostate; salvataggio interrotto — annulla lo spostamento.',
+  appSaveCompatTitle: 'Parte del contenuto di questa cartella di lavoro non verrà salvata nel file',
+  appSaveCompatDetail: ' — {item}',
+  appSaveCompatDismiss: 'Ignora l’avviso',
+  appSaveCompatCsv:
+    'Il salvataggio come CSV conserva solo i valori semplici del foglio attivo — formule, formattazione e altri fogli non verranno salvati.',
+  appSaveCompatMultiSelectDv:
+    'La convalida elenco a selezione multipla non può essere salvata in xlsx — elimina la regola prima di salvare.',
+  appSaveCompatStranded:
+    'Una nuova tabella o tabella pivot su un foglio aggiunto è in conflitto con modifiche di righe/colonne o di fogli in sospeso — salva una volta per risolvere o annulla le modifiche.',
+  appSaveCompatStructureConflict:
+    'Uno spostamento di righe/colonne, di intervallo o un’unione in sospeso è in conflitto con una tabella o un filtro del foglio — annullalo o salva prima.',
+  appSaveCompatDuplicateParts:
+    'Il foglio copiato contiene grafici, immagini, tabelle o tabelle pivot che non possono ancora essere salvati nella copia.',
+  appSaveCompatX14Cf:
+    'Le modifiche alla formattazione condizionale estesa (x14) non possono ancora essere salvate.',
+  appSaveCompatX14Dv:
+    'Le modifiche alla convalida dati estesa (x14) non possono ancora essere salvate.',
   appFromTextCsvTitle: 'Importa un file CSV/di testo nella selezione corrente',
   appCsvImported: 'Importate {rows} righe × {columns} colonne dal file in {cell}.',
   appCsvEmpty: 'Il file CSV non contiene dati.',

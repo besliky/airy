@@ -606,6 +606,21 @@ export const ko = {
     '이 차트 종류는 해당 편집을 지원하지 않아 저장을 중단했습니다 — 차트 변경을 실행 취소하십시오.',
   appSaveErrMoveOverlap:
     '수식, 서식 범위, 도형 또는 표가 이동한 행에 걸쳐 있어 저장을 중단했습니다 — 해당 이동을 실행 취소하십시오.',
+  appSaveCompatTitle: '이 통합 문서의 일부 내용은 파일에 저장되지 않습니다',
+  appSaveCompatDetail: ' — {item}',
+  appSaveCompatDismiss: '경고 닫기',
+  appSaveCompatCsv:
+    'CSV로 저장하면 활성 시트의 일반 값만 유지됩니다 — 수식, 서식, 다른 시트는 파일에 저장되지 않습니다.',
+  appSaveCompatMultiSelectDv:
+    '다중 선택 목록 유효성 검사는 xlsx에 저장할 수 없습니다 — 저장하기 전에 규칙을 삭제하세요.',
+  appSaveCompatStranded:
+    '추가된 시트의 새 표/피벗 테이블이 저장 대기 중인 행/열 또는 시트 변경과 충돌합니다 — 먼저 저장하거나 변경을 실행 취소하세요.',
+  appSaveCompatStructureConflict:
+    '저장 대기 중인 행/열 이동, 범위 이동 또는 병합이 시트의 표나 필터와 충돌합니다 — 먼저 취소하거나 저장하세요.',
+  appSaveCompatDuplicateParts:
+    '복사된 시트에는 차트, 이미지, 표, 피벗 테이블이 있어 아직 복사본에 저장할 수 없습니다.',
+  appSaveCompatX14Cf: '확장(x14) 조건부 서식에 대한 편집은 아직 저장할 수 없습니다.',
+  appSaveCompatX14Dv: '확장(x14) 데이터 유효성 검사에 대한 편집은 아직 저장할 수 없습니다.',
   appFromTextCsvTitle: 'CSV/텍스트 파일을 현재 선택 영역으로 가져오기',
   appCsvImported: '파일에서 {rows}행 × {columns}열을 {cell} 위치로 가져왔습니다.',
   appCsvEmpty: 'CSV 파일에 데이터가 없습니다.',

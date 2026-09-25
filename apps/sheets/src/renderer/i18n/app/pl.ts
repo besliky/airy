@@ -623,6 +623,23 @@ export const pl = {
     'Ten typ wykresu nie obsługuje tej edycji; zapisywanie przerwano — cofnij zmianę wykresu.',
   appSaveErrMoveOverlap:
     'Formuła, sformatowany zakres, kształt lub tabela obejmuje przenoszone wiersze; zapisywanie przerwano — cofnij przeniesienie.',
+  appSaveCompatTitle: 'Część zawartości tego skoroszytu nie zostanie zapisana do pliku',
+  appSaveCompatDetail: ' — {item}',
+  appSaveCompatDismiss: 'Ukryj ostrzeżenie',
+  appSaveCompatCsv:
+    'Zapis jako CSV zachowuje tylko zwykłe wartości aktywnego arkusza — formuły, formatowanie i pozostałe arkusze nie zostaną zapisane.',
+  appSaveCompatMultiSelectDv:
+    'Sprawdzanie poprawności listy wielokrotnego wyboru nie można zapisać w xlsx — usuń regułę przed zapisem.',
+  appSaveCompatStranded:
+    'Nowa tabela lub tabela przestawna na dodanym arkuszu koliduje z oczekującymi zmianami wierszy/kolumn lub arkuszy — zapisz raz, aby to rozwiązać, lub cofnij zmiany.',
+  appSaveCompatStructureConflict:
+    'Oczekujące przeniesienie wierszy/kolumn, zakresu lub scalanie koliduje z tabelą lub filtrem arkusza — cofnij je lub najpierw zapisz.',
+  appSaveCompatDuplicateParts:
+    'Skopiowany arkusz zawiera wykresy, obrazy, tabele lub tabele przestawne, których jeszcze nie można zapisać w kopii.',
+  appSaveCompatX14Cf:
+    'Zmiany rozszerzonego formatowania warunkowego (x14) nie mogą być jeszcze zapisane.',
+  appSaveCompatX14Dv:
+    'Zmiany rozszerzonego sprawdzania poprawności danych (x14) nie mogą być jeszcze zapisane.',
   appFromTextCsvTitle: 'Importuj plik CSV/tekstowy do bieżącego zaznaczenia',
   appCsvImported: 'Zaimportowano {rows} wierszy × {columns} kolumn z pliku do {cell}.',
   appCsvEmpty: 'Plik CSV nie zawiera danych.',

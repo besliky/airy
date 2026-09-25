@@ -630,6 +630,24 @@ export const nl = {
     'Dit grafiektype ondersteunt die bewerking niet; opslaan afgebroken — maak de grafiekwijziging ongedaan.',
   appSaveErrMoveOverlap:
     'Een formule, opgemaakt bereik, vorm of tabel loopt over de verplaatste rijen; opslaan afgebroken — maak de verplaatsing ongedaan.',
+  appSaveCompatTitle:
+    'Een deel van de inhoud van deze werkmap wordt niet in het bestand opgeslagen',
+  appSaveCompatDetail: ' — {item}',
+  appSaveCompatDismiss: 'Waarschuwing sluiten',
+  appSaveCompatCsv:
+    'Opslaan als CSV bewaart alleen de platte waarden van het actieve blad — formules, opmaak en andere bladen worden niet opgeslagen.',
+  appSaveCompatMultiSelectDv:
+    'Validatie van een multiselect-lijst kan niet als xlsx worden opgeslagen — verwijder de regel voordat u opslaat.',
+  appSaveCompatStranded:
+    'Een nieuwe tabel of draaitabel op een toegevoegd blad conflicteert met hangende rij-/kolom- of bladwijzigingen — sla eenmaal op om op te lossen, of maak de wijzigingen ongedaan.',
+  appSaveCompatStructureConflict:
+    'Een hangende rij-/kolomverplaatsing, bereikverplaatsing of samenvoeging conflicteert met een tabel of filter op het blad — maak het ongedaan of sla eerst op.',
+  appSaveCompatDuplicateParts:
+    'Het gekopieerde blad bevat grafieken, afbeeldingen, tabellen of draaitabellen die nog niet in de kopie opgeslagen kunnen worden.',
+  appSaveCompatX14Cf:
+    'Wijzigingen in uitgebreide (x14) voorwaardelijke opmaak kunnen nog niet worden opgeslagen.',
+  appSaveCompatX14Dv:
+    'Wijzigingen in uitgebreide (x14) gegevensvalidatie kunnen nog niet worden opgeslagen.',
   appFromTextCsvTitle: 'Een CSV-/tekstbestand in de huidige selectie importeren',
   appCsvImported: '{rows} rijen × {columns} kolommen uit het bestand geïmporteerd naar {cell}.',
   appCsvEmpty: 'Het CSV-bestand bevat geen gegevens.',

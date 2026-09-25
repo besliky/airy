@@ -636,6 +636,23 @@ export const es = {
     'Este tipo de gráfico no admite esa edición; guardado cancelado — deshaga el cambio del gráfico.',
   appSaveErrMoveOverlap:
     'Una fórmula, un rango con formato, una forma o una tabla abarca las filas movidas; guardado cancelado — deshaga el movimiento.',
+  appSaveCompatTitle: 'Parte del contenido de este libro no se guardará en el archivo',
+  appSaveCompatDetail: ' — {item}',
+  appSaveCompatDismiss: 'Descartar el aviso',
+  appSaveCompatCsv:
+    'Guardar como CSV conserva solo los valores planos de la hoja activa: las fórmulas, el formato y las demás hojas no se guardarán.',
+  appSaveCompatMultiSelectDv:
+    'La validación de lista de selección múltiple no se puede guardar en xlsx: elimine la regla antes de guardar.',
+  appSaveCompatStranded:
+    'Una tabla o tabla dinámica nueva en una hoja añadida entra en conflicto con cambios de filas/columnas o de hojas pendientes: guarde una vez para resolverlo o deshaga los cambios.',
+  appSaveCompatStructureConflict:
+    'Un movimiento pendiente de filas/columnas, de rango o una combinación entra en conflicto con una tabla o filtro de la hoja: deshágalo o guarde antes.',
+  appSaveCompatDuplicateParts:
+    'La hoja copiada contiene gráficos, imágenes, tablas o tablas dinámicas que aún no se pueden guardar en la copia.',
+  appSaveCompatX14Cf:
+    'Los cambios en formato condicional extendido (x14) aún no se pueden guardar.',
+  appSaveCompatX14Dv:
+    'Los cambios en validación de datos extendida (x14) aún no se pueden guardar.',
   appFromTextCsvTitle: 'Importar un archivo CSV/de texto en la selección actual',
   appCsvImported: 'Se importaron {rows} filas × {columns} columnas del archivo en {cell}.',
   appCsvEmpty: 'El archivo CSV no contiene datos.',

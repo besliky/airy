@@ -602,6 +602,21 @@ export const cs = {
     'Tento typ grafu danou úpravu nepodporuje; ukládání přerušeno — vraťte změnu grafu zpět.',
   appSaveErrMoveOverlap:
     'Přes přesouvané řádky zasahuje vzorec, formátovaná oblast, kresba nebo tabulka; ukládání přerušeno — vraťte přesun zpět.',
+  appSaveCompatTitle: 'Část obsahu tohoto sešitu se do souboru neuloží',
+  appSaveCompatDetail: ' — {item}',
+  appSaveCompatDismiss: 'Skrýt upozornění',
+  appSaveCompatCsv:
+    'Uložení jako CSV zachová jen prosté hodnoty aktivního listu — vzorce, formátování a další listy se neuloží.',
+  appSaveCompatMultiSelectDv:
+    'Ověřování dat se seznamem více výběrů nelze uložit do xlsx — před uložením pravidlo odstraňte.',
+  appSaveCompatStranded:
+    'Nová tabulka nebo kontingenční tabulka na přidaném listu je v konfliktu s čekajícími změnami řádků/sloupců nebo listů — jednou uložte pro vyřešení, nebo změny vraťte.',
+  appSaveCompatStructureConflict:
+    'Čekající přesun řádků/sloupců, přesun oblasti nebo sloučení buněk je v konfliktu s tabulkou nebo filtrem listu — vraťte jej, nebo nejprve uložte.',
+  appSaveCompatDuplicateParts:
+    'Zkopírovaný list obsahuje grafy, obrázky, tabulky nebo kontingenční tabulky, které zatím nelze do kopie uložit.',
+  appSaveCompatX14Cf: 'Změny rozšířeného (x14) podmíněného formátování zatím nelze uložit.',
+  appSaveCompatX14Dv: 'Změny rozšířeného (x14) ověřování dat zatím nelze uložit.',
   appFromTextCsvTitle: 'Importovat soubor CSV/text do aktuálního výběru',
   appCsvImported: 'Importováno {rows} řádků × {columns} sloupců ze souboru do {cell}.',
   appCsvEmpty: 'Soubor CSV neobsahuje žádná data.',

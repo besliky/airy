@@ -599,6 +599,21 @@ export const ms = {
     'Jenis carta ini tidak menyokong suntingan itu; penyimpanan dihentikan — buat asal perubahan carta tersebut.',
   appSaveErrMoveOverlap:
     'Terdapat formula, julat berformat, bentuk atau jadual merentangi baris yang dialihkan; penyimpanan dihentikan — buat asal pengalihan itu.',
+  appSaveCompatTitle: 'Sebahagian kandungan buku kerja ini tidak akan disimpan ke fail',
+  appSaveCompatDetail: ' — {item}',
+  appSaveCompatDismiss: 'Tutup amaran',
+  appSaveCompatCsv:
+    'Menyimpan sebagai CSV hanya menyimpan nilai biasa helaian aktif — formula, pemformatan dan helaian lain tidak akan disimpan.',
+  appSaveCompatMultiSelectDv:
+    'Pengesahan senarai berbilang pilihan tidak dapat disimpan ke xlsx — padamkan peraturan sebelum menyimpan.',
+  appSaveCompatStranded:
+    'Jadual atau Jadual Pivot baharu pada helaian tambahan bercanggah dengan perubahan baris/lajur atau helaian yang belum disimpan — simpan sekali untuk menyelesaikan, atau buat asal perubahan.',
+  appSaveCompatStructureConflict:
+    'Peralihan baris/lajur, peralihan julat atau penggabungan sel yang belum disimpan bercanggah dengan jadual atau penapis pada helaian — buat asal atau simpan dahulu.',
+  appSaveCompatDuplicateParts:
+    'Helaian yang disalin membawa carta, imej, jadual atau Jadual Pivot yang belum dapat disimpan ke dalam salinannya.',
+  appSaveCompatX14Cf: 'Suntingan pemformatan bersyarat lanjutan (x14) belum dapat disimpan.',
+  appSaveCompatX14Dv: 'Suntingan pengesahan data lanjutan (x14) belum dapat disimpan.',
   appFromTextCsvTitle: 'Import fail CSV/teks ke pilihan semasa',
   appCsvImported: 'Mengimport {rows} baris × {columns} lajur daripada fail ke {cell}.',
   appCsvEmpty: 'Fail CSV tiada data.',
