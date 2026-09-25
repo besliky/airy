@@ -690,6 +690,7 @@ export const nl = {
     'Formules opnieuw berekend op basis van uw bewerkingen — {count} behielden waarden uit de cache (functies die de terugvalengine mist).',
   appRecalcDone:
     'Formules opnieuw berekend op basis van uw bewerkingen ({count} cellen, terugvalengine).',
+  appCircularRefs: 'Cirkelverwijzingen: {refs}',
   appIndexing: '{name} wordt geïndexeerd: {rows} rijen gereed.',
   appStreamingRows: '{name} wordt streamend geladen: {rows} rijen beschikbaar.',
   appLoadRangeFailed: 'Kan het zichtbare bereik niet laden.',
