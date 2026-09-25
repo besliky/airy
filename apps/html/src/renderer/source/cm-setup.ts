@@ -1,4 +1,4 @@
-import { Annotation, EditorState, type Extension } from '@codemirror/state'
+import { Annotation, Compartment, EditorState, type Extension } from '@codemirror/state'
 import {
   EditorView,
   crosshairCursor,
@@ -29,6 +29,26 @@ import { findHighlight, syntaxCompartment } from './cm-find'
 
 /** Marks transactions that replace the document from outside the editor (load, patches) */
 export const External = Annotation.define<boolean>()
+
+/**
+ * Word wrap lives in a compartment (UX-1704) so the toggle reconfigures the
+ * state in place — the EditorView, its history and its scroll position all
+ * survive; only the extension slot is swapped. Default stays on: wrapping was
+ * always on before the toggle existed.
+ */
+export const wrapCompartment = new Compartment()
+
+/** whether the wrap extension is currently active in the state (mirrors CM's own guessWrapping probe) */
+export function wrapActive(state: EditorState): boolean {
+  return state
+    .facet(EditorView.contentAttributes)
+    .some((v) => typeof v !== 'function' && (v as { class?: string }).class === 'cm-lineWrapping')
+}
+
+/** flip word wrap on a live view without recreating it */
+export function setLineWrap(view: EditorView, on: boolean): void {
+  view.dispatch({ effects: wrapCompartment.reconfigure(on ? EditorView.lineWrapping : []) })
+}
 
 /** Colors come from --cm-* custom properties (tokens.css palette, light/dark aware) */
 const highlight = HighlightStyle.define([
@@ -75,7 +95,10 @@ const theme = EditorView.theme({
   '.cm-panels.cm-panels-top': { borderBottom: '1px solid var(--border)' },
 })
 
-export function buildExtensions(onDocChanged: (view: EditorView) => void): Extension {
+export function buildExtensions(
+  onDocChanged: (view: EditorView) => void,
+  { wrap = true }: { wrap?: boolean } = {},
+): Extension {
   return [
     lineNumbers(),
     highlightActiveLineGutter(),
@@ -105,7 +128,7 @@ export function buildExtensions(onDocChanged: (view: EditorView) => void): Exten
     syntaxCompartment.of(html()),
     aiHighlight(),
     findHighlight,
-    EditorView.lineWrapping,
+    wrapCompartment.of(wrap ? EditorView.lineWrapping : []),
     theme,
     EditorView.updateListener.of((update) => {
       // programmatic reveals (preview click, citation) carry External and must not feed back into selection

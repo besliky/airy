@@ -142,6 +142,27 @@ export function IconGlobe(props: IconProps) {
   )
 }
 
+/** word-wrap toggle (UX-1704): three reflowing lines with a fold arrow */
+export function IconWrapText(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M2.5 3.5h11M2.5 12.5h4M2.5 8h9.2a2.15 2.15 0 0 1 0 4.3H8.4" />
+      <path d="m9.9 10.9-1.5 1.4 1.5 1.4" />
+    </Svg>
+  )
+}
+
+/** split-view scroll-sync toggle (UX-1704): two panes, linked scroll positions */
+export function IconScrollSync(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="1.8" y="3" width="5.2" height="10" rx="1.2" />
+      <rect x="9" y="3" width="5.2" height="10" rx="1.2" />
+      <path d="M4.4 6.2v3.6M11.6 6.2v3.6M6 8h1.8M8.2 8H10" />
+    </Svg>
+  )
+}
+
 /** docs "AI Summarize" glyph (24-grid, drawn at the ribbon's big-button size) */
 export function IconSummarize({ size = 24 }: IconProps) {
   return (

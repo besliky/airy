@@ -2,9 +2,10 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { redo, redoDepth, undo, undoDepth } from '@codemirror/commands'
-import { External, buildExtensions } from './cm-setup'
+import { External, buildExtensions, setLineWrap } from './cm-setup'
 import { addAiRanges, clearAiRanges } from './cm-highlight'
 import { cmFindTarget } from './find-target'
+import { ratioToScrollTop, type ScrollerState } from '../preview/scroll-sync'
 import type { FindTarget } from '@airy-office/ui'
 import type { Patch } from '../document/patch'
 
@@ -18,6 +19,8 @@ export interface SourceEditorHandle {
   clearHighlights(): void
   /** select and scroll a source range into view; focus only when the user asked for the editor */
   revealRange(from: number, to: number, focus?: boolean): void
+  /** scroll-sync (UX-1704): move the viewport to a 0..1 proportion of the document */
+  applyScrollRatio(ratio: number): void
   undo(): boolean
   redo(): boolean
   canUndo(): boolean
@@ -40,10 +43,14 @@ interface Props {
   onCursor: (cursor: CursorInfo) => void
   /** only the editor's own transactions report changes; External-annotated ones are already known to the caller */
   className?: string
+  /** word wrap (UX-1704); toggling reconfigures the live editor, default on as before */
+  wordWrap?: boolean
+  /** scroll-sync: the scroller's own (non-echo) scroll events surface here as metrics */
+  onScroll?: (state: ScrollerState) => void
 }
 
 export const SourceEditor = forwardRef<SourceEditorHandle, Props>(function SourceEditor(
-  { initialText, onChange, onCursor, className },
+  { initialText, onChange, onCursor, className, wordWrap = true, onScroll },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -52,8 +59,11 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(function Sourc
   const docListeners = useRef(new Set<() => void>())
   const onChangeRef = useRef(onChange)
   const onCursorRef = useRef(onCursor)
+  const onScrollRef = useRef(onScroll)
+  const wrapRef = useRef(wordWrap)
   onChangeRef.current = onChange
   onCursorRef.current = onCursor
+  onScrollRef.current = onScroll
 
   useEffect(() => {
     const host = hostRef.current
@@ -62,11 +72,14 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(function Sourc
       parent: host,
       state: EditorState.create({
         doc: initialText,
-        extensions: buildExtensions((v) => {
-          const head = v.state.selection.main.head
-          const line = v.state.doc.lineAt(head)
-          onCursorRef.current({ line: line.number, col: head - line.from + 1, pos: head })
-        }),
+        extensions: buildExtensions(
+          (v) => {
+            const head = v.state.selection.main.head
+            const line = v.state.doc.lineAt(head)
+            onCursorRef.current({ line: line.number, col: head - line.from + 1, pos: head })
+          },
+          { wrap: wrapRef.current },
+        ),
       }),
       dispatchTransactions: (trs, v) => {
         v.update(trs)
@@ -81,7 +94,17 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(function Sourc
       docListeners.current.add(listener)
       return () => docListeners.current.delete(listener)
     })
+    const scrollDOM = view.scrollDOM
+    const onScrollEvent = () => {
+      onScrollRef.current?.({
+        scrollTop: scrollDOM.scrollTop,
+        scrollHeight: scrollDOM.scrollHeight,
+        clientHeight: scrollDOM.clientHeight,
+      })
+    }
+    scrollDOM.addEventListener('scroll', onScrollEvent)
     return () => {
+      scrollDOM.removeEventListener('scroll', onScrollEvent)
       view.destroy()
       viewRef.current = null
       findTargetRef.current = null
@@ -89,6 +112,14 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(function Sourc
     // the document is seeded once; later external replacements go through setDoc
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // word-wrap toggle (UX-1704): reconfigure the compartment in place; the mount
+  // already built the editor with wrapRef.current, so the first run is a no-op
+  useEffect(() => {
+    if (wordWrap === wrapRef.current) return
+    wrapRef.current = wordWrap
+    if (viewRef.current) setLineWrap(viewRef.current, wordWrap)
+  }, [wordWrap])
 
   useImperativeHandle(ref, () => ({
     setDoc(text) {
@@ -143,6 +174,20 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(function Sourc
         annotations: [External.of(true)],
       })
       if (focus) view.focus()
+    },
+    applyScrollRatio(ratio) {
+      const view = viewRef.current
+      if (!view) return
+      const dom = view.scrollDOM
+      const target = ratioToScrollTop(ratio, {
+        scrollTop: dom.scrollTop,
+        scrollHeight: dom.scrollHeight,
+        clientHeight: dom.clientHeight,
+      })
+      // the host gate drops our echo, but a same-position write would still
+      // fire a pointless scroll event — skip it at the source
+      if (target === dom.scrollTop) return
+      dom.scrollTop = target
     },
     undo: () => (viewRef.current ? undo(viewRef.current) : false),
     redo: () => (viewRef.current ? redo(viewRef.current) : false),

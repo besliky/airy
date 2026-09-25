@@ -10,6 +10,8 @@ export const HTML_CHANNELS = {
   presentNewTab: 'html:present-new-tab',
   readFile: 'html:read-file',
   setEncoding: 'html:set-encoding',
+  getEditorPrefs: 'html:get-editor-prefs',
+  setEditorPrefs: 'html:set-editor-prefs',
   writeRecovery: 'html:write-recovery',
   save: 'html:save',
   saveRequest: 'html:save-request',
@@ -116,6 +118,22 @@ export interface AttachmentImageResult {
 
 export type SaveMode = 'save' | 'saveAs'
 
+/**
+ * Source-editor view preferences (UX-1704), persisted workspace-wide in the
+ * shared userData/app-settings.json under one key. wordWrap keeps the
+ * historical default (the editor always wrapped before the toggle);
+ * scrollSync defaults off (an optional split-view affordance).
+ */
+export interface EditorPrefs {
+  wordWrap: boolean
+  scrollSync: boolean
+}
+
+/** a partial update; only the boolean-named fields are applied */
+export type EditorPrefsPatch = Partial<EditorPrefs>
+
+export const DEFAULT_EDITOR_PREFS: EditorPrefs = { wordWrap: true, scrollSync: false }
+
 export interface SaveHtmlRequest {
   /** full document text (frontmatter included) */
   text: string
@@ -210,6 +228,14 @@ export interface HtmlApi {
    * allowed; the pick survives tab close and relaunch (UX-1653).
    */
   setEncoding(path: string, encoding: string | null): Promise<boolean>
+  /** Editor view preferences (word wrap, split scroll-sync), persisted workspace-wide (UX-1704) */
+  getEditorPrefs(): Promise<EditorPrefs>
+  /**
+   * Merge a partial editor-prefs update through the app-settings single-writer
+   * queue (PR #108 discipline: merge-write that keeps untouched keys);
+   * resolves with the stored value.
+   */
+  setEditorPrefs(patch: EditorPrefsPatch): Promise<EditorPrefs>
   /** crash-recovery copy push (dirty renderers, every ~30s and on blur) */
   writeRecovery(path: string, text: string): Promise<void>
   /** Push the current buffer so html-preview:// serves it to the preview iframe */

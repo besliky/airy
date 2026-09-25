@@ -89,6 +89,7 @@ const PINNED_API_MEMBERS = `
   getAiPanelPrefs
   getAiSettings
   getAutoSaveDefault
+  getEditorPrefs
   getLanguage
   getPathForFile
   getPreviewInfo
@@ -117,6 +118,7 @@ const PINNED_API_MEMBERS = `
   sendCloseSaveResult
   sendSaveRequestAck
   setDirty
+  setEditorPrefs
   setEncoding
   setPresentFullScreen
   setProvisionalTitle
@@ -147,6 +149,7 @@ const PINNED_HTML_CHANNELS = `
   filesPick
   filesRead
   filesReadImage
+  getEditorPrefs
   getAiPanelPrefs
   getAutoSaveDefault
   getLanguage
@@ -165,6 +168,7 @@ const PINNED_HTML_CHANNELS = `
   saveImage
   saveRequest
   saveRequestAck
+  setEditorPrefs
   setEncoding
   themeChanged
   writeRecovery
