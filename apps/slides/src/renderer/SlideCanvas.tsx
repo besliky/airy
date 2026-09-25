@@ -43,6 +43,7 @@ import {
 } from './snap'
 import { NodeBody, StaticNode } from './NodeBody'
 import { dragEndTransform, sameGuides, sameSpacing } from './drag-gesture'
+import { groupAllowsChildTextEdit, resolveGroupDblClick } from './group-hit'
 import { ZOOM_PREVIEW_EVENT } from './zoom-preview'
 import { useI18n } from './i18n/locale'
 import {
@@ -293,8 +294,13 @@ interface Props {
   onDuplicateTo?: (sourceId: string, dxPx: number, dyPx: number) => void
   /** Group being edited from inside after double-click-into-group (its children are selectable/editable) */
   enteredGroupId?: string | null
-  /** Double-click a group to enter in-group editing (childId is the child hit by the double-click, may be empty) */
-  onEnterGroup?: (groupId: string, childId: string | null) => void
+  /** Double-click a group to enter in-group editing (childId is the child hit by the double-click, may be empty).
+   *  opts.editText opens the hit child's text editing in the same gesture (BUG-1725), with the caret at opts.caret. */
+  onEnterGroup?: (
+    groupId: string,
+    childId: string | null,
+    opts?: { editText?: boolean; caret?: { x: number; y: number } },
+  ) => void
   /** Connector endpoint drag committed: new endpoints in slide px; start/end = attachment change for that end (undefined keep, null detach, object attach) */
   onEditConnectorEndpoints?: (
     sourceId: string,
@@ -1721,6 +1727,11 @@ function NodeView({
         suppressClickRef.current = false
         return
       }
+      // The second click of a double-click pair must not re-select over the
+      // dblclick handler's result: a group dblclick would otherwise end up with
+      // the whole group re-selected over the child it just selected (BUG-1725).
+      // Additive (shift/⌘) clicks keep their multi-select meaning.
+      if (e.evt.detail >= 2 && !(e.evt.shiftKey || e.evt.metaKey)) return
       onSelect(node.sourceId, e.evt.shiftKey || e.evt.metaKey)
     },
     onTap: () => onSelect(node.sourceId),
@@ -1873,7 +1884,7 @@ function NodeView({
     const g = node as GroupRenderNode
     // The DOM text overlay doesn't follow group rotation/flip; in those cases children can't double-click into text editing.
     // ext/chExt scaling is already baked into child geometry (including text layout), so it no longer affects overlay alignment.
-    const plain = !box.rotationDeg && !box.flipH && !box.flipV
+    const plain = groupAllowsChildTextEdit(box)
     return (
       <Group id={`node_${node.sourceId}`} {...boxPivotProps(box)}>
         {/* In-group boundary indicator (dashed frame while editing a group) */}
@@ -1915,26 +1926,34 @@ function NodeView({
   }
 
   const editable = isEditableText(node) && (!insideGroupId || allowChildTextEdit)
-  // Double-click a group = enter in-group editing and select the child hit by the double-click (pointer converted to group-local coordinates, bounding-box hit)
+  // Double-click a group = enter in-group editing and open the hit child's text
+  // editing in the same gesture (PowerPoint-style, BUG-1725): the old two-step
+  // flow (enter, then dblclick the child again) kept losing to the pair's
+  // trailing click re-selecting the whole group. Hit-test picks the topmost
+  // child so the overlay binds to the child under the cursor, never to a
+  // sibling shape behind it.
   const onGroupDblClick = (e: Konva.KonvaEventObject<Event>) => {
     if (!onEnterGroup) return
     const g = node as GroupRenderNode
+    // children box already includes ext/chExt scaling (group-local px); compare directly after converting the pointer
     const p = e.target.getStage()?.getPointerPosition()
-    let childId: string | null = null
-    if (p && groupRef.current) {
-      // children box already includes ext/chExt scaling (group-local px); compare directly after converting the pointer
-      const local = groupRef.current.getAbsoluteTransform().copy().invert().point(p)
-      const lx = local.x
-      const ly = local.y
-      const hit = [...g.children]
-        .reverse()
-        .find(
-          (c) =>
-            lx >= c.box.x && lx <= c.box.x + c.box.w && ly >= c.box.y && ly <= c.box.y + c.box.h,
-        )
-      childId = hit?.sourceId ?? null
-    }
-    onEnterGroup(node.sourceId, childId)
+    const local =
+      p && groupRef.current
+        ? groupRef.current.getAbsoluteTransform().copy().invert().point(p)
+        : null
+    const hit = resolveGroupDblClick(g, groupAllowsChildTextEdit(box), local)
+    // Caret at the pointer (client coords, same as the top-level shape dblclick);
+    // dbltap events carry no clientX — the overlay then uses its default caret.
+    const evt = e.evt as Partial<MouseEvent> | undefined
+    const caret =
+      evt && typeof evt.clientX === 'number' && typeof evt.clientY === 'number'
+        ? { x: evt.clientX, y: evt.clientY }
+        : undefined
+    onEnterGroup(
+      node.sourceId,
+      hit.childId,
+      hit.editText ? { editText: true, ...(caret ? { caret } : {}) } : undefined,
+    )
   }
   // Table: double-click hits a cell in table-local coordinates, regardless of rotation/flip.
   const onTableDblClick = (e: Konva.KonvaEventObject<Event>) => {
