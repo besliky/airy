@@ -1823,6 +1823,11 @@ interface SheetsTabSession {
 /// Same ceiling as local add_image (readLocalImage's 20MB check)
 const MAX_REMOTE_IMAGE_BYTES = 20 * 1024 * 1024
 
+/// read_range calls slower than this leave a line in the main-process log with
+/// the range and duration (SC-10/OBS-1720 stuck-streaming trace). Normal reads
+/// on a loaded workbook finish far below it; a real stall logs exactly once.
+const SLOW_READ_RANGE_LOG_MS = 5_000
+
 const sheetsTabs = new Map<number, SheetsTabSession>()
 /** Per-tab screenshot-picker consent (state machine + rate limits, capture-consent.ts) */
 const captureConsent = new CaptureConsentTracker()
@@ -2770,12 +2775,25 @@ export function registerSheetsIpc(): void {
     const entry = sessionFor(event)
     const request = workbookRangeRequestSchema.parse(input)
     if (!entry.sessions.has(request.sessionId)) throw new Error('Unknown workbook session.')
-    const result = await entry.client.readRange(request)
-    return parseSidecarReadResult(
+    // SC-10/OBS-1720: the stuck-streaming report ("2 rows available" for 40+s
+    // on a tiny book) had no deterministic repro, so slow sidecar reads leave
+    // a trace here — one line with the range and the sidecar-side duration is
+    // enough to tell a hung engine from a slow disk on the next occurrence.
+    const startedAt = Date.now()
+    const result = parseSidecarReadResult(
       workbookRangeResultSchema,
-      result,
+      await entry.client.readRange(request),
       'Invalid workbook range response.',
     )
+    const elapsedMs = Date.now() - startedAt
+    if (elapsedMs >= SLOW_READ_RANGE_LOG_MS) {
+      console.warn(
+        `[sheets] slow read_range: ${elapsedMs}ms, session ${request.sessionId}, ` +
+          `sheet ${request.sheetId}, rows ${request.range.startRow}-${request.range.endRow}, ` +
+          `${result.rows.length} row record(s)`,
+      )
+    }
+    return result
   })
 
   ipcMain.handle(IPC_CHANNELS.readWorkbookFormulas, async (event, input: unknown) => {
