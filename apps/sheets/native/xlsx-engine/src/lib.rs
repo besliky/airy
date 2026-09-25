@@ -27,6 +27,7 @@ mod cell_images;
 mod ods_formula;
 mod refs;
 mod sparklines;
+mod structured_refs;
 mod table_styles;
 #[cfg(test)]
 mod tests;

@@ -20,6 +20,7 @@ use ironcalc::base::locale::{get_default_locale, get_locale};
 use ironcalc::import::load_from_xlsx;
 use serde::{Deserialize, Serialize};
 
+use crate::structured_refs::{normalize_at_shorthand, normalize_model_structured_references};
 use crate::{CellRange, SidecarError};
 
 pub const MAX_RECALC_EDITS: usize = 10_000;
@@ -311,6 +312,11 @@ fn run(
                 profile.import = Some(import_started.elapsed().as_millis() as u64);
             }
             let pin_started = std::time::Instant::now();
+            // Structured references: rewrite the `@` this-row shorthand
+            // IronCalc 0.8.3 cannot lex before pinning what still fails, so
+            // table formulas from real Excel files evaluate instead of
+            // erroring or staying frozen at their cached values.
+            normalize_model_structured_references(&mut model);
             pin_unparsable_formulas(&mut model);
             if profiling() {
                 profile.pin = Some(pin_started.elapsed().as_millis() as u64);
@@ -333,13 +339,22 @@ fn run(
             continue;
         }
         let sheet = sheet_index(&entry.model, &edit.sheet)?;
+        // Excel's `@` this-row shorthand inside structured references must be
+        // spelled out before IronCalc sees the formula. The applied-edit cache
+        // keeps the original input so repeated requests stay comparable; the
+        // rewrite is deterministic.
+        let input = if edit.input.starts_with('=') {
+            normalize_at_shorthand(&edit.input).into_owned()
+        } else {
+            edit.input.clone()
+        };
         entry
             .model
             .set_user_input(
                 sheet,
                 edit.row as i32 + 1,
                 edit.column as i32 + 1,
-                edit.input.clone(),
+                input,
             )
             .map_err(|error| {
                 SidecarError::Workbook(format!("Formula engine rejected an edit: {error}"))
