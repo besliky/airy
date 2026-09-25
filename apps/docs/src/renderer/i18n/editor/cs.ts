@@ -39,6 +39,7 @@ export const cs = {
   editorFormatChangeBy: 'Formátováno: {author}',
   editorUnknownAuthor: 'Neznámý autor',
   editorFieldHint: 'Pole: {instr} (F9 aktualizuje)',
+  editorTableFormulaHint: 'Vzorec tabulky: {instr} (F9 pro aktualizaci)',
   editorContentControl: 'Ovládací prvek obsahu',
   editorDefaultAuthor: 'Uživatel',
   editorCoverTitle: 'Název dokumentu',

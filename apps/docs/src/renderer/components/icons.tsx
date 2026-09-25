@@ -689,6 +689,17 @@ export function IconTableProperties(props: IconProps) {
   )
 }
 
+/** table formula (sigma over a cell grid), Word's Layout → Data → Formula */
+export function IconTableFormula(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="2.85" y="3.2" width="10.3" height="9.6" rx="0.65" />
+      <path d="M 2.85 6.4 h 10.3 M 8 6.4 v 6.4" strokeWidth="1" />
+      <path d="M 10.6 7.4 h 3.4 l -2.3 2.6 2.4 2.7 h -3.5" strokeWidth="1.2" />
+    </Svg>
+  )
+}
+
 export function IconRowInsertAbove(props: IconProps) {
   return (
     <Svg {...props}>

@@ -39,6 +39,7 @@ export const ja = {
   editorFormatChangeBy: '書式変更: {author}',
   editorUnknownAuthor: '作成者不明',
   editorFieldHint: 'フィールド: {instr}(F9 で更新)',
+  editorTableFormulaHint: '表の数式: {instr}(F9 で更新)',
   editorContentControl: 'コンテンツ コントロール',
   editorDefaultAuthor: 'ユーザー',
   editorCoverTitle: '文書のタイトル',

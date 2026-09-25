@@ -267,6 +267,32 @@ export const RefFieldMark = Mark.create({
 /** Revision display mode (synced by App; in original mode the extension below restores old formatting via decorations) */
 export const revisionDisplayState = { mode: 'all' as 'all' | 'none' | 'original' }
 
+/** Table formula field (=SUM(ABOVE)…, Word's Table Layout → Formula): text is the
+ * last-computed result, recomputed on F9. `instr` keeps the full field instruction
+ * (including a \# numeric picture switch) so saving regenerates the same w:fldSimple.
+ * inclusive: false — typing at the field edge must produce plain text, not extend the field */
+export const TableFormulaMark = Mark.create({
+  name: 'tableFormula',
+  inclusive: false,
+  addAttributes() {
+    return { instr: { default: '' } }
+  },
+  parseHTML() {
+    return [{ tag: 'span[data-table-formula]' }]
+  },
+  renderHTML({ mark }) {
+    return [
+      'span',
+      {
+        'data-table-formula': String(mark.attrs.instr),
+        class: 'doc-ref-field',
+        title: t('editorTableFormulaHint', { instr: String(mark.attrs.instr) }),
+      },
+      0,
+    ]
+  },
+})
+
 const revisionOriginalKey = new PluginKey('revisionOriginal')
 
 /**
