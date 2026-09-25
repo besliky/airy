@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { wordRangeAtCaret } from '../src/renderer/editor/comments'
+import { startNewComment, type ReviewContext } from '../src/renderer/review-actions'
 
 interface JsonNode {
   type: string
@@ -34,6 +35,32 @@ function setCaret(editor: Editor, pos: number): void {
 
 const textAt = (editor: Editor, range: { from: number; to: number }): string =>
   editor.state.doc.textBetween(range.from, range.to)
+
+/** minimal ReviewContext: only the editor and the composer/status callbacks matter here */
+function reviewContext(editor: Editor): ReviewContext {
+  return {
+    editor,
+    doc: null,
+    dirtyRef: { current: false },
+    setStatus: vi.fn(),
+    notePrompt: null,
+    setNotePrompt: vi.fn(),
+    footnotes: [],
+    endnotes: [],
+    setFootnotes: vi.fn(),
+    setEndnotes: vi.fn(),
+    setNotesDirty: vi.fn(),
+    comments: [],
+    setComments: vi.fn(),
+    setCommentsDirty: vi.fn(),
+    setCommentComposing: vi.fn(),
+    setShowComments: vi.fn(),
+    setInkAnnotations: vi.fn(),
+    setInksDirty: vi.fn(),
+    setCompareResult: vi.fn(),
+    setRevisionDisplay: vi.fn(),
+  }
+}
 
 describe('wordRangeAtCaret', () => {
   // "alpha beta gamma": paragraph content starts at doc position 1
@@ -95,6 +122,59 @@ describe('wordRangeAtCaret', () => {
     setCaret(ed, 5) // "done|."
     const range = wordRangeAtCaret(ed)
     expect(range && textAt(ed, range)).toBe('done')
+    ed.destroy()
+  })
+
+  // UX-1711: a caret resting in whitespace between words must still anchor a
+  // comment (Word never refuses) — the nearest word wins, next-word as fallback
+  it('falls forward to the next word from a leading gap', () => {
+    const ed = createEditor([para(text(' alpha'))])
+    setCaret(ed, 1) // "| alpha" — on the space before the word
+    const range = wordRangeAtCaret(ed)
+    expect(range && textAt(ed, range)).toBe('alpha')
+    ed.destroy()
+  })
+
+  it('falls forward to the next word from the middle of a whitespace run', () => {
+    const ed = createEditor([para(text('a   b'))])
+    setCaret(ed, 3) // "a  |b" — two spaces in, no word ends there
+    const range = wordRangeAtCaret(ed)
+    expect(range && textAt(ed, range)).toBe('b')
+    ed.destroy()
+  })
+
+  it('still returns null in a paragraph without any word', () => {
+    const ed = createEditor([para(text(' ... '))])
+    setCaret(ed, 2)
+    expect(wordRangeAtCaret(ed)).toBeNull()
+    ed.destroy()
+  })
+})
+
+// UX-1711: startNewComment must anchor on the word at/nearest a collapsed
+// caret instead of refusing (Word semantics), and only refuse in a wordless block
+describe('startNewComment caret anchoring', () => {
+  it('selects the next word when the caret rests in a gap and opens the composer', () => {
+    const ed = createEditor([para(text('a   b'))])
+    setCaret(ed, 3) // "a  |b"
+    const ctx = reviewContext(ed)
+    startNewComment(ctx)
+    const sel = ed.state.selection
+    expect(sel.empty).toBe(false)
+    expect(textAt(ed, { from: sel.from, to: sel.to })).toBe('b')
+    expect(ctx.setShowComments).toHaveBeenCalledWith(true)
+    expect(ctx.setCommentComposing).toHaveBeenCalledWith(true)
+    ed.destroy()
+  })
+
+  it('refuses with the status hint only in a wordless paragraph', () => {
+    const ed = createEditor([para(text(' ... '))])
+    setCaret(ed, 2)
+    const ctx = reviewContext(ed)
+    startNewComment(ctx)
+    // t() falls back to the raw key with no dictionary loaded (test env)
+    expect(ctx.setStatus).toHaveBeenCalledWith('appSelectTextToComment')
+    expect(ctx.setCommentComposing).not.toHaveBeenCalled()
     ed.destroy()
   })
 })

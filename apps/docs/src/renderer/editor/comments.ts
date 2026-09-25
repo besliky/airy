@@ -20,35 +20,56 @@ const WORD_SEGMENTER: Intl.Segmenter | null =
     ? new Intl.Segmenter(undefined, { granularity: 'word' })
     : null
 
-/** the word-like segment containing `off`, or the one ending exactly at it (caret right after a word) */
+/**
+ * The word-like segment containing `off`, the one ending exactly at it
+ * (caret right after a word), or — when the caret sits in a gap of
+ * whitespace/punctuation — the next word after it (Word never refuses to
+ * anchor a comment on a collapsed caret; UX-1711). Null only when the text
+ * has no word at or after the caret at all.
+ */
 function wordSegmentAt(text: string, off: number): { start: number; end: number } | null {
   if (WORD_SEGMENTER) {
     let before: { start: number; end: number } | null = null
+    let after: { start: number; end: number } | null = null
     for (const seg of WORD_SEGMENTER.segment(text)) {
+      if (!seg.isWordLike) continue
       const start = seg.index
       const end = seg.index + seg.segment.length
-      if (start > off) break
-      if (!seg.isWordLike) continue
-      if (off < end) return { start, end }
+      if (off < end) {
+        // a word starting past the caret only wins when the caret is in a
+        // gap — a word ending exactly at the caret takes precedence
+        if (start <= off) return { start, end }
+        after ??= { start, end }
+        break
+      }
       if (end === off) before = { start, end }
     }
-    return before
+    return before ?? after
   }
   const isWordChar = (ch: string) => /[\p{L}\p{N}_]/u.test(ch)
   let at = off
   if ((at >= text.length || !isWordChar(text[at]!)) && at > 0 && isWordChar(text[at - 1]!)) at--
-  if (at >= text.length || !isWordChar(text[at]!)) return null
-  let start = at
-  while (start > 0 && isWordChar(text[start - 1]!)) start--
-  let end = at + 1
+  if (at < text.length && isWordChar(text[at]!)) {
+    let start = at
+    while (start > 0 && isWordChar(text[start - 1]!)) start--
+    let end = at + 1
+    while (end < text.length && isWordChar(text[end]!)) end++
+    return { start, end }
+  }
+  // caret in a gap: fall forward to the next word, like the segmenter path
+  let scan = off
+  while (scan < text.length && !isWordChar(text[scan]!)) scan++
+  if (scan >= text.length) return null
+  let end = scan + 1
   while (end < text.length && isWordChar(text[end]!)) end++
-  return { start, end }
+  return { start: scan, end }
 }
 
 /**
- * The word under a collapsed caret, as Word anchors a new comment when
- * nothing is selected. Null for a non-empty selection, a caret outside any
- * word, or a caret in a non-text block.
+ * The word a collapsed caret anchors a new comment on, following Word: the
+ * word under the caret, or the nearest word when the caret sits between
+ * words. Null for a non-empty selection, a caret in a wordless text block,
+ * or a caret in a non-text block.
  */
 export function wordRangeAtCaret(editor: Editor): { from: number; to: number } | null {
   const { $from, empty } = editor.state.selection
