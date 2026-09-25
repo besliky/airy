@@ -36,6 +36,7 @@ import { SlideCanvas, selectionChromeColor } from './SlideCanvas'
 import { tableCellOverlayBox } from './table-hit'
 import { ZOOM_PREVIEW_EVENT } from './zoom-preview'
 import { createWheelPager } from './wheel-page-flip'
+import { appliedStageZoom, resizeFitDecision } from './zoom-fit'
 import type { DrawRect } from './draw-shape'
 import { SlideThumb } from './SlideThumb'
 import { MasterView } from './MasterView'
@@ -790,18 +791,24 @@ export function App() {
       const prevOuter = outerBox
       outerBox = { w: el.offsetWidth, h: el.offsetHeight }
       const z = fitZoom(slideLiveRef.current)
-      const lf = lastFitRef.current
-      const inFitMode = lf != null && Math.abs(zoomLiveRef.current - lf) <= 0.001
-      if (!inFitMode) {
-        // The overflow test uses the uncapped ratio: on large windows a manual
-        // zoom above the 1.5 fit cap can still fit and must not be wiped
-        if (zoomLiveRef.current <= rawFit(slideLiveRef.current) + 0.001) return
-        const outerResized =
-          prevOuter != null && (outerBox.w !== prevOuter.w || outerBox.h !== prevOuter.h)
-        if (!outerResized) return
-      }
-      lastFitRef.current = z
-      setZoom(z)
+      // BUG-1726: decide from the zoom the canvas is actually DISPLAYING, never
+      // from the state refs — zoom gestures apply to the CSS transform first and
+      // commit the state debounced, so zoomLiveRef trails the visible scale and
+      // a scrollbar ripple inside that window read as "still in fit mode" and
+      // slammed the canvas back to fit (wiping the user's zoom, and moving the
+      // page under an in-flight pointer drag: overshoot and non-started gestures).
+      const decision = resizeFitDecision({
+        appliedZoom: appliedStageZoom(stageScaleRef.current),
+        stateZoom: zoomLiveRef.current,
+        rawFitZoom: rawFit(slideLiveRef.current),
+        fitZoom: z,
+        lastFitZoom: lastFitRef.current,
+        outerResized:
+          prevOuter != null && (outerBox.w !== prevOuter.w || outerBox.h !== prevOuter.h),
+      })
+      if (decision.action !== 'refit') return
+      lastFitRef.current = decision.zoom
+      setZoom(decision.zoom)
     })
     ro.observe(el)
     return () => ro.disconnect()
@@ -1097,6 +1104,11 @@ export function App() {
             py = (ay - r.top) / applied
           }
           scaleEl.style.transform = `scale(${g.pending})`
+          // Sync the live ref with the APPLIED scale immediately: the state commit
+          // is debounced to the gesture end, and consumers that must see what the
+          // user sees right now (resize-observer fit decisions, the wheel pager's
+          // page-turn guard) would otherwise read a ~150ms-stale value (BUG-1726).
+          zoomLiveRef.current = g.pending
           const box = zoomBoxRef.current
           if (box) {
             // offsetWidth ignores the transform = unscaled layout size (same basis as scaleBox)
