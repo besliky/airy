@@ -473,4 +473,21 @@ export const hi = {
   dlgOutlineSummaryRight: 'सारांश कॉलम विवरण के दाएँ',
   dlgOutlineSummaryLeft: 'सारांश कॉलम विवरण के बाएँ',
   dlgOutlineSettingsNote: 'इस शीट पर लागू; इसकी रूपरेखा सेटिंग्स में सहेजा जाता है।',
+  dlgTableTitle: 'टेबल डिज़ाइन',
+  dlgTableName: 'टेबल का नाम',
+  dlgTableRange: 'रेंज',
+  dlgTableStyle: 'टेबल स्टाइल',
+  dlgTableBandedRows: 'धारीदार पंक्तियाँ',
+  dlgTableConvert: 'रेंज में बदलें',
+  dlgTableConvertConfirm:
+    'इस टेबल को सामान्य रेंज में बदलें? फ़िल्टर, धारियाँ और कुल पंक्ति काम करना बंद कर देंगी; डेटा बना रहेगा।',
+  dlgTableNote:
+    'आकार बदलने पर हेडर सेल स्थिर रहता है; सिकोड़ने पर रिहा सेल अपने स्थान पर रहते हैं।',
+  dlgTableNotInTable: 'पहले टेबल के अंदर कोई सेल चुनें।',
+  dlgTableBadName: 'वह नाम टेबल के लिए अनुमत नहीं है।',
+  dlgTableNameTaken: 'वह टेबल नाम पहले से उपयोग में है।',
+  dlgTableBadRange: 'A1:B4 जैसी मान्य रेंज दर्ज करें।',
+  dlgTableMoveHeader: 'रेंज टेबल के हेडर सेल से शुरू होनी चाहिए।',
+  dlgTablePendingShifts:
+    'टेबल संपादित करने से पहले लंबित पंक्ति/स्तंभ परिवर्तनों को सहेजें या पूर्ववत करें।',
 } satisfies Record<keyof typeof zh, string>

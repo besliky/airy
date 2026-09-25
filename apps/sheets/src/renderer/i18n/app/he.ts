@@ -1380,4 +1380,10 @@ export const he = {
   appOutlineSettingsSaved: 'הגדרות המתאר נרשמו — יחולו בשמירה.',
   appOutlineNoSummaryLine: 'שורת הסיכום תיפול מחוץ לגיליון.',
   appTextToColsDone: 'פוצלו {rows} שורות ל-{columns} עמודות ב-{cell}.',
+  appTableDesign: 'עיצוב טבלה',
+  appTableDesignDetail: 'שינוי גודל, שינוי שם, סגנון, המרה',
+  appTableUpdated: 'הטבלה עודכנה — שמרו עם ⌘S.',
+  appTableConverted: 'הטבלה הומרה לטווח — שמרו עם ⌘S.',
+  appSaveErrTableEditWithRowCol:
+    'לא ניתן לשמור עריכות טבלה יחד עם שינויי שורות/עמודות — קודם שמרו את הטבלה.',
 } satisfies Record<keyof typeof zh, string>

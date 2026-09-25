@@ -1483,4 +1483,10 @@ export const ja = {
   appOutlineSettingsSaved: 'アウトライン設定を記録しました。保存時に適用されます。',
   appOutlineNoSummaryLine: '集計行がシートの外になります。',
   appTextToColsDone: '{rows} 行を {columns} 列に分割しました（{cell} から）。',
+  appTableDesign: 'テーブル デザイン',
+  appTableDesignDetail: 'サイズ変更・名前変更・スタイル・変換',
+  appTableUpdated: 'テーブルを更新しました — ⌘S で保存してください。',
+  appTableConverted: 'テーブルを範囲に変換しました — ⌘S で保存してください。',
+  appSaveErrTableEditWithRowCol:
+    'テーブルの編集は行/列の変更と一緒に保存できません — 先にテーブルを保存してください。',
 } satisfies Record<keyof typeof zh, string>

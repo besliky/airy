@@ -473,4 +473,21 @@ export const ms = {
   dlgOutlineSummaryRight: 'Lajur ringkasan di kanan butiran',
   dlgOutlineSummaryLeft: 'Lajur ringkasan di kiri butiran',
   dlgOutlineSettingsNote: 'Terpakai pada helaian ini; disimpan dalam tetapan rangkanya.',
+  dlgTableTitle: 'Reka bentuk jadual',
+  dlgTableName: 'Nama jadual',
+  dlgTableRange: 'Julat',
+  dlgTableStyle: 'Gaya jadual',
+  dlgTableBandedRows: 'Baris jalur',
+  dlgTableConvert: 'Tukar kepada julat',
+  dlgTableConvertConfirm:
+    'Tukar jadual ini kepada julat biasa? Penapis, jalur dan baris jumlah berhenti berfungsi; data kekal.',
+  dlgTableNote:
+    'Penukaran saiz menahan sel pengepala di tempatnya; pengecutan meninggalkan sel yang dilepaskan di tempatnya.',
+  dlgTableNotInTable: 'Pilih sel di dalam jadual terlebih dahulu.',
+  dlgTableBadName: 'Nama itu tidak dibenarkan untuk jadual.',
+  dlgTableNameTaken: 'Nama jadual itu sudah digunakan.',
+  dlgTableBadRange: 'Masukkan julat yang sah seperti A1:B4.',
+  dlgTableMoveHeader: 'Julat mesti bermula pada sel pengepala jadual.',
+  dlgTablePendingShifts:
+    'Simpan atau buat asal perubahan baris/lajur yang tertunda sebelum mengedit jadual.',
 } satisfies Record<keyof typeof zh, string>

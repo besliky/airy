@@ -468,4 +468,20 @@ export const ko = {
   dlgOutlineSummaryRight: '요약 열을 세부 열 오른쪽에',
   dlgOutlineSummaryLeft: '요약 열을 세부 열 왼쪽에',
   dlgOutlineSettingsNote: '이 시트에 적용되며 저장 시 윤곽 설정에 기록됩니다.',
+  dlgTableTitle: '테이블 디자인',
+  dlgTableName: '테이블 이름',
+  dlgTableRange: '범위',
+  dlgTableStyle: '테이블 스타일',
+  dlgTableBandedRows: '줄무늬 행',
+  dlgTableConvert: '범위로 변환',
+  dlgTableConvertConfirm:
+    '이 테이블을 일반 범위로 변환하시겠습니까? 필터, 줄무늬, 합계 행이 작동하지 않게 되며 데이터는 그대로 유지됩니다.',
+  dlgTableNote: '크기를 조정해도 머리글 셀은 고정됩니다. 축소해도 해제된 셀은 그 자리에 남습니다.',
+  dlgTableNotInTable: '먼저 테이블 안의 셀을 선택하세요.',
+  dlgTableBadName: '그 이름은 테이블 이름으로 사용할 수 없습니다.',
+  dlgTableNameTaken: '그 테이블 이름은 이미 사용 중입니다.',
+  dlgTableBadRange: 'A1:B4 같은 유효한 범위를 입력하세요.',
+  dlgTableMoveHeader: '범위는 테이블의 머리글 셀에서 시작해야 합니다.',
+  dlgTablePendingShifts:
+    '테이블을 편집하기 전에 보류 중인 행/열 변경을 저장하거나 실행 취소하세요.',
 } satisfies Record<keyof typeof zh, string>

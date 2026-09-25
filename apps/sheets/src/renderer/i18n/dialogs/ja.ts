@@ -473,4 +473,21 @@ export const ja = {
   dlgOutlineSummaryRight: '集計列を明細列の右に配置',
   dlgOutlineSummaryLeft: '集計列を明細列の左に配置',
   dlgOutlineSettingsNote: 'このシートに適用され、保存時にアウトライン設定に書き込まれます。',
+  dlgTableTitle: 'テーブル デザイン',
+  dlgTableName: 'テーブル名',
+  dlgTableRange: '範囲',
+  dlgTableStyle: 'テーブル スタイル',
+  dlgTableBandedRows: '縞模様の行',
+  dlgTableConvert: '範囲に変換',
+  dlgTableConvertConfirm:
+    'このテーブルを通常の範囲に変換しますか？フィルター、縞模様、集計行は機能しなくなりますが、データは残ります。',
+  dlgTableNote:
+    'サイズ変更しても見出しセルは固定されたままです。縮小しても解放されたセルはその場に残ります。',
+  dlgTableNotInTable: '先にテーブル内のセルを選択してください。',
+  dlgTableBadName: 'その名前はテーブル名に使用できません。',
+  dlgTableNameTaken: 'そのテーブル名はすでに使われています。',
+  dlgTableBadRange: 'A1:B4 のような有効な範囲を入力してください。',
+  dlgTableMoveHeader: '範囲はテーブルの見出しセルから始まる必要があります。',
+  dlgTablePendingShifts:
+    'テーブルを編集する前に、保留中の行/列の変更を保存または取り消してください。',
 } satisfies Record<keyof typeof zh, string>

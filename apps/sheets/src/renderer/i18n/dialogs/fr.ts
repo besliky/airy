@@ -479,4 +479,21 @@ export const fr = {
   dlgOutlineSummaryRight: 'Colonnes de total à droite du détail',
   dlgOutlineSummaryLeft: 'Colonnes de total à gauche du détail',
   dlgOutlineSettingsNote: 'S’applique à cette feuille ; enregistré dans ses paramètres de plan.',
+  dlgTableTitle: 'Création de tableau',
+  dlgTableName: 'Nom du tableau',
+  dlgTableRange: 'Plage',
+  dlgTableStyle: 'Style de tableau',
+  dlgTableBandedRows: 'Lignes à bandes',
+  dlgTableConvert: 'Convertir en plage',
+  dlgTableConvertConfirm:
+    'Convertir ce tableau en plage normale ? Les filtres, les bandes et la ligne des totaux cesseront de fonctionner ; les données restent en place.',
+  dlgTableNote:
+    'Le redimensionnement garde la cellule d’en-tête ancrée ; la réduction laisse les cellules libérées en place.',
+  dlgTableNotInTable: 'Sélectionnez d’abord une cellule à l’intérieur d’un tableau.',
+  dlgTableBadName: 'Ce nom n’est pas autorisé pour un tableau.',
+  dlgTableNameTaken: 'Ce nom de tableau est déjà utilisé.',
+  dlgTableBadRange: 'Saisissez une plage valide comme A1:B4.',
+  dlgTableMoveHeader: 'La plage doit commencer à la cellule d’en-tête du tableau.',
+  dlgTablePendingShifts:
+    'Enregistrez ou annulez les changements de lignes/colonnes en attente avant de modifier les tableaux.',
 } satisfies Record<keyof typeof zh, string>

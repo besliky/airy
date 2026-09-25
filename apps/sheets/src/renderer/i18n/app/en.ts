@@ -1414,4 +1414,10 @@ export const en = {
   appOutlineSettingsSaved: 'Outline settings recorded — they apply on save.',
   appOutlineNoSummaryLine: 'The summary line would fall outside the sheet.',
   appTextToColsDone: 'Split {rows} rows into {columns} columns at {cell}.',
+  appTableDesign: 'Table design',
+  appTableDesignDetail: 'Resize, rename, style, convert',
+  appTableUpdated: 'Table updated — save with ⌘S.',
+  appTableConverted: 'Table converted to a range — save with ⌘S.',
+  appSaveErrTableEditWithRowCol:
+    'Table edits cannot be saved together with row/column changes — save the table first.',
 } satisfies Record<keyof typeof zh, string>

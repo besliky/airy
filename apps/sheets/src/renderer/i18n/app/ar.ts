@@ -1401,4 +1401,10 @@ export const ar = {
   appOutlineSettingsSaved: 'تم تسجيل إعدادات المخطط التفصيلي — تُطبق عند الحفظ.',
   appOutlineNoSummaryLine: 'سيقع صف الملخص خارج الورقة.',
   appTextToColsDone: 'تم تقسيم {rows} صفًا إلى {columns} أعمدة عند {cell}.',
+  appTableDesign: 'تصميم الجدول',
+  appTableDesignDetail: 'تغيير الحجم، إعادة التسمية، النمط، التحويل',
+  appTableUpdated: 'تم تحديث الجدول — احفظ باستخدام ⌘S.',
+  appTableConverted: 'تم تحويل الجدول إلى نطاق — احفظ باستخدام ⌘S.',
+  appSaveErrTableEditWithRowCol:
+    'لا يمكن حفظ تعديلات الجدول مع تغييرات الصفوف/الأعمدة — احفظ الجدول أولاً.',
 } satisfies Record<keyof typeof zh, string>

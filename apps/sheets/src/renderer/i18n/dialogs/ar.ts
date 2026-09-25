@@ -471,4 +471,20 @@ export const ar = {
   dlgOutlineSummaryRight: 'أعمدة الملخص يمين التفاصيل',
   dlgOutlineSummaryLeft: 'أعمدة الملخص يسار التفاصيل',
   dlgOutlineSettingsNote: 'ينطبق على هذه الورقة؛ يُحفظ في إعدادات المخطط التفصيلي الخاصة بها.',
+  dlgTableTitle: 'تصميم الجدول',
+  dlgTableName: 'اسم الجدول',
+  dlgTableRange: 'النطاق',
+  dlgTableStyle: 'نمط الجدول',
+  dlgTableBandedRows: 'صفوف مخططة',
+  dlgTableConvert: 'تحويل إلى نطاق',
+  dlgTableConvertConfirm:
+    'تحويل هذا الجدول إلى نطاق عادي؟ سيتوقف عمل عوامل التصفية والتخطيط وصف الإجماليات؛ وتبقى البيانات كما هي.',
+  dlgTableNote:
+    'يحافظ تغيير الحجم على تثبيت خلية الرأس؛ وعند التصغير تبقى الخلايا المحررة في مكانها.',
+  dlgTableNotInTable: 'حدد خلية داخل جدول أولاً.',
+  dlgTableBadName: 'لا يُسمح بهذا الاسم للجدول.',
+  dlgTableNameTaken: 'اسم الجدول هذا مستخدم بالفعل.',
+  dlgTableBadRange: 'أدخل نطاقاً صالحاً مثل A1:B4.',
+  dlgTableMoveHeader: 'يجب أن يبدأ النطاق من خلية رأس الجدول.',
+  dlgTablePendingShifts: 'احفظ أو تراجع عن تغييرات الصفوف/الأعمدة المعلقة قبل تحرير الجداول.',
 } satisfies Record<keyof typeof zh, string>

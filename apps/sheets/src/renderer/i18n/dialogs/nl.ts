@@ -474,4 +474,21 @@ export const nl = {
   dlgOutlineSummaryRight: 'Subtotalenkolommen rechts van details',
   dlgOutlineSummaryLeft: 'Subtotalenkolommen links van details',
   dlgOutlineSettingsNote: 'Geldt voor dit blad; opgeslagen in de overzichtsinstellingen.',
+  dlgTableTitle: 'Tabelontwerp',
+  dlgTableName: 'Tabelnaam',
+  dlgTableRange: 'Bereik',
+  dlgTableStyle: 'Tabelstijl',
+  dlgTableBandedRows: 'Gestreepte rijen',
+  dlgTableConvert: 'Converteren naar bereik',
+  dlgTableConvertConfirm:
+    'Deze tabel naar een normaal bereik converteren? Filters, banding en de totalenrij werken dan niet meer; de gegevens blijven staan.',
+  dlgTableNote:
+    'Bij het wijzigen van de grootte blijft de koptekstcel verankerd; verkleinen laat de vrijgegeven cellen op hun plaats.',
+  dlgTableNotInTable: 'Selecteer eerst een cel binnen een tabel.',
+  dlgTableBadName: 'Die naam is niet toegestaan voor een tabel.',
+  dlgTableNameTaken: 'Die tabelnaam is al in gebruik.',
+  dlgTableBadRange: 'Voer een geldig bereik in, zoals A1:B4.',
+  dlgTableMoveHeader: 'Het bereik moet beginnen bij de koptekstcel van de tabel.',
+  dlgTablePendingShifts:
+    'Sla de openstaande rij-/kolomwijzigingen op of maak ze ongedaan voordat u tabellen bewerkt.',
 } satisfies Record<keyof typeof zh, string>

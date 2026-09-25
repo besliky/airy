@@ -1434,4 +1434,10 @@ export const id = {
   appOutlineSettingsSaved: 'Pengaturan kerangka dicatat — diterapkan saat menyimpan.',
   appOutlineNoSummaryLine: 'Baris ringkasan akan berada di luar sheet.',
   appTextToColsDone: '{rows} baris dipecah menjadi {columns} kolom di {cell}.',
+  appTableDesign: 'Desain tabel',
+  appTableDesignDetail: 'Ubah ukuran, ganti nama, gaya, konversi',
+  appTableUpdated: 'Tabel diperbarui — simpan dengan ⌘S.',
+  appTableConverted: 'Tabel dikonversi menjadi rentang — simpan dengan ⌘S.',
+  appSaveErrTableEditWithRowCol:
+    'Edit tabel tidak dapat disimpan bersama perubahan baris/kolom — simpan tabelnya terlebih dahulu.',
 } satisfies Record<keyof typeof zh, string>

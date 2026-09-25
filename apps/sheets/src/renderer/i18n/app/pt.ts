@@ -1477,4 +1477,10 @@ export const pt = {
   appOutlineSettingsSaved: 'Configurações da estrutura registradas — aplicadas ao salvar.',
   appOutlineNoSummaryLine: 'A linha de totais ficaria fora da planilha.',
   appTextToColsDone: '{rows} linhas divididas em {columns} colunas em {cell}.',
+  appTableDesign: 'Design de tabela',
+  appTableDesignDetail: 'Redimensionar, renomear, estilo, converter',
+  appTableUpdated: 'Tabela atualizada — guarde com ⌘S.',
+  appTableConverted: 'Tabela convertida em intervalo — guarde com ⌘S.',
+  appSaveErrTableEditWithRowCol:
+    'As edições de tabela não podem ser guardadas juntamente com alterações de linhas/colunas — guarde primeiro a tabela.',
 } satisfies Record<keyof typeof zh, string>

@@ -1472,4 +1472,10 @@ export const nl = {
   appOutlineSettingsSaved: 'Overzichtsinstellingen vastgelegd — toegepast bij opslaan.',
   appOutlineNoSummaryLine: 'De subtotalenrij zou buiten het blad vallen.',
   appTextToColsDone: '{rows} rijen gesplitst in {columns} kolommen vanaf {cell}.',
+  appTableDesign: 'Tabelontwerp',
+  appTableDesignDetail: 'Grootte, naam, stijl, converteren',
+  appTableUpdated: 'Tabel bijgewerkt — sla op met ⌘S.',
+  appTableConverted: 'Tabel geconverteerd naar een bereik — sla op met ⌘S.',
+  appSaveErrTableEditWithRowCol:
+    'Tabelbewerkingen kunnen niet samen met rij-/kolomwijzigingen worden opgeslagen — sla eerst de tabel op.',
 } satisfies Record<keyof typeof zh, string>

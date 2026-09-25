@@ -1452,4 +1452,10 @@ export const ru = {
   appOutlineSettingsSaved: 'Параметры структуры записаны — применятся при сохранении.',
   appOutlineNoSummaryLine: 'Итоговая строка оказалась бы за пределами листа.',
   appTextToColsDone: 'Разделено строк: {rows}, столбцов: {columns}, начиная с {cell}.',
+  appTableDesign: 'Конструктор таблиц',
+  appTableDesignDetail: 'Размер, имя, стиль, преобразование',
+  appTableUpdated: 'Таблица обновлена — сохраните с ⌘S.',
+  appTableConverted: 'Таблица преобразована в диапазон — сохраните с ⌘S.',
+  appSaveErrTableEditWithRowCol:
+    'Правки таблицы нельзя сохранить вместе с изменениями строк или столбцов — сначала сохраните таблицу.',
 } satisfies Record<keyof typeof zh, string>

@@ -477,4 +477,21 @@ export const ru = {
   dlgOutlineSummaryRight: 'Итоги справа от данных',
   dlgOutlineSummaryLeft: 'Итоги слева от данных',
   dlgOutlineSettingsNote: 'Применяется к этому листу; сохраняется в его параметрах структуры.',
+  dlgTableTitle: 'Конструктор таблиц',
+  dlgTableName: 'Имя таблицы',
+  dlgTableRange: 'Диапазон',
+  dlgTableStyle: 'Стиль таблицы',
+  dlgTableBandedRows: 'Чередующиеся строки',
+  dlgTableConvert: 'Преобразовать в диапазон',
+  dlgTableConvertConfirm:
+    'Преобразовать таблицу в обычный диапазон? Фильтры, чередование строк и строка итогов перестанут работать; данные останутся на месте.',
+  dlgTableNote:
+    'При изменении размера ячейка заголовка остаётся на месте; при сжатии освобождённые ячейки не удаляются.',
+  dlgTableNotInTable: 'Сначала выберите ячейку внутри таблицы.',
+  dlgTableBadName: 'Такое имя нельзя использовать для таблицы.',
+  dlgTableNameTaken: 'Такое имя таблицы уже занято.',
+  dlgTableBadRange: 'Введите корректный диапазон, например A1:B4.',
+  dlgTableMoveHeader: 'Диапазон должен начинаться с ячейки заголовка таблицы.',
+  dlgTablePendingShifts:
+    'Перед изменением таблиц сохраните или отмените ожидающие изменения строк и столбцов.',
 } satisfies Record<keyof typeof zh, string>

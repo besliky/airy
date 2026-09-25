@@ -474,4 +474,20 @@ export const cs = {
   dlgOutlineSummaryRight: 'Sloupce souhrnů vpravo od podrobností',
   dlgOutlineSummaryLeft: 'Sloupce souhrnů vlevo od podrobností',
   dlgOutlineSettingsNote: 'Platí pro tento list; uloženo v nastavení osnovy.',
+  dlgTableTitle: 'Návrh tabulky',
+  dlgTableName: 'Název tabulky',
+  dlgTableRange: 'Oblast',
+  dlgTableStyle: 'Styl tabulky',
+  dlgTableBandedRows: 'Proužkové řádky',
+  dlgTableConvert: 'Převést na oblast',
+  dlgTableConvertConfirm:
+    'Převést tuto tabulku na obyčejnou oblast? Filtry, proužky a řádek součtů přestanou fungovat; data zůstanou na místě.',
+  dlgTableNote:
+    'Změna velikosti drží buňku záhlaví na místě; zmenšení ponechá uvolněné buňky na místě.',
+  dlgTableNotInTable: 'Nejprve vyberte buňku uvnitř tabulky.',
+  dlgTableBadName: 'Tento název není pro tabulku povolen.',
+  dlgTableNameTaken: 'Tento název tabulky je už používán.',
+  dlgTableBadRange: 'Zadejte platnou oblast, například A1:B4.',
+  dlgTableMoveHeader: 'Oblast musí začínat v buňce záhlaví tabulky.',
+  dlgTablePendingShifts: 'Před úpravou tabulek uložte nebo zrušte čekající změny řádků/sloupců.',
 } satisfies Record<keyof typeof zh, string>

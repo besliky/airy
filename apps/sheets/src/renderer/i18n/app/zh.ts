@@ -1372,4 +1372,9 @@ export const zh = {
   appOutlineSettingsSaved: '已记录分级显示设置，保存时写入文件。',
   appOutlineNoSummaryLine: '汇总行将落在工作表之外。',
   appTextToColsDone: '已将 {rows} 行拆分为 {columns} 列，起始单元格 {cell}。',
+  appTableDesign: '表格设计',
+  appTableDesignDetail: '调整大小、重命名、样式、转换',
+  appTableUpdated: '表格已更新——请用 ⌘S 保存。',
+  appTableConverted: '表格已转换为区域——请用 ⌘S 保存。',
+  appSaveErrTableEditWithRowCol: '表格编辑不能和行列改动一起保存——请先保存表格。',
 }
