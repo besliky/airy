@@ -3322,10 +3322,25 @@ export default function App() {
     inFlightPageMapRef.current = snapshot.pageMap
     const run = (async (): Promise<boolean> => {
       setSaveState('saving')
-      const result = await window.pdfApi.save({ path: filePath, ...editsPayload(edits, noteFlush) })
+      const result = await window.pdfApi.save({
+        path: filePath,
+        auto: autosave || undefined,
+        ...editsPayload(edits, noteFlush),
+      })
       if (!result.ok) {
+        // external-modified: the main process already raised the fence dialog for a
+        // manual save (Save As / Overwrite / Cancel) or silently deferred an autosave
+        // to one — stay dirty, no second dialog or error banner
+        if ('reason' in result) return false
         opFailed(result.error)
         return false
+      }
+      if (result.savedAsPath) {
+        // Fence "Save As": the edits landed on the user-picked copy; the contested
+        // original was never written and this tab keeps its pending edits — the
+        // same contract as the menu's non-destructive Save As
+        setSaveState('idle')
+        return true
       }
       if (result.skippedTextEdits && result.skippedTextEdits.length > 0) {
         noticeSkippedEdits(result.skippedTextEdits)
@@ -3459,6 +3474,9 @@ export default function App() {
     setSaveState('saving')
     const result = await window.pdfApi.save({ path: filePath, targetPath, ...edits })
     if (!result.ok) {
+      // the fence only gates in-place saves; an explicit Save As target cannot be
+      // refused as external-modified, so this is always a plain error here
+      if ('reason' in result) return false
       opFailed(result.error)
       return false
     }

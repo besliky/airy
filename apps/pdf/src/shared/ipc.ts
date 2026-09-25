@@ -461,6 +461,9 @@ export interface SavePdfRequest {
    * Must match the target granted to the view by the main process (save dialog pick).
    */
   targetPath?: string
+  /** Unattended autosave (renderer's 30s tick / window blur). A stale in-place
+   *  target is refused without any dialog — the next manual save raises the fence. */
+  auto?: boolean
   markups: MarkupInput[]
   /** Saved markup annotations to remove (applied before every other stage) */
   annotDeletes?: AnnotDeleteInput[]
@@ -510,11 +513,19 @@ export interface PdfAutoRenameResult {
 export type SavePdfResult =
   | {
       ok: true
+      /** Fence "Save As" outcome: the edits landed on this user-picked copy instead
+          of the contested original (which was never written). The tab keeps its
+          pending edits — same contract as the menu's non-destructive Save As. */
+      savedAsPath?: string
       skippedTextEdits?: TextEditFailure[]
       skippedTextInserts?: TextInsertFailure[]
       skippedImageEdits?: ImageEditFailure[]
     }
   | { ok: false; error: string }
+  /** The file changed on disk since this view last read/saved it (staleness fence).
+      Manual saves were already surfaced the Save As/Overwrite/Cancel dialog; an
+      autosave — or a canceled prompt — reports this reason and stays dirty. */
+  | { ok: false; reason: 'external-modified' }
 
 /** Dry-run matching for pending text edits against the file on disk (no mutation) */
 export interface ValidateTextEditsRequest {
