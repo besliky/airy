@@ -91,6 +91,7 @@ import {
 } from './xlsx-protection'
 import { applyThemeState, type WorkbookThemeState } from './xlsx-theme'
 import { applySheetNotes, type SheetNote } from './xlsx-notes'
+import { applyThreadedCommentStates, type ThreadedThread } from './xlsx-threaded-comments'
 import {
   applySparklineAdditions,
   type SheetSparklineAddition,
@@ -543,6 +544,12 @@ export interface SheetNoteState {
   readonly notes: readonly SheetNote[]
 }
 
+/// Full threaded-comment snapshot for one sheet ([] removes the sheet's part).
+export interface SheetThreadedCommentState {
+  readonly sheetName: string
+  readonly threads: readonly ThreadedThread[]
+}
+
 export interface SheetVisualAddition {
   readonly sheetName: string
   readonly anchor: DrawingAnchor
@@ -633,6 +640,7 @@ export async function planCellEditsToXlsx(
   workbookProtectionState: { readonly lockStructure: boolean } | null = null,
   protectedRangeStates: readonly SheetProtectedRangesState[] = [],
   bulkConstantFills: readonly BulkConstantFill[] = [],
+  threadedCommentStates: readonly SheetThreadedCommentState[] = [],
 ): Promise<MutationPlan> {
   // A pending pivot pins final coordinates for its source and output; shifts
   // on either sheet, and sheet renames (worksheetSource@sheet), would desync
@@ -1090,6 +1098,25 @@ export async function planCellEditsToXlsx(
     const worksheetPath =
       additionPaths.get(state.sheetName) ?? (await resolveWorksheetPath(pkg, state.sheetName))
     await applySheetNotes(pkg, worksheetPath, state.notes, touchedEntries)
+  }
+
+  // Threaded-comment snapshots replace each covered sheet's whole thread set
+  // and maintain the workbook-level persons directory; they run after the
+  // notes so both comment models see the final sheet set.
+  if (threadedCommentStates.length > 0) {
+    const threadedEntries = []
+    for (const state of threadedCommentStates) {
+      threadedEntries.push({
+        worksheetPath:
+          additionPaths.get(state.sheetName) ?? (await resolveWorksheetPath(pkg, state.sheetName)),
+        threads: state.threads,
+      })
+    }
+    const worksheetPathPattern = /^xl\/worksheets\/[^/]+\.xml$/
+    const packageWorksheetPaths = (await pkg.paths()).filter((path) =>
+      worksheetPathPattern.test(path),
+    )
+    await applyThreadedCommentStates(pkg, threadedEntries, packageWorksheetPaths, touchedEntries)
   }
 
   // Recomputed pivots: their output cells were saved as ordinary edits above;

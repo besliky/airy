@@ -72,7 +72,9 @@ const editSharedStrings = `<?xml version="1.0" encoding="UTF-8"?>
 
 const editStyles = `<?xml version="1.0" encoding="UTF-8"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <fonts count="2"><font/><font><b/></font></fonts><fills count="1"><fill/></fills><borders count="1"><border/></borders>
+  <!-- patternFill children: openpyxl rejects a bare <fill/> ("Fill() takes no
+       arguments"), and real writers always spell the pattern out. -->
+  <fonts count="2"><font/><font><b/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders>
   <cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="2"><xf/><xf fontId="1" applyFont="1"/></cellXfs>
 </styleSheet>`
 
