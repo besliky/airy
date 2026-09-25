@@ -4,24 +4,32 @@
  * `editor.markdown.parse` / `editor.markdown.serialize` (see extensions.ts).
  *
  * 1. `liftIndentedCodeAfterLists` — marked folds a blank-line-separated block
- *    indented by 8+ spaces that follows a list into the last list item as a
- *    plain paragraph. In that position the block is authored code (the ticket
- *    fixture: a "plain four-space code block" under a nested ordered item),
- *    and the model must not swallow it: list edits and the docx export would
- *    treat the code as item text. The transform rewrites only that region
- *    into a fenced block before parsing, so the document model gains a real
- *    code block. The fence materializes in the file on the next save — the
- *    manager has no indented-code serializer, so the fenced form is the
- *    canonical on-disk shape for a code block in this position.
+ *    indented past a list's content column into the last list item as a plain
+ *    paragraph. In that position the block is authored code (BUG-1742's
+ *    fixture: a "plain four-space code block" after an ordered list), and the
+ *    model must not swallow it: list edits and the docx export would treat
+ *    the code as item text, and the serializer re-indents it (+2 spaces on
+ *    the audit vector). The transform rewrites only that region into a fenced
+ *    block before parsing, so the document model gains a real code block.
+ *    The fence materializes in the file on the next save — the manager has no
+ *    indented-code serializer, so the fenced form is the canonical on-disk
+ *    shape for a code block in this position.
  *
- *    The rule is deliberately narrow to keep ordinary loose-list continuation
- *    paragraphs untouched: the block must be indented by TWO nesting units
- *    (8 spaces of the configured 4-space indentation — one unit, 4 spaces, is
- *    exactly where the serializer puts an ordinary nested paragraph like
- *    "1. one\n\n    more about one"), it must follow a blank line at the tail
- *    of the list context, and every non-blank line of the block must share
- *    the deep indent. Consecutive deep-indented chunks separated by blank
- *    lines are one code block (indented-code chunk semantics).
+ *    The rule works in two indent tiers, and is deliberately narrow to keep
+ *    ordinary loose-list continuation paragraphs untouched:
+ *
+ *    - Two units deep (8 spaces of the configured 4-space indentation) the
+ *      block always lifts: no serializer continuation lives that deep.
+ *    - One unit deep (4 spaces) the chunk lifts only when it cannot be a
+ *      serializer continuation: it needs at least two content lines (a single
+ *      line is exactly the serializer's nested-paragraph shape
+ *      "1. one\n\n    more about one") and no line may carry the serializer's
+ *      hard-break form (text followed by 2+ trailing spaces — "serialize"
+ *      emits wrapped list-item paragraphs as "    line one  \n    line two").
+ *
+ *    In both tiers the block must follow a blank line at the tail of the list
+ *    context. Consecutive indented chunks separated by blank lines are one
+ *    code block (indented-code chunk semantics).
  *
  * 2. `stripBlankLinePadding` — an empty paragraph nested in a list item
  *    serializes as a line of indentation spaces ("    "), i.e. trailing
@@ -41,8 +49,14 @@ const LIST_MARKER = /^ {0,3}(?:[-+*]|\d{1,9}[.)])(?:\s|$)/
 /** block math delimiter ($$ ... $$), serialized on its own lines */
 const BLOCK_MATH = /^\$\$/
 
-/** the lifted block must be indented by two 4-space nesting units */
+/** the lifted block's two-unit form: indented by two 4-space nesting units */
 const CODE_INDENT = 8
+
+/** the lifted block's one-unit form (BUG-1742 audit vector): 4 spaces */
+const ONE_UNIT_INDENT = 4
+
+/** the serializer's hard-break form: text followed by 2+ trailing spaces */
+const SERIALIZER_HARD_BREAK = / {2,}$/
 
 const indentOf = (line: string): number => line.length - line.trimStart().length
 const isBlank = (line: string): boolean => line.trim() === ''
@@ -98,6 +112,23 @@ function maxBacktickRun(text: string): number {
   return max
 }
 
+/**
+ * Should the indented chunk lines[from..to] lift out of the list as code?
+ * Two-unit chunks always do (no serializer continuation lives that deep —
+ * though a serializer hard-break trail still vetoes, it marks wrapped text).
+ * One-unit chunks lift only when they cannot be a serializer continuation:
+ * at least two content lines and none carrying a hard-break trail.
+ */
+function liftsAsCode(lines: string[], from: number, to: number, twoUnit: boolean): boolean {
+  let contentLines = 0
+  for (let j = from; j <= to; j++) {
+    if (isBlank(lines[j])) continue
+    contentLines++
+    if (SERIALIZER_HARD_BREAK.test(lines[j])) return false
+  }
+  return twoUnit || contentLines >= 2
+}
+
 export function liftIndentedCodeAfterLists(markdown: string): string {
   const lines = markdown.split('\n')
   const out: string[] = []
@@ -120,23 +151,27 @@ export function liftIndentedCodeAfterLists(markdown: string): string {
     }
 
     const indent = indentOf(line)
-    const atColumnZero = indent < 4
+    const atColumnZero = indent < ONE_UNIT_INDENT
     const isMarker = atColumnZero && LIST_MARKER.test(line)
 
-    // candidate: deep-indented block, list still open, blank line before it
-    if (indent >= CODE_INDENT && inList && isBlank(out[out.length - 1] ?? '')) {
-      // collect chunks: deep-indented lines, blank lines between them kept
-      // when another deep-indented line follows (indented-code chunk form)
+    // candidate: indented block, list still open, blank line before it
+    if (indent >= ONE_UNIT_INDENT && inList && isBlank(out[out.length - 1] ?? '')) {
+      const twoUnit = indent >= CODE_INDENT
+      // chunk membership threshold: lines indented by at least one unit below
+      // the chunk's tier (a two-unit chunk is not joined by one-unit lines)
+      const chunkIndent = twoUnit ? CODE_INDENT : ONE_UNIT_INDENT
+      // collect chunks: indented lines, blank lines between them kept
+      // when another indented line follows (indented-code chunk form)
       let lastContent = -1
       for (let j = i; j < lines.length; j++) {
         if (isBlank(lines[j])) continue
-        if (indentOf(lines[j]) < CODE_INDENT) break
+        if (indentOf(lines[j]) < chunkIndent) break
         lastContent = j
       }
-      if (lastContent >= i) {
+      if (lastContent >= i && liftsAsCode(lines, i, lastContent, twoUnit)) {
         const content = lines
           .slice(i, lastContent + 1)
-          .map((l) => (isBlank(l) ? '' : l.slice(CODE_INDENT)))
+          .map((l) => (isBlank(l) ? '' : l.slice(chunkIndent)))
         // a closing fence is any line starting with a run at least as long as
         // the fence itself — pick a length no content line can match
         const fenceText = '`'.repeat(Math.max(3, maxBacktickRun(content.join('\n')) + 1))

@@ -18,9 +18,12 @@
  * 4. Allowed elements keep NO attributes except a tiny semantic set: `a`
  *    href/title, `img` src/alt/title, `td`/`th` colspan/rowspan, `col(group)`
  *    span, `abbr` title. Every `on*` handler, `class`, `id`, `style` and
- *    `data-*` attribute is stripped by not being on the list. `href`/`src`
- *    must be http(s) or mailto — `javascript:` URLs drop the attribute (the
- *    anchor itself degrades to plain text), and an `img` without a safe src
+ *    `data-*` attribute is stripped by not being on the list. `src` must be
+ *    http(s); `href` additionally accepts internal links (BUG-1739): pure-hash
+ *    anchors and scheme-less relative paths — Word TOCs are full of them, and
+ *    cutting them made the links die silently before link diagnostics could
+ *    ever see them. Any other scheme (`javascript:`, `data:`, ...) drops the
+ *    attribute: the anchor degrades to plain text, an `img` without a safe src
  *    degrades to its alt text.
  *
  * The output is an HTML fragment string (body innerHTML) that the editor's own
@@ -138,6 +141,19 @@ const KEEP_ATTRS: Record<string, ReadonlySet<string>> = {
 
 const SAFE_URL = /^(https?:|mailto:)/i
 
+/** a scheme-like prefix: `javascript:`, `data:`, `vbscript:`, `file:` and friends */
+const SCHEME_LIKE = /^[a-z][a-z0-9+.-]*:/i
+
+/**
+ * hrefs that survive sanitization. Absolute http(s)/mailto as before, plus
+ * internal links (BUG-1739): `#anchor` and scheme-less relative paths cannot
+ * carry a script payload — the only dangerous href is one whose scheme-like
+ * prefix is not on the allow-list, and those still lose the attribute.
+ */
+function isSafeHref(value: string): boolean {
+  return SAFE_URL.test(value) || !SCHEME_LIKE.test(value)
+}
+
 /**
  * Strip a clipboard HTML payload down to the allow-listed fragment.
  * Returns '' when nothing content-worthy survives (the caller then falls back
@@ -176,10 +192,10 @@ export function sanitizeClipboardHtml(html: string): string {
     const keep = KEEP_ATTRS[tag]
     for (const attr of Array.from(element.attributes)) {
       const name = attr.name.toLowerCase()
-      if (
-        !keep?.has(name) ||
-        ((name === 'href' || name === 'src') && !SAFE_URL.test(attr.value.trim()))
-      ) {
+      const value = attr.value.trim()
+      const unsafeUrl =
+        name === 'src' ? !SAFE_URL.test(value) : name === 'href' ? !isSafeHref(value) : false
+      if (!keep?.has(name) || unsafeUrl) {
         element.removeAttribute(attr.name)
       }
     }
@@ -187,9 +203,11 @@ export function sanitizeClipboardHtml(html: string): string {
   for (const child of Array.from(body.children)) clean(child)
 
   // (4) degrade anchors without a safe href and images without a safe src:
-  // dead `<a>` wrappers unwrap to their text, `<img>` collapses to its alt
+  // dead `<a>` wrappers unwrap to their text, `<img>` collapses to its alt.
+  // href="" is a real (empty) link — it parses to `[text]()`, which link
+  // diagnostics honestly marks, so only a MISSING href degrades
   for (const anchor of Array.from(body.querySelectorAll('a'))) {
-    if (!anchor.getAttribute('href')) anchor.replaceWith(...anchor.childNodes)
+    if (anchor.getAttribute('href') === null) anchor.replaceWith(...anchor.childNodes)
   }
   for (const image of Array.from(body.querySelectorAll('img'))) {
     if (!image.getAttribute('src')) {

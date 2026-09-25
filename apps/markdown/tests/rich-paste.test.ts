@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Editor } from '@tiptap/core'
 import { Slice } from '@tiptap/pm/model'
+import { linkDiagnosticsPluginKey } from '../src/renderer/editor/linkDiagnostics'
 import {
   consumePlainPasteGesture,
   insertPlainText,
@@ -126,6 +127,44 @@ describe('flavors and gestures that keep the default behavior', () => {
     const handled = paste(editor, clipboard({ 'text/html': '<p><b>b</b></p>', 'text/plain': 'b' }))
     expect(handled).toBe(false)
     expect(editor.state.doc.firstChild!.type.name).toBe('codeBlock')
+  })
+})
+
+describe('internal links survive paste (BUG-1739)', () => {
+  // the round-3 audit vector: a Word fragment whose TOC links through anchors
+  // and relative paths used to lose its hrefs in the sanitizer, so the links
+  // died as plain text BEFORE link diagnostics (#198) could ever classify them
+  const TOC_HTML =
+    '<h1>Section Two</h1>' +
+    '<a href="#section-two">internal jump</a>' +
+    '<a href="#ghost-anchor">dead anchor</a>' +
+    '<a href="docs/page.md">relative jump</a>'
+
+  it('anchors and relative hrefs land as real links, not plain text', async () => {
+    const editor = await createEditor()
+    const handled = paste(editor, clipboard({ 'text/html': TOC_HTML, 'text/plain': 'text' }))
+    expect(handled).toBe(true)
+    const md = editor.getMarkdown()
+    expect(md).toContain('[internal jump](#section-two)')
+    expect(md).toContain('[dead anchor](#ghost-anchor)')
+    expect(md).toContain('[relative jump](docs/page.md)')
+    expect(md).toContain('# Section Two')
+  })
+
+  it('link diagnostics sees the pasted anchors: resolved one unmarked, ghost marked dead', async () => {
+    const editor = await createEditor()
+    paste(editor, clipboard({ 'text/html': TOC_HTML, 'text/plain': 'text' }))
+    const state = linkDiagnosticsPluginKey.getState(editor.state)
+    expect(state).toBeTruthy()
+    const dead = (state?.set.find() ?? [])
+      .map((d) => ({
+        text: editor.state.doc.textBetween(d.from, d.to, ' ', ' '),
+        cls: String(d.type.attrs?.class ?? ''),
+      }))
+      .filter((d) => d.cls.startsWith('md-link-'))
+    // the pasted <h1>Section Two</h1> makes #section-two resolvable — exactly
+    // the irony the audit called out; only the ghost anchor is honestly dead
+    expect(dead).toEqual([{ text: 'dead anchor', cls: 'md-link-dead-anchor' }])
   })
 })
 

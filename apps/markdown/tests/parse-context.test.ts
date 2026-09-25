@@ -84,6 +84,60 @@ describe('BUG-1703: indented code block after a list', () => {
     expect(item?.content?.[0]?.content?.[1].content?.[0]?.text).toBe('more about one')
   })
 
+  it('keeps the serializer hard-break continuation inside its item (both indent tiers)', () => {
+    // `serialize` emits wrapped list-item paragraphs as
+    // "    line one  \n    line two" / "        deep one  \n        deep two";
+    // the hard-break trail (2+ trailing spaces) must reopen as item text,
+    // never as a code block (BUG-1742 round-trip guard)
+    const shallow = manager.parse('1. one\n\n    line one  \n    line two')
+    expect(shallow.content?.[0]?.content?.[0]?.content?.map((n) => n.type)).toEqual([
+      'paragraph',
+      'paragraph',
+    ])
+    const deep = manager.parse('1. one\n    1. two\n\n        deep one  \n        deep two')
+    const item = deep.content?.[0]?.content?.[0]
+    expect(item?.type).toBe('listItem')
+    expect(item?.content?.map((n) => n.type)).toEqual(['paragraph', 'orderedList'])
+    expect(deep.content?.map((n) => n.type)).toEqual(['orderedList'])
+  })
+
+  it('lifts the round-3 audit vector: one-unit block after a top-level ordered list (BUG-1742)', () => {
+    // AUDITS/2026-09-25-md-html-round3.md (cr-code.md after docText's CR/BOM
+    // normalization): a 4-space block after a blank line following an ordered
+    // list was still swallowed into the last item as plain text, and the
+    // serializer shifted the continuation by two spaces (4 -> 6)
+    const md = [
+      '1. Ordered item alpha',
+      '2. Ordered item beta',
+      '',
+      '    indented code line one',
+      '    indented code line two',
+      '',
+      'Tail paragraph',
+      '',
+    ].join('\n')
+    const doc = manager.parse(md)
+    const top = doc.content ?? []
+    expect(top.map((n) => n.type)).toEqual(['orderedList', 'codeBlock', 'paragraph'])
+    // the code is its own sibling node with the authored lines verbatim
+    expect(top[1].content?.[0]?.text).toBe('indented code line one\nindented code line two')
+    // the list keeps exactly its authored items, no swallowed text
+    expect(top[0].content?.[0].content?.map((n) => n.type)).toEqual(['paragraph'])
+    expect(top[0].content?.[1].content?.map((n) => n.type)).toEqual(['paragraph'])
+    expect(top[2].content?.[0]?.text).toBe('Tail paragraph')
+  })
+
+  it('round-trips the audit-vector lift stably (parse → serialize → parse)', () => {
+    const md = '1. one\n2. two\n\n    code line one\n    code line two\n\nTail\n'
+    const first = manager.parse(md)
+    const once = manager.serialize(first)
+    // the block materializes fenced as a sibling of the list
+    expect(once).toBe('1. one\n2. two\n\n```\ncode line one\ncode line two\n```\n\nTail')
+    const second = manager.parse(once)
+    expect(JSON.stringify(second)).toBe(JSON.stringify(first))
+    expect(manager.serialize(second)).toBe(once)
+  })
+
   it('does not lift when no blank line separates the block from the item', () => {
     const doc = manager.parse('1. one\n2. two\n        glued continuation')
     const item = doc.content?.[0]?.content?.[1]
@@ -93,6 +147,25 @@ describe('BUG-1703: indented code block after a list', () => {
   it('merges blank-separated deep chunks into one code block', () => {
     const lifted = liftIndentedCodeAfterLists('- a\n    - b\n\n        x\n\n        y\n')
     expect(lifted).toBe('- a\n    - b\n\n```\nx\n\ny\n```\n')
+  })
+
+  it('lifts a one-unit chunk out of the list, un-indenting a single unit', () => {
+    // deeper lines inside a one-unit chunk keep their extra indentation
+    expect(liftIndentedCodeAfterLists('1. a\n\n    x\n        y\n')).toBe(
+      '1. a\n\n```\nx\n    y\n```\n',
+    )
+  })
+
+  it('does not lift a one-unit single-line chunk (serializer nested-paragraph shape)', () => {
+    expect(liftIndentedCodeAfterLists('1. a\n\n    more about a\n')).toBe(
+      '1. a\n\n    more about a\n',
+    )
+  })
+
+  it('does not lift a one-unit chunk whose lines carry hard-break trails', () => {
+    expect(liftIndentedCodeAfterLists('1. a\n\n    line one  \n    line two\n')).toBe(
+      '1. a\n\n    line one  \n    line two\n',
+    )
   })
 
   it('picks a fence no content line can close', () => {
