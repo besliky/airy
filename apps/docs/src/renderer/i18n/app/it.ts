@@ -344,6 +344,8 @@ export const it = {
   appMatchCase: 'Maiuscole/minuscole',
   appWholeWord: 'Solo parole intere',
   appUseWildcards: 'Usa caratteri jolly',
+  appWildcardsUnsupported:
+    'Gli operatori jolly di Word {ops} non sono supportati qui e vengono trattati come caratteri normali.',
   appIgnoreDiacritics: 'Ignora i segni diacritici',
   appNoResults: 'Nessun risultato',
   appPrevMatch: 'Precedente (Maiusc+Invio)',

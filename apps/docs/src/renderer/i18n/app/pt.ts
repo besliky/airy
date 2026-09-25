@@ -341,6 +341,8 @@ export const pt = {
   appMatchCase: 'Diferenciar maiúsculas de minúsculas',
   appWholeWord: 'Somente palavras inteiras',
   appUseWildcards: 'Usar caracteres curinga',
+  appWildcardsUnsupported:
+    'Os operadores curinga do Word {ops} não são compatíveis aqui e são tratados como caracteres comuns.',
   appIgnoreDiacritics: 'Ignorar diacríticos',
   appNoResults: 'Sem resultados',
   appPrevMatch: 'Anterior (Shift+Enter)',

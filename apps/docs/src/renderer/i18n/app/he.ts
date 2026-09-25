@@ -335,6 +335,8 @@ export const he = {
   appMatchCase: 'התאמת אותיות רישיות/קטנות',
   appWholeWord: 'מילים שלמות בלבד',
   appUseWildcards: 'שימוש בתווים כלליים',
+  appWildcardsUnsupported:
+    'אופרטורי התווים הכלליים של Word {ops} אינם נתמכים כאן ומותאמים כתווים רגילים.',
   appIgnoreDiacritics: 'התעלם מסימנים דיאקריטיים',
   appNoResults: 'אין תוצאות',
   appPrevMatch: 'הקודם (Shift+Enter)',

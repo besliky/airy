@@ -345,6 +345,8 @@ export const pl = {
   appMatchCase: 'Uwzględnij wielkość liter',
   appWholeWord: 'Tylko całe wyrazy',
   appUseWildcards: 'Użyj symboli wieloznacznych',
+  appWildcardsUnsupported:
+    'Operatory wieloznaczne programu Word {ops} nie są tutaj obsługiwane i są traktowane jak zwykłe znaki.',
   appIgnoreDiacritics: 'Ignoruj znaki diakrytyczne',
   appNoResults: 'Brak wyników',
   appPrevMatch: 'Poprzedni (Shift+Enter)',

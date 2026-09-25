@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/core'
 import { useI18n } from '../i18n/locale'
 import { searchPluginKey } from '../editor/extensions'
-import { compileWildcards, foldCase, foldDiacritics } from '../find-wildcards'
+import {
+  compileWildcards,
+  foldCase,
+  foldDiacritics,
+  unsupportedWildcardOperators,
+} from '../find-wildcards'
 
 // re-exported for existing importers (tests) — foldCase now lives with the
 // other length-preserving folds in find-wildcards.ts
@@ -103,6 +108,9 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
   const replaceInputRef = useRef<HTMLInputElement>(null)
   const indexRef = useRef(0)
   const canEdit = editor.isEditable
+  // UX-1712: Word operators this engine matches literally (( ) { } @ < >)
+  // must not silently narrow to "No results" — surface them inline instead
+  const wildcardOps = useWildcards ? unsupportedWildcardOperators(query) : []
 
   const highlight = useCallback(
     (ranges: Range[], activeIndex: number) => {
@@ -332,6 +340,11 @@ export function FindPanel({ editor, onClose, focusReplaceNonce }: FindPanelProps
               : `${index + 1}/${matches.length}`
             : ''}
         </span>
+        {wildcardOps.length > 0 && (
+          <span className="find-wild-warn" role="note">
+            {t('appWildcardsUnsupported', { ops: wildcardOps.join(' ') })}
+          </span>
+        )}
         <button
           className="find-btn"
           data-tip={t('appPrevMatch')}

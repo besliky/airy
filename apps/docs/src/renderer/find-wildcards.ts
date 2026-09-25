@@ -181,6 +181,45 @@ export function compileWildcards(pattern: string, ignoreCase: boolean): Wildcard
 }
 
 /**
+ * The Word wildcard operators this engine treats as plain literals, for the
+ * find panel's inline warning: `( )` groups/backreferences, `{ }` repeat
+ * counts, `@` one-or-more and `<`/`>` word anchors (the header list).
+ * Escaped occurrences (`\(`) and everything inside `[...]` (where those
+ * characters are literal by Word's rules) are not reported. `+` is NOT a
+ * Word wildcard operator — it is a literal in Word too — so it is not
+ * flagged: warning on every literal plus would drown legit searches
+ * ("C++") while Word itself stays silent there.
+ *
+ * Returns the distinct operator characters in first-occurrence order; empty
+ * when the pattern uses only the supported subset. Pure and linear — safe to
+ * run per keystroke next to the debounced scan.
+ */
+export function unsupportedWildcardOperators(pattern: string): string[] {
+  const found: string[] = []
+  const pcs = Array.from(pattern)
+  for (let i = 0; i < pcs.length; i++) {
+    const c = pcs[i]!
+    if (c === '\\' && i + 1 < pcs.length) {
+      i++ // escaped: the next character is a literal
+    } else if (c === '[') {
+      // inside a class every other operator is literal; an unterminated `[`
+      // stays a literal `[` and the scan resumes after it (like parseTokens)
+      let k = i + 1
+      if (pcs[k] === '!') k++
+      if (pcs[k] === '\\') k++
+      while (k < pcs.length && pcs[k] !== ']') {
+        if (pcs[k] === '\\' && k + 1 < pcs.length) k++
+        k++
+      }
+      i = k < pcs.length ? k : i // terminated: jump past `]`; else just past `[`
+    } else if ('(){}@<>'.includes(c)) {
+      if (!found.includes(c)) found.push(c)
+    }
+  }
+  return found
+}
+
+/**
  * The linear matcher. For every token position `ti` (right to left) it
  * computes `f[s]` = end slot of the match of `tokens[ti..]` starting at
  * code-point slot `s` (or -1), from the already computed layer of `ti + 1`:

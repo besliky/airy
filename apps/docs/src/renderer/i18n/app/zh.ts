@@ -354,6 +354,7 @@ export const zh = {
   appMatchCase: '区分大小写',
   appWholeWord: '全字匹配',
   appUseWildcards: '使用通配符',
+  appWildcardsUnsupported: '不支持在此使用的 Word 通配符 {ops}，它们将按普通字符匹配。',
   appIgnoreDiacritics: '忽略变音符号',
   appNoResults: '无结果',
   appPrevMatch: '上一个 (Shift+Enter)',

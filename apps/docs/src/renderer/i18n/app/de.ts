@@ -350,6 +350,8 @@ export const de = {
   appMatchCase: 'Groß-/Kleinschreibung beachten',
   appWholeWord: 'Nur ganzes Wort suchen',
   appUseWildcards: 'Platzhalterzeichen verwenden',
+  appWildcardsUnsupported:
+    'Word-Platzhalteroperatoren {ops} werden hier nicht unterstützt und als gewöhnliche Zeichen behandelt.',
   appIgnoreDiacritics: 'Diakritische Zeichen ignorieren',
   appNoResults: 'Keine Ergebnisse',
   appPrevMatch: 'Zurück (Umschalt+Eingabetaste)',

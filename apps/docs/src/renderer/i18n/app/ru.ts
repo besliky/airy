@@ -343,6 +343,8 @@ export const ru = {
   appMatchCase: 'Учитывать регистр',
   appWholeWord: 'Только слово целиком',
   appUseWildcards: 'Использовать подстановочные знаки',
+  appWildcardsUnsupported:
+    'Подстановочные операторы Word {ops} здесь не поддерживаются и совпадают как обычные символы.',
   appIgnoreDiacritics: 'Игнорировать диакритические знаки',
   appNoResults: 'Нет результатов',
   appPrevMatch: 'Назад (Shift+Enter)',

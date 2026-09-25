@@ -365,6 +365,8 @@ export const ko = {
   appMatchCase: '대/소문자 구분',
   appWholeWord: '단어 단위로',
   appUseWildcards: '와일드카드 사용',
+  appWildcardsUnsupported:
+    'Word 와일드카드 연산자 {ops}는(는) 여기서 지원되지 않으며 일반 문자로 일치합니다.',
   appIgnoreDiacritics: '분음 기호 무시',
   appNoResults: '결과 없음',
   appPrevMatch: '이전 (Shift+Enter)',

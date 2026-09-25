@@ -340,6 +340,8 @@ export const cs = {
   appMatchCase: 'Rozlišovat velikost písmen',
   appWholeWord: 'Pouze celá slova',
   appUseWildcards: 'Použít zástupné znaky',
+  appWildcardsUnsupported:
+    'Zástupné operátory aplikace Word {ops} zde nejsou podporovány a porovnávají se jako běžné znaky.',
   appIgnoreDiacritics: 'Ignorovat diakritiku',
   appNoResults: 'Žádné výsledky',
   appPrevMatch: 'Předchozí (Shift+Enter)',

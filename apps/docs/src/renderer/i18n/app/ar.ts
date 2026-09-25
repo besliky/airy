@@ -337,6 +337,7 @@ export const ar = {
   appMatchCase: 'مطابقة حالة الأحرف',
   appWholeWord: 'الكلمة بأكملها فقط',
   appUseWildcards: 'استخدام أحرف البدل',
+  appWildcardsUnsupported: 'عوامل البدل في Word {ops} غير مدعومة هنا وتُطابق كأحرف عادية.',
   appIgnoreDiacritics: 'تجاهل علامات التشكيل',
   appNoResults: 'لا توجد نتائج',
   appPrevMatch: 'السابق (Shift+Enter)',

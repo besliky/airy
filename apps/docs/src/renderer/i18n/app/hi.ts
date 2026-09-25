@@ -340,6 +340,8 @@ export const hi = {
   appMatchCase: 'अक्षर के आकार का मिलान करें',
   appWholeWord: 'केवल पूर्ण शब्द',
   appUseWildcards: 'वाइल्डकार्ड का उपयोग करें',
+  appWildcardsUnsupported:
+    'Word वाइल्डकार्ड ऑपरेटर {ops} यहाँ समर्थित नहीं हैं और साधारण वर्णों की तरह मैच होते हैं।',
   appIgnoreDiacritics: 'उच्चारण चिह्नों की अवहेलना करें',
   appNoResults: 'कोई परिणाम नहीं',
   appPrevMatch: 'पिछला (Shift+Enter)',

@@ -342,6 +342,8 @@ export const id = {
   appMatchCase: 'Cocokkan huruf besar/kecil',
   appWholeWord: 'Hanya kata utuh',
   appUseWildcards: 'Gunakan karakter wildcard',
+  appWildcardsUnsupported:
+    'Operator wildcard Word {ops} tidak didukung di sini dan dicocokkan sebagai karakter biasa.',
   appIgnoreDiacritics: 'Abaikan diakritik',
   appNoResults: 'Tidak ada hasil',
   appPrevMatch: 'Sebelumnya (Shift+Enter)',
