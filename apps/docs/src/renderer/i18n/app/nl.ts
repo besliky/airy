@@ -350,6 +350,8 @@ export const nl = {
   appMatchCase: 'Identieke hoofdletters/kleine letters',
   appWholeWord: 'Alleen hele woorden',
   appUseWildcards: 'Jokertekens gebruiken',
+  appWildcardsUnsupported:
+    'Word-jokertekenoperators {ops} worden hier niet ondersteund en als gewone tekens behandeld.',
   appIgnoreDiacritics: 'Diakritische tekens negeren',
   appNoResults: 'Geen resultaten',
   appPrevMatch: 'Vorige (Shift+Enter)',

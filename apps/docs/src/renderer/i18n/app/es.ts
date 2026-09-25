@@ -346,6 +346,8 @@ export const es = {
   appMatchCase: 'Coincidir mayúsculas y minúsculas',
   appWholeWord: 'Solo palabras completas',
   appUseWildcards: 'Usar caracteres comodín',
+  appWildcardsUnsupported:
+    'Los operadores comodín de Word {ops} no se admiten aquí y se tratan como caracteres normales.',
   appIgnoreDiacritics: 'Omitir los signos diacríticos',
   appNoResults: 'Sin resultados',
   appPrevMatch: 'Anterior (Mayús+Entrar)',

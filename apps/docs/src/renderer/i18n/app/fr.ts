@@ -350,6 +350,8 @@ export const fr = {
   appMatchCase: 'Respecter la casse',
   appWholeWord: 'Mot entier',
   appUseWildcards: 'Utiliser les caractères génériques',
+  appWildcardsUnsupported:
+    'Les opérateurs wildcard de Word {ops} ne sont pas pris en charge ici et sont traités comme des caractères ordinaires.',
   appIgnoreDiacritics: 'Ignorer les signes diacritiques',
   appNoResults: 'Aucun résultat',
   appPrevMatch: 'Précédent (Maj+Entrée)',

@@ -344,6 +344,8 @@ export const ms = {
   appMatchCase: 'Padankan huruf besar/kecil',
   appWholeWord: 'Perkataan penuh sahaja',
   appUseWildcards: 'Guna aksara kad liar',
+  appWildcardsUnsupported:
+    'Operator kad bebas Word {ops} tidak disokong di sini dan dipadankan sebagai aksara biasa.',
   appIgnoreDiacritics: 'Abaikan tanda diakritik',
   appNoResults: 'Tiada hasil',
   appPrevMatch: 'Sebelumnya (Shift+Enter)',

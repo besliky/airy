@@ -340,6 +340,8 @@ export const th = {
   appMatchCase: 'ตรงตามตัวพิมพ์ใหญ่-เล็ก',
   appWholeWord: 'ทั้งคำเท่านั้น',
   appUseWildcards: 'ใช้อักขระตัวแทน',
+  appWildcardsUnsupported:
+    'โอเปอเรเตอร์ไวลด์การ์ดของ Word {ops} ไม่รองรับที่นี่ และจะจับคู่เป็นอักขระปกติ',
   appIgnoreDiacritics: 'ละเว้นเครื่องหมายกำกับการออกเสียง',
   appNoResults: 'ไม่พบผลลัพธ์',
   appPrevMatch: 'ก่อนหน้า (Shift+Enter)',

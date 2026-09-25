@@ -9232,6 +9232,17 @@ body.docs-crop-active
   text-align: center;
 }
 
+/* UX-1712: inline warning for Word wildcard operators this search matches
+   literally — sits next to the match count, ellipsizes when cramped */
+.find-wild-warn {
+  font-size: 11px;
+  color: var(--danger);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .find-btn {
   width: 24px;
   height: 24px;

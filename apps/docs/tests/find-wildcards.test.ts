@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { editorExtensions } from '../src/renderer/editor/extensions'
 import { findMatches } from '../src/renderer/components/FindPanel'
-import { compileWildcards, foldDiacritics } from '../src/renderer/find-wildcards'
+import {
+  compileWildcards,
+  foldDiacritics,
+  unsupportedWildcardOperators,
+} from '../src/renderer/find-wildcards'
 
 function createEditor(text: string): Editor {
   return new Editor({
@@ -316,5 +320,30 @@ describe('ignore-diacritics findMatches', () => {
     // the lazy * keeps each match at the M?lle prefix, folded accents and all
     expect(matchTexts(editor, 'M?lle*', opts)).toEqual(['Mülle', 'Mulle', 'Mülle'])
     editor.destroy()
+  })
+})
+
+// UX-1712: Word wildcard operators this engine treats as literals must be
+// surfaced to the user instead of silently narrowing to "No results"
+describe('unsupportedWildcardOperators', () => {
+  it('reports groups, counts, @ and anchors in first-occurrence order', () => {
+    expect(unsupportedWildcardOperators('target[0-9]{1,}x')).toEqual(['{', '}'])
+    expect(unsupportedWildcardOperators('(pre)@content')).toEqual(['(', ')', '@'])
+    expect(unsupportedWildcardOperators('<begin>')).toEqual(['<', '>'])
+    expect(unsupportedWildcardOperators('a)b')).toEqual([')'])
+  })
+
+  it('stays silent for the supported subset and plain text', () => {
+    expect(unsupportedWildcardOperators('target[0-9][0-9]x')).toEqual([])
+    expect(unsupportedWildcardOperators('s?d * [!a-m]')).toEqual([])
+    expect(unsupportedWildcardOperators('C++ and 100%')).toEqual([])
+    expect(unsupportedWildcardOperators('')).toEqual([])
+  })
+
+  it('ignores escaped operators and operators inside classes', () => {
+    expect(unsupportedWildcardOperators('\\(literal\\) {1}')).toEqual(['{', '}'])
+    expect(unsupportedWildcardOperators('[({@})] literal')).toEqual([])
+    // an unterminated `[` is a literal `[` (like parseTokens): the scan resumes
+    expect(unsupportedWildcardOperators('[abc(x)')).toEqual(['(', ')'])
   })
 })
