@@ -118,7 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Search that stops at the 1,000-match cap says so: a document with far more
     matches than the cap used to report "1 / 1000", indistinguishable from
     exactly one thousand. `searchInIndex` now returns `{matches, capped,
-    moreCount}` — the remainder counted by cheap indexOf without rect
+moreCount}` — the remainder counted by cheap indexOf without rect
     interpolation — and the counter reads "1 / 1000+ (+M more)"
     (`searchCountMore`, 20 locales); wrap cycles the capped set; a document
     with exactly 1,000 matches reports without the cap; mark-up-all stays
@@ -131,7 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     dialog (20 locales), auto-save declines without a modal
     (`{ok:false, reason:'external-modified'}`) and the renderer stays dirty,
     and without a stamp basis the old behavior degrades gracefully; 7 behavior
-    + 10 wiring tests against the real pptx pipeline (PR #223).
+    - 10 wiring tests against the real pptx pipeline (PR #223).
   - Double-click on a group child's text opens that exact child's text edit in
     one gesture (PowerPoint-style): the pair's trailing click no longer
     re-selects the whole group over the child selection (non-additive clicks
