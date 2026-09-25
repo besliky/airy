@@ -40,6 +40,11 @@ export const id = {
   closeUnsavedDetail: 'Simpan sebelum menutup?',
   btnDontSave: 'Jangan Simpan',
   btnCancel: 'Batal',
+  externalChangeTitle: 'File diubah dari luar aplikasi',
+  externalChangeDetail:
+    '"{name}" diubah, diganti nama, atau dihapus oleh program lain sejak penyimpanan terakhir. Timpa akan membuang perubahan eksternal; Simpan Sebagai menulis versi Anda ke file baru.',
+  btnOverwrite: 'Timpa',
+  btnSaveAs: 'Simpan Sebagai',
   mediaUnsupportedTitle: 'Video ini mungkin tidak dapat diputar di dalam aplikasi',
   mediaNoAudioBody:
     'Codec audio video ({codec}) tidak didukung pemutar bawaan, sehingga pemutaran di aplikasi tidak akan bersuara. File disematkan apa adanya dan diputar normal di PowerPoint setelah diekspor.',

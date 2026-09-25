@@ -40,6 +40,11 @@ export const cs = {
   closeUnsavedDetail: 'Chcete je před zavřením uložit?',
   btnDontSave: 'Neukládat',
   btnCancel: 'Zrušit',
+  externalChangeTitle: 'Soubor byl změněn mimo aplikaci',
+  externalChangeDetail:
+    'Od posledního uložení byl soubor „{name}“ změněn, přejmenován nebo smazán jiným programem. Přepsáním se zahodí externí změny; Uložit jako zapíše vaši verzi do nového souboru.',
+  btnOverwrite: 'Přepsat',
+  btnSaveAs: 'Uložit jako',
   mediaUnsupportedTitle: 'Toto video se v aplikaci možná nepřehraje',
   mediaNoAudioBody:
     'Zvukový kodek videa ({codec}) není vestavěným přehrávačem podporován, takže přehrávání v aplikaci bude bez zvuku. Soubor je vložen beze změny a po exportu se v PowerPointu přehrává normálně.',

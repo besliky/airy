@@ -40,6 +40,11 @@ export const de = {
   closeUnsavedDetail: 'Vor dem Schließen speichern?',
   btnDontSave: 'Nicht speichern',
   btnCancel: 'Abbrechen',
+  externalChangeTitle: 'Datei außerhalb der App geändert',
+  externalChangeDetail:
+    '„{name}“ wurde seit dem letzten Speichern von einem anderen Programm geändert, umbenannt oder gelöscht. Überschreiben verwirft die externen Änderungen; Speichern unter schreibt Ihre Version in eine neue Datei.',
+  btnOverwrite: 'Überschreiben',
+  btnSaveAs: 'Speichern unter',
   mediaUnsupportedTitle: 'Dieses Video kann in der App möglicherweise nicht wiedergegeben werden',
   mediaNoAudioBody:
     'Der Audio-Codec des Videos ({codec}) wird vom integrierten Player nicht unterstützt; die Wiedergabe in der App bleibt stumm. Die Datei wird unverändert eingebettet und spielt nach dem Export in PowerPoint normal ab.',

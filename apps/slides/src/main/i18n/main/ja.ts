@@ -39,6 +39,11 @@ export const ja = {
   closeUnsavedDetail: '閉じる前に保存しますか？',
   btnDontSave: '保存しない',
   btnCancel: 'キャンセル',
+  externalChangeTitle: 'ファイルが外部で変更されました',
+  externalChangeDetail:
+    '最後の保存後、「{name}」は他のプログラムによって変更・名前変更・削除されました。上書きすると外部の変更は失われます。名前を付けて保存すると新しいファイルに保存されます。',
+  btnOverwrite: '上書き保存',
+  btnSaveAs: '名前を付けて保存',
   mediaUnsupportedTitle: 'このビデオはアプリ内で再生できない可能性があります',
   mediaNoAudioBody:
     'このビデオの音声コーデック（{codec}）は内蔵プレーヤーでサポートされていないため、アプリ内での再生は無音になります。ファイルはそのまま埋め込まれ、エクスポート後は PowerPoint で正常に再生できます。',

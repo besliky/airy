@@ -7,6 +7,7 @@
 import { BrowserWindow, webContents } from 'electron'
 import type { WebContents } from 'electron'
 import { join } from 'node:path'
+import type { FileStamp } from '@airy-office/electron-utils'
 import {
   materializeSlide,
   parseClrMap,
@@ -77,6 +78,13 @@ export interface Session {
   opSeq?: number
   /** Applied-op journal, capped ring — the attachment point for a future sync transport */
   opLog?: OpLogEntry[]
+  /**
+   * Staleness-fence baseline (BUG-1724): the on-disk mtime+size as of the last
+   * open/save of `path` by this session. Lives on the session (not per
+   * webContents) so aliased windows share one baseline; null/undefined when
+   * untitled or not yet stamped (the next save degrades to unfenced).
+   */
+  saveStamp?: FileStamp | null
 }
 export const sessions = new Map<number, Session>()
 

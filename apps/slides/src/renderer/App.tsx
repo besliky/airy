@@ -889,7 +889,8 @@ export function App() {
   const askOpenRef = useRef(false)
 
   const save = useCallback(
-    (quiet = false): Promise<boolean> => fileActions.save(() => ctxRef.current, quiet),
+    (quiet = false, auto = false): Promise<boolean> =>
+      fileActions.save(() => ctxRef.current, quiet, auto),
     [],
   )
 
@@ -947,7 +948,7 @@ export function App() {
       void window.slidesApi.isDirty().then((d) => {
         if (!d || saving) return
         saving = true
-        void save(true).finally(() => {
+        void save(true, true).finally(() => {
           saving = false
         })
       })

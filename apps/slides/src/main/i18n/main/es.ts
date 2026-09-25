@@ -40,6 +40,11 @@ export const es = {
   closeUnsavedDetail: '¿Desea guardarlos antes de cerrar?',
   btnDontSave: 'No guardar',
   btnCancel: 'Cancelar',
+  externalChangeTitle: 'Archivo modificado fuera de la aplicación',
+  externalChangeDetail:
+    '«{name}» fue cambiado, renombrado o eliminado por otro programa desde el último guardado. Sobrescribir descarta los cambios externos; Guardar como escribe su versión en un archivo nuevo.',
+  btnOverwrite: 'Sobrescribir',
+  btnSaveAs: 'Guardar como',
   mediaUnsupportedTitle: 'Es posible que este video no se reproduzca dentro de la aplicación',
   mediaNoAudioBody:
     'El códec de audio del video ({codec}) no es compatible con el reproductor integrado, por lo que la reproducción en la aplicación no tendrá sonido. El archivo se incrusta tal cual y se reproduce normalmente en PowerPoint tras exportar.',

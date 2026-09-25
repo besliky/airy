@@ -40,6 +40,11 @@ export const fr = {
   closeUnsavedDetail: 'Voulez-vous les enregistrer avant de fermer ?',
   btnDontSave: 'Ne pas enregistrer',
   btnCancel: 'Annuler',
+  externalChangeTitle: 'Fichier modifié à l’extérieur de l’application',
+  externalChangeDetail:
+    'Depuis le dernier enregistrement, « {name} » a été modifié, renommé ou supprimé par un autre programme. Écraser abandonne les modifications externes ; Enregistrer sous écrit votre version dans un nouveau fichier.',
+  btnOverwrite: 'Écraser',
+  btnSaveAs: 'Enregistrer sous',
   mediaUnsupportedTitle: 'Cette vidéo peut ne pas être lue dans l’application',
   mediaNoAudioBody:
     'Le codec audio de la vidéo ({codec}) n’est pas pris en charge par le lecteur intégré : la lecture dans l’application sera muette. Le fichier est incorporé tel quel et se lit normalement dans PowerPoint après export.',

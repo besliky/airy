@@ -18,7 +18,7 @@ import {
   webContents,
   WebContentsView,
 } from 'electron'
-import type { WebContents } from 'electron'
+import type { IpcMainInvokeEvent, WebContents } from 'electron'
 import { execFile } from 'node:child_process'
 import { readFile, writeFile, rm, stat, mkdir, open } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
@@ -39,6 +39,7 @@ import {
   ALL_OPEN_EXTENSIONS,
   OPEN_EXTENSION_GROUPS,
   appMenuLabels,
+  checkSaveStaleness,
   configuredAuthorName,
   configuredDefaultSaveDir,
   contextMenuLabels,
@@ -57,6 +58,7 @@ import {
   saveAsSuggestion,
   showOpenDialogWithMemory,
   showSaveDialogWithMemory,
+  statFileStamp,
   toggleDevToolsItem,
   truncateByCodePoints,
   voidLoad,
@@ -532,7 +534,12 @@ export async function replaceSlidesRecentFile(oldPath: string, newPath: string):
  *  saves write the new file) and push to the renderer to update the editor title bar. */
 export function slidesFileRenamed(wc: WebContents, oldPath: string, newPath: string): void {
   const session = sessions.get(wc.id)
-  if (session && session.path === oldPath) session.path = newPath
+  if (session && session.path === oldPath) {
+    session.path = newPath
+    // a rename keeps the file's identity — re-stamp at the new path so the
+    // staleness fence keeps comparing against the same file (BUG-1724)
+    session.saveStamp = statFileStamp(newPath)
+  }
   wc.send('slides:renamed', newPath)
 }
 
@@ -825,6 +832,9 @@ async function openAndBuild(
     undoStack: [],
     redoStack: [],
     ...(recovered ? { metaDirty: true } : {}),
+    // staleness-fence baseline: the file as it sits on disk right now (not the
+    // recovery copy — what matters is what save would overwrite, BUG-1724)
+    saveStamp: statFileStamp(path),
   })
   scheduleHistoryNotify(sessions.get(wc.id)!)
   await pushRecent(path)
@@ -884,6 +894,46 @@ function pickDraftPath(draftsDir: string, deckName?: string): string {
 }
 
 /**
+ * Save As flow shared by the menu handler and the external-change fence
+ * (BUG-1724): the dialog-picked path is explicit user consent to create or
+ * overwrite that file, so no staleness fence runs here; a successful write
+ * refreshes the fence baseline for the session's new path.
+ */
+async function saveSessionAs(e: IpcMainInvokeEvent, session: Session, defaultName: string) {
+  const parent = dialogParent()
+  const r = await showSaveDialogWithMemory(
+    dialog,
+    parent,
+    {
+      defaultPath: saveAsSuggestion(session.path, defaultName),
+      filters: [{ name: 'PowerPoint', extensions: ['pptx'] }],
+    },
+    getDraftsDir(),
+    e.sender.id,
+  )
+  if (r.canceled || !r.filePath) return { ok: false }
+  try {
+    await savePptxToFile(session.opened, r.filePath)
+    session.path = r.filePath
+    // the write is ours — refresh the fence baseline from the fresh file
+    session.saveStamp = statFileStamp(r.filePath)
+    autosaveBackoff.delete(r.filePath)
+    dropUntitledRecovery(e.sender.id)
+    await pushRecent(r.filePath)
+    syncAttachedPaths(session, r.filePath)
+    commitSaved(session.opened)
+    session.metaDirty = false
+    return {
+      ok: true,
+      path: r.filePath,
+      slides: buildAllRenderSlides(session.opened, session.fitWidthPx),
+    }
+  } catch (err) {
+    return { ok: false, error: String(err) }
+  }
+}
+
+/**
  * Auto-save the draft to <Documents>/Airy/<name>.pptx after AI generation completes.
  * Append mode reuses the session's existing draft path (overwrite); replace mode generates a
  * new filename. On successful write, update session.path, pushRecent, slidesOpenedHook.
@@ -910,6 +960,8 @@ async function saveDraftAfterGenerate(
     }
 
     await writeFile(draftPath, Buffer.from(bytes))
+    // the write is ours — refresh the staleness-fence baseline (BUG-1724)
+    session.saveStamp = statFileStamp(draftPath)
     session.path = draftPath
     await pushRecent(draftPath)
     slidesOpenedHook?.(wc, draftPath)
@@ -4154,7 +4206,7 @@ export function registerSlidesIpc(): void {
     )
   })
 
-  ipcMain.handle('slides:save', async (e) => {
+  ipcMain.handle('slides:save', async (e, auto?: boolean) => {
     const session = sessions.get(e.sender.id)
     if (!session) return { ok: false, error: 'no file open' }
     // Untitled (new blank file): the first save lands silently in the drafts folder (Save As keeps its dialog)
@@ -4166,7 +4218,38 @@ export function registerSlidesIpc(): void {
       slidesOpenedHook?.(e.sender, session.path)
     }
     try {
+      // BUG-1724 staleness fence: an in-place save must not blindly overwrite a
+      // deck that another program (or another app instance — two instances with
+      // separate user-data dirs legitimately coexist) wrote since this session
+      // opened or last saved it. The stat runs as late as possible before the
+      // write; a writer racing between the stat and the atomic rename still
+      // wins — the fence narrows the window, it cannot close it.
+      if (checkSaveStaleness(session.path, session.saveStamp) !== 'fresh') {
+        // automatic saves are declined silently: a modal on every autosave tick
+        // would hold the deck hostage; the renderer stays dirty and the next
+        // manual save raises the dialog
+        if (auto === true) return { ok: false, reason: 'external-modified' }
+        const options = {
+          type: 'warning' as const,
+          message: tm('externalChangeTitle'),
+          detail: tm('externalChangeDetail', { name: basename(session.path) }),
+          buttons: [tm('btnSaveAs'), tm('btnOverwrite'), tm('btnCancel')],
+          defaultId: 0,
+          cancelId: 2,
+          noLink: true,
+        }
+        const parent = dialogParent()
+        const { response } =
+          parent && !parent.isDestroyed()
+            ? await dialog.showMessageBox(parent, options)
+            : await dialog.showMessageBox(options)
+        if (response === 2) return { ok: false, reason: 'external-modified' }
+        if (response === 0) return saveSessionAs(e, session, basename(session.path))
+        // response 1 (Overwrite): the user deliberately replaces the external contents
+      }
       await savePptxToFile(session.opened, session.path)
+      // the write is ours — refresh the fence baseline from the fresh file
+      session.saveStamp = statFileStamp(session.path)
       autosaveBackoff.delete(session.path)
       void rm(autosavePathFor(session.path), { force: true }).catch(() => {})
       dropUntitledRecovery(e.sender.id)
@@ -4189,35 +4272,7 @@ export function registerSlidesIpc(): void {
   ipcMain.handle('slides:save-as', async (e, defaultName: string) => {
     const session = sessions.get(e.sender.id)
     if (!session) return { ok: false, error: 'no file open' }
-    const parent = dialogParent()
-    const r = await showSaveDialogWithMemory(
-      dialog,
-      parent,
-      {
-        defaultPath: saveAsSuggestion(session.path, defaultName),
-        filters: [{ name: 'PowerPoint', extensions: ['pptx'] }],
-      },
-      getDraftsDir(),
-      e.sender.id,
-    )
-    if (r.canceled || !r.filePath) return { ok: false }
-    try {
-      await savePptxToFile(session.opened, r.filePath)
-      session.path = r.filePath
-      autosaveBackoff.delete(r.filePath)
-      dropUntitledRecovery(e.sender.id)
-      await pushRecent(r.filePath)
-      syncAttachedPaths(session, r.filePath)
-      commitSaved(session.opened)
-      session.metaDirty = false
-      return {
-        ok: true,
-        path: r.filePath,
-        slides: buildAllRenderSlides(session.opened, session.fitWidthPx),
-      }
-    } catch (err) {
-      return { ok: false, error: String(err) }
-    }
+    return saveSessionAs(e, session, defaultName)
   })
 
   // ── Export (PDF / images): the renderer renders hi-res PNGs with offscreen Konva; the main process handles dialogs/writing ──

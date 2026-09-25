@@ -1771,7 +1771,19 @@ export interface SlidesApi {
   setVideoExportActive: (active: boolean) => Promise<boolean>
   /** Print (system dialog; cancel counts as ok=false without an error) */
   printSlides: (op: PrintSlidesOp) => Promise<{ ok: boolean; error?: string }>
-  save: () => Promise<{ ok: boolean; path?: string; error?: string; slides?: RenderSlide[] }>
+  /**
+   * Save in place. auto=true marks an automatic (autosave-tick) save: when the
+   * staleness fence detects an externally modified file, an automatic save is
+   * declined without a dialog ({ok:false, reason:'external-modified'}) while a
+   * manual save raises Save As / Overwrite / Cancel.
+   */
+  save: (auto?: boolean) => Promise<{
+    ok: boolean
+    path?: string
+    error?: string
+    reason?: 'external-modified'
+    slides?: RenderSlide[]
+  }>
   saveAs: (
     defaultName: string,
   ) => Promise<{ ok: boolean; path?: string; error?: string; slides?: RenderSlide[] }>

@@ -40,6 +40,11 @@ export const ms = {
   closeUnsavedDetail: 'Adakah anda mahu menyimpannya sebelum menutup?',
   btnDontSave: 'Jangan Simpan',
   btnCancel: 'Batal',
+  externalChangeTitle: 'Fail diubah di luar aplikasi',
+  externalChangeDetail:
+    '"{name}" telah diubah, dinamakan semula atau dipadamkan oleh program lain sejak simpanan terakhir. Tulis ganti akan mengetepikan perubahan luaran; Simpan Sebagai menulis versi anda ke fail baharu.',
+  btnOverwrite: 'Tulis ganti',
+  btnSaveAs: 'Simpan Sebagai',
   mediaUnsupportedTitle: 'Video ini mungkin tidak dapat dimainkan dalam aplikasi',
   mediaNoAudioBody:
     'Codec audio video ({codec}) tidak disokong oleh pemain terbina dalam; main balik dalam aplikasi tiada bunyi. Fail dibenamkan seadanya dan dimainkan seperti biasa dalam PowerPoint selepas eksport.',

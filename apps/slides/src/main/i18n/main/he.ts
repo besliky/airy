@@ -38,6 +38,11 @@ export const he = {
   closeUnsavedDetail: 'האם לשמור אותם לפני הסגירה?',
   btnDontSave: 'אל תשמור',
   btnCancel: 'ביטול',
+  externalChangeTitle: 'הקובץ השתנה מחוץ ליישום',
+  externalChangeDetail:
+    '"{name}" שונה, שונה שמו או נמחק על ידי תוכנית אחרת מאז השמירה האחרונה. דריסה מוותרת על השינויים החיצוניים; שמירה בשם כותבת את הגרסה שלך לקובץ חדש.',
+  btnOverwrite: 'דריסה',
+  btnSaveAs: 'שמירה בשם',
   mediaUnsupportedTitle: 'ייתכן שסרטון זה לא יופעל בתוך האפליקציה',
   mediaNoAudioBody:
     'מקודד השמע של הסרטון ({codec}) אינו נתמך בנגן המובנה, ולכן ההפעלה באפליקציה תהיה ללא קול. הקובץ מוטמע כפי שהוא ומופעל כרגיל ב-PowerPoint לאחר הייצוא.',

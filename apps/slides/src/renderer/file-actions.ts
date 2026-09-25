@@ -83,13 +83,15 @@ async function runSerialized<T>(pass: () => Promise<T>): Promise<T> {
   return current
 }
 
-export async function save(getCtx: () => ActionCtx, quiet = false): Promise<boolean> {
+export async function save(getCtx: () => ActionCtx, quiet = false, auto = false): Promise<boolean> {
   return runSerialized(async () => {
     // resolved only now: a queued pass must remap selection against the tree the prior save adopted
     const ctx = getCtx()
     await flushActiveEdit(ctx)
     await ctx.flushNotes()
-    const r = await window.slidesApi.save()
+    // auto marks the 30s autosave tick: the main process declines it without a
+    // dialog when the file changed externally (BUG-1724)
+    const r = await window.slidesApi.save(auto)
     if (r.ok) {
       if (r.slides) adoptSavedSlides(ctx, r.slides)
       if (r.path) ctx.setPath(r.path)
@@ -97,6 +99,10 @@ export async function save(getCtx: () => ActionCtx, quiet = false): Promise<bool
       const saved = t('appStatusSaved')
       ctx.setStatus(saved)
       if (!quiet) showToast(saved)
+    } else if (r.reason === 'external-modified') {
+      // external-modified: the main process already prompted (or the autosave
+      // deferred to a manual save) — stay dirty, no error toast
+      return false
     } else {
       const failed = t('appStatusSaveFailed', { error: r.error ?? t('appErrorCanceled') })
       ctx.setStatus(failed)

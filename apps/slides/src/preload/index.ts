@@ -334,7 +334,7 @@ const api: SlidesApi = {
   setVideoExportActive: (active: boolean) =>
     ipcRenderer.invoke('slides:set-video-export-active', active),
   printSlides: (op: PrintSlidesOp) => ipcRenderer.invoke('slides:print', op),
-  save: () => ipcRenderer.invoke('slides:save'),
+  save: (auto?: boolean) => ipcRenderer.invoke('slides:save', auto === true),
   saveAs: (defaultName: string) => ipcRenderer.invoke('slides:save-as', defaultName),
   onCloseSaveRequest: (handler: () => void) => {
     const listener = () => handler()
