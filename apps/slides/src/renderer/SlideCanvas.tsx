@@ -32,6 +32,12 @@ import type {
   PictureRenderNode,
   GroupRenderNode,
 } from '@airy-office/pptx-render'
+import { setDragDistanceNoRedraw, suppressClickEndDragDraw } from './konva-click-draw'
+
+// PERF-1727: a selection click must not pay Konva's click-time full-layer redraw
+// (see konva-click-draw.ts) — it blocked the Format Pane update behind ~1.1s of
+// software rasterization on a 100-shape slide.
+suppressClickEndDragDraw()
 import { boxPivotProps, fillToKonva, isEditableText } from './konva-adapter'
 import { tableCellAtPoint, tableLocalPointFromStage } from './table-hit'
 import {
@@ -583,11 +589,28 @@ export function SlideCanvas({
   // background actually changes (zoom settle, slide switch, background edit), never per move.
   const bgWhiteRef = useRef<Konva.Rect>(null)
   const bgFillRef = useRef<Konva.Rect>(null)
+  // PERF-1727: the bake is a pure function of (ratio, this callback's inputs); a zoom-only
+  // re-arm (e.g. the auto-refit when a dock opens) used to re-bake both full-page caches
+  // (~1.2s of software rasterization on a 100-shape slide) after the Format Pane was
+  // already up. Skip a re-bake when the ratio and every input are unchanged.
+  const bgBakedRef = useRef<{ ratio: number; deps: unknown[] } | null>(null)
   const recacheBg = useCallback(
     (ratio: number) => {
+      const deps: unknown[] = [
+        nodeCount,
+        slide.widthPx,
+        slide.heightPx,
+        dense,
+        slide.background,
+        images,
+      ]
+      const baked = bgBakedRef.current
+      if (baked && baked.ratio === ratio && baked.deps.every((v, i) => v === deps[i])) return
       const w = slide.widthPx
       const h = slide.heightPx
       if (!(w > 0) || !(h > 0)) return
+      if (!bgWhiteRef.current || !bgFillRef.current) return // not mounted yet: retry later
+      bgBakedRef.current = { ratio, deps }
       for (const ref of [bgWhiteRef, bgFillRef]) {
         const n = ref.current
         if (!n) continue
@@ -604,7 +627,6 @@ export function SlideCanvas({
     // The extra deps (dense/background/images/nodeCount) don't appear in the body: the
     // callback identity re-arms the re-raster effect below when the baked background's
     // inputs change, so the cache re-bakes with the current ratio.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [nodeCount, slide.widthPx, slide.heightPx, dense, slide.background, images],
   )
   // Re-bake the bg cache when its inputs change: recacheBg's identity already encodes
@@ -1660,6 +1682,19 @@ function NodeView({
     const g = groupRef.current
     if (g && dragPosRef.current && g.isDragging()) g.position(dragPosRef.current)
   })
+  // PERF-1727: the drag threshold keeps PowerPoint's "6 screen px" semantics
+  // (Konva compares in canvas coordinates, so divide by the canvas CSS zoom — a
+  // slight hand slip on click-select must not become a 6px+ model jump). It is
+  // applied imperatively instead of through JSX: on a zoom-only change (e.g. the
+  // auto-refit when a dock opens) a JSX re-apply would _requestDraw() every node
+  // group on the slide and batch a full content-layer redraw (~1.1s of software
+  // rasterization at 100 shapes). Konva reads dragDistance live at gesture start
+  // (DD._drag), so suppressing the auto-draw around the setter is sufficient.
+  useLayoutEffect(() => {
+    const g = groupRef.current
+    if (!g) return
+    setDragDistanceNoRedraw(g, 6 / Math.max(zoom, 0.1))
+  }, [zoom])
   useEffect(() => () => altKeyCleanupRef.current?.(), [])
 
   // The Transformer's frame/scale basis defaults to getClientRect() (content bounding box). When text
@@ -1718,10 +1753,8 @@ function NodeView({
     id: `node_${node.sourceId}`,
     ...boxPivotProps(box),
     draggable,
-    // A slight hand slip on click-select (3~5px is common on trackpads) shouldn't trigger a drag: Konva's
-    // default 3px threshold is too sensitive, and once it becomes a drag, onDragMove snapping amplifies it into a visible 6px+ jump that commits to the model.
-    // The threshold's semantics are "6 screen px": Konva compares in canvas coordinates, so divide by the canvas CSS zoom.
-    dragDistance: 6 / Math.max(zoom, 0.1),
+    // NOTE: dragDistance is applied imperatively (see the useLayoutEffect below),
+    // not through JSX — see PERF-1727 note there.
     onClick: (e: Konva.KonvaEventObject<MouseEvent>) => {
       if (suppressClickRef?.current) {
         suppressClickRef.current = false
