@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement, RefObject } from 'react'
 import airyMark from '@airy-office/ui/assets/airy-mark.png'
 import iconDocx from './assets/file-docx.svg'
@@ -17,7 +17,13 @@ import { HOME_PATHS_CAP } from '../../shared/home-paths'
 import { useDismissablePopover } from '@airy-office/ui'
 import { fileCountKey, visiblePageCount } from './counts'
 import { showErrorToast } from './error-toast'
-import { filterFileEntries, isSearchActive, mergeFileLists } from './home-search'
+import {
+  buildNameFilterIndex,
+  filterWithIndex,
+  isSearchActive,
+  mergeFileLists,
+} from './home-search'
+import { WindowedFileList } from './home-window-list'
 import { useI18n } from './locale'
 import type { I18n, StringKey } from './locale'
 import { projectCountKey, statPathsChunked } from './project-files'
@@ -1032,18 +1038,45 @@ export function Home() {
   // ── Plain view (no project selected): type filtering runs in the main
   // process; the name search filters the loaded rows client-side. Search
   // corpus: everything loaded right now — the active view's list plus the
-  // open project's files — deduped by path, earlier list first. ──
-  const visibleEntries = filterFileEntries(mergeFileLists(entries, projectFileEntries), search)
-  const selectedPaths = visibleEntries.filter((e) => selected.has(e.path)).map((e) => e.path)
+  // open project's files — deduped by path, earlier list first. All of this
+  // is memoized (PERF-1736): the folded-name index is rebuilt only when a
+  // source list changes, so a keystroke never re-folds a 20k-file corpus and
+  // the derived lists stay referentially stable while typing. ──
+  const corpus = useMemo(
+    () => mergeFileLists(entries, projectFileEntries),
+    [entries, projectFileEntries],
+  )
+  const corpusIndex = useMemo(() => buildNameFilterIndex(corpus), [corpus])
+  const visibleEntries = useMemo(() => filterWithIndex(corpusIndex, search), [corpusIndex, search])
+  const selectedPaths = useMemo(
+    () => visibleEntries.filter((e) => selected.has(e.path)).map((e) => e.path),
+    [visibleEntries, selected],
+  )
   const allSelected = visibleEntries.length > 0 && selectedPaths.length === visibleEntries.length
 
   // project view shares the same `selected` set (keyed by path)
-  const visibleProjectEntries = filterFileEntries(projectFileEntries, search)
-  const projSelectedPaths = visibleProjectEntries
-    .filter((e) => selected.has(e.path))
-    .map((e) => e.path)
+  const projectIndex = useMemo(() => buildNameFilterIndex(projectFileEntries), [projectFileEntries])
+  const visibleProjectEntries = useMemo(
+    () => filterWithIndex(projectIndex, search),
+    [projectIndex, search],
+  )
+  const projSelectedPaths = useMemo(
+    () => visibleProjectEntries.filter((e) => selected.has(e.path)).map((e) => e.path),
+    [visibleProjectEntries, selected],
+  )
   const projAllSelected =
     visibleProjectEntries.length > 0 && projSelectedPaths.length === visibleProjectEntries.length
+
+  // header sort flips the newest-first base order; memoized so the reversed
+  // copy is not rebuilt on every keystroke
+  const orderedVisibleEntries = useMemo(
+    () => (fileSort === 'oldest' ? [...visibleEntries].reverse() : visibleEntries),
+    [visibleEntries, fileSort],
+  )
+  const orderedProjectEntries = useMemo(
+    () => (fileSort === 'oldest' ? [...visibleProjectEntries].reverse() : visibleProjectEntries),
+    [visibleProjectEntries, fileSort],
+  )
 
   const changeView = (next: 'recent' | 'starred') => {
     setView(next)
@@ -1566,12 +1599,10 @@ export function Home() {
                 <span />
                 <span />
               </div>
-              <ul className="recent-list">
-                {(fileSort === 'oldest'
-                  ? [...visibleProjectEntries].reverse()
-                  : visibleProjectEntries
-                ).map((entry) => renderFileRow(entry, 'project'))}
-              </ul>
+              <WindowedFileList
+                rows={orderedProjectEntries}
+                renderRow={(entry) => renderFileRow(entry, 'project')}
+              />
             </div>
           )}
         </section>
@@ -1701,11 +1732,10 @@ export function Home() {
                 <span />
                 <span />
               </div>
-              <ul className="recent-list">
-                {(fileSort === 'oldest' ? [...visibleEntries].reverse() : visibleEntries).map(
-                  (entry) => renderFileRow(entry, 'global'),
-                )}
-              </ul>
+              <WindowedFileList
+                rows={orderedVisibleEntries}
+                renderRow={(entry) => renderFileRow(entry, 'global')}
+              />
               {hasMore && (
                 <div ref={sentinelRef} className="load-more" aria-hidden="true">
                   <span className="load-more-spinner" />
