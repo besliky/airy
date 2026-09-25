@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeAll } from 'vitest'
 import JSZip from 'jszip'
 import { z } from 'zod'
 
@@ -53,12 +53,24 @@ function buildCsv(): string {
   return parts.join('')
 }
 
+// PERF-1720: the corpus build and the engine conversion each cost seconds at
+// this scale, so both tests share ONE buildCsv() -> csvToXlsxBuffer() artifact
+// instead of repeating the pipeline per test. Coverage is unchanged — the same
+// full-size conversion is now verified by two independent consumers (zip
+// structure probe and sidecar round-trip), mirroring production where one
+// saved file is read by separate readers.
+let converted: Uint8Array
+
+beforeAll(async () => {
+  converted = await csvToXlsxBuffer(buildCsv())
+})
+
 describe('csvToXlsxBuffer at 500k rows (PERF-1663)', () => {
   it(
     'converts with the full row count and intact boundary rows',
     { timeout: 120_000 },
     async () => {
-      const zip = await JSZip.loadAsync(await csvToXlsxBuffer(buildCsv()))
+      const zip = await JSZip.loadAsync(converted)
       const sheet = (await zip.file('xl/worksheets/sheet1.xml')?.async('text')) ?? ''
 
       // boolean-gated probes: a bare toContain would print the ~100MB sheet on
@@ -103,7 +115,7 @@ describe('csvToXlsxBuffer at 500k rows (PERF-1663)', () => {
     async () => {
       const directory = await mkdtemp(join(tmpdir(), 'csv-500k-'))
       const path = join(directory, 'csv_500k.xlsx')
-      await writeFile(path, await csvToXlsxBuffer(buildCsv()))
+      await writeFile(path, converted)
       const client = new XlsxSidecarClient(sidecarBinaryPath())
       const openedResultSchema = z.object({
         sessionId: z.string().uuid(),

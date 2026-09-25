@@ -66,8 +66,8 @@ afterAll(() => {
   if (work) rmSync(work, { recursive: true, force: true })
 })
 
-async function convertToPdf(pptxPath: string): Promise<string> {
-  const dir = dirname(pptxPath)
+async function convertToPdf(pptxPaths: string[]): Promise<void> {
+  const dir = dirname(pptxPaths[0]!)
   // Isolated profile: never touch a user's running LibreOffice instance.
   const profile = join(dir, '.lo-profile')
   const { stderr } = await execFileAsync(
@@ -79,15 +79,19 @@ async function convertToPdf(pptxPath: string): Promise<string> {
       '--outdir',
       dir,
       `-env:UserInstallation=file://${profile}`,
-      pptxPath,
+      ...pptxPaths,
     ],
     { timeout: 240_000 },
   )
-  const pdf = pptxPath.replace(/\.pptx$/, '.pdf')
-  // LO exits 0 even when the source fails to load ("source file could not be
-  // loaded" on stderr, no output) — the produced PDF is the real assertion.
-  expect(statSync(pdf).size, `PDF produced for ${pptxPath}; stderr: ${stderr}`).toBeGreaterThan(0)
-  return pdf
+  // PERF-1720: all decks go through ONE soffice process — per-deck process
+  // startup (~6 s each on a snap install) dominated this file's serial wall.
+  // Every deck is still asserted individually: LO converts each input on its
+  // own and exits 0 even when a source fails to load ("source file could not
+  // be loaded" on stderr, no output) — the produced PDF is the real assertion.
+  for (const pptxPath of pptxPaths) {
+    const pdf = pptxPath.replace(/\.pptx$/, '.pdf')
+    expect(statSync(pdf).size, `PDF produced for ${pptxPath}; stderr: ${stderr}`).toBeGreaterThan(0)
+  }
 }
 
 describeWithSoffice(
@@ -132,11 +136,13 @@ describeWithSoffice(
         ['media-heavy.pptx', mediaDeck],
       ]
 
+      const savedPaths: string[] = []
       for (const [name, opened] of decks) {
         const path = join(work, name)
         await savePptxToFile(opened, path)
-        await convertToPdf(path)
+        savedPaths.push(path)
       }
+      await convertToPdf(savedPaths)
     }, 600_000)
 
     it.skipIf(!hasPyPptx)(
