@@ -51,6 +51,9 @@ const NEED_ISOLATION = [
   'tests/function-catalog.registry.test.ts',
   // Boots the real Univer DI graph (same FUniver breakage class as above).
   'tests/sheet-protection.univer.test.ts',
+  // Boots the real Univer DI graph (filter model + commands) for the by-color
+  // criteria round-trip.
+  'tests/color-filter.univer.test.ts',
   // TEST-1726: boots the real Univer DI graph for its two wrapper tests and
   // flaked in a full serial run with the exact FUniver breakage above (2
   // failed of 3138; alone it is green 5/5, so the cause is the shared

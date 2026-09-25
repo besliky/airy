@@ -3447,8 +3447,9 @@ fn serializes_sparklines_in_expected_shape() {
 
 /// The autoFilter's filterColumn criteria round-trip through the range
 /// result: checked values (with XML escapes and the blank flag), comparison
-/// criteria, and colId offsets. Color-filter columns and customSheetViews
-/// copies of the autoFilter are ignored.
+/// criteria, and colId offsets. Color-filter columns whose dxfId does not
+/// resolve (no styles.xml here) and customSheetViews copies of the autoFilter
+/// are ignored.
 #[test]
 fn reads_auto_filter_column_criteria() {
     let (_dir, path) = open_fixture(&[
@@ -3516,6 +3517,70 @@ fn reads_auto_filter_column_criteria() {
         customs.filters[1].operator.as_deref(),
         Some("lessThanOrEqual")
     );
+}
+
+/// A `<colorFilter dxfId>` resolves through the styles.xml dxfs into a wire
+/// criterion: a dxf fill (bgColor) becomes kind "fill", a dxf font color
+/// becomes kind "font", both carrying the resolved #RRGGBB. An out-of-range
+/// dxfId leaves the column criteria-less.
+#[test]
+fn resolves_color_filter_criteria_through_dxfs() {
+    let (_dir, path) = open_fixture(&[
+        (
+            "xl/workbook.xml",
+            r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>"#,
+        ),
+        (
+            "xl/_rels/workbook.xml.rels",
+            r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#,
+        ),
+        (
+            "xl/styles.xml",
+            r#"<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="1"><font/></fonts>
+<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+<borders count="1"><border/></borders>
+<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellXfs>
+<dxfs count="2">
+<dxf><fill><patternFill><bgColor rgb="FF5B9BD5"/></patternFill></fill></dxf>
+<dxf><font><color rgb="FF00B050"/></font></dxf>
+</dxfs>
+</styleSheet>"#,
+        ),
+        (
+            "xl/worksheets/sheet1.xml",
+            r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>h</t></is></c></row></sheetData><autoFilter ref="A1:C9"><filterColumn colId="0"><colorFilter dxfId="0"/></filterColumn><filterColumn colId="1"><colorFilter dxfId="1"/></filterColumn><filterColumn colId="2"><colorFilter dxfId="7"/></filterColumn></autoFilter></worksheet>"#,
+        ),
+    ]);
+    let mut sessions = WorkbookSessions::new();
+    let metadata = sessions.open(&path).unwrap();
+    let sheet_id = metadata.sheets[0].id.clone();
+    let range = CellRange {
+        start_row: 0,
+        end_row: 0,
+        start_column: 0,
+        end_column: 0,
+    };
+    let result = loop {
+        let result = sessions
+            .read_range(&metadata.session_id, &sheet_id, &range)
+            .unwrap();
+        if result.indexing_complete {
+            break result;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    };
+    assert_eq!(result.auto_filter_columns.len(), 2);
+    let fill = &result.auto_filter_columns[0];
+    assert_eq!(fill.col_id, 0);
+    let color = fill.color_filter.as_ref().expect("fill criterion");
+    assert_eq!(color.kind, "fill");
+    assert_eq!(color.color, "#5B9BD5");
+    let font = &result.auto_filter_columns[1];
+    assert_eq!(font.col_id, 1);
+    let color = font.color_filter.as_ref().expect("font criterion");
+    assert_eq!(color.kind, "font");
+    assert_eq!(color.color, "#00B050");
 }
 
 /// Modern Excel threaded comments ([MS-XLSX] 2.3.7): roots carry the cell ref

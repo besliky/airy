@@ -495,9 +495,10 @@ pub struct RangeResult {
 }
 
 /// One `<filterColumn>` of a worksheet autoFilter: checked values
-/// (`<filters>`), the blank flag, or comparison criteria
-/// (`<customFilters>`). Color/icon/dynamic/top10 criteria have no renderer
-/// mapping and their column is omitted.
+/// (`<filters>`), the blank flag, comparison criteria (`<customFilters>`),
+/// or a color criterion (`<colorFilter>` resolved through its dxf).
+/// Icon/dynamic/top10 criteria have no renderer mapping and their column is
+/// omitted.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FilterColumnCriteria {
@@ -509,6 +510,20 @@ pub struct FilterColumnCriteria {
     pub blank: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub customs: Option<CustomFilterCriteria>,
+    #[serde(rename = "colorFilter", skip_serializing_if = "Option::is_none")]
+    pub color_filter: Option<WireColorFilter>,
+}
+
+/// A resolved `<colorFilter>`: the dxf it references carries the color
+/// (fill → patternFill/bgColor, font → font/color), so the wire ships the
+/// resolved kind + #RRGGBB instead of the dxf index.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WireColorFilter {
+    /// "fill" (cell background) or "font" (text color).
+    pub kind: String,
+    /// Resolved criterion color, "#RRGGBB".
+    pub color: String,
 }
 
 #[derive(Clone, Debug, Serialize)]

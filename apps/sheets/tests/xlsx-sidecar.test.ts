@@ -744,6 +744,41 @@ describe('XLSX Rust sidecar', () => {
       await rm(directory, { recursive: true, force: true })
     }
   })
+  it('resolves a colorFilter autoFilter criterion through the styles.xml dxfs (PAR-213)', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'xlsx-sidecar-test-'))
+    const path = join(directory, 'fixture.xlsx')
+    await writeFile(path, await buildColorFilterFixture())
+    const client = new XlsxSidecarClient(sidecarBinaryPath())
+    let sessionId: string | null = null
+    try {
+      const opened = openResultSchema.parse(await client.open(path))
+      sessionId = opened.sessionId
+      // Color criteria are sheet-wide and complete-only, so poll until the
+      // sheet indexes through.
+      let result: z.infer<typeof workbookRangeResultSchema> | null = null
+      for (let attempt = 0; attempt < 200 && result?.indexingComplete !== true; attempt += 1) {
+        result = workbookRangeResultSchema.parse(
+          await client.readRange({
+            sessionId,
+            sheetId: 'sheet-1',
+            range: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+          }),
+        )
+        if (result.indexingComplete !== true) {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        }
+      }
+      expect(result?.indexingComplete).toBe(true)
+      expect(result?.autoFilterColumns).toEqual([
+        { colId: 0, colorFilter: { kind: 'fill', color: '#5B9BD5' } },
+        { colId: 1, colorFilter: { kind: 'font', color: '#00B050' } },
+      ])
+    } finally {
+      if (sessionId) await client.close(sessionId)
+      client.stop()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
 })
 
 async function buildStructureFixture(): Promise<Buffer> {
@@ -1046,6 +1081,57 @@ async function buildVisualFixture(): Promise<Buffer> {
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
       'base64',
     ),
+  )
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+}
+
+/// openpyxl-structured workbook whose worksheet autoFilter carries color
+/// criteria and whose styles.xml dxfs hold the criterion colors: dxf 0 is a
+/// fill (patternFill/bgColor), dxf 1 a font color.
+async function buildColorFilterFixture(): Promise<Buffer> {
+  const zip = new JSZip()
+  zip.file(
+    'xl/workbook.xml',
+    `<?xml version="1.0"?>
+    <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+      <sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets>
+    </workbook>`,
+  )
+  zip.file(
+    'xl/_rels/workbook.xml.rels',
+    `<?xml version="1.0"?>
+    <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+      <Relationship Id="rId1"
+        Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"
+        Target="worksheets/sheet1.xml"/>
+    </Relationships>`,
+  )
+  zip.file(
+    'xl/styles.xml',
+    `<?xml version="1.0"?>
+    <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+      <fonts count="1"><font/></fonts>
+      <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+      <borders count="1"><border/></borders>
+      <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellXfs>
+      <dxfs count="2">
+        <dxf><fill><patternFill><bgColor rgb="FF5B9BD5"/></patternFill></fill></dxf>
+        <dxf><font><color rgb="FF00B050"/></font></dxf>
+      </dxfs>
+    </styleSheet>`,
+  )
+  zip.file(
+    'xl/worksheets/sheet1.xml',
+    `<?xml version="1.0"?>
+    <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+      <dimension ref="A1:C2"/>
+      <sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>h</t></is></c></row></sheetData>
+      <autoFilter ref="A1:C9">
+        <filterColumn colId="0"><colorFilter dxfId="0"/></filterColumn>
+        <filterColumn colId="1"><colorFilter dxfId="1"/></filterColumn>
+      </autoFilter>
+    </worksheet>`,
   )
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
 }
