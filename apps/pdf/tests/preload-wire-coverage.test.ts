@@ -116,6 +116,7 @@ const PINNED_API_MEMBERS = `
   onSaveAsFlow
   onSaveAsRequest
   onThemeChanged
+  openAttachment
   pageImagePng
   pagePreviewPng
   readFile
@@ -166,6 +167,7 @@ const PINNED_PDF_CHANNELS = `
   mergePages
   mergePdf
   ocrPage
+  openAttachment
   pageImagePng
   pagePreviewPng
   printRequest

@@ -202,4 +202,21 @@ describe('form catalog', () => {
     ).toEqual({ hasXfa: true, encrypted: true })
     expect(documentFormFeatures({}, bytes)).toEqual({ hasXfa: false, encrypted: false })
   })
+
+  it('treats owner-only encryption (empty user password, permissive flags) as encrypted: view-only by design (OBS-1735)', () => {
+    // enc-owner.pdf shape: no user password, owner password set, P=-1 (all permissions
+    // formally allowed). pdf.js opens it without a password and reports the encrypt
+    // filter; the app maps ANY non-empty encrypt filter to `encrypted`, and App.tsx
+    // derives readOnly from it. This is a deliberate conservative decision, not a
+    // defect: pdf-lib cannot write encrypted files (content streams stay scrambled),
+    // so enabling edits would mean saving the file decrypted — a silent protection
+    // downgrade. Acrobat edits such files because it can write encryption back;
+    // changing this stance requires an encryption-capable writer and must be a
+    // conscious product decision (see .orchestrator/LOGS/OBS-1728.md).
+    const bytes = new TextEncoder().encode('owner-encrypted payload')
+    expect(documentFormFeatures({ EncryptFilterName: 'StdCF' }, bytes)).toEqual({
+      hasXfa: false,
+      encrypted: true,
+    })
+  })
 })

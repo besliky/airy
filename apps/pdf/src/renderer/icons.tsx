@@ -315,6 +315,11 @@ export const IconOutline = () => (
     <circle cx="8.79" cy="18.32" r="0.9" fill="currentColor" stroke="none" />
   </Icon>
 )
+export const IconPaperclip = () => (
+  <Icon>
+    <path d="M20.4 11.05 L12.1 19.35 A4.55 4.55 0 0 1 5.65 12.9 L14.5 4.05 A3.03 3.03 0 0 1 18.8 8.35 L10.5 16.65 A1.52 1.52 0 0 1 8.35 14.5 L16.1 6.75" />
+  </Icon>
+)
 export const IconDrawColor = () => (
   <Icon>
     <path d="M12 4.5 C14.2 7.3 17.25 9.2 17.25 12.4 C17.25 15.4 14.9 17.5 12 17.5 C9.1 17.5 6.75 15.4 6.75 12.4 C6.75 9.2 9.8 7.3 12 4.5 Z" />

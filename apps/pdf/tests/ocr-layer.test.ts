@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildOcrPageData } from '../src/renderer/ocr-layer'
+import { buildOcrPageData, ocrAvailableOnPlatform } from '../src/renderer/ocr-layer'
 import type { PdfOcrLine } from '../src/shared/ipc'
 
 const GEOM = { pw: 600, ph: 800, rot: 0 }
@@ -149,5 +149,17 @@ describe('buildOcrPageData word joining', () => {
     }
     const shang = data.entry.items[3]!
     expect(data.entry.text.slice(shang.start, shang.end)).toBe('商')
+  })
+})
+
+describe('ocrAvailableOnPlatform (UX-1733)', () => {
+  it('promises recognition only where a system engine exists', () => {
+    // engines ship as macOS Vision / Windows.Media.Ocr helpers only
+    expect(ocrAvailableOnPlatform('MacIntel')).toBe(true)
+    expect(ocrAvailableOnPlatform('Mac OS X')).toBe(true)
+    expect(ocrAvailableOnPlatform('Win32')).toBe(true)
+    // Linux (and an unknown/empty platform) gets no OCR promise in UI copy
+    expect(ocrAvailableOnPlatform('Linux x86_64')).toBe(false)
+    expect(ocrAvailableOnPlatform('')).toBe(false)
   })
 })
