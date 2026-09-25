@@ -89,6 +89,43 @@ describe('dangerous content', () => {
     expect(out).not.toMatch(/<a[^>]*>bad</)
   })
 
+  it('keeps internal hrefs: hash anchors and scheme-less relative paths (BUG-1739)', () => {
+    // Word TOCs link through anchors and relative paths — cutting them made the
+    // links die silently before link diagnostics could ever see them
+    const out = sanitizeClipboardHtml(
+      '<a href="#section-two">jump</a><a href="docs/page.md">rel</a>' +
+        '<a href="./local.md">dot</a><a name="kept-target">target</a>',
+    )
+    expect(out).toContain('href="#section-two"')
+    expect(out).toContain('href="docs/page.md"')
+    expect(out).toContain('href="./local.md"')
+  })
+
+  it('still cuts hrefs with a non-allowlisted scheme (data:, vbscript:, file:)', () => {
+    const out = sanitizeClipboardHtml(
+      '<a href="javascript:alert(1)">bad</a><a href="data:text/html,<b>x</b>">data</a>' +
+        '<a href="vbscript:run">vbs</a><a href="file:///C:/x.md">file</a>',
+    )
+    expect(out).not.toContain('javascript:')
+    expect(out).not.toContain('data:')
+    expect(out).not.toContain('vbscript:')
+    expect(out).not.toContain('file:')
+    // unsafe-scheme anchors still degrade to their plain text
+    expect(out).toContain('bad')
+    expect(out).toContain('data')
+    expect(out).not.toMatch(/<a[^>]*>bad</)
+    expect(out).not.toMatch(/<a[^>]*>data</)
+  })
+
+  it('keeps href="" as a real empty link (diagnostics marks it) and degrades missing ones', () => {
+    const out = sanitizeClipboardHtml('<a href="">empty</a><a name="x">no-href</a>')
+    expect(out).toContain('href=""')
+    expect(out).toContain('empty')
+    // an anchor without an href attribute cannot be a markdown link: plain text
+    expect(out).toContain('no-href')
+    expect(out).not.toMatch(/<a[^>]*>no-href</)
+  })
+
   it('keeps http(s) img, degrades others to alt text', () => {
     const out = sanitizeClipboardHtml(
       '<img src="https://cdn.example/x.png" alt="pic">' +
