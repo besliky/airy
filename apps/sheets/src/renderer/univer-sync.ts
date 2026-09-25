@@ -32,6 +32,7 @@ import { CFValueType, type IValueConfig } from '@univerjs/preset-sheets-conditio
 
 import { CENTER_ACROSS_END_KEY } from './center-continuous'
 import { notifyCfStreamWindow } from './cf-formula-fold'
+import { circularRefAddress, findCircularFormulas } from './circular-refs'
 import { refreshDvSourcesAfterSheetLoad } from './data-validation-source-gate'
 import {
   THRESHOLD_RANGE_CELL_CAP,
@@ -1332,6 +1333,59 @@ function degradeCostlyFormulas(
   )
 }
 
+/// Statically detects circular-reference formulas once per open and reports
+/// them for the status-bar badge (BUG-1718): the engine resolves a reference
+/// cycle in a single pass and shows the one-pass numbers silently, even when
+/// the file's calcPr asks for iterative recalculation the engine never
+/// performs. Runs after the workbook's full formula list is in hand — a
+/// truncated list stays silent rather than badge a partial picture.
+function detectCircularRefs(
+  state: LazyWorkbookState,
+  sheets: readonly ClosureSheetInput[],
+  onCircularRefs?: (refs: string[]) => void,
+): void {
+  if (state.circularRefs.length > 0) return
+  const hits = findCircularFormulas(sheets)
+  if (hits.length === 0) return
+  state.circularRefs = hits.map((hit) => circularRefAddress(hit))
+  onCircularRefs?.(state.circularRefs)
+}
+
+/// Fully-loaded (formulaMode) workbooks never stream formulas through the
+/// closure, so their formula list is read here for the same detection.
+async function detectWorkbookCircularRefs(
+  lazyWorkbookRef: { current: LazyWorkbookState | null },
+  onCircularRefs?: (refs: string[]) => void,
+): Promise<void> {
+  const state = lazyWorkbookRef.current
+  if (!state || state.circularRefs.length > 0) return
+  const inputs: ClosureSheetInput[] = []
+  for (const sheet of state.file.sheets) {
+    if (lazyWorkbookRef.current !== state) return
+    let result
+    try {
+      result = await window.desktopApi.readWorkbookFormulas({
+        sessionId: state.file.sessionId,
+        sheetId: sheet.id,
+      })
+    } catch {
+      return
+    }
+    if (result.truncated || !result.indexingComplete) return
+    inputs.push({
+      id: sheet.id,
+      name: sheet.name,
+      rowCount: sheet.rowCount,
+      columnCount: sheet.columnCount,
+      formulas: result.cells.flatMap((cell) =>
+        cell.formula ? [{ row: cell.row, column: cell.column, formula: cell.formula }] : [],
+      ),
+    })
+  }
+  if (lazyWorkbookRef.current !== state) return
+  detectCircularRefs(state, inputs, onCircularRefs)
+}
+
 /// Streams every sheet's formula list, computes the dependency closure, and
 /// — when it fits the budget — installs and pins the closure cells so the
 /// formula engine recalculates them live while the workbook keeps streaming.
@@ -1339,6 +1393,7 @@ export async function activateFormulaClosure(
   runtime: UniverRuntime,
   lazyWorkbookRef: { current: LazyWorkbookState | null },
   setMessage: (message: string) => void,
+  onCircularRefs?: (refs: string[]) => void,
 ): Promise<void> {
   const state = lazyWorkbookRef.current
   if (!state || state.formulaMode || state.closure.status !== 'idle') return
@@ -1388,6 +1443,7 @@ export async function activateFormulaClosure(
     }
   }
   if (inputs.every((sheet) => sheet.formulas.length === 0)) return giveUp()
+  detectCircularRefs(state, inputs, onCircularRefs)
   const closure = computeFormulaClosure(inputs, CLOSURE_MAX_CELLS)
   if (!closure.ok) return giveUp()
   // Structural edits made while analyzing would shift the coordinates the
@@ -4906,6 +4962,7 @@ export async function preloadEntireWorkbook(
   runtime: UniverRuntime,
   lazyWorkbookRef: { current: LazyWorkbookState | null },
   setMessage: (message: string) => void,
+  onCircularRefs?: (refs: string[]) => void,
 ): Promise<void> {
   const state = lazyWorkbookRef.current
   const workbook = runtime.univerAPI.getActiveWorkbook()
@@ -4913,6 +4970,7 @@ export async function preloadEntireWorkbook(
   state.flags.preloadRunning = true
   try {
     await preloadEntireWorkbookInner(runtime, state, workbook, lazyWorkbookRef, setMessage)
+    await detectWorkbookCircularRefs(lazyWorkbookRef, onCircularRefs)
   } finally {
     state.flags.preloadRunning = false
   }

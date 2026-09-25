@@ -693,6 +693,10 @@ export function App(): React.JSX.Element {
   const [fullLoadPrompt, setFullLoadPrompt] = useState<'ask' | 'tooLarge' | null>(null)
   const fullLoadRunning = useRef(false)
   const [message, setMessage] = useState(t('appReadyInitial'))
+  /// Circular-reference addresses detected at open (BUG-1718): the engine
+  /// resolves cycles in a single pass silently, so the status bar badges
+  /// them instead. Raw addresses; ExcelShell translates the surrounding text.
+  const [circularRefs, setCircularRefs] = useState<string[]>([])
   /// Zoom of the active sheet in percent, echoed by the status-bar slider.
   const [zoomPercent, setZoomPercent] = useState(100)
   const [selectionFormat, setSelectionFormat] = useState<SelectionFormat | null>(null)
@@ -4153,6 +4157,7 @@ export function App(): React.JSX.Element {
     setRevision(0)
     setPreview(null)
     lazyPreviewRef.current = null
+    setCircularRefs([])
     setPendingEdits(0)
     // Slicers/timelines belong to the previous workbook's session only;
     // switching files invalidates them.
@@ -4288,11 +4293,11 @@ export function App(): React.JSX.Element {
             : undefined,
         )
         if (state.formulaMode) {
-          void preloadEntireWorkbook(runtime, lazyWorkbookRef, setMessage)
+          void preloadEntireWorkbook(runtime, lazyWorkbookRef, setMessage, setCircularRefs)
         } else {
           // Deferred so first paint and initial streaming win the sidecar.
           setTimeout(() => {
-            void activateFormulaClosure(runtime, lazyWorkbookRef, setMessage)
+            void activateFormulaClosure(runtime, lazyWorkbookRef, setMessage, setCircularRefs)
           }, 1500)
         }
       })
@@ -4597,6 +4602,7 @@ export function App(): React.JSX.Element {
         }
         selectionFormat={selectionFormat}
         statusMessage={message}
+        circularRefs={circularRefs}
         aiBusy={aiBusy}
         chat={chat}
         historicChat={historicChat}
