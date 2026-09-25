@@ -48,7 +48,11 @@ import {
   MAX_SAVE_EDITS_TOTAL,
   SAVE_EDITS_CHUNK_JSON_MAX,
 } from '../shared/ipc-channels'
-import { SHEET_PROTECTION_ATTRIBUTES } from '../shared/desktop-api'
+// NOTE: nothing here may import '../shared/desktop-api' — the module builds
+// its zod schemas at the top level, so any value import pulls zod into this
+// bundle, and a sandboxed preload cannot resolve external packages at
+// runtime ("module not found: zod" kills the whole preload).
+// BUG-13xx-P4: wire validation lives in main.
 import { installDropOpenBridge } from '@airy-office/electron-utils/drop-open'
 
 const desktopApi: DesktopApi = {
@@ -1346,19 +1350,21 @@ function parseRangeResult(input: unknown): WorkbookRangeResult {
     if (
       !isRecord(protection) ||
       typeof protection.protected !== 'boolean' ||
-      typeof protection.hasPassword !== 'boolean' ||
-      (protection.passwordHash !== undefined &&
-        (typeof protection.passwordHash !== 'string' ||
-          !/^[0-9A-Fa-f]{1,4}$/.test(protection.passwordHash)))
+      typeof protection.hasPassword !== 'boolean'
     ) {
       throw new Error('Invalid workbook sheet protection.')
     }
     // PAR-204: the legacy hash and the modeled attributes bridge through so
     // the renderer can verify unprotect passwords and gate disallowed actions.
+    // Thin pass-through on purpose: the hash alphabet and boolean-only
+    // attributes are validated authoritatively in main
+    // (workbookSheetProtectionSchema, applied before the payload crosses IPC).
     sheetProtection = {
       protected: protection.protected,
       hasPassword: protection.hasPassword,
-      ...(protection.passwordHash === undefined ? {} : { passwordHash: protection.passwordHash }),
+      ...(typeof protection.passwordHash === 'string'
+        ? { passwordHash: protection.passwordHash }
+        : {}),
       ...Object.fromEntries(
         // Spelled out so a dropped attribute fails this name check loudly.
         (
@@ -1825,20 +1831,19 @@ function parseSaveRequest(input: WorkbookSaveRequest): WorkbookSaveRequest {
   )
     invalid('pivot refresh updates: malformed entry')
   cappedArray('sheet protections', input.sheetProtections, 1_000)
+  // Entry-level shape check only. Each entry's full wire shape (legacy hash
+  // alphabet, boolean-only modeled attributes) is validated authoritatively
+  // by main's zod schema (workbookSaveRequestSchema -> sheetProtectionSaveSchema)
+  // once the invoke lands — same split as the pivot relayout above. The
+  // sandboxed preload cannot run those checks itself: the schema module is
+  // zod-based, and zod cannot be resolved from a sandboxed preload.
   if (
     input.sheetProtections.some(
       (state) =>
         !isRecord(state) ||
         typeof state.sheetId !== 'string' ||
         state.sheetId.length === 0 ||
-        typeof state.protected !== 'boolean' ||
-        // Legacy password hash (PAR-204): 1-4 hex digits, or null to clear.
-        (state.passwordHash !== undefined &&
-          state.passwordHash !== null &&
-          !/^[0-9A-Fa-f]{1,4}$/.test(String(state.passwordHash))) ||
-        !SHEET_PROTECTION_ATTRIBUTES.every(
-          (name) => state[name] === undefined || typeof state[name] === 'boolean',
-        ),
+        typeof state.protected !== 'boolean',
     )
   )
     invalid('sheet protections: malformed entry')
