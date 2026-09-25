@@ -7,6 +7,171 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-09-25
+
+### Added
+
+- Markdown & HTML editors:
+  - Rich paste with sanitized formatting: pasting a `text/html` clipboard
+    flavor (a Word fragment with mso-styles, `StartFragment` markers, span
+    wrappers) no longer degrades to bare text. In markdown the sanitized HTML
+    goes through the same parse pipeline as typed input — `b`/`i`/`u` become
+    marks, `p`/`h`/`li`/`table` become nodes, and anything without a schema
+    node (mark, kbd, details…) stays a rawHtml chip; plain pastes without the
+    html flavor are not intercepted, ProseMirror's own `data-pm-slice` pastes
+    keep the default exact restoration (internal copies of images and rawHtml
+    chips would otherwise degrade), and paste into a code block stays textual.
+    In the html source editor the sanitized HTML is inserted as markup in one
+    undo step (the flavor used to be ignored entirely), and the preview's
+    inline edit — natively `contenteditable=plaintext-only` — gains a
+    paste-guard fallback for engines without plaintext-only. The sanitizer
+    policy is an allow-list, documented in `pasteSanitize.ts` with twin
+    implementations in markdown and html: comments are removed whole (mso
+    conditional blocks, StartFragment/EndFragment); dangerous or content-empty
+    elements are removed with their subtree (script, style, iframe/object,
+    svg/math, forms, media); everything else outside the allow-list is
+    unwrapped keeping the children (span, font, `o:p`, office namespace tags);
+    inline styles are stripped rather than simplified — colors and fonts do
+    not survive, semantics (b/i/u, headings, lists, tables) do; attributes are
+    restricted to a[href,title] / img[src,alt,title] / td / col / abbr with
+    http/https/mailto URLs only (a `javascript:` href is dropped, its text
+    lives). An explicit "Paste as plain text" command joins both editors: a
+    Ctrl/Cmd+Shift+V gesture (armed on keydown, absorbed by the paste event,
+    expiring) and a quick-access Ribbon button via
+    `navigator.clipboard.readText()` (a permission refusal is a silent no-op —
+    the document is not touched). 21 new markdown tests (377/377) and 18 html
+    tests (294/294); the two sanitizer suites are byte-identical twins
+    (PR #214).
+
+### Fixed
+
+- Word documents:
+  - A docx whose body ends without an explicit trailing `sectPr` no longer
+    collapses all of its sections onto one live canvas page: the missing
+    optional body-level trailing `sectPr` (CT_Body) is now supplied by
+    `readSections` as an implicit final section with Word-repair semantics —
+    default portrait, `nextPage`, empty header/footer references meaning
+    linked inheritance, with even/odd headers and titlePg still honored. A
+    portrait→landscape→portrait mix that reported "Page 2 of 2" with the whole
+    text on a single 1056px page now paginates to "Page 2 of 3". The audit's
+    hypothesis is honestly corrected on the record: keying sections by shared
+    header/footer r:id was not the root — such builds already produced 3 pages
+    before the fix — and the residual difference from python-docx (which sees
+    2 sections) is deliberate (PR #216).
+  - Body `PAGE` fields stop caching a wrong value on F9: the field callback
+    answered every body PAGE run with the current viewport page, so opening a
+    file and pressing F9+save wrote "1" into all of them (headers and footers
+    were unaffected — they resolve through the pagination paths). PAGE now
+    resolves from the live pagination slicer — the field's top-level block
+    position is lifted and the displayed number comes from the same
+    `nodePagesFactory` the TOC-backfill and `REF \p` use — and when pagination
+    cannot place the block the cache is left untouched ("don't write a value
+    we can't place" instead of silently corrupting it); the canvas is measured
+    at most once per F9 update, F9 job collection moved into a testable
+    `field-caches.ts`, 7 regression tests. WMF/EMF pictures stop rendering as
+    an empty rectangle: a metafile with a valid header but no drawing records
+    used to convert into a fully transparent PNG that occupied its extent
+    invisibly; blank detection (zero opaque pixels, proven live in a real
+    renderer) now refuses the conversion and shows a broken-image style plate
+    — "WMF image (N KB)" — so the user knows an image was there. The
+    pagination corpus is unchanged (LO 95.7% / Word 97.3%) (PR #217).
+- Sheets:
+  - A row insert inside an expression conditional-formatting range no longer
+    splits the rule in two: `B1:B10` (`=B1>50`) used to become `B1:B2` +
+    `B3:B11` with the relative anchor drifting to `=B4>50` (repeated edits
+    breeding duplicates and round-trip drift) while cellIs/dataBar rules
+    expanded correctly; segments that exactly tile one bounding box now merge
+    back into a single rule carrying the formula of the segment that still
+    holds the original anchor — Excel semantics — via a runtime wrapper around
+    `FormulaRefRangeService.registerRangeFormula`; ragged, holed or overlapping
+    shapes pass through with the upstream behavior preserved (the wrapper also
+    serves data validations, where a merge fires only on an honest tiling).
+  - Cycles that the engine silently resolves in one pass get an indicator: a
+    static circular-reference detector — a bipartite formula↔range graph with
+    an iterative Tarjan pass over both discovery branches — puts a persistent
+    danger badge in the status bar (all 20 locales) when a workbook contains
+    circular references; under `calcPr iterate=1` such a book used to compute
+    `A1=2/B1=1` with no `#CIRC!` and no indication at all (PR #218).
+- PDF:
+  - Selection across columns follows the columns, not the DOM order: a narrow
+    diagonal drag over ~6 lines used to select the whole left column plus 3
+    lines of the right one (1,468 characters instead of ~180, the clipboard in
+    the same order). A strict geometric column detector (gutter ≥ max(0.8×
+    median line height, 8% of width); a column must cover ≥20% of lines; a
+    full-width element cancels detection — conservatively) plus a band-based
+    correction on selectionchange (rAF) that fires only on a clear
+    interception (the native selection carrying ≥3 extra lines) reshapes the
+    selection; the multi-range result is ordered in reading order (Acrobat
+    copy semantics) with a single-range fallback; consumers take the union
+    (selection quads for Highlight/AI scope, the union rect for the markup
+    popup and Ask-AI). Reading mode only — select-all and same-column
+    selection untouched; 16 new unit tests (PR #220).
+  - Saving a PDF from a stale window no longer overwrites silently: the
+    docs-family staleness fence (#151) ports to pdf — an mtime+size+sha256
+    stamp per (view, path) is taken at open, after post-save reload and after
+    every write (moved along on auto-rename); a mismatched in-place save
+    offers Save As (default) / Overwrite / Cancel (20 locales, docs texts),
+    auto-save declines quietly (`{ok:false, reason:'external-modified'}`), the
+    fence's Save-As is non-destructive (copy + pending) and an explicit target
+    path is not fenced; 15 new tests including a two-window duel regression
+    (PR #221).
+  - Search that stops at the 1,000-match cap says so: a document with far more
+    matches than the cap used to report "1 / 1000", indistinguishable from
+    exactly one thousand. `searchInIndex` now returns `{matches, capped,
+    moreCount}` — the remainder counted by cheap indexOf without rect
+    interpolation — and the counter reads "1 / 1000+ (+M more)"
+    (`searchCountMore`, 20 locales); wrap cycles the capped set; a document
+    with exactly 1,000 matches reports without the cap; mark-up-all stays
+    capped and rect performance is unchanged (PR #219).
+- Slides:
+  - Slides gain the staleness fence: a second editor of the same deck can no
+    longer overwrite silently — the #151-family fence ports with a per-session
+    mtime+size stamp (open, in-place save, Save As, AI-draft, rename); a stale
+    in-place save offers the native Save As (default) / Overwrite / Cancel
+    dialog (20 locales), auto-save declines without a modal
+    (`{ok:false, reason:'external-modified'}`) and the renderer stays dirty,
+    and without a stamp basis the old behavior degrades gracefully; 7 behavior
+    + 10 wiring tests against the real pptx pipeline (PR #223).
+  - Double-click on a group child's text opens that exact child's text edit in
+    one gesture (PowerPoint-style): the pair's trailing click no longer
+    re-selects the whole group over the child selection (non-additive clicks
+    with detail ≥ 2 are absorbed), and the overlay binds by explicit groupId
+    through a new pure `group-hit.ts` — topmost-child bbox hit-test plus a
+    rotation/flip alignment gate — so typed text can no longer land in a
+    neighbor or the group's background shape (the audit caught " EDITED" saved
+    into the background while the children stayed untouched); tests run from
+    unit hit-resolution and the alignment gate to engine-level model+XML (the
+    text reaches the child's `<p:sp>`, the background stays empty, the result
+    survives save→reopen) — 18 new (PR #224).
+  - Dragging a shape lands under the cursor again: the applied delta used to
+    overshoot ×1.250±0.003 on X — not converter arithmetic but a zoom race.
+    The `ResizeObserver` on `.stage-wrap` decided re-fit from a stale
+    `zoomLiveRef` (setZoom debounced 150 ms) and read the scrollbar ripple of
+    every zoom step as "still fit", erasing the manual zoom after ~300 ms; new
+    pure `appliedStageZoom`/`resizeFitDecision` (zoom-fit.ts) make the observer
+    decide from the actually applied scale (rect.width/offsetWidth) and
+    previewZoom synchronize `zoomLiveRef` in an rAF transform write;
+    clamp/fit rules verbatim; 11 units including two live repros and
+    drag-delta proportionality (100 screen px → 100/zoom page px) on 3 zoom
+    levels; live probe: drag ratio 1.0000 at 104%/144% zoom, gesture start 7/7
+    (PR #222).
+
+### Performance
+
+- Tests & CI:
+  - The serial test wall is back under target: v0.21.0 shipped with the
+    +12.7–14.4% regression filed as PERF-1720 (175.9/176.7 s warm at v0.20.0,
+    183.2/167.0 s at the release base), and bisection attributed the growth to
+    two new heavyweights — pptx-engine `save-lo-interop` starting snap-soffice
+    four times per deck (~6.5 s each; the file sat at ~26.5 s carrying the
+    whole +19 s) and sheets `csv-import-500k` generating and converting its
+    500k-CSV corpus twice. The four LibreOffice conversions now batch into a
+    single soffice process (per-deck asserts intact) and the corpus is built
+    once in `beforeAll`; two consecutive warm gates measure 149.4 s and
+    148.6 s, 22/22 — the ≤160 s target met, −15…−16% against the base.
+    Coverage is identical (13,291 vitest, 0 failed) and the sheets quarantine
+    is intact; a test-only change, production code untouched (PR #215).
+
 ## [0.21.0] - 2026-09-25
 
 ### Added
