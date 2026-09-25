@@ -242,11 +242,21 @@ export function applyPageNumType(
  * Enumerate every section in document order. A paragraph-level w:sectPr
  * (section-break paragraph) closes its section; the trailing hidden sectPr closes the last.
  * Block ranges use docxIndex (body child order), boundaries inclusive.
+ *
+ * A document whose body-level trailing sectPr is missing (the OOXML schema makes
+ * it optional; hand-crafted/repaired files omit it) leaves the blocks after the
+ * last paragraph-level sectPr without an owning section. Word treats the final
+ * section's missing properties as defaults (portrait Letter) with header/footer
+ * references inherited from the previous section, so the same implicit final
+ * section is modeled here — the tail renders as its own page instead of being
+ * absorbed into the previous section (BUG-1708).
  */
 export function readSections(parsed: ParsedDoc): SectionInfo[] {
   const sections: SectionInfo[] = []
   let first = 0
+  let last = 0
   for (const block of parsed.blocks) {
+    if (block.docxIndex != null) last = Math.max(last, block.docxIndex)
     const xml = block.originalXml ?? ''
     if (block.docxIndex == null || !xml.includes('<w:sectPr')) continue
     const sectPrXml = SECT_PR_RE.exec(xml)?.[0]
@@ -255,8 +265,14 @@ export function readSections(parsed: ParsedDoc): SectionInfo[] {
     first = block.docxIndex + 1
   }
   if (sections.length === 0) {
-    const last = parsed.blocks[parsed.blocks.length - 1]?.docxIndex ?? 0
     sections.push(sectionFromSectPr('', 0, last))
+    return sections
+  }
+  const lastSection = sections[sections.length - 1]
+  if (lastSection.lastBlockIndex < last) {
+    // empty sectPr slice: default settings, nextPage start, and no own hf refs
+    // (absence = linked to previous, resolved by inheritance downstream)
+    sections.push(sectionFromSectPr('', lastSection.lastBlockIndex + 1, last))
   }
   return sections
 }

@@ -595,3 +595,124 @@ describe('pgBorders details', () => {
     expect(s.pageBorderProps).toBeUndefined()
   })
 })
+
+describe('missing body-level trailing sectPr (BUG-1708)', () => {
+  /** buildDocx always appends the trailing body sectPr; strip it to model
+   *  hand-crafted files that omit it (schema-optional in CT_Body) */
+  async function stripTrailingSectPr(bytes: Uint8Array): Promise<Uint8Array> {
+    const JSZip = (await import('jszip')).default
+    const zip = await JSZip.loadAsync(bytes)
+    const doc = await zip.file('word/document.xml')!.async('string')
+    const start = doc.lastIndexOf('<w:sectPr')
+    const end = doc.lastIndexOf('</w:sectPr></w:body>')
+    zip.file('word/document.xml', doc.slice(0, start) + doc.slice(end + '</w:sectPr>'.length))
+    return zip.generateAsync({ type: 'uint8array' })
+  }
+
+  it('blocks after the last sectPr form an implicit final section with defaults', async () => {
+    const source = await buildDocx({
+      bodyXml: P('a') + P('b') + sectBreakPara({ landscape: true }) + P('c') + P('tail'),
+    })
+    const stripped = await stripTrailingSectPr(source)
+    const parsed = await parseDocx(stripped)
+    const sections = readSections(parsed)
+    // section 1 = blocks 0..2 (landscape break para closes it); the tail
+    // paragraphs 3..4 previously merged into it — now an implicit final section
+    expect(sections.length).toBe(2)
+    expect(sections[0].firstBlockIndex).toBe(0)
+    expect(sections[0].lastBlockIndex).toBe(2)
+    expect(sections[0].settings.orientation).toBe('landscape')
+    expect(sections[1].firstBlockIndex).toBe(3)
+    expect(sections[1].lastBlockIndex).toBe(4)
+    // Word-repair defaults: portrait page, nextPage start, no own hf refs
+    // (absence = linked to previous, resolved by inheritance downstream)
+    expect(sections[1].settings.orientation).toBe('portrait')
+    expect(sections[1].settings.pageWidth).toBe(12240)
+    expect(sections[1].settings.pageHeight).toBe(15840)
+    expect(sections[1].startType).toBe('nextPage')
+    expect(sections[1].headerRefs).toEqual({})
+    expect(sections[1].footerRefs).toEqual({})
+    expect(readSectionSettings(parsed).pageWidth).toBe(12240)
+  })
+
+  it('a document with a trailing sectPr is unaffected (ranges still end at it)', async () => {
+    const parsed = await parseDocx(
+      await buildDocx({ bodyXml: P('a') + sectBreakPara({ landscape: true }) + P('b') + P('c') }),
+    )
+    const sections = readSections(parsed)
+    expect(sections.length).toBe(2)
+    const lastIdx = parsed.blocks[parsed.blocks.length - 1].docxIndex!
+    expect(sections[1].lastBlockIndex).toBe(lastIdx)
+    expect(sections[1].settings.orientation).toBe('portrait')
+  })
+})
+
+describe('sections sharing header/footer parts (linked refs, BUG-1708)', () => {
+  const sharedRefs =
+    '<w:headerReference w:type="default" r:id="rIdH1"/>' +
+    '<w:headerReference w:type="even" r:id="rIdH2"/>' +
+    '<w:footerReference w:type="default" r:id="rIdF1"/>'
+
+  const breakWithSharedRefs = (opts: { landscape?: boolean; titlePg?: boolean } = {}) => {
+    const size = opts.landscape
+      ? '<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>'
+      : '<w:pgSz w:w="11906" w:h="16838"/>'
+    return (
+      '<w:p><w:pPr><w:sectPr>' +
+      sharedRefs +
+      (opts.titlePg ? '<w:titlePg/>' : '') +
+      size +
+      '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>' +
+      '</w:sectPr></w:pPr></w:p>'
+    )
+  }
+
+  it('three sections referencing the same parts stay three sections', async () => {
+    const source = await buildDocx({
+      bodyXml:
+        P('一') +
+        breakWithSharedRefs({ titlePg: true }) +
+        P('二') +
+        breakWithSharedRefs({ landscape: true }) +
+        P('三'),
+      sectPrExtra: sharedRefs,
+      extraRels:
+        '<Relationship Id="rIdH1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>' +
+        '<Relationship Id="rIdH2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header2.xml"/>' +
+        '<Relationship Id="rIdF1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>',
+      extraParts: [
+        {
+          path: 'word/header1.xml',
+          xml: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>H1</w:t></w:r></w:p></w:hdr>`,
+          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml',
+        },
+        {
+          path: 'word/header2.xml',
+          xml: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>H2</w:t></w:r></w:p></w:hdr>`,
+          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml',
+        },
+        {
+          path: 'word/footer1.xml',
+          xml: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>F1</w:t></w:r></w:p></w:ftr>`,
+          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml',
+        },
+      ],
+    })
+    const parsed = await parseDocx(source)
+    const sections = readSections(parsed)
+    expect(sections.length).toBe(3)
+    // every section keeps its (identical) references — sections are never
+    // deduplicated or merged by header/footer rel identity
+    for (const s of sections) {
+      expect(s.headerRefs.default).toBe('rIdH1')
+      expect(s.headerRefs.even).toBe('rIdH2')
+      expect(s.footerRefs.default).toBe('rIdF1')
+    }
+    expect(sections.map((s) => s.settings.orientation)).toEqual([
+      'portrait',
+      'landscape',
+      'portrait',
+    ])
+    expect(Object.keys(parsed.hfParts ?? {}).sort()).toEqual(['rIdF1', 'rIdH1', 'rIdH2'])
+  })
+})
