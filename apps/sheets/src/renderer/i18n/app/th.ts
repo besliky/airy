@@ -627,6 +627,7 @@ export const th = {
   appRecalcPartial:
     'คำนวณสูตรใหม่ตามการแก้ไขของคุณแล้ว — {count} รายการคงค่าแคชไว้ (ฟังก์ชันที่เอนจินสำรองไม่มี)',
   appRecalcDone: 'คำนวณสูตรใหม่ตามการแก้ไขของคุณแล้ว ({count} เซลล์ ใช้เอนจินสำรอง)',
+  appCircularRefs: 'การอ้างอิงวนซ้ำ: {refs}',
   appIndexing: 'กำลังทำดัชนี {name}: พร้อมแล้ว {rows} แถว',
   appStreamingRows: 'กำลังโหลด {name} แบบสตรีม: ใช้ได้ {rows} แถว',
   appLoadRangeFailed: 'โหลดช่วงที่มองเห็นไม่ได้',

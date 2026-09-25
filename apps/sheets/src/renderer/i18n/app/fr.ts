@@ -714,6 +714,7 @@ export const fr = {
     'Formules recalculées selon vos modifications — {count} ont conservé leurs valeurs en cache (fonctions absentes du moteur de secours).',
   appRecalcDone:
     'Formules recalculées selon vos modifications ({count} cellules, moteur de secours).',
+  appCircularRefs: 'Références circulaires : {refs}',
   appIndexing: 'Indexation de {name} : {rows} lignes prêtes.',
   appStreamingRows: 'Chargement en flux de {name} : {rows} lignes disponibles.',
   appLoadRangeFailed: 'Impossible de charger la zone visible.',
