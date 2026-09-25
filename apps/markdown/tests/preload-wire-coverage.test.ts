@@ -89,6 +89,7 @@ const PINNED_API_MEMBERS = `
   getAiPanelPrefs
   getAiSettings
   getAutoSaveDefault
+  getEncoding
   getLanguage
   getTheme
   imageSearch
@@ -135,6 +136,7 @@ const PINNED_MARKDOWN_CHANNELS = `
   fileRenamed
   getAiPanelPrefs
   getAutoSaveDefault
+  getEncoding
   getLanguage
   getTheme
   languageChanged

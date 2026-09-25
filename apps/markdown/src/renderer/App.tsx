@@ -27,7 +27,7 @@ import { setImageBaseDir } from './editor/localImage'
 import { insertPlainText } from './editor/richPaste'
 import { Ribbon } from './components/Ribbon'
 import { SlashMenu, type SlashMenuHandle } from './components/SlashMenu'
-import { EncodingPicker, type EncodingPick } from './components/EncodingPicker'
+import { EncodingPicker, asEncodingPick, type EncodingPick } from './components/EncodingPicker'
 import { ToastHost } from '@airy-office/ui'
 import { showToast } from '@airy-office/ui/toast-bus'
 import { TableMenu } from './components/TableMenu'
@@ -279,6 +279,12 @@ export default function App() {
       if (!current) return false
       const opened = await window.markdownApi.readFile(path)
       if (isCancelled()) return false
+      // BUG-1741: the picker mirrors the persisted pick — the charset this
+      // read decoded with and the charset a save will write — instead of a
+      // session-local 'auto' that hides an override an earlier session made
+      const remembered = await window.markdownApi.getEncoding(path).catch(() => null)
+      if (isCancelled()) return false
+      setEncodingPick(asEncodingPick(remembered))
       const envelope = parseDocText(opened.text)
       envelopeRef.current = envelope
       setImageBaseDir(dirOf(path))
@@ -475,6 +481,11 @@ export default function App() {
             window.markdownApi.setDirty(true)
             setSaveState('idle')
           }
+          // BUG-1741: re-sync the picker from the persisted truth — a Save As
+          // onto a fresh path has no pick (Auto), and a save whose text could
+          // not be written in the pinned charset dropped that pick
+          const remembered = await window.markdownApi.getEncoding(result.path).catch(() => null)
+          setEncodingPick(asEncodingPick(remembered))
           return true
         }
         setSaveState(result.ok ? 'idle' : 'failed')
