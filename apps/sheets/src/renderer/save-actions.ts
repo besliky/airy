@@ -18,6 +18,7 @@ import {
   toSaveSparklineAdds,
   toSaveStructuralOps,
   toSaveTableAdds,
+  toSaveTableEdits,
   toSaveVisualAdds,
   toSaveVisualEdits,
 } from './edit-journal'
@@ -120,6 +121,11 @@ export async function handleSave(
   const visualEdits = toSaveVisualEdits(state.editJournal)
   const visualAdditions = toSaveVisualAdds(state.editJournal)
   const tableAdditions = toSaveTableAdds(state.editJournal)
+  // File-table edits (PAR-202): resizes and Convert to Range pin absolute
+  // coordinates, so they demand a shift-free save (the renderer gates this
+  // live; the gateway fails closed regardless). Coordinate-free renames and
+  // style tweaks can hold for a two-phase save instead of blocking it.
+  const tableEdits = toSaveTableEdits(state.editJournal)
   const pivotAdditions = toSavePivotAdds(state.editJournal)
   const sparklineAdditions = toSaveSparklineAdds(state.editJournal)
   const sheetOps = toSaveSheetOps(state.editJournal)
@@ -223,6 +229,10 @@ export async function handleSave(
   // held ops stay addressable — ops on sheets created this session are
   // the exception and keep the explicit error.
   const hasShifts = structuralOps.length > 0 || sheetOps.length > 0
+  const coordinateFreeTableEdits = tableEdits.filter(
+    (edit) => edit.resize === undefined && edit.convertToRange !== true,
+  )
+  const heldTableEdits = hasShifts ? coordinateFreeTableEdits : tableEdits
   const heldPivots = hasShifts ? pivotAdditions : []
   const heldTables = structuralOps.length > 0 ? tableAdditions : []
   const heldNames = hasShifts ? definedNamesState : null
@@ -263,6 +273,7 @@ export async function handleSave(
     visualAdditions.length +
     visualEdits.length +
     tableAdditions.length +
+    tableEdits.length +
     pivotAdditions.length +
     sparklineAdditions.length
   // A restored crash-recovery session carries its changes in the workbook
@@ -352,6 +363,7 @@ export async function handleSave(
     visualEdits,
     visualAdditions,
     tableAdditions,
+    tableEdits,
     pivotAdditions,
     sheetOps,
     sheetOrder,
@@ -400,6 +412,9 @@ export async function handleSave(
       visualEdits,
       visualAdditions,
       tableAdditions: splitSave && heldTables.length > 0 ? [] : tableAdditions,
+      // Phase 1 carries the shifts — even coordinate-free table edits wait
+      // for phase 2 (the gateway refuses any overlap with shifts).
+      tableEdits: splitSave ? [] : tableEdits,
       pivotAdditions: splitSave && heldPivots.length > 0 ? [] : pivotAdditions,
       sheetOps,
       sheetOrder,
@@ -473,6 +488,7 @@ export async function handleSave(
         visualEdits: [],
         visualAdditions: [],
         tableAdditions: heldTables,
+        tableEdits: heldTableEdits,
         pivotAdditions: heldPivots,
         sheetOps: [],
         sheetOrder: [],
@@ -545,6 +561,8 @@ const SAVE_ERROR_PATTERNS = [
   ['A new pivot cannot be saved together with sheet management', 'appSaveErrPivotWithSheetOps'],
   ['A new pivot cannot be saved together with row/column', 'appSaveErrPivotWithRowCol'],
   ['A new table cannot be saved together with row/column', 'appSaveErrTableWithRowCol'],
+  ['Table edits cannot be saved together with row/column', 'appSaveErrTableEditWithRowCol'],
+  ['Table edits cannot be saved together with sheet management', 'appSaveErrTableEditWithRowCol'],
   ['Defined-name edits cannot be saved together', 'appSaveErrNamesWithStructural'],
   // Only the mid-save race from the gateway: the pre-save disk-changed error
   // arrives from the main process already localized (and advises Save As,
