@@ -39,6 +39,7 @@ export const en = {
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
   undo: 'Undo',
+  pastePlain: 'Paste as plain text (Ctrl+Shift+V)',
   redo: 'Redo',
   cursorPos: 'Ln {line}, Col {col}',
   charCount: '{n} chars',

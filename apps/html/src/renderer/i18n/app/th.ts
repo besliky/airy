@@ -39,6 +39,7 @@ export const th = {
   zoomIn: 'ขยาย',
   zoomOut: 'ย่อ',
   undo: 'เลิกทำ',
+  pastePlain: 'วางเป็นข้อความธรรมดา (Ctrl+Shift+V)',
   redo: 'ทำซ้ำ',
   cursorPos: 'บรรทัด {line} คอลัมน์ {col}',
   charCount: '{n} อักขระ',

@@ -39,6 +39,7 @@ export const pt = {
   zoomIn: 'Ampliar',
   zoomOut: 'Reduzir',
   undo: 'Desfazer',
+  pastePlain: 'Colar como texto simples (Ctrl+Shift+V)',
   redo: 'Refazer',
   cursorPos: 'Lin. {line}, col. {col}',
   charCount: '{n} caracteres',

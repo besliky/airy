@@ -39,6 +39,7 @@ export const ar = {
   zoomIn: 'تكبير',
   zoomOut: 'تصغير',
   undo: 'تراجع',
+  pastePlain: 'لصق كنص عادي (Ctrl+Shift+V)',
   redo: 'إعادة',
   cursorPos: 'سطر {line}، عمود {col}',
   charCount: '{n} حرف',

@@ -13,6 +13,7 @@ import {
   IconCode,
   IconExpand,
   IconGlobe,
+  IconPaste,
   IconPlay,
   IconPalette,
   IconPreview,
@@ -60,6 +61,8 @@ interface Props {
   canRedo: boolean
   onUndo: () => void
   onRedo: () => void
+  /** UX-1705: insert the clipboard's text/plain flavor into the source buffer */
+  onPastePlain: () => void
   autoSave: boolean
   onToggleAutoSave: (on: boolean) => void
   view: ViewMode
@@ -172,6 +175,17 @@ export function Ribbon(p: Props) {
           onClick={p.onFind}
         >
           <IconSearch size={16} />
+        </button>
+        <button
+          type="button"
+          className="qa-btn"
+          data-tip={t('pastePlain')}
+          aria-label={t('pastePlain')}
+          disabled={off}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={p.onPastePlain}
+        >
+          <IconPaste size={16} />
         </button>
         <label className={`autosave-toggle${p.autoSave ? ' on' : ''}`} data-tip={t('autoSaveTip')}>
           <span className="autosave-knob" />

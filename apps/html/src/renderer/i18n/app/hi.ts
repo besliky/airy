@@ -39,6 +39,7 @@ export const hi = {
   zoomIn: 'बड़ा करें',
   zoomOut: 'छोटा करें',
   undo: 'पूर्ववत करें',
+  pastePlain: 'सादे टेक्स्ट के रूप में पेस्ट करें (Ctrl+Shift+V)',
   redo: 'फिर से करें',
   cursorPos: 'पंक्ति {line}, स्तंभ {col}',
   charCount: '{n} वर्ण',

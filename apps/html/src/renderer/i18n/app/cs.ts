@@ -28,6 +28,7 @@ export const cs = {
   zoomIn: 'Přiblížit',
   zoomOut: 'Oddálit',
   undo: 'Zpět',
+  pastePlain: 'Vložit jako prostý text (Ctrl+Shift+V)',
   redo: 'Znovu',
   cursorPos: 'Ř. {line}, Sl. {col}',
   charCount: '{n} znaků',

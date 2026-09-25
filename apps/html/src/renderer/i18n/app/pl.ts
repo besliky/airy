@@ -39,6 +39,7 @@ export const pl = {
   zoomIn: 'Powiększ',
   zoomOut: 'Pomniejsz',
   undo: 'Cofnij',
+  pastePlain: 'Wklej jako zwykły tekst (Ctrl+Shift+V)',
   redo: 'Ponów',
   cursorPos: 'Wiersz {line}, kol. {col}',
   charCount: '{n} zn.',

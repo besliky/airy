@@ -40,6 +40,7 @@ export const nl = {
   zoomIn: 'Inzoomen',
   zoomOut: 'Uitzoomen',
   undo: 'Ongedaan maken',
+  pastePlain: 'Plakken als platte tekst (Ctrl+Shift+V)',
   redo: 'Opnieuw',
   cursorPos: 'Rg {line}, kol {col}',
   charCount: '{n} tekens',

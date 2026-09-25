@@ -39,6 +39,7 @@ export const it = {
   zoomIn: 'Ingrandisci',
   zoomOut: 'Riduci',
   undo: 'Annulla',
+  pastePlain: 'Incolla come testo semplice (Ctrl+Shift+V)',
   redo: 'Ripeti',
   cursorPos: 'Riga {line}, col. {col}',
   charCount: '{n} caratteri',

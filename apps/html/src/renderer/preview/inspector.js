@@ -260,6 +260,22 @@
   const bySid = (sid) => document.querySelector(`[${SID}="${sid}"]`)
 
   // ---- inline text editing (one element at a time) ----
+  // UX-1705: pastes into the temporary editor must stay plain — the text model
+  // behind it is a single text node. Where contenteditable="plaintext-only" is
+  // supported the native behavior already guarantees that; on engines without
+  // it the element would fall back to rich editing, so the paste event is
+  // intercepted and reduced to the text/plain flavor.
+  const PLAINTEXT_ONLY_SUPPORTED = (() => {
+    const probe = document.createElement('div')
+    probe.setAttribute('contenteditable', 'plaintext-only')
+    return probe.contentEditable === 'plaintext-only'
+  })()
+  const pasteGuard = (e) => {
+    if (PLAINTEXT_ONLY_SUPPORTED || !editing) return
+    const text = e.clipboardData ? e.clipboardData.getData('text/plain') : ''
+    e.preventDefault()
+    document.execCommand('insertText', false, text)
+  }
   const textNodeIndex = (el, node) => {
     let i = 0
     for (const child of el.childNodes) {
@@ -281,6 +297,7 @@
     editing = { el, node, index: textNodeIndex(el, node), before: node.textContent }
     el.setAttribute(`${MARK}-editing`, '')
     el.setAttribute('contenteditable', 'plaintext-only')
+    el.addEventListener('paste', pasteGuard)
     el.focus()
     const range = document.createRange()
     range.selectNodeContents(node)
@@ -292,6 +309,7 @@
     if (!editing) return
     const { el, node, index, before } = editing
     editing = null
+    el.removeEventListener('paste', pasteGuard)
     el.removeAttribute('contenteditable')
     el.removeAttribute(`${MARK}-editing`)
     // contenteditable may have split/merged text nodes; read the element's direct text again
