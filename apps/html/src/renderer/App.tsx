@@ -15,6 +15,12 @@ import { parseDocText, serializeDocText, type Envelope } from './document/envelo
 import { SourceEditor, type CursorInfo, type SourceEditorHandle } from './source/SourceEditor'
 import { PreviewFrame, type PreviewFrameHandle } from './preview/PreviewFrame'
 import { instrumentForPreview } from './preview/instrument'
+import {
+  ScrollSyncGate,
+  SYNC_RATIO_EPSILON,
+  scrollRatio,
+  type ScrollerState,
+} from './preview/scroll-sync'
 import type { ComputedSnapshot, ElementRect, FromInspector } from './preview/inspector-protocol'
 import inspectorSource from './preview/inspector.js?raw'
 import { AiPanel, AiryMark, type AiPreset, type HtmlAiDeps } from './ai/AiPanel'
@@ -84,6 +90,8 @@ const DEVICES: Device[] = ['desktop', 'tablet', 'mobile']
 /** document scaffolding: selectable in the source, never a target for element ops */
 const STRUCTURAL = new Set(['html', 'head', 'body'])
 const IS_MAC = /Mac/i.test(navigator.platform)
+/** both panes sit under one document: when the preview pane is hidden the sync has nothing to drive */
+const syncActive = (view: ViewMode) => view === 'split'
 
 function readViewMode(): ViewMode {
   const stored = localStorage.getItem('htmlapp.viewMode')
@@ -159,6 +167,10 @@ export default function App() {
   // UX-1696: the encoding override picked in this session ('auto' until then;
   // a pick persisted by an earlier session still decodes the file at open)
   const [encodingPick, setEncodingPick] = useState<EncodingPick>('auto')
+  // UX-1704 editor view prefs; hydrated from the workspace settings before the
+  // document is ready (defaults keep the pre-toggle behavior: wrap on, sync off)
+  const [wordWrap, setWordWrapState] = useState(true)
+  const [scrollSync, setScrollSyncState] = useState(false)
   const [pictureDialog, setPictureDialog] = useState<{
     kind: 'crop' | 'cutout'
     sid: number
@@ -194,6 +206,16 @@ export default function App() {
   const flushingStylesRef = useRef(false)
   const stageRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
+  // UX-1704 scroll-sync state: one gate silences the driven pane's echoes, the
+  // rAF coalesces source scroll bursts, and the last applied ratio skips
+  // sub-pixel feedback so the panes cannot hum against each other
+  const viewRef = useRef<ViewMode>(view)
+  const scrollSyncRef = useRef(scrollSync)
+  const syncGateRef = useRef(new ScrollSyncGate())
+  const syncRafRef = useRef<number | null>(null)
+  const syncPendingRatioRef = useRef<number | null>(null)
+  const lastSyncRatioRef = useRef(0)
+  const prefsLoadedRef = useRef(false)
   pathRef.current = path
   textRef.current = text
   editQueueRef.current = editQueue
@@ -201,6 +223,8 @@ export default function App() {
   savedTextRef.current = savedText
   statusRef.current = status
   selectedSidRef.current = selectedSid
+  viewRef.current = view
+  scrollSyncRef.current = scrollSync
   const dirty = text !== savedText
 
   // deferred parse-map rebuilds: bump a render tick so breadcrumb/selection catch up off the typing path
@@ -233,14 +257,26 @@ export default function App() {
     let cancelled = false
     void (async () => {
       try {
-        const [pending, info] = await Promise.all([
+        const [pending, info, prefs] = await Promise.all([
           window.htmlApi.consumePending(),
           window.htmlApi.getPreviewInfo(),
+          // UX-1704: hydration is best-effort — a stale preload or an offline
+          // settings file leaves the session at the defaults (wrap on, sync off)
+          typeof window.htmlApi.getEditorPrefs === 'function'
+            ? window.htmlApi.getEditorPrefs().catch(() => null)
+            : Promise.resolve(null),
         ])
         const opened = pending ? await window.htmlApi.readFile(pending) : null
         const raw = opened?.text ?? ''
         const recovered = opened?.recovered === true
         if (cancelled) return
+        if (prefs) {
+          setWordWrapState(prefs.wordWrap)
+          setScrollSyncState(prefs.scrollSync)
+        }
+        // only after hydration may a toggle write land (it must not clobber the
+        // stored value with the pre-hydration defaults)
+        prefsLoadedRef.current = true
         const doc = parseDocText(raw)
         envelopeRef.current = doc.envelope
         textRef.current = doc.text
@@ -390,6 +426,49 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('htmlapp.stylePanel', panelOpen ? '1' : '0')
   }, [panelOpen])
+
+  // UX-1704: persist editor view prefs in the workspace settings. The session
+  // state is already applied when the setter runs, so persistence is
+  // fire-and-forget — a failed write only costs the recall. Writes wait for
+  // hydration so a fresh session cannot clobber the stored value with defaults.
+  const setWordWrap = useCallback((on: boolean) => {
+    setWordWrapState(on)
+    if (prefsLoadedRef.current && typeof window.htmlApi.setEditorPrefs === 'function')
+      window.htmlApi.setEditorPrefs({ wordWrap: on }).catch(() => {})
+  }, [])
+  const setScrollSync = useCallback((on: boolean) => {
+    setScrollSyncState(on)
+    if (!on) lastSyncRatioRef.current = 0
+    if (prefsLoadedRef.current && typeof window.htmlApi.setEditorPrefs === 'function')
+      window.htmlApi.setEditorPrefs({ scrollSync: on }).catch(() => {})
+  }, [])
+
+  // UX-1704 scroll-sync, source → preview: coalesce the scroll burst to one
+  // frame, then drive the preview proportionally. The gate + ratio epsilon
+  // make the loop impossible: the driven pane's echo is ignored, and a
+  // sub-rounding move is not forwarded at all.
+  const onEditorScroll = useCallback((state: ScrollerState) => {
+    if (!scrollSyncRef.current || !syncActive(viewRef.current)) return
+    if (syncGateRef.current.shouldIgnore('source', Date.now())) return
+    syncPendingRatioRef.current = scrollRatio(state)
+    if (syncRafRef.current !== null) return
+    syncRafRef.current = window.requestAnimationFrame(() => {
+      syncRafRef.current = null
+      const ratio = syncPendingRatioRef.current
+      syncPendingRatioRef.current = null
+      if (ratio === null) return
+      if (Math.abs(ratio - lastSyncRatioRef.current) < SYNC_RATIO_EPSILON) return
+      lastSyncRatioRef.current = ratio
+      syncGateRef.current.drive('preview', Date.now())
+      previewRef.current?.post({ type: 'gx:scrollTo', ratio })
+    })
+  }, [])
+  useEffect(
+    () => () => {
+      if (syncRafRef.current !== null) window.cancelAnimationFrame(syncRafRef.current)
+    },
+    [],
+  )
 
   // the device host is centred in the stage: any stage resize (split view, AI dock, device) moves it
   useEffect(() => {
@@ -605,6 +684,10 @@ export default function App() {
           const sid = selectedSidRef.current
           if (sid !== null) previewRef.current?.post({ type: 'gx:select', sid })
           postMarks()
+          // scroll-sync (UX-1704): a typing-triggered reload restarts the frame
+          // at the top — while sync is live, put it back at the source's viewport
+          if (scrollSyncRef.current && syncActive(viewRef.current) && lastSyncRatioRef.current > 0)
+            previewRef.current?.post({ type: 'gx:scrollTo', ratio: lastSyncRatioRef.current })
           return
         }
         case 'gx:markClick': {
@@ -730,6 +813,17 @@ export default function App() {
           window.open(msg.href)
           setNotice(t('openExternal'))
           return
+        case 'gx:scrolled': {
+          // scroll-sync (UX-1704), preview → source: same gate + epsilon
+          // discipline as the forward direction, mirrored
+          if (!scrollSyncRef.current || !syncActive(viewRef.current)) return
+          if (syncGateRef.current.shouldIgnore('preview', Date.now())) return
+          if (Math.abs(msg.ratio - lastSyncRatioRef.current) < SYNC_RATIO_EPSILON) return
+          lastSyncRatioRef.current = msg.ratio
+          syncGateRef.current.drive('source', Date.now())
+          editorRef.current?.applyScrollRatio(msg.ratio)
+          return
+        }
         default:
           return
       }
@@ -1364,6 +1458,10 @@ export default function App() {
         }}
         canvasMode={canvasMode}
         onPresent={startPresent}
+        wordWrap={wordWrap}
+        onToggleWordWrap={setWordWrap}
+        scrollSync={scrollSync}
+        onToggleScrollSync={setScrollSync}
       />
 
       <div className="app-main">
@@ -1500,6 +1598,8 @@ export default function App() {
                 initialText={text}
                 onChange={onEditorChange}
                 onCursor={onCursor}
+                wordWrap={wordWrap}
+                onScroll={onEditorScroll}
               />
             </div>
           </div>

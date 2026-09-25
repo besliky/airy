@@ -61,6 +61,8 @@ import {
   readRememberedFileEncoding,
   rememberFileEncoding,
 } from './encoding-memory'
+import { readEditorPrefs, writeEditorPrefs } from './editor-prefs'
+import type { EditorPrefsPatch } from './editor-prefs'
 import {
   copyImageIntoOwnedAssets,
   discardPendingOwnedAssets,
@@ -1545,6 +1547,18 @@ function registerHtmlIpc(): void {
       return true
     },
   )
+
+  // UX-1704: the source editor's view preferences (word wrap, split
+  // scroll-sync) persist workspace-wide in app-settings.json through the
+  // single-writer queue (PR #108 discipline) — a toggle write re-reads inside
+  // its queued section, so it keeps keys other windows wrote in between.
+  ipcMain.handle(HTML_CHANNELS.getEditorPrefs, () => readEditorPrefs(appSettingsPath()))
+  ipcMain.handle(HTML_CHANNELS.setEditorPrefs, (_e, patch: unknown) => {
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+      throw new Error('html: editor prefs patch must be an object')
+    }
+    return writeEditorPrefs(appSettingsPath(), patch as EditorPrefsPatch)
+  })
 
   // crash-recovery copy push: dirty renderers serialize and send every ~30s
   ipcMain.handle(HTML_CHANNELS.writeRecovery, async (e, path: unknown, text: unknown) => {

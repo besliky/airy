@@ -18,11 +18,13 @@ import {
   IconPreview,
   IconRedo,
   IconSave,
+  IconScrollSync,
   IconSearch,
   IconSplitView,
   IconSummarize,
   IconUndo,
   IconWand,
+  IconWrapText,
 } from './icons'
 
 export type ViewMode = 'preview' | 'split' | 'source'
@@ -68,6 +70,12 @@ interface Props {
   onAiPreset: (text: string) => void
   canvasMode: CanvasMode
   onPresent: (kind: PresentKind) => void
+  /** UX-1704: source-pane word wrap (persisted workspace-wide) */
+  wordWrap: boolean
+  onToggleWordWrap: (on: boolean) => void
+  /** UX-1704: split-view scroll-sync (off by default, persisted) */
+  scrollSync: boolean
+  onToggleScrollSync: (on: boolean) => void
 }
 
 export type CanvasMode = 'edit' | 'present'
@@ -286,6 +294,39 @@ export function Ribbon(p: Props) {
                 </button>
               )
             })}
+          </div>
+        </div>
+
+        <div className="rb-sep" />
+
+        <div className="ribbon-group">
+          <div className="ribbon-group-items">
+            {/* UX-1704: word wrap lives wherever the source pane is visible */}
+            <button
+              type="button"
+              className={`rb-btn rb-view${p.wordWrap ? ' active' : ''}`}
+              aria-pressed={p.wordWrap}
+              data-tip={t('wordWrapTip')}
+              disabled={off || p.view === 'preview'}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => p.onToggleWordWrap(!p.wordWrap)}
+            >
+              <IconWrapText size={ICON} />
+              <span>{t('wordWrap')}</span>
+            </button>
+            {/* scroll-sync only means something in split view, where both panes show */}
+            <button
+              type="button"
+              className={`rb-btn rb-view${p.scrollSync ? ' active' : ''}`}
+              aria-pressed={p.scrollSync}
+              data-tip={t('scrollSyncTip')}
+              disabled={off || p.view !== 'split'}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => p.onToggleScrollSync(!p.scrollSync)}
+            >
+              <IconScrollSync size={ICON} />
+              <span>{t('scrollSync')}</span>
+            </button>
           </div>
         </div>
 

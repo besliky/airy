@@ -14,6 +14,8 @@ export type ToInspector =
   | { type: 'gx:previewStyle'; sid: number; styles: Record<string, string | null> }
   /** numbered pins on elements with queued AI edits (replaces the previous set) */
   | { type: 'gx:mark'; marks: Array<{ sid: number; label: string }> }
+  /** scroll-sync (UX-1704): jump the frame's viewport to this 0..1 document proportion */
+  | { type: 'gx:scrollTo'; ratio: number }
 
 /** effective styles of the selected element (px numbers without unit, colours as #rrggbb, '' when transparent) */
 export interface ComputedSnapshot {
@@ -109,6 +111,8 @@ export type FromInspectorBody =
   | { type: 'gx:zoom'; delta: number }
   | { type: 'gx:navigateBlocked'; href: string }
   | { type: 'gx:markClick'; sid: number }
+  /** scroll-sync (UX-1704): the frame's viewport moved; 0..1 document proportion */
+  | { type: 'gx:scrolled'; ratio: number }
 
 export function isFromInspector(data: unknown): data is FromInspector {
   return (

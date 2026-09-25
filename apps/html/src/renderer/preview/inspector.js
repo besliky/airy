@@ -460,6 +460,31 @@
   )
   window.addEventListener('scroll', refresh, true)
   window.addEventListener('resize', refresh)
+
+  // ---- scroll sync (UX-1704) ----
+  // Proportional viewport position (0..1) reported to the host so it can move
+  // the source pane; the host gates echoes, and our own host-driven
+  // repositions (gx:scrollTo) stay silent for the same reason — a reposition
+  // the host asked for is not a user scroll and must not bounce back.
+  const SYNC_ECHO_MS = 150
+  let syncScrollAt = -1e9
+  let scrollReportQueued = false
+  const viewportRatio = () => {
+    const max = document.documentElement.scrollHeight - window.innerHeight
+    if (!(max > 0)) return 0
+    return Math.min(1, Math.max(0, window.scrollY / max))
+  }
+  // non-capture: only the document viewport scrolls count, not inner scrollables
+  window.addEventListener('scroll', () => {
+    if (Date.now() - syncScrollAt < SYNC_ECHO_MS || scrollReportQueued) return
+    scrollReportQueued = true
+    window.requestAnimationFrame(() => {
+      scrollReportQueued = false
+      if (Date.now() - syncScrollAt < SYNC_ECHO_MS) return
+      post({ type: 'gx:scrolled', ratio: viewportRatio() })
+    })
+  })
+
   document.addEventListener('focusout', (e) => {
     if (editing && e.target === editing.el) finishEdit(true)
   })
@@ -528,6 +553,14 @@
         select(bySid(msg.sid), false)
         beginEdit(selected)
         break
+      case 'gx:scrollTo': {
+        const max = document.documentElement.scrollHeight - window.innerHeight
+        if (!(max > 0)) break
+        const ratio = Math.min(1, Math.max(0, Number(msg.ratio) || 0))
+        syncScrollAt = Date.now()
+        window.scrollTo(0, ratio * max)
+        break
+      }
       case 'gx:theme':
         dark = !!msg.dark
         document.documentElement.style.setProperty('--gx-select', dark ? '#4a9eff' : '#0f7fff')
