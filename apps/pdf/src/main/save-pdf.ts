@@ -863,6 +863,12 @@ export interface SavePdfSkips {
   skippedImageEdits: ImageEditFailure[]
 }
 
+/** SavePdfSkips plus the bytes that landed on disk — the caller stamps them as the
+    view's fresh disk state so the staleness fence doesn't flag its own write */
+export interface SavePdfOutcome extends SavePdfSkips {
+  bytes: Uint8Array
+}
+
 /** Original page index → index in the saved file (after this request's deletions/reorder);
     null = the page is gone from the output */
 function finalPageIndex(request: SavePdfRequest, p: number): number | null {
@@ -934,7 +940,7 @@ export async function savePdfToPath(
   sourcePath: string,
   targetPath: string,
   request: SavePdfRequest,
-): Promise<SavePdfSkips> {
+): Promise<SavePdfOutcome> {
   const { bytes, ...skips } = await applySaveRequest(
     new Uint8Array(await readFile(sourcePath)),
     request,
@@ -947,7 +953,7 @@ export async function savePdfToPath(
   // (and any concurrent save's temp) from being swept.
   await sweepStaleSaveTemps(dirname(targetPath))
   await atomicWriteFile(targetPath, bytes)
-  return skips
+  return { bytes, ...skips }
 }
 
 export interface AppliedSaveRequest {

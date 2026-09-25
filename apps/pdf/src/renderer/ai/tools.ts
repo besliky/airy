@@ -1234,7 +1234,7 @@ async function searchText(deps: PdfAiDeps, input: Record<string, unknown>): Prom
   const indexPromise = deps.searchIndex()
   if (!indexPromise) return err('Document not ready', t('aiToolSearch', { query, count: 0 }))
   const index = await indexPromise
-  const matches = searchInIndex(index, query)
+  const { matches, capped, moreCount } = searchInIndex(index, query)
   const lines: string[] = []
   for (const m of matches.slice(0, 40)) {
     const entry = index[m.pageIndex]!
@@ -1243,7 +1243,10 @@ async function searchText(deps: PdfAiDeps, input: Record<string, unknown>): Prom
     const snippet = entry.text.slice(from, pos + query.length + 40).replace(/\s+/g, ' ')
     lines.push(`Page ${m.pageIndex + 1}: …${snippet}…`)
   }
-  if (matches.length > 40) lines.push(`(${matches.length} matches total; only the first 40 listed)`)
+  if (matches.length > 40)
+    lines.push(
+      `(${matches.length} matches total${capped ? ` (+${moreCount} more beyond the cap)` : ''}; only the first 40 listed)`,
+    )
   return {
     output: lines.join('\n') || 'No matches found',
     summary: t('aiToolSearch', { query, count: matches.length }),
@@ -1265,7 +1268,7 @@ async function markupText(deps: PdfAiDeps, input: Record<string, unknown>): Prom
   const indexPromise = deps.searchIndex()
   if (!indexPromise) return err('Document not ready', summary)
   const index = await indexPromise
-  const onPage = searchInIndex(index, text).filter((m) => m.pageIndex === r.origIdx)
+  const onPage = searchInIndex(index, text).matches.filter((m) => m.pageIndex === r.origIdx)
   if (onPage.length === 0) {
     return err(
       `"${text}" not found on page ${r.origIdx + 1}; use read_pages to verify the exact text`,
@@ -1275,6 +1278,7 @@ async function markupText(deps: PdfAiDeps, input: Record<string, unknown>): Prom
   const targets = input.all === true ? onPage : onPage.slice(0, 1)
   for (const m of targets) deps.addMarkup(type, r.origIdx, m.rects, color)
   deps.gotoPage(r.origIdx + 1)
+  // Search caps its result set (search.ts MAX_MATCHES); "all" then means "all found", never a hang
   return {
     output: `Marked ${targets.length} occurrence(s) on page ${r.origIdx + 1} (unsaved; the user saves with ⌘S)`,
     mutated: true,

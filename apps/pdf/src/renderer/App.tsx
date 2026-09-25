@@ -24,10 +24,12 @@ import {
   quadSetsMatch,
   quadToRect,
   selectionQuadsByPage,
+  selectionUnionRect,
   viewToPdf,
 } from './annotations'
 import type { LocalMarkup, PageGeom } from './annotations'
 import { groupLineSpans } from './text-line'
+import { watchColumnSelection } from './column-selection'
 import { DRAW_COLORS, DrawLayer, cssRgb } from './DrawLayer'
 import { ColorPickerPopover } from './ColorPicker'
 import type { DrawTool, LocalDrawing, SavedNotePin } from './DrawLayer'
@@ -72,7 +74,7 @@ import {
 import { StampDialog } from './StampDialog'
 import { buildStamps } from './stamps'
 import type { HeaderFooterConfig, WatermarkConfig } from './stamps'
-import { buildSearchIndex, searchInIndex } from './search'
+import { buildSearchIndex, nextMatchIndex, searchInIndex } from './search'
 import type { SearchIndex, SearchMatch } from './search'
 import { mapDocFont, type DocFontStyle } from './doc-font'
 import { groupPageBlocks, reflowOverflows, type TextBlock } from './text-block'
@@ -779,6 +781,8 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchMatches, setSearchMatches] = useState<SearchMatch[]>([])
+  /** Non-null when the search cap truncated the result set; `more` = hits beyond it (BUG-1731) */
+  const [searchOverflow, setSearchOverflow] = useState<{ more: number } | null>(null)
   const [searchCur, setSearchCur] = useState(0)
   const [printing, setPrinting] = useState(false)
   const [undoStack, setUndoStack] = useState<EditSnapshot[]>([])
@@ -1230,6 +1234,15 @@ export default function App() {
 
   /** pdf-lib cannot write encrypted files, including owner-protected files that open without a password. */
   const readOnly = status === 'ready' && (passwordRef.current !== undefined || documentEncrypted)
+
+  // BUG-1729: on multi-column pages a native selection follows DOM (column) order, so a
+  // narrow diagonal drag can swallow whole columns. The watcher rewrites only such
+  // over-reaching selections into the visual band; single-column pages are never touched.
+  // Suppressed while edit-text mode owns the text layer.
+  useEffect(
+    () => watchColumnSelection(() => !(editTextMode && !readOnly)),
+    [editTextMode, readOnly],
+  )
 
   useEffect(() => {
     if (
@@ -1918,6 +1931,7 @@ export default function App() {
   useEffect(() => {
     if (!searchOpen || !searchQuery.trim()) {
       setSearchMatches([])
+      setSearchOverflow(null)
       setSearchCur(0)
       return
     }
@@ -1925,7 +1939,9 @@ export default function App() {
     const timer = setTimeout(() => {
       void getSearchIndex()?.then((idx) => {
         if (cancelled) return
-        setSearchMatches(searchInIndex(idx, searchQuery.trim()))
+        const result = searchInIndex(idx, searchQuery.trim())
+        setSearchMatches(result.matches)
+        setSearchOverflow(result.capped ? { more: result.moreCount } : null)
         setSearchCur(0)
       })
     }, 200)
@@ -1967,7 +1983,7 @@ export default function App() {
   const searchStep = (dir: 1 | -1) => {
     const n = activeMatches.length
     if (n === 0) return
-    setSearchCur((searchCurClamped + dir + n) % n)
+    setSearchCur(nextMatchIndex(searchCurClamped, dir, n))
   }
 
   const openSearch = () => {
@@ -2015,11 +2031,14 @@ export default function App() {
         setAiSelection(null)
         return
       }
-      // Selection lives outside the document (e.g. panel text): leave the scope alone
-      if (!el.contains(sel.getRangeAt(0).commonAncestorContainer)) return
-      const box = sel.getRangeAt(0).getBoundingClientRect()
-      const quads = box.width >= 1 || box.height >= 1 ? selectionQuads() : null
-      if (!quads) {
+      // Selection lives outside the document (e.g. panel text): leave the scope alone.
+      // The box unions every range so the markup bar centers over a whole column-band,
+      // not just its first line.
+      const ranges = [...Array(sel.rangeCount)].map((_, i) => sel.getRangeAt(i))
+      if (!ranges.every((range) => el.contains(range.commonAncestorContainer))) return
+      const box = selectionUnionRect()
+      const quads = box && (box.width >= 1 || box.height >= 1) ? selectionQuads() : null
+      if (!box || !quads) {
         // A live document selection the scope can't represent must not leave a stale chip
         setAiSelection(null)
         return
@@ -2116,10 +2135,8 @@ export default function App() {
       to this click; the popover input will collapse it) */
   const openAskPopover = () => {
     const sel = window.getSelection()
-    const box =
-      sel && !sel.isCollapsed && sel.rangeCount > 0
-        ? sel.getRangeAt(0).getBoundingClientRect()
-        : null
+    // Union over all ranges: for a column-band selection the anchor is the whole band
+    const box = selectionUnionRect()
     const rect: AskAnchorRect | null = box
       ? { left: box.left, top: box.top, right: box.right, bottom: box.bottom }
       : selPopup
@@ -3317,10 +3334,25 @@ export default function App() {
     inFlightPageMapRef.current = snapshot.pageMap
     const run = (async (): Promise<boolean> => {
       setSaveState('saving')
-      const result = await window.pdfApi.save({ path: filePath, ...editsPayload(edits, noteFlush) })
+      const result = await window.pdfApi.save({
+        path: filePath,
+        auto: autosave || undefined,
+        ...editsPayload(edits, noteFlush),
+      })
       if (!result.ok) {
+        // external-modified: the main process already raised the fence dialog for a
+        // manual save (Save As / Overwrite / Cancel) or silently deferred an autosave
+        // to one — stay dirty, no second dialog or error banner
+        if ('reason' in result) return false
         opFailed(result.error)
         return false
+      }
+      if (result.savedAsPath) {
+        // Fence "Save As": the edits landed on the user-picked copy; the contested
+        // original was never written and this tab keeps its pending edits — the
+        // same contract as the menu's non-destructive Save As
+        setSaveState('idle')
+        return true
       }
       if (result.skippedTextEdits && result.skippedTextEdits.length > 0) {
         noticeSkippedEdits(result.skippedTextEdits)
@@ -3454,6 +3486,9 @@ export default function App() {
     setSaveState('saving')
     const result = await window.pdfApi.save({ path: filePath, targetPath, ...edits })
     if (!result.ok) {
+      // the fence only gates in-place saves; an explicit Save As target cannot be
+      // refused as external-modified, so this is always a plain error here
+      if ('reason' in result) return false
       opFailed(result.error)
       return false
     }
@@ -7895,10 +7930,16 @@ export default function App() {
                 <span className="pdf-search-count">
                   {searchQuery.trim()
                     ? activeMatches.length > 0
-                      ? t('searchCount', {
-                          current: searchCurClamped + 1,
-                          total: activeMatches.length,
-                        })
+                      ? searchOverflow
+                        ? t('searchCountMore', {
+                            current: searchCurClamped + 1,
+                            total: activeMatches.length,
+                            more: searchOverflow.more,
+                          })
+                        : t('searchCount', {
+                            current: searchCurClamped + 1,
+                            total: activeMatches.length,
+                          })
                       : t('searchNoResults')
                     : ''}
                 </span>

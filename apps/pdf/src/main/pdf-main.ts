@@ -8,7 +8,8 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { readFile, stat, writeFile } from 'node:fs/promises'
 import { userInfo } from 'node:os'
 import { basename, dirname, join, sep } from 'node:path'
 import { BrowserWindow, WebContentsView, app, dialog, ipcMain, shell } from 'electron'
@@ -88,6 +89,8 @@ import {
   saveSignatures,
 } from './signature-store'
 import { uniqueGeneratedPdfPath } from './generated-output'
+import { isExternallyModified } from './external-change'
+import type { DiskFileState } from './external-change'
 
 const tDlg = createI18n({
   zh: {
@@ -106,6 +109,10 @@ const tDlg = createI18n({
     btnSave: '保存',
     btnDontSave: '不保存',
     btnCancel: '取消',
+    extModifiedMsg: '文件已被其他程序修改。',
+    extModifiedDetail: '“另存为”会将更改保存为新文件；“覆盖”将替换磁盘上的版本。',
+    btnOverwrite: '覆盖',
+    btnSaveAs: '另存为',
   },
   en: {
     dlgExportImages: 'Export Images to Folder',
@@ -123,6 +130,11 @@ const tDlg = createI18n({
     btnSave: 'Save',
     btnDontSave: "Don't Save",
     btnCancel: 'Cancel',
+    extModifiedMsg: 'The file has been modified by another program.',
+    extModifiedDetail:
+      '"Save As" keeps your changes in a new file; "Overwrite" replaces the version on disk.',
+    btnOverwrite: 'Overwrite',
+    btnSaveAs: 'Save As',
   },
   ja: {
     dlgExportImages: '画像をフォルダに書き出す',
@@ -140,6 +152,11 @@ const tDlg = createI18n({
     btnSave: '保存',
     btnDontSave: '保存しない',
     btnCancel: 'キャンセル',
+    extModifiedMsg: 'このファイルは別のプログラムによって変更されています。',
+    extModifiedDetail:
+      '「名前を付けて保存」すると変更は新しいファイルに保存され、「上書き」はディスク上のバージョンを置き換えます。',
+    btnOverwrite: '上書き',
+    btnSaveAs: '名前を付けて保存',
   },
   ko: {
     dlgExportImages: '이미지를 폴더로 내보내기',
@@ -157,6 +174,11 @@ const tDlg = createI18n({
     btnSave: '저장',
     btnDontSave: '저장 안 함',
     btnCancel: '취소',
+    extModifiedMsg: '이 파일이 다른 프로그램에서 수정되었습니다.',
+    extModifiedDetail:
+      "'다른 이름으로 저장'하면 변경 사항이 새 파일에 저장되고, '덮어쓰기'는 디스크의 버전을 대체합니다.",
+    btnOverwrite: '덮어쓰기',
+    btnSaveAs: '다른 이름으로 저장',
   },
   fr: {
     dlgExportImages: 'Exporter les images vers un dossier',
@@ -174,6 +196,11 @@ const tDlg = createI18n({
     btnSave: 'Enregistrer',
     btnDontSave: 'Ne pas enregistrer',
     btnCancel: 'Annuler',
+    extModifiedMsg: 'Le fichier a été modifié par un autre programme.',
+    extModifiedDetail:
+      '« Enregistrer sous » conserve vos modifications dans un nouveau fichier ; « Écraser » remplace la version sur le disque.',
+    btnOverwrite: 'Écraser',
+    btnSaveAs: 'Enregistrer sous',
   },
   de: {
     dlgExportImages: 'Bilder in Ordner exportieren',
@@ -191,6 +218,11 @@ const tDlg = createI18n({
     btnSave: 'Speichern',
     btnDontSave: 'Nicht speichern',
     btnCancel: 'Abbrechen',
+    extModifiedMsg: 'Die Datei wurde von einem anderen Programm geändert.',
+    extModifiedDetail:
+      '„Speichern unter“ sichert Ihre Änderungen in einer neuen Datei; „Überschreiben“ ersetzt die Version auf dem Datenträger.',
+    btnOverwrite: 'Überschreiben',
+    btnSaveAs: 'Speichern unter',
   },
   es: {
     dlgExportImages: 'Exportar imágenes a una carpeta',
@@ -208,6 +240,11 @@ const tDlg = createI18n({
     btnSave: 'Guardar',
     btnDontSave: 'No guardar',
     btnCancel: 'Cancelar',
+    extModifiedMsg: 'El archivo ha sido modificado por otro programa.',
+    extModifiedDetail:
+      '«Guardar como» conserva los cambios en un archivo nuevo; «Sobrescribir» reemplaza la versión del disco.',
+    btnOverwrite: 'Sobrescribir',
+    btnSaveAs: 'Guardar como',
   },
   th: {
     dlgExportImages: 'ส่งออกรูปภาพไปยังโฟลเดอร์',
@@ -225,6 +262,11 @@ const tDlg = createI18n({
     btnSave: 'บันทึก',
     btnDontSave: 'ไม่บันทึก',
     btnCancel: 'ยกเลิก',
+    extModifiedMsg: 'ไฟล์ถูกแก้ไขโดยโปรแกรมอื่น',
+    extModifiedDetail:
+      '"บันทึกเป็น" จะเก็บการเปลี่ยนแปลงของคุณไว้ในไฟล์ใหม่ "เขียนทับ" จะแทนที่เวอร์ชันบนดิสก์',
+    btnOverwrite: 'เขียนทับ',
+    btnSaveAs: 'บันทึกเป็น',
   },
   id: {
     dlgExportImages: 'Ekspor gambar ke folder',
@@ -242,6 +284,11 @@ const tDlg = createI18n({
     btnSave: 'Simpan',
     btnDontSave: 'Jangan Simpan',
     btnCancel: 'Batal',
+    extModifiedMsg: 'File telah diubah oleh program lain.',
+    extModifiedDetail:
+      "'Simpan Sebagai' menyimpan perubahan Anda ke file baru; 'Timpa' mengganti versi di disk.",
+    btnOverwrite: 'Timpa',
+    btnSaveAs: 'Simpan Sebagai',
   },
   ru: {
     dlgExportImages: 'Экспорт изображений в папку',
@@ -259,6 +306,11 @@ const tDlg = createI18n({
     btnSave: 'Сохранить',
     btnDontSave: 'Не сохранять',
     btnCancel: 'Отмена',
+    extModifiedMsg: 'Файл был изменён другой программой.',
+    extModifiedDetail:
+      '«Сохранить как» сохранит изменения в новый файл; «Перезаписать» заменит версию на диске.',
+    btnOverwrite: 'Перезаписать',
+    btnSaveAs: 'Сохранить как',
   },
   ar: {
     dlgExportImages: 'تصدير الصور إلى مجلد',
@@ -276,6 +328,10 @@ const tDlg = createI18n({
     btnSave: 'حفظ',
     btnDontSave: 'عدم الحفظ',
     btnCancel: 'إلغاء',
+    extModifiedMsg: 'تم تعديل الملف بواسطة برنامج آخر.',
+    extModifiedDetail: '"حفظ باسم" يحفظ تغييراتك في ملف جديد؛ و"استبدال" يستبدل الإصدار على القرص.',
+    btnOverwrite: 'استبدال',
+    btnSaveAs: 'حفظ باسم',
   },
   pt: {
     dlgExportImages: 'Exportar imagens para pasta',
@@ -293,6 +349,11 @@ const tDlg = createI18n({
     btnSave: 'Salvar',
     btnDontSave: 'Não Salvar',
     btnCancel: 'Cancelar',
+    extModifiedMsg: 'O arquivo foi modificado por outro programa.',
+    extModifiedDetail:
+      '“Salvar como” mantém suas alterações em um novo arquivo; “Sobrescrever” substitui a versão no disco.',
+    btnOverwrite: 'Sobrescrever',
+    btnSaveAs: 'Salvar como',
   },
   it: {
     dlgExportImages: 'Esporta immagini in una cartella',
@@ -310,6 +371,11 @@ const tDlg = createI18n({
     btnSave: 'Salva',
     btnDontSave: 'Non salvare',
     btnCancel: 'Annulla',
+    extModifiedMsg: 'Il file è stato modificato da un altro programma.',
+    extModifiedDetail:
+      '"Salva con nome" mantiene le modifiche in un nuovo file; "Sovrascrivi" sostituisce la versione sul disco.',
+    btnOverwrite: 'Sovrascrivi',
+    btnSaveAs: 'Salva con nome',
   },
   pl: {
     dlgExportImages: 'Eksportuj obrazy do folderu',
@@ -327,6 +393,11 @@ const tDlg = createI18n({
     btnSave: 'Zapisz',
     btnDontSave: 'Nie zapisuj',
     btnCancel: 'Anuluj',
+    extModifiedMsg: 'Plik został zmodyfikowany przez inny program.',
+    extModifiedDetail:
+      '„Zapisz jako” zachowa zmiany w nowym pliku; „Nadpisz” zastąpi wersję na dysku.',
+    btnOverwrite: 'Nadpisz',
+    btnSaveAs: 'Zapisz jako',
   },
   cs: {
     dlgExportImages: 'Exportovat obrázky do složky',
@@ -344,6 +415,11 @@ const tDlg = createI18n({
     btnSave: 'Uložit',
     btnDontSave: 'Neukládat',
     btnCancel: 'Zrušit',
+    extModifiedMsg: 'Soubor byl změněn jiným programem.',
+    extModifiedDetail:
+      '„Uložit jako“ uloží změny do nového souboru; „Přepsat“ nahradí verzi na disku.',
+    btnOverwrite: 'Přepsat',
+    btnSaveAs: 'Uložit jako',
   },
   nl: {
     dlgExportImages: 'Afbeeldingen naar map exporteren',
@@ -361,6 +437,11 @@ const tDlg = createI18n({
     btnSave: 'Opslaan',
     btnDontSave: 'Niet opslaan',
     btnCancel: 'Annuleren',
+    extModifiedMsg: 'Het bestand is door een ander programma gewijzigd.',
+    extModifiedDetail:
+      '‘Opslaan als’ bewaart uw wijzigingen in een nieuw bestand; ‘Overschrijven’ vervangt de versie op schijf.',
+    btnOverwrite: 'Overschrijven',
+    btnSaveAs: 'Opslaan als',
   },
   ms: {
     dlgExportImages: 'Eksport imej ke folder',
@@ -378,6 +459,11 @@ const tDlg = createI18n({
     btnSave: 'Simpan',
     btnDontSave: 'Jangan Simpan',
     btnCancel: 'Batal',
+    extModifiedMsg: 'Fail telah diubah oleh program lain.',
+    extModifiedDetail:
+      "'Simpan Sebagai' menyimpan perubahan anda dalam fail baharu; 'Tulis Ganti' menggantikan versi pada cakera.",
+    btnOverwrite: 'Tulis Ganti',
+    btnSaveAs: 'Simpan Sebagai',
   },
   he: {
     dlgExportImages: 'ייצוא תמונות לתיקייה',
@@ -395,6 +481,10 @@ const tDlg = createI18n({
     btnSave: 'שמירה',
     btnDontSave: 'אל תשמור',
     btnCancel: 'ביטול',
+    extModifiedMsg: 'הקובץ שונה על ידי תוכנית אחרת.',
+    extModifiedDetail: '"שמירה בשם" שומרת את השינויים בקובץ חדש; "דרוס" מחליף את הגרסה בדיסק.',
+    btnOverwrite: 'דרוס',
+    btnSaveAs: 'שמירה בשם',
   },
   hi: {
     dlgExportImages: 'चित्र फ़ोल्डर में निर्यात करें',
@@ -412,6 +502,11 @@ const tDlg = createI18n({
     btnSave: 'सहेजें',
     btnDontSave: 'न सहेजें',
     btnCancel: 'रद्द करें',
+    extModifiedMsg: 'फ़ाइल को किसी अन्य प्रोग्राम ने बदल दिया है।',
+    extModifiedDetail:
+      "'इस रूप में सहेजें' आपके बदलावों को नई फ़ाइल में रखेगा; 'अधिलेखित करें' डिस्क पर मौजूद संस्करण को बदल देगा।",
+    btnOverwrite: 'अधिलेखित करें',
+    btnSaveAs: 'इस रूप में सहेजें',
   },
   'zh-TW': {
     dlgExportImages: '匯出圖片到資料夾',
@@ -429,6 +524,10 @@ const tDlg = createI18n({
     btnSave: '儲存',
     btnDontSave: '不儲存',
     btnCancel: '取消',
+    extModifiedMsg: '檔案已被其他程式修改。',
+    extModifiedDetail: '「另存新檔」會將變更儲存為新檔案；「覆寫」將取代磁碟上的版本。',
+    btnOverwrite: '覆寫',
+    btnSaveAs: '另存新檔',
   },
 })
 type DlgKey =
@@ -447,6 +546,10 @@ type DlgKey =
   | 'btnSave'
   | 'btnDontSave'
   | 'btnCancel'
+  | 'extModifiedMsg'
+  | 'extModifiedDetail'
+  | 'btnOverwrite'
+  | 'btnSaveAs'
 const tm = (key: DlgKey) => tDlg(getUiLang(), key)
 
 interface RuntimePaths {
@@ -573,6 +676,45 @@ const saveAsTargetByWc = new Map<number, string>()
 /** Source PDF picked for "insert pages from PDF", per view: the pick dialog grants
  * the exact file the user chose; insertPdf only ever reads this remembered path */
 const insertSourceByWc = new Map<number, string>()
+/** Disk snapshot (mtime+size+hash) per granted path, as this view last read/wrote it —
+ * the staleness fence for in-place saves (docs #151 analog): two windows on one file
+ * must not clobber each other silently */
+const diskStatesByWc = new Map<number, Map<string, DiskFileState>>()
+
+const sha256Hex = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
+
+/** Record the on-disk state of `filePath` from `bytes` just read/written by this view */
+async function rememberPdfDiskState(
+  wcId: number,
+  filePath: string,
+  bytes: Uint8Array,
+): Promise<void> {
+  try {
+    const s = await stat(filePath)
+    const states = diskStatesByWc.get(wcId) ?? new Map<string, DiskFileState>()
+    states.set(filePath, { mtimeMs: s.mtimeMs, size: s.size, hash: sha256Hex(bytes) })
+    diskStatesByWc.set(wcId, states)
+  } catch {
+    /* unstatable target: skip tracking; the next save simply won't flag a conflict */
+  }
+}
+
+/** True when the file changed on disk since this view last read/wrote it */
+async function pdfDiskChangedExternally(wcId: number, filePath: string): Promise<boolean> {
+  let current: { mtimeMs: number; size: number } | null
+  try {
+    current = await stat(filePath)
+  } catch {
+    current = null
+  }
+  return isExternallyModified(diskStatesByWc.get(wcId)?.get(filePath), current, async () => {
+    try {
+      return sha256Hex(await readFile(filePath))
+    } catch {
+      return null
+    }
+  })
+}
 
 export function pdfIsDirty(webContentsId: number): boolean {
   return dirtyByWc.has(webContentsId)
@@ -863,6 +1005,9 @@ function registerPdfIpc(): void {
       throw new Error('pdf: path not granted to this view')
     }
     const buf = await readFile(path)
+    // Every full read (open, post-save reload) is what this view sees on screen —
+    // stamp it so the save fence compares against the bytes actually displayed
+    await rememberPdfDiskState(e.sender.id, path, buf)
     return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
   })
 
@@ -890,18 +1035,73 @@ function registerPdfIpc(): void {
       return { ok: false, error: 'pdf: path not granted to this view' }
     }
     // Save As targets must have been granted by requestPdfSaveAs (main-process dialog pick)
-    const target = typeof request.targetPath === 'string' ? request.targetPath : path
+    let target = typeof request.targetPath === 'string' ? request.targetPath : path
     if (target !== path && saveAsTargetByWc.get(e.sender.id) !== target) {
       return { ok: false, error: 'pdf: target path not granted to this view' }
     }
+    // Staleness fence for in-place saves (BUG-1730, docs #151 analog): another
+    // window or program may have rewritten the file after this view last read or
+    // saved it. Only in-place saves are fenced — an explicit Save As target was
+    // picked by the user in a dialog pointed at exactly that file.
+    let savedAsPath: string | undefined
+    if (target === path && (await pdfDiskChangedExternally(e.sender.id, path))) {
+      // autosave must never clobber another program's edits; the renderer stays
+      // dirty and the next manual save raises the dialog
+      if (request.auto === true) return { ok: false, reason: 'external-modified' }
+      const options = {
+        type: 'warning' as const,
+        message: tm('extModifiedMsg'),
+        detail: tm('extModifiedDetail'),
+        buttons: [tm('btnSaveAs'), tm('btnOverwrite'), tm('btnCancel')],
+        defaultId: 0,
+        cancelId: 2,
+        noLink: true,
+      }
+      const parent =
+        BrowserWindow.fromWebContents(e.sender) ?? BrowserWindow.getFocusedWindow() ?? undefined
+      const { response } =
+        parent && !parent.isDestroyed()
+          ? await dialog.showMessageBox(parent, options)
+          : await dialog.showMessageBox(options)
+      if (response === 2) return { ok: false, reason: 'external-modified' }
+      if (response === 0) {
+        // Save As: land the edits on a user-picked copy instead; the contested
+        // original is never written (pdf's non-destructive Save As contract — the
+        // tab keeps this view's pending edits)
+        const saveOptions = {
+          title: tm('btnSaveAs'),
+          defaultPath: path,
+          filters: [{ name: tm('filterPdf'), extensions: ['pdf'] as string[] }],
+        }
+        const pick =
+          parent && !parent.isDestroyed()
+            ? await dialog.showSaveDialog(parent, saveOptions)
+            : await dialog.showSaveDialog(saveOptions)
+        if (pick.canceled || !pick.filePath) return { ok: false, reason: 'external-modified' }
+        // the view may have been closed while the dialogs were open: its grants
+        // are gone, and landing the write now would persist abandoned edits
+        if (e.sender.isDestroyed() || !allowedByWc.get(e.sender.id)?.has(path)) {
+          return { ok: false, error: 'pdf: path not granted to this view' }
+        }
+        saveAsTargetByWc.set(e.sender.id, pick.filePath)
+        target = pick.filePath
+        savedAsPath = pick.filePath
+      }
+      // response === 1 → Overwrite: fall through with the original target
+      if (e.sender.isDestroyed() || !allowedByWc.get(e.sender.id)?.has(path)) {
+        return { ok: false, error: 'pdf: path not granted to this view' }
+      }
+    }
     try {
-      const { skippedTextEdits, skippedTextInserts, skippedImageEdits } = await savePdfToPath(
-        path,
-        target,
-        request,
-      )
+      const { bytes, skippedTextEdits, skippedTextInserts, skippedImageEdits } =
+        await savePdfToPath(path, target, request)
+      // Stamp what this view just wrote so its own next save doesn't flag itself.
+      // The post-save renderer reload re-stamps via readFile, but a failed reload
+      // must not leave the pre-save snapshot behind as the fence baseline.
+      await rememberPdfDiskState(e.sender.id, target, bytes)
       return {
         ok: true,
+        ...(savedAsPath !== undefined ? { savedAsPath } : {}),
         ...(skippedTextEdits.length > 0 ? { skippedTextEdits } : {}),
         ...(skippedTextInserts.length > 0 ? { skippedTextInserts } : {}),
         ...(skippedImageEdits.length > 0 ? { skippedImageEdits } : {}),
@@ -957,6 +1157,19 @@ function registerPdfIpc(): void {
       // the same operation that grants the new one, even if it is recreated.
       allowedByWc.set(e.sender.id, new Set([target]))
       if (openPathByWc.get(e.sender.id) === path) openPathByWc.set(e.sender.id, target)
+      // The fence baseline follows the file: the move preserves the bytes, so the
+      // old snapshot's hash stays valid under the new path's fresh mtime+size
+      const states = diskStatesByWc.get(e.sender.id)
+      const baseline = states?.get(path)
+      if (states && baseline) {
+        states.delete(path)
+        try {
+          const s = statSync(target)
+          states.set(target, { mtimeMs: s.mtimeMs, size: s.size, hash: baseline.hash })
+        } catch {
+          /* unstatable target: skip tracking; the next save won't flag a conflict */
+        }
+      }
       untitledPdfPaths.delete(path)
       try {
         pdfRenamedHook?.(e.sender, path, target)
@@ -1490,6 +1703,7 @@ function grantAndTrack(wc: WebContents, openPath?: string | null): void {
     dirtyByWc.delete(wcId)
     saveAsTargetByWc.delete(wcId)
     insertSourceByWc.delete(wcId)
+    diskStatesByWc.delete(wcId)
     closeSaveWaiters.get(wcId)?.(false)
     closeSaveWaiters.delete(wcId)
     saveAsWaiters.get(wcId)?.(false)
