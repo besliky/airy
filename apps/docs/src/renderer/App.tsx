@@ -12,10 +12,11 @@ import {
 import type { CSSProperties, MouseEvent as ReactMouseEvent, SetStateAction } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/core'
-import { DOMParser as PmDOMParser, type Mark as PmMark } from '@tiptap/pm/model'
+import { DOMParser as PmDOMParser } from '@tiptap/pm/model'
 import { NodeSelection } from '@tiptap/pm/state'
 import { Dropdown, useAutoSavePref, useModalDialog } from '@airy-office/ui'
 import { wordRangeAtCaret } from './editor/comments'
+import { collectInlineFieldJobs } from './editor/field-caches'
 import { markdownPasteHtml } from './editor/markdown-paste'
 import { pasteTextSlice, singleCellPasteText } from './editor/paste-text'
 import { applyFieldCaches } from './editor/revisions'
@@ -2868,49 +2869,17 @@ export function App() {
    * TOC is recomputed when Word opens the file */
   const updateFields = useCallback(() => {
     if (!editor) return
-    const { state } = editor
-    const jobs: Array<{ from: number; to: number; text: string; marks: readonly PmMark[] }> = []
-    const refs: Array<{
-      pos: number
-      text: string | undefined
-      nodeSize: number
-      marks: readonly PmMark[]
-      instr: string
-    }> = []
-    state.doc.descendants((node, pos) => {
-      if (!node.isText) return
-      const mark = node.marks.find((m) => m.type.name === 'instrField')
-      if (mark) {
-        const next = fieldValue(String(mark.attrs.instr))
-        if (next && next !== node.text) {
-          jobs.push({ from: pos, to: pos + node.nodeSize, text: next, marks: node.marks })
-        }
-        return
-      }
-      const ref = node.marks.find((m) => m.type.name === 'refField')
-      if (ref) {
-        refs.push({
-          pos,
-          text: node.text,
-          nodeSize: node.nodeSize,
-          marks: node.marks,
-          // legacy references without a stored instruction fall back to the plain default
-          instr: String(ref.attrs.instr || ` REF ${ref.attrs.name} \\h `),
-        })
-      }
-    })
-    // table formulas (=SUM(ABOVE)…): recomputed against the current cells, like
-    // Word's F9 over table fields; directions re-scan, headers stay ignored
-    jobs.push(...collectTableFormulaJobs(editor))
-    // pagination only when a \p reference actually needs it (measuring is not free)
-    let pageOf: ((pos: number) => number | null) | null = null
-    for (const r of refs) {
-      if (r.instr.includes('\\p') && pageOf === null) pageOf = nodePagesFactory()
-      const next = refCacheOf(editor, doc?.parsed.blocks ?? [], r.instr, pageOf)
-      if (next !== null && next !== r.text) {
-        jobs.push({ from: r.pos, to: r.pos + r.nodeSize, text: next, marks: r.marks })
-      }
-    }
+    const blocks = doc?.parsed.blocks ?? []
+    const jobs = [
+      ...collectInlineFieldJobs(editor, {
+        fieldValue,
+        pageOf: nodePagesFactory,
+        refCache: (instr, pageOf) => refCacheOf(editor, blocks, instr, pageOf),
+      }),
+      // table formulas (=SUM(ABOVE)…): recomputed against the current cells, like
+      // Word's F9 over table fields; directions re-scan, headers stay ignored
+      ...collectTableFormulaJobs(editor),
+    ]
     // one TRACK_IGNORE transaction: a refreshed field result is recomputation,
     // not an authored edit, so track changes must not record it (BUG-917)
     applyFieldCaches(editor, jobs)
