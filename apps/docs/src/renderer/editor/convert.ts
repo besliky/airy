@@ -59,6 +59,7 @@ import {
 } from '../line-metrics'
 import { firstStrongDir } from './direction'
 import { inlineMathML } from './equation'
+import { mergeLooseTableRowBlocks } from './loose-table-rows'
 import { isStraightLineKind } from './shape-svg'
 
 /** minimal ProseMirror JSON shapes */
@@ -78,7 +79,7 @@ export interface PmNode {
 
 export function blocksToPmDoc(blocks: Block[], sections?: SectionInfo[]): PmNode {
   const content: PmNode[] = []
-  for (const block of blocks) {
+  for (const block of mergeLooseTableRowBlocks(blocks)) {
     if (block.hidden) continue
     content.push(
       blockToPmNode(
