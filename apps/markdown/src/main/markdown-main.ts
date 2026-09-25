@@ -48,6 +48,7 @@ import {
   writeImageIntoOwnedAssets,
 } from './asset-lifecycle'
 import { createMarkdownConversionSession, writeMarkdownConversion } from './conversion-lifecycle'
+import { encodeTextAsEncoding } from './encode-text'
 import {
   decodeBytesAsEncoding,
   forgetFileEncoding,
@@ -764,8 +765,25 @@ export function requestMarkdownSave(contents: WebContents, mode: SaveMode): Prom
   })
 }
 
-async function writeTextAtomic(path: string, text: string): Promise<void> {
-  await atomicWriteFile(path, Buffer.from(text, 'utf8'))
+/**
+ * The bytes a save writes for `text` into `target`: the file's remembered
+ * charset when one is pinned (BUG-1741 — a Buffer.from-utf8 write silently
+ * transcoded pinned files while the pick kept claiming otherwise), UTF-8
+ * otherwise. A text the pinned charset cannot represent falls back to a
+ * lossless UTF-8 write and the now-false pick is dropped, so the reopen
+ * auto-detects the file the way it actually is. The pick is only consulted
+ * for the fallback decision here; the returned charset is the truth about
+ * the bytes.
+ */
+async function encodeForSave(text: string, target: string): Promise<Buffer> {
+  const remembered = readRememberedFileEncoding(appSettingsPath(), target)
+  if (!remembered) return Buffer.from(text, 'utf8')
+  const encoded = encodeTextAsEncoding(text, remembered)
+  if (encoded) return encoded
+  await forgetFileEncoding(appSettingsPath(), target).catch(() => {
+    // best-effort: the write below still produced a correct UTF-8 file
+  })
+  return Buffer.from(text, 'utf8')
 }
 
 type ExternalChangeChoice = 'saveAs' | 'overwrite' | 'cancel'
@@ -915,6 +933,16 @@ function registerMarkdownIpc(): void {
     },
   )
 
+  // BUG-1741: the status-bar picker shows the persisted pick (the charset the
+  // open decodes with and the save writes in), not a session-local 'auto' that
+  // would mask an active override — read-only, granted paths only.
+  ipcMain.handle(MARKDOWN_CHANNELS.getEncoding, (e, path: unknown): string | null => {
+    if (typeof path !== 'string' || !allowedByWc.get(e.sender.id)?.has(path)) {
+      throw new Error('markdown: path not granted to this view')
+    }
+    return readRememberedFileEncoding(appSettingsPath(), path) ?? null
+  })
+
   // crash-recovery copy push: dirty renderers serialize and send every ~30s
   // (the store's write creates the autosave dir — BUG-1738 keeps the dir
   // resolution lazy so it lands in the profile the shell actually installed)
@@ -1001,8 +1029,9 @@ function registerMarkdownIpc(): void {
             : null
         const textToWrite = prepared?.text ?? request.text
         const savedImageSources = prepared?.imageSources ?? imageSources
+        const bytesToWrite = await encodeForSave(textToWrite, target)
         try {
-          await writeTextAtomic(target, textToWrite)
+          await atomicWriteFile(target, bytesToWrite)
         } catch (error) {
           if (prepared) await rollbackPreparedSaveAsAssets(prepared).catch(() => {})
           throw error

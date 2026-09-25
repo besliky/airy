@@ -7,6 +7,18 @@ import type { SelectableEncoding } from '../../shared/ipc'
 export type EncodingPick = 'auto' | SelectableEncoding
 
 /**
+ * Narrow a persisted charset name (the getEncoding answer, BUG-1741) to a
+ * picker value: anything unknown — including null, the no-pick answer — is
+ * the honest 'auto'. Keeps the persisted store, not the type system, trusted
+ * for what a path may be pinned to.
+ */
+export function asEncodingPick(value: string | null): EncodingPick {
+  return value !== null && (SELECTABLE_ENCODINGS as readonly string[]).includes(value)
+    ? (value as EncodingPick)
+    : 'auto'
+}
+
+/**
  * Status-bar "Reopen with encoding" control (UX-1696): shows the active
  * override ('auto' until a pick is made in this session) and offers
  * auto-detection plus every selectable charset. Picking hands the choice to
