@@ -435,7 +435,30 @@ export const id = {
   appProtectedWithPassword:
     'Lembar ini diproteksi dengan kata sandi — menghapus proteksinya tidak didukung.',
   appProtectionWillWrite:
-    'Proteksi lembar akan ditulis saat disimpan (tanpa kata sandi). Editor sendiri tidak memberlakukannya.',
+    'Proteksi lembar akan ditulis saat disimpan — editor memblokir pengeditan sel terkunci dan tindakan yang tidak diizinkan.',
+  appSheetCellProtected:
+    'Sel yang ingin Anda ubah berada pada lembar kerja yang dilindungi. Untuk mengubahnya, lepas dulu proteksi lembar — Anda mungkin diminta memasukkan kata sandi.',
+  appSheetActionProtected:
+    'Tindakan itu tidak diizinkan pada lembar kerja yang dilindungi. Lepas dulu proteksi lembar (Tinjau › Lepas Proteksi Lembar).',
+  appProtectPassword: 'Kata sandi untuk melepas proteksi lembar:',
+  appProtectReenterPassword: 'Masukkan ulang kata sandi untuk konfirmasi:',
+  appProtectPasswordMismatch: 'Kata sandi tidak cocok — masukkan ulang.',
+  appProtectAllowedHeading: 'Izinkan semua pengguna lembar kerja ini untuk:',
+  appUnprotectUnsupported:
+    'Lembar ini menggunakan hash kata sandi modern yang tidak dapat diverifikasi di sini — proteksi tetap aktif.',
+  appUnprotectWrongPassword:
+    'Kata sandi yang Anda ketik salah. Pastikan Caps Lock mati dan coba lagi.',
+  appProtectAllowSelectLocked: 'Pilih sel terkunci',
+  appProtectAllowSelectUnlocked: 'Pilih sel tidak terkunci',
+  appProtectAllowFormatCells: 'Format sel',
+  appProtectAllowFormatColumns: 'Format kolom',
+  appProtectAllowFormatRows: 'Format baris',
+  appProtectAllowInsertRows: 'Sisipkan baris',
+  appProtectAllowInsertColumns: 'Sisipkan kolom',
+  appProtectAllowDeleteRows: 'Hapus baris',
+  appProtectAllowDeleteColumns: 'Hapus kolom',
+  appProtectAllowSort: 'Urutkan',
+  appProtectAllowAutoFilter: 'Gunakan AutoFilter',
   appProtectionWillRemove: 'Proteksi lembar akan dihapus saat disimpan.',
   appZoom: 'Zoom {percent}%.',
   appTopRowFrozen: 'Baris atas dibekukan — simpan dengan ⌘S.',
@@ -1267,7 +1290,7 @@ export const id = {
   appUnprotectSheet: 'Buka Proteksi Lembar',
   appProtectSheet: 'Proteksi Lembar',
   appOpenFileFirst: 'Buka file dahulu',
-  appNoPassword: 'Tanpa kata sandi',
+  appNoPassword: 'Mencegah pengeditan tak sengaja — kata sandi opsional',
   appProtectWorkbook: 'Proteksi Buku Kerja',
   appAllowEditRanges: 'Izinkan Edit Rentang',
   appGroupClipboard: 'Papan Klip',

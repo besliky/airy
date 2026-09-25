@@ -444,7 +444,30 @@ export const ko = {
     '보호 설정을 하려면 먼저 이 시트의 인덱싱이 완료되어야 합니다 — 잠시 후 다시 시도하십시오.',
   appProtectedWithPassword: '이 시트는 암호로 보호되어 있습니다 — 보호 해제는 지원되지 않습니다.',
   appProtectionWillWrite:
-    '저장할 때 시트 보호(암호 없음)가 기록됩니다. 편집기 자체는 보호를 강제하지 않습니다.',
+    '저장 시 시트 보호가 기록됩니다. 잠긴 셀 편집과 허용되지 않은 작업은 편집기에서 차단됩니다.',
+  appSheetCellProtected:
+    '변경하려는 셀은 보호된 워크시트에 있습니다. 변경하려면 먼저 시트 보호를 해제하세요(암호를 입력해야 할 수 있습니다).',
+  appSheetActionProtected:
+    '보호된 워크시트에서는 해당 작업이 허용되지 않습니다. 먼저 시트 보호를 해제하세요(검토 › 시트 보호 해제).',
+  appProtectPassword: '시트 보호를 해제할 때 사용할 암호:',
+  appProtectReenterPassword: '확인을 위해 암호를 다시 입력하세요:',
+  appProtectPasswordMismatch: '암호가 일치하지 않습니다. 다시 입력하세요.',
+  appProtectAllowedHeading: '이 워크시트의 모든 사용자에게 허용할 작업:',
+  appUnprotectUnsupported:
+    '이 시트는 최신 암호 해시를 사용하여 여기서 확인할 수 없습니다. 보호가 유지됩니다.',
+  appUnprotectWrongPassword:
+    '입력한 암호가 올바르지 않습니다. Caps Lock이 꺼져 있는지 확인하고 다시 시도하세요.',
+  appProtectAllowSelectLocked: '잠긴 셀 선택',
+  appProtectAllowSelectUnlocked: '잠기지 않은 셀 선택',
+  appProtectAllowFormatCells: '셀 서식',
+  appProtectAllowFormatColumns: '열 서식',
+  appProtectAllowFormatRows: '행 서식',
+  appProtectAllowInsertRows: '행 삽입',
+  appProtectAllowInsertColumns: '열 삽입',
+  appProtectAllowDeleteRows: '행 삭제',
+  appProtectAllowDeleteColumns: '열 삭제',
+  appProtectAllowSort: '정렬',
+  appProtectAllowAutoFilter: '자동 필터 사용',
   appProtectionWillRemove: '저장할 때 시트 보호가 제거됩니다.',
   appZoom: '확대/축소 {percent}%.',
   appTopRowFrozen: '첫 행을 고정했습니다 — ⌘S로 저장합니다.',
@@ -1288,7 +1311,7 @@ export const ko = {
   appUnprotectSheet: '시트 보호 해제',
   appProtectSheet: '시트 보호',
   appOpenFileFirst: '먼저 파일을 여십시오',
-  appNoPassword: '암호 없음',
+  appNoPassword: '실수로 인한 편집 방지 — 암호 선택 사항',
   appProtectWorkbook: '통합 문서 보호',
   appAllowEditRanges: '범위 편집 허용',
   // Home tab

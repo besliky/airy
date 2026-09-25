@@ -1,33 +1,62 @@
-/// Worksheet protection toggle: adds or removes `<sheetProtection>` (no
-/// password support — unprotecting a password-protected sheet fails closed).
-/// Also: workbook structure protection (`<workbookProtection>`) and
-/// allow-edit ranges (`<protectedRanges>`), same no-password rules.
+/// Worksheet protection: writes or removes `<sheetProtection>` — the full
+/// modeled attribute set plus Excel's legacy password hash (PAR-204). Also:
+/// workbook structure protection (`<workbookProtection>`, no password
+/// support — unlocking a password-protected structure fails closed) and
+/// allow-edit ranges (`<protectedRanges>`, same no-password rules).
+import type { SheetProtectionAttributes } from '../shared/desktop-api'
 
 export class SheetProtectionError extends Error {}
 
 const ELEMENT_PATTERN = /<sheetProtection\b[^>]*\/>|<sheetProtection\b[^>]*>\s*<\/sheetProtection>/
 
-export function applySheetProtection(worksheetXml: string, protect: boolean): string {
+/// One save-request entry for a worksheet's `<sheetProtection>` element:
+/// `protected: false` removes the element (any password form included — the
+/// renderer has verified the password before recording the unprotect).
+/// `protected: true` rebuilds the element from the spec: Excel's defaults
+/// (`sheet="1" objects="1" scenarios="1"`) plus the modeled attributes in raw
+/// OOXML polarity (true = prevented, false = allowed, absent = schema
+/// default) and the legacy `password=` hash when the user set one.
+export interface SheetProtectionSpec {
+  readonly protected: boolean
+  readonly passwordHash?: string | null | undefined
+  readonly attributes?: SheetProtectionAttributes | undefined
+}
+
+export function applySheetProtection(worksheetXml: string, spec: SheetProtectionSpec): string {
   const existing = ELEMENT_PATTERN.exec(worksheetXml)
-  if (!protect) {
+  if (!spec.protected) {
     if (!existing) return worksheetXml
-    if (/\b(?:password|hashValue)="/.test(existing[0])) {
-      throw new SheetProtectionError(
-        'This sheet is protected with a password — removing its protection is not ' + 'supported.',
-      )
-    }
     return worksheetXml.replace(existing[0], '')
   }
-  if (existing) {
-    if (/\bsheet="(?:1|true)"/.test(existing[0])) return worksheetXml
-    const updated = existing[0].includes(' sheet="')
-      ? existing[0].replace(/ sheet="[^"]*"/, ' sheet="1"')
-      : existing[0].replace(/<sheetProtection\b/, '<sheetProtection sheet="1"')
-    return worksheetXml.replace(existing[0], updated)
+  // Attribute order mirrors Excel's writer: sheet, objects, scenarios, then
+  // the dialog-driven attributes in schema order. `true` (prevented) and
+  // `false` (allowed) are both written explicitly so the saved element never
+  // drifts from the dialog state the user chose.
+  const modeled = [
+    'selectLockedCells',
+    'selectUnlockedCells',
+    'formatCells',
+    'formatColumns',
+    'formatRows',
+    'insertColumns',
+    'insertRows',
+    'deleteColumns',
+    'deleteRows',
+    'sort',
+    'autoFilter',
+  ] as const
+  const parts = ['<sheetProtection sheet="1" objects="1" scenarios="1"']
+  if (spec.passwordHash) parts.push(` password="${spec.passwordHash.toUpperCase()}"`)
+  for (const name of modeled) {
+    const value = spec.attributes?.[name]
+    if (value === undefined) continue
+    parts.push(` ${name}="${value ? '1' : '0'}"`)
   }
-  // Excel's defaults when protecting without a password. Schema order: the
-  // element follows sheetData (and sheetCalcPr when present).
-  const element = '<sheetProtection sheet="1" objects="1" scenarios="1"/>'
+  parts.push('/>')
+  const element = parts.join('')
+  if (existing) return worksheetXml.replace(existing[0], element)
+  // Schema order: the element follows sheetData (and sheetCalcPr when
+  // present).
   const anchor =
     /<sheetCalcPr\b[^>]*\/?>/.exec(worksheetXml) ??
     /<\/sheetData>|<sheetData\b[^>]*\/>/.exec(worksheetXml)

@@ -96,6 +96,12 @@ pub fn read_styles(
                             })
                     });
                     let alignment = xf.children().find(|child| child.has_tag_name("alignment"));
+                    // <protection locked="0">: the cell stays editable on a
+                    // protected sheet. Absent element = Excel's locked default.
+                    let protection = xf.children().find(|child| child.has_tag_name("protection"));
+                    let locked = protection
+                        .and_then(|node| node.attribute("locked"))
+                        .map(|value| value != "0" && value != "false");
                     // Excel resolves scheme fonts against the theme; the
                     // literal <name val> is only a cached copy.
                     let font_family = match (font.scheme.as_deref(), theme_fonts) {
@@ -145,6 +151,7 @@ pub fn read_styles(
                         border_diagonal: border.diagonal,
                         diagonal_up: border.diagonal_up,
                         diagonal_down: border.diagonal_down,
+                        locked,
                         border_inner_horizontal: None,
                         border_inner_vertical: None,
                     }
@@ -231,6 +238,7 @@ pub(crate) fn parse_dxf(dxf: Node<'_, '_>, colors: &ColorContext) -> CellStyle {
         border_diagonal: border.diagonal,
         diagonal_up: border.diagonal_up,
         diagonal_down: border.diagonal_down,
+        locked: None,
         border_inner_horizontal: border.horizontal,
         border_inner_vertical: border.vertical,
     }

@@ -3990,10 +3990,14 @@ async function writeWorkbookTo(
     sheetName: resolveSheetName(state.sheetId),
     rules: state.rules,
   }))
-  const sheetProtections = request.sheetProtections.map((state) => ({
-    sheetName: resolveSheetName(state.sheetId),
-    protected: state.protected,
-  }))
+  const sheetProtections = request.sheetProtections.map(
+    ({ sheetId, protected: isProtected, passwordHash, ...attributes }) => ({
+      sheetName: resolveSheetName(sheetId),
+      protected: isProtected,
+      passwordHash,
+      attributes,
+    }),
+  )
   const protectedRangeStates = request.protectedRangeStates.map((state) => ({
     sheetName: resolveSheetName(state.sheetId),
     ranges: state.ranges,

@@ -1,6 +1,7 @@
 import { CellValueType } from '@univerjs/core'
 
 import type {
+  SheetProtectionAttributes,
   WorkbookCellEdit,
   WorkbookBulkConstantFill,
   WorkbookChartEdit,
@@ -167,8 +168,10 @@ export interface EditJournal {
   readonly cfDirty: Set<string>
   /// Sheets whose data validation changed; saved like cfDirty.
   readonly dvDirty: Set<string>
-  /// Desired sheet-protection state (dropped when toggled back to original).
-  readonly sheetProtection: Map<string, boolean>
+  /// Desired sheet-protection element per sheet (PAR-204): the full spec the
+  /// save writes — protection flag, legacy password hash, and the modeled
+  /// attribute set. Dropped when toggled back to the original state.
+  readonly sheetProtection: Map<string, SheetProtectionDelta>
   /// Desired workbook structure-protection state (null = untouched).
   readonly workbookProtection: { desired: boolean | null }
   /// Sheets whose allow-edit-range set changed; the save snapshots the live
@@ -290,7 +293,7 @@ export function createEditJournal(): EditJournal {
     filterDirty: new Set(),
     cfDirty: new Set(),
     dvDirty: new Set(),
-    sheetProtection: new Map(),
+    sheetProtection: new Map<string, SheetProtectionDelta>(),
     workbookProtection: { desired: null },
     protectedRangesDirty: new Set(),
     theme: {},
@@ -379,14 +382,36 @@ export function recordThemeFonts(
   journal.theme.fonts = { name, major, minor }
 }
 
+/// The journal's desired sheetProtection element for one sheet. `passwordHash`
+/// rides along so protecting with a password writes the legacy hash and
+/// unprotecting drops it from the file.
+export interface SheetProtectionDelta {
+  readonly protected: boolean
+  readonly passwordHash?: string | null
+  readonly attributes?: SheetProtectionAttributes
+}
+
 export function recordSheetProtection(
   journal: EditJournal,
   sheetId: string,
-  desired: boolean,
-  original: boolean,
+  desired: SheetProtectionDelta,
+  original: SheetProtectionDelta,
 ): void {
-  if (desired === original) journal.sheetProtection.delete(sheetId)
+  const sameProtection = desired.protected === original.protected
+  const samePassword = (desired.passwordHash ?? null) === (original.passwordHash ?? null)
+  const sameAttributes = shallowRecordEqual(desired.attributes ?? {}, original.attributes ?? {})
+  if (sameProtection && samePassword && sameAttributes) journal.sheetProtection.delete(sheetId)
   else journal.sheetProtection.set(sheetId, desired)
+}
+
+function shallowRecordEqual(
+  left: Readonly<Record<string, unknown>>,
+  right: Readonly<Record<string, unknown>>,
+): boolean {
+  const leftKeys = Object.keys(left)
+  const rightKeys = Object.keys(right)
+  if (leftKeys.length !== rightKeys.length) return false
+  return leftKeys.every((key) => left[key] === right[key])
 }
 
 export function recordCfChange(journal: EditJournal, sheetId: string): void {

@@ -5,48 +5,86 @@ import {
   applySheetProtection,
   applyWorkbookProtection,
   SheetProtectionError,
+  type SheetProtectionSpec,
 } from '../src/gateway/xlsx-protection'
+import { excelLegacyPasswordHash } from '../src/shared/legacy-password'
 
 const BARE = '<worksheet><sheetData/><autoFilter ref="A1:C4"/></worksheet>'
 
 describe('applySheetProtection', () => {
   it('inserts the element after sheetData with Excel defaults', () => {
-    expect(applySheetProtection(BARE, true)).toBe(
+    expect(applySheetProtection(BARE, { protected: true })).toBe(
       '<worksheet><sheetData/><sheetProtection sheet="1" objects="1" scenarios="1"/>' +
         '<autoFilter ref="A1:C4"/></worksheet>',
     )
   })
 
-  it('removes an unpassworded element and is a no-op without one', () => {
-    const protectedXml = applySheetProtection(BARE, true)
-    expect(applySheetProtection(protectedXml, false)).toBe(BARE)
-    expect(applySheetProtection(BARE, false)).toBe(BARE)
-  })
-
-  it('re-enables the sheet attribute on an existing element, keeping others', () => {
-    const xml =
-      '<worksheet><sheetData/>' +
-      '<sheetProtection sheet="0" formatCells="0" insertRows="0"/></worksheet>'
-    expect(applySheetProtection(xml, true)).toContain(
-      '<sheetProtection sheet="1" formatCells="0" insertRows="0"/>',
-    )
-    const already = applySheetProtection(xml, true)
-    expect(applySheetProtection(already, true)).toBe(already)
-  })
-
-  it('fails closed when unprotecting a password-protected sheet', () => {
+  it('removes any element (password forms included) and is a no-op without one', () => {
+    const protectedXml = applySheetProtection(BARE, { protected: true })
+    expect(applySheetProtection(protectedXml, { protected: false })).toBe(BARE)
+    expect(applySheetProtection(BARE, { protected: false })).toBe(BARE)
+    // The renderer verifies the password before recording the unprotect, so
+    // the gateway may strip password-bearing elements unconditionally.
     for (const attrs of [
       'sheet="1" password="83AF"',
       'sheet="1" algorithmName="SHA-512" hashValue="x" saltValue="y" spinCount="100000"',
     ]) {
       const xml = `<worksheet><sheetData/><sheetProtection ${attrs}/></worksheet>`
-      expect(() => applySheetProtection(xml, false)).toThrow(SheetProtectionError)
+      expect(applySheetProtection(xml, { protected: false })).toBe(
+        '<worksheet><sheetData/></worksheet>',
+      )
     }
+  })
+
+  it('rebuilds an existing element from the full spec', () => {
+    const xml =
+      '<worksheet><sheetData/>' +
+      '<sheetProtection sheet="0" formatCells="0" insertRows="0"/></worksheet>'
+    expect(
+      applySheetProtection(xml, {
+        protected: true,
+        attributes: { formatCells: false, insertRows: false },
+      }),
+    ).toBe(
+      '<worksheet><sheetData/>' +
+        '<sheetProtection sheet="1" objects="1" scenarios="1" formatCells="0" insertRows="0"/>' +
+        '</worksheet>',
+    )
+  })
+
+  it('writes the legacy password hash and raw-polarity attributes', () => {
+    const spec: SheetProtectionSpec = {
+      protected: true,
+      passwordHash: excelLegacyPasswordHash('secret'),
+      // Excel dialog "allowed" checkboxes map to attribute "0" here.
+      attributes: {
+        selectLockedCells: false,
+        selectUnlockedCells: false,
+        formatCells: false,
+        insertRows: false,
+        deleteRows: true,
+        sort: false,
+        autoFilter: false,
+      },
+    }
+    const out = applySheetProtection(BARE, spec)
+    expect(out).toContain('password="DAA7"')
+    expect(out).toContain('selectLockedCells="0"')
+    expect(out).toContain('formatCells="0"')
+    expect(out).toContain('deleteRows="1"')
+    expect(out).toContain('sort="0"')
+    expect(out).not.toContain('insertColumns')
+    // Unmodeled attributes are not preserved: the save sends the full spec.
+    const previous =
+      '<worksheet><sheetData/><sheetProtection sheet="1" pivotTables="0"/></worksheet>'
+    expect(applySheetProtection(previous, { protected: true })).not.toContain('pivotTables')
   })
 
   it('handles the paired-tag form', () => {
     const xml = '<worksheet><sheetData/><sheetProtection sheet="1"></sheetProtection></worksheet>'
-    expect(applySheetProtection(xml, false)).toBe('<worksheet><sheetData/></worksheet>')
+    expect(applySheetProtection(xml, { protected: false })).toBe(
+      '<worksheet><sheetData/></worksheet>',
+    )
   })
 })
 
