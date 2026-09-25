@@ -22,6 +22,8 @@
     "format:check": "node tools/format-changed.mjs --check",
     "check:theme-colors": "node tools/check-theme-colors.mjs",
     "check:english-comments": "node tools/check-english-comments.mjs",
+    "check:preload": "node tools/check-preload-bundles.mjs",
+    "test:tools": "node --test \"tools/*.test.mjs\"",
     "lint": "eslint .",
     "fixtures": "npm run fixtures -w @airy-office/docx-engine",
     "test": "node tools/run-workspaces.mjs test",
