@@ -172,6 +172,35 @@ function normalizeSelectionRects(rects: readonly ViewRect[]): ViewRect[] {
   })
 }
 
+/** Union client rect over all ranges of the current selection (null when collapsed or
+    empty). Multi-range selections come from the column-band correction: the union is
+    the visual box of the whole band, not just its first line. */
+export function selectionUnionRect(): {
+  left: number
+  top: number
+  right: number
+  bottom: number
+  width: number
+  height: number
+} | null {
+  const sel = window.getSelection()
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null
+  let box: { left: number; top: number; right: number; bottom: number } | null = null
+  for (let i = 0; i < sel.rangeCount; i++) {
+    const r = sel.getRangeAt(i).getBoundingClientRect()
+    if (r.width <= 0 && r.height <= 0) continue
+    box = box
+      ? {
+          left: Math.min(box.left, r.left),
+          top: Math.min(box.top, r.top),
+          right: Math.max(box.right, r.right),
+          bottom: Math.max(box.bottom, r.bottom),
+        }
+      : { left: r.left, top: r.top, right: r.right, bottom: r.bottom }
+  }
+  return box ? { ...box, width: box.right - box.left, height: box.bottom - box.top } : null
+}
+
 /**
  * Current selection → PDF-coordinate quads grouped by visible page (y up; each quad
  * [x1,yMax,x2,yMax,x1,yMin,x2,yMin]). Returns null when the selection is empty.
@@ -184,14 +213,20 @@ export function selectionQuadsByPage(
 ): Map<number, number[][]> | null {
   const sel = window.getSelection()
   if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null
-  const range = sel.getRangeAt(0)
-  if (!scrollEl.contains(range.commonAncestorContainer)) return null
+  // Multi-range selections (the column-band correction emits one range per visual
+  // line) contribute every in-document range, not just the first
+  const ranges = [...Array(sel.rangeCount)]
+    .map((_, i) => sel.getRangeAt(i))
+    .filter((range) => scrollEl.contains(range.commonAncestorContainer))
+  if (ranges.length === 0) return null
 
   const pageEls = [...scrollEl.querySelectorAll<HTMLElement>('.pdf-page')]
   const pageRects = pageEls.map((el) => el.getBoundingClientRect())
 
   // Selection rects mix element-level big boxes with overlapping span-level ones: drop boxes containing others, then dedupe by pixel
-  const raw = [...range.getClientRects()].filter((r) => r.width > 1 && r.height > 1)
+  const raw = ranges
+    .flatMap((range) => [...range.getClientRects()])
+    .filter((r) => r.width > 1 && r.height > 1)
   const rects = raw.filter(
     (r, i) =>
       !raw.some(
