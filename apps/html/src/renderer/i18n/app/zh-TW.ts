@@ -39,6 +39,7 @@ export const zhTW = {
   zoomIn: '放大',
   zoomOut: '縮小',
   undo: '復原',
+  pastePlain: '貼上為純文字 (Ctrl+Shift+V)',
   redo: '重做',
   cursorPos: '行 {line}，列 {col}',
   charCount: '{n} 字元',

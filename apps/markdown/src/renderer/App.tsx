@@ -24,6 +24,7 @@ import { tiptapFindTarget, type FindStatus } from './editor/findTarget'
 import { buildSlashItems } from './editor/slashCommand'
 import type { SlashController, SlashMenuState } from './editor/slashCommand'
 import { setImageBaseDir } from './editor/localImage'
+import { insertPlainText } from './editor/richPaste'
 import { Ribbon } from './components/Ribbon'
 import { SlashMenu, type SlashMenuHandle } from './components/SlashMenu'
 import { EncodingPicker, type EncodingPick } from './components/EncodingPicker'
@@ -201,6 +202,23 @@ export default function App() {
       const relPath = await window.markdownApi.pickImage()
       const current = editorRef.current
       if (relPath && current) uiOp(current, { op: 'insertImage', after: 'selection', src: relPath })
+    })()
+  }, [])
+
+  // UX-1705: ribbon "paste as plain text" — same insertion path the
+  // Mod+Shift+V gesture takes, driven by the async clipboard API instead of
+  // the paste event. Electron grants clipboard-read, matching the copy
+  // buttons' use of writeText.
+  const pastePlainText = useCallback(() => {
+    void (async () => {
+      const current = editorRef.current
+      if (!current) return
+      try {
+        const text = await navigator.clipboard.readText()
+        if (text) insertPlainText(current, text)
+      } catch {
+        // clipboard read denied/unavailable — keep the document untouched
+      }
     })()
   }, [])
 
@@ -821,6 +839,7 @@ export default function App() {
         onToggleAutoSave={setAutoSave}
         imageEnabled={Boolean(filePath)}
         onInsertImage={insertImage}
+        onPastePlain={pastePlainText}
         frontmatterOpen={fmOpen}
         onToggleFrontmatter={() => setFmOpen((v) => !v)}
         aiOpen={aiOpen}

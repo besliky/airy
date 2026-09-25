@@ -13,6 +13,7 @@ export {
   IconNumbered,
   IconIndentDec,
   IconIndentInc,
+  IconPaste,
   IconTable,
   IconPicture,
   IconLink,

@@ -16,6 +16,7 @@ export {
   IconFlipV,
   IconLink,
   IconPalette,
+  IconPaste,
   IconRedo,
   IconRemoveBg,
   IconReplacePicture,

@@ -39,6 +39,7 @@ export const ko = {
   zoomIn: '확대',
   zoomOut: '축소',
   undo: '실행 취소',
+  pastePlain: '일반 텍스트로 붙여넣기 (Ctrl+Shift+V)',
   redo: '다시 실행',
   cursorPos: '줄 {line}, 열 {col}',
   charCount: '{n}자',

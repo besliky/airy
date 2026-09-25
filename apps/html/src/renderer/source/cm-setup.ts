@@ -26,6 +26,7 @@ import { html } from '@codemirror/lang-html'
 import { tags } from '@lezer/highlight'
 import { aiHighlight } from './cm-highlight'
 import { findHighlight, syntaxCompartment } from './cm-find'
+import { notePlainPasteGesture, sourcePaste } from './source-paste'
 
 /** Marks transactions that replace the document from outside the editor (load, patches) */
 export const External = Annotation.define<boolean>()
@@ -126,6 +127,15 @@ export function buildExtensions(
     // the language sits in a compartment so a bulk replace can suspend reparsing
     // for the duration of the run (see setSyntaxSuspended in cm-find)
     syntaxCompartment.of(html()),
+    // UX-1705: text/html clipboard flavor → sanitized markup into the source;
+    // Mod+Shift+V forces the plain flavor
+    EditorView.domEventHandlers({
+      keydown: (event) => {
+        notePlainPasteGesture(event)
+        return false
+      },
+      paste: (event, view) => sourcePaste(view, event),
+    }),
     aiHighlight(),
     findHighlight,
     wrapCompartment.of(wrap ? EditorView.lineWrapping : []),

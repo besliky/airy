@@ -39,6 +39,7 @@ export const he = {
   zoomIn: 'הגדל',
   zoomOut: 'הקטן',
   undo: 'בטל',
+  pastePlain: 'הדבק כטקסט רגיל (Ctrl+Shift+V)',
   redo: 'בצע שוב',
   cursorPos: 'שורה {line}, עמודה {col}',
   charCount: '{n} תווים',

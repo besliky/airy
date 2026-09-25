@@ -1208,6 +1208,22 @@ export default function App() {
     if (canvasMode === 'present') closeFind()
   }, [canvasMode, closeFind])
 
+  // UX-1705: ribbon "paste as plain text" — the same plain insertion the
+  // Mod+Shift+V gesture produces in the source pane, driven by the async
+  // clipboard API. Electron grants clipboard-read, matching the copy buttons'
+  // use of writeText.
+  const pastePlainText = useCallback(() => {
+    void navigator.clipboard
+      .readText()
+      .then((text) => {
+        if (!text) return
+        editorRef.current?.insertPlainText(text)
+      })
+      .catch(() => {
+        // clipboard read denied/unavailable — keep the buffer untouched
+      })
+  }, [])
+
   const exportingRef = useRef(false)
   const runExport = useCallback(async (format: ExportFormat) => {
     if (statusRef.current !== 'ready' || exportingRef.current) return
@@ -1445,6 +1461,7 @@ export default function App() {
           editorRef.current?.redo()
           editorRef.current?.focus()
         }}
+        onPastePlain={pastePlainText}
         autoSave={autoSave}
         onToggleAutoSave={setAutoSave}
         view={view}

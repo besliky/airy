@@ -39,6 +39,7 @@ export const fr = {
   zoomIn: 'Agrandir',
   zoomOut: 'Réduire',
   undo: 'Annuler',
+  pastePlain: 'Coller comme texte brut (Ctrl+Shift+V)',
   redo: 'Rétablir',
   cursorPos: 'Lig. {line}, col. {col}',
   charCount: '{n} car.',

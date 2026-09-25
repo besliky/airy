@@ -39,6 +39,7 @@ export const es = {
   zoomIn: 'Acercar',
   zoomOut: 'Alejar',
   undo: 'Deshacer',
+  pastePlain: 'Pegar como texto sin formato (Ctrl+Shift+V)',
   redo: 'Rehacer',
   cursorPos: 'Lín. {line}, col. {col}',
   charCount: '{n} caracteres',

@@ -26,6 +26,8 @@ export interface SourceEditorHandle {
   canUndo(): boolean
   canRedo(): boolean
   focus(): void
+  /** UX-1705: insert clipboard text verbatim at the selection (paste as plain text) */
+  insertPlainText(text: string): void
   /** adapter for the find/replace panel; null until the editor is mounted */
   findTarget(): FindTarget | null
 }
@@ -194,6 +196,17 @@ export const SourceEditor = forwardRef<SourceEditorHandle, Props>(function Sourc
     canUndo: () => (viewRef.current ? undoDepth(viewRef.current.state) > 0 : false),
     canRedo: () => (viewRef.current ? redoDepth(viewRef.current.state) > 0 : false),
     focus: () => viewRef.current?.focus(),
+    insertPlainText: (text) => {
+      const view = viewRef.current
+      if (!view || !text) return
+      const { from, to } = view.state.selection.main
+      view.dispatch({
+        changes: { from, to, insert: text },
+        selection: { anchor: from + text.length },
+        userEvent: 'input.paste',
+      })
+      view.focus()
+    },
     findTarget: () => findTargetRef.current,
   }))
 

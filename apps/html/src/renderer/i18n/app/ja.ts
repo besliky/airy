@@ -39,6 +39,7 @@ export const ja = {
   zoomIn: '拡大',
   zoomOut: '縮小',
   undo: '元に戻す',
+  pastePlain: 'プレーンテキストとして貼り付け (Ctrl+Shift+V)',
   redo: 'やり直す',
   cursorPos: '行 {line}、列 {col}',
   charCount: '{n} 文字',

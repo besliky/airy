@@ -40,6 +40,7 @@ export const de = {
   zoomIn: 'Vergrößern',
   zoomOut: 'Verkleinern',
   undo: 'Rückgängig',
+  pastePlain: 'Als einfachen Text einfügen (Ctrl+Shift+V)',
   redo: 'Wiederholen',
   cursorPos: 'Z. {line}, Sp. {col}',
   charCount: '{n} Zeichen',

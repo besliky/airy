@@ -38,6 +38,7 @@ export const zh = {
   zoomIn: '放大',
   zoomOut: '缩小',
   undo: '撤销',
+  pastePlain: '粘贴为纯文本 (Ctrl+Shift+V)',
   redo: '重做',
   cursorPos: '行 {line}，列 {col}',
   charCount: '{n} 字符',

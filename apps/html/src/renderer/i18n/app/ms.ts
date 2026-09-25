@@ -39,6 +39,7 @@ export const ms = {
   zoomIn: 'Besarkan',
   zoomOut: 'Kecilkan',
   undo: 'Buat asal',
+  pastePlain: 'Tampal sebagai teks biasa (Ctrl+Shift+V)',
   redo: 'Buat semula',
   cursorPos: 'Baris {line}, Lajur {col}',
   charCount: '{n} aksara',

@@ -39,6 +39,7 @@ export const id = {
   zoomIn: 'Perbesar',
   zoomOut: 'Perkecil',
   undo: 'Urungkan',
+  pastePlain: 'Tempel sebagai teks biasa (Ctrl+Shift+V)',
   redo: 'Ulangi',
   cursorPos: 'Brs {line}, Kol {col}',
   charCount: '{n} karakter',

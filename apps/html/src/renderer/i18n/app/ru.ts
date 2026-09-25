@@ -39,6 +39,7 @@ export const ru = {
   zoomIn: 'Увеличить',
   zoomOut: 'Уменьшить',
   undo: 'Отменить',
+  pastePlain: 'Вставить как обычный текст (Ctrl+Shift+V)',
   redo: 'Повторить',
   cursorPos: 'Стр. {line}, стлб. {col}',
   charCount: '{n} симв.',

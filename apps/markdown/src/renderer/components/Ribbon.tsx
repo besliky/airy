@@ -19,6 +19,7 @@ import {
   IconInlineCode,
   IconLink,
   IconNumbered,
+  IconPaste,
   IconPicture,
   IconProperties,
   IconRedo,
@@ -39,6 +40,8 @@ interface Props {
   onToggleAutoSave: (on: boolean) => void
   imageEnabled: boolean
   onInsertImage: () => void
+  /** UX-1705: insert the clipboard's text/plain flavor at the cursor */
+  onPastePlain: () => void
   frontmatterOpen: boolean
   onToggleFrontmatter: () => void
   aiOpen: boolean
@@ -157,6 +160,7 @@ export function Ribbon({
   onToggleAutoSave,
   imageEnabled,
   onInsertImage,
+  onPastePlain,
   frontmatterOpen,
   onToggleFrontmatter,
   aiOpen,
@@ -288,6 +292,17 @@ export function Ribbon({
           onClick={onFind}
         >
           <IconSearch size={16} />
+        </button>
+        <button
+          type="button"
+          className="qa-btn"
+          data-tip={t('pastePlain')}
+          aria-label={t('pastePlain')}
+          disabled={off}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onPastePlain}
+        >
+          <IconPaste size={16} />
         </button>
         <label className={`autosave-toggle${autoSave ? ' on' : ''}`} data-tip={t('autoSaveTip')}>
           <span className="autosave-knob" />
