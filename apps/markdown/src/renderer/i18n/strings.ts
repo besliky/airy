@@ -1,5 +1,6 @@
 export const strings = {
   zh: {
+    pastePlain: '粘贴为纯文本 (Ctrl+Shift+V)',
     aiToolReadFm: '读取文档属性',
     aiToolSetFm: '更新文档属性',
     aiScopeSelection: '已选中 {words} 字',
@@ -191,6 +192,7 @@ export const strings = {
     footnoteUnsupported: '暂不支持脚注([^1] 语法),将按普通文本显示',
   },
   en: {
+    pastePlain: 'Paste as plain text (Ctrl+Shift+V)',
     aiToolReadFm: 'Read document properties',
     aiToolSetFm: 'Update document properties',
     aiScopeSelection: 'Selected: {words} words',
@@ -389,6 +391,7 @@ export const strings = {
     footnoteUnsupported: 'Footnotes ([^1]) are not supported yet — they stay as plain text',
   },
   ja: {
+    pastePlain: 'プレーンテキストとして貼り付け (Ctrl+Shift+V)',
     aiToolReadFm: 'ドキュメントのプロパティを読み取り',
     aiToolSetFm: 'ドキュメントのプロパティを更新',
     aiScopeSelection: '選択中: {words} 文字',
@@ -584,6 +587,7 @@ export const strings = {
     footnoteUnsupported: '脚注([^1])には未対応です。普通のテキストとして表示されます',
   },
   ko: {
+    pastePlain: '일반 텍스트로 붙여넣기 (Ctrl+Shift+V)',
     aiToolReadFm: '문서 속성 읽기',
     aiToolSetFm: '문서 속성 업데이트',
     aiScopeSelection: '선택됨: {words}자',
@@ -780,6 +784,7 @@ export const strings = {
     footnoteUnsupported: '각주([^1])는 아직 지원되지 않으며 일반 텍스트로 표시됩니다',
   },
   fr: {
+    pastePlain: 'Coller comme texte brut (Ctrl+Shift+V)',
     aiToolReadFm: 'Lecture des propriétés du document',
     aiToolSetFm: 'Mise à jour des propriétés du document',
     aiScopeSelection: 'Sélection : {words} mots',
@@ -983,6 +988,7 @@ export const strings = {
       'Les notes de bas de page ([^1]) ne sont pas encore prises en charge — elles restent du texte brut',
   },
   de: {
+    pastePlain: 'Als einfachen Text einfügen (Ctrl+Shift+V)',
     aiToolReadFm: 'Dokumenteigenschaften lesen',
     aiToolSetFm: 'Dokumenteigenschaften aktualisieren',
     aiScopeSelection: 'Ausgewählt: {words} Wörter',
@@ -1186,6 +1192,7 @@ export const strings = {
       'Fußnoten ([^1]) werden noch nicht unterstützt — sie bleiben einfacher Text',
   },
   es: {
+    pastePlain: 'Pegar como texto sin formato (Ctrl+Shift+V)',
     aiToolReadFm: 'Leer propiedades del documento',
     aiToolSetFm: 'Actualizar propiedades del documento',
     aiScopeSelection: 'Seleccionado: {words} palabras',
@@ -1389,6 +1396,7 @@ export const strings = {
       'Las notas al pie ([^1]) aún no son compatibles: se muestran como texto normal',
   },
   th: {
+    pastePlain: 'วางเป็นข้อความธรรมดา (Ctrl+Shift+V)',
     aiToolReadFm: 'อ่านคุณสมบัติเอกสาร',
     aiToolSetFm: 'อัปเดตคุณสมบัติเอกสาร',
     aiScopeSelection: 'เลือกแล้ว {words} คำ',
@@ -1583,6 +1591,7 @@ export const strings = {
     footnoteUnsupported: 'ยังไม่รองรับเชิงอรรถ ([^1]) — จะแสดงเป็นข้อความธรรมดา',
   },
   id: {
+    pastePlain: 'Tempel sebagai teks biasa (Ctrl+Shift+V)',
     aiToolReadFm: 'Baca properti dokumen',
     aiToolSetFm: 'Perbarui properti dokumen',
     aiScopeSelection: 'Terpilih: {words} kata',
@@ -1781,6 +1790,7 @@ export const strings = {
       'Catatan kaki ([^1]) belum didukung — tetap ditampilkan sebagai teks biasa',
   },
   ru: {
+    pastePlain: 'Вставить как обычный текст (Ctrl+Shift+V)',
     aiToolReadFm: 'Чтение свойств документа',
     aiToolSetFm: 'Обновление свойств документа',
     aiScopeSelection: 'Выделено: {words} слов',
@@ -1979,6 +1989,7 @@ export const strings = {
     footnoteUnsupported: 'Сноски ([^1]) пока не поддерживаются — они остаются обычным текстом',
   },
   ar: {
+    pastePlain: 'لصق كنص عادي (Ctrl+Shift+V)',
     aiToolReadFm: 'قراءة خصائص المستند',
     aiToolSetFm: 'تحديث خصائص المستند',
     aiScopeSelection: 'المحدد: {words} كلمة',
@@ -2173,6 +2184,7 @@ export const strings = {
     footnoteUnsupported: 'الحواشي السفلية ([^1]) غير مدعومة بعد — تبقى كنص عادي',
   },
   pt: {
+    pastePlain: 'Colar como texto simples (Ctrl+Shift+V)',
     aiToolReadFm: 'Ler propriedades do documento',
     aiToolSetFm: 'Atualizar propriedades do documento',
     aiScopeSelection: 'Selecionado: {words} palavras',
@@ -2374,6 +2386,7 @@ export const strings = {
       'Notas de rodapé ([^1]) ainda não são compatíveis — permanecem como texto simples',
   },
   it: {
+    pastePlain: 'Incolla come testo semplice (Ctrl+Shift+V)',
     aiToolReadFm: 'Lettura delle proprietà del documento',
     aiToolSetFm: 'Aggiornamento delle proprietà del documento',
     aiScopeSelection: 'Selezionato: {words} parole',
@@ -2575,6 +2588,7 @@ export const strings = {
       'Le note a piè di pagina ([^1]) non sono ancora supportate — restano testo normale',
   },
   pl: {
+    pastePlain: 'Wklej jako zwykły tekst (Ctrl+Shift+V)',
     aiToolReadFm: 'Odczyt właściwości dokumentu',
     aiToolSetFm: 'Aktualizacja właściwości dokumentu',
     aiScopeSelection: 'Zaznaczono: {words} słów',
@@ -2773,6 +2787,7 @@ export const strings = {
     footnoteUnsupported: 'Przypisy ([^1]) nie są jeszcze obsługiwane — pozostają zwykłym tekstem',
   },
   cs: {
+    pastePlain: 'Vložit jako prostý text (Ctrl+Shift+V)',
     aiToolReadFm: 'Číst vlastnosti dokumentu',
     aiToolSetFm: 'Aktualizovat vlastnosti dokumentu',
     aiScopeSelection: 'Vybráno: {words} slov',
@@ -2971,6 +2986,7 @@ export const strings = {
     mermaidError: 'Chyba syntaxe diagramu',
   },
   nl: {
+    pastePlain: 'Plakken als platte tekst (Ctrl+Shift+V)',
     aiToolReadFm: 'Documenteigenschappen lezen',
     aiToolSetFm: 'Documenteigenschappen bijwerken',
     aiScopeSelection: 'Geselecteerd: {words} woorden',
@@ -3171,6 +3187,7 @@ export const strings = {
     footnoteUnsupported: 'Voetnoten ([^1]) worden nog niet ondersteund — ze blijven gewone tekst',
   },
   ms: {
+    pastePlain: 'Tampal sebagai teks biasa (Ctrl+Shift+V)',
     aiToolReadFm: 'Baca sifat dokumen',
     aiToolSetFm: 'Kemas kini sifat dokumen',
     aiScopeSelection: 'Dipilih: {words} patah perkataan',
@@ -3369,6 +3386,7 @@ export const strings = {
     footnoteUnsupported: 'Nota kaki ([^1]) belum disokong — kekal sebagai teks biasa',
   },
   he: {
+    pastePlain: 'הדבק כטקסט רגיל (Ctrl+Shift+V)',
     aiToolReadFm: 'קריאת מאפייני המסמך',
     aiToolSetFm: 'עדכון מאפייני המסמך',
     aiScopeSelection: 'נבחרו: {words} מילים',
@@ -3561,6 +3579,7 @@ export const strings = {
     footnoteUnsupported: 'הערות שוליים ([^1]) עדיין אינן נתמכות — הן נשארות טקסט רגיל',
   },
   hi: {
+    pastePlain: 'सादे टेक्स्ट के रूप में पेस्ट करें (Ctrl+Shift+V)',
     aiToolReadFm: 'दस्तावेज़ गुण पढ़ें',
     aiToolSetFm: 'दस्तावेज़ गुण अपडेट करें',
     aiScopeSelection: 'चयनित: {words} शब्द',
@@ -3758,6 +3777,7 @@ export const strings = {
     footnoteUnsupported: 'फ़ुटनोट ([^1]) अभी समर्थित नहीं हैं — ये सादे पाठ के रूप में रहते हैं',
   },
   'zh-TW': {
+    pastePlain: '貼上為純文字 (Ctrl+Shift+V)',
     aiToolReadFm: '讀取文件屬性',
     aiToolSetFm: '更新文件屬性',
     aiScopeSelection: '已選中 {words} 字',

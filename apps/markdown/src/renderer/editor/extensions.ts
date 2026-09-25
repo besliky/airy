@@ -10,6 +10,7 @@ import { Placeholder } from '@tiptap/extensions'
 import { CodeBlockView } from './CodeBlockView'
 import { LocalImage } from './localImage'
 import { RawHtml } from './rawHtml'
+import { RichPaste } from './richPaste'
 import { BlockDragHandle } from './blockDragHandle'
 import { BlockKeymap } from './blockKeymap'
 import { AiHighlight } from './aiHighlight'
@@ -80,6 +81,9 @@ export function buildExtensions(options: BuildExtensionsOptions): AnyExtension[]
     // verbatim raw-HTML preservation (BUG-1685) — must come after the schema
     // extensions it falls back from; see rawHtml.ts
     RawHtml,
+    // rich (text/html) paste sanitization + the plain-paste gesture (UX-1705);
+    // after LocalImage so image-file pastes keep their existing claim
+    RichPaste,
     BlockDragHandle,
     BlockKeymap,
     AiHighlight,
