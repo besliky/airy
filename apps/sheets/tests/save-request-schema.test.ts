@@ -25,6 +25,7 @@ function emptyRequest(mode: 'save' | 'save-as') {
     dvStates: [],
     pageSetupStates: [],
     noteStates: [],
+    threadedCommentStates: [],
     formulaValues: [],
     pivotCacheRefreshPaths: [],
     pivotRefreshUpdates: [],
