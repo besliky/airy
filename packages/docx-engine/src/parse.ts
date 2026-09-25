@@ -2,7 +2,7 @@ import JSZip from 'jszip'
 import { parseCustGeom } from '@airy-office/pptx-engine/custgeom'
 import { parseChartPartXml } from './chart'
 import { findInkRuns, stripInkRuns } from './ink'
-import { isMetafileMime, metafileToDataUrl } from './metafile'
+import { isMetafileMime, metafilePlateText, metafileToDataUrl } from './metafile'
 import { isTiffMime, tiffToDataUrl } from './tiff'
 import { ommlFragmentsOf, ommlToLatex, ommlToMathML } from './math'
 import { splitXmlChildren } from './generate'
@@ -1267,18 +1267,21 @@ async function buildBlock(
       return { ...base, type: 'image', label: 'Image', imageDataUrl: image, ...imageMeta(detect) }
     }
     // Picture whose media cannot be shown (rel missing / pointing at a
-    // non-media part, or metafile conversion failed): empty frame at the
-    // declared extent
-    // instead of a bare chip. Bytes still pass through untouched.
+    // non-media part, or metafile conversion failed or rendered blank):
+    // empty frame at the declared extent
+    // instead of a bare chip. Bytes still pass through untouched. Metafile
+    // media name the plate after the part kind and size, so the reader can
+    // tell an image was there (UX-1710); an author's alt text wins.
     if (detect.includes('<a:blip') || detect.includes('<pic:pic')) {
       const docPr = /<wp:docPr [^>]*\/?>/.exec(detect)?.[0] ?? ''
       const alt = /\bdescr="([^"]+)"/.exec(docPr)?.[1] ?? /\bname="([^"]+)"/.exec(docPr)?.[1]
+      const preview = alt ? decodeEntities(alt) : await metafilePlateTextOf(ctx, detect)
       return {
         ...base,
         type: 'passthrough',
         label: 'Image',
         brokenImage: true,
-        ...(alt ? { previewText: decodeEntities(alt) } : {}),
+        ...(preview ? { previewText: preview } : {}),
         ...imageMeta(detect),
       }
     }
@@ -6024,6 +6027,26 @@ function relPartPath(ctx: BuildContext, rId: string | undefined): string | null 
     /^word\/\.\.\//,
     '',
   )
+}
+
+/**
+ * Plate text for an unshowable picture whose media part is a metafile
+ * (WMF/EMF conversion failed or rendered blank): kind + part size, e.g.
+ * "WMF image (2 KB)". Undefined when the media is not a metafile (UX-1710).
+ */
+async function metafilePlateTextOf(ctx: BuildContext, xml: string): Promise<string | undefined> {
+  const rId =
+    /<a:blip[^>]*r:embed="([^"]+)"/.exec(xml)?.[1] ??
+    /<a:blip[^>]*r:link="([^"]+)"/.exec(xml)?.[1] ??
+    /<v:imagedata[^>]*r:id="([^"]+)"/.exec(xml)?.[1]
+  const path = relPartPath(ctx, rId)
+  if (!path) return undefined
+  const file = ctx.zip.file(path)
+  if (!file) return undefined
+  const mime = await imagePartMime(ctx.zip, path)
+  if (!mime || !isMetafileMime(mime)) return undefined
+  const bytes = await file.async('arraybuffer')
+  return metafilePlateText(mime, bytes.byteLength)
 }
 
 /**
