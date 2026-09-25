@@ -34,6 +34,7 @@ import { ColorDropdown } from './ColorDropdown'
 import { FormatCellsDialog } from './FormatCellsDialog'
 import { AllowEditRangesDialog } from './AllowEditRangesDialog'
 import { GoToDialog } from './GoToDialog'
+import { formatAddressList } from './circular-refs'
 import { COLOR_SCHEMES, FONT_SCHEMES, THEME_PRESETS } from './themes'
 import { useI18n, type StringKey } from './i18n/locale'
 import { NameManagerDialog, type DefinedNameAction, type DefinedNameRow } from './NameManagerDialog'
@@ -225,6 +226,10 @@ interface ExcelShellProps {
   readonly onIsCellEditing: () => boolean
   /// Left side of the status bar (ready / streaming / AI progress messages).
   readonly statusMessage: string
+  /// Addresses of circular-reference formulas detected at open (BUG-1718):
+  /// the engine resolves cycles in one pass silently, so the status bar
+  /// keeps the warning visible instead.
+  readonly circularRefs: readonly string[]
   /// Zoom of the active sheet in percent, echoed by the status-bar slider.
   readonly zoomPercent: number
   /// True when the edit journal has unsaved changes (enables the QAT Save).
@@ -445,6 +450,7 @@ export function ExcelShell({
   onCommand,
   onIsCellEditing,
   statusMessage,
+  circularRefs,
   zoomPercent,
   canSave,
   onSave,
@@ -907,6 +913,16 @@ export function ExcelShell({
           <footer className="status-bar">
             <div className="status-left">
               <span className="status-msg">{statusMessage}</span>
+              {circularRefs.length > 0 && (
+                <span
+                  className="status-circular"
+                  role="status"
+                  aria-live="polite"
+                  title={t('appCircularRefs', { refs: formatAddressList(circularRefs) })}
+                >
+                  {t('appCircularRefs', { refs: formatAddressList(circularRefs) })}
+                </span>
+              )}
             </div>
             <div className="status-right">
               <button
