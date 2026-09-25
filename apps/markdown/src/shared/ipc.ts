@@ -5,6 +5,7 @@ import type { AiSettings, AiStreamChunk, AiStreamRequest } from '@airy-office/ai
 export const MARKDOWN_CHANNELS = {
   consumePending: 'markdown:consume-pending',
   readFile: 'markdown:read-file',
+  getEncoding: 'markdown:get-encoding',
   writeRecovery: 'markdown:write-recovery',
   save: 'markdown:save',
   saveRequest: 'markdown:save-request',
@@ -172,6 +173,13 @@ export interface MarkdownApi {
    * allowed; the pick survives tab close and relaunch (UX-1653).
    */
   setEncoding(path: string, encoding: string | null): Promise<boolean>
+  /**
+   * The remembered charset for a granted path (null = auto-detection). The
+   * pick governs both how the open decodes the file and — BUG-1741 — the
+   * charset a save writes it in, so the status-bar picker reflects it instead
+   * of a session-local 'auto' that would mask an active override.
+   */
+  getEncoding(path: string): Promise<string | null>
   /** crash-recovery copy push (dirty renderers, every ~30s and on blur) */
   writeRecovery(path: string, text: string): Promise<void>
   /**

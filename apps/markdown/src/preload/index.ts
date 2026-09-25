@@ -12,6 +12,7 @@ const api: MarkdownApi = {
   readFile: (path) => ipcRenderer.invoke(MARKDOWN_CHANNELS.readFile, path),
   setEncoding: (path, encoding) =>
     ipcRenderer.invoke(MARKDOWN_CHANNELS.setEncoding, path, encoding),
+  getEncoding: (path) => ipcRenderer.invoke(MARKDOWN_CHANNELS.getEncoding, path),
   writeRecovery: (path, text) => ipcRenderer.invoke(MARKDOWN_CHANNELS.writeRecovery, path, text),
   save: (request) => ipcRenderer.invoke(MARKDOWN_CHANNELS.save, request),
   setDirty: (dirty) => ipcRenderer.send(MARKDOWN_CHANNELS.dirtyChanged, dirty),
