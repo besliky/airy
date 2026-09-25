@@ -614,6 +614,23 @@ export const pt = {
     'Este tipo de gráfico não suporta essa edição; salvamento cancelado — desfaça a alteração do gráfico.',
   appSaveErrMoveOverlap:
     'Uma fórmula, um intervalo formatado, uma forma ou uma tabela atravessa as linhas movidas; salvamento cancelado — desfaça a movimentação.',
+  appSaveCompatTitle: 'Parte do conteúdo desta pasta de trabalho não será salvo no arquivo',
+  appSaveCompatDetail: ' — {item}',
+  appSaveCompatDismiss: 'Dispensar o aviso',
+  appSaveCompatCsv:
+    'Salvar como CSV mantém apenas os valores simples da planilha ativa — fórmulas, formatação e outras planilhas não serão salvas.',
+  appSaveCompatMultiSelectDv:
+    'A validação de lista de seleção múltipla não pode ser salva em xlsx — exclua a regra antes de salvar.',
+  appSaveCompatStranded:
+    'Uma nova tabela ou Tabela Dinâmica em uma planilha adicionada entra em conflito com alterações pendentes de linhas/colunas ou de planilhas — salve uma vez para resolver ou desfaça as alterações.',
+  appSaveCompatStructureConflict:
+    'Uma movimentação pendente de linhas/colunas, de intervalo ou uma mesclagem entra em conflito com uma tabela ou filtro da planilha — desfaça-a ou salve antes.',
+  appSaveCompatDuplicateParts:
+    'A planilha copiada contém gráficos, imagens, tabelas ou Tabelas Dinâmicas que ainda não podem ser salvos na cópia.',
+  appSaveCompatX14Cf:
+    'Alterações na formatação condicional estendida (x14) ainda não podem ser salvas.',
+  appSaveCompatX14Dv:
+    'Alterações na validação de dados estendida (x14) ainda não podem ser salvas.',
   appFromTextCsvTitle: 'Importar um arquivo CSV/texto para a seleção atual',
   appCsvImported: '{rows} linhas × {columns} colunas importadas do arquivo para {cell}.',
   appCsvEmpty: 'O arquivo CSV não contém dados.',

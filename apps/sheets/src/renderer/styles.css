@@ -355,6 +355,56 @@ textarea:disabled {
   background: var(--surface-subtle);
 }
 
+/* Pre-flight warning for fail-closed saves (PAR-206): a non-blocking strip
+ * between the formula bar and the grid; chrome colors go through tokens. */
+.save-compat-banner {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 14px;
+  border-bottom: 1px solid var(--sheets-ai-error-border);
+  background: var(--sheets-ai-error-bg);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.save-compat-title {
+  flex: none;
+  font-weight: 600;
+  color: var(--sheets-ai-error);
+}
+
+.save-compat-list {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 0;
+  list-style: disc inside;
+}
+
+.save-compat-list li {
+  display: list-item;
+}
+
+.save-compat-dismiss {
+  flex: none;
+  align-self: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.save-compat-dismiss:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
 .name-box {
   width: 120px;
   padding: 2px 6px;

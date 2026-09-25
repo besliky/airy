@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { platformShortcuts } from '@airy-office/i18n'
 import {
   Dropdown,
@@ -348,6 +348,10 @@ interface ExcelShellProps {
   readonly calcManual: boolean
   /// Goal Seek solve; rejects with a user-facing Error message.
   readonly onGoalSeek: (setCell: string, toValue: number, byCell: string) => Promise<GoalSeekResult>
+  /// Pre-flight warning strip for fail-closed saves (PAR-206); App computes
+  /// the findings and the dismiss policy, the shell only places the strip
+  /// between the formula bar and the grid. Absent = nothing to warn about.
+  readonly saveCompatBanner?: ReactNode
 }
 
 export interface PageLayoutEcho {
@@ -456,6 +460,7 @@ export function ExcelShell({
   pageLayout,
   calcManual,
   onGoalSeek,
+  saveCompatBanner,
 }: ExcelShellProps): React.JSX.Element {
   const { t } = useI18n()
   const [activeTab, setActiveTab] = useState<RibbonTab>('Home')
@@ -882,6 +887,7 @@ export function ExcelShell({
               ▾
             </button>
           </div>
+          {saveCompatBanner}
           <section className="workbook-area">
             <div id="univer-container" className="spreadsheet" />
           </section>

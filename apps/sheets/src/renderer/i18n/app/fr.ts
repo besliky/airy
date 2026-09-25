@@ -631,6 +631,23 @@ export const fr = {
     'Ce type de graphique ne prend pas en charge cette modification ; enregistrement interrompu — annulez la modification du graphique.',
   appSaveErrMoveOverlap:
     'Une formule, une plage mise en forme, une forme ou un tableau chevauche les lignes déplacées ; enregistrement interrompu — annulez le déplacement.',
+  appSaveCompatTitle: 'Certains éléments de ce classeur ne seront pas enregistrés dans le fichier',
+  appSaveCompatDetail: ' — {item}',
+  appSaveCompatDismiss: 'Masquer l’avertissement',
+  appSaveCompatCsv:
+    'L’enregistrement en CSV ne conserve que les valeurs brutes de la feuille active — formules, mise en forme et autres feuilles ne seront pas enregistrées.',
+  appSaveCompatMultiSelectDv:
+    'La validation de liste à sélection multiple ne peut pas être enregistrée en xlsx — supprimez la règle avant d’enregistrer.',
+  appSaveCompatStranded:
+    'Un nouveau tableau ou tableau croisé dynamique sur une feuille ajoutée entre en conflit avec des changements de lignes/colonnes ou de feuilles en attente — enregistrez une fois pour résoudre, ou annulez les changements.',
+  appSaveCompatStructureConflict:
+    'Un déplacement de lignes/colonnes, de plage ou une fusion en attente entre en conflit avec un tableau ou un filtre de la feuille — annulez-le ou enregistrez d’abord.',
+  appSaveCompatDuplicateParts:
+    'La feuille copiée contient des graphiques, images, tableaux ou tableaux croisés dynamiques qui ne peuvent pas encore être enregistrés dans la copie.',
+  appSaveCompatX14Cf:
+    'Les modifications de mise en forme conditionnelle étendue (x14) ne peuvent pas encore être enregistrées.',
+  appSaveCompatX14Dv:
+    'Les modifications de validation de données étendue (x14) ne peuvent pas encore être enregistrées.',
   appFromTextCsvTitle: 'Importer un fichier CSV/texte dans la sélection actuelle',
   appCsvImported: '{rows} lignes × {columns} colonnes importées du fichier vers {cell}.',
   appCsvEmpty: 'Le fichier CSV ne contient aucune donnée.',
