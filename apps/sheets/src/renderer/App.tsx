@@ -23,6 +23,7 @@ import {
   recalcOverBudgetAtOpen,
   RECALC_MAX_FAILURES,
   queueVisualInstall,
+  revealCellBelowFreeze,
   sheetOutline,
   syncUniver,
   univerDefinedNames,
@@ -408,6 +409,12 @@ import { solveGoalSeek } from './goal-seek'
 import { SlicerFieldPicker, SlicerPanels, type SlicerUiState } from './SlicerPanel'
 import { WatchWindowPanel, watchKey, type WatchCell, type WatchRowValue } from './WatchWindowPanel'
 import { TimelineFieldPicker, TimelinePanels, type TimelineUiState } from './TimelinePanel'
+import { ThreadedCommentsPanel } from './ThreadedCommentsPanel'
+import {
+  installThreadedCommentIndicators,
+  setThreadPanelOpener,
+} from './threaded-comment-indicators'
+import { installWorkbookThreadedComments, type ThreadedCommentThread } from './threaded-comments'
 import type { DefinedNameAction, DefinedNameRow } from './NameManagerDialog'
 import {
   clearVisualSelection,
@@ -654,6 +661,15 @@ export function App(): React.JSX.Element {
     () => window.desktopApi?.onRecoveryPrompt?.((prompt) => setRecoveryPrompt(prompt)) ?? undefined,
     [],
   )
+  /// Cell indicators open the comments panel on their thread (the module-level
+  /// listener bridge keeps Univer's float-DOM root out of the React tree).
+  useEffect(() => {
+    setThreadPanelOpener((thread) => {
+      setThreadPanelOpen(true)
+      setThreadDraft(thread)
+    })
+    return () => setThreadPanelOpener(null)
+  }, [])
   /// Streaming-mode filter gate (alpha r166/r169): the filter panel builds
   /// value counts from whatever happens to be loaded and the apply command is
   /// cancelled, so instead of a silent no-op the user gets an explicit offer
@@ -721,6 +737,12 @@ export function App(): React.JSX.Element {
   /// SlicerPanel).
   const [slicers, setSlicers] = useState<readonly SlicerUiState[]>([])
   const [watchOpen, setWatchOpen] = useState(false)
+  /// Threaded-comments panel (Excel's Comments pane) and the thread its
+  /// composer focus lands on when opened from the ribbon.
+  const [threadPanelOpen, setThreadPanelOpen] = useState(false)
+  const [threadDraft, setThreadDraft] = useState<ThreadedCommentThread | null>(null)
+  const [threadComposerSignal, setThreadComposerSignal] = useState(0)
+  const [activeSheetId, setActiveSheetId] = useState<string | null>(null)
   const [watchCells, setWatchCells] = useState<readonly WatchCell[]>([])
   const [calcManual, setCalcManual] = useState(false)
   /// Non-null while the "Insert Slicer" field picker is open.
@@ -1734,6 +1756,8 @@ export function App(): React.JSX.Element {
     const copyMaterializeDisposable = installCopyMaterialize(runtime, lazyWorkbookRef, setMessage)
     // Validation dropdowns and input messages follow the active cell, matching Excel.
     const dataValidationChromeDisposable = installActiveCellDataValidationChrome(runtime)
+    // Threaded-comment cell indicators (Excel's purple corner badge).
+    const threadIndicatorDisposable = installThreadedCommentIndicators(runtime)
     // Univer's own UI (rule-management panels, dialogs) follows the app
     // language instead of hard-coded English.
     void applyUniverLocale(runtime, getLang())
@@ -1822,6 +1846,7 @@ export function App(): React.JSX.Element {
       runtime.univerAPI.Event.ActiveSheetChanged,
       ({ activeSheet }) => {
         setAiSelectionAskAnchor(null)
+        setActiveSheetId(activeSheet.getSheetId())
         void loadVisibleRange(runtime, lazyWorkbookRef, activeSheet, setMessage)
         // formula view is per-sheet (sheetView/@showFormulas)
         applyShowFormulasView(runtime, lazyWorkbookRef.current, activeSheet.getSheetId())
@@ -3040,6 +3065,7 @@ export function App(): React.JSX.Element {
       nullResultDisposable.dispose()
       copyMaterializeDisposable.dispose()
       dataValidationChromeDisposable.dispose()
+      threadIndicatorDisposable.dispose()
       ruleDetailDisposable()
       lazyFindDisposable.dispose()
       replaceAutoSearchDisposable.dispose()
@@ -3682,6 +3708,19 @@ export function App(): React.JSX.Element {
       setWatchOpen((open) => !open)
       return
     }
+    if (command === 'thread-comments-panel') {
+      setThreadPanelOpen((open) => !open)
+      return
+    }
+    if (command === 'thread-comment-new') {
+      // Excel parity: New Comment opens the pane with the composer focused;
+      // the thread itself is created on Post (so an abandoned composer does
+      // not leave an empty thread behind).
+      setThreadPanelOpen(true)
+      setThreadDraft(null)
+      setThreadComposerSignal((value) => value + 1)
+      return
+    }
     if (command === 'toggle-page-break-preview') {
       togglePageBreakPreview()
       return
@@ -3723,6 +3762,15 @@ export function App(): React.JSX.Element {
 
   /// Adds every cell of the active selection (capped — a whole-column
   /// selection must not spawn a million watches) that isn't watched yet.
+  /// Panel navigation: scrolls the active sheet so the thread's anchor cell is
+  /// visible (the panel only lists the active sheet's threads).
+  function navigateToThread(thread: ThreadedCommentThread): void {
+    const workbook = univerRef.current?.univerAPI.getActiveWorkbook()
+    const sheet = workbook?.getActiveSheet()
+    if (!workbook || !sheet) return
+    void revealCellBelowFreeze(sheet, thread.row, thread.column)
+  }
+
   function addWatchSelection(): void {
     const workbook = univerRef.current?.univerAPI.getActiveWorkbook()
     const worksheet = workbook?.getActiveSheet()
@@ -4032,6 +4080,11 @@ export function App(): React.JSX.Element {
     disposeVisuals(visualDisposablesRef.current)
     loadWorkbookSkeleton(univerRef.current, selected)
     applyWorkbookNotes(univerRef.current, selected)
+    installWorkbookThreadedComments(selected)
+    setThreadDraft(null)
+    setActiveSheetId(
+      univerRef.current?.univerAPI.getActiveWorkbook()?.getActiveSheet()?.getSheetId() ?? null,
+    )
     applyDefinedNames(univerRef.current, selected, state)
     const runtime = univerRef.current
     if (runtime) {
@@ -4635,6 +4688,19 @@ export function App(): React.JSX.Element {
           onAddSelection={addWatchSelection}
           onRemove={(key) => setWatchCells(watchCells.filter((cell) => watchKey(cell) !== key))}
           onClose={() => setWatchOpen(false)}
+        />
+      )}
+      {threadPanelOpen && (
+        <ThreadedCommentsPanel
+          runtime={univerRef.current!}
+          sheetId={activeSheetId}
+          draftThread={threadDraft}
+          composerFocusSignal={threadComposerSignal}
+          onNavigate={navigateToThread}
+          onClose={() => {
+            setThreadPanelOpen(false)
+            setThreadDraft(null)
+          }}
         />
       )}
     </>

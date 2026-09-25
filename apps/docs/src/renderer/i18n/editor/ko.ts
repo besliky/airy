@@ -39,6 +39,7 @@ export const ko = {
   editorFormatChangeBy: '서식 변경: {author}',
   editorUnknownAuthor: '작성자 알 수 없음',
   editorFieldHint: '필드: {instr}(F9로 업데이트)',
+  editorTableFormulaHint: '표 수식: {instr}(F9 업데이트)',
   editorContentControl: '콘텐츠 컨트롤',
   editorDefaultAuthor: '사용자',
   editorCoverTitle: '문서 제목',

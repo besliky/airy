@@ -1957,7 +1957,7 @@ function Ribbon({
         <RibbonGroup label={t('appGroupComments')}>
           <RibbonButton
             large
-            label={t('appNewComment')}
+            label={t('appNewNote')}
             detail={t('appAtSelection')}
             symbol="🗨"
             onClick={() => onCommand('note-open')}
@@ -2719,7 +2719,21 @@ function Ribbon({
         <RibbonGroup label={t('appGroupComments')}>
           <RibbonButton
             large
-            label={t('appNewComment')}
+            label={t('appThreadNewComment')}
+            detail={t('appThreadNewCommentDetail')}
+            symbol="💬"
+            onClick={() => onCommand('thread-comment-new')}
+          />
+          <RibbonButton
+            large
+            label={t('appThreadComments')}
+            detail={t('appThreadShowCommentsDetail')}
+            symbol="🗂"
+            onClick={() => onCommand('thread-comments-panel')}
+          />
+          <RibbonButton
+            large
+            label={t('appNewNote')}
             detail={t('appNewCommentDetail')}
             symbol="🗨"
             onClick={() => onCommand('note-open')}

@@ -4006,6 +4006,10 @@ async function writeWorkbookTo(
     sheetName: resolveSheetName(sheetId),
     notes,
   }))
+  const threadedCommentStates = request.threadedCommentStates.map(({ sheetId, threads }) => ({
+    sheetName: resolveSheetName(sheetId),
+    threads,
+  }))
   const visualAdditions = request.visualAdditions.map((addition) => ({
     sheetName: resolveSheetName(addition.sheetId),
     anchor: addition.anchor,
@@ -4090,6 +4094,7 @@ async function writeWorkbookTo(
     visualAdditions,
     pageSetupStates,
     noteStates,
+    threadedCommentStates,
     tableAdditions,
     pivotAdditions,
     sparklineAdditions,

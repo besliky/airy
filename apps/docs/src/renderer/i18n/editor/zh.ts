@@ -37,6 +37,7 @@ export const zh = {
   editorFormatChangeBy: '格式修订: {author}',
   editorUnknownAuthor: '未知作者',
   editorFieldHint: '域: {instr}(F9 更新)',
+  editorTableFormulaHint: '表格公式: {instr}(F9 更新)',
   editorContentControl: '内容控件',
   editorDefaultAuthor: '用户',
   editorCoverTitle: '文档标题',

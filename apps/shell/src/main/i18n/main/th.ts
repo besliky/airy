@@ -16,6 +16,7 @@ export const th = {
   menuNewHtml: 'AI HTML',
   menuNewPdf: 'AI PDF',
   menuExportPdf: 'ส่งออกเป็น PDF…',
+  menuExportHtml: 'ส่งออกเป็น HTML…',
   menuOpenInDocs: 'แปลงและเปิดใน Docs',
   menuPrint: 'พิมพ์…',
   menuOpen: 'เปิด…',

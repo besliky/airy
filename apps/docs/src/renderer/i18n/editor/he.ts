@@ -39,6 +39,7 @@ export const he = {
   editorFormatChangeBy: 'שינוי עיצוב: {author}',
   editorUnknownAuthor: 'מחבר לא ידוע',
   editorFieldHint: 'שדה: {instr} (F9 לעדכון)',
+  editorTableFormulaHint: 'נוסחת טבלה: {instr} (F9 לעדכון)',
   editorContentControl: 'פקד תוכן',
   editorDefaultAuthor: 'משתמש',
   editorCoverTitle: 'כותרת המסמך',

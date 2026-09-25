@@ -39,6 +39,7 @@ export const nl = {
   editorFormatChangeBy: 'Opmaak gewijzigd: {author}',
   editorUnknownAuthor: 'Onbekende auteur',
   editorFieldHint: 'Veld: {instr} (F9 om bij te werken)',
+  editorTableFormulaHint: 'Tabelformule: {instr} (F9 om bij te werken)',
   editorContentControl: 'Inhoudsbesturingselement',
   editorDefaultAuthor: 'Gebruiker',
   editorCoverTitle: 'Documenttitel',

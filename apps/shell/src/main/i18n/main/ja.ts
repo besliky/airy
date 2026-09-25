@@ -16,6 +16,7 @@ export const ja = {
   menuNewHtml: 'AI HTML',
   menuNewPdf: 'AI PDF',
   menuExportPdf: 'PDF として書き出す…',
+  menuExportHtml: 'HTML として書き出す…',
   menuOpenInDocs: 'Docs 文書に変換して開く',
   menuPrint: '印刷…',
   menuOpen: '開く…',

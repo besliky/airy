@@ -16,6 +16,7 @@ export const nl = {
   menuNewHtml: 'AI HTML',
   menuNewPdf: 'AI PDF',
   menuExportPdf: 'Exporteren als PDF…',
+  menuExportHtml: 'Exporteren als HTML…',
   menuOpenInDocs: 'Converteren en openen in Docs',
   menuPrint: 'Afdrukken…',
   menuOpen: 'Openen…',

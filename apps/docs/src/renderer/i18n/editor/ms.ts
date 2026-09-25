@@ -39,6 +39,7 @@ export const ms = {
   editorFormatChangeBy: 'Diformatkan: {author}',
   editorUnknownAuthor: 'Pengarang tidak dikenali',
   editorFieldHint: 'Medan: {instr} (F9 untuk kemas kini)',
+  editorTableFormulaHint: 'Formula jadual: {instr} (F9 untuk mengemas kini)',
   editorContentControl: 'Kawalan kandungan',
   editorDefaultAuthor: 'Pengguna',
   editorCoverTitle: 'Tajuk dokumen',

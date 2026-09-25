@@ -59,6 +59,7 @@ import { MARKDOWN_CHANNELS } from '../shared/ipc'
 import type {
   ExportDocxRequest,
   ExportFormat,
+  ExportHtmlRequest,
   ExportPdfRequest,
   ExportResult,
   ImageData,
@@ -1192,6 +1193,42 @@ function registerMarkdownIpc(): void {
       } finally {
         printWin.destroy()
         await rm(workDir, { recursive: true, force: true })
+      }
+    },
+  )
+
+  ipcMain.handle(
+    MARKDOWN_CHANNELS.exportHtml,
+    async (e, request: ExportHtmlRequest): Promise<ExportResult> => {
+      if (typeof request?.html !== 'string' || !request.html) {
+        return { ok: false, error: 'markdown: bad export request' }
+      }
+      // the cap counts code points (BUG-412): slice would split a surrogate pair
+      const safeName =
+        truncateByCodePoints(
+          String(request.suggestedName || tm('untitledFile')).replace(/[/\\:*?"<>|]/g, '_'),
+          80,
+        ).trim() || tm('untitledFile')
+      const win =
+        BrowserWindow.fromWebContents(e.sender) ?? BrowserWindow.getFocusedWindow() ?? undefined
+      const picked = await showSaveDialogWithMemory(
+        dialog,
+        win,
+        {
+          defaultPath: `${safeName}.html`,
+          filters: [{ name: 'HTML', extensions: ['html'] }],
+        },
+        configuredDefaultSaveDir(app),
+      )
+      if (picked.canceled || !picked.filePath) return { ok: true, canceled: true }
+      // PAR-315: stage and rename like every other user-picked export target —
+      // a plain writeFile would truncate the previous file before writing
+      const htmlBytes = Buffer.from(request.html, 'utf8')
+      try {
+        await atomicWriteFile(picked.filePath, htmlBytes)
+        return { ok: true, path: picked.filePath }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }
     },
   )

@@ -140,6 +140,7 @@ import {
   RevisionOriginalExtension,
   RprChangeMark,
   StrikeMark,
+  TableFormulaMark,
   TextStyleMark,
   UnderlineMark,
 } from './marks'
@@ -5708,6 +5709,7 @@ const textboxSubExtensions = [
   // without these marks the whole box fails to load into the sub-editor
   RefFieldMark,
   InstrFieldMark,
+  TableFormulaMark,
   TextStyleMark,
   CommentMark,
   UndoRedo,
@@ -5866,6 +5868,7 @@ export const editorExtensions = [
   LinkMark,
   RefFieldMark,
   InstrFieldMark,
+  TableFormulaMark,
   RprChangeMark,
   TextStyleMark,
   CommentMark,
