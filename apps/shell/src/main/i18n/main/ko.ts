@@ -16,6 +16,7 @@ export const ko = {
   menuNewHtml: 'AI HTML',
   menuNewPdf: 'AI PDF',
   menuExportPdf: 'PDF로 내보내기…',
+  menuExportHtml: 'HTML로 내보내기…',
   menuOpenInDocs: 'Docs 문서로 변환하여 열기',
   menuPrint: '인쇄…',
   menuOpen: '열기…',

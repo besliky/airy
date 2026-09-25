@@ -39,6 +39,7 @@ export const id = {
   editorFormatChangeBy: 'Diformat: {author}',
   editorUnknownAuthor: 'Penulis tidak dikenal',
   editorFieldHint: 'Bidang: {instr} (F9 untuk memperbarui)',
+  editorTableFormulaHint: 'Rumus tabel: {instr} (F9 untuk memperbarui)',
   editorContentControl: 'Kontrol konten',
   editorDefaultAuthor: 'Pengguna',
   editorCoverTitle: 'Judul dokumen',

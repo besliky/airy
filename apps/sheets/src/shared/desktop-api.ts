@@ -142,6 +142,31 @@ const worksheetMetadataSchema = z
         })
         .strict(),
     ),
+    /// Modern Excel threaded comments, flat per message ([MS-XLSX] 2.3.7):
+    /// replies have no cell of their own — they hang off parentId. Defaulted
+    /// so a stale sidecar binary degrades to "no threaded comments" gracefully.
+    threadedComments: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1),
+            row: z.number().int().nonnegative(),
+            column: z.number().int().nonnegative(),
+            personId: z.string().min(1),
+            /// Display name resolved sidecar-side from the persons part.
+            author: z.string(),
+            text: z.string(),
+            /// Verbatim `dT` attribute (ISO-8601).
+            created: z.string(),
+            parentId: z.string().min(1).optional(),
+            userId: z.string().optional(),
+            providerId: z.string().optional(),
+            done: z.boolean(),
+          })
+          .strict(),
+      )
+      .max(2_000)
+      .default([]),
     /// PivotTable output areas; the renderer blocks edits inside them.
     pivotRanges: z.array(cellAreaSchema).max(1_000),
     /// Part paths for on-demand pivot definition reads (refresh support).
@@ -1871,6 +1896,44 @@ export const workbookNoteStateSchema = z
   })
   .strict()
 
+/// One message inside a saved threaded-comment chain. personId/author pairs
+/// feed the workbook-level persons part; userId/providerId are preserved when
+/// the session opened a file that carried them.
+export const threadedCommentMessageSchema = z
+  .object({
+    id: z.string().min(1).max(255),
+    personId: z.string().min(1).max(255),
+    author: z.string().max(255),
+    text: z.string().max(32_767),
+    /// ISO-8601 creation timestamp for the `dT` attribute.
+    createdAt: z.string().min(1).max(64),
+    userId: z.string().max(255).optional(),
+    providerId: z.string().max(255).optional(),
+  })
+  .strict()
+
+/// A whole thread (root message + replies, root first): one cell anchor, one
+/// resolution flag. Empty thread lists remove the sheet's part.
+export const workbookThreadedCommentStateSchema = z
+  .object({
+    sheetId: z.string().min(1),
+    threads: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1).max(255),
+            row: z.number().int().nonnegative().max(1_048_575),
+            column: z.number().int().nonnegative().max(16_383),
+            resolved: z.boolean(),
+            /// Root message first; replies follow in conversation order.
+            messages: z.array(threadedCommentMessageSchema).min(1).max(1_000),
+          })
+          .strict(),
+      )
+      .max(1_000),
+  })
+  .strict()
+
 /// A table (ListObject) created in the editor this session; the save writes
 /// a new xl/tables part and registers it on the worksheet. The header row is
 /// always the area's first row (headerRowCount=1).
@@ -2115,6 +2178,7 @@ export const workbookSaveRequestSchema = z
     dvStates: z.array(workbookDvStateSchema).max(1_000),
     pageSetupStates: z.array(workbookPageSetupStateSchema).max(1_000),
     noteStates: z.array(workbookNoteStateSchema).max(1_000),
+    threadedCommentStates: z.array(workbookThreadedCommentStateSchema).max(1_000),
     /// Recalculated formula-cell values written back into <v> so the saved file's
     /// inputs and outputs agree for readers without a formula engine.
     formulaValues: z
@@ -2270,6 +2334,7 @@ export const workbookSaveRequestSchema = z
       request.dvStates.length > 0 ||
       request.pageSetupStates.length > 0 ||
       request.noteStates.length > 0 ||
+      request.threadedCommentStates.length > 0 ||
       request.pivotCacheRefreshPaths.length > 0 ||
       request.pivotRefreshUpdates.length > 0 ||
       request.sheetProtections.length > 0 ||
@@ -2525,6 +2590,8 @@ export type WorkbookCfState = z.infer<typeof workbookCfStateSchema>
 export type WorkbookDvState = z.infer<typeof workbookDvStateSchema>
 export type WorkbookPageSetupState = z.infer<typeof workbookPageSetupStateSchema>
 export type WorkbookNoteState = z.infer<typeof workbookNoteStateSchema>
+export type ThreadedCommentMessage = z.infer<typeof threadedCommentMessageSchema>
+export type WorkbookThreadedCommentState = z.infer<typeof workbookThreadedCommentStateSchema>
 export type WorkbookSheetOp = z.infer<typeof workbookSheetOpSchema>
 export type WorkbookFilterState = z.infer<typeof workbookFilterStateSchema>
 export type WorkbookSaveRequest = z.infer<typeof workbookSaveRequestSchema>

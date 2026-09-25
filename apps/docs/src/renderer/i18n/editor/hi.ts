@@ -39,6 +39,7 @@ export const hi = {
   editorFormatChangeBy: 'स्वरूपित: {author}',
   editorUnknownAuthor: 'अज्ञात लेखक',
   editorFieldHint: 'फ़ील्ड: {instr} (अपडेट के लिए F9)',
+  editorTableFormulaHint: 'तालिका सूत्र: {instr} (अपडेट करने के लिए F9)',
   editorContentControl: 'सामग्री नियंत्रण',
   editorDefaultAuthor: 'उपयोगकर्ता',
   editorCoverTitle: 'दस्तावेज़ शीर्षक',

@@ -23,6 +23,7 @@ import type {
   SheetDvState,
   SheetHyperlinkEdits,
   SheetNoteState,
+  SheetThreadedCommentState,
   SheetProtectedRangesState,
   SheetProtectionState,
   SheetPivotAddition,
@@ -105,6 +106,7 @@ export interface StreamingSaveRequest {
   readonly visualAdditions?: readonly SheetVisualAddition[] | undefined
   readonly pageSetupStates?: readonly SheetPageSetupState[] | undefined
   readonly noteStates?: readonly SheetNoteState[] | undefined
+  readonly threadedCommentStates?: readonly SheetThreadedCommentState[] | undefined
   readonly tableAdditions?: readonly SheetTableAddition[] | undefined
   readonly pivotAdditions?: readonly SheetPivotAddition[] | undefined
   readonly pivotCacheRefreshPaths?: readonly string[] | undefined
@@ -183,6 +185,7 @@ export async function saveWorkbookViaSidecar(
       request.workbookProtectionState ?? null,
       request.protectedRangeStates ?? [],
       request.bulkConstantFills ?? [],
+      request.threadedCommentStates ?? [],
     )
 
     const replacements = await writePlanContents(workDir, 'replace', plan.replaced)

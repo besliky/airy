@@ -39,6 +39,7 @@ export const th = {
   editorFormatChangeBy: 'เปลี่ยนรูปแบบ: {author}',
   editorUnknownAuthor: 'ไม่ทราบผู้เขียน',
   editorFieldHint: 'เขตข้อมูล: {instr} (กด F9 เพื่ออัปเดต)',
+  editorTableFormulaHint: 'สูตรตาราง: {instr} (กด F9 เพื่ออัปเดต)',
   editorContentControl: 'ตัวควบคุมเนื้อหา',
   editorDefaultAuthor: 'ผู้ใช้',
   editorCoverTitle: 'ชื่อเอกสาร',

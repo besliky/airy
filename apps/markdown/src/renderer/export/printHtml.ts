@@ -1,7 +1,8 @@
 import katexCss from 'katex/dist/katex.min.css?inline'
 
-/** Print-theme CSS: mirrors the editor typography so the PDF matches the canvas */
-const PRINT_CSS = `
+/** Print-theme CSS: mirrors the editor typography so the PDF matches the canvas.
+ * Shared with the standalone HTML export (htmlExport) — one preview pipeline. */
+export const PRINT_CSS = `
 @page {
   margin: 2cm;
   size: auto;

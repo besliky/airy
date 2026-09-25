@@ -62,6 +62,7 @@ import {
   toggleRepeatHeaderRows,
   updateSelectedTableAttrs,
 } from '../editor/table-properties'
+import { insertCellFormula, proposeCellFormula } from '../editor/table-formulas'
 import { useI18n, type StringKey } from '../i18n/locale'
 import { fontFamiliesFor, isEastAsianFontName } from '../font-list'
 import { useSystemFontFamilies } from '../system-fonts'
@@ -90,6 +91,7 @@ import { CompressPicturesDialog, CropDialog, CutoutDialog } from './PictureDialo
 import { AltTextDialog } from './AltTextDialog'
 import { SHADOW_PRESETS, shadowDecls, shadowPresetKey } from '../editor/shadow-effects'
 import { SortDialog } from './SortDialog'
+import { FormulaDialog } from './FormulaDialog'
 import {
   AiryMark,
   IconAlignCenter,
@@ -155,6 +157,7 @@ import {
   IconTableDelete,
   IconRepeatHeader,
   IconTableProperties,
+  IconTableFormula,
 } from './icons'
 interface RibbonProps {
   /** App keyboard shortcuts reuse ribbon closures through here (font-size stepping keeps its coalescing) */
@@ -862,6 +865,8 @@ function RibbonInner({
   const [listDialog, setListDialog] = useState(false)
   const [sortDialog, setSortDialog] = useState(false)
   const [tablePropertiesOpen, setTablePropertiesOpen] = useState(false)
+  /** Table Layout → Data → Formula dialog (cell formula field) */
+  const [formulaOpen, setFormulaOpen] = useState(false)
 
   useEffect(() => {
     if (tabRequest && (TABS as readonly string[]).includes(tabRequest.tab)) {
@@ -3210,6 +3215,17 @@ function RibbonInner({
             <div className="table-tool-group table-tool-advanced">
               <div className="table-tool-stack">
                 <button
+                  className="table-command-row"
+                  disabled={!inTable}
+                  onClick={() => {
+                    setDropdown(null)
+                    setFormulaOpen(true)
+                  }}
+                >
+                  <IconTableFormula size={17} />
+                  <span>{t('ribbonFormula')}</span>
+                </button>
+                <button
                   className={
                     tableHeader.active
                       ? 'table-command-row table-tool-button active'
@@ -4423,6 +4439,13 @@ function RibbonInner({
           initial={tablePropertiesFromAttrs(tableAttrs)}
           onApply={applyTableProperties}
           onClose={() => setTablePropertiesOpen(false)}
+        />
+      )}
+      {formulaOpen && (
+        <FormulaDialog
+          initialFormula={proposeCellFormula(editor)}
+          onApply={(instruction) => insertCellFormula(editor, instruction)}
+          onClose={() => setFormulaOpen(false)}
         />
       )}
     </div>

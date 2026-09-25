@@ -37,8 +37,9 @@ import { EDIT_QUEUE_MAX, selectionForAnchor, type EditQueueItem } from './ai/edi
 import { addQueueAnchor, clearQueueAnchors, removeQueueAnchors } from './editor/aiQueueAnchors'
 import { DOCX_MAX_IMAGE_PX, exportDocxBytes } from './export/docxExport'
 import { buildPrintHtml } from './export/printHtml'
+import { buildStandaloneHtml } from './export/htmlExport'
 import { mermaidSvgToPng, renderMermaid } from './editor/mermaid'
-import { resolveImageSrc } from './editor/localImage'
+import { resolveImageSrc, unresolveImageSrc } from './editor/localImage'
 import type { ExportFormat, SaveMode } from '../shared/ipc'
 import { uiOp } from './editor/ops'
 // module-level t: toasts fired from callbacks outliving a render closure
@@ -486,6 +487,18 @@ export default function App() {
           const html = buildPrintHtml(current.view.dom, suggestedName)
           const result = await window.markdownApi.exportPdf({ html, suggestedName })
           if (!result.ok) console.error('[markdown] pdf export failed:', result.error)
+          return
+        }
+        if (format === 'html') {
+          // standalone HTML through the same preview pipeline as the PDF path;
+          // md-asset:// images are inlined (the app URL is dead in a standalone
+          // file), remote images keep their URLs
+          const html = await buildStandaloneHtml(current.view.dom, suggestedName, async (src) => {
+            if (!src.startsWith('md-asset://')) return null
+            return window.markdownApi.readImage(unresolveImageSrc(src))
+          })
+          const result = await window.markdownApi.exportHtml({ html, suggestedName })
+          if (!result.ok) console.error('[markdown] html export failed:', result.error)
           return
         }
         const loadImage = async (src: string) => {

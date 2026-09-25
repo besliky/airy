@@ -188,6 +188,7 @@ fn rejects_oversized_ranges() {
         zoom_scale: None,
         tables: Vec::new(),
         comments: Vec::new(),
+        threaded_comments: Vec::new(),
         pivot_ranges: Vec::new(),
         pivot_tables: Vec::new(),
         sparklines: Vec::new(),
@@ -352,6 +353,7 @@ fn omits_empty_sparklines_field_from_metadata_json() {
         zoom_scale: None,
         tables: Vec::new(),
         comments: Vec::new(),
+        threaded_comments: Vec::new(),
         pivot_ranges: Vec::new(),
         pivot_tables: Vec::new(),
         sparklines: Vec::new(),
@@ -3514,6 +3516,88 @@ fn reads_auto_filter_column_criteria() {
         customs.filters[1].operator.as_deref(),
         Some("lessThanOrEqual")
     );
+}
+
+/// Modern Excel threaded comments ([MS-XLSX] 2.3.7): roots carry the cell ref
+/// (plus the resolution flag), replies reference their root through parentId,
+/// and author display names come from the workbook-level persons part. The
+/// fixture mirrors a real Excel-shaped file, including the Microsoft
+/// namespaces and `dT` attribute casing.
+#[test]
+fn threaded_comments_resolve_anchors_authors_and_replies() {
+    let (_dir, path) = open_fixture(&[
+        (
+            "xl/workbook.xml",
+            r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>"#,
+        ),
+        (
+            "xl/_rels/workbook.xml.rels",
+            r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.microsoft.com/office/2017/10/relationships/person" Target="persons/person.xml"/></Relationships>"#,
+        ),
+        (
+            "xl/worksheets/sheet1.xml",
+            r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>"#,
+        ),
+        (
+            "xl/worksheets/_rels/sheet1.xml.rels",
+            r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId5" Type="http://schemas.microsoft.com/office/2017/10/relationships/threadedComment" Target="../threadedComments/threadedComment1.xml"/></Relationships>"#,
+        ),
+        (
+            "xl/threadedComments/threadedComment1.xml",
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<threadedComments xmlns="http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments" xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<threadedComment dT="2026-09-01T08:00:00.000Z" ref="C2" personId="{AAAAAAAA-1111-1111-1111-111111111111}" id="{11111111-1111-1111-1111-111111111111}" done="1"><text>Tax inclusive</text></threadedComment>
+<threadedComment dT="2026-09-01T09:00:00.000Z" personId="{AAAAAAAA-2222-2222-2222-222222222222}" id="{22222222-2222-2222-2222-222222222222}" parentId="{11111111-1111-1111-1111-111111111111}"><text>Confirmed</text></threadedComment>
+<threadedComment dT="2026-09-01T10:00:00.000Z" personId="{AAAAAAAA-1111-1111-1111-111111111111}" id="{33333333-3333-3333-3333-333333333333}" parentId="{99999999-9999-9999-9999-999999999999}"><text>orphan</text></threadedComment>
+</threadedComments>"#,
+        ),
+        (
+            "xl/persons/person.xml",
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<persons xmlns="http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments"><person xmlns:xr10="http://schemas.microsoft.com/office/spreadsheetml/2016/revision10" id="{AAAAAAAA-1111-1111-1111-111111111111}" displayName="Reviewer" userId="user-1111" providerId="None"/><person id="{AAAAAAAA-2222-2222-2222-222222222222}" displayName="Author Two"/></persons>"#,
+        ),
+    ]);
+    let mut sessions = WorkbookSessions::new();
+    let metadata = sessions.open(&path).unwrap();
+    let threads = &metadata.sheets[0].threaded_comments;
+    assert_eq!(threads.len(), 2, "orphan replies are dropped");
+    assert_eq!(threads[0].id, "{11111111-1111-1111-1111-111111111111}");
+    // The root's ref anchors the thread; C2 is row 1, column 2.
+    assert_eq!((threads[0].row, threads[0].column), (1, 2));
+    assert!(threads[0].done);
+    assert_eq!(threads[0].author, "Reviewer");
+    assert_eq!(threads[0].user_id.as_deref(), Some("user-1111"));
+    assert_eq!(threads[0].provider_id.as_deref(), Some("None"));
+    // The reply inherits the root's anchor and resolves its own author.
+    assert_eq!(threads[1].id, "{22222222-2222-2222-2222-222222222222}");
+    assert_eq!((threads[1].row, threads[1].column), (1, 2));
+    assert_eq!(threads[1].parent_id.as_deref(), Some("{11111111-1111-1111-1111-111111111111}"));
+    assert_eq!(threads[1].author, "Author Two");
+    assert!(threads[1].user_id.is_none());
+    assert!(!threads[1].done);
+}
+
+/// A workbook without threaded comments (or with a threadedComments rel whose
+/// part vanished) opens with an empty thread set instead of an error.
+#[test]
+fn missing_threaded_comment_parts_open_empty() {
+    let (_dir, path) = open_fixture(&[
+        (
+            "xl/workbook.xml",
+            r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>"#,
+        ),
+        (
+            "xl/_rels/workbook.xml.rels",
+            r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#,
+        ),
+        (
+            "xl/worksheets/sheet1.xml",
+            r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>"#,
+        ),
+    ]);
+    let mut sessions = WorkbookSessions::new();
+    let metadata = sessions.open(&path).unwrap();
+    assert!(metadata.sheets[0].threaded_comments.is_empty());
 }
 
 /// PAR-204: worksheet protection reads back the full attribute set plus the

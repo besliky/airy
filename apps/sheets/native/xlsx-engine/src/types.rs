@@ -97,6 +97,10 @@ pub struct SheetMetadata {
     pub zoom_scale: Option<u16>,
     pub tables: Vec<TableInfo>,
     pub comments: Vec<CommentInfo>,
+    /// Modern threaded comments, flat per message. Emptied out of the reply
+    /// when the sheet has none (renderer-side zod default covers old binaries).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub threaded_comments: Vec<ThreadedCommentMessageInfo>,
     /// PivotTable output areas — protected from edits by the renderer.
     pub pivot_ranges: Vec<MergedRange>,
     /// One entry per pivot table part: enough for the host to read and
@@ -329,6 +333,29 @@ pub struct CommentInfo {
     pub column: usize,
     pub author: String,
     pub text: String,
+}
+
+/// One message of a modern Excel threaded comment ([MS-XLSX] 2.3.7), already
+/// resolved to its thread's anchor cell (roots carry the ref; replies inherit
+/// their parent's cell) and to the author's display name from the persons part.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadedCommentMessageInfo {
+    pub id: String,
+    pub row: usize,
+    pub column: usize,
+    pub person_id: String,
+    pub author: String,
+    pub text: String,
+    /// Verbatim `dT` attribute (ISO-8601).
+    pub created: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_id: Option<String>,
+    pub done: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]

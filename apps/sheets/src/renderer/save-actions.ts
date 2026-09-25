@@ -35,6 +35,11 @@ import {
   collectNoteStates,
 } from './univer-sync'
 import type { LazyWorkbookState, UniverRuntime } from './univer-state'
+import {
+  collectThreadedCommentStates,
+  fileHadThreadedComments,
+  pruneSheets,
+} from './threaded-comments'
 
 /** The App refs/state the save flow needs; built fresh per call. */
 export interface SaveContext {
@@ -143,6 +148,20 @@ export async function handleSave(
     }))
   const pageSetupStates = toSavePageSetupStates(state.editJournal)
   const noteStates = collectNoteStates(ctx.univerRef.current, state)
+  // Threads live outside Univer (no native preset), so the snapshot comes
+  // straight from the store: every surviving sheet when the file carried
+  // threads at open (empty lists then remove their parts), otherwise only
+  // sheets that gained threads this session.
+  const liveSheetIds =
+    ctx.univerRef.current?.univerAPI
+      .getActiveWorkbook()
+      ?.getSheets()
+      .map((sheet) => sheet.getSheetId()) ?? []
+  pruneSheets(liveSheetIds)
+  const threadedCommentStates = collectThreadedCommentStates(
+    liveSheetIds,
+    fileHadThreadedComments(),
+  )
   const pivotCacheRefreshPaths = [...state.editJournal.pivotCacheRefresh]
   // Output-area expansion after layout growth (location ref write-back); the
   // count folds into cacheRefresh.
@@ -234,6 +253,7 @@ export async function handleSave(
     dvStates.length +
     pageSetupStates.length +
     noteStates.length +
+    threadedCommentStates.length +
     pivotCacheRefreshPaths.length +
     sheetProtections.length +
     (definedNamesState === null ? 0 : 1) +
@@ -341,6 +361,7 @@ export async function handleSave(
     dvStates,
     pageSetupStates,
     noteStates,
+    threadedCommentStates,
     pivotCacheRefreshPaths,
     pivotRefreshUpdates,
     sheetProtections,
@@ -388,6 +409,7 @@ export async function handleSave(
       dvStates,
       pageSetupStates,
       noteStates,
+      threadedCommentStates,
       pivotCacheRefreshPaths,
       pivotRefreshUpdates,
       sheetProtections,
@@ -460,6 +482,7 @@ export async function handleSave(
         dvStates: [],
         pageSetupStates: [],
         noteStates: [],
+        threadedCommentStates: [],
         pivotCacheRefreshPaths: [],
         pivotRefreshUpdates: [],
         sheetProtections: [],

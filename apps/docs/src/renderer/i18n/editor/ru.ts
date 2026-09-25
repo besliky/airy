@@ -39,6 +39,7 @@ export const ru = {
   editorFormatChangeBy: 'Изменен формат: {author}',
   editorUnknownAuthor: 'Неизвестный автор',
   editorFieldHint: 'Поле: {instr} (F9 — обновить)',
+  editorTableFormulaHint: 'Формула таблицы: {instr} (F9 — обновить)',
   editorContentControl: 'Элемент управления содержимым',
   editorDefaultAuthor: 'Пользователь',
   editorCoverTitle: 'Название документа',
