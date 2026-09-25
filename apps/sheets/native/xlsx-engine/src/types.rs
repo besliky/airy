@@ -528,12 +528,42 @@ pub struct CustomFilterItem {
     pub operator: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SheetProtectionInfo {
     pub protected: bool,
     /// password= (legacy) or algorithmName/hashValue (modern) present.
     pub has_password: bool,
+    /// The legacy `password=` attribute itself (1-4 hex digits) when the file
+    /// used it; absent for modern hashValue sheets and unprotected ones. The
+    /// renderer verifies unprotect attempts against it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+    /// Modeled CT_SheetProtection attributes, raw OOXML semantics: true =
+    /// action prevented while protected. Absent = the attribute was not in
+    /// the element (schema default applies on the consumer side).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub select_locked_cells: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub select_unlocked_cells: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format_cells: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format_columns: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format_rows: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub insert_columns: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub insert_rows: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delete_columns: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delete_rows: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_filter: Option<bool>,
 }
 
 /// Inches, from `<pageMargins>`.

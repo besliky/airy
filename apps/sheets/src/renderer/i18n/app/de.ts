@@ -471,7 +471,30 @@ export const de = {
   appProtectedWithPassword:
     'Dieses Blatt ist mit einem Kennwort geschützt — das Entfernen des Schutzes wird nicht unterstützt.',
   appProtectionWillWrite:
-    'Der Blattschutz wird beim Speichern geschrieben (ohne Kennwort). Der Editor selbst erzwingt ihn nicht.',
+    'Der Blattschutz wird beim Speichern geschrieben — der Editor blockiert Änderungen gesperrter Zellen und unzulässige Aktionen.',
+  appSheetCellProtected:
+    'Die Zelle, die Sie ändern möchten, befindet sich auf einem geschützten Blatt. Heben Sie zum Ändern den Blattschutz auf — möglicherweise wird ein Kennwort abgefragt.',
+  appSheetActionProtected:
+    'Diese Aktion ist auf einem geschützten Blatt nicht zulässig. Heben Sie dazu zuerst den Blattschutz auf (Überprüfen › Blattschutz aufheben).',
+  appProtectPassword: 'Kennwort zum Aufheben des Blattschutzes:',
+  appProtectReenterPassword: 'Kennwort zur Bestätigung erneut eingeben:',
+  appProtectPasswordMismatch: 'Die Kennwörter stimmen nicht überein — bitte erneut eingeben.',
+  appProtectAllowedHeading: 'Allen Benutzern dieses Arbeitsblatts erlauben:',
+  appUnprotectUnsupported:
+    'Dieses Blatt verwendet einen modernen Kennwort-Hash, der hier nicht geprüft werden kann — der Schutz bleibt aktiv.',
+  appUnprotectWrongPassword:
+    'Das eingegebene Kennwort ist falsch. Prüfen Sie, ob die Feststelltaste aktiviert ist, und versuchen Sie es erneut.',
+  appProtectAllowSelectLocked: 'Gesperrte Zellen markieren',
+  appProtectAllowSelectUnlocked: 'Ungesperrte Zellen markieren',
+  appProtectAllowFormatCells: 'Zellen formatieren',
+  appProtectAllowFormatColumns: 'Spalten formatieren',
+  appProtectAllowFormatRows: 'Zeilen formatieren',
+  appProtectAllowInsertRows: 'Zeilen einfügen',
+  appProtectAllowInsertColumns: 'Spalten einfügen',
+  appProtectAllowDeleteRows: 'Zeilen löschen',
+  appProtectAllowDeleteColumns: 'Spalten löschen',
+  appProtectAllowSort: 'Sortieren',
+  appProtectAllowAutoFilter: 'AutoFilter verwenden',
   appProtectionWillRemove: 'Der Blattschutz wird beim Speichern entfernt.',
   appZoom: 'Zoom {percent} %.',
   appTopRowFrozen: 'Oberste Zeile fixiert — mit ⌘S speichern.',
@@ -1319,7 +1342,7 @@ export const de = {
   appUnprotectSheet: 'Blattschutz aufheben',
   appProtectSheet: 'Blatt schützen',
   appOpenFileFirst: 'Öffnen Sie zuerst eine Datei',
-  appNoPassword: 'Kein Kennwort',
+  appNoPassword: 'Schützt vor unbeabsichtigten Änderungen — Kennwort optional',
   appProtectWorkbook: 'Arbeitsmappe schützen',
   appAllowEditRanges: 'Bereiche zur Bearbeitung freigeben',
   appGroupClipboard: 'Zwischenablage',

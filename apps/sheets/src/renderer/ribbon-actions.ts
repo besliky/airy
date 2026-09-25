@@ -48,6 +48,7 @@ import {
   NO_FILL_STYLE,
   recordNeutralStyleEdit,
   recordPageSetup,
+  recordSheetProtection,
   recordSparklineAdd,
   recordStructuralOp,
   removeStructuralOp,
@@ -136,6 +137,10 @@ export interface RibbonCommandContext {
   handleExportPdf: () => Promise<void>
   /// File › Print (and Ctrl+P): opens the print dialog.
   openPrintDialog: () => void
+  /// Review › Protect/Unprotect Sheet (PAR-204): opens Excel's dialog;
+  /// the 'protect' mode carries the password + allowed-action checkboxes,
+  /// 'unprotect' the password prompt.
+  openProtectSheetDialog: (mode: 'protect' | 'unprotect') => void
 }
 
 /// Resolves interned style references and merges row/col/sheet styles —
@@ -388,12 +393,34 @@ export function handleRibbonCommand(ctx: RibbonCommandContext, command: string):
       }
       const sheetId = worksheet?.getSheetId()
       if (!sheetId || isSheetRemoved(state.editJournal, sheetId)) return
-      const original = state.sheetProtections.get(sheetId)?.protected ?? false
-      const current = state.editJournal.sheetProtection.get(sheetId) ?? original
-      void ctx.runOps(
-        [{ op: 'protect_sheet', sheetId, protected: !current }],
-        !current ? t('appProtectionWillWrite') : t('appProtectionWillRemove'),
+      const file = state.sheetProtections.get(sheetId) ?? { protected: false, hasPassword: false }
+      const delta = state.editJournal.sheetProtection.get(sheetId)
+      if (!(delta?.protected ?? file.protected)) {
+        // Excel always opens the Protect Sheet dialog when protecting.
+        ctx.openProtectSheetDialog('protect')
+        return
+      }
+      if (delta === undefined && file.hasPassword) {
+        // File protection with a password: Excel asks before unprotecting,
+        // and the dialog verifies before the journal moves.
+        ctx.openProtectSheetDialog('unprotect')
+        return
+      }
+      // Nothing stands in the way — file protection without a password, or a
+      // protection toggled this session: unprotect right away. Comparing
+      // against the FILE state (not the delta) also cancels a session-only
+      // toggle cleanly: equal delta and original delete the entry.
+      recordSheetProtection(
+        state.editJournal,
+        sheetId,
+        { protected: false, passwordHash: null },
+        {
+          protected: file.protected,
+          ...(file.passwordHash !== undefined ? { passwordHash: file.passwordHash } : {}),
+        },
       )
+      ctx.setPendingEdits(journalSize(state.editJournal))
+      ctx.setMessage(t('appProtectionWillRemove'))
       return
     }
     case 'workbook-protect': {

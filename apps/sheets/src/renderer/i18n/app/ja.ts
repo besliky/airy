@@ -465,7 +465,30 @@ export const ja = {
   appProtectedWithPassword:
     'このシートはパスワードで保護されています — その保護の解除には対応していません。',
   appProtectionWillWrite:
-    '保存時にシートの保護（パスワードなし）が書き込まれます。エディター自体は保護を強制しません。',
+    '保存時にシート保護を書き込みます。ロックされたセルの編集と許可されていない操作はエディターで阻止されます。',
+  appSheetCellProtected:
+    '変更しようとしているセルは、保護されたワークシートにあります。変更するには、まずシート保護を解除してください（パスワードが必要な場合があります）。',
+  appSheetActionProtected:
+    '保護されたワークシートでは、その操作は許可されていません。先にシート保護を解除してください（校閲 › シート保護の解除）。',
+  appProtectPassword: 'シート保護を解除するためのパスワード:',
+  appProtectReenterPassword: '確認のためパスワードを再入力してください:',
+  appProtectPasswordMismatch: 'パスワードが一致しません。もう一度入力してください。',
+  appProtectAllowedHeading: 'このワークシートのすべてのユーザーに許可する操作:',
+  appUnprotectUnsupported:
+    'このシートは新しい形式のパスワードハッシュを使用しており、ここでは検証できません。保護は維持されます。',
+  appUnprotectWrongPassword:
+    '入力したパスワードが正しくありません。Caps Lock を確認して、もう一度お試しください。',
+  appProtectAllowSelectLocked: 'ロックされたセルの選択',
+  appProtectAllowSelectUnlocked: 'ロック解除セルの選択',
+  appProtectAllowFormatCells: 'セルの書式設定',
+  appProtectAllowFormatColumns: '列の書式設定',
+  appProtectAllowFormatRows: '行の書式設定',
+  appProtectAllowInsertRows: '行の挿入',
+  appProtectAllowInsertColumns: '列の挿入',
+  appProtectAllowDeleteRows: '行の削除',
+  appProtectAllowDeleteColumns: '列の削除',
+  appProtectAllowSort: '並べ替え',
+  appProtectAllowAutoFilter: 'オートフィルターの使用',
   appProtectionWillRemove: '保存時にシートの保護が解除されます。',
   appZoom: 'ズーム {percent}%。',
   appTopRowFrozen: '先頭行を固定しました — ⌘S で保存します。',
@@ -1315,7 +1338,7 @@ export const ja = {
   appUnprotectSheet: 'シート保護の解除',
   appProtectSheet: 'シートの保護',
   appOpenFileFirst: '先にファイルを開いてください',
-  appNoPassword: 'パスワードなし',
+  appNoPassword: '誤った編集を防止 — パスワードは任意',
   appProtectWorkbook: 'ブックの保護',
   appAllowEditRanges: '範囲の編集を許可',
   // Home tab

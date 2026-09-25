@@ -440,7 +440,30 @@ export const cs = {
   appProtectedWithPassword:
     'Tento list je zamknutý heslem — odstranění jeho zámku není podporováno.',
   appProtectionWillWrite:
-    'Zámek listu se zapíše při uložení (bez hesla). Samotný editor ho nevynucuje.',
+    'Ochrana listu bude zapsána při uložení — editor blokuje úpravy uzamčených buněk a zakázané akce.',
+  appSheetCellProtected:
+    'Buňka, kterou se snažíte změnit, je na chráněném listu. Chcete-li ji změnit, nejprve zrušte ochranu listu — může být vyžadováno heslo.',
+  appSheetActionProtected:
+    'Tato akce není na chráněném listu povolena. Nejprve zrušte ochranu listu (Revize › Zrušit ochranu listu).',
+  appProtectPassword: 'Heslo pro zrušení ochrany listu:',
+  appProtectReenterPassword: 'Potvrzení: zadejte heslo znovu:',
+  appProtectPasswordMismatch: 'Hesla se neshodují — zadejte je znovu.',
+  appProtectAllowedHeading: 'Povolit všem uživatelům tohoto listu:',
+  appUnprotectUnsupported:
+    'Tento list používá moderní hash hesla, který zde nelze ověřit — ochrana zůstává aktivní.',
+  appUnprotectWrongPassword:
+    'Zadané heslo není správné. Zkontrolujte, zda není zapnutý Caps Lock, a zkuste to znovu.',
+  appProtectAllowSelectLocked: 'Vybrat uzamčené buňky',
+  appProtectAllowSelectUnlocked: 'Vybrat odemčené buňky',
+  appProtectAllowFormatCells: 'Formátovat buňky',
+  appProtectAllowFormatColumns: 'Formátovat sloupce',
+  appProtectAllowFormatRows: 'Formátovat řádky',
+  appProtectAllowInsertRows: 'Vkládat řádky',
+  appProtectAllowInsertColumns: 'Vkládat sloupce',
+  appProtectAllowDeleteRows: 'Odstranit řádky',
+  appProtectAllowDeleteColumns: 'Odstranit sloupce',
+  appProtectAllowSort: 'Řadit',
+  appProtectAllowAutoFilter: 'Používat automatický filtr',
   appProtectionWillRemove: 'Zámek listu se při uložení odstraní.',
   appZoom: 'Lupa {percent} %.',
   appTopRowFrozen: 'Horní řádek ukotven — uloží se pomocí ⌘S.',
@@ -1270,7 +1293,7 @@ export const cs = {
   appUnprotectSheet: 'Odemknout list',
   appProtectSheet: 'Zamknout list',
   appOpenFileFirst: 'Nejprve otevřete soubor',
-  appNoPassword: 'Bez hesla',
+  appNoPassword: 'Chrání před nechtěnými úpravami — heslo nepovinné',
   appProtectWorkbook: 'Zamknout sešit',
   appAllowEditRanges: 'Povolit úpravy oblastí',
   appGroupClipboard: 'Schránka',

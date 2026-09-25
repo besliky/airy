@@ -37,6 +37,7 @@ import {
   restoreJournalCells,
   type PageSetupJournalState,
 } from './edit-journal'
+import { excelLegacyPasswordHash } from '../shared/legacy-password'
 import { indexedFormulaText } from './formula-view'
 import { buildLazyChangePlan } from './lazy-plan'
 import { t } from './i18n/locale'
@@ -557,10 +558,27 @@ async function executeOp(op: PlannedOp, run: OpRun): Promise<void> {
   } else if (op.op === 'set_hyperlink') {
     applyAiHyperlink(state, sheetById(op.sheetId), op)
   } else if (op.op === 'protect_sheet') {
-    const guard = protectSheetGuard(state, op.sheetId, op.protected)
+    const guard = protectSheetGuard(state, op.sheetId, op.protected, op.password)
     if (guard) throw new Error(guard)
-    const original = state.sheetProtections.get(op.sheetId)?.protected ?? false
-    recordSheetProtection(state.editJournal, op.sheetId, op.protected, original)
+    const file = state.sheetProtections.get(op.sheetId) ?? { protected: false, hasPassword: false }
+    const delta = state.editJournal.sheetProtection.get(op.sheetId)
+    const original = {
+      protected: delta?.protected ?? file.protected,
+      ...(delta?.passwordHash !== undefined
+        ? { passwordHash: delta.passwordHash }
+        : file.passwordHash !== undefined
+          ? { passwordHash: file.passwordHash }
+          : {}),
+    }
+    recordSheetProtection(
+      state.editJournal,
+      op.sheetId,
+      {
+        protected: op.protected,
+        passwordHash: op.protected && op.password ? excelLegacyPasswordHash(op.password) : null,
+      },
+      original,
+    )
   } else if (op.op === 'set_filter') {
     const target = sheetById(op.sheetId)
     const existing = target.getFilter()

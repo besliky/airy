@@ -437,7 +437,30 @@ export const ms = {
   appProtectedWithPassword:
     'Helaian ini dilindungi dengan kata laluan — pengalihan keluar perlindungannya tidak disokong.',
   appProtectionWillWrite:
-    'Perlindungan helaian akan ditulis semasa disimpan (tanpa kata laluan). Editor itu sendiri tidak menguatkuasakannya.',
+    'Perlindungan helaian akan ditulis semasa menyimpan — editor menyekat suntingan sel berkunci dan tindakan yang tidak dibenarkan.',
+  appSheetCellProtected:
+    'Sel yang anda cuba ubah berada pada helaian yang dilindungi. Untuk mengubahnya, nyahperlindungi helaian dahulu — anda mungkin diminta kata laluan.',
+  appSheetActionProtected:
+    'Tindakan itu tidak dibenarkan pada helaian yang dilindungi. Nyahperlindungi helaian dahulu (Semak › Nyahperlindungi Helaian).',
+  appProtectPassword: 'Kata laluan untuk nyahperlindungan helaian:',
+  appProtectReenterPassword: 'Masukkan semula kata laluan untuk pengesahan:',
+  appProtectPasswordMismatch: 'Kata laluan tidak sepadan — masukkan semula.',
+  appProtectAllowedHeading: 'Benarkan semua pengguna helaian kerja ini untuk:',
+  appUnprotectUnsupported:
+    'Helaian ini menggunakan cincangan kata laluan moden yang tidak dapat disahkan di sini — perlindungan kekal aktif.',
+  appUnprotectWrongPassword:
+    'Kata laluan yang anda taip salah. Pastikan Caps Lock dimatikan dan cuba lagi.',
+  appProtectAllowSelectLocked: 'Pilih sel berkunci',
+  appProtectAllowSelectUnlocked: 'Pilih sel tidak berkunci',
+  appProtectAllowFormatCells: 'Format sel',
+  appProtectAllowFormatColumns: 'Format lajur',
+  appProtectAllowFormatRows: 'Format baris',
+  appProtectAllowInsertRows: 'Sisipkan baris',
+  appProtectAllowInsertColumns: 'Sisipkan lajur',
+  appProtectAllowDeleteRows: 'Padam baris',
+  appProtectAllowDeleteColumns: 'Padam lajur',
+  appProtectAllowSort: 'Isih',
+  appProtectAllowAutoFilter: 'Guna AutoPenapis',
   appProtectionWillRemove: 'Perlindungan helaian akan dialih keluar semasa disimpan.',
   appZoom: 'Zum {percent}%.',
   appTopRowFrozen: 'Baris teratas dibekukan — simpan dengan ⌘S.',
@@ -1267,7 +1290,7 @@ export const ms = {
   appUnprotectSheet: 'Nyahlindung Helaian',
   appProtectSheet: 'Lindungi Helaian',
   appOpenFileFirst: 'Buka fail dahulu',
-  appNoPassword: 'Tiada kata laluan',
+  appNoPassword: 'Menghalang suntingan tidak sengaja — kata laluan pilihan',
   appProtectWorkbook: 'Lindungi Buku Kerja',
   appAllowEditRanges: 'Benarkan Edit Julat',
   appGroupClipboard: 'Papan Klip',

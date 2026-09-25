@@ -608,7 +608,7 @@ impl WorkbookSession {
             Vec::new()
         };
         let sheet_protection = if indexing_complete {
-            index.sheet_protection
+            index.sheet_protection.clone()
         } else {
             None
         };

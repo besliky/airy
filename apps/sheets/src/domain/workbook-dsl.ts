@@ -475,6 +475,9 @@ const protectSheetSchema = z.object({
   op: z.literal('protect_sheet'),
   sheetId: z.string().min(1),
   protected: z.boolean(),
+  /// Protecting with a password (or unprotecting one): the plain password;
+  /// the executor hashes it with Excel's legacy scheme for the file.
+  password: z.string().max(255).optional(),
 })
 
 // Creates (or replaces) the sheet's auto-filter over the range. Filter

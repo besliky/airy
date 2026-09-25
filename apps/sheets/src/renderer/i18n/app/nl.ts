@@ -462,7 +462,30 @@ export const nl = {
   appProtectedWithPassword:
     'Dit werkblad is met een wachtwoord beveiligd — het opheffen van de beveiliging wordt niet ondersteund.',
   appProtectionWillWrite:
-    'De werkbladbeveiliging wordt bij het opslaan geschreven (zonder wachtwoord). De editor zelf dwingt deze niet af.',
+    'De bladbeveiliging wordt bij het opslaan geschreven — de editor blokkeert bewerkingen van vergrendelde cellen en niet-toegestane acties.',
+  appSheetCellProtected:
+    'De cel die u wilt wijzigen staat op een beveiligd werkblad. Als u wijzigingen wilt aanbrengen, heft u eerst de bladbeveiliging op; er kan om een wachtwoord worden gevraagd.',
+  appSheetActionProtected:
+    'Die actie is niet toegestaan op een beveiligd werkblad. Hef eerst de bladbeveiliging op (Beoordelen › Bladbeveiliging opheffen).',
+  appProtectPassword: 'Wachtwoord om de bladbeveiliging op te heffen:',
+  appProtectReenterPassword: 'Voer het wachtwoord ter bevestiging opnieuw in:',
+  appProtectPasswordMismatch: 'De wachtwoorden komen niet overeen — voer ze opnieuw in.',
+  appProtectAllowedHeading: 'Alle gebruikers van dit werkblad toestaan om:',
+  appUnprotectUnsupported:
+    'Dit werkblad gebruikt een moderne wachtwoord-hash die hier niet kan worden gecontroleerd — de beveiliging blijft actief.',
+  appUnprotectWrongPassword:
+    'Het ingevoerde wachtwoord is onjuist. Controleer of Caps Lock uit staat en probeer het opnieuw.',
+  appProtectAllowSelectLocked: 'Vergrendelde cellen selecteren',
+  appProtectAllowSelectUnlocked: 'Ontgrendelde cellen selecteren',
+  appProtectAllowFormatCells: 'Cellen opmaken',
+  appProtectAllowFormatColumns: 'Kolommen opmaken',
+  appProtectAllowFormatRows: 'Rijen opmaken',
+  appProtectAllowInsertRows: 'Rijen invoegen',
+  appProtectAllowInsertColumns: 'Kolommen invoegen',
+  appProtectAllowDeleteRows: 'Rijen verwijderen',
+  appProtectAllowDeleteColumns: 'Kolommen verwijderen',
+  appProtectAllowSort: 'Sorteren',
+  appProtectAllowAutoFilter: 'AutoFilter gebruiken',
   appProtectionWillRemove: 'De werkbladbeveiliging wordt bij het opslaan verwijderd.',
   appZoom: 'Zoomen {percent}%.',
   appTopRowFrozen: 'Bovenste rij geblokkeerd — sla op met ⌘S.',
@@ -1304,7 +1327,7 @@ export const nl = {
   appUnprotectSheet: 'Beveiliging blad opheffen',
   appProtectSheet: 'Blad beveiligen',
   appOpenFileFirst: 'Open eerst een bestand',
-  appNoPassword: 'Geen wachtwoord',
+  appNoPassword: 'Voorkomt onbedoelde wijzigingen — wachtwoord optioneel',
   appProtectWorkbook: 'Werkmap beveiligen',
   appAllowEditRanges: 'Bewerken van bereiken toestaan',
   appGroupClipboard: 'Klembord',
