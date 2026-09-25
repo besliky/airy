@@ -755,6 +755,11 @@ function matchRelationship(relsXml: string, type: string): { id: string; target:
 }
 
 export function resolveRelTarget(fromPart: string, target: string): string {
+  // Package-absolute targets ("/xl/tables/table1.xml" — the form Excel and
+  // openpyxl write for table relationships) resolve against the package root.
+  // Joining them onto the source part's directory produced
+  // "xl/worksheets/xl/tables/..." (BUG-1712) and aborted the structural save.
+  if (target.startsWith('/')) return target.slice(1)
   const base = fromPart.split('/').slice(0, -1)
   for (const segment of target.split('/')) {
     if (segment === '..') base.pop()

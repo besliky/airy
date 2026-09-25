@@ -823,7 +823,10 @@ describe('structural save integration', () => {
     '<c:chart><c:plotArea><c:barChart><c:ser><c:f>Data!$A$1:$A$10</c:f></c:ser></c:barChart></c:plotArea></c:chart>' +
     '</c:chartSpace>'
 
-  async function buildAnchoredFixture(): Promise<Buffer> {
+  /// `absoluteTableRel` mirrors the rel form Excel and openpyxl write for
+  /// tables — a package-absolute "/xl/tables/table1.xml" target (BUG-1712).
+  /// The default keeps the producer-neutral relative form.
+  async function buildAnchoredFixture(absoluteTableRel = false): Promise<Buffer> {
     const zip = await JSZip.loadAsync(await buildStructureFixture())
     const sheet = (await zip.file('xl/worksheets/sheet1.xml')!.async('text'))
       .replace(
@@ -840,7 +843,9 @@ describe('structural save integration', () => {
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
         '<Relationship Id="rIdD" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>' +
-        '<Relationship Id="rIdT" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table1.xml"/>' +
+        '<Relationship Id="rIdT" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="' +
+        (absoluteTableRel ? '/xl/tables/table1.xml' : '../tables/table1.xml') +
+        '"/>' +
         '</Relationships>',
       { createFolders: false },
     )
@@ -874,6 +879,27 @@ describe('structural save integration', () => {
     expect(drawing).toContain('<xdr:row>7</xdr:row><xdr:rowOff>20</xdr:rowOff>')
     const chart = await zip.file('xl/charts/chart1.xml')?.async('text')
     expect(chart).toContain('<c:f>Data!$A$1:$A$11</c:f>')
+  })
+
+  it('resolves a package-absolute table rel so the row insert is saved (BUG-1712)', async () => {
+    // Excel/openpyxl point the worksheet→table relationship at the
+    // package-absolute "/xl/tables/table1.xml"; resolving it relative to the
+    // worksheet used to look for xl/worksheets/xl/tables/table1.xml and
+    // abort the save, silently dropping the inserted row.
+    const mutation = await applyCellEditsToXlsx(
+      await buildAnchoredFixture(true),
+      [],
+      [{ sheetName: SHEET, ops: [{ kind: 'insert-rows', index: 1, count: 1 }] }],
+    )
+    expect(() => assertOnlyTouchedEntriesChanged(mutation)).not.toThrow()
+    const zip = await JSZip.loadAsync(mutation.buffer)
+    // The shifted table lives at its real package path — no double-prefixed
+    // xl/worksheets/xl/... entry — so a reopen sees the edited table.
+    expect(Object.keys(zip.files)).toContain('xl/tables/table1.xml')
+    expect(Object.keys(zip.files)).not.toContain('xl/worksheets/xl/tables/table1.xml')
+    const table = await zip.file('xl/tables/table1.xml')?.async('text')
+    expect(table).toContain('ref="A1:B4"')
+    expect(table).toContain('<autoFilter ref="A1:B4"/>')
   })
 
   it('a row deletion compresses covered drawings, leaves the table above alone, and clamps chart refs', async () => {
