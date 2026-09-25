@@ -737,6 +737,12 @@ body.vib .home {
   border-top: 1px solid var(--border-subtle);
 }
 
+/* Invisible spacers hold the scrolled-out rows of a windowed (virtualized)
+   list (PERF-1736): pure height, no chrome of their own. */
+.recent-list li.recent-list-spacer {
+  border-top: none;
+}
+
 .recent-item {
   width: 100%;
   padding-top: 14px;
