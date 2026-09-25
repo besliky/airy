@@ -652,6 +652,7 @@ export const id = {
   appRecalcPartial:
     'Rumus dihitung ulang dari pengeditan Anda — {count} mempertahankan nilai cache (fungsi yang tidak ada di mesin cadangan).',
   appRecalcDone: 'Rumus dihitung ulang dari pengeditan Anda ({count} sel, mesin cadangan).',
+  appCircularRefs: 'Referensi melingkar: {refs}',
   appIndexing: 'Mengindeks {name}: {rows} baris siap.',
   appStreamingRows: 'Memuat {name} secara streaming: {rows} baris tersedia.',
   appLoadRangeFailed: 'Tidak dapat memuat rentang yang terlihat.',
