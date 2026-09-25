@@ -26,6 +26,7 @@ import type {
   WorkbookPivotRequest,
   WorkbookRangeRequest,
   WorkbookRangeResult,
+  WorkbookSheetProtection,
   WorkbookRecalcRequest,
   WorkbookRecalcResult,
   WorkbookRichRun,
@@ -47,6 +48,7 @@ import {
   MAX_SAVE_EDITS_TOTAL,
   SAVE_EDITS_CHUNK_JSON_MAX,
 } from '../shared/ipc-channels'
+import { SHEET_PROTECTION_ATTRIBUTES } from '../shared/desktop-api'
 import { installDropOpenBridge } from '@airy-office/electron-utils/drop-open'
 
 const desktopApi: DesktopApi = {
@@ -1300,17 +1302,46 @@ function parseRangeResult(input: unknown): WorkbookRangeResult {
       ...(rule.prompt === undefined ? {} : { prompt: rule.prompt }),
     }
   })
-  let sheetProtection: { protected: boolean; hasPassword: boolean } | null = null
+  let sheetProtection: WorkbookSheetProtection | null = null
   if (input.sheetProtection !== null && input.sheetProtection !== undefined) {
     const protection = input.sheetProtection
     if (
       !isRecord(protection) ||
       typeof protection.protected !== 'boolean' ||
-      typeof protection.hasPassword !== 'boolean'
+      typeof protection.hasPassword !== 'boolean' ||
+      (protection.passwordHash !== undefined &&
+        (typeof protection.passwordHash !== 'string' ||
+          !/^[0-9A-Fa-f]{1,4}$/.test(protection.passwordHash)))
     ) {
       throw new Error('Invalid workbook sheet protection.')
     }
-    sheetProtection = { protected: protection.protected, hasPassword: protection.hasPassword }
+    // PAR-204: the legacy hash and the modeled attributes bridge through so
+    // the renderer can verify unprotect passwords and gate disallowed actions.
+    sheetProtection = {
+      protected: protection.protected,
+      hasPassword: protection.hasPassword,
+      ...(protection.passwordHash === undefined ? {} : { passwordHash: protection.passwordHash }),
+      ...Object.fromEntries(
+        // Spelled out so a dropped attribute fails this name check loudly.
+        (
+          [
+            'selectLockedCells',
+            'selectUnlockedCells',
+            'formatCells',
+            'formatColumns',
+            'formatRows',
+            'insertColumns',
+            'insertRows',
+            'deleteColumns',
+            'deleteRows',
+            'sort',
+            'autoFilter',
+          ] as const
+        )
+          .filter((name) => typeof protection[name] === 'boolean')
+          .map((name) => [name, protection[name]]),
+      ),
+    }
   }
   const parseBreaks = (value: unknown, label: string): number[] => {
     if (!Array.isArray(value) || value.length > 1_024 || !value.every(isNonnegativeInteger)) {
@@ -1761,7 +1792,14 @@ function parseSaveRequest(input: WorkbookSaveRequest): WorkbookSaveRequest {
         !isRecord(state) ||
         typeof state.sheetId !== 'string' ||
         state.sheetId.length === 0 ||
-        typeof state.protected !== 'boolean',
+        typeof state.protected !== 'boolean' ||
+        // Legacy password hash (PAR-204): 1-4 hex digits, or null to clear.
+        (state.passwordHash !== undefined &&
+          state.passwordHash !== null &&
+          !/^[0-9A-Fa-f]{1,4}$/.test(String(state.passwordHash))) ||
+        !SHEET_PROTECTION_ATTRIBUTES.every(
+          (name) => state[name] === undefined || typeof state[name] === 'boolean',
+        ),
     )
   )
     invalid('sheet protections: malformed entry')

@@ -14,6 +14,7 @@ import type {
   WorksheetState,
 } from '../domain/workbook.types'
 import type {
+  SheetProtectionAttributes,
   WorkbookChartEdit,
   WorkbookRichRun,
   WorkbookStyleEdit,
@@ -161,6 +162,8 @@ export interface SheetDvState {
 export interface SheetProtectionState {
   readonly sheetName: string
   readonly protected: boolean
+  readonly passwordHash?: string | null | undefined
+  readonly attributes?: SheetProtectionAttributes | undefined
 }
 
 /// Full allow-edit-range snapshot for one sheet ([] removes the element).
@@ -1007,10 +1010,17 @@ export async function planCellEditsToXlsx(
     worksheetXmls.set(state.sheetName, applyDvRules(worksheetXml, state.rules))
   }
 
-  for (const state of sheetProtections) {
-    const worksheetXml = worksheetXmls.get(state.sheetName)
+  for (const { sheetName, protected: isProtected, passwordHash, attributes } of sheetProtections) {
+    const worksheetXml = worksheetXmls.get(sheetName)
     if (worksheetXml === undefined) continue
-    worksheetXmls.set(state.sheetName, applySheetProtection(worksheetXml, state.protected))
+    worksheetXmls.set(
+      sheetName,
+      applySheetProtection(worksheetXml, {
+        protected: isProtected,
+        passwordHash,
+        attributes,
+      }),
+    )
   }
 
   // Allow-edit ranges are declarative snapshots, like filters.

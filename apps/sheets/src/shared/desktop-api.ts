@@ -368,6 +368,9 @@ const cellStyleSchema = z
     borderDiagonal: borderEdgeSchema.optional(),
     diagonalUp: z.boolean(),
     diagonalDown: z.boolean(),
+    /// xf <protection locked="0">: the cell stays editable while its sheet is
+    /// protected. Absent = Excel's default (locked).
+    locked: z.boolean().optional(),
   })
   .strict()
 const drawingAnchorSchema = z
@@ -856,6 +859,87 @@ const filterColumnStateSchema = z
     { message: 'A filter column needs values, a blank flag, or custom criteria.' },
   )
 
+/// <sheetProtection> attributes the app models. Raw OOXML semantics: true =
+/// the action is PREVENTED while the sheet is protected; absent = the schema
+/// default. Excel's Protect Sheet dialog talks in "allowed" terms (checked =
+/// allowed), so its checkboxes map to attribute="0", unchecked to "1". The
+/// two select* attributes default to false (allowed); every other one
+/// defaults to true (prevented) per CT_SheetProtection.
+export const SHEET_PROTECTION_ATTRIBUTES = [
+  'selectLockedCells',
+  'selectUnlockedCells',
+  'formatCells',
+  'formatColumns',
+  'formatRows',
+  'insertColumns',
+  'insertRows',
+  'deleteColumns',
+  'deleteRows',
+  'sort',
+  'autoFilter',
+] as const
+
+/// `| undefined` is explicit so zod-inferred objects (whose optional props
+/// carry `| undefined`) assign cleanly under exactOptionalPropertyTypes.
+export type SheetProtectionAttributes = {
+  readonly [K in (typeof SHEET_PROTECTION_ATTRIBUTES)[number]]?: boolean | undefined
+}
+
+const sheetProtectionAttributesSchema = z
+  .object({
+    selectLockedCells: z.boolean().optional(),
+    selectUnlockedCells: z.boolean().optional(),
+    formatCells: z.boolean().optional(),
+    formatColumns: z.boolean().optional(),
+    formatRows: z.boolean().optional(),
+    insertColumns: z.boolean().optional(),
+    insertRows: z.boolean().optional(),
+    deleteColumns: z.boolean().optional(),
+    deleteRows: z.boolean().optional(),
+    sort: z.boolean().optional(),
+    autoFilter: z.boolean().optional(),
+  })
+  .strict()
+
+/// Worksheet <sheetProtection> as delivered by the sidecar (sheet-wide,
+/// complete-only) and mirrored in renderer state.
+const workbookSheetProtectionSchema = z
+  .object({
+    protected: z.boolean(),
+    /// Any password form present: the legacy `password=` attribute or a
+    /// modern algorithmName/hashValue pair.
+    hasPassword: z.boolean(),
+    /// The hash itself when the file used the legacy `password=` attribute —
+    /// 1-4 hex digits, the Excel/openpyxl-compatible encoding of a 15-bit
+    /// value. Present only for the legacy form, so unprotect can verify a
+    /// typed password; modern hashValue sheets stay fail-closed.
+    passwordHash: z
+      .string()
+      .regex(/^[0-9A-Fa-f]{1,4}$/)
+      .optional(),
+  })
+  .merge(sheetProtectionAttributesSchema)
+
+export type WorkbookSheetProtection = z.infer<typeof workbookSheetProtectionSchema>
+
+/// One save-request entry: the desired sheetProtection element for a sheet,
+/// built from the journal delta. `protected: false` removes the element (any
+/// password form included — the renderer verified the password first).
+const sheetProtectionSaveSchema = z
+  .object({
+    sheetId: z.string().min(1),
+    protected: z.boolean(),
+    /// Legacy hash to write into `password=`; null writes no password.
+    /// Absent is treated the same as null.
+    passwordHash: z
+      .string()
+      .regex(/^[0-9A-Fa-f]{1,4}$/)
+      .nullish(),
+  })
+  .merge(sheetProtectionAttributesSchema)
+
+export type SheetProtectionSave = z.infer<typeof sheetProtectionSaveSchema>
+
 export const workbookRangeResultSchema = z
   .object({
     cells: z.array(workbookCellRecordSchema).max(MAX_RANGE_CELLS),
@@ -917,13 +1001,7 @@ export const workbookRangeResultSchema = z
       .max(MAX_RANGE_CELLS),
     /// Sheet-wide, delivered complete-only (like autoFilter). null = no
     /// <sheetProtection> element in the worksheet.
-    sheetProtection: z
-      .object({
-        protected: z.boolean(),
-        hasPassword: z.boolean(),
-      })
-      .strict()
-      .nullable(),
+    sheetProtection: workbookSheetProtectionSchema.nullable(),
     /// Manual page breaks (0-based index of the row/column after the break);
     /// sheet-wide, complete-only.
     rowBreaks: z.array(z.number().int().nonnegative()).max(1_024),
@@ -2072,17 +2150,9 @@ export const workbookSaveRequestSchema = z
           .strict(),
       )
       .max(100),
-    /// Desired worksheet-protection state per sheet (no password support).
-    sheetProtections: z
-      .array(
-        z
-          .object({
-            sheetId: z.string().min(1),
-            protected: z.boolean(),
-          })
-          .strict(),
-      )
-      .max(1_000),
+    /// Desired worksheet-protection element per sheet (full spec: toggled
+    /// sheets are rebuilt from it, untouched sheets keep their XML verbatim).
+    sheetProtections: z.array(sheetProtectionSaveSchema).max(1_000),
     /// x14 sparkline groups created this session (defaulted so older callers
     /// keep working).
     sparklineAdditions: z
