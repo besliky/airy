@@ -55,11 +55,16 @@ export async function launchShell(options: LaunchOptions): Promise<LaunchedApp> 
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...hostEnv } = process.env
   // Linux CI runners restrict unprivileged user namespaces (no usable SUID
   // sandbox) and run under xvfb without GPU — without these the window opens
-  // but the renderer never loads. The suite drives trusted local builds only.
+  // but the renderer never loads. Pin the ozone platform to X11: on a Wayland
+  // dev session WAYLAND_DISPLAY leaks into the launch env and Chromium binds
+  // the host compositor instead of the xvfb display, hanging startup (the
+  // ELECTRON_OZONE_PLATFORM_HINT env var is not sufficient there). The suite
+  // drives trusted local builds only.
   // Switches go before the app path so Chromium is guaranteed to consume them
   // and they never leak into the argv the app parses for documents to open.
   const args: string[] = []
-  if (process.platform === 'linux') args.push('--no-sandbox', '--disable-gpu')
+  if (process.platform === 'linux')
+    args.push('--no-sandbox', '--disable-gpu', '--ozone-platform=x11')
   args.push(SHELL_DIR)
   if (options.openFile) args.push(options.openFile)
   const app = await electron.launch({
