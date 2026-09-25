@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import JSZip from 'jszip'
 
-import { createBufferEntrySource, planCellEditsToXlsx } from '../src/gateway/xlsx-gateway'
+import {
+  assembleWithJsZip,
+  createBufferEntrySource,
+  planCellEditsToXlsx,
+} from '../src/gateway/xlsx-gateway'
 import type { SheetThreadedCommentState } from '../src/gateway/xlsx-gateway'
 import {
   applyThreadedCommentStates,
@@ -90,8 +94,10 @@ const STATES: SheetThreadedCommentState[] = [
 ]
 
 /// A fixture that already carries a threadedComments part (as Excel writes
-/// it), so removal and rewrite paths have something to work on.
-async function buildThreadedFixture(): Promise<Uint8Array> {
+/// it), so removal and rewrite paths have something to work on. With
+/// `withPersonsRel = false` the persons part is dangling — the workbook rels
+/// carry no persons relationship, as audited on real books (BUG-1713).
+async function buildThreadedFixture(withPersonsRel = true): Promise<Uint8Array> {
   const zip = await JSZip.loadAsync(await buildEditFixture())
   zip.file(
     'xl/threadedComments/threadedComment1.xml',
@@ -132,7 +138,7 @@ async function buildThreadedFixture(): Promise<Uint8Array> {
   zip.file(
     'xl/_rels/workbook.xml.rels',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.microsoft.com/office/2017/10/relationships/person" Target="persons/person.xml"/></Relationships>`,
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>${withPersonsRel ? '<Relationship Id="rId2" Type="http://schemas.microsoft.com/office/2017/10/relationships/person" Target="persons/person.xml"/>' : ''}</Relationships>`,
   )
   zip.file(
     '[Content_Types].xml',
@@ -294,5 +300,49 @@ describe('threaded comment persons merge (direct package apply)', () => {
     // The rewritten threadedComments part replaces the stale one in place.
     expect(added.has('xl/threadedComments/threadedComment7.xml')).toBe(false)
     expect(replaced.get('xl/threadedComments/threadedComment7.xml')).toContain('ref="B1"')
+  })
+})
+
+describe('saves on books with a dangling persons part (BUG-1713)', () => {
+  it('reuses the existing persons part instead of adding a duplicate entry', async () => {
+    const plan = await planThreads(STATES, await buildThreadedFixture(false))
+    // The part already exists in the source package, so it must be replaced:
+    // a second zip entry with the same name aborts the whole save.
+    expect(plan.added.has('xl/persons/person.xml')).toBe(false)
+    const persons = plan.replaced.get('xl/persons/person.xml')
+    expect(persons).toContain('user-3333')
+    expect(persons).toContain('Reviewer &lt;lead&gt;')
+    // The missing workbook relationship is appended so authors resolve again.
+    const workbookRels = plan.replaced.get('xl/_rels/workbook.xml.rels')
+    expect(workbookRels).toContain(
+      'Type="http://schemas.microsoft.com/office/2017/10/relationships/person"',
+    )
+    expect(workbookRels).toContain('Target="persons/person.xml"')
+  })
+
+  it('survives two consecutive saves with exactly one persons entry (BUG-1713)', async () => {
+    const source = await buildThreadedFixture(false)
+    const firstPlan = await planThreads(STATES, source)
+    expect(firstPlan.added.has('xl/persons/person.xml')).toBe(false)
+    const first = await assembleWithJsZip(source, firstPlan)
+    const secondPlan = await planThreads(STATES, first.buffer)
+    expect(secondPlan.added.has('xl/persons/person.xml')).toBe(false)
+    const second = await assembleWithJsZip(first.buffer, secondPlan)
+
+    // Reopen: one persons part, carrying both the original author and the
+    // save's mentions, next to a threadedComments part.
+    const zip = await JSZip.loadAsync(second.buffer)
+    const personsEntries = Object.keys(zip.files).filter((path) =>
+      /^xl\/persons\/[^/]+\.xml$/.test(path),
+    )
+    expect(personsEntries).toEqual(['xl/persons/person.xml'])
+    const persons = await zip.file('xl/persons/person.xml')?.async('text')
+    expect(persons).toContain('Original')
+    expect(persons).toContain('Reviewer &lt;lead&gt;')
+    expect(await zip.file('xl/threadedComments/threadedComment1.xml')?.async('text')).toContain(
+      'ref="C2"',
+    )
+    const workbookRels = await zip.file('xl/_rels/workbook.xml.rels')?.async('text')
+    expect(workbookRels?.match(/relationships\/person/g)).toHaveLength(1)
   })
 })
