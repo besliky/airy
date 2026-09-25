@@ -227,6 +227,7 @@ export const zhTW = {
   appZoomOut: '縮小',
   appZoomLabel: '縮放',
   appMediaCloseTitle: '關閉 (Esc)',
+  appRecordTitle: '錄製投影片放映',
   appRehearseTitle: '排練計時',
   appRehearseSummary: '本次放映總時長 {duration}。是否儲存每頁停留時間作為自動換頁時間？',
   appRehearseDiscard: '不儲存',

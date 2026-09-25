@@ -255,6 +255,7 @@ export const fr = {
   appZoomOut: 'Zoom arrière',
   appZoomLabel: 'Zoom',
   appMediaCloseTitle: 'Fermer (Échap)',
+  appRecordTitle: 'Enregistrer le diaporama',
   appRehearseTitle: 'Vérification du minutage',
   appRehearseSummary:
     'La durée totale du diaporama était de {duration}. Voulez-vous enregistrer le minutage des diapositives pour le défilement automatique ?',

@@ -370,6 +370,8 @@ export const he = {
   ribbonRehearse: 'חזרה על תזמונים',
   ribbonRehearseTip:
     'חזרה על תזמונים: הפעלת ההצגה מההתחלה ורישום הזמן לכל שקופית; שמירה כתזמוני התקדמות אוטומטית (נשמר ב-pptx)',
+  ribbonRecordTip:
+    'הקלטת מצגת: הפעל את המצגת מההתחלה ותזמן כל שקופית (השהיה/המשך עם P); הזמנים נשמרים כמעבר אוטומטי (לקובץ pptx)',
   ribbonRecord: 'הקלטה',
   ribbonGroupProofing: 'הגהה',
   ribbonSpellCheck: 'בדיקת איות',

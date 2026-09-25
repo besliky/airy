@@ -390,6 +390,8 @@ export const nl = {
   ribbonRehearse: 'Tijdsinstellingen repeteren',
   ribbonRehearseTip:
     'Tijdsinstellingen repeteren: start de voorstelling vanaf het begin en registreert de tijd per dia; sla op als tijden voor automatisch doorgaan (opgeslagen in pptx)',
+  ribbonRecordTip:
+    'Diavoorstelling opnemen: start de voorstelling vanaf het begin en timeer elke dia (pauzeren/hervatten met P); de tijden worden opgeslagen als automatisch doorgaan (in pptx)',
   ribbonRecord: 'Opnemen',
   ribbonGroupProofing: 'Controle',
   ribbonSpellCheck: 'Spelling',

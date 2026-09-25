@@ -394,6 +394,8 @@ export const ja = {
   ribbonRehearse: 'リハーサル',
   ribbonRehearseTip:
     'リハーサル：最初から放映して各スライドの所要時間を記録し、終了後に自動切り替えのタイミングとして保存可能（pptx に保存）',
+  ribbonRecordTip:
+    'スライドショーの記録: 最初から実行して各スライドの時間を計測（P で一時停止/再開）。計測時間は自動切り替え時間として保存されます（pptx へ保存）',
   ribbonRecord: '記録',
   // Review
   ribbonGroupProofing: '文章校正',

@@ -385,6 +385,8 @@ export const ko = {
   ribbonRehearse: '예행 연습',
   ribbonRehearseTip:
     '예행 연습: 처음부터 진행하며 슬라이드별 시간을 기록하고, 종료 후 자동 전환 시간으로 저장 가능(pptx에 저장)',
+  ribbonRecordTip:
+    '슬라이드 쇼 기록: 처음부터 실행하며 각 슬라이드의 시간을 측정합니다(P로 일시중지/재개). 측정된 시간은 자동 전환 시간으로 저장됩니다(pptx에 저장)',
   ribbonRecord: '녹화',
   // Review
   ribbonGroupProofing: '언어 교정',

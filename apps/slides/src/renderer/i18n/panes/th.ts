@@ -315,6 +315,12 @@ export const th = {
   paneShowEndedClick: 'จบการนำเสนอแล้ว คลิกเพื่อออก',
   paneShowEnded: 'จบการนำเสนอแล้ว',
   paneShowRehearseTip: 'ซ้อมการกำหนดเวลา: เวลาบนสไลด์นี้ / เวลารวม',
+  paneShowRecordTip:
+    'การบันทึกการนำเสนอ: สไลด์นี้ / รวมเวลาที่บันทึก — หยุดชั่วคราวด้วย P หยุดเพื่อบันทึกเวลา',
+  paneShowRecordPause: 'หยุดการบันทึกชั่วคราว (P)',
+  paneShowRecordResume: 'บันทึกต่อ (P)',
+  paneShowRecordStop: 'หยุดและบันทึกเวลา',
+  paneShowRecordPaused: 'หยุดชั่วคราว',
   paneShowRehearseTotal: 'รวม {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

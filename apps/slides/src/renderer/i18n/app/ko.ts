@@ -235,6 +235,7 @@ export const ko = {
   appZoomOut: '축소',
   appZoomLabel: '확대/축소',
   appMediaCloseTitle: '닫기(Esc)',
+  appRecordTitle: '슬라이드 쇼 기록',
   appRehearseTitle: '예행 연습',
   appRehearseSummary:
     '슬라이드 쇼에 걸린 시간은 {duration}입니다. 각 슬라이드의 표시 시간을 자동 전환 시간으로 저장하시겠습니까?',

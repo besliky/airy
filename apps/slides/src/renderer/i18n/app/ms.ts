@@ -249,6 +249,7 @@ export const ms = {
   appZoomOut: 'Zum keluar',
   appZoomLabel: 'Zum',
   appMediaCloseTitle: 'Tutup (Esc)',
+  appRecordTitle: 'Rakam Peragaan Slaid',
   appRehearseTitle: 'Raptai Pemasaan',
   appRehearseSummary:
     'Jumlah masa persembahan ialah {duration}. Adakah anda mahu menyimpan pemasaan slaid untuk peralihan slaid automatik?',

@@ -316,6 +316,12 @@ export const ru = {
   paneShowEndedClick: 'Показ завершен. Щелкните, чтобы выйти.',
   paneShowEnded: 'Показ завершен.',
   paneShowRehearseTip: 'Настройка времени: время на этом слайде / общее время',
+  paneShowRecordTip:
+    'Запись показа: этот слайд / всего записано — пауза по P, стоп сохранит тайминги',
+  paneShowRecordPause: 'Приостановить запись (P)',
+  paneShowRecordResume: 'Продолжить запись (P)',
+  paneShowRecordStop: 'Остановить и сохранить тайминги',
+  paneShowRecordPaused: 'Пауза',
   paneShowRehearseTotal: 'Всего {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

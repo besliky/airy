@@ -232,6 +232,7 @@ export const he = {
   appZoomOut: 'התרחקות',
   appZoomLabel: 'זום',
   appMediaCloseTitle: 'סגור (Esc)',
+  appRecordTitle: 'הקלטת מצגת',
   appRehearseTitle: 'חזרה על תזמונים',
   appRehearseSummary:
     'משך ההצגה הכולל היה {duration}. האם לשמור את תזמוני השקופיות למעבר אוטומטי בין שקופיות?',

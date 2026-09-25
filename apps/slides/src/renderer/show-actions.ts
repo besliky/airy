@@ -69,15 +69,30 @@ export function startRehearseShow(ctx: ActionCtx): void {
   ctx.setSlideShow({ startAt: Math.max(0, first), rehearse: true })
 }
 
-/** Rehearsal ended: stash per-slide seconds; after exiting the show, prompt "save?" */
-export function onRehearseDone(ctx: ActionCtx, perPageSec: number[]): void {
-  if (perPageSec.some((s) => s > 0)) ctx.setPendingRehearse(perPageSec)
+/**
+ * Record Slide Show (PAR-314): run the show from the start with an explicit
+ * recording session — pause/resume/stop HUD on top of the rehearsal clock.
+ * Narration is not recorded (headless/CI has no audio input; follow-up).
+ */
+export function startRecordShow(ctx: ActionCtx): void {
+  if (ctx.slides.length === 0 || ctx.slideShow || ctx.presenter) return
+  dropShowCurtain()
+  ctx.setEditing(null)
+  ctx.setCtxMenu(null)
+  const first = ctx.slides.findIndex((s) => !s.hidden)
+  ctx.setSlideShow({ startAt: Math.max(0, first), rehearse: true, record: true })
 }
 
-/** Save rehearsal timings: write each slide's dwell seconds as auto-advance times (<p:transition advTm>, milliseconds) */
+/** Recording/rehearsal ended: stash per-slide seconds; after exiting the show, prompt "save?" */
+export function onRehearseDone(ctx: ActionCtx, perPageSec: number[]): void {
+  if (perPageSec.some((s) => s > 0))
+    ctx.setPendingRehearse({ sec: perPageSec, record: ctx.slideShow?.record === true })
+}
+
+/** Save rehearsal/recorded timings: write each slide's dwell seconds as auto-advance times (<p:transition advTm>, milliseconds) */
 export async function saveRehearseTimings(ctx: ActionCtx): Promise<void> {
   if (!ctx.pendingRehearse) return
-  const times = ctx.pendingRehearse
+  const times = ctx.pendingRehearse.sec
     .map((sec, i) => ({ slideIndex: i, ms: sec * 1000 }))
     .filter((t) => t.ms > 0)
   ctx.setPendingRehearse(null)

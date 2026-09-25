@@ -316,6 +316,12 @@ export const ko = {
   paneShowEndedClick: '슬라이드 쇼가 끝났습니다. 클릭하면 종료됩니다.',
   paneShowEnded: '슬라이드 쇼가 끝났습니다.',
   paneShowRehearseTip: '예행 연습: 현재 슬라이드 시간 / 전체 시간',
+  paneShowRecordTip:
+    '슬라이드 쇼 기록: 이 슬라이드 / 총 기록 시간 — P로 일시중지, 정지하면 시간 저장',
+  paneShowRecordPause: '기록 일시중지(P)',
+  paneShowRecordResume: '기록 재개(P)',
+  paneShowRecordStop: '중지 후 시간 저장',
+  paneShowRecordPaused: '일시중지',
   paneShowRehearseTotal: '전체 {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

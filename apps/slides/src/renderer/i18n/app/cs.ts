@@ -243,6 +243,7 @@ export const cs = {
   appZoomOut: 'Oddálit',
   appZoomLabel: 'Lupa',
   appMediaCloseTitle: 'Zavřít (Esc)',
+  appRecordTitle: 'Záznam prezentace',
   appRehearseTitle: 'Vyzkoušet časování',
   appRehearseSummary:
     'Celková doba prezentace byla {duration}. Chcete uložit časování snímků pro automatické přepínání?',

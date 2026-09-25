@@ -317,6 +317,12 @@ export const en = {
   paneShowEndedClick: 'End of slide show. Click to exit.',
   paneShowEnded: 'End of slide show.',
   paneShowRehearseTip: 'Rehearse Timings: time on this slide / total time',
+  paneShowRecordTip:
+    'Record Slide Show: this slide / total recorded — pause with P, stop to save timings',
+  paneShowRecordPause: 'Pause recording (P)',
+  paneShowRecordResume: 'Resume recording (P)',
+  paneShowRecordStop: 'Stop and save timings',
+  paneShowRecordPaused: 'Paused',
   paneShowRehearseTotal: 'Total {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

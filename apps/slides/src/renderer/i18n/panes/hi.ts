@@ -317,6 +317,12 @@ export const hi = {
   paneShowEndedClick: 'स्लाइड शो समाप्त। बाहर निकलने के लिए क्लिक करें।',
   paneShowEnded: 'स्लाइड शो समाप्त।',
   paneShowRehearseTip: 'समय का पूर्वाभ्यास: इस स्लाइड पर समय / कुल समय',
+  paneShowRecordTip:
+    'स्लाइड शो रिकॉर्डिंग: यह स्लाइड / कुल रिकॉर्डेड — P से रोकें/फिर शुरू करें, समय सहेजने के लिए रोकें',
+  paneShowRecordPause: 'रिकॉर्डिंग रोकें (P)',
+  paneShowRecordResume: 'रिकॉर्डिंग फिर से शुरू करें (P)',
+  paneShowRecordStop: 'रोकें और समय सहेजें',
+  paneShowRecordPaused: 'रुका हुआ',
   paneShowRehearseTotal: 'कुल {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

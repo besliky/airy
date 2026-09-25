@@ -314,6 +314,11 @@ export const zhTW = {
   paneShowEndedClick: '放映結束，按一下離開。',
   paneShowEnded: '放映結束。',
   paneShowRehearseTip: '排練計時：目前頁停留 / 總時長',
+  paneShowRecordTip: '錄製投影片放映：本頁時間 / 已錄總時間 — 按 P 暫停，停止可儲存計時',
+  paneShowRecordPause: '暫停錄製（P）',
+  paneShowRecordResume: '繼續錄製（P）',
+  paneShowRecordStop: '停止並儲存計時',
+  paneShowRecordPaused: '已暫停',
   paneShowRehearseTotal: '總時長 {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

@@ -377,6 +377,8 @@ export const en = {
   ribbonRehearse: 'Rehearse Timings',
   ribbonRehearseTip:
     'Rehearse timings: run the show from the start and record time per slide; save as auto-advance timings (saved to pptx)',
+  ribbonRecordTip:
+    'Record Slide Show: run the show from the start, timing each slide (pause/resume with P); timings are saved as auto-advance (into pptx)',
   ribbonRecord: 'Record',
   ribbonGroupProofing: 'Proofing',
   ribbonSpellCheck: 'Spelling',

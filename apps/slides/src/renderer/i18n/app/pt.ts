@@ -252,6 +252,7 @@ export const pt = {
   appZoomOut: 'Reduzir',
   appZoomLabel: 'Zoom',
   appMediaCloseTitle: 'Fechar (Esc)',
+  appRecordTitle: 'Gravar apresentação',
   appRehearseTitle: 'Testar Intervalos',
   appRehearseSummary:
     'O tempo total da apresentação foi de {duration}. Deseja salvar os intervalos dos slides para o avanço automático?',

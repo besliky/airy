@@ -244,6 +244,7 @@ export const id = {
   appZoomOut: 'Perkecil',
   appZoomLabel: 'Zoom',
   appMediaCloseTitle: 'Tutup (Esc)',
+  appRecordTitle: 'Rekam Peragaan Slide',
   appRehearseTitle: 'Latih Pengaturan Waktu',
   appRehearseSummary:
     'Total waktu peragaan slide adalah {duration}. Simpan waktu setiap slide untuk perpindahan slide otomatis?',

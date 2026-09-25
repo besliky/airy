@@ -318,6 +318,12 @@ export const id = {
   paneShowEndedClick: 'Peragaan slide berakhir. Klik untuk keluar.',
   paneShowEnded: 'Peragaan slide berakhir.',
   paneShowRehearseTip: 'Latih Pengaturan Waktu: waktu pada slide ini / total waktu',
+  paneShowRecordTip:
+    'Rekam Peragaan Slide: slide ini / total terekam — jeda dengan P, hentikan untuk menyimpan waktu',
+  paneShowRecordPause: 'Jeda rekaman (P)',
+  paneShowRecordResume: 'Lanjutkan rekaman (P)',
+  paneShowRecordStop: 'Hentikan dan simpan waktu',
+  paneShowRecordPaused: 'Dijeda',
   paneShowRehearseTotal: 'Total {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

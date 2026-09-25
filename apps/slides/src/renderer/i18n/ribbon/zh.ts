@@ -373,6 +373,8 @@ export const zh = {
   ribbonRehearse: '排练计时',
   ribbonRehearseTip:
     '排练计时：从头放映并记录每页停留时间，结束后可保存为自动换片时间（写入 pptx）',
+  ribbonRecordTip:
+    '录制幻灯片演示：从头开始放映并给每张幻灯片计时（按 P 暂停/继续）；计时将保存为自动换片时间（写入 pptx）',
   ribbonRecord: '录制',
   // Review
   ribbonGroupProofing: '校对',

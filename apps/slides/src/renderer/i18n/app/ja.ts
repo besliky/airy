@@ -239,6 +239,7 @@ export const ja = {
   appZoomOut: '縮小',
   appZoomLabel: 'ズーム',
   appMediaCloseTitle: '閉じる (Esc)',
+  appRecordTitle: 'スライドショーの記録',
   appRehearseTitle: 'リハーサル',
   appRehearseSummary:
     'スライドショーの所要時間は {duration} でした。各スライドの表示時間を自動切り替えのタイミングとして保存しますか？',

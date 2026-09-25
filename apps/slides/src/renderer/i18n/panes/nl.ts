@@ -320,6 +320,12 @@ export const nl = {
   paneShowEndedClick: 'Einde van de diavoorstelling. Klik om af te sluiten.',
   paneShowEnded: 'Einde van de diavoorstelling.',
   paneShowRehearseTip: 'Try-out: tijd op deze dia / totale tijd',
+  paneShowRecordTip:
+    'Diavoorstelling opnemen: deze dia / totaal opgenomen — pauzeren met P, stoppen slaat de tijden op',
+  paneShowRecordPause: 'Opname pauzeren (P)',
+  paneShowRecordResume: 'Opname hervatten (P)',
+  paneShowRecordStop: 'Stoppen en tijden opslaan',
+  paneShowRecordPaused: 'Gepauzeerd',
   paneShowRehearseTotal: 'Totaal {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

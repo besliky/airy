@@ -545,6 +545,8 @@ export interface Props {
   onCustomShow: () => void
   /** Start rehearsal timing (plays the show recording each page's dwell time; can be saved as auto-advance times afterwards) */
   onRehearse: () => void
+  /** Start Record Slide Show (rehearsal clock + explicit record session: pause/resume/stop HUD) */
+  onRecord: () => void
   /** Whether the current page is hidden (hide-slide button display) */
   currentHidden: boolean
   /** Hide/unhide the current page */

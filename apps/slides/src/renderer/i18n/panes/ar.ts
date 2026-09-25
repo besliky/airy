@@ -315,6 +315,12 @@ export const ar = {
   paneShowEndedClick: 'انتهى عرض الشرائح. انقر للخروج.',
   paneShowEnded: 'انتهى عرض الشرائح.',
   paneShowRehearseTip: 'التمرن على التوقيت: الوقت على هذه الشريحة / الوقت الإجمالي',
+  paneShowRecordTip:
+    'تسجيل العرض: هذه الشريحة / الإجمالي المسجّل — إيقاف مؤقت بالمفتاح P، والوقف يحفظ التوقيتات',
+  paneShowRecordPause: 'إيقاف التسجيل مؤقتًا (P)',
+  paneShowRecordResume: 'استئناف التسجيل (P)',
+  paneShowRecordStop: 'الوقف وحفظ التوقيتات',
+  paneShowRecordPaused: 'متوقف مؤقتًا',
   paneShowRehearseTotal: 'الإجمالي {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

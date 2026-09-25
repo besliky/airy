@@ -237,6 +237,7 @@ export const ar = {
   appZoomOut: 'تصغير',
   appZoomLabel: 'تكبير/تصغير',
   appMediaCloseTitle: 'إغلاق (Esc)',
+  appRecordTitle: 'تسجيل عرض الشرائح',
   appRehearseTitle: 'التمرن على التوقيت',
   appRehearseSummary:
     'المدة الإجمالية للعرض هي {duration}. هل تريد حفظ توقيتات الشرائح للتقدم التلقائي للشرائح؟',

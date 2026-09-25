@@ -73,3 +73,80 @@ export function formatClock(ms: number): string {
   const sec = Math.max(0, Math.floor(ms / 1000))
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
 }
+
+// ── Record Slide Show session ────────────────────────────────────────────────────
+// A Record Slide Show (PowerPoint parity minus narration — see PAR-314) is an
+// explicit recording session on top of the rehearsal clock: dwell accumulates
+// only while the session is recording, pause/resume freezes the clock without
+// ending the session, and the accumulated dwell is saved as auto-advance
+// timings (<p:transition advTm>) exactly like a rehearsal.
+
+export type RecordPhase = 'recording' | 'paused'
+
+/** Record session state: rehearsal clock + whether dwell currently accumulates. */
+export interface RecordSession {
+  perPageMs: number[]
+  /** Slide currently dwelt on (original index; -1 = stopped) */
+  currentIndex: number
+  /** Timestamp the current (unaccumulated) dwell window started at (ms) */
+  enteredAt: number
+  phase: RecordPhase
+}
+
+/** Start a Record Slide Show session: recording immediately from startIndex. */
+export function startRecord(slideCount: number, startIndex: number, now: number): RecordSession {
+  return {
+    perPageMs: new Array(Math.max(0, slideCount)).fill(0),
+    currentIndex: startIndex,
+    enteredAt: now,
+    phase: 'recording',
+  }
+}
+
+/** Pause recording: bank the current dwell; page turns no longer accumulate until resumed. */
+export function pauseRecord(t: RecordSession, now: number): RecordSession {
+  if (t.phase === 'paused') return t
+  const banked = switchRecordPage(t, t.currentIndex, now)
+  return { ...banked, phase: 'paused' }
+}
+
+/** Resume recording: a fresh dwell window starts for the current slide. */
+export function resumeRecord(t: RecordSession, now: number): RecordSession {
+  if (t.phase === 'recording') return t
+  return { ...t, phase: 'recording', enteredAt: now }
+}
+
+/**
+ * Page turn during a record session: accumulate the current slide's dwell while
+ * recording (a paused session moves on without accumulating), then switch to
+ * nextIndex (revisiting a slide keeps accumulating, as in a rehearsal).
+ */
+export function switchRecordPage(t: RecordSession, nextIndex: number, now: number): RecordSession {
+  const perPageMs = t.perPageMs.slice()
+  if (t.phase === 'recording' && t.currentIndex >= 0 && t.currentIndex < perPageMs.length) {
+    perPageMs[t.currentIndex]! += Math.max(0, now - t.enteredAt)
+  }
+  return { perPageMs, currentIndex: nextIndex, enteredAt: now, phase: t.phase }
+}
+
+/**
+ * Stop the session: bank the last dwell while recording (a paused session keeps
+ * only what was banked at pause), then convert to seconds per slide (rounded;
+ * visited slides count at least 1 second — same contract as a rehearsal).
+ */
+export function finishRecord(t: RecordSession, now: number): number[] {
+  const final = t.phase === 'recording' ? switchRecordPage(t, -1, now) : { ...t, currentIndex: -1 }
+  return final.perPageMs.map((ms) => (ms > 0 ? Math.max(1, Math.round(ms / 1000)) : 0))
+}
+
+/** Dwell of the current slide so far (frozen while paused) — record HUD clock. */
+export function currentRecordMs(t: RecordSession, now: number): number {
+  const sinceEntered = t.phase === 'recording' ? Math.max(0, now - t.enteredAt) : 0
+  return (t.perPageMs[t.currentIndex] ?? 0) + sinceEntered
+}
+
+/** Total recorded time so far (frozen while paused) — record HUD progress. */
+export function totalRecordMs(t: RecordSession, now: number): number {
+  const sinceEntered = t.phase === 'recording' ? Math.max(0, now - t.enteredAt) : 0
+  return t.perPageMs.reduce((a, b) => a + b, 0) + sinceEntered
+}
