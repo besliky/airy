@@ -146,6 +146,7 @@ import { checkMergeSourcePaths } from './merge-source-policy'
 import { SaveEditsTransferStore } from './save-edits-transfer'
 import { exportPdf, previewPrint, printWorkbook } from './pdf-export'
 import { allowsAutomaticWorkbookRecovery } from './recovery-policy'
+import { parseSidecarReadResult } from './sidecar-read-validation'
 import { setSystemShortDate, shortDatePatternForSystemLocale } from '../shared/short-date'
 import {
   cleanupExpiredPastedFiles,
@@ -2770,7 +2771,11 @@ export function registerSheetsIpc(): void {
     const request = workbookRangeRequestSchema.parse(input)
     if (!entry.sessions.has(request.sessionId)) throw new Error('Unknown workbook session.')
     const result = await entry.client.readRange(request)
-    return workbookRangeResultSchema.parse(result)
+    return parseSidecarReadResult(
+      workbookRangeResultSchema,
+      result,
+      'Invalid workbook range response.',
+    )
   })
 
   ipcMain.handle(IPC_CHANNELS.readWorkbookFormulas, async (event, input: unknown) => {
@@ -2778,7 +2783,11 @@ export function registerSheetsIpc(): void {
     const request = workbookFormulaCellsRequestSchema.parse(input)
     if (!entry.sessions.has(request.sessionId)) throw new Error('Unknown workbook session.')
     const result = await entry.client.readFormulaCells(request)
-    return workbookFormulaCellsResultSchema.parse(result)
+    return parseSidecarReadResult(
+      workbookFormulaCellsResultSchema,
+      result,
+      'Invalid formula-cells response.',
+    )
   })
 
   // IronCalc recalculation: sheet ids resolve through the session's file

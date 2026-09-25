@@ -928,22 +928,50 @@ const sheetProtectionAttributesSchema = z
 
 /// Worksheet <sheetProtection> as delivered by the sidecar (sheet-wide,
 /// complete-only) and mirrored in renderer state.
-const workbookSheetProtectionSchema = z
-  .object({
-    protected: z.boolean(),
-    /// Any password form present: the legacy `password=` attribute or a
-    /// modern algorithmName/hashValue pair.
-    hasPassword: z.boolean(),
-    /// The hash itself when the file used the legacy `password=` attribute —
-    /// 1-4 hex digits, the Excel/openpyxl-compatible encoding of a 15-bit
-    /// value. Present only for the legacy form, so unprotect can verify a
-    /// typed password; modern hashValue sheets stay fail-closed.
-    passwordHash: z
-      .string()
-      .regex(/^[0-9A-Fa-f]{1,4}$/)
-      .optional(),
-  })
-  .merge(sheetProtectionAttributesSchema)
+///
+/// The sidecar has always serialized the legacy `password=` hash under the
+/// attribute's own name (`password`, the OOXML attribute — see
+/// SheetProtectionInfo in native/xlsx-engine/src/types.rs), while the app's
+/// canonical key is `passwordHash` (preload passthrough, renderer state, edit
+/// journal, and the save path all read that form). The alias is renamed
+/// BEFORE parsing so the strict object below stays strict: any other unknown
+/// key still rejects, a payload carrying both keys is ambiguous and rejects,
+/// and the hash alphabet is enforced no matter which name carried it
+/// (BUG-1711: a legacy-password sheet failed every read_range here).
+const normalizeSheetProtectionPasswordAlias = (value: unknown): unknown => {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    !('password' in value) ||
+    'passwordHash' in value
+  ) {
+    return value
+  }
+  const { password, ...rest } = value as Record<string, unknown>
+  return { ...rest, passwordHash: password }
+}
+
+const workbookSheetProtectionSchema = z.preprocess(
+  normalizeSheetProtectionPasswordAlias,
+  z
+    .object({
+      protected: z.boolean(),
+      /// Any password form present: the legacy `password=` attribute or a
+      /// modern algorithmName/hashValue pair.
+      hasPassword: z.boolean(),
+      /// The hash itself when the file used the legacy `password=` attribute —
+      /// 1-4 hex digits, the Excel/openpyxl-compatible encoding of a 15-bit
+      /// value. Present only for the legacy form, so unprotect can verify a
+      /// typed password; modern hashValue sheets stay fail-closed. The
+      /// sidecar's `password` alias lands here via the normalization above.
+      passwordHash: z
+        .string()
+        .regex(/^[0-9A-Fa-f]{1,4}$/)
+        .optional(),
+    })
+    .merge(sheetProtectionAttributesSchema),
+)
 
 export type WorkbookSheetProtection = z.infer<typeof workbookSheetProtectionSchema>
 
