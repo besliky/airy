@@ -49,6 +49,8 @@ const NEED_ISOLATION = [
   'tests/dv-source-gate.univer.test.ts',
   'tests/grid-grow.univer.test.ts',
   'tests/function-catalog.registry.test.ts',
+  // Boots the real Univer DI graph (same FUniver breakage class as above).
+  'tests/sheet-protection.univer.test.ts',
 ]
 
 export default defineConfig({
