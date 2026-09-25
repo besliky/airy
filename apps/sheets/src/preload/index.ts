@@ -869,6 +869,43 @@ function parseWorkbookFile(input: unknown): WorkbookFile {
         text: comment.text,
       }
     })
+    // Modern threaded comments ([MS-XLSX] 2.3.7), flat per message. Absent
+    // (stale sidecar) degrades to an empty set, like sparklines.
+    const openThreadedComments = Array.isArray(sheet.threadedComments) ? sheet.threadedComments : []
+    if (openThreadedComments.length > 2_000) {
+      throw new Error('Invalid threaded comment message.')
+    }
+    const threadedComments = openThreadedComments.map((message) => {
+      if (
+        !isRecord(message) ||
+        !isBoundedString(message.id, 255) ||
+        !isNonnegativeInteger(message.row) ||
+        !isNonnegativeInteger(message.column) ||
+        !isBoundedString(message.personId, 255) ||
+        typeof message.author !== 'string' ||
+        typeof message.text !== 'string' ||
+        !isBoundedString(message.created, 64) ||
+        (message.parentId !== undefined && !isBoundedString(message.parentId, 255)) ||
+        (message.userId !== undefined && !isBoundedString(message.userId, 255)) ||
+        (message.providerId !== undefined && !isBoundedString(message.providerId, 255)) ||
+        typeof message.done !== 'boolean'
+      ) {
+        throw new Error('Invalid threaded comment message.')
+      }
+      return {
+        id: message.id,
+        row: message.row,
+        column: message.column,
+        personId: message.personId,
+        author: message.author,
+        text: message.text,
+        created: message.created,
+        ...(message.parentId === undefined ? {} : { parentId: message.parentId }),
+        ...(message.userId === undefined ? {} : { userId: message.userId }),
+        ...(message.providerId === undefined ? {} : { providerId: message.providerId }),
+        done: message.done,
+      }
+    })
     const columnWidths = sheet.columnWidths.map((columnWidth) => {
       if (
         !isRecord(columnWidth) ||
@@ -929,6 +966,7 @@ function parseWorkbookFile(input: unknown): WorkbookFile {
         : {}),
       tables,
       comments,
+      threadedComments,
       pivotRanges: sheet.pivotRanges.map(parseCellArea),
       pivotTables: parsePivotTableInfos(sheet.pivotTables ?? []),
       sparklines: parseSparklineGroups(sheet.sparklines ?? []),
@@ -1736,6 +1774,7 @@ function parseSaveRequest(input: WorkbookSaveRequest): WorkbookSaveRequest {
   cappedArray('data-validation states', input.dvStates, 1_000)
   cappedArray('page-setup states', input.pageSetupStates, 1_000)
   cappedArray('note states', input.noteStates, 1_000)
+  cappedArray('threaded-comment states', input.threadedCommentStates, 1_000)
   cappedArray('pivot cache refreshes', input.pivotCacheRefreshPaths, 100)
   if (input.pivotCacheRefreshPaths.some((path) => typeof path !== 'string'))
     invalid('pivot cache refreshes: non-string path')
@@ -1815,6 +1854,7 @@ function parseSaveRequest(input: WorkbookSaveRequest): WorkbookSaveRequest {
     input.dvStates.length === 0 &&
     input.pageSetupStates.length === 0 &&
     input.noteStates.length === 0 &&
+    input.threadedCommentStates.length === 0 &&
     input.pivotCacheRefreshPaths.length === 0 &&
     input.pivotRefreshUpdates.length === 0 &&
     input.sheetProtections.length === 0 &&

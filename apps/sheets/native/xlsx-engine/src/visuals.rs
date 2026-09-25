@@ -1388,6 +1388,173 @@ const MAX_HEADER_FOOTER_PICTURE_BYTES: u64 = 2 * 1024 * 1024;
 /// Six slots × three page variants.
 const MAX_HEADER_FOOTER_PICTURES: usize = 18;
 
+/// One raw threaded comment ([MS-XLSX] CT_ThreadedComment): a single message
+/// in a thread, anchored to a cell only on the root message.
+pub(crate) struct RawThreadedComment {
+    pub id: String,
+    pub reference: Option<String>,
+    pub person_id: String,
+    pub parent_id: Option<String>,
+    pub datetime: Option<String>,
+    pub done: bool,
+    pub text: String,
+}
+
+/// One entry of the workbook-level persons directory.
+pub(crate) struct ThreadedPerson {
+    pub id: String,
+    pub display_name: String,
+    pub user_id: Option<String>,
+    pub provider_id: Option<String>,
+}
+
+/// Reads `xl/persons/person.xml` (the threaded-comment author directory). The
+/// part is located through the workbook part's relationship of the persons
+/// type, so non-standard part names still resolve; a missing directory is an
+/// empty list, not an error.
+pub(crate) fn read_threaded_persons(
+    archive: &mut ZipArchive<File>,
+) -> Result<Vec<ThreadedPerson>, SidecarError> {
+    let relationships = read_relationships(archive, "xl/workbook.xml")?;
+    let Some(persons_relationship) = relationships
+        .values()
+        .find(|relationship| relationship.relationship_type.ends_with("/person"))
+    else {
+        return Ok(Vec::new());
+    };
+    let persons_path = resolve_part_target("xl/workbook.xml", &persons_relationship.target)?;
+    let Some(xml) = read_optional_xml(archive, &persons_path)? else {
+        return Ok(Vec::new());
+    };
+    let Ok(document) = Document::parse(&xml) else {
+        return Ok(Vec::new());
+    };
+    Ok(document
+        .descendants()
+        .filter(|node| node.has_tag_name("person"))
+        .filter_map(|node| {
+            Some(ThreadedPerson {
+                id: node.attribute("id")?.to_owned(),
+                display_name: node.attribute("displayName").unwrap_or_default().to_owned(),
+                user_id: node.attribute("userId").map(str::to_owned),
+                provider_id: node.attribute("providerId").map(str::to_owned),
+            })
+        })
+        .collect())
+}
+
+/// Reads a worksheet's threadedComments part as raw messages. The worksheet
+/// owns exactly one such part ([MS-XLSX] 2.1); its absence is an empty list.
+pub(crate) fn read_threaded_comments(
+    archive: &mut ZipArchive<File>,
+    worksheet_path: &str,
+) -> Result<Vec<RawThreadedComment>, SidecarError> {
+    let relationships = read_relationships(archive, worksheet_path)?;
+    let Some(threaded_relationship) = relationships
+        .values()
+        .find(|relationship| relationship.relationship_type.ends_with("/threadedComment"))
+    else {
+        return Ok(Vec::new());
+    };
+    let threaded_path = resolve_part_target(worksheet_path, &threaded_relationship.target)?;
+    let Some(xml) = read_optional_xml(archive, &threaded_path)? else {
+        return Ok(Vec::new());
+    };
+    let Ok(document) = Document::parse(&xml) else {
+        return Ok(Vec::new());
+    };
+    Ok(document
+        .descendants()
+        .filter(|node| node.has_tag_name("threadedComment"))
+        .filter_map(|node| {
+            Some(RawThreadedComment {
+                id: node.attribute("id")?.to_owned(),
+                reference: node.attribute("ref").map(str::to_owned),
+                person_id: node.attribute("personId").unwrap_or_default().to_owned(),
+                parent_id: node.attribute("parentId").map(str::to_owned),
+                datetime: node.attribute("dT").map(str::to_owned),
+                done: node
+                    .attribute("done")
+                    .map(|value| value == "1" || value == "true")
+                    .unwrap_or(false),
+                text: node
+                    .children()
+                    .find(|child| child.has_tag_name("text"))
+                    .and_then(|child| child.text())
+                    .unwrap_or_default()
+                    .to_owned(),
+            })
+        })
+        .collect())
+}
+
+/// Resolves a worksheet's raw threaded comments into wire messages: every
+/// message carries its thread's anchor cell (the root's ref; replies inherit
+/// it, transitively for replies-to-replies) and the author's display name from
+/// the persons directory. Messages with no reachable anchor (dangling
+/// parentId, unparsable root ref) are dropped.
+pub(crate) fn read_threaded_comment_messages(
+    archive: &mut ZipArchive<File>,
+    worksheet_path: &str,
+    persons: &[ThreadedPerson],
+) -> Result<Vec<crate::ThreadedCommentMessageInfo>, SidecarError> {
+    let raw_comments = read_threaded_comments(archive, worksheet_path)?;
+    if raw_comments.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut cell_by_id: HashMap<&str, (usize, usize)> = HashMap::new();
+    for comment in &raw_comments {
+        let Some(reference) = &comment.reference else {
+            continue
+        };
+        if let Ok((row, column)) =
+            crate::refs::parse_address(&reference.replace('$', ""))
+        {
+            cell_by_id.insert(comment.id.as_str(), (row, column));
+        }
+    }
+    let mut messages = Vec::with_capacity(raw_comments.len());
+    for comment in &raw_comments {
+        // Walk up the parent chain to the anchored root (Excel chains replies
+        // to the root, but replies-to-replies are legal). A depth cap keeps a
+        // cyclic part from spinning forever.
+        let mut anchor = None;
+        let mut cursor = comment.parent_id.as_deref();
+        for _ in 0..64 {
+            let Some(id) = cursor else {
+                anchor = cell_by_id.get(comment.id.as_str()).copied();
+                break;
+            };
+            if let Some(cell) = cell_by_id.get(id) {
+                anchor = Some(*cell);
+                break;
+            }
+            cursor = raw_comments
+                .iter()
+                .find(|candidate| candidate.id == id)
+                .and_then(|candidate| candidate.parent_id.as_deref());
+        }
+        let Some((row, column)) = anchor else {
+            continue
+        };
+        let person = persons.iter().find(|candidate| candidate.id == comment.person_id);
+        messages.push(crate::ThreadedCommentMessageInfo {
+            id: comment.id.clone(),
+            row,
+            column,
+            person_id: comment.person_id.clone(),
+            author: person.map(|value| value.display_name.clone()).unwrap_or_default(),
+            text: comment.text.clone(),
+            created: comment.datetime.clone().unwrap_or_default(),
+            parent_id: comment.parent_id.clone(),
+            user_id: person.and_then(|value| value.user_id.clone()),
+            provider_id: person.and_then(|value| value.provider_id.clone()),
+            done: comment.done,
+        });
+    }
+    Ok(messages)
+}
+
 /// `&G` pictures behind a worksheet's `<legacyDrawingHF r:id>`: the VML
 /// part's `<v:shape id="LH|CH|RH|LF|CF|RF[EVEN|FIRST]">` names the slot,
 /// its style carries the printed size, and `<v:imagedata o:relid>` points

@@ -151,6 +151,7 @@ impl WorkbookSessions {
         )?;
         let custom_table_styles = read_custom_table_styles(&mut archive, &dxf_styles);
         let rich_value_images = richdata::read_rich_value_images(&mut archive);
+        let threaded_persons = visuals::read_threaded_persons(&mut archive)?;
         let mut cell_image_count = 0usize;
         let mut sheets = Vec::with_capacity(declarations.len());
         let mut runtimes = Vec::with_capacity(declarations.len());
@@ -187,6 +188,11 @@ impl WorkbookSessions {
                     })
                 })
                 .collect();
+            let threaded_comments = visuals::read_threaded_comment_messages(
+                &mut archive,
+                &worksheet_path,
+                &threaded_persons,
+            )?;
             let sparklines = read_sheet_sparklines(&mut archive, &worksheet_path)?;
             let cell_images = read_sheet_cell_images(
                 &mut archive,
@@ -258,6 +264,7 @@ impl WorkbookSessions {
                 zoom_scale: dimensions.zoom_scale,
                 tables,
                 comments,
+                threaded_comments,
                 pivot_ranges,
                 pivot_tables,
                 sparklines,
