@@ -90,6 +90,18 @@ export async function buildSearchIndex(doc: PDFDocumentProxy): Promise<SearchInd
   return entries
 }
 
+/** True when a page has effectively no extractable text (scanned candidate).
+    Shared with the AI read_pages fallback so both sides agree on what "scanned" means. */
+export const isScannedText = (text: string): boolean => text.replace(/\s/g, '').length < 8
+
+export const isScannedEntry = (entry: PageEntry): boolean => isScannedText(entry.text)
+
+/** True when the whole document lacks a text layer: an empty search result is
+    then explained by the missing layer, not an honest "no hits" (UX-1733). */
+export function indexHasNoTextLayer(index: SearchIndex): boolean {
+  return index.length > 0 && index.every(isScannedEntry)
+}
+
 /** Case-insensitive full-text search; rects linearly interpolated within items by char ratio (approximate; bounding box for rotated glyphs).
     Collects at most MAX_MATCHES matches (first in document order) and keeps counting the remainder so callers can show an honest overflow. */
 export function searchInIndex(index: SearchIndex, query: string): SearchResult {
