@@ -1585,6 +1585,16 @@ button {
   white-space: nowrap;
 }
 
+/* "No text layer" explanation (UX-1733): a sentence, not a counter — it must
+   wrap inside the search bar instead of stretching it */
+.pdf-search-nolayer {
+  display: block;
+  max-width: 240px;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.35;
+}
+
 .pdf-search-layer {
   position: absolute;
   inset: 0;

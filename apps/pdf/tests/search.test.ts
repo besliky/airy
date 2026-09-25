@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import {
   buildSearchIndex,
+  indexHasNoTextLayer,
+  isScannedEntry,
+  isScannedText,
   MAX_MATCHES,
   nextMatchIndex,
   searchInIndex,
@@ -208,6 +211,50 @@ describe('searchInIndex', () => {
       expect(nextMatchIndex(5, -1, MAX_MATCHES)).toBe(4)
       expect(nextMatchIndex(0, -1, 1)).toBe(0)
       expect(nextMatchIndex(0, 1, 1)).toBe(0)
+    })
+  })
+
+  describe('indexHasNoTextLayer (UX-1733)', () => {
+    const scanned = (page = 0): SearchIndex[number] => ({
+      // whitespace-only text: a raster page with no extractable characters
+      text: page === 0 ? '' : '  \n ',
+      lower: page === 0 ? '' : '  \n ',
+      items: [],
+    })
+    const bornDigital = (): SearchIndex[number] => ({
+      text: 'SECRET-TEXT',
+      lower: 'secret-text',
+      items: [{ start: 0, end: 11, x: 0, y: 700, w: 110, h: 12 }],
+    })
+
+    it('isScannedText judges by non-whitespace character count', () => {
+      expect(isScannedText('')).toBe(true)
+      expect(isScannedText(' \n\t ')).toBe(true)
+      expect(isScannedText('seven ch')).toBe(true) // 7 non-whitespace chars, below the threshold
+      expect(isScannedText('eight chr')).toBe(false) // 8 non-whitespace chars: extractable text
+    })
+
+    it('flags a scan-like page as scanned for the OCR pass', () => {
+      expect(isScannedEntry(scanned())).toBe(true)
+      expect(isScannedEntry(bornDigital())).toBe(false)
+    })
+
+    it('a text-less document explains an empty result: the UI may say "no text layer"', () => {
+      const index = [scanned(), scanned(1)]
+      // the search itself comes back empty...
+      expect(searchInIndex(index, 'SECRET-TEXT').matches).toHaveLength(0)
+      // ...but indexHasNoTextLayer distinguishes the scan case from an honest miss
+      expect(indexHasNoTextLayer(index)).toBe(true)
+    })
+
+    it('a document with any born-digital text keeps the honest "No results"', () => {
+      const index = [bornDigital(), scanned(1)]
+      expect(searchInIndex(index, 'NOT-PRESENT').matches).toHaveLength(0)
+      expect(indexHasNoTextLayer(index)).toBe(false)
+    })
+
+    it('an empty index is not a text-layer case', () => {
+      expect(indexHasNoTextLayer([])).toBe(false)
     })
   })
 })

@@ -131,6 +131,8 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+（另有 {more} 处）',
     searchNoResults: '无结果',
+    searchNoTextLayerOcr: '这些页面没有文本层。文本识别（OCR）会在 Windows 和 macOS 上自动运行。',
+    searchNoTextLayerNoOcr: '这些页面没有文本层。此平台不支持文本识别（OCR）。',
     print: '打印',
     printPreparing: '准备打印…',
     undo: '撤销',
@@ -454,6 +456,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (+{more} more)',
     searchNoResults: 'No results',
+    searchNoTextLayerOcr:
+      'No text layer on these pages. Text recognition (OCR) runs automatically on Windows and macOS.',
+    searchNoTextLayerNoOcr:
+      'No text layer on these pages. Text recognition (OCR) is not available on this platform.',
     print: 'Print',
     printPreparing: 'Preparing…',
     undo: 'Undo',
@@ -783,6 +789,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+（他 {more} 件）',
     searchNoResults: '結果なし',
+    searchNoTextLayerOcr:
+      'これらのページにはテキスト層がありません。テキスト認識（OCR）は Windows と macOS で自動的に実行されます。',
+    searchNoTextLayerNoOcr:
+      'これらのページにはテキスト層がありません。このプラットフォームではテキスト認識（OCR）を利用できません。',
     print: '印刷',
     printPreparing: '準備中…',
     undo: '元に戻す',
@@ -1113,6 +1123,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (외 {more}곳)',
     searchNoResults: '결과 없음',
+    searchNoTextLayerOcr:
+      '이 페이지에는 텍스트 레이어가 없습니다. 텍스트 인식(OCR)은 Windows와 macOS에서 자동으로 실행됩니다.',
+    searchNoTextLayerNoOcr:
+      '이 페이지에는 텍스트 레이어가 없습니다. 이 플랫폼에서는 텍스트 인식(OCR)을 사용할 수 없습니다.',
     print: '인쇄',
     printPreparing: '준비 중…',
     undo: '실행 취소',
@@ -1444,6 +1458,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (+ {more} autres)',
     searchNoResults: 'Aucun résultat',
+    searchNoTextLayerOcr:
+      'Ces pages n’ont pas de couche de texte. La reconnaissance de texte (OCR) s’exécute automatiquement sous Windows et macOS.',
+    searchNoTextLayerNoOcr:
+      'Ces pages n’ont pas de couche de texte. La reconnaissance de texte (OCR) n’est pas disponible sur cette plateforme.',
     print: 'Imprimer',
     printPreparing: 'Préparation…',
     undo: 'Annuler',
@@ -1780,6 +1798,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (+{more} weitere)',
     searchNoResults: 'Keine Treffer',
+    searchNoTextLayerOcr:
+      'Diese Seiten haben keine Textebene. Texterkennung (OCR) wird unter Windows und macOS automatisch ausgeführt.',
+    searchNoTextLayerNoOcr:
+      'Diese Seiten haben keine Textebene. Texterkennung (OCR) ist auf dieser Plattform nicht verfügbar.',
     print: 'Drucken',
     printPreparing: 'Vorbereitung…',
     undo: 'Rückgängig',
@@ -2113,6 +2135,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (+{more} más)',
     searchNoResults: 'Sin resultados',
+    searchNoTextLayerOcr:
+      'Estas páginas no tienen capa de texto. El reconocimiento de texto (OCR) se ejecuta automáticamente en Windows y macOS.',
+    searchNoTextLayerNoOcr:
+      'Estas páginas no tienen capa de texto. El reconocimiento de texto (OCR) no está disponible en esta plataforma.',
     print: 'Imprimir',
     printPreparing: 'Preparando…',
     undo: 'Deshacer',
@@ -2447,6 +2473,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (อีก {more} รายการ)',
     searchNoResults: 'ไม่พบผลลัพธ์',
+    searchNoTextLayerOcr:
+      'หน้าเหล่านี้ไม่มีเลเยอร์ข้อความ การจดจำข้อความ (OCR) จะทำงานอัตโนมัติบน Windows และ macOS',
+    searchNoTextLayerNoOcr:
+      'หน้าเหล่านี้ไม่มีเลเยอร์ข้อความ การจดจำข้อความ (OCR) ไม่พร้อมใช้งานบนแพลตฟอร์มนี้',
     print: 'พิมพ์',
     printPreparing: 'กำลังเตรียม…',
     undo: 'เลิกทำ',
@@ -2776,6 +2806,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (+{more} lainnya)',
     searchNoResults: 'Tidak ada hasil',
+    searchNoTextLayerOcr:
+      'Halaman-halaman ini tidak memiliki lapisan teks. Pengenalan teks (OCR) berjalan otomatis di Windows dan macOS.',
+    searchNoTextLayerNoOcr:
+      'Halaman-halaman ini tidak memiliki lapisan teks. Pengenalan teks (OCR) tidak tersedia di platform ini.',
     print: 'Cetak',
     printPreparing: 'Menyiapkan…',
     undo: 'Urungkan',
@@ -3108,6 +3142,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (ещё {more})',
     searchNoResults: 'Нет результатов',
+    searchNoTextLayerOcr:
+      'На этих страницах нет текстового слоя. Распознавание текста (OCR) выполняется автоматически в Windows и macOS.',
+    searchNoTextLayerNoOcr:
+      'На этих страницах нет текстового слоя. Распознавание текста (OCR) недоступно на этой платформе.',
     print: 'Печать',
     printPreparing: 'Подготовка…',
     undo: 'Отменить',
@@ -3439,6 +3477,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (+{more} أخرى)',
     searchNoResults: 'لا نتائج',
+    searchNoTextLayerOcr:
+      'لا تحتوي هذه الصفحات على طبقة نص. يعمل التعرف على النص (OCR) تلقائيًا على Windows و macOS.',
+    searchNoTextLayerNoOcr:
+      'لا تحتوي هذه الصفحات على طبقة نص. التعرف على النص (OCR) غير متاح على هذه المنصة.',
     print: 'طباعة',
     printPreparing: 'جارٍ التجهيز…',
     undo: 'تراجع',
@@ -3769,6 +3811,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (+{more} seguintes)',
     searchNoResults: 'Sem resultados',
+    searchNoTextLayerOcr:
+      'Estas páginas não têm camada de texto. O reconhecimento de texto (OCR) é executado automaticamente no Windows e no macOS.',
+    searchNoTextLayerNoOcr:
+      'Estas páginas não têm camada de texto. O reconhecimento de texto (OCR) não está disponível nesta plataforma.',
     print: 'Imprimir',
     printPreparing: 'Preparando…',
     undo: 'Desfazer',
@@ -4103,6 +4149,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (altri {more})',
     searchNoResults: 'Nessun risultato',
+    searchNoTextLayerOcr:
+      'Queste pagine non hanno livello di testo. Il riconoscimento del testo (OCR) viene eseguito automaticamente su Windows e macOS.',
+    searchNoTextLayerNoOcr:
+      'Queste pagine non hanno livello di testo. Il riconoscimento del testo (OCR) non è disponibile su questa piattaforma.',
     print: 'Stampa',
     printPreparing: 'Preparazione…',
     undo: 'Annulla',
@@ -4438,6 +4488,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (+{more} dalej)',
     searchNoResults: 'Brak wyników',
+    searchNoTextLayerOcr:
+      'Te strony nie mają warstwy tekstu. Rozpoznawanie tekstu (OCR) działa automatycznie w systemach Windows i macOS.',
+    searchNoTextLayerNoOcr:
+      'Te strony nie mają warstwy tekstu. Rozpoznawanie tekstu (OCR) nie jest dostępne na tej platformie.',
     print: 'Drukuj',
     printPreparing: 'Przygotowywanie…',
     undo: 'Cofnij',
@@ -4770,6 +4824,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (dalších {more})',
     searchNoResults: 'Žádné výsledky',
+    searchNoTextLayerOcr:
+      'Tyto stránky nemají textovou vrstvu. Rozpoznávání textu (OCR) se automaticky spouští v systémech Windows a macOS.',
+    searchNoTextLayerNoOcr:
+      'Tyto stránky nemají textovou vrstvu. Rozpoznávání textu (OCR) není na této platformě k dispozici.',
     print: 'Tisk',
     printPreparing: 'Příprava…',
     undo: 'Zpět',
@@ -5104,6 +5162,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (+{more} meer)',
     searchNoResults: 'Geen resultaten',
+    searchNoTextLayerOcr:
+      'Deze pagina’s hebben geen tekstlaag. Tekstherkenning (OCR) wordt automatisch uitgevoerd op Windows en macOS.',
+    searchNoTextLayerNoOcr:
+      'Deze pagina’s hebben geen tekstlaag. Tekstherkenning (OCR) is niet beschikbaar op dit platform.',
     print: 'Afdrukken',
     printPreparing: 'Voorbereiden…',
     undo: 'Ongedaan maken',
@@ -5436,6 +5498,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (+{more} lagi)',
     searchNoResults: 'Tiada hasil',
+    searchNoTextLayerOcr:
+      'Halaman-halaman ini tidak mempunyai lapisan teks. Pengecaman teks (OCR) berjalan secara automatik pada Windows dan macOS.',
+    searchNoTextLayerNoOcr:
+      'Halaman-halaman ini tidak mempunyai lapisan teks. Pengecaman teks (OCR) tidak tersedia pada platform ini.',
     print: 'Cetak',
     printPreparing: 'Sedang menyediakan…',
     undo: 'Buat asal',
@@ -5766,6 +5832,9 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (+{more} נוספים)',
     searchNoResults: 'אין תוצאות',
+    searchNoTextLayerOcr:
+      'לעמודים אלה אין שכבת טקסט. זיהוי טקסט (OCR) פועל באופן אוטומטי ב-Windows ו-macOS.',
+    searchNoTextLayerNoOcr: 'לעמודים אלה אין שכבת טקסט. זיהוי טקסט (OCR) אינו זמין בפלטפורמה זו.',
     print: 'הדפסה',
     printPreparing: 'מכין…',
     undo: 'ביטול פעולה',
@@ -6091,6 +6160,10 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+ (+{more} अधिक)',
     searchNoResults: 'कोई परिणाम नहीं',
+    searchNoTextLayerOcr:
+      'इन पृष्ठों पर टेक्स्ट लेयर नहीं है। टेक्स्ट पहचान (OCR) Windows और macOS पर स्वतः चलती है।',
+    searchNoTextLayerNoOcr:
+      'इन पृष्ठों पर टेक्स्ट लेयर नहीं है। इस प्लेटफ़ॉर्म पर टेक्स्ट पहचान (OCR) उपलब्ध नहीं है।',
     print: 'प्रिंट करें',
     printPreparing: 'तैयार किया जा रहा है…',
     undo: 'पूर्ववत करें',
@@ -6420,6 +6493,8 @@ export const strings = {
     searchCount: '{current} / {total}',
     searchCountMore: '{current} / {total}+（另有 {more} 處）',
     searchNoResults: '無結果',
+    searchNoTextLayerOcr: '這些頁面沒有文字層。文字辨識（OCR）會在 Windows 和 macOS 上自動執行。',
+    searchNoTextLayerNoOcr: '這些頁面沒有文字層。此平台不支援文字辨識（OCR）。',
     print: '列印',
     printPreparing: '準備列印…',
     undo: '復原',

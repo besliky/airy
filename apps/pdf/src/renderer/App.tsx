@@ -12,6 +12,7 @@ import {
   OcrTextLayer,
   buildOcrPageData,
   isScannedEntry,
+  ocrAvailableOnPlatform,
   renderPageForOcr,
   type OcrPageData,
 } from './ocr-layer'
@@ -74,7 +75,7 @@ import {
 import { StampDialog } from './StampDialog'
 import { buildStamps } from './stamps'
 import type { HeaderFooterConfig, WatermarkConfig } from './stamps'
-import { buildSearchIndex, nextMatchIndex, searchInIndex } from './search'
+import { buildSearchIndex, indexHasNoTextLayer, nextMatchIndex, searchInIndex } from './search'
 import type { SearchIndex, SearchMatch } from './search'
 import { mapDocFont, type DocFontStyle } from './doc-font'
 import { groupPageBlocks, reflowOverflows, type TextBlock } from './text-block'
@@ -783,6 +784,9 @@ export default function App() {
   const [searchMatches, setSearchMatches] = useState<SearchMatch[]>([])
   /** Non-null when the search cap truncated the result set; `more` = hits beyond it (BUG-1731) */
   const [searchOverflow, setSearchOverflow] = useState<{ more: number } | null>(null)
+  /** The empty result is explained by a missing text layer, not an honest
+      "no hits" — the search bar says so instead of a bare "No results" (UX-1733) */
+  const [searchNoTextLayer, setSearchNoTextLayer] = useState(false)
   const [searchCur, setSearchCur] = useState(0)
   const [printing, setPrinting] = useState(false)
   const [undoStack, setUndoStack] = useState<EditSnapshot[]>([])
@@ -1932,6 +1936,7 @@ export default function App() {
     if (!searchOpen || !searchQuery.trim()) {
       setSearchMatches([])
       setSearchOverflow(null)
+      setSearchNoTextLayer(false)
       setSearchCur(0)
       return
     }
@@ -1942,6 +1947,8 @@ export default function App() {
         const result = searchInIndex(idx, searchQuery.trim())
         setSearchMatches(result.matches)
         setSearchOverflow(result.capped ? { more: result.moreCount } : null)
+        // A text-less document can never hit; say why instead of a bare "No results" (UX-1733)
+        setSearchNoTextLayer(result.matches.length === 0 && indexHasNoTextLayer(idx))
         setSearchCur(0)
       })
     }, 200)
@@ -7928,20 +7935,36 @@ export default function App() {
                   }}
                 />
                 <span className="pdf-search-count">
-                  {searchQuery.trim()
-                    ? activeMatches.length > 0
-                      ? searchOverflow
-                        ? t('searchCountMore', {
-                            current: searchCurClamped + 1,
-                            total: activeMatches.length,
-                            more: searchOverflow.more,
-                          })
-                        : t('searchCount', {
-                            current: searchCurClamped + 1,
-                            total: activeMatches.length,
-                          })
-                      : t('searchNoResults')
-                    : ''}
+                  {searchQuery.trim() ? (
+                    searchNoTextLayer ? (
+                      // Distinct from "No results": this document cannot ever hit (UX-1733).
+                      // OCR runs automatically where an engine exists; elsewhere say so honestly.
+                      <span className="pdf-search-nolayer">
+                        {t(
+                          ocrAvailableOnPlatform()
+                            ? 'searchNoTextLayerOcr'
+                            : 'searchNoTextLayerNoOcr',
+                        )}
+                      </span>
+                    ) : activeMatches.length > 0 ? (
+                      searchOverflow ? (
+                        t('searchCountMore', {
+                          current: searchCurClamped + 1,
+                          total: activeMatches.length,
+                          more: searchOverflow.more,
+                        })
+                      ) : (
+                        t('searchCount', {
+                          current: searchCurClamped + 1,
+                          total: activeMatches.length,
+                        })
+                      )
+                    ) : (
+                      t('searchNoResults')
+                    )
+                  ) : (
+                    ''
+                  )}
                 </span>
                 <button
                   className="rb-icon"

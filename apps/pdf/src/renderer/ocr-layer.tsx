@@ -158,11 +158,14 @@ export function buildOcrPageData(lines: PdfOcrLine[], geom: PageGeom): OcrPageDa
   return { entry: { text, lower: text.toLowerCase(), items }, words }
 }
 
-/** True when a page has effectively no extractable text (scanned candidate).
-    Shared with the AI read_pages fallback so both sides agree on what "scanned" means. */
-export const isScannedText = (text: string): boolean => text.replace(/\s/g, '').length < 8
+// The scanned-page classifier lives next to the search index it patches; the
+// re-export keeps the existing '../ocr-layer' importers stable
+export { isScannedText, isScannedEntry } from './search'
 
-export const isScannedEntry = (entry: PageEntry): boolean => isScannedText(entry.text)
+/** Whether this platform ships a system OCR engine (macOS Vision / Windows.Media.Ocr);
+    Linux has none, so UI copy must not promise recognition (UX-1733). */
+export const ocrAvailableOnPlatform = (platform: string = navigator.platform): boolean =>
+  /mac|win/i.test(platform)
 
 /** Render the page bitmap for recognition (display orientation, ~2k px long edge) */
 export async function renderPageForOcr(
