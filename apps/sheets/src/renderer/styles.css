@@ -1661,6 +1661,19 @@ button.check-item:hover {
   text-overflow: ellipsis;
 }
 
+/* Circular-reference badge (BUG-1718): Excel keeps this warning in the
+ * status bar for as long as the workbook carries the cycles. */
+.status-circular {
+  flex-shrink: 0;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 3px;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  white-space: nowrap;
+}
+
 .status-right {
   display: flex;
   align-items: center;

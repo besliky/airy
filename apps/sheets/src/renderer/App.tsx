@@ -298,6 +298,7 @@ import { installFormulaLexerFix } from './formula-lexer-fix'
 import { installFormulaNewlineDisplay } from './formula-newline-display'
 import { installCfDisplayKeyCompare } from './cf-duplicate-key'
 import { installCfFormulaFold } from './cf-formula-fold'
+import { installCfRefSegmentMerge } from './cf-segment-merge'
 import { installSheetRenameFix } from './sheet-rename-fix'
 import { installArrowCollapse } from './arrow-collapse-fix'
 import { installMenuInputEnter } from './menu-input-enter'
@@ -692,6 +693,10 @@ export function App(): React.JSX.Element {
   const [fullLoadPrompt, setFullLoadPrompt] = useState<'ask' | 'tooLarge' | null>(null)
   const fullLoadRunning = useRef(false)
   const [message, setMessage] = useState(t('appReadyInitial'))
+  /// Circular-reference addresses detected at open (BUG-1718): the engine
+  /// resolves cycles in a single pass silently, so the status bar badges
+  /// them instead. Raw addresses; ExcelShell translates the surrounding text.
+  const [circularRefs, setCircularRefs] = useState<string[]>([])
   /// Zoom of the active sheet in percent, echoed by the status-bar slider.
   const [zoomPercent, setZoomPercent] = useState(100)
   const [selectionFormat, setSelectionFormat] = useState<SelectionFormat | null>(null)
@@ -1762,6 +1767,10 @@ export function App(): React.JSX.Element {
     // the engine stops rebuilding millions of per-cell dependency trees on
     // every stream-in recalculation (genspark-ai/genoffice#158).
     const cfFormulaFoldDisposable = installCfFormulaFold(runtime)
+    // Ref-shifted formula rules (expression CF, formula validations) stay one
+    // rule when a row/column edit extends their range, instead of splitting
+    // into anchor-drifted duplicates (BUG-1717).
+    const cfSegmentMergeDisposable = installCfRefSegmentMerge(runtime)
     // duplicateValues / uniqueValues compare display text like Excel (1981233
     // and "1981233" are duplicates).
     const cfDisplayKeyDisposable = installCfDisplayKeyCompare(runtime)
@@ -3136,6 +3145,7 @@ export function App(): React.JSX.Element {
       arrowCollapseDisposable.dispose()
       multiRowAutofitDisposable.dispose()
       cfFormulaFoldDisposable.dispose()
+      cfSegmentMergeDisposable.dispose()
       cfDisplayKeyDisposable.dispose()
       nullResultDisposable.dispose()
       copyMaterializeDisposable.dispose()
@@ -4086,6 +4096,7 @@ export function App(): React.JSX.Element {
         running: false,
         lastRunAt: 0,
       },
+      circularRefs: [],
     }
     // Column outline levels arrive with the sheet metadata; seed them now.
     for (const sheet of selected.sheets) {
@@ -4146,6 +4157,7 @@ export function App(): React.JSX.Element {
     setRevision(0)
     setPreview(null)
     lazyPreviewRef.current = null
+    setCircularRefs([])
     setPendingEdits(0)
     // Slicers/timelines belong to the previous workbook's session only;
     // switching files invalidates them.
@@ -4281,11 +4293,11 @@ export function App(): React.JSX.Element {
             : undefined,
         )
         if (state.formulaMode) {
-          void preloadEntireWorkbook(runtime, lazyWorkbookRef, setMessage)
+          void preloadEntireWorkbook(runtime, lazyWorkbookRef, setMessage, setCircularRefs)
         } else {
           // Deferred so first paint and initial streaming win the sidecar.
           setTimeout(() => {
-            void activateFormulaClosure(runtime, lazyWorkbookRef, setMessage)
+            void activateFormulaClosure(runtime, lazyWorkbookRef, setMessage, setCircularRefs)
           }, 1500)
         }
       })
@@ -4590,6 +4602,7 @@ export function App(): React.JSX.Element {
         }
         selectionFormat={selectionFormat}
         statusMessage={message}
+        circularRefs={circularRefs}
         aiBusy={aiBusy}
         chat={chat}
         historicChat={historicChat}
