@@ -1056,7 +1056,7 @@ export function toSaveChartEdits(journal: EditJournal): WorkbookChartEdit[] {
   }))
 }
 
-interface RowColumnShift {
+export interface RowColumnShift {
   readonly axis: 'row' | 'column'
   readonly removing: boolean
   readonly index: number
@@ -1094,7 +1094,7 @@ export function swapPosition(position: number, swap: SwapSpans): number {
   return position
 }
 
-function toRowColumnShift(op: {
+export function toRowColumnShift(op: {
   kind: string
   index: number
   count: number
@@ -1112,6 +1112,19 @@ function toRowColumnShift(op: {
       ? { swap: toSwapSpans({ index: op.index, count: op.count, before: op.before }) }
       : {}),
   }
+}
+
+/// The line-position rule shared by the journal replay and the
+/// threaded-comment anchor remap (identical mapping for every dependent
+/// state): a position inside a removed span dies (null), an insert at or
+/// below the index shifts, a whole-line move swaps the blocks.
+export function shiftLinePosition(position: number, shift: RowColumnShift): number | null {
+  if (shift.swap) return swapPosition(position, shift.swap)
+  if (shift.removing) {
+    if (position >= shift.index && position < shift.index + shift.count) return null
+    return position >= shift.index + shift.count ? position - shift.count : position
+  }
+  return position >= shift.index ? position + shift.count : position
 }
 
 /// Same clamping the save-side drawing shift applies: marks inside a removed
@@ -1587,20 +1600,8 @@ export function recordStructuralOp(
     op.kind === 'insert-cols' || op.kind === 'remove-cols' || op.kind === 'move-cols'
       ? 'column'
       : 'row'
-  const removing = op.kind === 'remove-rows' || op.kind === 'remove-cols'
-  const swap =
-    rowColumnOp.kind === 'move-rows' || rowColumnOp.kind === 'move-cols'
-      ? toSwapSpans(rowColumnOp)
-      : null
-  const movePosition = (position: number): number | null => {
-    const { index, count } = rowColumnOp
-    if (swap) return swapPosition(position, swap)
-    if (removing) {
-      if (position >= index && position < index + count) return null
-      return position >= index + count ? position - count : position
-    }
-    return position >= index ? position + count : position
-  }
+  const shift = toRowColumnShift(rowColumnOp)
+  const movePosition = (position: number): number | null => shiftLinePosition(position, shift)
   const sheetEntries = journal.cells.get(sheetId)
   if (sheetEntries && sheetEntries.size > 0) {
     const shifted = new Map<string, JournalEntry>()
@@ -1683,7 +1684,6 @@ export function recordStructuralOp(
   // Session visuals and pending chart edits follow the same shift: the save
   // appends/applies them after the file's own structural pass, so they must
   // already live in post-operation coordinates.
-  const shift = toRowColumnShift(rowColumnOp)
   journal.visualAdds.forEach((visual, at) => {
     journal.visualAdds[at] = shiftVisualForStructuralOp(visual, sheetId, sheetName, op)
   })
