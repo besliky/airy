@@ -2,7 +2,7 @@ import type { AnyExtension } from '@tiptap/core'
 import { Extension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
-import { TableKit } from '@tiptap/extension-table'
+import { Table, TableKit } from '@tiptap/extension-table'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { CodeBlock } from '@tiptap/extension-code-block'
 import { ReactNodeViewRenderer } from '@tiptap/react'
@@ -24,6 +24,39 @@ import { SlashCommand } from './slashCommand'
 import type { SlashController, SlashItem } from './slashCommand'
 import { liftIndentedCodeAfterLists, stripBlankLinePadding } from '../markdown/parseContext'
 import { t } from '../i18n/locale'
+
+/**
+ * BUG-1740: a pasted (or file-sourced) HTML table never reaches the table node
+ * with the stock parse rules. `DOMParser` normalizes every table body into
+ * `<tbody>` (and real-world tables carry `<thead>`/`<tfoot>`/`<colgroup>` on
+ * top), but the table node's content model is `tableRow+`, so those wrapper
+ * elements cannot fit inside it. No dedicated rule matched them — until the
+ * RawHtml catch-all (`tag: '*'`, priority 10) claimed the `<tbody>` as a chip:
+ * the parser closed the still-empty table around it and every pasted table
+ * degraded to an uneditable chip serialized as bare `<tbody>` (invalid HTML in
+ * the saved file).
+ *
+ * These high-priority rules teach the schema how to walk the structural table
+ * wrappers instead:
+ * - thead/tbody/tfoot are SKIPped — parsing continues with their rows inside
+ *   the table context, so the table node assembles and stays editable;
+ * - colgroup (width metadata with no GFM counterpart and no text content) is
+ *   IGNOREd — a chip here would split the table apart for zero information.
+ *
+ * Applies everywhere the schema parses DOM (rich paste, `generateJSON` on
+ * open), and only to elements that are structural table internals.
+ */
+const BodyAwareTable = Table.extend({
+  parseHTML() {
+    return [
+      { tag: 'table' },
+      { tag: 'thead', skip: true },
+      { tag: 'tbody', skip: true },
+      { tag: 'tfoot', skip: true },
+      { tag: 'colgroup', ignore: true },
+    ]
+  },
+})
 
 export interface BuildExtensionsOptions {
   slashController: SlashController
@@ -71,8 +104,10 @@ export function buildExtensions(options: BuildExtensionsOptions): AnyExtension[]
     // BUG-1703 parse/serialize context fixes; must follow `Markdown` (above)
     MarkdownParseContext,
     // column widths are not expressible in GFM tables — no resizable columns;
-    // the wrapper div gives wide tables a horizontal scrollbar
-    TableKit.configure({ table: { resizable: false, renderWrapper: true } }),
+    // the wrapper div gives wide tables a horizontal scrollbar. `table: false`
+    // swaps the kit's table node for BodyAwareTable (BUG-1740 wrapper rules)
+    TableKit.configure({ table: false, tableRow: {}, tableCell: {}, tableHeader: {} }),
+    BodyAwareTable.configure({ resizable: false, renderWrapper: true }),
     TaskList,
     TaskItem.configure({ nested: true }),
     // KaTeX-rendered $...$ / $$...$$ formulas (issue #100)
