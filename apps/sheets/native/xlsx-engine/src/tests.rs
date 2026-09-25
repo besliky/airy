@@ -3515,3 +3515,72 @@ fn reads_auto_filter_column_criteria() {
         Some("lessThanOrEqual")
     );
 }
+
+/// PAR-204: worksheet protection reads back the full attribute set plus the
+/// legacy password hash, and cell xfs expose <protection locked="0"> so the
+/// renderer can tell unlocked cells apart.
+#[test]
+fn reads_sheet_protection_attributes_and_unlocked_styles() {
+    let (_dir, path) = open_fixture(&[
+        (
+            "xl/workbook.xml",
+            r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>"#,
+        ),
+        (
+            "xl/_rels/workbook.xml.rels",
+            r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#,
+        ),
+        (
+            "xl/worksheets/sheet1.xml",
+            r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" s="1"/></row></sheetData><sheetProtection sheet="1" password="83AF" objects="1" scenarios="1" formatCells="0" formatColumns="0" formatRows="0" insertColumns="0" insertRows="0" deleteColumns="1" deleteRows="1" sort="0" autoFilter="0" selectLockedCells="1"/></worksheet>"#,
+        ),
+        (
+            "xl/styles.xml",
+            r#"<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyProtection="1"><protection locked="0"/></xf></cellXfs></styleSheet>"#,
+        ),
+    ]);
+    let mut sessions = WorkbookSessions::new();
+    let metadata = sessions.open(&path).unwrap();
+
+    // xf 1 carries the unlocked flag; xf 0 stays None (locked default).
+    assert_eq!(metadata.styles[1].locked, Some(false));
+    assert_eq!(metadata.styles[0].locked, None);
+
+    let range = CellRange {
+        start_row: 0,
+        end_row: 0,
+        start_column: 0,
+        end_column: 1,
+    };
+    let result = loop {
+        let result = sessions
+            .read_range(&metadata.session_id, "sheet-1", &range)
+            .unwrap();
+        if result.indexing_complete {
+            break result;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    };
+    let protection = result.sheet_protection.expect("sheetProtection");
+    assert!(protection.protected);
+    assert!(protection.has_password);
+    assert_eq!(protection.password.as_deref(), Some("83AF"));
+    assert_eq!(protection.format_cells, Some(false));
+    assert_eq!(protection.format_columns, Some(false));
+    assert_eq!(protection.format_rows, Some(false));
+    assert_eq!(protection.insert_columns, Some(false));
+    assert_eq!(protection.insert_rows, Some(false));
+    assert_eq!(protection.delete_columns, Some(true));
+    assert_eq!(protection.delete_rows, Some(true));
+    assert_eq!(protection.sort, Some(false));
+    assert_eq!(protection.auto_filter, Some(false));
+    assert_eq!(protection.select_locked_cells, Some(true));
+    assert_eq!(protection.select_unlocked_cells, None);
+
+    // The value-less unlocked cell survives the blank-cell gate (dropping it
+    // would silently re-lock the cell after a round-trip).
+    assert!(result
+        .cells
+        .iter()
+        .any(|cell| cell.row == 0 && cell.column == 1 && cell.style_index == Some(1)));
+}

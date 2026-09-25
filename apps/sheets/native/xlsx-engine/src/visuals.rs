@@ -82,6 +82,10 @@ pub struct CellStyle {
     pub border_diagonal: Option<BorderEdge>,
     pub diagonal_up: bool,
     pub diagonal_down: bool,
+    /// xf <protection locked="0">: the cell stays editable while its sheet is
+    /// protected. None = no <protection> element (Excel's default: locked).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub locked: Option<bool>,
     /// Table-style dxf inner grid edges (<horizontal>/<vertical>) — consumed
     /// by the custom table palette only, never serialized per cell.
     #[serde(skip)]
@@ -97,7 +101,9 @@ impl CellStyle {
     /// the user types into the cell — number format, font, alignment (#169).
     /// Comparing against the default xf keeps the payload bounded: fontId=0
     /// materializes the default font into every style, so presence alone
-    /// would mark every cell as styled.
+    /// would mark every cell as styled. A protection difference (an unlocked
+    /// input cell) is worth keeping too: dropping it would silently re-lock
+    /// the cell after a round-trip.
     pub fn styles_blank_cell(&self, default: &CellStyle) -> bool {
         self.fill_color.is_some()
             || self.border_top.is_some()
@@ -119,6 +125,7 @@ impl CellStyle {
             || self.text_rotation != default.text_rotation
             || self.wrap_text != default.wrap_text
             || self.shrink_to_fit != default.shrink_to_fit
+            || self.locked != default.locked
     }
 }
 

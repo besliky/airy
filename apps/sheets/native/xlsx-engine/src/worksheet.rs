@@ -448,11 +448,30 @@ pub(crate) fn index_worksheet(
             {
                 let protected = attribute_value(&reader, &element, b"sheet")?
                     .is_some_and(|value| value == "1" || value == "true");
-                let has_password = attribute_value(&reader, &element, b"password")?.is_some()
+                let legacy_password = attribute_value(&reader, &element, b"password")?;
+                let has_password = legacy_password.is_some()
                     || attribute_value(&reader, &element, b"hashValue")?.is_some();
+                // Modeled attributes in raw OOXML polarity (true = prevented);
+                // absent stays absent so consumers keep the schema default.
+                let flag = |name: &[u8]| -> Result<Option<bool>, SidecarError> {
+                    Ok(attribute_value(&reader, &element, name)?
+                        .map(|value| value == "1" || value == "true"))
+                };
                 sheet_protection = Some(SheetProtectionInfo {
                     protected,
                     has_password,
+                    password: legacy_password,
+                    select_locked_cells: flag(b"selectLockedCells")?,
+                    select_unlocked_cells: flag(b"selectUnlockedCells")?,
+                    format_cells: flag(b"formatCells")?,
+                    format_columns: flag(b"formatColumns")?,
+                    format_rows: flag(b"formatRows")?,
+                    insert_columns: flag(b"insertColumns")?,
+                    insert_rows: flag(b"insertRows")?,
+                    delete_columns: flag(b"deleteColumns")?,
+                    delete_rows: flag(b"deleteRows")?,
+                    sort: flag(b"sort")?,
+                    auto_filter: flag(b"autoFilter")?,
                 });
             }
             Event::Start(element) if element.local_name().as_ref() == b"customSheetViews" => {
