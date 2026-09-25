@@ -5902,3 +5902,228 @@ textarea:focus {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Threaded comments (modern Excel comments): pane + cell indicators */
+
+.thread-comments {
+  position: fixed;
+  right: 18px;
+  bottom: 64px;
+  width: 340px;
+  max-height: 460px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--sheets-shadow-slicer);
+  overflow: hidden;
+  z-index: 60;
+}
+
+.thread-comments header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 10px;
+  background: var(--accent);
+  color: var(--sheets-on-accent);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.thread-title {
+  flex: 1;
+}
+
+.thread-close {
+  border: none;
+  background: transparent;
+  color: var(--sheets-on-accent);
+  font-size: 12px;
+  line-height: 1;
+  padding: 3px 6px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.thread-close:hover {
+  background: var(--sheets-on-accent-hover);
+}
+
+.thread-empty {
+  margin: 0;
+  padding: 14px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.thread-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.thread-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: var(--surface);
+}
+
+.thread-card.resolved {
+  opacity: 0.62;
+}
+
+.thread-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.thread-anchor {
+  border: 1px solid var(--border);
+  background: var(--hover);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 1px 5px;
+  cursor: pointer;
+}
+
+.thread-anchor:hover {
+  background: var(--accent-soft);
+}
+
+.thread-resolve {
+  margin-left: auto;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.thread-resolve[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.thread-delete {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.thread-delete:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.thread-author {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 4px;
+}
+
+.thread-time {
+  font-weight: 400;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.thread-text {
+  margin: 2px 0 4px;
+  font-size: 12px;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.thread-replies {
+  list-style: none;
+  margin: 0 0 2px;
+  padding: 2px 0 0 10px;
+  border-left: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.thread-compose {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.thread-compose input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  padding: 3px 6px;
+}
+
+.thread-compose input:focus-visible {
+  outline: 1px solid var(--accent);
+}
+
+.thread-post {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 11.5px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.thread-post:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.thread-post:not(:disabled):hover {
+  background: var(--hover);
+}
+
+/* The corner badge pinned to a threaded cell (float DOM over the grid).
+   Colors follow Excel's modern-comment purple via the app accent token. */
+.thread-indicator {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.thread-indicator svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: var(--accent);
+}
+
+.thread-indicator.resolved svg {
+  fill: var(--text-muted);
+}
