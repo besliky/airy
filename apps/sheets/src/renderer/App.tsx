@@ -391,6 +391,7 @@ import { planStillMatches } from './lazy-plan'
 import {
   effectiveSheetProtection,
   protectionRefusal,
+  structuralAncestry,
   unprotectPasswordStatus,
   type ProtectionWorksheet,
 } from './sheet-protection'
@@ -1945,6 +1946,13 @@ export function App(): React.JSX.Element {
     const journalDisposable = runtime.univerAPI.addEvent(
       runtime.univerAPI.Event.CommandExecuted,
       (event) => {
+        // BUG-1716: the allowed structural command finished (CommandExecuted
+        // fires for declined commands too) — its descendant set-range-values
+        // mutations gate normally again. Runs before the early returns so a
+        // declined or suppressed command still closes the window.
+        if (structuralAncestry.sheetId !== null && STRUCTURAL_EDIT_COMMAND_PATTERN.test(event.id)) {
+          structuralAncestry.sheetId = null
+        }
         if (journalSuppression.active) return
         // The formula engine re-applies cached results with these execution
         // options; they are derived state, never user edits.
@@ -2499,6 +2507,14 @@ export function App(): React.JSX.Element {
               setMessage(t(refusalKey))
               showToast(t(refusalKey), 'error')
               return
+            }
+            // BUG-1716: the gate allowed this structural command. Excel runs
+            // it even when the shifted neighbors are locked; its descendant
+            // set-range-values mutations (the neighbor rewrites) must not be
+            // re-gated by the locked scan while it executes. Cleared when the
+            // command's CommandExecuted fires below.
+            if (STRUCTURAL_EDIT_COMMAND_PATTERN.test(event.id)) {
+              structuralAncestry.sheetId = gateSheetId
             }
           }
         }

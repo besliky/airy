@@ -27,6 +27,9 @@
  * still edits as locked (noted in .orchestrator/LOGS/PAR-204.md — a rare
  * authoring path; the Lock Cell ribbon toggle writes cell-level xfs).
  *
+ * Allowed structural actions (insertRows="0" …) run even when the shifted
+ * neighbor cells are locked: their internal set-range-values mutations skip
+ * the locked scan while the structural command is in flight (BUG-1716).
  */
 import type { LazyWorkbookState } from './univer-state'
 import type { SheetProtectionAttributes, WorkbookSheetProtection } from '../shared/desktop-api'
@@ -173,6 +176,17 @@ export function inspectProtectionPatch(
 /// The gate's action families — the protection attributes they consult.
 export type ProtectedAction = keyof SheetProtectionAttributes
 
+/// Sheet id of the structural command the protection gate has just allowed
+/// (BUG-1716). Insert/delete row-column commands rewrite the shifted
+/// neighbor cells through set-range-values mutations; Excel executes those
+/// regardless of the cells' locks once the structural action itself is
+/// allowed (insertRows="0" and friends), so its descendants on the same
+/// sheet must not be re-gated by the locked scan. App.tsx sets this when the
+/// gate passes a structural command and clears it when that command's
+/// CommandExecuted fires (which happens for declined commands too), keeping
+/// the window exactly around the synchronous command execution.
+export const structuralAncestry: { sheetId: string | null } = { sheetId: null }
+
 /// Raw OOXML polarity: true (or absent — the prevented-by-default set) =
 /// the action is refused while the sheet is protected. (The two select*
 /// attributes default to allowed.)
@@ -286,6 +300,9 @@ export function protectionRefusal(
   // Value / style / paste / clear / autofill writes all land as
   // set-range-values (command or direct mutation).
   if (eventId === SET_RANGE_VALUES_COMMAND || eventId === SET_RANGE_VALUES_MUTATION) {
+    // BUG-1716: a descendant of an allowed structural command — its payload
+    // only restates the shifted neighbors, never user data.
+    if (structuralAncestry.sheetId === sheetId) return null
     const patch =
       (params as { value?: unknown; cellValue?: unknown } | undefined)?.value ??
       (params as { cellValue?: unknown } | undefined)?.cellValue

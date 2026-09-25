@@ -12,6 +12,7 @@ import {
   inspectProtectionPatch,
   protectionRefusal,
   rangeHasLockedCell,
+  structuralAncestry,
   unprotectPasswordStatus,
 } from '../src/renderer/sheet-protection'
 import { excelLegacyPasswordHash } from '../src/shared/legacy-password'
@@ -380,5 +381,96 @@ describe('rangeHasLockedCell / protectionRefusal', () => {
         hasPassword: false,
       }),
     ).toBeNull()
+  })
+
+  it('runs an insert-row on protected sheets when insertRows="0" allows it (BUG-1716)', () => {
+    const state = makeState({ s1: { protected: true, hasPassword: false } })
+    // Excel polarity: insertRows="0" = allowed, absent = prevented.
+    expect(
+      protectionRefusal(
+        state,
+        's1',
+        'sheet.command.insert-row',
+        { range: { startRow: 3, endRow: 3, startColumn: 0, endColumn: 3 } },
+        undefined,
+        { protected: true, hasPassword: false, insertRows: false },
+      ),
+    ).toBeNull()
+    expect(
+      protectionRefusal(
+        state,
+        's1',
+        'sheet.command.insert-row',
+        { range: { startRow: 3, endRow: 3, startColumn: 0, endColumn: 3 } },
+        undefined,
+        { protected: true, hasPassword: false, insertRows: true },
+      ),
+    ).toBe('appSheetActionProtected')
+  })
+
+  it('skips the locked scan for descendants of an allowed structural command (BUG-1716)', () => {
+    const state = makeState({ s1: { protected: true, hasPassword: false } })
+    // The insert itself is allowed (insertRows="0"), but its internal
+    // set-range-values mutations rewrite locked shifted cells — Excel
+    // executes those regardless, so the gate must not re-refuse them.
+    structuralAncestry.sheetId = 's1'
+    try {
+      expect(
+        protectionRefusal(
+          state,
+          's1',
+          'sheet.mutation.set-range-values',
+          { cellValue: { 0: { 0: { v: 'shifted' } } } },
+          undefined,
+          { protected: true, hasPassword: false, insertRows: false },
+        ),
+      ).toBeNull()
+      // The command form rides along (some controllers execute it directly).
+      expect(
+        protectionRefusal(
+          state,
+          's1',
+          'sheet.command.set-range-values',
+          { value: { 0: { 0: { v: 'shifted' } } } },
+          undefined,
+          { protected: true, hasPassword: false, insertRows: false },
+        ),
+      ).toBeNull()
+    } finally {
+      structuralAncestry.sheetId = null
+    }
+    // With the window closed the same mutation is refused again.
+    expect(
+      protectionRefusal(
+        state,
+        's1',
+        'sheet.mutation.set-range-values',
+        { cellValue: { 0: { 0: { v: 'typed' } } } },
+        undefined,
+        { protected: true, hasPassword: false, insertRows: false },
+      ),
+    ).toBe('appSheetCellProtected')
+  })
+
+  it('keeps the structural window scoped to its own sheet (BUG-1716)', () => {
+    const state = makeState({
+      s1: { protected: true, hasPassword: false },
+      s2: { protected: true, hasPassword: false },
+    })
+    structuralAncestry.sheetId = 's2'
+    try {
+      expect(
+        protectionRefusal(
+          state,
+          's1',
+          'sheet.mutation.set-range-values',
+          { cellValue: { 0: { 0: { v: 'typed' } } } },
+          undefined,
+          { protected: true, hasPassword: false },
+        ),
+      ).toBe('appSheetCellProtected')
+    } finally {
+      structuralAncestry.sheetId = null
+    }
   })
 })
