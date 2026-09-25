@@ -637,6 +637,7 @@ export const en = {
   appRecalcPartial:
     'Formulas recalculated from your edits — {count} kept cached values (functions the fallback engine lacks).',
   appRecalcDone: 'Formulas recalculated from your edits ({count} cells, engine fallback).',
+  appCircularRefs: 'Circular references: {refs}',
   appIndexing: 'Indexing {name}: {rows} rows ready.',
   appStreamingRows: 'Streaming {name}: {rows} rows available.',
   appLoadRangeFailed: 'Unable to load the visible range.',

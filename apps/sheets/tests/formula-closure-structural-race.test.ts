@@ -30,6 +30,7 @@ function closureState(): LazyWorkbookState {
     },
     editJournal: { structuralOps: new Map(), cells: new Map() },
     closure: { status: 'idle', pinned: new Map() },
+    circularRefs: [],
     formulaText: new Map(),
     cachedFormulaValues: new Map(),
     rowColStyleKeys: new Map(),
