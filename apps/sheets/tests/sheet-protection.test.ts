@@ -148,6 +148,30 @@ describe('cellIsUnlocked', () => {
     expect(cellIsUnlocked(state, 's1', 0, 0, worksheet)).toBe(false)
   })
 
+  it('prefers the raw cell when the composed read drops the custom bag (BUG-1715)', () => {
+    const state = makeState({})
+    // Live-app shape: the CELL_CONTENT interceptor chain rebuilds the cell
+    // object and hides custom, while the raw matrix keeps the install flag.
+    const worksheet = {
+      getCell: () => ({ v: 'x', custom: null }),
+      getCellRaw: (row: number, column: number) =>
+        row === 1 && column === 1 ? { custom: { unlocked: true } } : null,
+    }
+    expect(cellIsUnlocked(state, 's1', 1, 1, worksheet)).toBe(true)
+    expect(cellIsUnlocked(state, 's1', 0, 0, worksheet)).toBe(false)
+    // And the edit on the raw-unlocked cell passes the gate.
+    expect(
+      protectionRefusal(
+        state,
+        's1',
+        'sheet.mutation.set-range-values',
+        { cellValue: { 1: { 1: { v: 'typed' } } } },
+        worksheet,
+        { protected: true, hasPassword: false },
+      ),
+    ).toBeNull()
+  })
+
   it('resolves column-default styles from the file metadata', () => {
     // sheet1's columnWidths unlock columns 1..3 (styleIndex 1 → locked=false).
     const state = makeState({})

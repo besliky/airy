@@ -17,13 +17,16 @@
  * Locked resolution order (Excel default = locked):
  *   1. the cell's journal style patch (a session "Unlock Cell" toggle),
  *   2. the cell's own file xf, delivered as the `custom.unlocked` install
- *      flag (see patchWorksheetRangeInner),
+ *      flag (see patchWorksheetRangeInner) and read back through the raw
+ *      cell matrix — composed getCell results can drop the custom bag
+ *      (BUG-1715),
  *   3. the column-default xf (<col style=>) from the file metadata,
  *   4. locked.
  * Row-default xfs are the documented gap: row styles stream without a
  * per-sheet record to consult at gate time, so a row-level unlocked default
  * still edits as locked (noted in .orchestrator/LOGS/PAR-204.md — a rare
  * authoring path; the Lock Cell ribbon toggle writes cell-level xfs).
+ *
  */
 import type { LazyWorkbookState } from './univer-state'
 import type { SheetProtectionAttributes, WorkbookSheetProtection } from '../shared/desktop-api'
@@ -111,7 +114,9 @@ export function cellIsUnlocked(
     ?.style?.protectionLocked
   if (patched === false) return true
   if (patched === true) return false
-  const custom = worksheet?.getCell?.(row, column)?.custom
+  // Raw first: the composed read can lose the flag (see ProtectionWorksheet).
+  const custom =
+    worksheet?.getCellRaw?.(row, column)?.custom ?? worksheet?.getCell?.(row, column)?.custom
   if (custom?.[UNLOCKED_CELL_KEY] === true) return true
   return columnDefaultUnlocked(state, sheetId, column)
 }
@@ -182,9 +187,17 @@ export function actionPrevented(
 }
 
 /// Minimal read surface the gate needs from a worksheet — the core
-/// Worksheet satisfies it, and tests can pass fakes.
+/// Worksheet satisfies it, and tests can pass fakes. The raw read is the
+/// authoritative one (BUG-1715): composed getCell results go through the
+/// CELL_CONTENT interceptor chain, whose rich-text/render handlers rebuild
+/// the cell object and can drop the custom bag — in the live app that hid
+/// the install flag and refused unlocked cells. The raw cell matrix keeps it.
 export interface ProtectionWorksheet {
   getCell?(
+    row: number,
+    column: number,
+  ): { custom?: Record<string, unknown> | null } | null | undefined
+  getCellRaw?(
     row: number,
     column: number,
   ): { custom?: Record<string, unknown> | null } | null | undefined
