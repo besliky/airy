@@ -37,6 +37,11 @@ export const zh = {
   closeUnsavedDetail: '关闭前是否保存？',
   btnDontSave: '不保存',
   btnCancel: '取消',
+  externalChangeTitle: '文件已被外部修改',
+  externalChangeDetail:
+    '自上次保存后，“{name}”已被其他程序更改、重命名或删除。覆盖将丢弃外部更改；另存为会将您的版本写入新文件。',
+  btnOverwrite: '覆盖',
+  btnSaveAs: '另存为',
   mediaUnsupportedTitle: '视频可能无法在应用内播放',
   mediaNoAudioBody:
     '该视频的音轨编码（{codec}）不受内置播放器支持，在应用内播放时将没有声音。文件会原样嵌入，导出后在 PowerPoint 中播放不受影响。',

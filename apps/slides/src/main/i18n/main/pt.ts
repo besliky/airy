@@ -40,6 +40,11 @@ export const pt = {
   closeUnsavedDetail: 'Deseja salvá-las antes de fechar?',
   btnDontSave: 'Não Salvar',
   btnCancel: 'Cancelar',
+  externalChangeTitle: 'Arquivo alterado fora do aplicativo',
+  externalChangeDetail:
+    '"{name}" foi alterado, renomeado ou excluído por outro programa desde o último salvamento. Sobrescrever descarta as alterações externas; Salvar como grava a sua versão em um novo arquivo.',
+  btnOverwrite: 'Sobrescrever',
+  btnSaveAs: 'Salvar como',
   mediaUnsupportedTitle: 'Este vídeo pode não ser reproduzido dentro do aplicativo',
   mediaNoAudioBody:
     'O codec de áudio do vídeo ({codec}) não é suportado pelo player integrado; a reprodução no aplicativo ficará sem som. O arquivo é incorporado como está e é reproduzido normalmente no PowerPoint após a exportação.',

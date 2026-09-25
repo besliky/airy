@@ -38,6 +38,11 @@ export const zhTW = {
   closeUnsavedDetail: '關閉前是否要儲存？',
   btnDontSave: '不儲存',
   btnCancel: '取消',
+  externalChangeTitle: '檔案已被外部修改',
+  externalChangeDetail:
+    '自上次儲存後，「{name}」已被其他程式變更、重新命名或刪除。覆蓋將捨棄外部變更；另存新檔會將您的版本寫入新檔案。',
+  btnOverwrite: '覆蓋',
+  btnSaveAs: '另存新檔',
   mediaUnsupportedTitle: '影片可能無法在應用程式內播放',
   mediaNoAudioBody:
     '該影片的音訊編碼（{codec}）不受內建播放器支援，在應用程式內播放時將沒有聲音。檔案會原樣嵌入，匯出後在 PowerPoint 中播放不受影響。',

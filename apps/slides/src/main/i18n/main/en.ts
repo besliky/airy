@@ -40,6 +40,11 @@ export const en = {
   closeUnsavedDetail: 'Do you want to save them before closing?',
   btnDontSave: "Don't Save",
   btnCancel: 'Cancel',
+  externalChangeTitle: 'File changed outside this app',
+  externalChangeDetail:
+    '"{name}" was changed, renamed, or deleted by another program since the last save. Overwriting discards the external changes; Save As writes your version to a new file.',
+  btnOverwrite: 'Overwrite',
+  btnSaveAs: 'Save As',
   mediaUnsupportedTitle: 'This video may not play inside the app',
   mediaNoAudioBody:
     'The video’s audio codec ({codec}) is not supported by the built-in player, so in-app playback will have no sound. The file is embedded as-is and plays normally in PowerPoint after export.',

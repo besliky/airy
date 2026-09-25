@@ -40,6 +40,11 @@ export const ko = {
   closeUnsavedDetail: '닫기 전에 저장하시겠습니까?',
   btnDontSave: '저장 안 함',
   btnCancel: '취소',
+  externalChangeTitle: '파일이 외부에서 변경되었습니다',
+  externalChangeDetail:
+    '마지막 저장 후 "{name}"이(가) 다른 프로그램에 의해 변경, 이름 변경 또는 삭제되었습니다. 덮어쓰면 외부 변경 사항이 손실됩니다. 다른 이름으로 저장하면 새 파일에 저장됩니다.',
+  btnOverwrite: '덮어쓰기',
+  btnSaveAs: '다른 이름으로 저장',
   mediaUnsupportedTitle: '이 비디오는 앱 내에서 재생되지 않을 수 있습니다',
   mediaNoAudioBody:
     '이 비디오의 오디오 코덱({codec})은 내장 플레이어에서 지원되지 않아 앱 내 재생 시 소리가 나지 않습니다. 파일은 원본 그대로 삽입되며 내보낸 후 PowerPoint에서는 정상적으로 재생됩니다.',

@@ -40,6 +40,11 @@ export const it = {
   closeUnsavedDetail: 'Salvarle prima di chiudere?',
   btnDontSave: 'Non salvare',
   btnCancel: 'Annulla',
+  externalChangeTitle: 'File modificato al di fuori dell’app',
+  externalChangeDetail:
+    '"{name}" è stato modificato, rinominato o eliminato da un altro programma dall’ultimo salvataggio. Sovrascrivere scarta le modifiche esterne; Salva come scrive la tua versione in un nuovo file.',
+  btnOverwrite: 'Sovrascrivi',
+  btnSaveAs: 'Salva come',
   mediaUnsupportedTitle: 'Questo video potrebbe non essere riprodotto nell’app',
   mediaNoAudioBody:
     'Il codec audio del video ({codec}) non è supportato dal lettore integrato: la riproduzione nell’app sarà senza audio. Il file viene incorporato così com’è e si riproduce normalmente in PowerPoint dopo l’esportazione.',

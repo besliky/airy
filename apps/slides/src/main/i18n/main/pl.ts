@@ -40,6 +40,11 @@ export const pl = {
   closeUnsavedDetail: 'Czy zapisać je przed zamknięciem?',
   btnDontSave: 'Nie zapisuj',
   btnCancel: 'Anuluj',
+  externalChangeTitle: 'Plik zmieniony poza aplikacją',
+  externalChangeDetail:
+    'Od ostatniego zapisu plik „{name}” został zmieniony, przemianowany lub usunięty przez inny program. Nadpisanie odrzuci zmiany zewnętrzne; Zapisz jako zapisze Twoją wersję w nowym pliku.',
+  btnOverwrite: 'Nadpisz',
+  btnSaveAs: 'Zapisz jako',
   mediaUnsupportedTitle: 'Ten film może nie odtwarzać się w aplikacji',
   mediaNoAudioBody:
     'Kodek audio filmu ({codec}) nie jest obsługiwany przez wbudowany odtwarzacz — odtwarzanie w aplikacji będzie bez dźwięku. Plik jest osadzany bez zmian i po eksporcie odtwarza się normalnie w programie PowerPoint.',

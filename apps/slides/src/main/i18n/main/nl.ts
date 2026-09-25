@@ -40,6 +40,11 @@ export const nl = {
   closeUnsavedDetail: 'Wilt u ze opslaan voordat u sluit?',
   btnDontSave: 'Niet opslaan',
   btnCancel: 'Annuleren',
+  externalChangeTitle: 'Bestand buiten de app gewijzigd',
+  externalChangeDetail:
+    '"{name}" is sinds de laatste opslag gewijzigd, hernoemd of verwijderd door een ander programma. Overschrijven staakt de externe wijzigingen; Opslaan als schrijft uw versie naar een nieuw bestand.',
+  btnOverwrite: 'Overschrijven',
+  btnSaveAs: 'Opslaan als',
   mediaUnsupportedTitle: 'Deze video wordt mogelijk niet afgespeeld in de app',
   mediaNoAudioBody:
     'De audiocodec van de video ({codec}) wordt niet ondersteund door de ingebouwde speler; afspelen in de app is dan zonder geluid. Het bestand wordt ongewijzigd ingesloten en speelt na export normaal af in PowerPoint.',
