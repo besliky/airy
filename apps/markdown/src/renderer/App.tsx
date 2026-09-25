@@ -440,6 +440,14 @@ export default function App() {
     async (mode: SaveMode, suggestedName?: string, auto = false): Promise<boolean> => {
       const current = editorRef.current
       if (!current || statusRef.current !== 'ready' || savingRef.current) return false
+      // OBS-1746: a no-edit save must not rewrite the file. The parse→
+      // serialize round trip is not byte-faithful for every envelope (a
+      // mid-file BOM is filtered on display, code-block indentation is
+      // re-serialized), so Ctrl+S on a clean document stops here and the
+      // on-disk bytes stay exactly as the last writer left them. The menu
+      // Save already short-circuits clean views main-side (requestMarkdownSave);
+      // Save As stays explicit — a picked target is a deliberate write.
+      if (mode === 'save' && !dirtyRef.current && filePathRef.current) return true
       savingRef.current = true
       setSaveState('saving')
       try {
