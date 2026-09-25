@@ -424,7 +424,11 @@ import {
   installThreadedCommentIndicators,
   setThreadPanelOpener,
 } from './threaded-comment-indicators'
-import { installWorkbookThreadedComments, type ThreadedCommentThread } from './threaded-comments'
+import {
+  installWorkbookThreadedComments,
+  remapThreadedCommentAnchors,
+  type ThreadedCommentThread,
+} from './threaded-comments'
 import type { DefinedNameAction, DefinedNameRow } from './NameManagerDialog'
 import {
   clearVisualSelection,
@@ -2351,6 +2355,10 @@ export function App(): React.JSX.Element {
               mapProtectedRanges(protectedRanges, [structuralOp]),
             )
           }
+          // Threaded-comment anchors follow their cells like Excel's comments:
+          // inserts shift them, a removal buries the thread (its undo restores
+          // it), whole-line moves carry it (see threaded-comments.ts).
+          remapThreadedCommentAnchors(structuralSheetId, structuralOp)
           if (pageBreakLayersRef.current.has(structuralSheetId)) {
             installPageBreakLayers(structuralSheetId)
           }
