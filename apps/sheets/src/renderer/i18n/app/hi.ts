@@ -652,6 +652,7 @@ export const hi = {
   appRecalcPartial:
     'आपके संपादनों से सूत्रों की पुनर्गणना हुई — {count} ने कैश किए गए मान रखे (फ़ॉलबैक इंजन में अनुपलब्ध फ़ंक्शन)।',
   appRecalcDone: 'आपके संपादनों से सूत्रों की पुनर्गणना हुई ({count} सेल, फ़ॉलबैक इंजन)।',
+  appCircularRefs: 'परिपत्र संदर्भ: {refs}',
   appIndexing: '{name} अनुक्रमित हो रहा है: {rows} पंक्तियाँ तैयार।',
   appStreamingRows: '{name} स्ट्रीम हो रहा है: {rows} पंक्तियाँ उपलब्ध।',
   appLoadRangeFailed: 'दृश्यमान श्रेणी लोड नहीं की जा सकी।',

@@ -150,6 +150,11 @@ export interface LazyWorkbookState {
     running: boolean
     lastRunAt: number
   }
+  /// A1-style addresses of statically detected circular-reference formulas
+  /// (BUG-1718): the engine resolves cycles in a single pass and shows the
+  /// one-pass numbers silently, so the status bar badges them instead.
+  /// Populated once per open from the workbook's full formula list.
+  circularRefs: string[]
 }
 
 export interface PinnedClosureCell {
