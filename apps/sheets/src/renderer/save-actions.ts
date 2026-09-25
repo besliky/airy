@@ -5,7 +5,7 @@
  * Extracted from App.tsx; the App component passes a SaveContext built fresh
  * per call so refs and state never go stale.
  */
-import type { WorkbookFile, WorkbookFilterState } from '../shared/desktop-api'
+import type { SheetProtectionSave, WorkbookFile, WorkbookFilterState } from '../shared/desktop-api'
 import {
   isSheetRemoved,
   toSaveChartEdits,
@@ -130,9 +130,17 @@ export async function handleSave(
   }
   const cfStates = collectCfStates(ctx.univerRef.current, state)
   const dvStates = collectDvStates(ctx.univerRef.current, state)
-  const sheetProtections = [...state.editJournal.sheetProtection]
+  // Full sheetProtection specs: toggled sheets are rebuilt from these at
+  // save, untouched sheets keep their XML verbatim. Attributes spread at the
+  // top level — the wire item IS the element's attribute set.
+  const sheetProtections: SheetProtectionSave[] = [...state.editJournal.sheetProtection]
     .filter(([sheetId]) => !isSheetRemoved(state.editJournal, sheetId))
-    .map(([sheetId, isProtected]) => ({ sheetId, protected: isProtected }))
+    .map(([sheetId, delta]) => ({
+      sheetId,
+      protected: delta.protected,
+      ...(delta.passwordHash === undefined ? {} : { passwordHash: delta.passwordHash }),
+      ...(delta.attributes ?? {}),
+    }))
   const pageSetupStates = toSavePageSetupStates(state.editJournal)
   const noteStates = collectNoteStates(ctx.univerRef.current, state)
   const pivotCacheRefreshPaths = [...state.editJournal.pivotCacheRefresh]

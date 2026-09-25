@@ -467,7 +467,30 @@ export const it = {
   appProtectedWithPassword:
     'Questo foglio è protetto da password — la rimozione della protezione non è supportata.',
   appProtectionWillWrite:
-    "La protezione del foglio verrà scritta al salvataggio (senza password). L'editor stesso non la applica.",
+    "La protezione del foglio verrà scritta al salvataggio: l'editor blocca la modifica delle celle bloccate e le azioni non consentite.",
+  appSheetCellProtected:
+    'La cella che si sta tentando di modificare si trova in un foglio protetto. Per apportare modifiche, rimuovi prima la protezione del foglio; potrebbe essere richiesta una password.',
+  appSheetActionProtected:
+    'Questa azione non è consentita in un foglio protetto. Rimuovi prima la protezione del foglio (Revisione › Rimuovi protezione foglio).',
+  appProtectPassword: 'Password per rimuovere la protezione del foglio:',
+  appProtectReenterPassword: 'Reimmetti la password per confermare:',
+  appProtectPasswordMismatch: 'Le password non corrispondono; digitarle di nuovo.',
+  appProtectAllowedHeading: 'Consenti a tutti gli utenti di questo foglio di lavoro di:',
+  appUnprotectUnsupported:
+    'Questo foglio usa un hash della password moderno non verificabile qui: la protezione resta attiva.',
+  appUnprotectWrongPassword:
+    'La password immessa non è corretta. Verifica che Blocc Maiusc sia disattivato e riprova.',
+  appProtectAllowSelectLocked: 'Selezionare celle bloccate',
+  appProtectAllowSelectUnlocked: 'Selezionare celle sbloccate',
+  appProtectAllowFormatCells: 'Formatta celle',
+  appProtectAllowFormatColumns: 'Formatta colonne',
+  appProtectAllowFormatRows: 'Formatta righe',
+  appProtectAllowInsertRows: 'Inserisci righe',
+  appProtectAllowInsertColumns: 'Inserisci colonne',
+  appProtectAllowDeleteRows: 'Elimina righe',
+  appProtectAllowDeleteColumns: 'Elimina colonne',
+  appProtectAllowSort: 'Ordina',
+  appProtectAllowAutoFilter: 'Usa filtro automatico',
   appProtectionWillRemove: 'La protezione del foglio verrà rimossa al salvataggio.',
   appZoom: 'Zoom {percent}%.',
   appTopRowFrozen: 'Riga superiore bloccata — salva con ⌘S.',
@@ -1276,7 +1299,7 @@ export const it = {
   appUnprotectSheet: 'Rimuovi protezione foglio',
   appProtectSheet: 'Proteggi foglio',
   appOpenFileFirst: 'Apri prima un file',
-  appNoPassword: 'Nessuna password',
+  appNoPassword: 'Previene modifiche accidentali — password facoltativa',
   appProtectWorkbook: 'Proteggi cartella di lavoro',
   appAllowEditRanges: 'Consenti modifica intervalli',
   appGroupClipboard: 'Appunti',

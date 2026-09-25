@@ -456,7 +456,30 @@ export const pl = {
   appProtectedWithPassword:
     'Ten arkusz jest chroniony hasłem — usunięcie jego ochrony nie jest obsługiwane.',
   appProtectionWillWrite:
-    'Ochrona arkusza zostanie zapisana przy zapisywaniu (bez hasła). Sam edytor jej nie wymusza.',
+    'Ochrona arkusza zostanie zapisana przy zapisie — edytor blokuje edycję zablokowanych komórek i niedozwolone czynności.',
+  appSheetCellProtected:
+    'Komórka, którą próbujesz zmienić, znajduje się na chronionym arkuszu. Aby ją zmienić, najpierw usuń ochronę arkusza — może być wymagane hasło.',
+  appSheetActionProtected:
+    'Ta czynność nie jest dozwolona na chronionym arkuszu. Najpierw usuń ochronę arkusza (Recenzja › Wyłącz ochronę arkusza).',
+  appProtectPassword: 'Hasło do usunięcia ochrony arkusza:',
+  appProtectReenterPassword: 'Wpisz hasło ponownie, aby potwierdzić:',
+  appProtectPasswordMismatch: 'Hasła nie są zgodne — wpisz je ponownie.',
+  appProtectAllowedHeading: 'Zezwól wszystkim użytkownikom tego arkusza na:',
+  appUnprotectUnsupported:
+    'Ten arkusz używa nowoczesnego skrótu hasła, którego nie można tu zweryfikować — ochrona pozostaje włączona.',
+  appUnprotectWrongPassword:
+    'Wpisane hasło jest nieprawidłowe. Upewnij się, że klawisz Caps Lock jest wyłączony, i spróbuj ponownie.',
+  appProtectAllowSelectLocked: 'Zaznaczanie zablokowanych komórek',
+  appProtectAllowSelectUnlocked: 'Zaznaczanie odblokowanych komórek',
+  appProtectAllowFormatCells: 'Formatowanie komórek',
+  appProtectAllowFormatColumns: 'Formatowanie kolumn',
+  appProtectAllowFormatRows: 'Formatowanie wierszy',
+  appProtectAllowInsertRows: 'Wstawianie wierszy',
+  appProtectAllowInsertColumns: 'Wstawianie kolumn',
+  appProtectAllowDeleteRows: 'Usuwanie wierszy',
+  appProtectAllowDeleteColumns: 'Usuwanie kolumn',
+  appProtectAllowSort: 'Sortowanie',
+  appProtectAllowAutoFilter: 'Korzystanie z autofiltra',
   appProtectionWillRemove: 'Ochrona arkusza zostanie usunięta przy zapisywaniu.',
   appZoom: 'Powiększenie {percent}%.',
   appTopRowFrozen: 'Zablokowano górny wiersz — zapisz za pomocą ⌘S.',
@@ -1265,7 +1288,7 @@ export const pl = {
   appUnprotectSheet: 'Nie chroń arkusza',
   appProtectSheet: 'Chroń arkusz',
   appOpenFileFirst: 'Najpierw otwórz plik',
-  appNoPassword: 'Bez hasła',
+  appNoPassword: 'Chroni przed przypadkowymi zmianami — hasło opcjonalne',
   appProtectWorkbook: 'Chroń skoroszyt',
   appAllowEditRanges: 'Zezwalaj na edytowanie zakresów',
   appGroupClipboard: 'Schowek',

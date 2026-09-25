@@ -364,6 +364,7 @@ import {
   recordDvChange,
   recordNoteChange,
   recordProtectedRangesChange,
+  recordSheetProtection,
   recordFilterChange,
   recordSetNumfmt,
   recordSetRangeValues,
@@ -379,6 +380,15 @@ import {
 import { shiftPinnedCells } from './formula-closure'
 import { getLang, t, aiLangDirective } from './i18n/locale'
 import { planStillMatches } from './lazy-plan'
+import {
+  effectiveSheetProtection,
+  protectionRefusal,
+  unprotectPasswordStatus,
+  type ProtectionWorksheet,
+} from './sheet-protection'
+import { ProtectSheetDialog, type ProtectSheetRequest } from './ProtectSheetDialog'
+import { showToast } from '@airy-office/ui/toast-bus'
+import { excelLegacyPasswordHash } from '../shared/legacy-password'
 import { lastSurvivingScreenLine, netAxisDelta, screenToFile } from './view-transform'
 import { selectionFormatEquals, toSelectionFormat, type SelectionFormat } from './selection-format'
 import { ExcelShell } from './ExcelShell'
@@ -708,6 +718,8 @@ export function App(): React.JSX.Element {
   const [timelinePicker, setTimelinePicker] = useState<TimelinePickerState | null>(null)
   const menuActionRef = useRef<(action: MenuAction) => void>(() => {})
   const [printDialogOpen, setPrintDialogOpen] = useState(false)
+  /// Review > Protect/Unprotect Sheet (PAR-204): null = closed.
+  const [protectSheetDialog, setProtectSheetDialog] = useState<'protect' | 'unprotect' | null>(null)
   /// Help > Keyboard Shortcuts reference dialog.
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   /// Where the user was when a save started: the post-save session swap
@@ -2403,6 +2415,45 @@ export function App(): React.JSX.Element {
       (event) => {
         const state = lazyWorkbookRef.current
         if (journalSuppression.active || !state) return
+        // PAR-204: worksheet protection. While the sheet is protected,
+        // locked cells refuse edits (Excel's "the cell you're trying to
+        // change is on a protected sheet") and the modeled actions refuse
+        // unless their attribute allows them. New sheets carry no file
+        // protection record; the journal delta keeps the check honest after
+        // an in-session protect/unprotect.
+        const gateSheetId =
+          (event.params as { subUnitId?: string } | undefined)?.subUnitId ??
+          runtime.univerAPI.getActiveWorkbook()?.getActiveSheet()?.getSheetId()
+        if (
+          gateSheetId !== undefined &&
+          !state.editJournal.sheets.added.has(gateSheetId) &&
+          !state.editJournal.sheets.removed.has(gateSheetId)
+        ) {
+          const protection = effectiveSheetProtection(state, gateSheetId)
+          if (protection?.protected) {
+            const gateUiWorkbook = runtime.univerAPI.getActiveWorkbook()
+            const gateWorksheet = gateUiWorkbook?.getSheetBySheetId(gateSheetId)?.getSheet() as
+              ProtectionWorksheet | undefined
+            const gateOptions = event.options as { fromFormula?: boolean } | undefined
+            const refusalKey =
+              gateOptions?.fromFormula === true
+                ? null
+                : protectionRefusal(
+                    state,
+                    gateSheetId,
+                    event.id,
+                    event.params,
+                    gateWorksheet,
+                    protection,
+                  )
+            if (refusalKey !== null) {
+              event.cancel = true
+              setMessage(t(refusalKey))
+              showToast(t(refusalKey), 'error')
+              return
+            }
+          }
+        }
         if (event.id === SET_RANGE_VALUES_COMMAND || event.id === SET_RANGE_VALUES_MUTATION) {
           // Quadratic array-criteria formulas (distinct-count COUNTIF idioms
           // over 80k+ rows) freeze the main-thread formula engine for
@@ -3645,6 +3696,7 @@ export function App(): React.JSX.Element {
       handlePageLayoutCommand: (rest) => handlePageLayoutCommandImpl(pageLayoutContext(), rest),
       handleExportPdf: () => handleExportPdfImpl(pageLayoutContext()),
       openPrintDialog: () => setPrintDialogOpen(true),
+      openProtectSheetDialog: (mode) => setProtectSheetDialog(mode),
     }
   }
 
@@ -4341,6 +4393,13 @@ export function App(): React.JSX.Element {
     <>
       <ToastHost />
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+      {protectSheetDialog && (
+        <ProtectSheetDialog
+          mode={protectSheetDialog}
+          onApply={applyProtectSheet}
+          onClose={() => setProtectSheetDialog(null)}
+        />
+      )}
       {recoveryPrompt && (
         <RecoveryDialog
           prompt={recoveryPrompt}
@@ -4689,7 +4748,7 @@ export function App(): React.JSX.Element {
     const sheetId = univerRef.current?.univerAPI.getActiveWorkbook()?.getActiveSheet()?.getSheetId()
     if (!state || !sheetId) return null
     const journaled = state.editJournal.sheetProtection.get(sheetId)
-    if (journaled !== undefined) return journaled
+    if (journaled !== undefined) return journaled.protected
     const file = state.sheetProtections.get(sheetId)
     if (file) return file.protected
     return state.editJournal.sheets.added.has(sheetId) ? false : null
@@ -4733,6 +4792,52 @@ export function App(): React.JSX.Element {
     recordProtectedRangesChange(state.editJournal, sheetId)
     setPendingEdits(journalSize(state.editJournal))
     setMessage(t('appRangesRecorded', { count: ranges.length }))
+    return null
+  }
+
+  /// Review > Protect Sheet / Unprotect Sheet (PAR-204): the dialog's apply
+  /// hook. Records the journal delta the save serializes; the password is
+  /// hashed with Excel's legacy scheme so Excel and openpyxl recognize it.
+  /// Returns an error message for the dialog, or null on success.
+  function applyProtectSheet(request: ProtectSheetRequest): string | null {
+    const state = lazyWorkbookRef.current
+    const sheetId = univerRef.current?.univerAPI.getActiveWorkbook()?.getActiveSheet()?.getSheetId()
+    if (!state || !sheetId) return t('appProtectionNeedsFile')
+    const file = state.sheetProtections.get(sheetId) ?? { protected: false, hasPassword: false }
+    const original = {
+      protected: state.editJournal.sheetProtection.get(sheetId)?.protected ?? file.protected,
+      passwordHash:
+        state.editJournal.sheetProtection.get(sheetId)?.passwordHash ?? file.passwordHash ?? null,
+    }
+    if (request.mode === 'unprotect') {
+      const status = unprotectPasswordStatus(file, request.password)
+      if (status === 'unsupported') return t('appUnprotectUnsupported')
+      if (status === 'wrong') return t('appUnprotectWrongPassword')
+      recordSheetProtection(
+        state.editJournal,
+        sheetId,
+        { protected: false, passwordHash: null },
+        original,
+      )
+      setPendingEdits(journalSize(state.editJournal))
+      setMessage(t('appProtectionWillRemove'))
+      return null
+    }
+    if (request.password !== '' && request.password.length > 255) {
+      return t('appUnprotectWrongPassword')
+    }
+    recordSheetProtection(
+      state.editJournal,
+      sheetId,
+      {
+        protected: true,
+        passwordHash: request.password === '' ? null : excelLegacyPasswordHash(request.password),
+        attributes: request.attributes,
+      },
+      original,
+    )
+    setPendingEdits(journalSize(state.editJournal))
+    setMessage(t('appProtectionWillWrite'))
     return null
   }
 }

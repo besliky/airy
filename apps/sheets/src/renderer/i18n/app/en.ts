@@ -424,7 +424,30 @@ export const en = {
   appProtectedWithPassword:
     'This sheet is protected with a password — removing its protection is not supported.',
   appProtectionWillWrite:
-    'Sheet protection will be written on save (no password). The editor itself does not enforce it.',
+    'Sheet protection will be written on save — the editor blocks edits of locked cells and disallowed actions.',
+  appSheetCellProtected:
+    'The cell or chart you are trying to change is on a protected sheet. To make a change, unprotect the sheet — you may be asked for a password.',
+  appSheetActionProtected:
+    'That action is not allowed on a protected sheet. Unprotect the sheet first (Review › Unprotect Sheet).',
+  appProtectPassword: 'Password to unprotect the sheet:',
+  appProtectReenterPassword: 'Reenter password to proceed:',
+  appProtectPasswordMismatch: 'The two passwords do not match — please retype them.',
+  appProtectAllowedHeading: 'Allow all users of this worksheet to:',
+  appUnprotectUnsupported:
+    'This sheet uses a modern password hash that cannot be verified here — the protection stays on.',
+  appUnprotectWrongPassword:
+    'The password you typed is incorrect. Check that Caps Lock is off and try again.',
+  appProtectAllowSelectLocked: 'Select locked cells',
+  appProtectAllowSelectUnlocked: 'Select unlocked cells',
+  appProtectAllowFormatCells: 'Format cells',
+  appProtectAllowFormatColumns: 'Format columns',
+  appProtectAllowFormatRows: 'Format rows',
+  appProtectAllowInsertRows: 'Insert rows',
+  appProtectAllowInsertColumns: 'Insert columns',
+  appProtectAllowDeleteRows: 'Delete rows',
+  appProtectAllowDeleteColumns: 'Delete columns',
+  appProtectAllowSort: 'Sort',
+  appProtectAllowAutoFilter: 'Use AutoFilter',
   appProtectionWillRemove: 'Sheet protection will be removed on save.',
   appZoom: 'Zoom {percent}%.',
   appTopRowFrozen: 'Top row frozen — saves with ⌘S.',
@@ -1218,7 +1241,7 @@ export const en = {
   appUnprotectSheet: 'Unprotect Sheet',
   appProtectSheet: 'Protect Sheet',
   appOpenFileFirst: 'Open a file first',
-  appNoPassword: 'No password',
+  appNoPassword: 'Prevent unwanted edits — optional password',
   appProtectWorkbook: 'Protect Workbook',
   appAllowEditRanges: 'Allow Edit Ranges',
   appGroupClipboard: 'Clipboard',

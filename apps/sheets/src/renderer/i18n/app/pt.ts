@@ -468,7 +468,30 @@ export const pt = {
   appProtectedWithPassword:
     'Esta planilha está protegida com senha — remover a proteção não é suportado.',
   appProtectionWillWrite:
-    'A proteção da planilha será gravada ao salvar (sem senha). O editor em si não a impõe.',
+    'A proteção da planilha será gravada ao salvar — o editor bloqueia a edição de células bloqueadas e ações não permitidas.',
+  appSheetCellProtected:
+    'A célula que você está tentando alterar está em uma planilha protegida. Para alterá-la, desproteja a planilha primeiro; uma senha pode ser solicitada.',
+  appSheetActionProtected:
+    'Essa ação não é permitida em uma planilha protegida. Desproteja a planilha primeiro (Revisão › Desproteger Planilha).',
+  appProtectPassword: 'Senha para desproteger a planilha:',
+  appProtectReenterPassword: 'Digite a senha novamente para confirmar:',
+  appProtectPasswordMismatch: 'As senhas não coincidem — digite-as novamente.',
+  appProtectAllowedHeading: 'Permitir que todos os usuários desta planilha:',
+  appUnprotectUnsupported:
+    'Esta planilha usa um hash de senha moderno que não pode ser verificado aqui — a proteção permanece.',
+  appUnprotectWrongPassword:
+    'A senha digitada está incorreta. Verifique se Caps Lock está desativado e tente novamente.',
+  appProtectAllowSelectLocked: 'Selecionar células bloqueadas',
+  appProtectAllowSelectUnlocked: 'Selecionar células desbloqueadas',
+  appProtectAllowFormatCells: 'Formatar células',
+  appProtectAllowFormatColumns: 'Formatar colunas',
+  appProtectAllowFormatRows: 'Formatar linhas',
+  appProtectAllowInsertRows: 'Inserir linhas',
+  appProtectAllowInsertColumns: 'Inserir colunas',
+  appProtectAllowDeleteRows: 'Excluir linhas',
+  appProtectAllowDeleteColumns: 'Excluir colunas',
+  appProtectAllowSort: 'Classificar',
+  appProtectAllowAutoFilter: 'Usar AutoFiltro',
   appProtectionWillRemove: 'A proteção da planilha será removida ao salvar.',
   appZoom: 'Zoom {percent}%.',
   appTopRowFrozen: 'Primeira linha congelada — salve com ⌘S.',
@@ -1278,7 +1301,7 @@ export const pt = {
   appUnprotectSheet: 'Desproteger Planilha',
   appProtectSheet: 'Proteger Planilha',
   appOpenFileFirst: 'Abra um arquivo primeiro',
-  appNoPassword: 'Sem senha',
+  appNoPassword: 'Evita edições acidentais — senha opcional',
   appProtectWorkbook: 'Proteger Pasta de Trabalho',
   appAllowEditRanges: 'Permitir Edição de Intervalos',
   appGroupClipboard: 'Área de Transferência',

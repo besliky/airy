@@ -483,7 +483,30 @@ export const fr = {
   appProtectedWithPassword:
     "Cette feuille est protégée par un mot de passe — la suppression de sa protection n'est pas prise en charge.",
   appProtectionWillWrite:
-    "La protection de la feuille sera écrite à l'enregistrement (sans mot de passe). L'éditeur lui-même ne l'applique pas.",
+    "La protection de la feuille sera enregistrée — l'éditeur bloque la modification des cellules verrouillées et les actions interdites.",
+  appSheetCellProtected:
+    "La cellule que vous essayez de modifier se trouve sur une feuille protégée. Pour la modifier, ôtez d'abord la protection de la feuille — un mot de passe peut vous être demandé.",
+  appSheetActionProtected:
+    "Cette action n'est pas autorisée sur une feuille protégée. Ôtez d'abord la protection de la feuille (Révision › Ôter la protection de la feuille).",
+  appProtectPassword: 'Mot de passe pour ôter la protection de la feuille :',
+  appProtectReenterPassword: 'Ressaisissez le mot de passe pour confirmer :',
+  appProtectPasswordMismatch: 'Les mots de passe ne correspondent pas — veuillez les ressaisir.',
+  appProtectAllowedHeading: 'Autoriser tous les utilisateurs de cette feuille à :',
+  appUnprotectUnsupported:
+    'Cette feuille utilise un hachage de mot de passe moderne impossible à vérifier ici — la protection reste active.',
+  appUnprotectWrongPassword:
+    'Le mot de passe saisi est incorrect. Vérifiez que la touche Verr. Maj est désactivée, puis réessayez.',
+  appProtectAllowSelectLocked: 'Sélectionner les cellules verrouillées',
+  appProtectAllowSelectUnlocked: 'Sélectionner les cellules déverrouillées',
+  appProtectAllowFormatCells: 'Mettre en forme les cellules',
+  appProtectAllowFormatColumns: 'Mettre en forme les colonnes',
+  appProtectAllowFormatRows: 'Mettre en forme les lignes',
+  appProtectAllowInsertRows: 'Insérer des lignes',
+  appProtectAllowInsertColumns: 'Insérer des colonnes',
+  appProtectAllowDeleteRows: 'Supprimer des lignes',
+  appProtectAllowDeleteColumns: 'Supprimer des colonnes',
+  appProtectAllowSort: 'Trier',
+  appProtectAllowAutoFilter: 'Utiliser le filtre automatique',
   appProtectionWillRemove: "La protection de la feuille sera supprimée à l'enregistrement.",
   appZoom: 'Zoom {percent} %.',
   appTopRowFrozen: 'Ligne supérieure figée — enregistrez avec ⌘S.',
@@ -1300,7 +1323,7 @@ export const fr = {
   appUnprotectSheet: 'Ôter la protection de la feuille',
   appProtectSheet: 'Protéger la feuille',
   appOpenFileFirst: "Ouvrez d'abord un fichier",
-  appNoPassword: 'Sans mot de passe',
+  appNoPassword: 'Empêche les modifications involontaires — mot de passe facultatif',
   appProtectWorkbook: 'Protéger le classeur',
   appAllowEditRanges: 'Permettre la modification des plages',
   appGroupClipboard: 'Presse-papiers',

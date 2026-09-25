@@ -466,7 +466,30 @@ export const es = {
   appProtectedWithPassword:
     'Esta hoja está protegida con contraseña — quitar su protección no se admite.',
   appProtectionWillWrite:
-    'La protección de la hoja se escribirá al guardar (sin contraseña). El editor en sí no la aplica.',
+    'La protección de la hoja se escribirá al guardar; el editor bloquea la edición de celdas bloqueadas y las acciones no permitidas.',
+  appSheetCellProtected:
+    'La celda que intenta modificar está en una hoja protegida. Para modificarla, quite primero la protección de la hoja; es posible que se le pida una contraseña.',
+  appSheetActionProtected:
+    'Esa acción no está permitida en una hoja protegida. Quite primero la protección de la hoja (Revisar › Quitar protección de hoja).',
+  appProtectPassword: 'Contraseña para quitar la protección de la hoja:',
+  appProtectReenterPassword: 'Vuelva a escribir la contraseña para confirmar:',
+  appProtectPasswordMismatch: 'Las contraseñas no coinciden; escríbalas de nuevo.',
+  appProtectAllowedHeading: 'Permitir que todos los usuarios de esta hoja de trabajo:',
+  appUnprotectUnsupported:
+    'Esta hoja usa un hash de contraseña moderno que no se puede verificar aquí; la protección se mantiene.',
+  appUnprotectWrongPassword:
+    'La contraseña escrita no es correcta. Compruebe que Bloq Mayús esté desactivado e inténtelo de nuevo.',
+  appProtectAllowSelectLocked: 'Seleccionar celdas bloqueadas',
+  appProtectAllowSelectUnlocked: 'Seleccionar celdas desbloqueadas',
+  appProtectAllowFormatCells: 'Dar formato a celdas',
+  appProtectAllowFormatColumns: 'Dar formato a columnas',
+  appProtectAllowFormatRows: 'Dar formato a filas',
+  appProtectAllowInsertRows: 'Insertar filas',
+  appProtectAllowInsertColumns: 'Insertar columnas',
+  appProtectAllowDeleteRows: 'Eliminar filas',
+  appProtectAllowDeleteColumns: 'Eliminar columnas',
+  appProtectAllowSort: 'Ordenar',
+  appProtectAllowAutoFilter: 'Usar Autofiltro',
   appProtectionWillRemove: 'La protección de la hoja se quitará al guardar.',
   appZoom: 'Zoom {percent} %.',
   appTopRowFrozen: 'Fila superior inmovilizada — guarde con ⌘S.',
@@ -1278,7 +1301,7 @@ export const es = {
   appUnprotectSheet: 'Desproteger hoja',
   appProtectSheet: 'Proteger hoja',
   appOpenFileFirst: 'Abra primero un archivo',
-  appNoPassword: 'Sin contraseña',
+  appNoPassword: 'Evita cambios accidentales — contraseña opcional',
   appProtectWorkbook: 'Proteger libro',
   appAllowEditRanges: 'Permitir editar rangos',
   appGroupClipboard: 'Portapapeles',

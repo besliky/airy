@@ -161,6 +161,7 @@ import {
   type UniverWorksheet,
 } from './univer-state'
 import { isManualCalculation } from './calc-options'
+import { UNLOCKED_CELL_KEY, unprotectPasswordStatus } from './sheet-protection'
 import { noteFormulaStreamChunk, requestFullRecalcAfterStream } from './formula-stream-hold'
 
 export const MINIMUM_SHEET_ROW_COUNT = 1000
@@ -611,6 +612,7 @@ export function protectSheetGuard(
   state: LazyWorkbookState,
   sheetId: string,
   nextProtected: boolean,
+  password?: string,
 ): string | null {
   if (isSheetRemoved(state.editJournal, sheetId)) return `Unknown sheet: ${sheetId}`
   const isAdded = state.editJournal.sheets.added.has(sheetId)
@@ -619,7 +621,11 @@ export function protectSheetGuard(
     return t('appProtectionNeedsIndexed')
   }
   if (!nextProtected && file?.hasPassword) {
-    return t('appProtectedWithPassword')
+    // The AI path cannot type a password unless the plan supplies one: an
+    // omitted (or wrong) password fails closed, a verified one may unprotect.
+    const status = unprotectPasswordStatus(file, password ?? '')
+    if (status === 'unsupported') return t('appUnprotectUnsupported')
+    if (status === 'wrong') return t('appUnprotectWrongPassword')
   }
   return null
 }
@@ -4170,7 +4176,10 @@ export function patchWorksheetRangeInner(
     // spill with #SPILL!; keep the style, let the engine fill the content.
     if (useFormulas && arrayFollowers?.has(`${cell.row}:${cell.column}`)) {
       if (row) {
-        row[cell.column - range.startColumn] = style ? { s: toUniverStyle(style) } : {}
+        row[cell.column - range.startColumn] = {
+          ...(style ? { s: toUniverStyle(style) } : {}),
+          ...(style?.locked === false ? { custom: { [UNLOCKED_CELL_KEY]: true } } : {}),
+        }
         if (style && rowColStyleKeys?.size) {
           overrideCells.push([cell.row - range.startRow, cell.column - range.startColumn])
         }
@@ -4290,6 +4299,14 @@ export function patchWorksheetRangeInner(
               },
             }
           : {}),
+      }
+      // PAR-204: mark the cell unlocked in its custom bag (see the chunk
+      // builder) — Excel's xf <protection locked="0"> edit pass.
+      if (effectiveStyle?.locked === false) {
+        const cellData = row[cell.column - range.startColumn]
+        if (cellData) {
+          cellData.custom = { ...(cellData.custom ?? {}), [UNLOCKED_CELL_KEY]: true }
+        }
       }
       // Only cells with their own xf override row/col defaults.
       if (effectiveStyle && rowColStyleKeys?.size) {

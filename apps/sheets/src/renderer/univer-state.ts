@@ -11,6 +11,7 @@ import type {
   WorkbookFile,
   WorkbookPagePrintSettings,
   WorkbookPivotDefinition,
+  WorkbookSheetProtection,
 } from '../shared/desktop-api'
 import type { createUniver } from './create-univer'
 import type { EditJournal } from './edit-journal'
@@ -51,7 +52,9 @@ export interface LazyWorkbookState {
   /// so an already-loaded range must not satisfy the next load request.
   readonly decorationsPendingSheets: Set<string>
   /// File-side worksheet protection, known once a sheet finishes indexing.
-  readonly sheetProtections: Map<string, { protected: boolean; hasPassword: boolean }>
+  /// Carries the full attribute set plus the legacy password hash when the
+  /// file used one (PAR-204).
+  readonly sheetProtections: Map<string, WorkbookSheetProtection>
   /// File-side manual page breaks (0-based index of the row/column after the
   /// break, file coordinates), known once a sheet finishes indexing.
   readonly sheetPageBreaks: Map<string, { rowBreaks: number[]; colBreaks: number[] }>
