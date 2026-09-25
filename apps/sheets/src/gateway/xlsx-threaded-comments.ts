@@ -337,28 +337,33 @@ export async function applyThreadedCommentStates(
   let workbookRelsChanged = false
 
   if (hasAnyThreadedParts) {
+    // The workbook relationship can be missing while the persons part is real
+    // (producers that ship the part without the rel, BUG-1713): those entries
+    // survive the merge too, and the existing part is reused instead of added
+    // anew — a second zip entry with the same name aborts the whole save.
+    const danglingPersonsPart =
+      existingPersonsPart === null ? await findExistingPersonsPart(pkg) : null
     const merged = new Map<string, PersonRecord>()
-    if (existingPersonsPart !== null && (await pkg.has(existingPersonsPart))) {
-      for (const person of parseExistingPersons(await pkg.readText(existingPersonsPart))) {
+    for (const part of [existingPersonsPart, danglingPersonsPart]) {
+      if (part === null || !(await pkg.has(part))) continue
+      for (const person of parseExistingPersons(await pkg.readText(part))) {
         merged.set(person.id, person)
       }
     }
     for (const [id, person] of mentioned) merged.set(id, person)
     const personsXml = buildPersonsXml(merged.values())
-    let personsPath = existingPersonsPart
-    if (personsPath === null) {
-      personsPath = PERSONS_PART_PATH
+    const personsPath = existingPersonsPart ?? danglingPersonsPart ?? PERSONS_PART_PATH
+    if (existingPersonsPart === null) {
       workbookRelsXml = appendRel(
         workbookRelsXml,
         nextFreeRid(workbookRelsXml),
         PERSONS_REL_TYPE,
-        'persons/person.xml',
+        personsPath.slice('xl/'.length),
       )
       workbookRelsChanged = true
-      pkg.add(personsPath, personsXml)
-    } else {
-      pkg.write(personsPath, personsXml)
     }
+    if (await pkg.has(personsPath)) pkg.write(personsPath, personsXml)
+    else pkg.add(personsPath, personsXml)
     touchedEntries.add(personsPath)
     const contentTypes = await pkg.readText(CONTENT_TYPES_PATH)
     const updated = ensureContentTypeOverride(contentTypes, personsPath, PERSONS_CONTENT_TYPE)
@@ -391,6 +396,18 @@ export async function applyThreadedCommentStates(
     else pkg.add(WORKBOOK_RELS_PATH, workbookRelsXml)
     touchedEntries.add(WORKBOOK_RELS_PATH)
   }
+}
+
+/// The persons part to reuse when no workbook relationship points at one:
+/// the standard path first, then any persons part a producer left in the
+/// package (deterministic order). PERSONS_PART_PATH when nothing exists, so
+/// the caller adds a fresh part.
+async function findExistingPersonsPart(pkg: MutableThreadedPackage): Promise<string> {
+  if (await pkg.has(PERSONS_PART_PATH)) return PERSONS_PART_PATH
+  const candidates = (await pkg.paths())
+    .filter((path) => /^xl\/persons\/[^/]+\.xml$/.test(path))
+    .sort()
+  return candidates[0] ?? PERSONS_PART_PATH
 }
 
 /// True when any worksheet's rels still target an existing threadedComments
