@@ -7,6 +7,152 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-09-25
+
+### Added
+
+- PDF:
+  - PDF portfolios become visible and scan search says what is true. A
+    `/Collection` portfolio used to render only its cover page with no
+    indication that valid embedded documents were inside (embedded files
+    already survived save — invisibly): a read-only Attachments panel now
+    lists the EmbeddedFiles (name + description) with a per-file
+    "Open in tab" action through the new `pdf:open-attachment` IPC (the child
+    is extracted under a sanitized unique name), and Properties gains an
+    "Attachments: N" row (hidden at 0). Search over pages without a text
+    layer used to answer a bare "No results", indistinguishable from an
+    honest empty; the state now reads "No text layer on these pages" with the
+    OCR offer worded per platform — "Text recognition (OCR) runs…" where an
+    engine exists (macOS Vision / Windows.Media.Ocr) and an honest "…is not
+    available on this platform" on Linux (the auto-OCR pass is engine-only
+    there), with text-less pages excluded from match counting while the
+    text-layer pages of a partially-scanned document keep searching normally.
+    10 new tests, pdf suite 859 → 869 (PR #226).
+
+### Fixed
+
+- Markdown & HTML editors:
+  - Pasted tables become native tables: any HTML table in a rich paste (a
+    clean `<table>` or a Word table) used to collapse into a rawHtml chip of
+    a bare `<tbody>` — the sanitizer preserves table/tbody and the browser's
+    DOMParser auto-inserts a tbody, but the Table content model matches
+    `tableRow+` and not thead/tbody/tfoot, so the catch-all rawHtml rule
+    (prio 10) grabbed the rows, the chip closed an otherwise empty table, and
+    Ctrl+S wrote `<tbody>…</tbody>` with no `<table>` into the file — a
+    broken block for other markdown renderers; the generateJSON file path was
+    equally uneditable. The parse rules (`BodyAwareTable`, extensions.ts) now
+    skip thead/tbody/tfoot and collect their rows into a native editable
+    table (colgroup ignored — width metadata without a GFM equivalent); the
+    sanitizer is untouched, so rich paste and the file path are fixed by one
+    change, and a caption stays an honest chip next to the whole table.
+    8 new paste-table tests, full suite 385/385 (PR #231).
+  - Rich paste stops eating links and list-following code blocks. The
+    sanitizer's `SAFE_URL = /^(https?:|mailto:)/i` stripped the href of
+    internal (`#section`) and relative links, and an `<a>` without href
+    unfolded into plain text — a Word fragment carrying five kinds of links
+    pasted to exactly one href, with link diagnostics seeing dead=0 because
+    the link had vanished entirely (no honest indication possible). Anchors
+    and relative paths now pass `isSafeHref` (Word tables of contents are the
+    mass case), `href=""` lives as an empty link, and a dead anchor becomes
+    visible diagnostics. The #196 regression closes with it: a 4-space code
+    block after an empty line after an ordered list still parsed as list
+    plain text (the serializer shifting continuations +2 spaces); a two-tier
+    lift (8+ spaces, or exactly 4 with a hard-break guard) raises the block
+    out of the list as a sibling — the round-3 audit vector is green. Full
+    suite 388/388 (PR #234).
+  - Crash recovery works in every install shape: `TextRecoveryStore` was
+    constructed at module-eval and captured `userData` before the shell's
+    `setPath` ran — the handler mkdir-ed the new autosave dir while the store
+    kept writing into the default profile, so under unpacked /
+    `AIRY_USER_DATA` / packaged runs recovery copies were never written
+    (kill -9 relaunched with no Restore dialog and the edits were gone), and
+    when `~/.config/Airy/markdown-autosave` already existed, copies silently
+    leaked into a stranger's profile. Both mains (markdown and html) now
+    build the store lazily (`getRecoveryStore`) and resolve the autosave dir
+    at call time, with mkdir moved into `store.write`; live probe kill -9 →
+    Restore — PASS (markdown 379/379 + html 296/296 on the PR's base, +2
+    tests each) (PR #235).
+- Docs & sheets audit tails:
+  - A comment can be inserted from a collapsed caret: Insert comment at a
+    caret with no selection used to open the panel, create nothing, and
+    report "Select the text to comment on first" while typed text went into
+    the body; the word under the caret is now selected (Word semantics) via
+    the segment helper shared with `canComment`.
+  - Unsupported wildcard operators are named: with wildcards on, Word's
+    `( ) { } @ < >` operators silently matched as literals ("No results" with
+    no explanation); the find panel now shows an inline warning next to the
+    counter (20 locales).
+  - Formula cells stop being saved with empty cache values: session saves
+    wrote `<v></v>` for every formula cell, so `openpyxl data_only` and
+    pandas readers saw `None` everywhere though the model held the values;
+    a save now writes the computed value or omits `<v>` entirely.
+  - Long `read_range` streams leave a trace: a streaming read over 5 s writes
+    one timeline line into the main log (session, sheet, rows, duration) —
+    telemetry for the not-reproduced streaming-stall observation, for the
+    next cadence to catch a state dump on a hang. Gates: docx-engine 1346,
+    docs 2522 → 2530 (PR #230).
+- Shell:
+  - Launching with a batch of files opens all of them: argv / second-instance
+    handling took only the first supported path (`supportedFileIn(argv)`) and
+    silently dropped the rest — a six-file multi-select "Open with Airy",
+    `airy *.md` or a drag onto the icon produced exactly one tab, and macOS
+    open-file / lock-forwarding carried a single path. `collectLaunchFiles`
+    (launch-files.ts) now classifies every argv path: valid ones open as tabs
+    through the regular File>Open flow, invalid ones get the unsupported-file
+    dialog strictly one by one, and known-unsupported types get one
+    aggregated warning; the macOS open-file event and lock-forwarding carry
+    the whole batch (`launchPaths`, with `launchPath` kept for a
+    version-skewed binary). 20 new tests, shell 633/633 (PR #233).
+- Tests & CI:
+  - The last flaky bulk sheet file is quarantined: `cf-segment-merge.test.ts`
+    (the conditional-formatting merge suite from #218) flaked 1-in-5 full
+    serial runs (2 of its wrapper tests failing together; the only remaining
+    bulk file with a live DI-bootstrap `createUniver`) and joins
+    `NEED_ISOLATION` — a config-only change that drops nothing: the file
+    still executes in the mocked project, and after the move the full serial
+    run is green twice — 267 files / 3,137 passed / 1 skipped, 0 KILL under
+    the memory guard; the target file alone 10/10 (PR #228).
+  - The slides/pdf observation batch closes with verdicts and pins, product
+    untouched: OBS-1728 (autosize/wrap rendering) is not reproduced — both
+    theses were already implemented on main and the audit corpus carried an
+    explicit `wrap="none"` from a python-pptx template — with 6 new pin tests
+    for the OOXML defaults (wrap/normAutofit); OBS-1732 (Ctrl+P hanging
+    forever in a bare xvfb without a print stack) is ruled environment (the
+    INFRA-1684 class; the vector print path with a text layer stays a
+    proposed feature); OBS-1735 (owner-encrypted files forced view-only
+    despite permissive flags) is a wontfix on the record — pdf-lib cannot
+    write encrypted files, view-only is deliberate conservatism, pinned by a
+    test (PR #227).
+
+### Performance
+
+- Slides:
+  - The inspector keeps up with selection on heavy slides: with 100 shapes on
+    the active slide a click took 1183–1975 ms to update the Format Pane
+    fields (pane open 1220 ms), because Konva's `DD._endDragBefore`
+    unconditionally redrew the content layer on every mouseup — even a click
+    paid ~1.1 s of rasterization. The Konva patch is re-bound (a click's
+    'ready' no longer end-draws; a drag keeps the original accounting),
+    `dragDistance` is tracked imperatively without a redraw, and background
+    caches skip a same-input re-bake. Live numbers on deck100: click→fields
+    1183–1975 ms → 6–26 ms, pane open 1220 → 60 ms, control (5 shapes)
+    59–97 → 15–43 ms — no regression at the small end; the full slides suite
+    passes twice under the memory guard, 1194/1194 after the merge (PR #229).
+- Shell:
+  - Home search answers at the 20,000-file cap: every keystroke used to
+    freeze the window — 16.1–16.5 s per press in the audit (61 s for each of
+    the first four characters on the shipper's machine, ~61–70 s per query) —
+    because all 20,000 `<li>` rows sat in the DOM and each keystroke
+    re-sorted and re-rendered the whole list (~800k DOM nodes per keystroke).
+    The list is now windowed above 512 entries (48 rendered rows + overscan,
+    invisible spacers keep the height; ≤512 rows render exactly as before)
+    over a pre-built folded name index with memoized merge/filter paths.
+    Keystroke latency is 5–32 ms with zero long tasks >50 ms, catalog settle
+    44–49 s → 2.6–2.9 s, tree RSS 2.8–3.1 GB → 0.86–0.93 GB. Deliberately no
+    debounce — the index filter answers in ~0.4 ms at 20k and debounce would
+    break the synchronous live-search contract TEST-704 pins. 26 new tests in
+    4 files, shell suite 639/639 (PR #232).
+
 ## [0.22.0] - 2026-09-25
 
 ### Added
