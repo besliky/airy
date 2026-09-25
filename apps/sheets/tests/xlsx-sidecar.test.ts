@@ -13,7 +13,8 @@ import { blankXlsxBuffer } from '../src/gateway/csv-import'
 import { saveWorkbookViaSidecar } from '../src/gateway/xlsx-package-io'
 import { XlsxSidecarClient } from '../src/main/xlsx-sidecar-client'
 import { workbookRangeResultSchema } from '../src/shared/desktop-api'
-import { buildCompatibilityFixture } from './fixture-builder'
+import { excelLegacyPasswordHash } from '../src/shared/legacy-password'
+import { buildCompatibilityFixture, buildLegacyProtectedFixture } from './fixture-builder'
 
 const openResultSchema = z.object({
   sessionId: z.string().uuid(),
@@ -114,6 +115,70 @@ describe('XLSX Rust sidecar', () => {
       expect(result.cells).toEqual([
         { row: 0, column: 0, value: 'Old', styleIndex: 0 },
         { row: 0, column: 1, value: 10, styleIndex: 0 },
+      ])
+    } finally {
+      if (sessionId) await client.close(sessionId)
+      client.stop()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('streams a legacy-password-protected sheet: the password wire form parses (PAR-204/BUG-1711)', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'xlsx-sidecar-prot-'))
+    const path = join(directory, 'fixture.xlsx')
+    const hash = excelLegacyPasswordHash('secret')
+    await writeFile(path, await buildLegacyProtectedFixture(hash))
+    const client = new XlsxSidecarClient(sidecarBinaryPath())
+    let sessionId: string | null = null
+    try {
+      const opened = openResultSchema.parse(await client.open(path))
+      sessionId = opened.sessionId
+      // sheetProtection is sheet-wide, complete-only: it arrives null until
+      // worksheet indexing finishes, so poll like the renderer does.
+      const read = (): Promise<unknown> =>
+        client.readRange({
+          sessionId: sessionId!,
+          sheetId: 'sheet-1',
+          range: { startRow: 0, endRow: 1, startColumn: 0, endColumn: 1 },
+        })
+      let raw = (await read()) as {
+        sheetProtection?: {
+          protected?: boolean
+          hasPassword?: boolean
+          password?: string
+          insertRows?: boolean
+        }
+        cells?: unknown[]
+        indexingComplete?: boolean
+      }
+      for (let attempt = 0; attempt < 40 && !raw.indexingComplete; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        raw = (await read()) as typeof raw
+      }
+      // The sidecar's historical wire form: the legacy hash rides the OOXML
+      // attribute's own `password` name (SheetProtectionInfo in native
+      // xlsx-engine types.rs) — this is what real protected files stream.
+      expect(raw.sheetProtection).toEqual({
+        protected: true,
+        hasPassword: true,
+        password: hash,
+        insertRows: false,
+      })
+      // The read-path schema accepts that form, so the sheet reads instead
+      // of dying in unrecognized_keys on every chunk (BUG-1711): the
+      // canonical passwordHash lands in renderer state and cells arrive.
+      const result = workbookRangeResultSchema.parse(raw)
+      expect(result.sheetProtection).toEqual({
+        protected: true,
+        hasPassword: true,
+        passwordHash: hash,
+        insertRows: false,
+      })
+      expect(result.cells).toEqual([
+        { row: 0, column: 0, value: 11, styleIndex: 0 },
+        { row: 0, column: 1, value: 12, styleIndex: 0 },
+        { row: 1, column: 0, value: 21, styleIndex: 0 },
+        { row: 1, column: 1, value: 22, styleIndex: 0 },
       ])
     } finally {
       if (sessionId) await client.close(sessionId)

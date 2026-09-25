@@ -585,6 +585,31 @@ const kitchenSinkPng = Buffer.from([
   0x42, 0x60, 0x82,
 ])
 
+/// PAR-204 / BUG-1711: a sheet protected the way Excel's legacy writers (and
+/// openpyxl) record it — the <sheetProtection> element carries the 1-4 digit
+/// legacy hash in its own password= attribute. The sidecar serializes that
+/// hash as the wire field `password`, the form the read-path schema must
+/// accept alongside its canonical `passwordHash`.
+export async function buildLegacyProtectedFixture(passwordHash: string): Promise<Buffer> {
+  const zip = new JSZip()
+  zip.file('[Content_Types].xml', contentTypes)
+  zip.file('_rels/.rels', packageRelationships)
+  zip.file('xl/workbook.xml', workbook)
+  zip.file('xl/_rels/workbook.xml.rels', workbookRelationships)
+  zip.file('xl/worksheets/sheet1.xml', legacyProtectedWorksheet(passwordHash))
+  zip.file('xl/styles.xml', styles)
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+}
+
+const legacyProtectedWorksheet = (passwordHash: string) => `<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+    <row r="1"><c r="A1"><v>11</v></c><c r="B1"><v>12</v></c></row>
+    <row r="2"><c r="A2"><v>21</v></c><c r="B2"><v>22</v></c></row>
+  </sheetData>
+  <sheetProtection sheet="1" objects="1" scenarios="1" password="${passwordHash}" insertRows="0"/>
+</worksheet>`
+
 const contentTypes = `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
