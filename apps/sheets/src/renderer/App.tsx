@@ -407,10 +407,7 @@ import {
   installThreadedCommentIndicators,
   setThreadPanelOpener,
 } from './threaded-comment-indicators'
-import {
-  installWorkbookThreadedComments,
-  type ThreadedCommentThread,
-} from './threaded-comments'
+import { installWorkbookThreadedComments, type ThreadedCommentThread } from './threaded-comments'
 import type { DefinedNameAction, DefinedNameRow } from './NameManagerDialog'
 import {
   clearVisualSelection,

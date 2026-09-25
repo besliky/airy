@@ -30,9 +30,7 @@ function message(overrides: Partial<OpenMessage> & { id: string }): OpenMessage 
   }
 }
 
-function fileWith(
-  sheets: { id: string; threadedComments: OpenMessage[] }[],
-): WorkbookFile {
+function fileWith(sheets: { id: string; threadedComments: OpenMessage[] }[]): WorkbookFile {
   return {
     sheets: sheets.map((sheet) => ({ ...sheet, comments: [] })),
   } as unknown as WorkbookFile
