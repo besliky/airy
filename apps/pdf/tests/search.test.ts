@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
-import { buildSearchIndex, searchInIndex, type SearchIndex } from '../src/renderer/search'
+import {
+  buildSearchIndex,
+  MAX_MATCHES,
+  nextMatchIndex,
+  searchInIndex,
+  type SearchIndex,
+} from '../src/renderer/search'
 
 interface FakeItem {
   str?: string
@@ -89,12 +95,12 @@ describe('searchInIndex', () => {
 
   it('returns empty for an empty query', () => {
     const index = [entry('abc', [{ start: 0, end: 3, x: 0, y: 0, w: 30, h: 10 }])]
-    expect(searchInIndex(index, '')).toEqual([])
+    expect(searchInIndex(index, '')).toEqual({ matches: [], capped: false, moreCount: 0 })
   })
 
   it('finds case-insensitive matches with interpolated rects', () => {
     const index = [entry('Hello World', [{ start: 0, end: 11, x: 0, y: 700, w: 110, h: 12 }])]
-    const matches = searchInIndex(index, 'WORLD')
+    const { matches } = searchInIndex(index, 'WORLD')
     expect(matches).toHaveLength(1)
     expect(matches[0]!.pageIndex).toBe(0)
     // 'World' spans chars 6..11 of 11 -> x from 60 to 110
@@ -113,7 +119,7 @@ describe('searchInIndex', () => {
         { start: 3, end: 6, x: 30, y: 0, w: 30, h: 10 },
       ]),
     ]
-    const matches = searchInIndex(index, 'cd')
+    const { matches } = searchInIndex(index, 'cd')
     expect(matches).toHaveLength(1)
     expect(matches[0]!.rects).toHaveLength(2)
     expect(matches[0]!.rects[0]).toEqual([20, 0, 30, 10])
@@ -125,7 +131,7 @@ describe('searchInIndex', () => {
       entry('nothing here', [{ start: 0, end: 12, x: 0, y: 0, w: 120, h: 10 }]),
       entry('foo bar foo', [{ start: 0, end: 11, x: 0, y: 0, w: 110, h: 10 }]),
     ]
-    const matches = searchInIndex(index, 'foo')
+    const { matches } = searchInIndex(index, 'foo')
     expect(matches).toHaveLength(2)
     expect(matches.every((m) => m.pageIndex === 1)).toBe(true)
   })
@@ -138,15 +144,70 @@ describe('searchInIndex', () => {
         { start: 6, end: 11, x: 0, y: -20, w: 50, h: 10 },
       ]),
     ]
-    expect(searchInIndex(index, 'hello')).toHaveLength(1)
-    expect(searchInIndex(index, 'world')).toHaveLength(1)
+    expect(searchInIndex(index, 'hello').matches).toHaveLength(1)
+    expect(searchInIndex(index, 'world').matches).toHaveLength(1)
     // The match itself spans the newline; rects come from both surrounding items
-    expect(searchInIndex(index, 'hello\nworld')[0]!.rects).toHaveLength(2)
+    expect(searchInIndex(index, 'hello\nworld').matches[0]!.rects).toHaveLength(2)
   })
 
-  it('caps results at 1000 matches', () => {
+  it('returns the full set un-capped when hits stay under the cap', () => {
+    const index = [entry('a b a b a', [{ start: 0, end: 9, x: 0, y: 0, w: 90, h: 10 }])]
+    const result = searchInIndex(index, 'a')
+    expect(result.matches).toHaveLength(3)
+    expect(result.capped).toBe(false)
+    expect(result.moreCount).toBe(0)
+  })
+
+  it('reports no cap when the document has exactly MAX_MATCHES hits', () => {
+    // 1000 'a's separated by spaces: exactly 1000 occurrences of 'a'
+    const text = Array.from({ length: MAX_MATCHES }, () => 'a').join(' ')
+    const index = [entry(text, [{ start: 0, end: text.length, x: 0, y: 0, w: text.length, h: 10 }])]
+    const result = searchInIndex(index, 'a')
+    expect(result.matches).toHaveLength(MAX_MATCHES)
+    expect(result.capped).toBe(false)
+    expect(result.moreCount).toBe(0)
+  })
+
+  it('caps at MAX_MATCHES with an honest more-count (BUG-1731)', () => {
+    // 2000 adjacent 'a's: 2000 single-char occurrences -> 1000 kept + 1000 more
     const text = 'a'.repeat(2000)
     const index = [entry(text, [{ start: 0, end: 2000, x: 0, y: 0, w: 2000, h: 10 }])]
-    expect(searchInIndex(index, 'a')).toHaveLength(1000)
+    const result = searchInIndex(index, 'a')
+    expect(result.matches).toHaveLength(1000)
+    expect(result.capped).toBe(true)
+    expect(result.moreCount).toBe(1000)
+  })
+
+  it('counts hits past the cap across later pages, keeping first-page matches first', () => {
+    // 600 hits on page 0, 700 on page 1 -> 1000 kept in document order, 300 more
+    const page = (n: number): SearchIndex[number] => {
+      const text = 'a '.repeat(n).trim()
+      return entry(text, [{ start: 0, end: text.length, x: 0, y: 0, w: text.length, h: 10 }])
+    }
+    const index: SearchIndex = [page(600), page(700)]
+    const result = searchInIndex(index, 'a')
+    expect(result.matches).toHaveLength(1000)
+    expect(result.matches[0]!.pageIndex).toBe(0)
+    expect(result.matches[599]!.pageIndex).toBe(0)
+    expect(result.matches[600]!.pageIndex).toBe(1)
+    expect(result.capped).toBe(true)
+    expect(result.moreCount).toBe(300)
+  })
+
+  describe('nextMatchIndex (wrap-around navigation over the capped set)', () => {
+    it('wraps forward from the last match to the first', () => {
+      expect(nextMatchIndex(MAX_MATCHES - 1, 1, MAX_MATCHES)).toBe(0)
+    })
+
+    it('wraps backward from the first match to the last', () => {
+      expect(nextMatchIndex(0, -1, MAX_MATCHES)).toBe(MAX_MATCHES - 1)
+    })
+
+    it('steps normally inside the set and tolerates count 1', () => {
+      expect(nextMatchIndex(0, 1, MAX_MATCHES)).toBe(1)
+      expect(nextMatchIndex(5, -1, MAX_MATCHES)).toBe(4)
+      expect(nextMatchIndex(0, -1, 1)).toBe(0)
+      expect(nextMatchIndex(0, 1, 1)).toBe(0)
+    })
   })
 })
