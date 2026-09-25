@@ -1147,6 +1147,58 @@ button {
   background: var(--hover);
 }
 
+/* ── Attachments sidebar (PDF portfolio children, UX-1734) ── */
+
+.pdf-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pdf-attachments-title {
+  padding: 4px 8px 6px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.pdf-attachment {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px;
+  border-radius: 4px;
+}
+
+.pdf-attachment:hover {
+  background: var(--hover);
+}
+
+.pdf-attachment-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.pdf-attachment-open {
+  flex: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11.5px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+
+.pdf-attachment-open:hover {
+  background: var(--hover);
+  border-color: var(--accent);
+}
+
 /* ── Encrypted document password ── */
 
 /* ---- encrypted-PDF password dialog (form dialog, matching the

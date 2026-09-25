@@ -31,6 +31,7 @@ export const PDF_CHANNELS = {
   convertOffice: 'pdf:convert-office',
   createDocument: 'pdf:create-document',
   generateImage: 'pdf:generate-image',
+  openAttachment: 'pdf:open-attachment',
   listSignatures: 'pdf:list-signatures',
   addSignature: 'pdf:add-signature',
   removeSignature: 'pdf:remove-signature',
@@ -678,6 +679,22 @@ export type ExportImagesResult =
   | { ok: true; canceled: true }
   | { ok: false; error: string }
 
+/** Extract one embedded file (a PDF portfolio child, UX-1734) to the default
+    save dir and open it like a generated file: a PDF child opens as a new tab,
+    other types follow the shell's document routing, anything unroutable is
+    revealed on disk. The renderer already holds the parsed document, so it
+    sends the attachment bytes; the main process only picks the safe target path. */
+export interface OpenAttachmentRequest {
+  /** The document this view has open (grant check — the channel is only meaningful for it) */
+  path: string
+  /** Attachment display name; becomes the base of the extracted file name (sanitized) */
+  name: string
+  /** Attachment bytes, base64 (no data: prefix), as read via pdf.js getAttachmentContent */
+  content: string
+}
+
+export type OpenAttachmentResult = { ok: true; savedPath: string } | { ok: false; error: string }
+
 /** AI channels are app-wide shared ipcMain handlers (shell registers via docs-main registerAiIpc); pass-through only */
 export const AI_CHANNELS = {
   getSettings: 'ai:get-settings',
@@ -769,6 +786,8 @@ export interface PdfApi {
     url?: string
     error?: string
   }>
+  /** Extract an embedded file (PDF portfolio child) to the default save dir and open it (pdf → new tab) */
+  openAttachment(request: OpenAttachmentRequest): Promise<OpenAttachmentResult>
   /** Saved signatures reusable across documents (persisted in userData), newest first */
   listSavedSignatures(): Promise<SavedSignature[]>
   /** Persist a signature for reuse; returns the updated list (capped, deduplicated) */

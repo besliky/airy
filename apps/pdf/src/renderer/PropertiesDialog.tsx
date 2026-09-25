@@ -35,6 +35,7 @@ export function PropertiesDialog({
   fileName,
   fileSize,
   pageCount,
+  attachmentsCount,
   pending,
   readOnly,
   t,
@@ -45,6 +46,9 @@ export function PropertiesDialog({
   fileName: string
   fileSize: number
   pageCount: number
+  /** Embedded files carried by the document (PDF portfolio children); the row is
+      hidden while zero — its presence is the minimal honest signal (UX-1734) */
+  attachmentsCount: number
   /** Properties edited but not yet saved */
   pending: MetadataInput | null
   readOnly: boolean
@@ -104,6 +108,7 @@ export function PropertiesDialog({
           {row(t('propFileName'), fileName)}
           {row(t('propPages'), String(pageCount))}
           {row(t('propSize'), fmtSize(fileSize))}
+          {attachmentsCount > 0 && row(t('attachments'), String(attachmentsCount))}
           {row(t('propVersion'), info?.PDFFormatVersion ?? '—')}
           {row(t('propProducer'), info?.Producer ?? '')}
           {row(t('propCreated'), fmtPdfDate(info?.CreationDate))}

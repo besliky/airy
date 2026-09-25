@@ -61,6 +61,8 @@ import type { PdfViewState } from './view-state'
 import { LinkLayer } from './LinkLayer'
 import { OutlinePanel } from './OutlinePanel'
 import type { OutlineNode } from './OutlinePanel'
+import { AttachmentsPanel } from './AttachmentsPanel'
+import type { PdfAttachment } from './AttachmentsPanel'
 import { printPdf } from './print'
 import { PasswordDialog } from './PasswordDialog'
 import { PropertiesDialog } from './PropertiesDialog'
@@ -234,6 +236,7 @@ import {
   IconFitWidth,
   IconFitPage,
   IconOutline,
+  IconPaperclip,
   IconDrawColor,
   RbCaret,
   IconSearch,
@@ -289,7 +292,7 @@ export default function App() {
   const [scale, setScale] = useState(1)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageInput, setPageInput] = useState('1')
-  const [sidebar, setSidebar] = useState<'thumbs' | 'outline' | null>('thumbs')
+  const [sidebar, setSidebar] = useState<'thumbs' | 'outline' | 'attachments' | null>('thumbs')
   const [sidebarW, setSidebarW] = useState(loadSidebarW)
   /** raster width for thumbnails — only updated when a drag ends (re-rastering every frame would jank) */
   const [thumbRasterW, setThumbRasterW] = useState(() => loadSidebarW() - SIDEBAR_CHROME)
@@ -342,6 +345,8 @@ export default function App() {
   const [spread, setSpread] = useState<1 | 2>(1)
   const [nightMode, setNightMode] = useState(false)
   const [outline, setOutline] = useState<OutlineNode[] | null>(null)
+  /** Embedded files of the document (PDF portfolio children, UX-1734); null when none */
+  const [attachments, setAttachments] = useState<PdfAttachment[] | null>(null)
   const [markups, setMarkups] = useState<LocalMarkup[]>([])
   const markupsRef = useRef(markups)
   markupsRef.current = markups
@@ -1185,6 +1190,21 @@ export default function App() {
         (o) => setOutline(o && o.length > 0 ? (o as OutlineNode[]) : null),
         () => setOutline(null),
       )
+      // Portfolio children / attached files (UX-1734): listed in the Attachments
+      // panel; both callbacks clear, so a document without any hides the panel
+      void loaded.getAttachments().then(
+        (m) =>
+          setAttachments(
+            m && m.size > 0
+              ? [...m.entries()].map(([id, a]) => ({
+                  id,
+                  filename: a.filename,
+                  description: a.description ?? '',
+                }))
+              : null,
+          ),
+        () => setAttachments(null),
+      )
       // pdfjs-dist 6.x removed PDFDocumentProxy.destroy(); go through the loading task
       if (previous) void previous.loadingTask.destroy()
       return loaded.numPages
@@ -2002,6 +2022,37 @@ export default function App() {
   }
 
   const closeSearch = () => setSearchOpen(false)
+
+  /** Chunked binary-to-base64: String.fromCharCode on the whole array blows the
+      argument limit for multi-MB attachments (chunk = 32k code units) */
+  const bytesToBase64 = (bytes: Uint8Array): string => {
+    let binary = ''
+    for (let i = 0; i < bytes.length; i += 0x8000)
+      binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+    return btoa(binary)
+  }
+
+  /** Open a portfolio child in a new tab (UX-1734): the extracted file is written
+      to the default save dir by the main process, which then routes it like any
+      generated output; a failure is surfaced through the notice toast */
+  const openAttachment = async (att: PdfAttachment) => {
+    if (!doc || !filePath) return
+    try {
+      const content = await doc.getAttachmentContent(att.id)
+      if (!content) {
+        showNotice(t('attachmentOpenFailed'))
+        return
+      }
+      const result = await window.pdfApi.openAttachment({
+        path: filePath,
+        name: att.filename,
+        content: bytesToBase64(content),
+      })
+      if (!result.ok) showNotice(t('attachmentOpenFailed'))
+    } catch {
+      showNotice(t('attachmentOpenFailed'))
+    }
+  }
 
   /** Selection quads in PDF space keyed by original page index; null when nothing usable */
   const selectionQuads = (): Map<number, number[][]> | null => {
@@ -5873,6 +5924,19 @@ export default function App() {
           </span>
           {t('outline')}
         </button>
+        {/* Portfolio children live outside the page tree; without this panel the
+            viewer would show only the cover page (UX-1734) */}
+        <button
+          className={`rb-big${sidebar === 'attachments' ? ' active' : ''}`}
+          disabled={!attachments}
+          data-tip={attachments ? t('attachmentsCount', { n: attachments.length }) : undefined}
+          onClick={() => setSidebar((v) => (v === 'attachments' ? null : 'attachments'))}
+        >
+          <span className="rb-big-icon">
+            <IconPaperclip />
+          </span>
+          {t('attachments')}
+        </button>
         {searchBtn}
         <button
           className={`rb-big${spread === 2 ? ' active' : ''}`}
@@ -6621,6 +6685,15 @@ export default function App() {
                 <OutlinePanel outline={outline} onGoToDest={(dest) => void goToDest(dest)} />
               </div>
             )}
+            {sidebar === 'attachments' && attachments && (
+              <div className="pdf-thumbs pdf-outline-pane" style={{ width: sidebarW }}>
+                <AttachmentsPanel
+                  attachments={attachments}
+                  t={t}
+                  onOpen={(att) => void openAttachment(att)}
+                />
+              </div>
+            )}
             {sidebar === 'thumbs' && (
               <div ref={thumbsRef} className="pdf-thumbs" style={{ width: sidebarW }}>
                 {visList.map((origIdx, v) => {
@@ -6737,7 +6810,9 @@ export default function App() {
                 })}
               </div>
             )}
-            {(sidebar === 'thumbs' || (sidebar === 'outline' && !!outline)) && (
+            {(sidebar === 'thumbs' ||
+              (sidebar === 'outline' && !!outline) ||
+              (sidebar === 'attachments' && !!attachments)) && (
               <div className="pdf-side-resizer" onPointerDown={startSidebarResize} />
             )}
             <div
@@ -8309,6 +8384,7 @@ export default function App() {
                 fileName={fileName}
                 fileSize={fileSize}
                 pageCount={pageCount}
+                attachmentsCount={attachments?.length ?? 0}
                 pending={metadata}
                 readOnly={readOnly}
                 t={t}

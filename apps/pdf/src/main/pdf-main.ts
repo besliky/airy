@@ -45,6 +45,8 @@ import type {
   MergePagesResult,
   MergePdfRequest,
   MergePdfResult,
+  OpenAttachmentRequest,
+  OpenAttachmentResult,
   PagePreviewRequest,
   ReplacePagesRequest,
   ReplacePagesResult,
@@ -88,7 +90,7 @@ import {
   removeSignature,
   saveSignatures,
 } from './signature-store'
-import { uniqueGeneratedPdfPath } from './generated-output'
+import { uniqueGeneratedAttachmentPath, uniqueGeneratedPdfPath } from './generated-output'
 import { isExternallyModified } from './external-change'
 import type { DiskFileState } from './external-change'
 
@@ -1639,6 +1641,33 @@ function registerPdfIpc(): void {
         prompt: String(op?.prompt ?? ''),
         aspectRatio: op?.aspectRatio ? String(op.aspectRatio) : undefined,
       }),
+  )
+
+  // Embedded file out of the opened document (PDF portfolio child, UX-1734):
+  // written under a sanitized name in the default save dir, then opened like
+  // any generated output (a PDF child becomes a new tab; anything the shell
+  // cannot route is revealed on disk, so success is never silent)
+  ipcMain.handle(
+    PDF_CHANNELS.openAttachment,
+    async (e, request: OpenAttachmentRequest): Promise<OpenAttachmentResult> => {
+      const { path, name, content } = request ?? {}
+      if (
+        typeof path !== 'string' ||
+        !allowedByWc.get(e.sender.id)?.has(path) ||
+        typeof name !== 'string' ||
+        typeof content !== 'string'
+      ) {
+        return { ok: false, error: 'pdf: attachment request rejected' }
+      }
+      try {
+        const targetPath = uniqueGeneratedAttachmentPath(configuredDefaultSaveDir(app), name)
+        await writeFile(targetPath, Buffer.from(content, 'base64'))
+        openGeneratedPdf(targetPath, e.sender.id)
+        return { ok: true, savedPath: targetPath }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    },
   )
 
   ipcMain.handle(PDF_CHANNELS.listSignatures, () => withSignatures(async (list) => list))
