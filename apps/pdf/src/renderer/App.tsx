@@ -72,7 +72,7 @@ import {
 import { StampDialog } from './StampDialog'
 import { buildStamps } from './stamps'
 import type { HeaderFooterConfig, WatermarkConfig } from './stamps'
-import { buildSearchIndex, searchInIndex } from './search'
+import { buildSearchIndex, nextMatchIndex, searchInIndex } from './search'
 import type { SearchIndex, SearchMatch } from './search'
 import { mapDocFont, type DocFontStyle } from './doc-font'
 import { groupPageBlocks, reflowOverflows, type TextBlock } from './text-block'
@@ -779,6 +779,8 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchMatches, setSearchMatches] = useState<SearchMatch[]>([])
+  /** Non-null when the search cap truncated the result set; `more` = hits beyond it (BUG-1731) */
+  const [searchOverflow, setSearchOverflow] = useState<{ more: number } | null>(null)
   const [searchCur, setSearchCur] = useState(0)
   const [printing, setPrinting] = useState(false)
   const [undoStack, setUndoStack] = useState<EditSnapshot[]>([])
@@ -1918,6 +1920,7 @@ export default function App() {
   useEffect(() => {
     if (!searchOpen || !searchQuery.trim()) {
       setSearchMatches([])
+      setSearchOverflow(null)
       setSearchCur(0)
       return
     }
@@ -1925,7 +1928,9 @@ export default function App() {
     const timer = setTimeout(() => {
       void getSearchIndex()?.then((idx) => {
         if (cancelled) return
-        setSearchMatches(searchInIndex(idx, searchQuery.trim()))
+        const result = searchInIndex(idx, searchQuery.trim())
+        setSearchMatches(result.matches)
+        setSearchOverflow(result.capped ? { more: result.moreCount } : null)
         setSearchCur(0)
       })
     }, 200)
@@ -1967,7 +1972,7 @@ export default function App() {
   const searchStep = (dir: 1 | -1) => {
     const n = activeMatches.length
     if (n === 0) return
-    setSearchCur((searchCurClamped + dir + n) % n)
+    setSearchCur(nextMatchIndex(searchCurClamped, dir, n))
   }
 
   const openSearch = () => {
@@ -7895,10 +7900,16 @@ export default function App() {
                 <span className="pdf-search-count">
                   {searchQuery.trim()
                     ? activeMatches.length > 0
-                      ? t('searchCount', {
-                          current: searchCurClamped + 1,
-                          total: activeMatches.length,
-                        })
+                      ? searchOverflow
+                        ? t('searchCountMore', {
+                            current: searchCurClamped + 1,
+                            total: activeMatches.length,
+                            more: searchOverflow.more,
+                          })
+                        : t('searchCount', {
+                            current: searchCurClamped + 1,
+                            total: activeMatches.length,
+                          })
                       : t('searchNoResults')
                     : ''}
                 </span>
