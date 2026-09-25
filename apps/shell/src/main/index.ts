@@ -223,6 +223,22 @@ import { showErrorDialog } from './error-dialog'
 import { classifyOpenFailure, reportOpenFailure, type OpenFailureDeps } from './open-failure'
 import { openFromHome } from './home-open'
 import {
+  addLaunchPath,
+  collectLaunchFiles,
+  emptyLaunchFiles,
+  launchFileCount,
+  launchPathList,
+  openLaunchFiles,
+  type LaunchOpenDeps,
+  DOCX_RE,
+  XLSX_RE,
+  PPTX_RE,
+  PDF_RE,
+  MD_RE,
+  HTML_RE,
+  SUPPORTED_DOC_RE,
+} from './launch-files'
+import {
   isInsideDirectory,
   listStagedFiles,
   orphanedStagedFiles,
@@ -1433,24 +1449,8 @@ function installShellModuleHooks(): void {
 }
 
 // ---- routing: one dispatch function for every open path ----
-
-const DOCX_RE = /\.docx$/i
-const XLSX_RE = /\.(xlsx|xlsm|xls|csv)$/i
-const PPTX_RE = /\.pptx$/i
-const PDF_RE = /\.pdf$/i
-const MD_RE = /\.(md|markdown)$/i
-const HTML_RE = /\.html?$/i
-
-/** document formats we recognize but don't open — surfaced as a dialog, not silently dropped */
-const UNSUPPORTED_DOC_RE = /\.(doc|rtf|odt|ppt|pps|odp|ods|xlsb|pages|key|numbers)$/i
-
-/** union of the per-module open regexes above, built from their sources so the
- *  two cannot drift (unreadable-path guard in routeDocumentPath, missing-file
- *  launch probe in missingFileIn) */
-const SUPPORTED_DOC_RE = new RegExp(
-  [DOCX_RE, XLSX_RE, PPTX_RE, PDF_RE, MD_RE, HTML_RE].map((re) => re.source).join('|'),
-  'i',
-)
+// (the DOCX/XLSX/PPTX/PDF/MD/HTML and supported/unsupported regexes live in
+// launch-files.ts so the argv classification cannot drift from this router)
 
 /**
  * The suite-wide open-dialog filter list: one entry per document type plus the
@@ -1470,39 +1470,6 @@ function openDialogFilters() {
     { name: tm('filterMarkdown'), extensions: [...OPEN_EXTENSION_GROUPS.markdown] },
     { name: tm('filterHtml'), extensions: [...OPEN_EXTENSION_GROUPS.html] },
   ]
-}
-
-function supportedFileIn(argv: string[]): string | null {
-  return (
-    argv.find(
-      (arg) =>
-        (DOCX_RE.test(arg) ||
-          XLSX_RE.test(arg) ||
-          PPTX_RE.test(arg) ||
-          PDF_RE.test(arg) ||
-          MD_RE.test(arg) ||
-          HTML_RE.test(arg)) &&
-        existsSync(arg),
-    ) ?? null
-  )
-}
-
-function unsupportedFileIn(argv: string[]): string | null {
-  return argv.find((arg) => UNSUPPORTED_DOC_RE.test(arg) && existsSync(arg)) ?? null
-}
-
-/**
- * argv entry naming a supported document that cannot be stat'ed — EACCES on a
- * parent directory or a file that has vanished. supportedFileIn and
- * unsupportedFileIn drop such paths (their existsSync guard also filters argv
- * junk), so an inaccessible double-click/CLI launch used to be silent
- * (BUG-1655); switch-looking arguments (always leading "-") are ignored.
- */
-function missingFileIn(argv: string[]): string | null {
-  return (
-    argv.find((arg) => !arg.startsWith('-') && SUPPORTED_DOC_RE.test(arg) && !existsSync(arg)) ??
-    null
-  )
 }
 
 function notifyUnsupportedFile(filePath: string): void {
@@ -1576,6 +1543,16 @@ const openFailureDeps: OpenFailureDeps = {
   showErrorDialog: (message, err, onClosed) =>
     showErrorDialog(focusedShellWindow(), message, err, onClosed),
   openFailedMessage: (name) => tm('errOpenFailed', { name }),
+}
+
+/** batch wiring for argv / open-file / second-instance launches (BUG-1737):
+ *  every collected path goes through the normal router, failures surface via
+ *  the #154 channel, known-unsupported formats share one aggregated warning */
+const launchOpenDeps: LaunchOpenDeps = {
+  openDocument: openDocumentPath,
+  openFailure: openFailureDeps,
+  showWarning: showAppWarning,
+  unsupportedMessage: (exts) => tm('errUnsupportedExt', { ext: exts.join(', ') }),
 }
 
 function routeDocumentPath(filePath: string, into?: TabManager): boolean {
@@ -3488,8 +3465,10 @@ async function installMainProcessProxy(): Promise<void> {
 
 // ---- lifecycle (the shell is the only owner) ----
 
-let pendingLaunchPath =
-  supportedFileIn(process.argv) ?? unsupportedFileIn(process.argv) ?? missingFileIn(process.argv)
+// EVERY recognized launch path, not just the first (BUG-1737): a file-manager
+// multi-select or `airy a.md b.xlsx ...` used to open one tab and silently
+// drop the rest of the batch.
+let pendingLaunchFiles = collectLaunchFiles(process.argv)
 
 // show() does not un-minimize, and on macOS ⌘W destroys the shell window while the
 // app keeps running — either way a file opened from Finder would land out of sight.
@@ -3502,13 +3481,14 @@ function revealShellWindow(): void {
 }
 
 // On macOS a file opened from Finder is not in argv; it arrives via the open-file event (before ready).
-// If another instance already holds the lock, this process exits, and the path must ride along in
+// Multi-select delivers one event per file, so each path joins the pending batch (BUG-1737).
+// If another instance already holds the lock, this process exits, and the paths must ride along in
 // the lock request's additionalData to the surviving instance — so the lock request is deferred
-// until ready, after the path is known.
+// until ready, after the batch is known.
 app.on('open-file', (event, filePath) => {
   event.preventDefault()
   if (!app.isReady()) {
-    pendingLaunchPath = filePath
+    addLaunchPath(pendingLaunchFiles, filePath)
     return
   }
   revealShellWindow()
@@ -3520,19 +3500,22 @@ app.on('open-file', (event, filePath) => {
 })
 
 app.on('second-instance', (_event, argv, _cwd, additionalData) => {
-  const file =
-    supportedFileIn(argv) ??
-    unsupportedFileIn(argv) ??
-    missingFileIn(argv) ??
-    (additionalData as { launchPath?: string } | null)?.launchPath
+  const files = collectLaunchFiles(argv)
+  if (launchFileCount(files) === 0) {
+    // macOS open-file paths ride in the lock request, not in argv. `launchPaths`
+    // is the batch form; `launchPath` is the pre-BUG-1737 single-path key, still
+    // sent for a version-skewed surviving instance (old holder, new second).
+    const data = additionalData as { launchPaths?: string[]; launchPath?: string } | null
+    if (Array.isArray(data?.launchPaths)) for (const p of data.launchPaths) addLaunchPath(files, p)
+    else if (typeof data?.launchPath === 'string') addLaunchPath(files, data.launchPath)
+  }
   revealShellWindow()
-  if (!file) {
+  if (launchFileCount(files) === 0) {
     focusedManager()?.openHomeTab()
     return
   }
-  if (!openDocumentPath(file)) {
-    // an intended open that produced no tab must explain itself (BUG-1655)
-    reportOpenFailure(file, openFailureDeps)
+  if (!openLaunchFiles(files, launchOpenDeps)) {
+    // every invalid path already explained itself (#154); keep the Home fallback
     focusedManager()?.openHomeTab()
   }
 })
@@ -3554,14 +3537,23 @@ setSessionPathResolver(resolveSheetsSessionPath)
 const devPidFile = () => join(app.getPath('userData'), 'dev-instance.pid')
 
 app.whenReady().then(async () => {
-  const lockData = () => (pendingLaunchPath ? { launchPath: pendingLaunchPath } : {})
+  const lockData = () => {
+    // ALL recognized launch paths ride on the first lock request (BUG-1737);
+    // every failed requestSingleInstanceLock re-emits 'second-instance' in the
+    // lock holder with the same additionalData, so re-sending the batch would
+    // multiply tabs and dialogs the way one forwarded failure once multiplied
+    // error dialogs (BUG-1678). `launchPath` (the first path) stays in the
+    // payload for a version-skewed surviving instance running pre-batch code.
+    const paths = launchPathList(pendingLaunchFiles)
+    return paths.length > 0 ? { launchPaths: paths, launchPath: paths[0] } : {}
+  }
   // The launch path rides along ONLY on the first lock request: every failed
   // requestSingleInstanceLock re-emits 'second-instance' in the lock holder
   // with the same additionalData, so the unpacked retry loop below multiplied
   // one forwarded-open failure into ~21 identical error dialogs (BUG-1678).
   // Retries exist only to wait out the doomed previous instance; if one of
-  // them acquires the lock, this instance reports pendingLaunchPath itself
-  // right after ready, so nothing is lost by not re-sending it.
+  // them acquires the lock, this instance reports the pending launch batch
+  // itself right after ready, so nothing is lost by not re-sending it.
   let hasLock = app.requestSingleInstanceLock(lockData())
   if (!hasLock && !app.isPackaged) {
     // Dev watch restart: electron-vite SIGTERMs the previous instance and spawns this
@@ -3666,14 +3658,13 @@ app.whenReady().then(async () => {
   installDockMenu()
 
   const restoredTabs = restorePreviousSession()
-  if (!pendingLaunchPath || !openDocumentPath(pendingLaunchPath)) {
-    // a launch path that cannot be read explains itself (BUG-1655) instead of
-    // quietly doing nothing
-    if (pendingLaunchPath) reportOpenFailure(pendingLaunchPath, openFailureDeps)
-    // nothing to open and no session to fall back on → Home
+  const launchCount = launchFileCount(pendingLaunchFiles)
+  if (launchCount === 0 || !openLaunchFiles(pendingLaunchFiles, launchOpenDeps)) {
+    // every invalid launch path explained itself inside openLaunchFiles
+    // (BUG-1655); with nothing opened and no session to fall back on → Home
     if (restoredTabs === 0) focusedManager()?.openHomeTab()
   }
-  pendingLaunchPath = null
+  pendingLaunchFiles = emptyLaunchFiles()
   // staged untitled files nothing reopened (crash leftovers whose session was
   // not restored — restore disabled or pruned) are dead scratch: clean them
   purgeOrphanStagedFiles()
