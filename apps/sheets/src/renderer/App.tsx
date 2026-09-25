@@ -59,7 +59,7 @@ import {
 import { isNumericIdentifierText } from './cell-warning'
 import { consumePendingUndoCarry, undoStackDepth } from './undo-carry'
 import { installEdgeNavigationGrowth } from './grid-grow'
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useAutoSavePref, type AiScopeQuoteData } from '@airy-office/ui'
 
 import {
@@ -346,6 +346,13 @@ import { effectivePageBreaks, installPageBreakPreview } from './page-break-previ
 import { mapProtectedRanges } from './protected-ranges'
 import { handleSave as handleSaveImpl, type SaveContext } from './save-actions'
 import {
+  collectSaveCompatFindings,
+  saveCompatDismissKey,
+  saveCompatVisible,
+  type SaveCompatFinding,
+} from './save-compat'
+import { SaveCompatBanner } from './save-compat-banner'
+import {
   applyChartEdit as applyChartEditImpl,
   applyShapeEdit as applyShapeEditImpl,
   flushPendingChartDataSync,
@@ -519,6 +526,22 @@ export function App(): React.JSX.Element {
   const [_revision, setRevision] = useState(0)
   const [workbookFile, setWorkbookFile] = useState<WorkbookFile | null>(null)
   const [pendingEdits, setPendingEdits] = useState(0)
+  /// Pre-flight warning for fail-closed saves (PAR-206): findings recomputed
+  /// whenever the journal moves (every edit path bumps pendingEdits) or the
+  /// session swaps; saveCompatDismissed holds the dismiss key of the finding
+  /// set the user closed, so the banner re-shows when a DIFFERENT construct
+  /// appears (per-session dismissal, never a blocker).
+  const [saveCompatDismissed, setSaveCompatDismissed] = useState<string | null>(null)
+  const saveCompatSessionKey = lazyWorkbookRef.current?.file.sessionId ?? 'none'
+  const saveCompatFindings = useMemo<readonly SaveCompatFinding[]>(() => {
+    const state = lazyWorkbookRef.current
+    if (!state) return []
+    return collectSaveCompatFindings({ state, runtime: univerRef.current })
+    // Refs are stable; pendingEdits is the journal-changed signal every edit
+    // path bumps, the session key covers opens/swaps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingEdits, saveCompatSessionKey])
+  const visibleSaveCompat = saveCompatVisible(saveCompatFindings, saveCompatDismissed)
   /// Whether any cell in the workbook has content — the ribbon's one-click AI
   /// action buttons are greyed out on a fully empty sheet.
   const [sheetHasContent, setSheetHasContent] = useState(false)
@@ -4474,6 +4497,14 @@ export function App(): React.JSX.Element {
           if (!runtime) return Promise.reject(new Error(t('appWorkbookNotReady')))
           return solveGoalSeek(runtime, { setCell, toValue, byCell })
         }}
+        saveCompatBanner={
+          visibleSaveCompat.length > 0 ? (
+            <SaveCompatBanner
+              findings={visibleSaveCompat}
+              onDismiss={() => setSaveCompatDismissed(saveCompatDismissKey(visibleSaveCompat))}
+            />
+          ) : undefined
+        }
         selectionFormat={selectionFormat}
         statusMessage={message}
         aiBusy={aiBusy}

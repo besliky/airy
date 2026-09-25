@@ -560,6 +560,21 @@ export const en = {
     'This chart type does not support that edit; save aborted — undo the chart change.',
   appSaveErrMoveOverlap:
     'A formula, formatted range, drawing, or table spans the moved rows; save aborted — undo the move.',
+  appSaveCompatTitle: "Some content in this workbook won't save to the file",
+  appSaveCompatDetail: ' — {item}',
+  appSaveCompatDismiss: 'Dismiss the warning',
+  appSaveCompatCsv:
+    'Saving as CSV keeps plain values of the active sheet only — formulas, formatting, and other sheets will not be saved.',
+  appSaveCompatMultiSelectDv:
+    'Multi-select list validation cannot be saved to xlsx — delete the rule before saving.',
+  appSaveCompatStranded:
+    'A new table or PivotTable on an added sheet conflicts with pending row/column or sheet changes — save once to resolve, or undo the changes.',
+  appSaveCompatStructureConflict:
+    'A pending row/column move, range move, or merge conflicts with a table or filter on the sheet — undo it or save first.',
+  appSaveCompatDuplicateParts:
+    'The copied sheet carries charts, images, tables, or pivots that cannot be saved into the copy yet.',
+  appSaveCompatX14Cf: 'Edits to extended (x14) conditional formatting cannot be saved yet.',
+  appSaveCompatX14Dv: 'Edits to extended (x14) data validation cannot be saved yet.',
   appFromTextCsvTitle: 'Import a CSV/text file into the current selection',
   appCsvImported: 'Imported {rows} rows × {columns} columns from the file into {cell}.',
   appCsvEmpty: 'The CSV file has no data.',

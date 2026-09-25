@@ -511,6 +511,18 @@ export const zh = {
   appSaveErrChartUnsupported: '这个图表类型不支持该编辑，保存已中止——请撤销该图表改动。',
   appSaveErrMoveOverlap:
     '有公式、格式范围、图形或表格横跨被移动的行——这次保存已中止，请撤销该移动。',
+  appSaveCompatTitle: '本簿中的部分内容无法保存到文件',
+  appSaveCompatDetail: '——{item}',
+  appSaveCompatDismiss: '关闭提示',
+  appSaveCompatCsv: '以 CSV 保存时只保留当前工作表的纯数值——公式、格式和其他工作表不会写入文件。',
+  appSaveCompatMultiSelectDv: '多选列表验证无法保存到 xlsx——请先删除该规则再保存。',
+  appSaveCompatStranded:
+    '新增工作表上的新表格/透视表与待保存的行列或工作表改动冲突——请先保存一次，或撤销相关改动。',
+  appSaveCompatStructureConflict:
+    '待保存的行列移动、区域移动或合并单元格与工作表上的表格或筛选冲突——请先撤销或保存。',
+  appSaveCompatDuplicateParts: '复制的副本工作表带有图表、图片、表格或透视表，暂无法随副本保存。',
+  appSaveCompatX14Cf: '对扩展(x14)条件格式的修改暂时无法保存。',
+  appSaveCompatX14Dv: '对扩展(x14)数据验证的修改暂时无法保存。',
   appFromTextCsvTitle: '把 CSV/文本文件导入到当前选区',
   appCsvImported: '已从文件导入 {rows} 行 × {columns} 列到 {cell}。',
   appCsvEmpty: 'CSV 文件里没有数据。',

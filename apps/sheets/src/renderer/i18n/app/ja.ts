@@ -607,6 +607,21 @@ export const ja = {
     'このグラフの種類はこの編集をサポートしていないため保存を中止しました — グラフの変更を元に戻してください。',
   appSaveErrMoveOverlap:
     '数式、書式設定された範囲、図形、またはテーブルが移動対象の行にまたがっているため保存を中止しました — 移動を元に戻してください。',
+  appSaveCompatTitle: 'このブックの一部の内容はファイルに保存されません',
+  appSaveCompatDetail: '——{item}',
+  appSaveCompatDismiss: '警告を閉じる',
+  appSaveCompatCsv:
+    'CSV で保存するとアクティブなシートの値のみが保持されます——数式・書式・他のシートはファイルに保存されません。',
+  appSaveCompatMultiSelectDv:
+    '複数選択リストの入力ルールは xlsx に保存できません——保存前にルールを削除してください。',
+  appSaveCompatStranded:
+    '追加したシート上の新しいテーブル/ピボットテーブルが、保存待ちの行・列・シート変更と競合しています——先に保存するか変更を元に戻してください。',
+  appSaveCompatStructureConflict:
+    '保存待ちの行・列移動、範囲移動、セル結合がシートのテーブルやフィルターと競合しています——先に元に戻すか保存してください。',
+  appSaveCompatDuplicateParts:
+    'コピーしたシートにはグラフ・画像・テーブル・ピボットテーブルがあり、コピー先にはまだ保存できません。',
+  appSaveCompatX14Cf: '拡張 (x14) 条件付き書式への変更はまだ保存できません。',
+  appSaveCompatX14Dv: '拡張 (x14) データの入力規則への変更はまだ保存できません。',
   appFromTextCsvTitle: 'CSV/テキストファイルを現在の選択範囲にインポート',
   appCsvImported: 'ファイルから {rows} 行 × {columns} 列を {cell} にインポートしました。',
   appCsvEmpty: 'CSV ファイルにデータがありません。',

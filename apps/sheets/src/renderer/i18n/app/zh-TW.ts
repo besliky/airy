@@ -503,6 +503,19 @@ export const zhTW = {
   appSaveErrChartUnsupported: '這個圖表類型不支援該編輯，儲存已中止——請復原該圖表變更。',
   appSaveErrMoveOverlap:
     '有公式、格式範圍、圖形或表格橫跨被移動的列——這次儲存已中止，請復原該移動。',
+  appSaveCompatTitle: '本活頁簿中的部分內容無法儲存到檔案',
+  appSaveCompatDetail: '——{item}',
+  appSaveCompatDismiss: '關閉提示',
+  appSaveCompatCsv: '以 CSV 儲存時只保留目前工作表的純數值——公式、格式與其他工作表不會寫入檔案。',
+  appSaveCompatMultiSelectDv: '多選清單驗證無法儲存到 xlsx——請先刪除該規則再儲存。',
+  appSaveCompatStranded:
+    '新增工作表上的新表格/樞紐分析表與待儲存的欄列或工作表變更衝突——請先儲存一次，或復原相關變更。',
+  appSaveCompatStructureConflict:
+    '待儲存的欄列移動、範圍移動或合併儲存格與工作表上的表格或篩選衝突——請先復原或儲存。',
+  appSaveCompatDuplicateParts:
+    '複製的副本工作表帶有圖表、圖片、表格或樞紐分析表，暫無法隨副本儲存。',
+  appSaveCompatX14Cf: '對擴充 (x14) 條件格式的修改暫時無法儲存。',
+  appSaveCompatX14Dv: '對擴充 (x14) 資料驗證的修改暫時無法儲存。',
   appFromTextCsvTitle: '把 CSV/文字檔匯入到目前的選取範圍',
   appCsvImported: '已從檔案匯入 {rows} 列 × {columns} 欄到 {cell}。',
   appCsvEmpty: 'CSV 檔案裡沒有資料。',
