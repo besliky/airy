@@ -298,6 +298,7 @@ import { installFormulaLexerFix } from './formula-lexer-fix'
 import { installFormulaNewlineDisplay } from './formula-newline-display'
 import { installCfDisplayKeyCompare } from './cf-duplicate-key'
 import { installCfFormulaFold } from './cf-formula-fold'
+import { installCfRefSegmentMerge } from './cf-segment-merge'
 import { installSheetRenameFix } from './sheet-rename-fix'
 import { installArrowCollapse } from './arrow-collapse-fix'
 import { installMenuInputEnter } from './menu-input-enter'
@@ -1762,6 +1763,10 @@ export function App(): React.JSX.Element {
     // the engine stops rebuilding millions of per-cell dependency trees on
     // every stream-in recalculation (genspark-ai/genoffice#158).
     const cfFormulaFoldDisposable = installCfFormulaFold(runtime)
+    // Ref-shifted formula rules (expression CF, formula validations) stay one
+    // rule when a row/column edit extends their range, instead of splitting
+    // into anchor-drifted duplicates (BUG-1717).
+    const cfSegmentMergeDisposable = installCfRefSegmentMerge(runtime)
     // duplicateValues / uniqueValues compare display text like Excel (1981233
     // and "1981233" are duplicates).
     const cfDisplayKeyDisposable = installCfDisplayKeyCompare(runtime)
@@ -3136,6 +3141,7 @@ export function App(): React.JSX.Element {
       arrowCollapseDisposable.dispose()
       multiRowAutofitDisposable.dispose()
       cfFormulaFoldDisposable.dispose()
+      cfSegmentMergeDisposable.dispose()
       cfDisplayKeyDisposable.dispose()
       nullResultDisposable.dispose()
       copyMaterializeDisposable.dispose()
@@ -4086,6 +4092,7 @@ export function App(): React.JSX.Element {
         running: false,
         lastRunAt: 0,
       },
+      circularRefs: [],
     }
     // Column outline levels arrive with the sheet metadata; seed them now.
     for (const sheet of selected.sheets) {
