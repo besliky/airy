@@ -108,7 +108,7 @@ function validateAddition(addition: TableAddition): void {
 }
 
 /// name= and displayName= of every existing table part, lowercased.
-async function collectExistingTableNames(pkg: MutablePackage): Promise<Set<string>> {
+export async function collectExistingTableNames(pkg: MutablePackage): Promise<Set<string>> {
   const names = new Set<string>()
   for (const path of await tablePartPaths(pkg)) {
     const xml = await pkg.readText(path)
@@ -130,7 +130,7 @@ async function maxExistingTableId(pkg: MutablePackage): Promise<number> {
   return max
 }
 
-async function tablePartPaths(pkg: MutablePackage): Promise<string[]> {
+export async function tablePartPaths(pkg: MutablePackage): Promise<string[]> {
   return (await pkg.paths()).filter((path) => /^xl\/tables\/[^/]+\.xml$/.test(path))
 }
 
@@ -225,14 +225,14 @@ function appendTablePart(worksheetXml: string, relId: string): string {
   return xml.slice(0, closeAt) + element + xml.slice(closeAt)
 }
 
-function areaToRef(area: TableArea): string {
+export function areaToRef(area: TableArea): string {
   return (
     `${columnLabel(area.startColumn)}${area.startRow + 1}` +
     `:${columnLabel(area.endColumn)}${area.endRow + 1}`
   )
 }
 
-function parseRef(ref: string): TableArea {
+export function parseRef(ref: string): TableArea {
   const match = /^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/.exec(ref.replace(/\$/g, ''))
   if (!match || !match[1] || !match[2]) {
     throw new TableAddError(`Unsupported range reference "${ref}" in the workbook.`)

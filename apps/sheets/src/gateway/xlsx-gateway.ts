@@ -34,6 +34,7 @@ import {
   type ShapeAdd,
 } from './xlsx-drawing-add'
 import { applyTableAdditions, type TableArea } from './xlsx-table-add'
+import { applyTableEdits, type SheetTableEdit, type TableStyleEdit } from './xlsx-table-edit'
 import type { PivotFilterDef } from '../domain/pivot-filters'
 import {
   applyPivotAdditions,
@@ -515,6 +516,7 @@ export async function applyCellEditsToXlsx(
   pageSetupStates: readonly SheetPageSetupState[] = [],
   noteStates: readonly SheetNoteState[] = [],
   formulaValues: readonly SheetFormulaValues[] = [],
+  tableEdits: readonly SheetTableEditRequest[] = [],
 ): Promise<XlsxMutation> {
   const plan = await planCellEditsToXlsx(
     await createBufferEntrySource(source),
@@ -538,6 +540,12 @@ export async function applyCellEditsToXlsx(
     [],
     [],
     formulaValues,
+    null,
+    null,
+    [],
+    [],
+    [],
+    tableEdits,
   )
   return assembleWithJsZip(source, plan)
 }
@@ -568,6 +576,20 @@ export interface SheetTableAddition {
   readonly columnNames: readonly string[]
   readonly style?: string | undefined
   readonly bandedRows: boolean
+}
+
+/// One edit against a table already stored in the file (PAR-202): resize
+/// (header-anchored), rename, style tweak, and/or Convert to Range. All
+/// operations are fail-closed at save: unknown tables, bad names, and
+/// coordinate conflicts abort the save.
+export interface SheetTableEditRequest {
+  readonly sheetName: string
+  /// The table's current name (the displayName token structured refs use).
+  readonly tableName: string
+  readonly rename?: string | undefined
+  readonly resize?: { readonly area: TableArea } | undefined
+  readonly style?: TableStyleEdit | undefined
+  readonly convertToRange?: boolean | undefined
 }
 
 export interface SheetPivotAddition {
@@ -644,6 +666,7 @@ export async function planCellEditsToXlsx(
   protectedRangeStates: readonly SheetProtectedRangesState[] = [],
   bulkConstantFills: readonly BulkConstantFill[] = [],
   threadedCommentStates: readonly SheetThreadedCommentState[] = [],
+  tableEdits: readonly SheetTableEditRequest[] = [],
 ): Promise<MutationPlan> {
   // A pending pivot pins final coordinates for its source and output; shifts
   // on either sheet, and sheet renames (worksheetSource@sheet), would desync
@@ -677,7 +700,25 @@ export async function planCellEditsToXlsx(
       )
     }
   }
-  // The defined-names snapshot carries model coordinates and file sheet
+  // Table edits pin absolute coordinates the same way: a resize replayed
+  // next to row/column shifts on its sheet would land on shifted geometry.
+  // Renames are coordinate-free but share the gate — the renderer saves
+  // table edits in their own phase, so this is a defensive backstop.
+  if (tableEdits.length > 0) {
+    if (sheetPlan !== undefined) {
+      throw new Error(
+        'Table edits cannot be saved together with sheet management changes — ' +
+          'save the table first.',
+      )
+    }
+    const editedSheets = new Set(tableEdits.map((edit) => edit.sheetName))
+    if (structuralOps.some((sheet) => sheet.ops.length > 0 && editedSheets.has(sheet.sheetName))) {
+      throw new Error(
+        'Table edits cannot be saved together with row/column changes on their ' +
+          'sheet — save the table first.',
+      )
+    }
+  } // The defined-names snapshot carries model coordinates and file sheet
   // indices; replaying structural or sheet operations underneath it would
   // desync both. The renderer blocks the combination too.
   if (
@@ -1141,6 +1182,25 @@ export async function planCellEditsToXlsx(
     const cacheXml = await pkg.readText(cachePath)
     pkg.write(cachePath, setPivotRefreshOnLoad(cacheXml))
     touchedEntries.add(cachePath)
+  }
+
+  // Edits to file tables run before new tables are added, so additions see
+  // the edited state (rename collisions, freed ranges) and the flushed
+  // worksheet XML carries the final formula texts the rewrites need.
+  if (tableEdits.length > 0) {
+    const resolvedEdits: SheetTableEdit[] = []
+    for (const edit of tableEdits) {
+      resolvedEdits.push({
+        worksheetPath:
+          additionPaths.get(edit.sheetName) ?? (await resolveWorksheetPath(pkg, edit.sheetName)),
+        tableName: edit.tableName,
+        ...(edit.rename === undefined ? {} : { rename: edit.rename }),
+        ...(edit.resize === undefined ? {} : { resize: edit.resize }),
+        ...(edit.style === undefined ? {} : { style: edit.style }),
+        ...(edit.convertToRange === undefined ? {} : { convertToRange: edit.convertToRange }),
+      })
+    }
+    await applyTableEdits(pkg, resolvedEdits, touchedEntries)
   }
 
   // New tables also run on the flushed worksheet XML: the <tableParts>
