@@ -7,6 +7,126 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-09-26
+
+### Fixed
+
+- MCP:
+  - The formula-cache overlay survives the canonical cold flow again
+    (BUG-1776 — the round-3 audit's P2 regression against #260/BUG-1761).
+    The overlay that refreshes `<f>`/`<v>` formula pairs on save required
+    `indexingComplete === true` from a single `read_formula_cells` call;
+    that command already spawns the sidecar's lazy worksheet indexer but
+    returns immediately — the sheets app polls it from the UI, and the
+    sidecar executes requests serially, so a blocking wait inside the
+    command would have stalled all traffic — and the overlay's one call
+    raced the indexer and always saw an incomplete index. Net effect: any
+    save with edits and no prior range read degraded 7/7 in the audit and
+    wrote every formula without a `<v>`, dropping the file's own stale
+    caches too — the exact hazard for script readers (openpyxl
+    `data_only`, pandas). The overlay now polls `read_formula_cells`
+    every 250 ms until the index completes, bounded by a 10 s budget, and
+    degrades with named reasons as before (index unavailable / truncated
+    reply / did not finish building in time); the degradation warning now
+    states the real effect ("see no cached values for the formula cells"
+    — the old text promised stale caches that are not there), and the
+    save_document description documents that caches refresh even when no
+    range was read in the session. Proven red before the fix: a
+    real-sidecar integration test (open → edit A1=100 → save with no
+    read) failed on the pre-fix session and passes after with fresh
+    `<v>120</v>`/`<v>1200</v>` and no warnings; the warm path and the
+    #260 budgets (20k recalc chunks, 64 MB source fence, 10k edits) are
+    unchanged, and the Rust wire protocol was not touched (PR #275).
+  - read_document shows what findReplace edits: nested tables and formula
+    caches (BUG-1777). `blockToHtml` rendered only `cell.paras`, so nested
+    tables and field-run cells appeared as empty (`<td></td>`) in both the
+    block overview and the full read while findReplace edited exactly that
+    text — the agent could not see what it was about to replace. Nested
+    tables now render as real `<table>` elements inside their cell,
+    interleaved at their paragraph anchors the same way the findReplace
+    recursion walks them, with the outer table's row/cell structure
+    intact; cell display text is derived from the same rich runs the
+    replace path edits — field runs keep their cached value verbatim and
+    gain a bracketed instruction note (`30 [formula: =SUM(LEFT)]`)
+    instead of empty cells or raw instruction noise — and
+    `blockPreviewText` shares the derivation, so overview lines see nested
+    text and values too. Verified on the audit corpus (f_nested.docx):
+    the overview line shows the inner table, findReplace
+    INNER-NEEDLE→INNER-HIT changed 1, read-after-write sees the edit and
+    an editable cache (33→34), and save keeps both `<w:tbl>` and both
+    `<w:fldSimple>` intact with the change present in the nested model on
+    reopen. Caches stored as direct `w:tc` children (outside any `w:p`)
+    never reach the engine model and stay invisible to read and
+    findReplace alike, byte-preserved — surfacing them is a named
+    docx-engine follow-up (PR #277).
+- Html:
+  - The html editor saves in the file's remembered encoding and keeps its
+    meta charset claim honest (BUG-1782 — the markdown #237 fix was never
+    ported). Save wrote UTF-8 unconditionally while the encoding-memory
+    pick kept claiming otherwise: a windows-1251 file pinned through the
+    reopen-with-encoding picker was silently transcoded to UTF-8, the
+    next open re-decoded the new bytes as the old charset (the pick is
+    authoritative) and rendered mojibake, the status-bar picker masked
+    the active override behind a session-local "auto", and the untouched
+    `<meta charset>` claim made every browser render the saved file as
+    mojibake too — even with no pick involved (decode-by-declared → UTF-8
+    write → stale claim). The save path now encodes into the file's
+    remembered charset through the shared `encodeTextAsEncoding` (the
+    encode-text module moved to `packages/electron-utils` so both
+    plain-text editors use one implementation — a pure move, no new
+    dependencies); a text the charset cannot represent falls back to a
+    lossless UTF-8 write and the now-false pick is dropped. The
+    `<meta charset>` declaration is synced to the charset the bytes
+    actually use — updated, never removed, matching Word's "Save As Web
+    Page" / LibreOffice HTML export and the MCP server's BUG-761
+    precedent; canonical alias comparison (`cp1251` ≡ `windows-1251`)
+    keeps matching declarations byte-identical, so pinned save cycles are
+    byte-idempotent. A new read-only `html:get-encoding` channel lets the
+    status-bar picker mirror the persisted pick at open and re-sync after
+    every save, so a Save As to a fresh path or a fallback UTF-8 write is
+    visible instead of masked. Regression tests: cp1251 open→edit→save ×2
+    with byte-idempotent cycles and an honest claim; gb18030 two-byte
+    text stays pinned while a four-byte-only character falls back
+    honestly with the meta rewritten to utf-8; the no-pick edited save of
+    a legacy file lands on UTF-8 with a matching claim; no declaration
+    means no injection (PR #278).
+
+### Performance
+
+- MCP:
+  - Saving a 100k-row workbook with a fresh formula overlay dropped from
+    ~24 s (or a silently degraded overlay) to ~1 s (PERF-1778). Profiling
+    pinned the cost on the one-time whole-book import into the IronCalc
+    recalc engine (per-phase profile: edits 0 ms, evaluate 55 ms, reads
+    0 ms; wire transfer kilobytes) — paid again after every save because
+    the resident model leaked three ways: the sidecar purged the resident
+    model whenever the last session on a path closed and the MCP
+    session's index refresh closed before re-opening; even kept, the
+    model's mtime+size stamp went stale the moment the save promoted the
+    new bytes over the backing file; and the prewarm build guard compared
+    a global purge epoch while every save queues a purge for the
+    gateway's temp target — so any prewarm overlapping a save discarded
+    the model it had just reused. Three wire-compatible fixes (app client
+    untouched): a best-effort `restamp_recalc` command refreshes the
+    resident model's file stamp and clears its applied-edit set after a
+    clean in-place save (a degraded overlay skips the restamp — only a
+    rebuild is safe then; an older sidecar just errors and the save keeps
+    the previous behavior); close purges the resident model only with the
+    last session on the path; and the prewarm guard is per-path. The
+    session also grants the reopened session's lazy formula index a
+    bounded 2 s grace instead of degrading the overlay instantly on
+    `indexingComplete=false`. Measured on big100k (100 001×5, 30
+    formulas, N=3 in-place saves): warm overlay-save 22–41 s-or-degraded
+    → 0.98–1.03 s with an honest, fresh overlay and no degradation
+    warnings; overlay values verified byte-equal against the pre-fix
+    build (openpyxl `data_only`); peak RSS unchanged (server ≤755 MB,
+    sidecar ≤464 MB, memguard 0 kills). The first save still pays the
+    one-time background import tail (17–23 s, bounded by the existing
+    120 s recalc budget — the 30 s clip at ~200k rows cannot happen); the
+    only file delta is a cosmetic attribute-separator space the gateway's
+    formula patch accumulates per successful overlay pass — pre-existing,
+    outside this change (PR #276).
+
 ## [0.29.0] - 2026-09-26
 
 ### Added
