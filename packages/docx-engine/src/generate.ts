@@ -2926,6 +2926,12 @@ function runFragmentXml(run: Run, insideLink: boolean): string {
     )
   }
   if (run.formulaField !== undefined) {
+    // A field without an instruction (degenerate paste/parse artifact, BUG-1758)
+    // must never serialize as w:fldSimple w:instr="" — Word cannot update such a
+    // field — so keep just the cached text instead.
+    if (run.formulaField.trim() === '') {
+      return generateRunXml({ ...run, formulaField: undefined }, insideLink)
+    }
     // Table formula field (Word's Formula dialog form): a w:fldSimple whose
     // child run is the cached result shown until the field updates (F9).
     // The instruction (including a \# numeric picture switch) is verbatim.

@@ -5,9 +5,11 @@ import type { Mark as PmMark } from '@tiptap/pm/model'
 import {
   evaluateFormulaInGrid,
   proposeTableFormula as proposeFromGrid,
+  type TableCell,
+  type TableModel,
 } from '@airy-office/docx-engine'
 
-import type { FieldCacheJob } from './revisions'
+import { TRACK_IGNORE, type FieldCacheJob } from './revisions'
 
 /**
  * Table formula fields (=SUM(ABOVE)…), Word's Table Layout → Formula.
@@ -38,6 +40,21 @@ export interface TableGridInfo {
   cells: PhysicalCell[]
 }
 
+/**
+ * Visible text of a cell for grid math. Nested docTable subtrees do not
+ * contribute: Word treats a table-holding cell as non-numeric, so an outer
+ * formula must never read the nested cells' (concatenated) text as a number.
+ */
+function cellOwnText(cell: PmNode): string {
+  let text = ''
+  cell.descendants((n) => {
+    if (n.type.name === 'docTable') return false
+    if (n.isText) text += n.text
+    return true
+  })
+  return text
+}
+
 /** Build the physical grid of a native docTable (mirrors pmTableToModel's spans). */
 export function pmTableGrid(table: PmNode, tablePos: number): TableGridInfo {
   const headerRows = new Set<number>()
@@ -58,13 +75,13 @@ export function pmTableGrid(table: PmNode, tablePos: number): TableGridInfo {
         occupied.add(col + i)
       }
     }
+    // direct cell children only: a nested table's cells belong to the nested
+    // table's own grid, never to this one (BUG-1757)
     const rowCells: Array<{ node: PmNode; pos: number }> = []
-    rowNode.descendants((n, off) => {
-      if (CELL_TYPES.has(n.type.name)) {
-        rowCells.push({ node: n, pos: rowPos + 1 + off })
-        return false
+    rowNode.forEach((cellNode, cellOffset) => {
+      if (CELL_TYPES.has(cellNode.type.name)) {
+        rowCells.push({ node: cellNode, pos: rowPos + 1 + cellOffset })
       }
-      return true
     })
     let cursor = 0
     const added = new Map<number, { remaining: number; span: number }>()
@@ -72,7 +89,7 @@ export function pmTableGrid(table: PmNode, tablePos: number): TableGridInfo {
       while (occupied.has(cursor)) cursor++
       const colspan = Math.max(1, Number(cell.node.attrs?.colspan) || 1)
       const rowspan = Math.max(1, Number(cell.node.attrs?.rowspan) || 1)
-      const text = cell.node.textContent
+      const text = cellOwnText(cell.node)
       for (let i = 0; i < colspan; i++) texts[rowIndex][cursor + i] = i === 0 ? text : ''
       cells.push({ node: cell.node, pos: cell.pos, row: rowIndex, col: cursor })
       if (rowspan > 1) added.set(cursor, { remaining: rowspan - 1, span: colspan })
@@ -170,11 +187,16 @@ export function collectTableFormulaJobs(editor: Editor): FieldCacheJob[] {
   const jobs: FieldCacheJob[] = []
   const visitCellText = (cell: PhysicalCell, grid: TableGridInfo) => {
     cell.node.descendants((n, off) => {
+      if (n.type.name === 'docTable') return false // a nested table is its own grid
       if (!n.isText) return
       const mark = n.marks.find((m: PmMark) => m.type.name === 'tableFormula')
       if (!mark) return
+      const instr = String(mark.attrs.instr)
+      // a degenerate field without an instruction keeps its cached text: F9
+      // must not write Word's "!Syntax Error" over it (BUG-1758)
+      if (!instr.trim()) return
       const abs = cell.pos + 1 + off
-      const next = evaluateFormulaInGrid(String(mark.attrs.instr), gridOf(grid), cell.row, cell.col)
+      const next = evaluateFormulaInGrid(instr, gridOf(grid), cell.row, cell.col)
       if (next !== n.text)
         jobs.push({ from: abs, to: abs + n.nodeSize, text: next, marks: n.marks })
     })
@@ -183,7 +205,141 @@ export function collectTableFormulaJobs(editor: Editor): FieldCacheJob[] {
     if (node.type.name !== 'docTable') return
     const grid = pmTableGrid(node, pos)
     for (const cell of grid.cells) visitCellText(cell, grid)
-    return false
+    // keep descending: a nested docTable is visited as its own grid so its
+    // formulas resolve ABOVE/LEFT against its own rows/columns, like Word
   })
   return jobs
+}
+
+// ---- nested tables (docNestedTable atoms) ----
+// A nested table is not PM content: it lives in the docNestedTable atom's
+// `model` attribute (TableModel). Its formula caches therefore cannot ride the
+// PM text jobs above — they are recomputed against the nested model's own grid
+// and written back as model updates (BUG-1757).
+
+interface ModelGrid {
+  texts: string[][]
+  isHeaderRow: (row: number) => boolean
+}
+
+/** visible text of a nested-model cell for grid math */
+function nestedCellText(cell: TableCell): string {
+  const paras = cell.richParas?.length
+    ? cell.richParas.map((p) => p.runs.map((run) => run.text).join(''))
+    : cell.paras
+  return paras.join('\n')
+}
+
+/** physical texts grid of a nested TableModel: vMerge continuations and gridGap
+ * placeholders contribute empty (non-numeric) text; colSpan widens its cell */
+function nestedModelGrid(model: TableModel): ModelGrid {
+  const texts: string[][] = []
+  const repeats = model.repeatHeaderRows ?? []
+  model.rows.forEach((row, r) => {
+    const textsRow: string[] = []
+    for (const cell of row) {
+      textsRow.push(cell.gridGap || cell.vMerge === 'continue' ? '' : nestedCellText(cell))
+      for (let i = 1; i < Math.max(1, cell.colSpan ?? 1); i++) textsRow.push('')
+    }
+    texts[r] = textsRow
+  })
+  return { texts, isHeaderRow: (row: number) => repeats[row] === true }
+}
+
+interface Refreshed<T> {
+  value: T
+  /** formula caches recomputed */
+  count: number
+}
+
+/** recompute one nested cell's formula caches against the model grid; null = unchanged */
+function refreshNestedCellFormulas(
+  cell: TableCell,
+  row: number,
+  col: number,
+  grid: ModelGrid,
+): Refreshed<TableCell> | null {
+  let count = 0
+  let next = cell
+  if (cell.richParas?.length) {
+    let changed = false
+    const richParas = cell.richParas.map((para) => {
+      let paraChanged = false
+      const runs = para.runs.map((run) => {
+        if (run.formulaField === undefined) return run
+        // a degenerate field without an instruction keeps its cached text (BUG-1758)
+        if (!String(run.formulaField).trim()) return run
+        const value = evaluateFormulaInGrid(String(run.formulaField), grid, row, col)
+        if (value === run.text) return run
+        paraChanged = true
+        count++
+        return { ...run, text: value }
+      })
+      if (!paraChanged) return para
+      changed = true
+      return { ...para, runs }
+    })
+    if (changed) {
+      // keep the plain-text cache in step: the save diff compares cell paras
+      const paras = cell.paras.map((text, p) =>
+        richParas[p] === cell.richParas![p] ? text : richParas[p].runs.map((r) => r.text).join(''),
+      )
+      next = { ...cell, paras, richParas }
+    }
+  }
+  if (cell.nestedTables?.length) {
+    let nestedChanged = false
+    const nestedTables = cell.nestedTables.map((nt) => {
+      const rec = refreshNestedModelFormulas(nt)
+      if (!rec) return nt
+      count += rec.count
+      nestedChanged = true
+      return rec.value
+    })
+    if (nestedChanged) next = { ...next, nestedTables }
+  }
+  return next === cell ? null : { value: next, count }
+}
+
+/** recompute every formula of one nested TableModel on its own grid; null = unchanged */
+function refreshNestedModelFormulas(model: TableModel): Refreshed<TableModel> | null {
+  const grid = nestedModelGrid(model)
+  let count = 0
+  let changed = false
+  const rows = model.rows.map((row, r) => {
+    let cursor = 0
+    return row.map((cell) => {
+      const col = cursor
+      cursor += Math.max(1, cell.colSpan ?? 1)
+      if (cell.gridGap || cell.vMerge === 'continue') return cell
+      const rec = refreshNestedCellFormulas(cell, r, col, grid)
+      if (!rec) return cell
+      count += rec.count
+      changed = true
+      return rec.value
+    })
+  })
+  return changed ? { value: { ...model, rows }, count } : null
+}
+
+/**
+ * F9 for nested tables: recompute every nested formula against its own table's
+ * grid (ABOVE/LEFT resolve inside the nested table, never the outer one) and
+ * write the updated models back in one TRACK_IGNORE transaction. Returns the
+ * number of recomputed caches (0 = nothing changed).
+ */
+export function refreshNestedTableFormulas(editor: Editor): number {
+  let updated = 0
+  const tr = editor.state.tr
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'docNestedTable') return
+    const model = node.attrs.model as TableModel | null
+    if (!model?.rows?.length) return
+    const rec = refreshNestedModelFormulas(model)
+    if (!rec) return
+    tr.setNodeMarkup(pos, undefined, { ...node.attrs, model: rec.value })
+    updated += rec.count
+  })
+  if (updated > 0) editor.view.dispatch(tr.setMeta(TRACK_IGNORE, true))
+  return updated
 }

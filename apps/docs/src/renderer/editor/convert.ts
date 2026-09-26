@@ -2324,9 +2324,15 @@ function nestedTextsDiff(
       if (text === originalCell.paras.join('\n') || text === richTexts.join('\n')) return null
       changed = true
       if (cell.paras.length !== originalCell.paras.length) return cell.paras
-      return cell.paras.map((p, i) =>
-        p === originalCell.paras[i] || p === richTexts[i] ? null : p,
-      )
+      return cell.paras.map((p, i): CellParaPatch => {
+        if (p === originalCell.paras[i] || p === richTexts[i]) return null
+        // a rich paragraph in sync with the edited text regenerates its runs,
+        // keeping run formatting and field forms (e.g. a refreshed formula
+        // cache must go back into its w:fldSimple, not plain text)
+        const para = cell.richParas?.[i]
+        if (para && para.runs.map((run) => run.text).join('') === p) return { runs: para.runs }
+        return p
+      })
     })
   })
   return changed ? grid : null
