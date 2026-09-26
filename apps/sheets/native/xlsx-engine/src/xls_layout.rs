@@ -122,8 +122,9 @@ const BORDER_STYLES: [&str; 14] = [
 #[derive(Default)]
 pub(crate) struct SheetLayout {
     /// Merged ranges, 0-based inclusive (row first/last, column first/last),
-    /// sorted and deduplicated.
-    pub(crate) merges: Vec<([u16; 2], [u16; 2])>,
+    /// sorted and deduplicated. Wide on purpose: ODF sheets (the .ods walk
+    /// shares this type) carry more than BIFF's 65 536 rows.
+    pub(crate) merges: Vec<([u32; 2], [u32; 2])>,
     /// User-set column spans (merged runs), ascending.
     pub(crate) cols: Vec<ColSpan>,
     /// Source XF index per styled cell. Plain unformatted cells are absent:
@@ -208,7 +209,7 @@ struct XfSpec {
 
 /// Style tables from the workbook globals substream.
 #[derive(Default)]
-struct StyleTables {
+pub(crate) struct StyleTables {
     fonts: Vec<FontSpec>,
     xfs: Vec<XfSpec>,
     /// Custom number formats as (id, code) in FORMAT record order.
@@ -256,9 +257,26 @@ impl WorkbookLayout {
         layout
     }
 
+    /// A layout assembled from parts another walk already understands —
+    /// the .ods walker shares this type (and the style emission that hangs
+    /// off it) while sourcing merges/cols/rows/styles from content.xml.
+    pub(crate) fn from_parts(sheets: Vec<SheetLayout>, styles: StyleTables, default_font: u16) -> Self {
+        Self {
+            sheets,
+            styles,
+            default_font,
+        }
+    }
+
     /// Layout for the sheet at calamine's index (BOUNDSHEET order).
     pub(crate) fn sheet(&self, index: usize) -> Option<&SheetLayout> {
         self.sheets.get(index).filter(|sheet| !(*sheet).is_empty())
+    }
+
+    /// Whether nothing at all was walked for this book — the convert path
+    /// uses it to fall back to the .ods walk (or the plain output).
+    pub(crate) fn is_empty(&self) -> bool {
+        self.sheets.is_empty()
     }
 
     pub(crate) fn default_font(&self) -> u16 {
@@ -397,7 +415,7 @@ fn parse_stream(stream: &[u8]) -> Option<(Vec<SheetLayout>, StyleTables, u16)> {
 /// and the ROW table.
 #[derive(Default)]
 struct SheetAccumulator {
-    merges: Vec<([u16; 2], [u16; 2])>,
+    merges: Vec<([u32; 2], [u32; 2])>,
     colinfos: Vec<(u16, u16, u16, bool)>,
     cells: HashMap<(u32, u32), u16>,
     /// Raw ROW records: row -> (height twips, grbit). One per row in
@@ -524,7 +542,10 @@ impl SheetAccumulator {
             );
             if row_first <= row_last && col_first <= col_last {
                 self.merges
-                    .push(([row_first, row_last], [col_first, col_last]));
+                    .push((
+                        [u32::from(row_first), u32::from(row_last)],
+                        [u32::from(col_first), u32::from(col_last)],
+                    ));
             }
         }
     }

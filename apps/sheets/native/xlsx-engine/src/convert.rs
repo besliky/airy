@@ -80,8 +80,13 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
     let repaired = legacy_xls::LegacyXlsStrings::extract(source);
     // BUG-1602: merges, column widths and basic cell styles, walked from the
     // BIFF stream directly (calamine exposes none of them). Empty for every
-    // non-.xls source, which keeps those conversions unchanged.
-    let layout = xls_layout::WorkbookLayout::extract(source);
+    // non-.xls source, which keeps those conversions unchanged. For an .ods
+    // source the content.xml walk (PAR-214) carries the same shape instead:
+    // merged headers survive the conversion just like on the .xls path.
+    let mut layout = xls_layout::WorkbookLayout::extract(source);
+    if layout.is_empty() {
+        layout = crate::ods_layout::extract(source);
+    }
     let mut styler = StyleInterner::new(&layout);
     let names: Vec<String> = workbook.sheet_names().to_vec();
     if names.is_empty() {
@@ -286,13 +291,22 @@ fn worksheet_xml(
         body.push_str("</row>");
     }
 
-    let dimension = match (range.start(), range.end()) {
-        (Some(start), Some(end)) => format!(
+    let dimension = {
+        // A merge may reach past the last written cell (a vertical merge
+        // anchoring the sheet's last content row); the grid must reach it,
+        // exactly like the table-range extension on the open path.
+        let mut end = range.end().unwrap_or((0, 0));
+        if let Some(layout) = layout {
+            for (rows, columns) in &layout.merges {
+                end = (end.0.max(rows[1]), end.1.max(columns[1]));
+            }
+        }
+        let start = range.start().unwrap_or((0, 0));
+        format!(
             "{}:{}",
             cell_reference(start.0, start.1),
             cell_reference(end.0, end.1),
-        ),
-        _ => "A1:A1".into(),
+        )
     };
     // Schema order: dimension, sheetFormatPr, cols, sheetData, mergeCells.
     let format_pr = layout.map(sheet_format_pr_xml).unwrap_or_default();
@@ -1221,6 +1235,71 @@ mod tests {
         assert_eq!(odf_datetime_to_serial("PT"), None);
         assert_eq!(odf_datetime_to_serial("PTH"), None);
         assert_eq!(odf_datetime_to_serial("P1DT"), None);
+    }
+
+    /// PAR-214: a LibreOffice-written .ods form keeps its merged ranges
+    /// through conversion — the anchors (`table:number-*-spanned`) and
+    /// their covered continuations used to collapse into loose cells. The
+    /// round trip re-opens the converted file and reads the merges back
+    /// the way the app does.
+    #[test]
+    fn carries_merges_from_an_ods_book() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/par214-ods-merges.ods"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let result = convert_to_xlsx(source, &target).unwrap();
+        assert_eq!(result.cells, 4);
+
+        let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
+        // The three fixture merges (title, box, vertical), sorted like the
+        // .xls path emits them.
+        assert!(sheet.contains(r#"<mergeCells count="3">"#));
+        assert!(sheet.contains(r#"<mergeCell ref="A1:C1"/>"#));
+        assert!(sheet.contains(r#"<mergeCell ref="B3:D4"/>"#));
+        assert!(sheet.contains(r#"<mergeCell ref="A7:A9"/>"#));
+
+        // Round trip: the reader hands the merges to the grid.
+        let mut sessions = crate::WorkbookSessions::new();
+        let metadata = sessions.open(&target).unwrap();
+        let range = sessions
+            .read_range(
+                &metadata.session_id,
+                "sheet-1",
+                &crate::CellRange {
+                    start_row: 0,
+                    end_row: 8,
+                    start_column: 0,
+                    end_column: 5,
+                },
+            )
+            .unwrap();
+        let address = |row: usize, column: usize| {
+            let mut letters = String::new();
+            let mut remaining = column + 1;
+            while remaining > 0 {
+                remaining -= 1;
+                letters.insert(0, char::from(b'A' + (remaining % 26) as u8));
+                remaining /= 26;
+            }
+            format!("{letters}{}", row + 1)
+        };
+        let mut refs: Vec<String> = range
+            .merges
+            .iter()
+            .map(|merge| {
+                format!(
+                    "{}:{}",
+                    address(merge.start_row, merge.start_column),
+                    address(merge.end_row, merge.end_column)
+                )
+            })
+            .collect();
+        refs.sort();
+        assert_eq!(refs, vec!["A1:C1", "A7:A9", "B3:D4"]);
     }
 
     /// BUG-1659: an empty book (no cells, no styles) still converts with a
