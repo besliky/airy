@@ -799,9 +799,86 @@ export function recordSlicerAdd(journal: EditJournal, entry: SlicerAddEntry): vo
   journal.slicerAdds.push(entry)
 }
 
-/// Session slicer adds for the save request; slicers on removed sheets drop.
+/// The name a table will carry once this session's pending tableEdits apply:
+/// the matching entry's rename target when one is pending, the name itself
+/// otherwise. Panels and journal entries keep the name the table had when
+/// the session first saw it (the file metadata is not rewritten by a pending
+/// rename), so every name-bearing save channel resolves through here — the
+/// gateway applies tableEdits before slicer additions and the table-owned
+/// filter write, and both find the part by its post-rename name.
+export function tableNameAfterEdits(
+  journal: EditJournal,
+  sheetId: string,
+  tableName: string,
+): string {
+  const entry = findTableEdit(journal, sheetId, tableName)
+  return entry?.rename ?? tableName
+}
+
+/// True when a pending Convert to Range removes the named table in this
+/// session's save — the table part (its autoFilter and criteria with it) and
+/// its slicers die with it, matching Excel.
+export function isTableConverted(
+  journal: EditJournal,
+  sheetId: string,
+  tableName: string,
+): boolean {
+  const entry = findTableEdit(journal, sheetId, tableName)
+  return entry?.convertToRange === true
+}
+
+function findTableEdit(
+  journal: EditJournal,
+  sheetId: string,
+  tableName: string,
+): TableEditEntry | undefined {
+  const needle = tableName.toLowerCase()
+  return journal.tableEdits.find(
+    (candidate) =>
+      candidate.sheetId === sheetId &&
+      (candidate.tableName.toLowerCase() === needle ||
+        (candidate.rename ?? '').toLowerCase() === needle),
+  )
+}
+
+/// Session slicer adds for the save request: slicers on removed sheets drop,
+/// a pending rename re-addresses the entry to the post-rename table name,
+/// and a pending Convert to Range drops the entry (the Apply handler also
+/// removes the matching panels — Excel deletes a table's slicers when the
+/// table becomes a range).
 export function toSaveSlicerAdds(journal: EditJournal): SlicerAddEntry[] {
-  return journal.slicerAdds.filter((slicer) => !isSheetRemoved(journal, slicer.sheetId))
+  const adds: SlicerAddEntry[] = []
+  for (const slicer of journal.slicerAdds) {
+    if (isSheetRemoved(journal, slicer.sheetId)) continue
+    if (isTableConverted(journal, slicer.sheetId, slicer.tableName)) continue
+    adds.push({
+      ...slicer,
+      tableName: tableNameAfterEdits(journal, slicer.sheetId, slicer.tableName),
+    })
+  }
+  return adds
+}
+
+/// Drops every journal slicer bound to one table (Convert to Range apply);
+/// returns how many entries went. The App removes the matching panels the
+/// same way, so the UI and the save request stay consistent.
+export function removeSlicerAddsForTable(
+  journal: EditJournal,
+  sheetId: string,
+  tableName: string,
+): number {
+  const needle = tableName.toLowerCase()
+  const kept = journal.slicerAdds.filter(
+    (slicer) =>
+      slicer.sheetId !== sheetId ||
+      (slicer.tableName.toLowerCase() !== needle &&
+        tableNameAfterEdits(journal, sheetId, slicer.tableName).toLowerCase() !== needle),
+  )
+  const removed = journal.slicerAdds.length - kept.length
+  if (removed > 0) {
+    ;(journal.slicerAdds as SlicerAddEntry[]).splice(0, journal.slicerAdds.length, ...kept)
+  }
+  return removed
 }
 
 /// Drops the journal entry when the panel is removed before saving.

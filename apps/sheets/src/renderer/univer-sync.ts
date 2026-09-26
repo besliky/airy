@@ -88,6 +88,7 @@ import {
   escapeCssLeadingDigit,
   fromNeutralStyle,
   bulkConstantFillValueAt,
+  isTableConverted,
   journalCellContentAt,
   isSheetRemoved,
   journalEntriesInRange,
@@ -95,6 +96,7 @@ import {
   ooxmlTextRotationToUniver,
   recordHyperlinkEdit,
   recordSetRangeValues,
+  tableNameAfterEdits,
   toRecalcUserInput,
   type EditJournal,
   type VisualEditEntry,
@@ -5652,20 +5654,36 @@ export function collectFilterStates(
           endColumn: Math.max(range.endColumn, origin.range.endColumn),
         }
       : range
+    // A table-owned filter keeps its criteria in the table part (the slicer
+    // round-trip): the save routes the snapshot there instead of writing a
+    // worksheet-level autoFilter over the table. The name resolves through
+    // this session's pending table edits — the gateway applies a rename
+    // before the deferred filter write and finds the part by its new name;
+    // a pending Convert to Range removes the part (its criteria die with
+    // it, and the filter's hidden rows stay as plain row state, like Excel).
+    let tableName: string | undefined
+    if (origin?.origin === 'table') {
+      const matched =
+        sheetMetaTableName(state, sheetId, range) ?? sheetMetaFirstTableName(state, sheetId)
+      if (matched !== undefined) {
+        if (isTableConverted(state.editJournal, sheetId, matched)) {
+          filterStates.push({
+            sheetId,
+            filter: null,
+            hiddenRows: filter.getFilteredOutRows(),
+            visibilityRange: toCellArea(visibilityRange),
+          })
+          continue
+        }
+        tableName = tableNameAfterEdits(state.editJournal, sheetId, matched)
+      }
+    }
     filterStates.push({
       sheetId,
       filter: { range: toCellArea(range), columns },
       hiddenRows: filter.getFilteredOutRows(),
       visibilityRange: toCellArea(visibilityRange),
-      // A table-owned filter keeps its criteria in the table part (the
-      // slicer round-trip): the save routes the snapshot there instead of
-      // writing a worksheet-level autoFilter over the table.
-      ...(origin?.origin === 'table'
-        ? {
-            tableName:
-              sheetMetaTableName(state, sheetId, range) ?? sheetMetaFirstTableName(state, sheetId),
-          }
-        : {}),
+      ...(tableName !== undefined ? { tableName } : {}),
     })
   }
   return filterStates
