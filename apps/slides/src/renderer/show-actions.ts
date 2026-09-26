@@ -83,17 +83,17 @@ export function startRecordShow(ctx: ActionCtx): void {
   ctx.setSlideShow({ startAt: Math.max(0, first), rehearse: true, record: true })
 }
 
-/** Recording/rehearsal ended: stash per-slide seconds; after exiting the show, prompt "save?" */
-export function onRehearseDone(ctx: ActionCtx, perPageSec: number[]): void {
-  if (perPageSec.some((s) => s > 0))
-    ctx.setPendingRehearse({ sec: perPageSec, record: ctx.slideShow?.record === true })
+/** Recording/rehearsal ended: stash per-slide dwell milliseconds; after exiting the show, prompt "save?" */
+export function onRehearseDone(ctx: ActionCtx, perPageMs: number[]): void {
+  if (perPageMs.some((ms) => ms > 0))
+    ctx.setPendingRehearse({ ms: perPageMs, record: ctx.slideShow?.record === true })
 }
 
-/** Save rehearsal/recorded timings: write each slide's dwell seconds as auto-advance times (<p:transition advTm>, milliseconds) */
+/** Save rehearsal/recorded timings: write each slide's dwell as its auto-advance time (<p:transition advTm>, exact milliseconds — UX-1768) */
 export async function saveRehearseTimings(ctx: ActionCtx): Promise<void> {
   if (!ctx.pendingRehearse) return
-  const times = ctx.pendingRehearse.sec
-    .map((sec, i) => ({ slideIndex: i, ms: sec * 1000 }))
+  const times = ctx.pendingRehearse.ms
+    .map((ms, i) => ({ slideIndex: i, ms }))
     .filter((t) => t.ms > 0)
   ctx.setPendingRehearse(null)
   const ok = await window.slidesApi.setAdvanceTimes({ times })

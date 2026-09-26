@@ -56,8 +56,8 @@ export function SlideShowView({
   rehearseMode?: boolean
   /** Record Slide Show mode: rehearsal clock + explicit record session HUD (pause/resume/stop, P key) */
   recordMode?: boolean
-  /** Rehearsal-end callback (called before onExit on exit); perPageSec is by original page index, unvisited pages are 0 */
-  onRehearseDone?: (perPageSec: number[]) => void
+  /** Rehearsal-end callback (called before onExit on exit); perPageMs is by original page index, unvisited pages are 0 */
+  onRehearseDone?: (perPageMs: number[]) => void
 }) {
   const { t } = useI18n()
   // Playback sequence (original indexes): hidden pages skipped (except the start page); custom shows use the given order
@@ -170,7 +170,7 @@ export function SlideShowView({
 
   const exitRef = useRef(() => {})
   exitRef.current = () => {
-    // Timing modes: report each page's dwell seconds before exit (ref nulled to prevent duplicate fullscreenchange triggers)
+    // Timing modes: report each page's dwell milliseconds before exit (ref nulled to prevent duplicate fullscreenchange triggers)
     const t = recRef.current
     if (timingActive && onRehearseDone && t) {
       recRef.current = null

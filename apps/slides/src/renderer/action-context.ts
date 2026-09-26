@@ -149,9 +149,9 @@ export interface ActionCtx {
   setPresenter: Set<{ startAt: number } | null>
   setCustomShows: Set<CustomShow[]>
   setCustomShowDlgOpen: Set<boolean>
-  /** Recorded dwell seconds awaiting the "save?" confirmation; record=true when captured by Record Slide Show (dialog title). */
-  pendingRehearse: { sec: number[]; record: boolean } | null
-  setPendingRehearse: Set<{ sec: number[]; record: boolean } | null>
+  /** Recorded dwell milliseconds awaiting the "save?" confirmation (written verbatim to advTm — UX-1768); record=true when captured by Record Slide Show (dialog title). */
+  pendingRehearse: { ms: number[]; record: boolean } | null
+  setPendingRehearse: Set<{ ms: number[]; record: boolean } | null>
 
   // Sections
   sections: SectionInfo[]

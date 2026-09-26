@@ -62,10 +62,14 @@ export function switchRehearsePage(
   return { perPageMs, currentIndex: nextIndex, enteredAt: now }
 }
 
-/** End rehearsal: accumulate the last slide's dwell, then convert to seconds per slide (rounded; visited slides count at least 1 second). */
+/**
+ * End rehearsal: accumulate the last slide's dwell and keep it in milliseconds
+ * (the exact dwell is what gets written to advTm — UX-1768; second rounding is
+ * display-only, see formatClock). Unvisited slides stay 0.
+ */
 export function finishRehearse(t: RehearseTiming, now: number): number[] {
   const final = switchRehearsePage(t, -1, now)
-  return final.perPageMs.map((ms) => (ms > 0 ? Math.max(1, Math.round(ms / 1000)) : 0))
+  return final.perPageMs.map((ms) => (ms > 0 ? ms : 0))
 }
 
 /** m:ss clock display (rehearsal timer bar / save confirmation dialog). */
@@ -131,12 +135,14 @@ export function switchRecordPage(t: RecordSession, nextIndex: number, now: numbe
 
 /**
  * Stop the session: bank the last dwell while recording (a paused session keeps
- * only what was banked at pause), then convert to seconds per slide (rounded;
- * visited slides count at least 1 second — same contract as a rehearsal).
+ * only what was banked at pause), then keep the per-slide dwell in milliseconds
+ * exactly as accumulated — PowerPoint stores advTm with ms precision, so no
+ * second rounding here (UX-1768; the HUD formats via formatClock instead).
+ * Unvisited slides stay 0.
  */
 export function finishRecord(t: RecordSession, now: number): number[] {
   const final = t.phase === 'recording' ? switchRecordPage(t, -1, now) : { ...t, currentIndex: -1 }
-  return final.perPageMs.map((ms) => (ms > 0 ? Math.max(1, Math.round(ms / 1000)) : 0))
+  return final.perPageMs.map((ms) => (ms > 0 ? ms : 0))
 }
 
 /** Dwell of the current slide so far (frozen while paused) — record HUD clock. */
