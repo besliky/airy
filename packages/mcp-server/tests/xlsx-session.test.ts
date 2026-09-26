@@ -767,3 +767,187 @@ describe('save refreshes formula caches (BUG-1761)', () => {
     expect(saveCalls[0]?.edits).toEqual([])
   })
 })
+
+// PERF-1778: an in-place save used to leave the sidecar's resident recalc
+// model purge-and-stamp-stale, so every save's overlay paid a whole-book
+// IronCalc re-import (~22s on a 100k book; the save after a read took 24s
+// against 0.63s degraded). The save now restamps the resident model (its own
+// overlay just proved the model carries the saved edits) and refreshes the
+// read index without dropping the model, so a warm overlay-save is a
+// resident hit plus the archive stream.
+describe('warm overlay-save across in-place saves (PERF-1778)', () => {
+  async function inPlaceSession(options: Parameters<typeof makeStubIo>[0] = {}) {
+    const bookPath = join(root, 'in-place.xlsx')
+    await writeFile(bookPath, 'stub-xlsx-bytes')
+    const io = makeStubIo({
+      formulaCells: [{ sheetId: 'sheet-0', row: 2, column: 0, value: 5 }],
+      recalcCells: [{ sheet: 'Sheet1', row: 2, column: 0, number: 103, isFormula: true }],
+      ...options,
+    })
+    // ordered wire trace: the save must restamp, then open the fresh session,
+    // and only then close the stale one (the sidecar keeps the resident model
+    // while a sibling session survives on the path)
+    const events: string[] = []
+    const rawOpen = io.open.bind(io)
+    const rawClose = io.close.bind(io)
+    const rawRestamp = io.restampRecalc.bind(io)
+    io.open = async (path: string) => {
+      events.push(`open:${path}`)
+      return rawOpen(path)
+    }
+    io.close = async (sessionId: string) => {
+      events.push(`close:${sessionId}`)
+      return rawClose(sessionId)
+    }
+    io.restampRecalc = async (path: string) => {
+      events.push(`restamp:${path}`)
+      return rawRestamp(path)
+    }
+    const session = await XlsxSession.open(bookPath, root, io)
+    events.length = 0
+    return { session, io, bookPath, events }
+  }
+
+  it('a clean in-place save restamps the resident model once', async () => {
+    const { session, io, bookPath } = await inPlaceSession()
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 100 }] })
+    const saved = await session.save(bookPath)
+    expect(saved.warnings).toEqual([])
+    expect(io.calls.restampRecalc).toEqual([bookPath])
+  })
+
+  it('the refresh restamps, opens the fresh session, then closes the stale one', async () => {
+    const { session, io, bookPath, events } = await inPlaceSession()
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 100 }] })
+    await session.save(bookPath)
+    // two opens (initial + refresh), one close (the first session only)
+    expect(io.calls.open).toEqual([bookPath, bookPath])
+    expect(io.calls.close).toEqual(['stub-session-1'])
+    expect(events).toEqual([`restamp:${bookPath}`, `open:${bookPath}`, 'close:stub-session-1'])
+  })
+
+  it('a degraded overlay skips the restamp (only a rebuild is safe)', async () => {
+    const { session, io, bookPath } = await inPlaceSession({
+      recalcError: new Error('recalc_busy'),
+    })
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 100 }] })
+    const saved = await session.save(bookPath)
+    expect(saved.warnings[0]).toContain('the formula engine was unavailable')
+    expect(io.calls.restampRecalc).toEqual([])
+  })
+
+  it('a save-as never restamps (the backing file was not rewritten)', async () => {
+    const { session, io } = await inPlaceSession()
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 100 }] })
+    await session.save(join(root, 'other.xlsx'))
+    expect(io.calls.restampRecalc).toEqual([])
+    // no reopen either: the backing index still matches the backing file
+    expect(io.calls.close).toEqual([])
+  })
+
+  it('a restamp failure (older sidecar) still completes the save', async () => {
+    const { session, io, bookPath } = await inPlaceSession({
+      restampError: new Error('unknown variant `restamp_recalc`'),
+    })
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 100 }] })
+    const saved = await session.save(bookPath)
+    expect(saved.warnings).toEqual([])
+    // the attempt was made and the index refresh still ran
+    expect(io.calls.restampRecalc).toEqual([bookPath])
+    expect(io.calls.close).toEqual(['stub-session-1'])
+  })
+
+  it('a zero-edit in-place save restamps (the rewrite invalidates the stamp)', async () => {
+    const { session, io, bookPath } = await inPlaceSession()
+    await session.save(bookPath)
+    expect(io.calls.restampRecalc).toEqual([bookPath])
+    expect(io.calls.recalcCells).toEqual([])
+  })
+
+  it('waits out the fresh index after a reopen instead of degrading', async () => {
+    const { session, io, bookPath } = await inPlaceSession()
+    // the first read after the reopen catches the lazy indexer mid-run; the
+    // grace poll must retry until it completes, keeping the overlay intact
+    let calls = 0
+    const rawReadFormula = io.readFormulaCells.bind(io)
+    io.readFormulaCells = async (input: { sessionId: string; sheetId: string }) => {
+      calls += 1
+      const reply = (await rawReadFormula(input)) as Record<string, unknown>
+      return calls === 1 ? { ...reply, indexingComplete: false } : reply
+    }
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 100 }] })
+    const saved = await session.save(bookPath)
+    expect(saved.warnings).toEqual([])
+    expect(calls).toBeGreaterThanOrEqual(2)
+    expect(saveCalls[0]?.formulaValues).toEqual([
+      { sheetName: 'Sheet1', cells: [{ row: 2, column: 0, value: 103 }] },
+    ])
+  })
+
+  it('batched recalc chunks merge into one correct overlay (>20k formula cells)', async () => {
+    const bookPath = join(root, 'many-formulas.xlsx')
+    await writeFile(bookPath, 'stub-xlsx-bytes')
+    const io = makeStubIo()
+    // 25 000 indexed formula cells (rows 0..24 999, column B): the sidecar's
+    // 20k read budget forces two chunks — the overlay must carry every
+    // chunk's values exactly once, in chunk order, deduped
+    const total = 25_000
+    const formulaCells = Array.from({ length: total }, (_, row) => ({
+      sheetId: 'sheet-0',
+      row,
+      column: 1,
+      value: row,
+    }))
+    const rawReadFormula = io.readFormulaCells.bind(io)
+    io.readFormulaCells = async (input: { sessionId: string; sheetId: string }) => ({
+      ...((await rawReadFormula(input)) as Record<string, unknown>),
+      cells: input.sheetId === 'sheet-0' ? formulaCells : [],
+      indexingComplete: true,
+      truncated: false,
+    })
+    io.recalcCells = async (input: {
+      path: string
+      edits: unknown
+      reads: readonly { sheet: string; range: { startRow: number; endRow: number } }[]
+    }) => {
+      io.calls.recalcCells.push(input.path)
+      io.recalcRequests.push({
+        path: input.path,
+        edits: [],
+        reads: input.reads.map((read) => ({
+          sheet: read.sheet,
+          range: { startRow: read.range.startRow, endRow: read.range.endRow },
+        })),
+      })
+      return {
+        cells: input.reads.map((read) => ({
+          sheet: read.sheet,
+          row: read.range.startRow,
+          column: 1,
+          number: read.range.startRow + 1,
+          isFormula: true,
+        })),
+      }
+    }
+    const session = await XlsxSession.open(bookPath, root, io)
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 100 }] })
+    const saved = await session.save(bookPath)
+    expect(saved.warnings).toEqual([])
+    expect(io.recalcRequests).toHaveLength(2)
+    expect(io.recalcRequests[0]?.reads).toHaveLength(20_000)
+    expect(io.recalcRequests[1]?.reads).toHaveLength(5_000)
+    const overlay = saveCalls[0]?.formulaValues as Array<{
+      sheetName: string
+      cells: Array<{ row: number; column: number; value: number }>
+    }>
+    expect(overlay).toHaveLength(1)
+    expect(overlay[0]?.cells).toHaveLength(total)
+    expect(overlay[0]?.cells[0]).toEqual({ row: 0, column: 1, value: 1 })
+    expect(overlay[0]?.cells[19_999]).toEqual({ row: 19_999, column: 1, value: 20_000 })
+    expect(overlay[0]?.cells[20_000]).toEqual({ row: 20_000, column: 1, value: 20_001 })
+    expect(overlay[0]?.cells[total - 1]).toEqual({ row: total - 1, column: 1, value: total })
+    // no chunk-seam duplicates: every row appears exactly once
+    const rows = new Set(overlay[0]?.cells.map((cell) => cell.row))
+    expect(rows.size).toBe(total)
+  })
+})

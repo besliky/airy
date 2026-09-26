@@ -726,6 +726,23 @@ export class XlsxSession {
     this.savedTargets.add(target)
     if (target === this.backingPath) {
       this.baseline = await statOrNull(this.backingPath)
+      // PERF-1778: the in-place save replaced the backing bytes with content
+      // the recalc engine's resident model already reflects (the overlay
+      // recalculated the same journal). Refresh the resident model's file
+      // stamp before the reopen below re-indexes, so the next save's overlay
+      // is a resident hit (~ms) instead of a whole-book IronCalc re-import
+      // (~20s on a 100k book, previously paid after every single save).
+      // Degraded overlays (recalcNote !== null) skip the restamp: the model
+      // may lack the saved edits, and only a rebuild from the file is safe.
+      // Best-effort by contract: a sidecar predating the command (or any
+      // transient error) keeps today's rebuild behavior.
+      if (recalcNote === null) {
+        try {
+          await this.io.restampRecalc(this.backingPath)
+        } catch {
+          // stamp stays stale; the next recalc rebuilds (pre-existing behavior)
+        }
+      }
       // the sidecar's in-memory index still reflects the pre-save file:
       // reopen the session so subsequent reads see the saved cells
       await this.reopenSidecar()
@@ -1008,17 +1025,26 @@ export class XlsxSession {
     }
   }
 
+  /**
+   * Refresh the sidecar's read index after an in-place save. The fresh
+   * session opens BEFORE the stale one closes (PERF-1778): the sidecar
+   * releases the resident recalc model only with the last session on the
+   * path, so the refresh keeps the model the restamp above just renewed —
+   * closing first used to drop it and force every save to pay a cold
+   * re-import. Failure ordering improves too: a failed open now leaves the
+   * old (stale-index) session alive instead of a closed one.
+   */
   private async reopenSidecar(): Promise<void> {
     const previous = this.sessionId
+    const openInfo = parseOpenResult(await this.io.open(this.backingPath))
+    this.sessionId = openInfo.sessionId
+    this.sheets = openInfo.sheets
+    this.activeSheetIndex = openInfo.activeTab
     try {
       await this.io.close(previous)
     } catch {
       // a stale session leak is preferable to failing a completed save
     }
-    const openInfo = parseOpenResult(await this.io.open(this.backingPath))
-    this.sessionId = openInfo.sessionId
-    this.sheets = openInfo.sheets
-    this.activeSheetIndex = openInfo.activeTab
   }
 
   // ---- lifecycle ----

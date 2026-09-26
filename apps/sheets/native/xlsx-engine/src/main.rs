@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
+use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -89,6 +90,13 @@ enum Command {
         edits: Vec<RecalcEdit>,
         reads: Vec<RecalcRead>,
     },
+    /// PERF-1778: after an in-place save whose recalculation just applied
+    /// the journal to the resident model, the client restamps the model to
+    /// the rewritten file so the next recalculation is a resident hit
+    /// instead of a whole-book re-import. Best-effort by contract: clients
+    /// tolerate this failing on sidecars that predate the command.
+    #[serde(rename_all = "camelCase")]
+    RestampRecalc { path: PathBuf },
 }
 
 #[derive(Debug, Deserialize)]
@@ -143,6 +151,10 @@ struct RecalcWorker {
     /// lock for minutes; they queue here and apply at the next recalc. Safe
     /// to defer: recalc_cells re-imports on mtime+size mismatch anyway.
     pending_purges: Arc<Mutex<Vec<PathBuf>>>,
+    /// Restamps (PERF-1778) queue the same way when the cache lock is busy:
+    /// a deferred restamp merely costs the next recalc a rebuild, exactly
+    /// the pre-restamp behavior.
+    pending_restamps: Arc<Mutex<Vec<(PathBuf, SystemTime, u64)>>>,
     busy: Arc<AtomicBool>,
     /// Serializes prewarms against each other (two tabs opened at once must
     /// not import concurrently). Real recalcs never wait on this flag: they
@@ -165,6 +177,7 @@ impl RecalcWorker {
         Self {
             cache: Arc::new(Mutex::new(RecalcCache::new())),
             pending_purges: Arc::new(Mutex::new(Vec::new())),
+            pending_restamps: Arc::new(Mutex::new(Vec::new())),
             busy: Arc::new(AtomicBool::new(false)),
             prewarm_active: Arc::new(AtomicBool::new(false)),
         }
@@ -175,6 +188,46 @@ impl RecalcWorker {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .push(path.clone());
+    }
+
+    /// PERF-1778: an in-place save replaced the file bytes with content the
+    /// resident model already reflects (the save's own recalculation applied
+    /// the same journal edits), so the model's file stamp refreshes instead
+    /// of the model being dropped — the next save's recalculation is then a
+    /// resident hit instead of a whole-book re-import. A missing entry is a
+    /// no-op; a busy cache defers the restamp to the next recalc's drain.
+    fn restamp_now_or_queue(&self, path: &PathBuf) {
+        let Ok(metadata) = std::fs::metadata(path) else {
+            return;
+        };
+        let Ok(mtime) = metadata.modified() else {
+            return;
+        };
+        let size = metadata.len();
+        match self.cache.try_lock() {
+            Ok(mut cache) => cache.restamp(path, mtime, size),
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => {
+                poisoned.into_inner().restamp(path, mtime, size)
+            }
+            Err(std::sync::TryLockError::WouldBlock) => {
+                self.pending_restamps
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .push((path.clone(), mtime, size));
+            }
+        }
+    }
+
+    fn drain_restamps(&self, cache: &mut RecalcCache) {
+        let restamps: Vec<(PathBuf, SystemTime, u64)> = self
+            .pending_restamps
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .drain(..)
+            .collect();
+        for (path, mtime, size) in restamps {
+            cache.restamp(&path, mtime, size);
+        }
     }
 
     /// Close must reclaim the resident model right away when it can: a queued
@@ -214,6 +267,7 @@ impl RecalcWorker {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         self.drain_purges(&mut cache);
+        self.drain_restamps(&mut cache);
         let response = match recalc_cells(&mut cache, path, edits, reads).and_then(to_json_value) {
             Ok(value) => Response::success(request_id, value),
             Err(error) => Response::from_error(request_id, error),
@@ -250,6 +304,7 @@ impl RecalcWorker {
         let worker = Self {
             cache: Arc::clone(&self.cache),
             pending_purges: Arc::clone(&self.pending_purges),
+            pending_restamps: Arc::clone(&self.pending_restamps),
             busy: Arc::clone(&self.busy),
             prewarm_active: Arc::clone(&self.prewarm_active),
         };
@@ -322,6 +377,7 @@ impl RecalcWorker {
         let worker = Self {
             cache: Arc::clone(&self.cache),
             pending_purges: Arc::clone(&self.pending_purges),
+            pending_restamps: Arc::clone(&self.pending_restamps),
             busy: Arc::clone(&self.busy),
             prewarm_active: Arc::clone(&self.prewarm_active),
         };
@@ -338,17 +394,20 @@ impl RecalcWorker {
                     .cache
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
-                let epoch_before = cache.purge_epoch();
+                let epoch_before = cache.purge_epoch(&path);
                 worker.drain_purges(&mut cache);
+                worker.drain_restamps(&mut cache);
                 // recalc_cells does the whole cold path — import, pin,
                 // evaluate, residency insert with its eviction rules — and
                 // contains its own panics; the value is discarded.
                 let _ = recalc_cells(&mut cache, &path, &[], &[]);
-                // A purge in between (close/save racing the build) means the
-                // workbook this model belongs to is gone or superseded: drop
-                // the fresh entry instead of pinning megabytes for a dead
-                // session until some later eviction.
-                if cache.purge_epoch() != epoch_before {
+                // A purge of THIS path in between (a close racing the build —
+                // applied by the drain above) means the workbook the model
+                // belongs to is gone or superseded: drop the fresh entry
+                // instead of pinning megabytes for a dead session until some
+                // later eviction. Purges of other paths (each save queues one
+                // for the gateway's temp target) must not count here.
+                if cache.purge_epoch(&path) != epoch_before {
                     cache.purge(&path);
                 }
                 worker.drain_purges(&mut cache);
@@ -577,8 +636,12 @@ fn handle_request(
         Command::Close { session_id } => {
             // A resident recalc model can dwarf the session itself (an
             // 8.8M-cell workbook's model holds ~1.2GB) — it must not outlive
-            // the tab that needed it.
-            if let Some(path) = sessions.session_path(&session_id) {
+            // the last session that uses it. An index refresh (PERF-1778)
+            // opens the fresh session before closing the stale one, so the
+            // surviving session keeps the model warm.
+            if let Some(path) = sessions.session_path(&session_id)
+                && sessions.is_last_session_for_path(&session_id)
+            {
                 recalc.purge_now_or_queue(&path);
             }
             sessions
@@ -652,6 +715,10 @@ fn handle_request(
         }
         Command::RecalcCells { path, edits, reads } => {
             return recalc.dispatch(request_id, path, edits, reads, output);
+        }
+        Command::RestampRecalc { path } => {
+            recalc.restamp_now_or_queue(&path);
+            to_json_value(serde_json::json!({ "restamped": true }))
         }
     };
     Some(match result {
@@ -870,6 +937,119 @@ mod tests {
         assert_eq!(recalc.pending_purges.lock().unwrap().len(), 1);
     }
 
+    /// PERF-1778: an index refresh opens the fresh session before closing
+    /// the stale one, so the close is not the last session on the path and
+    /// must not drop the resident model; the final close does.
+    #[test]
+    fn close_keeps_the_model_while_a_sibling_session_survives() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("open.xlsx");
+        write_workbook(&source);
+        let mut sessions = WorkbookSessions::new();
+        let recalc = RecalcWorker::new();
+        let output: SharedOutput = Arc::new(Mutex::new(BufWriter::new(io::stdout())));
+        let open_line = |id: &str| {
+            serde_json::json!({
+                "version": 1,
+                "requestId": id,
+                "command": "open",
+                "path": source,
+            })
+            .to_string()
+        };
+        let close_line = |id: &str, target: &str| {
+            serde_json::json!({
+                "version": 1,
+                "requestId": id,
+                "command": "close",
+                "sessionId": target,
+            })
+            .to_string()
+        };
+        let first = expect_ok(
+            handle_line(
+                &open_line("o1"),
+                &mut sessions,
+                &recalc,
+                &CancelledRequests::new(),
+                &output,
+            )
+            .unwrap(),
+        );
+        let second = expect_ok(
+            handle_line(
+                &open_line("o2"),
+                &mut sessions,
+                &recalc,
+                &CancelledRequests::new(),
+                &output,
+            )
+            .unwrap(),
+        );
+        let session_one = first["sessionId"].as_str().unwrap().to_owned();
+        let session_two = second["sessionId"].as_str().unwrap().to_owned();
+
+        expect_ok(recalc.run("r".into(), &source, &[], &recalc_reads()));
+        let warm = expect_ok(recalc.run("r2".into(), &source, &[], &recalc_reads()));
+        assert_eq!(warm["cached"], serde_json::json!(true));
+
+        // Refresh flow: close one of the two sessions — the model survives.
+        expect_ok(
+            handle_line(
+                &close_line("c1", &session_one),
+                &mut sessions,
+                &recalc,
+                &CancelledRequests::new(),
+                &output,
+            )
+            .unwrap(),
+        );
+        let kept = expect_ok(recalc.run("r3".into(), &source, &[], &recalc_reads()));
+        assert_eq!(kept["cached"], serde_json::json!(true));
+
+        // The last close on the path still releases the model.
+        expect_ok(
+            handle_line(
+                &close_line("c2", &session_two),
+                &mut sessions,
+                &recalc,
+                &CancelledRequests::new(),
+                &output,
+            )
+            .unwrap(),
+        );
+        let rebuilt = expect_ok(recalc.run("r4".into(), &source, &[], &recalc_reads()));
+        assert_eq!(rebuilt["cached"], serde_json::json!(false));
+    }
+
+    /// PERF-1778: the restamp command renews the resident model's stamp to
+    /// the rewritten file, so the next recalculation is a resident hit.
+    #[test]
+    fn restamp_command_keeps_the_next_recalc_warm() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("open.xlsx");
+        write_workbook(&source);
+        let recalc = RecalcWorker::new();
+
+        expect_ok(recalc.run("r".into(), &source, &[], &recalc_reads()));
+        let warm = expect_ok(recalc.run("r2".into(), &source, &[], &recalc_reads()));
+        assert_eq!(warm["cached"], serde_json::json!(true));
+
+        // The save rewrote the file; without a restamp the next recalc
+        // rebuilds (mtime drift), with it the model stays warm.
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let mut model = Model::new_empty("fixture", "en", "UTC", "en").unwrap();
+        model.set_user_input(0, 1, 1, "10".to_string()).unwrap();
+        model.set_user_input(0, 2, 1, "=A1*2".to_string()).unwrap();
+        model.evaluate();
+        std::fs::remove_file(&source).unwrap();
+        ironcalc::export::save_to_xlsx(&model, source.to_str().unwrap()).unwrap();
+        recalc.restamp_now_or_queue(&source);
+
+        let kept = expect_ok(recalc.run("r3".into(), &source, &[], &recalc_reads()));
+        assert_eq!(kept["cached"], serde_json::json!(true));
+    }
+
     /// While one recalculation is in flight, a second request short-circuits
     /// with recalc_busy instead of queueing behind the import.
     #[test]
@@ -968,6 +1148,42 @@ mod tests {
         assert_eq!(first["cached"], serde_json::json!(true));
         // And the prewarm flag was released with the prewarm thread.
         assert!(!recalc.prewarm_active.load(Ordering::Acquire));
+    }
+
+    /// PERF-1778: every save queues a purge for the gateway's TEMP target;
+    /// that unrelated-path purge must not trip the prewarm's build guard into
+    /// discarding the model it just reused for its own (restamped) workbook —
+    /// the guard is per-path.
+    #[test]
+    fn prewarm_keeps_the_model_when_an_unrelated_path_was_purged() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("open.xlsx");
+        write_workbook(&source);
+        let recalc = RecalcWorker::new();
+
+        expect_ok(recalc.run("r".into(), &source, &[], &recalc_reads()));
+
+        // The in-place save replaced the bytes and the client restamped...
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let mut model = Model::new_empty("fixture", "en", "UTC", "en").unwrap();
+        model.set_user_input(0, 1, 1, "10".to_string()).unwrap();
+        model.set_user_input(0, 2, 1, "=A1*2".to_string()).unwrap();
+        model.evaluate();
+        std::fs::remove_file(&source).unwrap();
+        ironcalc::export::save_to_xlsx(&model, source.to_str().unwrap()).unwrap();
+        recalc.restamp_now_or_queue(&source);
+        // ...and the save queued a purge for its (unrelated) temp target.
+        let temp_target = dir.path().join(".tmp-target.xlsx");
+        recalc.queue_purge(&temp_target);
+
+        recalc.prewarm_within(&source, 1, u64::MAX);
+        assert!(wait_for(&recalc.cache, |cache| {
+            cache.has_resident(&source) && !recalc.prewarm_active.load(Ordering::Acquire)
+        }));
+
+        // The model survived the overlapping save: the next recalc is a hit.
+        let next = expect_ok(recalc.run("r2".into(), &source, &[], &recalc_reads()));
+        assert_eq!(next["cached"], serde_json::json!(true));
     }
 
     /// Books outside the size window keep today's on-demand behavior: tiny

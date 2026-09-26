@@ -137,11 +137,13 @@ struct ResidentModel {
 pub struct RecalcCache {
     entries: HashMap<PathBuf, ResidentModel>,
     tick: u64,
-    /// Bumped by every `purge()`. The background prewarm compares it across
-    /// the model build: any purge in between (a close of this workbook, a
-    /// save over it — possibly for an unrelated path, which merely costs a
-    /// rebuild later) means the just-built model must not stay resident.
-    purge_epoch: u64,
+    /// Per-path purge counters (PERF-1778). The prewarm's build guard compares
+    /// the counter of ITS OWN path before and after the build; a single global
+    /// epoch misfired on every queued purge of an unrelated path — the gateway
+    /// hands save_archive a temp target, so each in-place save queued a purge
+    /// the next prewarm counted and discarded the model it had just reused,
+    /// making every save pay a whole-book re-import again.
+    purge_epochs: HashMap<PathBuf, u64>,
 }
 
 impl RecalcCache {
@@ -150,15 +152,36 @@ impl RecalcCache {
     }
 
     /// Drop the model for a path whose bytes are about to change (save) or
-    /// whose session closed.
+    /// whose session closed. Counted even when nothing is resident: the count
+    /// is what a concurrent prewarm reads to detect that its workbook was
+    /// superseded while the build held the cache lock.
     pub fn purge(&mut self, path: &Path) {
-        self.purge_epoch += 1;
+        *self.purge_epochs.entry(cache_key(path)).or_default() += 1;
         self.entries.remove(&cache_key(path));
     }
 
-    /// Current purge epoch (read by the prewarm around the model build).
-    pub fn purge_epoch(&self) -> u64 {
-        self.purge_epoch
+    /// Refresh the resident entry's file stamp after the file was rewritten
+    /// in place with content the model already reflects (PERF-1778: an
+    /// in-place save whose own recalculation just applied the same edits and
+    /// baked their results into the saved bytes). Clearing the applied-edit
+    /// set goes with the stamp: the saved file now embodies those edits, so
+    /// they are no longer model-only deltas and the residency filter must
+    /// not demand a rebuild over them. A missing entry restamps nothing.
+    pub fn restamp(&mut self, path: &Path, mtime: SystemTime, size: u64) {
+        if let Some(entry) = self.entries.get_mut(&cache_key(path)) {
+            entry.mtime = mtime;
+            entry.size = size;
+            entry.applied.clear();
+        }
+    }
+
+    /// How many times `path` was purged (read by the prewarm around the
+    /// model build).
+    pub fn purge_epoch(&self, path: &Path) -> u64 {
+        self.purge_epochs
+            .get(&cache_key(path))
+            .copied()
+            .unwrap_or(0)
     }
 
     /// Whether any resident model is held (used by the sidecar's tests).
@@ -1014,6 +1037,84 @@ mod tests {
         cache.purge(&path);
         let result = recalc_cells(&mut cache, &path, &[], &[read_a1_a3()]).unwrap();
         assert!(!result.cached);
+    }
+
+    /// PERF-1778: after an in-place save whose recalculation applied the
+    /// journal, `restamp` renews the file stamp and clears the applied-edit
+    /// set, so the next request — even one whose edit set no longer covers
+    /// the previously applied cells (a fresh journal) — is still a resident
+    /// hit: the saved file embodies those edits, no rebuild can know better.
+    #[test]
+    fn restamp_keeps_the_model_resident_across_an_in_place_save() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("recalc.xlsx");
+        fixture(&path);
+        let mut cache = RecalcCache::new();
+        let first = recalc_cells(&mut cache, &path, &[edit("A1", "100")], &[read_a1_a3()]).unwrap();
+        assert_eq!(sum_value(&first), "120");
+
+        // The save rewrote the file (new mtime) with content the model
+        // already reflects; the client restamps instead of purging.
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        write_fixture(&path, &[("A1", "100"), ("A2", "20"), ("A3", "=SUM(A1:A2)")]);
+        let metadata = std::fs::metadata(&path).unwrap();
+        let mtime = metadata.modified().unwrap();
+        cache.restamp(&path, mtime, metadata.len());
+
+        // A fresh journal (edit set shrank to one new cell) must not force
+        // the rebuild the applied-set filter used to demand...
+        let second = recalc_cells(
+            &mut cache,
+            &path,
+            &[edit("A2", "5")],
+            &[RecalcRead {
+                sheet: "Sheet1".into(),
+                range: CellRange {
+                    start_row: 2,
+                    end_row: 2,
+                    start_column: 0,
+                    end_column: 0,
+                },
+            }],
+        )
+        .unwrap();
+        assert!(second.cached);
+        // ...and the recomputation stays correct: A3 = 100 + 5.
+        assert_eq!(sum_value(&second), "105");
+    }
+
+    /// Without the restamp (a degraded save sent no command), the rewritten
+    /// file's stamp mismatches and the next recalc rebuilds from the file —
+    /// the model the save left behind must not survive as authoritative.
+    #[test]
+    fn a_rewritten_file_still_forces_a_rebuild_without_the_restamp() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("recalc.xlsx");
+        fixture(&path);
+        let mut cache = RecalcCache::new();
+        recalc_cells(&mut cache, &path, &[edit("A1", "100")], &[read_a1_a3()]).unwrap();
+        // wait out the mtime tick so the rewrite is observable
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        write_fixture(&path, &[("A1", "100"), ("A2", "20"), ("A3", "=SUM(A1:A2)")]);
+        let second = recalc_cells(&mut cache, &path, &[edit("A2", "5")], &[read_a1_a3()]).unwrap();
+        assert!(!second.cached);
+        assert_eq!(sum_value(&second), "105");
+    }
+
+    /// Restamping a path without a resident entry is a silent no-op (the
+    /// next recalc rebuilds, exactly like the pre-restamp behavior).
+    #[test]
+    fn restamp_without_a_resident_entry_is_a_no_op() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("recalc.xlsx");
+        fixture(&path);
+        let mut cache = RecalcCache::new();
+        let stamped = std::fs::metadata(&path).unwrap().modified().unwrap();
+        cache.restamp(&path, stamped, 1);
+        assert!(cache.is_empty());
+        let result = recalc_cells(&mut cache, &path, &[edit("A1", "7")], &[read_a1_a3()]).unwrap();
+        assert!(!result.cached);
+        assert_eq!(sum_value(&result), "27");
     }
 
     #[test]

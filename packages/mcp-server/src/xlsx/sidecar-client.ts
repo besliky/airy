@@ -114,6 +114,14 @@ export interface XlsxIo {
       }
     }[]
   }): Promise<unknown>
+  /**
+   * PERF-1778: after an in-place save whose recalc overlay just succeeded,
+   * refresh the sidecar's resident recalc model to the rewritten file so
+   * the next save's overlay is a resident hit instead of a whole-book
+   * re-import. Sidecars predating the command answer a request error —
+   * callers treat this as best-effort and keep the rebuild behavior.
+   */
+  restampRecalc(path: string): Promise<unknown>
   close(sessionId: string): Promise<void>
   convertWorkbook(input: { readonly path: string; readonly targetPath: string }): Promise<unknown>
   archiveManifest(path: string): Promise<unknown>
@@ -194,6 +202,11 @@ export class XlsxSidecarClient implements XlsxIo {
     // the recalc worker runs the IronCalc import + evaluation off the request
     // loop; a cold import alone can take seconds, so give it the archive budget
     return this.request({ command: 'recalc_cells', ...input }, ARCHIVE_TIMEOUT_MS)
+  }
+
+  async restampRecalc(path: string): Promise<unknown> {
+    // a metadata read + stamp write: plain request budget is plenty
+    return this.request({ command: 'restamp_recalc', path })
   }
 
   async close(sessionId: string): Promise<void> {

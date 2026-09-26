@@ -56,6 +56,8 @@ export interface StubIoOptions {
   /** evaluated cells recalc_cells reports (and optionally the error it raises) */
   recalcCells?: readonly StubRecalcCell[]
   recalcError?: Error
+  /** error the stub restamp_recalc raises (simulates a pre-PERF-1778 sidecar) */
+  restampError?: Error
   openError?: Error
   /** raw byte length the stub open reply reports (real sidecars always
    * send it; omitted → the reply has no rawBytes, the pre-BUG-1305 shape) */
@@ -74,6 +76,7 @@ export interface StubIo extends XlsxIo {
     convert: string[]
     readFormulaCells: string[]
     recalcCells: string[]
+    restampRecalc: string[]
   }
   /** every read_range request's range as "r0..r1 x c0..c1" (0-based, inclusive) */
   readonly readRanges: string[]
@@ -97,6 +100,7 @@ export function makeStubIo(options: StubIoOptions = {}): StubIo {
     convert: [] as string[],
     readFormulaCells: [] as string[],
     recalcCells: [] as string[],
+    restampRecalc: [] as string[],
   }
   const readRanges: string[] = []
   const recalcRequests: StubIo['recalcRequests'] = []
@@ -167,6 +171,11 @@ export function makeStubIo(options: StubIoOptions = {}): StubIo {
       })
       if (options.recalcError) throw options.recalcError
       return { cells: [...(options.recalcCells ?? [])] }
+    },
+    async restampRecalc(path: string) {
+      calls.restampRecalc.push(path)
+      if (options.restampError) throw options.restampError
+      return { restamped: true }
     },
     async close(sessionId: string) {
       calls.close.push(sessionId)
