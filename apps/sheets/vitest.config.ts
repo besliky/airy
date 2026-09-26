@@ -17,6 +17,7 @@ const NEED_ISOLATION = [
   'tests/rtl-rich-text.test.ts',
   // Files that register `vi.mock` module mocks: a mock left in the shared
   // module graph poisons whichever unrelated file runs next in that worker.
+  'tests/accessibility-policy.test.ts',
   'tests/csv-save-back-atomic.test.ts',
   'tests/column-width-mdw.test.ts',
   'tests/column-width-narrow.test.ts',
