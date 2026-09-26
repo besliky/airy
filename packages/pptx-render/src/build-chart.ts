@@ -9,11 +9,12 @@
  * independent right-side range + tick labels). Unrecognized types fall back to a
  * placeholder chip upstream.
  */
-import type { ChartModel } from '@airy-office/pptx-engine'
+import type { ChartModel, ChartTrendline } from '@airy-office/pptx-engine'
 import type { ChartRenderNode } from './render-tree'
 import type { PlacedBox } from './coords'
 import { emuToPx, ptToPx, type Viewport } from './coords'
 import type { FontMetricsProvider, RunStyle } from './metrics'
+import { formatRSquared, formatTrendEquation, linearFit, type LinearFit } from './trendline'
 
 /** Default series palette (approximation of PowerPoint's default theme accent sequence). */
 const PALETTE = ['#4472C4', '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5', '#70AD47']
@@ -113,6 +114,65 @@ function dashArray(val: string | undefined, widthPx: number): number[] {
     default:
       return [4 * u, 3 * u]
   }
+}
+
+/**
+ * One linear trendline (c:trendline): a dashed segment across the plot with the
+ * y endpoints clamped into the plot area, plus the optional equation / R² tag
+ * floating just above the right end. PowerPoint's default trendline formatting
+ * is a dashed line in the series color — an explicit c:spPr color/dash wins,
+ * and an explicit `prstDash solid` from a foreign file still renders dashed
+ * (the parser models non-solid dashes only — documented approximation).
+ *
+ * `dataX0/dataX1` are the fit's domain values at the segment ends (category
+ * ordinals or scatter x), `pxX0/pxX1` their pixel positions; `yAt` maps a fit
+ * value to pixel y.
+ */
+function pushTrendline(
+  node: ChartRenderNode,
+  tl: ChartTrendline,
+  fit: LinearFit,
+  dataX0: number,
+  dataX1: number,
+  pxX0: number,
+  pxX1: number,
+  yAt: (v: number) => number,
+  plot: { x: number; y: number; w: number; h: number },
+  fallbackColor: string,
+  widthPx: number,
+  measure: (t: string, sizePx: number) => number,
+  tagFontPx: number,
+): void {
+  const clampY = (v: number) => Math.min(Math.max(yAt(v), plot.y), plot.y + plot.h)
+  const yStart = clampY(fit.slope * dataX0 + fit.intercept)
+  const yEnd = clampY(fit.slope * dataX1 + fit.intercept)
+  node.polylines.push({
+    points: [pxX0, yStart, pxX1, yEnd],
+    color: tl.color ?? fallbackColor,
+    widthPx,
+    dash: tl.dash ? dashArray(tl.dash, widthPx) : [4, 3],
+  })
+  const tags = [
+    ...(tl.dispEq ? [formatTrendEquation(fit.slope, fit.intercept)] : []),
+    ...(tl.dispRSqr ? [formatRSquared(fit.r2)] : []),
+  ]
+  if (!tags.length) return
+  // PowerPoint floats the label just above the line's right end, kept inside the plot
+  const textW = Math.max(...tags.map((t) => measure(t, tagFontPx)))
+  const tx = Math.min(Math.max(pxX1 - textW / 2, plot.x + 2), plot.x + plot.w - textW - 2)
+  const ty = Math.min(
+    Math.max(yEnd - tagFontPx * 1.35 * tags.length, plot.y + 2),
+    plot.y + plot.h - tagFontPx * 1.25 * tags.length,
+  )
+  tags.forEach((t, k) => {
+    node.labels.push({
+      text: t,
+      x: tx,
+      y: ty + k * tagFontPx * 1.25,
+      fontSizePx: tagFontPx,
+      color: '#404040',
+    })
+  })
 }
 
 export function buildChartNode(
@@ -239,6 +299,7 @@ function buildChartNodeInner(
   metrics: FontMetricsProvider,
 ): ChartRenderNode | null {
   if (model.kind === 'pie') return buildPieNode(id, sourceId, model, box, vp, metrics)
+  if (model.kind === 'pieOfPie') return buildPieOfPieNode(id, sourceId, model, box, vp, metrics)
   if (model.kind === 'scatter') return buildScatterNode(id, sourceId, model, box, vp, metrics)
   if (model.kind === 'radar') return buildRadarNode(id, sourceId, model, box, vp, metrics)
   if (model.kind === 'funnel') return buildFunnelNode(id, sourceId, model, box, vp, metrics)
@@ -1087,6 +1148,44 @@ function buildChartNodeInner(
     })
   }
 
+  // ── Linear trendlines (c:trendline, least squares over the series values) ──
+  // Fit runs over category ordinals 0..n-1 (percent-stacked series use their
+  // normalized plot values); the segment spans the full category range and is
+  // clamped into the plot area like PowerPoint's.
+  {
+    const trendW = Math.max(1.5, ptToPx(1.5, vp.scale))
+    const tagFontPx = labelSizePx * 0.9
+    model.series.forEach((ser, si) => {
+      if (!ser.trendlines?.length) return
+      const pairs: Array<{ x: number; y: number }> = []
+      for (let i = 0; i < n; i++) {
+        const v = valueAt(si, i)
+        if (v != null) pairs.push({ x: i, y: v })
+      }
+      const fit = linearFit(pairs)
+      if (!fit) return
+      const yOfSer = onSecAxis(ser) ? yOf2 : yOf
+      const pxAt = (i: number) => plot.x + catSlot(i) * slotW + slotW / 2
+      for (const tl of ser.trendlines) {
+        pushTrendline(
+          node,
+          tl,
+          fit,
+          0,
+          n - 1,
+          pxAt(0),
+          pxAt(n - 1),
+          yOfSer,
+          plot,
+          seriesColor(si)!,
+          tl.widthPt ? Math.max(1, ptToPx(tl.widthPt, vp.scale)) : trendW,
+          (t, px) => measure(t, px),
+          tagFontPx,
+        )
+      }
+    })
+  }
+
   // ── Stock whiskers / up-down bars ────────────────────────────────
   if (model.stock) {
     const stockSers = model.series.filter((s) => s.fromStock)
@@ -1539,6 +1638,274 @@ function buildPieNode(
           fontSizePx: labelSizePx,
           color: labelColor,
         })
+        y += legendRowH
+      }
+    }
+  }
+
+  return node
+}
+
+/**
+ * Pie-of-pie (c:ofPieChart): a main pie whose trailing small slices move into a
+ * secondary chart to the right. The auto split moves the trailing slices whose
+ * cumulative share stays ≤ splitPos% of the total (other split types fall back
+ * to it — parser documents the limitation). The main pie draws one aggregated
+ * "other" wedge (a darkened tint of the first moved slice's color); the
+ * secondary keeps per-slice palette colors, with the two plot-boundary
+ * connector lines for a 'pie' secondary. c:ofPieType="bar" renders the
+ * secondary as a vertical stacked bar instead (connectors skipped). Legends use
+ * the plain top/bottom/side layout (no manual layout / RTL mirroring here).
+ */
+function buildPieOfPieNode(
+  id: string,
+  sourceId: string,
+  model: ChartModel,
+  box: PlacedBox,
+  vp: Viewport,
+  metrics: FontMetricsProvider,
+): ChartRenderNode | null {
+  const ser = model.series[0]
+  if (!ser) return null
+  const vals = ser.values.map((v) => (v != null && v > 0 ? v : 0))
+  const total = vals.reduce((a, b) => a + b, 0)
+  if (total <= 0) return null
+  const cfg = model.pieOfPie ?? {
+    type: 'pie' as const,
+    splitPos: 10,
+    secondPieSizePct: 75,
+    gapWidthPct: 100,
+  }
+
+  // Auto split: from the end, keep moving slices while the cumulative share stays ≤ threshold
+  const secShare = Math.min(Math.max(cfg.splitPos ?? 10, 0), 100) / 100
+  let secStart = vals.length
+  for (let i = vals.length - 1, acc = 0; i >= 1; i--) {
+    const v = vals[i]!
+    if (v <= 0) {
+      secStart = i
+      continue
+    }
+    if (acc + v > secShare * total) break
+    acc += v
+    secStart = i
+  }
+  const secTotal = vals.slice(secStart).reduce((a, b) => a + b, 0)
+  // Nothing small enough to split off: a plain pie
+  if (secTotal <= 0) return buildPieNode(id, sourceId, model, box, vp, metrics)
+
+  const node: ChartRenderNode = {
+    id,
+    type: 'chart',
+    box,
+    sourceId,
+    gridLines: [],
+    axisLines: [],
+    labels: [],
+    bars: [],
+    polylines: [],
+    markers: [],
+    swatches: [],
+    wedges: [],
+  }
+  const labelSizePx = ptToPx(chartTextPt(model), vp.scale)
+  const labelColor = model.valAxis?.labelColor ?? chartLabelDefault(model)
+  const style: RunStyle = {
+    fontFamily: LABEL_FONT,
+    fontSizePx: labelSizePx,
+    bold: false,
+    italic: false,
+  }
+  const measure = (text: string) => metrics.measure(text, style)
+  const palette = chartPalette(model)
+  const sliceColor = (i: number) =>
+    ser.pointColors?.[i] ??
+    (model.varyColors === false ? (ser.color ?? palette[0]!) : palette[i % palette.length]!)
+  const wedgeStroke = (i: number): { stroke?: string; strokeWidthPx?: number } => {
+    const ln = ser.pointLines?.[i]
+    if (!ln) return {}
+    if (ln.color === null) return { strokeWidthPx: 0 }
+    return {
+      stroke: ln.color,
+      ...(ln.widthPt != null ? { strokeWidthPx: ptToPx(ln.widthPt, vp.scale) } : {}),
+    }
+  }
+  const pad = Math.max(6, Math.min(box.w, box.h) * 0.03)
+
+  // Legend space (same reservation shape as the plain pie, simplified placement)
+  const legendPos = model.legendPos
+  const legendItems = model.categories
+    .slice(0, vals.length)
+    .map((cat, i) => ({ label: cat, color: sliceColor(i) }))
+  const legendRowH = labelSizePx * 1.5
+  let plotW = box.w - pad * 2
+  let plotH = box.h - pad * 2
+  let plotX = pad
+  let plotY = pad
+  const sideLegendW =
+    legendPos === 'l' || legendPos === 'r' || legendPos === 'tr'
+      ? Math.min(
+          box.w * 0.4,
+          Math.max(...legendItems.map((it) => measure(it.label)), 0) + labelSizePx * 2.2,
+        )
+      : 0
+  if (legendPos === 'r' || legendPos === 'tr') plotW -= sideLegendW
+  else if (legendPos === 'l') {
+    plotW -= sideLegendW
+    plotX += sideLegendW
+  } else if (legendPos === 't') {
+    plotY += legendRowH
+    plotH -= legendRowH
+  } else if (legendPos === 'b') plotH -= legendRowH
+
+  // Diameters: secD = secSizeK·mainD, gap = gapK·secR; mainD fills the leftover width, capped by the height
+  const secSizeK = Math.min(Math.max(cfg.secondPieSizePct ?? 75, 10), 200) / 100
+  const gapK = Math.max(cfg.gapWidthPct ?? 100, 0) / 100
+  let mainD = plotW / (1 + secSizeK + (gapK * secSizeK) / 2)
+  mainD = Math.min(mainD, plotH)
+  const secD = secSizeK * mainD
+  const gap = (gapK * secD) / 2
+  const x0 = plotX + (plotW - (mainD + gap + secD)) / 2
+  const mainR = mainD / 2
+  const secR = secD / 2
+  const cxM = x0 + mainR
+  const cxS = x0 + mainD + gap + secR
+  const cyM = plotY + plotH / 2
+  const cyS = plotY + plotH / 2
+  const startA = -90 + (model.firstSliceAngDeg ?? 0)
+
+  // Percent data labels (of the grand total, PowerPoint-style) at the wedge midline
+  const showLabels = !!model.dataLabels || !!model.dataLabelsPct
+  const wedgeLabel = (cx: number, cy: number, r: number, a: number, sweep: number, v: number) => {
+    if (!showLabels) return
+    const mid = ((a + sweep / 2) * Math.PI) / 180
+    const text = `${Math.round((v / total) * 100)}%`
+    const w = measure(text)
+    node.labels.push({
+      text,
+      x: cx + Math.cos(mid) * r * 0.66 - w / 2,
+      y: cy + Math.sin(mid) * r * 0.66 - labelSizePx * 0.55,
+      fontSizePx: labelSizePx * 0.9,
+      color: '#FFFFFF',
+    })
+  }
+
+  // Main pie: slices before the split point, then one aggregated "other" wedge
+  let a = startA
+  for (let i = 0; i < secStart; i++) {
+    const v = vals[i]!
+    if (v <= 0) continue
+    const sweep = (v / total) * 360
+    node.wedges!.push({
+      cx: cxM,
+      cy: cyM,
+      outerR: mainR,
+      innerR: 0,
+      startDeg: a,
+      sweepDeg: sweep,
+      color: sliceColor(i),
+      ...(ser.pointNoFill?.[i] ? { noFill: true } : {}),
+      ...wedgeStroke(i),
+    })
+    wedgeLabel(cxM, cyM, mainR, a, sweep, v)
+    a += sweep
+  }
+  const otherSweep = (secTotal / total) * 360
+  const otherColor = shade(sliceColor(secStart) ?? palette[0]!, 0.72)
+  node.wedges!.push({
+    cx: cxM,
+    cy: cyM,
+    outerR: mainR,
+    innerR: 0,
+    startDeg: a,
+    sweepDeg: otherSweep,
+    color: otherColor,
+  })
+  wedgeLabel(cxM, cyM, mainR, a, otherSweep, secTotal)
+  const otherEndDeg = a + otherSweep
+
+  if (cfg.type === 'pie') {
+    // Secondary pie + the two plot-boundary connector lines (serLines simplified to plain gray hairlines)
+    let sa = startA
+    for (let i = secStart; i < vals.length; i++) {
+      const v = vals[i]!
+      if (v <= 0) continue
+      const sweep = (v / secTotal) * 360
+      node.wedges!.push({
+        cx: cxS,
+        cy: cyS,
+        outerR: secR,
+        innerR: 0,
+        startDeg: sa,
+        sweepDeg: sweep,
+        color: sliceColor(i),
+        ...(ser.pointNoFill?.[i] ? { noFill: true } : {}),
+        ...wedgeStroke(i),
+      })
+      wedgeLabel(cxS, cyS, secR, sa, sweep, v)
+      sa += sweep
+    }
+    const ptAt = (cx: number, cy: number, r: number, deg: number) => ({
+      x: cx + Math.cos((deg * Math.PI) / 180) * r,
+      y: cy + Math.sin((deg * Math.PI) / 180) * r,
+    })
+    for (const deg of [startA, otherEndDeg]) {
+      const pm = ptAt(cxM, cyM, mainR, deg)
+      const ps = ptAt(cxS, cyS, secR, deg)
+      node.axisLines.push({ x1: pm.x, y1: pm.y, x2: ps.x, y2: ps.y, color: '#808080', widthPx: 1 })
+    }
+  } else {
+    // Secondary stacked bar (ofPieType="bar"): one column, slices stacked top-down
+    const barW = secD * 0.6
+    let yAcc = cyS - secR
+    for (let i = secStart; i < vals.length; i++) {
+      const v = vals[i]!
+      if (v <= 0) continue
+      const h = (v / secTotal) * secD
+      node.bars.push({
+        x: cxS - barW / 2,
+        y: yAcc,
+        w: barW,
+        h: Math.max(h, 0.5),
+        color: sliceColor(i),
+      })
+      yAcc += h
+    }
+  }
+
+  // Legend (plain layouts: one bottom/top row or a side column, no manual layout / RTL)
+  if (legendPos) {
+    const sw = labelSizePx * 0.5
+    const entry = (x: number, y: number, it: { label: string; color: string }) => {
+      node.swatches.push({
+        x,
+        y: y + labelSizePx * 0.25,
+        w: sw,
+        h: labelSizePx * 0.5,
+        color: it.color,
+      })
+      node.labels.push({
+        text: it.label,
+        x: x + sw + 4,
+        y,
+        fontSizePx: labelSizePx,
+        color: labelColor,
+      })
+    }
+    if (legendPos === 't' || legendPos === 'b') {
+      const itemWs = legendItems.map((it) => sw + 4 + measure(it.label) + labelSizePx * 0.5)
+      const totalW = itemWs.reduce((s, w) => s + w, 0)
+      let x = Math.max((box.w - totalW) / 2, pad)
+      const y = legendPos === 't' ? pad * 0.5 : box.h - pad * 0.5 - labelSizePx * 1.2
+      legendItems.forEach((it, i) => {
+        entry(x, y, it)
+        x += itemWs[i]!
+      })
+    } else {
+      const x = legendPos === 'l' ? pad : box.w - sideLegendW
+      let y = Math.max(cyM - (legendItems.length * legendRowH) / 2, pad)
+      for (const it of legendItems) {
+        entry(x, y, it)
         y += legendRowH
       }
     }
@@ -2563,6 +2930,37 @@ function buildScatterNode(
       })
     }
   })
+
+  // Linear trendlines (c:trendline): least squares over the real x/y pairs,
+  // drawn across the series' own x extent (endpoints clamped into the plot)
+  {
+    const trendW = Math.max(1.5, ptToPx(1.5, vp.scale))
+    const tagFontPx = labelSizePx * 0.9
+    model.series.forEach((ser, si) => {
+      if (!ser.trendlines?.length) return
+      const pts = points[si]
+      const fit = pts && pts.length >= 2 ? linearFit(pts) : null
+      if (!fit) return
+      const xs = pts!.map((p) => p.x)
+      for (const tl of ser.trendlines) {
+        pushTrendline(
+          node,
+          tl,
+          fit,
+          Math.min(...xs),
+          Math.max(...xs),
+          xOf(Math.min(...xs)),
+          xOf(Math.max(...xs)),
+          yOf,
+          plot,
+          seriesColor(si)!,
+          tl.widthPt ? Math.max(1, ptToPx(tl.widthPt, vp.scale)) : trendW,
+          measure,
+          tagFontPx,
+        )
+      }
+    })
+  }
 
   addSeriesLegend(node, model, box, plot, labelSizePx, measure, pad, seriesColor)
   return node

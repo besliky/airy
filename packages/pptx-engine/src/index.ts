@@ -261,6 +261,7 @@ export {
   parseChartXml,
   type ChartModel,
   type ChartSeries,
+  type ChartTrendline,
   type ChartKind,
   type ChartAxisStyle,
 } from './chart'
@@ -2796,7 +2797,9 @@ export function editChartElement(
               : existing.pseudo3D
                 ? 'pie3D'
                 : 'pie'
-            : (existing.kind as NewChartKind)
+            : existing.kind === 'pieOfPie'
+              ? 'pie'
+              : (existing.kind as NewChartKind)
   const kind: NewChartKind = patch.kind ?? derivedKind
   // Horizontal bar direction is preserved through rebuilds; an explicit type change resets it unless the patch asks for barDir 'bar' (the gallery's horizontal-bar entry)
   const barDir =
@@ -2852,6 +2855,9 @@ export function editChartElement(
   // A plain pie parses as holePct 0 — forwarding that would clamp a pie→doughnut
   // switch to a 1% hole, so only a real (nonzero) hole is preserved.
   const holeSizePct = patch.holeSizePct ?? (existing.holePct || undefined)
+  // A parsed linear trendline survives data/style-only rebuilds (first series carrying one)
+  const trendSerIdx = existing.series.findIndex((s) => s.trendlines?.length)
+  const trendSer = trendSerIdx >= 0 ? existing.series[trendSerIdx]!.trendlines![0] : undefined
 
   const opts: NewChartOptions = {
     kind,
@@ -2869,6 +2875,15 @@ export function editChartElement(
     ...(pointColors.some((row) => row?.some((c) => c != null)) ? { pointColors } : {}),
     ...(colorScheme ? { colorScheme } : {}),
     ...(holeSizePct != null ? { holeSizePct } : {}),
+    ...(trendSer
+      ? {
+          trendline: {
+            seriesIdx: trendSerIdx,
+            dispRSqr: !!trendSer.dispRSqr,
+            dispEq: !!trendSer.dispEq,
+          },
+        }
+      : {}),
   }
   const newXml = buildChartSpaceXml(opts)
   archive.entries.set(chartPath, Buffer.from(newXml, 'utf8'))

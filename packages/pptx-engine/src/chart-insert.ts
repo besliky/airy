@@ -61,6 +61,12 @@ export interface NewChartOptions extends ChartStyleOptions {
   colorScheme?: string[]
   /** Doughnut hole size (percent, c:holeSize, default 50) */
   holeSizePct?: number
+  /**
+   * Linear trendline on one series (c:trendline + c:trendlineType linear).
+   * Formatting stays at PowerPoint's defaults (dashed, series-colored — no
+   * c:spPr written); seriesIdx selects the series (default 0).
+   */
+  trendline?: { seriesIdx?: number; dispRSqr?: boolean; dispEq?: boolean }
 }
 
 const CHART_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml'
@@ -138,6 +144,18 @@ export function buildChartSpaceXml(opts: NewChartOptions): string {
     })
     return out
   }
+  // Linear trendline (c:trendline): schema position inside c:ser is after
+  // c:dLbls / c:dPt, before c:cat/c:val (scatter: before c:xVal/c:yVal)
+  const trendlineXml = (i: number): string => {
+    const tl = opts.trendline
+    if (!tl || (tl.seriesIdx ?? 0) !== i) return ''
+    return (
+      '<c:trendline><c:trendlineType val="linear"/>' +
+      (tl.dispRSqr ? '<c:dispRSqr val="1"/>' : '') +
+      (tl.dispEq ? '<c:dispEq val="1"/>' : '') +
+      '</c:trendline>'
+    )
+  }
   // Single-series fragment (idx/order use global ordinals so colors stay in order when a combo chart splits into two plots)
   const serXml = (ser: { name: string; values: number[] }, i: number): string => {
     const col = colLetter(i)
@@ -145,6 +163,7 @@ export function buildChartSpaceXml(opts: NewChartOptions): string {
       `<c:ser><c:idx val="${i}"/><c:order val="${i}"/>` +
       txXml(ser.name, i) +
       dPtXml(i) +
+      trendlineXml(i) +
       catXml +
       `<c:val>${numCacheXml(ser.values.slice(0, rows), `Sheet1!$${col}$2:$${col}$${rows + 1}`)}</c:val>` +
       '</c:ser>'
@@ -218,6 +237,7 @@ export function buildChartSpaceXml(opts: NewChartOptions): string {
         return (
           `<c:ser><c:idx val="${i}"/><c:order val="${i}"/>` +
           txXml(ser.name, i) +
+          trendlineXml(i) +
           `<c:xVal>${numCacheXml(xs, `Sheet1!$A$2:$A$${rows + 1}`)}</c:xVal>` +
           `<c:yVal>${numCacheXml(ser.values.slice(0, rows), `Sheet1!$${col}$2:$${col}$${rows + 1}`)}</c:yVal>` +
           '<c:smooth val="0"/></c:ser>'
