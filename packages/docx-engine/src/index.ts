@@ -138,5 +138,6 @@ export {
   proposeTableFormula,
   type FormulaDirection,
   type FormulaGrid,
+  type FormulaGridAnchors,
   type FormulaGridTexts,
 } from './table-formulas'
