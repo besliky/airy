@@ -3089,8 +3089,11 @@ function extractRuns(
   const addCommentIds = (run: Run, ids: string[]) => {
     run.commentIds = [...new Set([...(run.commentIds ?? []), ...ids])].sort()
   }
-  const pushRun = (run: Run, rev?: RevCtx) => {
-    if (activeComments.size > 0) run.commentIds = [...activeComments].sort()
+  const emitRun = (run: Run, rev?: RevCtx) => {
+    // merged, not overwritten: the empty-formula fold below pre-sets anchor ids
+    // of its own and no other producer passes commentIds into pushRun
+    if (activeComments.size > 0)
+      run.commentIds = [...new Set([...(run.commentIds ?? []), ...activeComments])].sort()
     if (pendingRefIds.length > 0) {
       addCommentIds(run, pendingRefIds)
       pendingRefIds = []
@@ -3098,6 +3101,62 @@ function extractRuns(
     if (rev?.ins) run.ins = rev.ins
     if (rev?.del) run.del = rev.del
     runs.push(run)
+  }
+  // BUG-1756: a formula field with an EMPTY cache (no result runs between
+  // separate and end) used to collapse to a single-space placeholder run
+  // carrying the instruction, while generators commonly emit the displayed
+  // value as a plain run right after the field — F9 refilled the placeholder
+  // next to that value ("600" became "600600") and the save kept the stray
+  // run. The placeholder stays pending instead: an immediately following plain
+  // numeric run folds into the formula run (its text becomes the cached
+  // result, comment anchors preserved); anything else flushes it unchanged.
+  let pendingFormulaCache: { instr: string; rev?: RevCtx; commentIds: string[] } | null = null
+  const revFingerprint = (rev?: RevCtx): string =>
+    JSON.stringify([rev?.ins ?? null, rev?.del ?? null])
+  // the cached result of a formula field is its numeric display text (a stale
+  // error cache is never empty); anything else must not be swallowed
+  const FORMULA_CACHE_TEXT = /^[+-]?\d[\d.,\s]*%?$/
+  const foldsIntoFormulaCache = (
+    run: Run,
+    rev: RevCtx | undefined,
+    pendingRev: RevCtx | undefined,
+  ): boolean =>
+    run.formulaField === undefined &&
+    run.instrField === undefined &&
+    run.refField === undefined &&
+    run.xeTerm === undefined &&
+    run.link === undefined &&
+    !run.noteRef &&
+    !run.math &&
+    !run.image &&
+    !run.ruby &&
+    FORMULA_CACHE_TEXT.test(run.text.trim()) &&
+    revFingerprint(rev) === revFingerprint(pendingRev)
+  const stashEmptyFormulaCache = (instr: string, rev?: RevCtx) => {
+    if (pendingFormulaCache) {
+      emitRun({ text: ' ', formulaField: pendingFormulaCache.instr }, pendingFormulaCache.rev)
+    }
+    pendingFormulaCache = { instr, rev, commentIds: [...activeComments].sort() }
+  }
+  const pushRun = (run: Run, rev?: RevCtx) => {
+    if (pendingFormulaCache) {
+      const pending = pendingFormulaCache
+      pendingFormulaCache = null
+      if (foldsIntoFormulaCache(run, rev, pending.rev)) {
+        const folded = { ...run, formulaField: pending.instr }
+        addCommentIds(folded, pending.commentIds)
+        emitRun(folded, rev)
+        return
+      }
+      emitRun({ text: ' ', formulaField: pending.instr }, pending.rev)
+    }
+    emitRun(run, rev)
+  }
+  const flushStashedFormulaCache = () => {
+    if (pendingFormulaCache) {
+      emitRun({ text: ' ', formulaField: pendingFormulaCache.instr }, pendingFormulaCache.rev)
+      pendingFormulaCache = null
+    }
   }
   const handleRun = (node: XNode, link: Run['link'] | undefined, rev?: RevCtx) => {
     const fldChar = findChild(node, 'w:fldChar')
@@ -3127,8 +3186,14 @@ function extractRuns(
           } else if (FORMULA_INSTR_RE.test(fieldInstr)) {
             // Table formula (=SUM(ABOVE)…) written as a complex field: the run
             // keeps the full instruction and re-emits as a w:fldSimple, the
-            // cached result stays the display text (Word shows it until F9)
-            pushRun({ text: fieldCached || ' ', formulaField: fieldInstr.trim() }, rev)
+            // cached result stays the display text (Word shows it until F9).
+            // An empty cache is stashed so the value run that generators emit
+            // right after the field can fold into it (BUG-1756).
+            if (fieldCached) {
+              pushRun({ text: fieldCached, formulaField: fieldInstr.trim() }, rev)
+            } else {
+              stashEmptyFormulaCache(fieldInstr.trim(), rev)
+            }
           } else if (hyper) {
             // fold the field into plain link runs (the cached result keeps its
             // formatting); regeneration emits w:hyperlink + a fresh rel
@@ -3331,7 +3396,9 @@ function extractRuns(
           if (FORMULA_INSTR_RE.test(instr)) {
             // Word's Formula field (Table Layout → Formula): keep the full
             // instruction on the run; the cached children are the last-computed
-            // result shown until the field updates (F9)
+            // result shown until the field updates (F9). An empty cache is
+            // stashed so the value run that generators emit right after the
+            // field can fold into it (BUG-1756).
             let cached = ''
             for (const child of childrenOf(node)) {
               const r = buildRun(
@@ -3347,7 +3414,8 @@ function extractRuns(
               )
               if (r) cached += r.text
             }
-            pushRun({ text: cached || ' ', formulaField: instr.trim() }, rev)
+            if (cached) pushRun({ text: cached, formulaField: instr.trim() }, rev)
+            else stashEmptyFormulaCache(instr.trim(), rev)
           } else walk(childrenOf(node), link, rev)
         }
       } else if (name === 'w:br') {
@@ -3357,6 +3425,9 @@ function extractRuns(
     }
   }
   walk(childrenOf(pNode))
+  // a stashed empty-formula placeholder with no following run to fold into
+  // keeps the historical single-space form
+  flushStashedFormulaCache()
   return mergeRuns(runs)
 }
 
