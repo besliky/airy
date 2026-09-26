@@ -20,7 +20,7 @@ import { collectInlineFieldJobs } from './editor/field-caches'
 import { markdownPasteHtml } from './editor/markdown-paste'
 import { pasteTextSlice, singleCellPasteText } from './editor/paste-text'
 import { applyFieldCaches } from './editor/revisions'
-import { collectTableFormulaJobs } from './editor/table-formulas'
+import { collectTableFormulaJobs, refreshNestedTableFormulas } from './editor/table-formulas'
 import {
   BLANK_BULLET_NUM_ID,
   BLANK_ORDERED_NUM_ID,
@@ -2883,6 +2883,10 @@ export function App() {
     // one TRACK_IGNORE transaction: a refreshed field result is recomputation,
     // not an authored edit, so track changes must not record it (BUG-917)
     applyFieldCaches(editor, jobs)
+    // nested tables keep their cells (and formula caches) in docNestedTable
+    // model attributes: recompute them on their own grids too, like Word's F9
+    // over a table inside a table (BUG-1757)
+    const nestedCaches = refreshNestedTableFormulas(editor)
     // TOC / table of figures: F9 rebuilds the cached field (entries + pages)
     // like Word's update — the authored switches are read back from the field;
     // \t source styles match by name, so the parsed style map rides along (BUG-1012)
@@ -2896,11 +2900,13 @@ export function App() {
         silent: true,
       },
     )
-    if (jobs.length === 0 && toc !== 'updated') {
+    if (jobs.length === 0 && nestedCaches === 0 && toc !== 'updated') {
       setStatus(t('appNoFieldsToUpdate'))
       return
     }
-    setStatus(t('appFieldsUpdated', { n: jobs.length + (toc === 'updated' ? 1 : 0) }))
+    setStatus(
+      t('appFieldsUpdated', { n: jobs.length + nestedCaches + (toc === 'updated' ? 1 : 0) }),
+    )
   }, [editor, fieldValue, nodePagesFactory, doc, headingPages, anchorPage])
 
   // status-bar page number: real page slicing (same algorithm as the pagination preview). Edits remeasure with debounce; scrolling only relocates
