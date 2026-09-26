@@ -30,6 +30,175 @@
 //! (`[A.A1:B.A5]`), `ORG.OPENOFFICE.*` names, and anything bracketed that
 //! does not parse as the reference grammar above.
 
+/// Translates an ODF defined-name payload into OOXML definedName content:
+/// a named range arrives as a cell-range-address (`$Data.$A$1:.$A$4`,
+/// `$Calc.$A$1`), a named expression as an `of:` formula. `None` = not
+/// understood — the caller must skip the name rather than carry ODF syntax
+/// into a book the engine has to open.
+pub(crate) fn translate_defined_name(raw: &str) -> Option<String> {
+    if raw.contains("of:") {
+        return translate(raw);
+    }
+    if raw.contains('!') {
+        // The .xls rendering (calamine resolves NAME records to
+        // `Sheet!$A$1:$A$4`): validated and re-quoted, carried as-is.
+        let (sheet, refs) = raw.split_once('!')?;
+        if sheet.is_empty() || refs.contains('!') {
+            return None;
+        }
+        if !refs.split(':').all(is_a1_address) {
+            return None;
+        }
+        let plain = sheet
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+            && !looks_like_address(&sheet);
+        let prefix = if plain {
+            sheet.to_string()
+        } else {
+            format!("'{}'", sheet.replace('\'', "''"))
+        };
+        return Some(format!("{prefix}!{refs}"));
+    }
+    let (first, second) = match raw.split_once(':') {
+        Some((first, second)) => (first, Some(second)),
+        None => (raw, None),
+    };
+    let first = parse_range_part(first)?;
+    let sheet = first.sheet?;
+    let mut out = format!("{sheet}!{}", first.address);
+    if let Some(second) = second {
+        let second = parse_range_part(second)?;
+        // A different sheet on the second endpoint is a 3-D range — beyond
+        // what a defined-name payload should carry, skip it.
+        if second.sheet.is_some_and(|other| other != sheet) {
+            return None;
+        }
+        out.push(':');
+        out.push_str(&second.address);
+    }
+    Some(out)
+}
+
+/// One endpoint of a cell-range-address: the (already Excel-rendered)
+/// optional sheet prefix and the address itself.
+struct RangePart {
+    sheet: Option<String>,
+    address: String,
+}
+
+/// Parses one `$?Sheet.?A1` endpoint of a cell-range-address. The sheet
+/// name keeps Excel quoting rules (bare when it cannot read as an address,
+/// single-quoted otherwise).
+fn parse_range_part(part: &str) -> Option<RangePart> {
+    let chars: Vec<char> = part.chars().collect();
+    let mut cursor = 0;
+    if chars.first() == Some(&'$') {
+        cursor = 1;
+    }
+    // Sheet part: quoted `'My Sheet'.` or bare `Data.`; a bare part may
+    // also start directly with the address (`.$A$1` continues the range).
+    let sheet = if chars.get(cursor) == Some(&'\'') {
+        let mut name = String::new();
+        cursor += 1;
+        loop {
+            match chars.get(cursor) {
+                Some('\'') if chars.get(cursor + 1) == Some(&'\'') => {
+                    name.push('\'');
+                    cursor += 2;
+                }
+                Some('\'') => {
+                    cursor += 1;
+                    break;
+                }
+                None => return None,
+                Some(ch) => {
+                    name.push(*ch);
+                    cursor += 1;
+                }
+            }
+        }
+        if chars.get(cursor) != Some(&'.') {
+            return None;
+        }
+        cursor += 1;
+        Some(format!("'{}'", name.replace('\'', "''")))
+    } else {
+        let start = cursor;
+        while cursor < chars.len()
+            && (chars[cursor].is_ascii_alphanumeric() || chars[cursor] == '_')
+        {
+            cursor += 1;
+        }
+        if chars.get(cursor) != Some(&'.') {
+            // No sheet part at all: everything so far must be the address.
+            cursor = 0;
+            None
+        } else if cursor == start {
+            // A bare `.` (the `.$A$4` of a range's second endpoint): the
+            // range continues on the first endpoint's sheet.
+            cursor += 1;
+            None
+        } else {
+            cursor += 1;
+            let name: String = chars[start..cursor - 1].iter().collect();
+            // A plain name that cannot read as an address stays bare; a
+            // quoted-form name (spaces, or one that reads as an address) is
+            // quoted exactly like a formula reference.
+            let plain = !name.is_empty()
+                && name
+                    .chars()
+                    .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+                && !looks_like_address(&name);
+            Some(if plain {
+                name
+            } else {
+                format!("'{}'", name.replace('\'', "''"))
+            })
+        }
+    };
+    let address = parse_address(&chars, &mut cursor)?;
+    if cursor != chars.len() {
+        return None;
+    }
+    Some(RangePart { sheet, address })
+}
+
+/// An absolute-ish A1 address (`$A$1`, `A1`) — the only endpoint shape
+/// calamine's NAME renderer produces.
+fn is_a1_address(address: &str) -> bool {
+    let body = address.trim_start_matches('$');
+    let (letters, digits) = body.split_at(
+        body.find(|ch: char| !ch.is_ascii_alphabetic())
+            .unwrap_or(body.len()),
+    );
+    (1..=3).contains(&letters.len())
+        && digits
+            .trim_start_matches('$')
+            .parse::<u32>()
+            .is_ok_and(|row| row >= 1)
+}
+
+/// Whether a name is one Excel accepts in `<definedName name="...">`:
+/// letters/digits/underscore/period, not starting with a digit, and not
+/// reading as an A1 address. Everything else (built-in names, control
+/// characters, `R1C1` lookalikes) is skipped rather than mis-emitted.
+pub(crate) fn is_valid_defined_name(name: &str) -> bool {
+    if name.is_empty() || name.len() > 255 {
+        return false;
+    }
+    if name.to_ascii_lowercase().starts_with("_xlnm") {
+        return false;
+    }
+    let starts = !name.starts_with(|ch: char| ch.is_ascii_digit() || ch == '$')
+        && name.starts_with(|ch: char| ch.is_alphanumeric() || matches!(ch, '_' | '\\'));
+    starts
+        && name
+            .chars()
+            .all(|ch| ch.is_alphanumeric() || matches!(ch, '_' | '.' | '\\'))
+        && !looks_like_address(name)
+}
+
 /// Rewrites an ODF formula into OOXML syntax. `None` means "not ODF, or
 /// not fully understood" — the original text must be carried verbatim.
 pub fn translate(raw: &str) -> Option<String> {
@@ -256,9 +425,12 @@ fn parse_address(chars: &[char], cursor: &mut usize) -> Option<String> {
         digits += 1;
     }
     // Whole column (letters only), whole row (digits only) or a cell
-    // (both); anything else (`.` or an empty token) is not understood.
-    let well_formed =
-        (letters > 0 && digits == 0) || (letters == 0 && digits > 0) || (letters > 0 && digits > 0);
+    // (both); anything else (`.` or an empty token) is not understood, and
+    // Excel columns stop at XFD.
+    let well_formed = letters <= 3
+        && ((letters > 0 && digits == 0)
+            || (letters == 0 && digits > 0)
+            || (letters > 0 && digits > 0));
     if !well_formed {
         return None;
     }

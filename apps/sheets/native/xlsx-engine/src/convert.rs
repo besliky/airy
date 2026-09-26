@@ -146,7 +146,23 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
 
     add("[Content_Types].xml", &content_types_xml(names.len()))?;
     add("_rels/.rels", ROOT_RELS)?;
-    add("xl/workbook.xml", &workbook_xml(&names, &repaired))?;
+    let defined_names: Vec<(String, String)> = workbook
+        .defined_names()
+        .iter()
+        .filter(|(name, _)| crate::ods_formula::is_valid_defined_name(name))
+        .filter_map(|(name, formula)| {
+            // A name the translator cannot carry is dropped, not mangled:
+            // ODF syntax in workbook.xml would poison the whole converted
+            // book for the formula engine.
+            crate::ods_formula::translate_defined_name(formula)
+                .filter(|translated| !translated.contains('#') && translated.len() <= 1024)
+                .map(|translated| (name.clone(), translated))
+        })
+        .collect();
+    add(
+        "xl/workbook.xml",
+        &workbook_xml(&names, &repaired, &defined_names),
+    )?;
     add(
         "xl/_rels/workbook.xml.rels",
         &workbook_rels_xml(names.len()),
@@ -636,7 +652,29 @@ fn content_types_xml(sheet_count: usize) -> String {
 const ROOT_RELS: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#;
 
-fn workbook_xml(names: &[String], repaired: &legacy_xls::LegacyXlsStrings) -> String {
+/// `<definedNames>` for the carried-over names, in workbook order.
+fn defined_names_xml(names: &[(String, String)]) -> String {
+    if names.is_empty() {
+        return String::new();
+    }
+    let entries: String = names
+        .iter()
+        .map(|(name, formula)| {
+            format!(
+                r#"<definedName name="{}">{}</definedName>"#,
+                escape_xml(name),
+                escape_xml(formula),
+            )
+        })
+        .collect();
+    format!(r#"<definedNames>{entries}</definedNames>"#)
+}
+
+fn workbook_xml(
+    names: &[String],
+    repaired: &legacy_xls::LegacyXlsStrings,
+    defined_names: &[(String, String)],
+) -> String {
     let sheets: String = names
         .iter()
         .enumerate()
@@ -657,7 +695,8 @@ fn workbook_xml(names: &[String], repaired: &legacy_xls::LegacyXlsStrings) -> St
         .collect();
     format!(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>{sheets}</sheets></workbook>"#,
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>{sheets}</sheets>{}</workbook>"#,
+        defined_names_xml(defined_names),
     )
 }
 
@@ -1302,6 +1341,109 @@ mod tests {
         assert_eq!(refs, vec!["A1:C1", "A7:A9", "B3:D4"]);
     }
 
+    /// PAR-214: named ranges survive conversion on both legacy paths. The
+    /// .ods fixture carries a single-cell and a range name in ODF
+    /// cell-range-address form (`$Data.$A$1:.$A$4`); the .xls fixture the
+    /// same names as BIFF NAME records, rendered `Sheet!$A$1:$A$4`. Both
+    /// re-open through the sidecar with the names in its metadata.
+    #[test]
+    fn carries_defined_names_from_legacy_books() {
+        for (fixture, expected) in [
+            (
+                "par214-ods-defined-names.ods",
+                vec![
+                    ("Rate".to_string(), "Calc!$A$1".to_string()),
+                    ("Values".to_string(), "Data!$A$1:$A$4".to_string()),
+                ],
+            ),
+            (
+                "par214-xls-defined-names.xls",
+                vec![
+                    ("Rate".to_string(), "Calc!$A$1".to_string()),
+                    ("Values".to_string(), "Data!$A$1:$A$4".to_string()),
+                ],
+            ),
+        ] {
+            let source = std::path::Path::new(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/",
+            ))
+            .join(fixture);
+            let dir = tempfile::tempdir().unwrap();
+            let target = dir.path().join("converted.xlsx");
+
+            let result = convert_to_xlsx(&source, &target).unwrap();
+            assert_eq!(result.sheets, 2, "{fixture}");
+
+            let workbook = read_entry(&target, "xl/workbook.xml");
+            assert!(
+                workbook
+                    .contains(r#"<definedName name="Values">Data!$A$1:$A$4</definedName>"#),
+                "{fixture}: {workbook}"
+            );
+            assert!(
+                workbook.contains(r#"<definedName name="Rate">Calc!$A$1</definedName>"#),
+                "{fixture}: {workbook}"
+            );
+
+            // Round trip: the open metadata carries the names the grid and
+            // the formula engine consume.
+            let mut sessions = crate::WorkbookSessions::new();
+            let metadata = sessions.open(&target).unwrap();
+            let names: Vec<(String, String)> = metadata
+                .defined_names
+                .iter()
+                .map(|defined| (defined.name.clone(), defined.formula.clone()))
+                .collect();
+            assert_eq!(names, expected, "{fixture}");
+        }
+    }
+
+    /// PAR-214: the defined-name grammar — ODF range addresses and `of:`
+    /// expressions translate; 3-D endpoints, address-less parts, garbage
+    /// and Excel-invalid names are skipped instead of mis-emitted.
+    #[test]
+    fn defined_name_payloads_translate_or_drop() {
+        assert_eq!(
+            crate::ods_formula::translate_defined_name("$Data.$A$1:.$A$4").as_deref(),
+            Some("Data!$A$1:$A$4")
+        );
+        assert_eq!(
+            crate::ods_formula::translate_defined_name("$Calc.$A$1").as_deref(),
+            Some("Calc!$A$1")
+        );
+        // A quoted sheet name keeps Excel quoting.
+        assert_eq!(
+            crate::ods_formula::translate_defined_name("$'My Sheet'.$A$1:.$B$2").as_deref(),
+            Some("'My Sheet'!$A$1:$B$2")
+        );
+        // A sheet name that reads as an address stays quoted.
+        assert_eq!(
+            crate::ods_formula::translate_defined_name("$A1.$B$2").as_deref(),
+            Some("'A1'!$B$2")
+        );
+        // Named expressions ride the formula translator.
+        assert_eq!(
+            crate::ods_formula::translate_defined_name("of:=SUM([.A1:.A4])").as_deref(),
+            Some("SUM(A1:A4)")
+        );
+        // 3-D endpoints, address-less parts and garbage are dropped.
+        assert_eq!(
+            crate::ods_formula::translate_defined_name("$Data.$A$1:$Other.$A$4"),
+            None
+        );
+        assert_eq!(crate::ods_formula::translate_defined_name("$Data.Wide"), None);
+        assert_eq!(crate::ods_formula::translate_defined_name("what is this"), None);
+        // Excel-invalid names never reach workbook.xml.
+        assert!(crate::ods_formula::is_valid_defined_name("Values_2024"));
+        assert!(crate::ods_formula::is_valid_defined_name("_Private"));
+        assert!(!crate::ods_formula::is_valid_defined_name("A1"));
+        assert!(!crate::ods_formula::is_valid_defined_name("1Values"));
+        assert!(!crate::ods_formula::is_valid_defined_name("has space"));
+        assert!(!crate::ods_formula::is_valid_defined_name("_xlnm.Print_Area"));
+        assert!(!crate::ods_formula::is_valid_defined_name(""));
+    }
+
     /// BUG-1659: an empty book (no cells, no styles) still converts with a
     /// complete styles.xml — the minimal output must not skip the section
     /// IronCalc's importer requires.
@@ -1497,3 +1639,4 @@ mod tests {
         writer.finish().unwrap();
     }
 }
+
