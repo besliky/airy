@@ -1,8 +1,34 @@
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { launchShell, closeAndSaveVideo, waitForPageWithUrl, screenshotPath } from './helpers'
+
+/** Serial of the live preview document: the iframe src carries ?v=<nonce>, bumped by every debounced push */
+function previewVersion(page: Page): number {
+  const url =
+    page
+      .frames()
+      .find((f) => f.url().startsWith('html-preview:'))
+      ?.url() ?? ''
+  return Number(/\?v=(\d+)/.exec(url)?.[1] ?? -1)
+}
+
+/**
+ * Every source change reloads the sandboxed preview through a new ?v=<nonce>
+ * src (PreviewFrame), and a keypress landing on the outgoing document is lost
+ * — the host drops relayed commands carrying a stale version. Wait for the
+ * reload that pushed a version past `afterVersion` to commit and fire its load
+ * event; the inspector script sits before </body>, so it has run once load
+ * fires. Returns the settled version so callers can gate the next reload.
+ */
+async function waitForPreviewReload(page: Page, afterVersion: number): Promise<number> {
+  await expect.poll(() => previewVersion(page)).toBeGreaterThan(afterVersion)
+  const frame = page.frames().find((f) => f.url().startsWith('html-preview:'))
+  if (!frame) throw new Error('preview frame disappeared mid-reload')
+  await frame.waitForLoadState('load')
+  return previewVersion(page)
+}
 
 test.describe('html editor', () => {
   test('AI HTML quick card opens an html editor tab in preview view with a ribbon', async () => {
@@ -76,8 +102,15 @@ test.describe('html editor', () => {
       await editorPage.keyboard.press('ControlOrMeta+End')
       await editorPage.keyboard.type('<!-- appended -->')
       await expect(editorPage.locator('.status-save')).toHaveText(/Unsaved/)
-      await editorPage.keyboard.press('ControlOrMeta+s')
-      await expect(editorPage.locator('.status-save')).toHaveText(/Saved/)
+      // the shortcut is a one-shot input racing the shell's application-menu
+      // accelerator and the renderer's own capture handler: if both miss it,
+      // no save starts and .status-save never renders. A completed save keeps
+      // the element in the DOM, so retry the press until it reports the save
+      // — a re-press is idempotent and the byte assert below stays the arbiter
+      await expect(async () => {
+        await editorPage.keyboard.press('ControlOrMeta+s')
+        await expect(editorPage.locator('.status-save')).toHaveText(/Saved/, { timeout: 2_000 })
+      }).toPass({ timeout: 15_000 })
       await editorPage.screenshot({ path: screenshotPath('open-html-saved') })
 
       const saved = await readFile(htmlPath, 'utf8')
@@ -176,8 +209,15 @@ test.describe('html editor', () => {
       await expect(editorPage.locator('.ribbon-body')).toBeVisible()
       await editorPage.locator('.rb-view', { hasText: /Source/ }).click()
       await editorPage.locator('.source-editor .cm-content').click()
-      await editorPage.keyboard.press('ControlOrMeta+s')
-      await expect(editorPage.locator('.status-save')).toHaveText(/Saved/)
+      // the shortcut is a one-shot input racing the shell's application-menu
+      // accelerator and the renderer's own capture handler: if both miss it,
+      // no save starts and .status-save never renders (it is absent on a
+      // clean document). Retry the press until the element reports the save —
+      // a re-press is idempotent and the byte assert below stays the arbiter
+      await expect(async () => {
+        await editorPage.keyboard.press('ControlOrMeta+s')
+        await expect(editorPage.locator('.status-save')).toHaveText(/Saved/, { timeout: 2_000 })
+      }).toPass({ timeout: 15_000 })
       expect(await readFile(htmlPath, 'utf8')).toBe(source)
     } finally {
       await closeAndSaveVideo(launched, 'html-identity-save')
@@ -463,19 +503,27 @@ test.describe('html editor', () => {
       const undoBtn = editorPage.locator('.ribbon').getByRole('button', { name: /^Undo$/ })
       await expect(frame.locator('p.note')).toHaveText('Beta')
       await expect(undoBtn).toBeDisabled()
+      // the rendered 'Beta' above is the renderer's first pushed preview copy
+      let previewV = previewVersion(editorPage)
 
       // Delete inside the frame removes the element; the frame reloads without it
       await frame.locator('p.note').click()
       await frame.locator('body').press('Delete')
       await expect(frame.locator('p.note')).toHaveCount(0)
       await expect(undoBtn).toBeEnabled()
+      previewV = await waitForPreviewReload(editorPage, previewV)
 
       // the frame owns keyboard focus, so Cmd/Ctrl+Z must be relayed to the host's history
       await frame.locator('body').press('ControlOrMeta+z')
       await expect(frame.locator('p.note')).toHaveText('Beta')
       await expect(undoBtn).toBeDisabled()
+      // settled: the undo's own reload is the document the 'Beta' text just proved
+      previewV = previewVersion(editorPage)
       await frame.locator('body').press('ControlOrMeta+Shift+z')
       await expect(frame.locator('p.note')).toHaveCount(0)
+      // toHaveCount(0) above also passes mid-reload — gate the next undo on the
+      // reloaded document being live, not on the outgoing one being torn down
+      await waitForPreviewReload(editorPage, previewV)
       await frame.locator('body').press('ControlOrMeta+z')
       await expect(frame.locator('p.note')).toHaveText('Beta')
 
