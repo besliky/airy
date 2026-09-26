@@ -27,6 +27,7 @@ import { existsSync, mkdirSync, realpathSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { cleanupExpiredGeneratedPages } from './generated-page-temp'
+import { sweepStalePdfExportTempDirs } from './pdf-export-temp'
 import { sweepStaleVideoExportTemps, videoExportTempPath } from './video-export-temp'
 import {
   exportDirInsidePick,
@@ -4408,6 +4409,10 @@ export function registerSlidesIpc(): void {
     if (!pickedFile || !exportFileMatchesPick(pickedFile, op.filePath, (p) => realpathSync(p))) {
       return { ok: false, error: tm('errExportDestNotPicked') }
     }
+    // BUG-1767 (EXP-4): a kill -9 mid-export bypasses exportSlidesPdf's
+    // finally-block and orphans its mkdtemp print-HTML directory in the OS
+    // temp root forever — each fresh export sweeps the expired ones first.
+    void sweepStalePdfExportTempDirs()
     return exportSlidesPdf({
       ...op,
       // the sandboxed export window has none of the renderer's font
