@@ -562,3 +562,125 @@ describe('recoverCorruptAppSettings (strict-prefix salvage)', () => {
     expect(Object.keys(recovered!).length).toBeGreaterThan(1000)
   })
 })
+
+// ── BUG-1774: an external wholesale editor must not erase keys unnoticed ──
+// SET-26-4: an external writer replacing the file WHOLESALE (no read) used to
+// pass silently; the next merge-write then salted the erasure in. A sharp
+// key-count drop on a healthy parse now warns once per distinct state and
+// preserves the last healthy state as `app-settings.json.previous`.
+
+const previousPath = () => `${settingsPath}.previous`
+
+const richSettings = (): AppSettings =>
+  Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`key${i}`, i]))
+
+describe('BUG-1774: wholesale-erase detection', () => {
+  it('warns and preserves the last healthy state when keys collapse', () => {
+    writeAppSettingsFile(settingsPath, richSettings())
+    readAppSettingsFile(settingsPath) // arm: the 8-key state becomes the baseline
+    const wiped = { extCounter: 48, extKeep: true }
+    writeFileSync(settingsPath, JSON.stringify(wiped))
+    const { warnings, restore } = captureWarnings()
+    try {
+      expect(readAppSettingsFile(settingsPath)).toEqual(wiped)
+      expect(warnings.some((line) => line.includes('dropped 8 -> 2'))).toBe(true)
+      // the pre-erasure keys survive in the `.previous` forensic copy
+      expect(JSON.parse(readFileSync(previousPath(), 'utf8'))).toEqual(richSettings())
+    } finally {
+      restore()
+    }
+  })
+
+  it('reports an erased state once, not on every read', () => {
+    writeAppSettingsFile(settingsPath, richSettings())
+    readAppSettingsFile(settingsPath)
+    writeFileSync(settingsPath, '{"only":1}')
+    const { warnings, restore } = captureWarnings()
+    try {
+      readAppSettingsFile(settingsPath)
+      readAppSettingsFile(settingsPath)
+      readAppSettingsFile(settingsPath)
+      expect(warnings.filter((line) => line.includes('dropped'))).toHaveLength(1)
+    } finally {
+      restore()
+    }
+  })
+
+  it('re-arms after the keys recover, preserving the healed state next time', () => {
+    writeAppSettingsFile(settingsPath, richSettings())
+    readAppSettingsFile(settingsPath)
+    writeFileSync(settingsPath, '{"only":1}')
+    const { warnings, restore } = captureWarnings()
+    try {
+      readAppSettingsFile(settingsPath)
+      // the keys come back (a restored backup, say) and the path re-arms
+      writeFileSync(settingsPath, JSON.stringify(richSettings()))
+      readAppSettingsFile(settingsPath)
+      writeFileSync(settingsPath, '{"different":2}')
+      readAppSettingsFile(settingsPath)
+      expect(warnings.filter((line) => line.includes('dropped'))).toHaveLength(2)
+      expect(JSON.parse(readFileSync(previousPath(), 'utf8'))).toEqual(richSettings())
+    } finally {
+      restore()
+    }
+  })
+
+  it('never fires on legitimately small files', () => {
+    writeAppSettingsFile(settingsPath, { a: 1, b: 2, c: 3 })
+    readAppSettingsFile(settingsPath)
+    writeFileSync(settingsPath, '{"a":1}')
+    const { warnings, restore } = captureWarnings()
+    try {
+      expect(readAppSettingsFile(settingsPath)).toEqual({ a: 1 })
+      expect(warnings).toEqual([])
+      expect(existsSync(previousPath())).toBe(false)
+    } finally {
+      restore()
+    }
+  })
+
+  it('never fires on a shrink that stays above the wiped threshold', () => {
+    writeAppSettingsFile(settingsPath, richSettings())
+    readAppSettingsFile(settingsPath)
+    const shrunk = Object.fromEntries(Object.entries(richSettings()).slice(0, 4))
+    writeFileSync(settingsPath, JSON.stringify(shrunk))
+    const { warnings, restore } = captureWarnings()
+    try {
+      expect(readAppSettingsFile(settingsPath)).toEqual(shrunk)
+      expect(warnings).toEqual([])
+    } finally {
+      restore()
+    }
+  })
+
+  it('detection also guards the merge-write (it reads through the same path)', () => {
+    writeAppSettingsFile(settingsPath, richSettings())
+    readAppSettingsFile(settingsPath)
+    writeFileSync(settingsPath, '{"extCounter":48}')
+    const { warnings, restore } = captureWarnings()
+    try {
+      // the next ordinary merge must not silently salt the erasure in unnoticed
+      writeAppSettingsFile(settingsPath, { theme: 'dark' })
+      expect(warnings.some((line) => line.includes('dropped 8 -> 1'))).toBe(true)
+      const stored = JSON.parse(readFileSync(settingsPath, 'utf8')) as AppSettings
+      expect(stored.extCounter).toBe(48) // merge keeps the on-disk keys…
+      expect(stored.theme).toBe('dark') // …plus the app's own update
+      expect(readFileSync(`${settingsPath}.previous`, 'utf8')).toContain('"key7"')
+    } finally {
+      restore()
+    }
+  })
+
+  it('healthy reads leave no .previous and never log', () => {
+    const { warnings, restore } = captureWarnings()
+    try {
+      writeAppSettingsFile(settingsPath, richSettings())
+      readAppSettingsFile(settingsPath)
+      readAppSettingsFile(settingsPath)
+      expect(existsSync(previousPath())).toBe(false)
+      expect(warnings).toEqual([])
+    } finally {
+      restore()
+    }
+  })
+})

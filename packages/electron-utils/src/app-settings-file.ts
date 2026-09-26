@@ -30,6 +30,16 @@
 /// strict JSON parsing allows (BOM prefix / garbage after a complete object /
 /// truncated tail). A wrong-type root (array, number), empty or
 /// whitespace-only content has no object data to salvage: honest defaults.
+///
+/// BUG-1774 (SET-26-4): the single-writer discipline covers only THIS
+/// process — an external wholesale editor (a script or tool rewriting the
+/// file without reading it) can still erase most keys between two reads, and
+/// the merge-write then salts the erasure in. Reads therefore track the last
+/// healthy key set per path: a sharp drop (was ≥ WHOLESALE_ERASE_BASELINE_KEYS
+/// keys, now < WHOLESALE_ERASE_MIN_KEYS) logs a warning and preserves the
+/// last healthy state as `app-settings.json.previous` (stable name, once per
+/// distinct on-disk state) so the erased keys stay recoverable. Detection
+/// only observes and warns — the merge itself is never blocked.
 import { randomUUID } from 'node:crypto'
 import {
   copyFileSync,
@@ -54,6 +64,31 @@ export type AppSettings = Record<string, unknown>
  * "when did this break?" after the original is overwritten).
  */
 export const APP_SETTINGS_BACKUP_SUFFIX = '.bak'
+
+/**
+ * Forensic copy of the last healthy settings state, written when a read sees
+ * the key set collapse (BUG-1774). Stable name for the same reasons as the
+ * corrupt-state `.bak` above: one discoverable file, refreshed only when the
+ * erased state on disk changes.
+ */
+export const APP_SETTINGS_PREVIOUS_SUFFIX = '.previous'
+
+/**
+ * Wholesale-erase heuristic (BUG-1774): a path that last held at least this
+ * many keys is an established settings file whose sudden near-emptying is
+ * not a normal first-run or organic growth pattern. Deliberately above the
+ * ~3 keys a fresh install writes, so a legitimately small file never arms
+ * the detection.
+ */
+const WHOLESALE_ERASE_BASELINE_KEYS = 5
+
+/**
+ * A read that finds fewer than this many keys on an armed path (see
+ * {@link WHOLESALE_ERASE_BASELINE_KEYS}) counts as erased. A file that
+ * merely shrank (say 12 → 4 keys) is left alone: only a near-total wipe,
+ * the audited adversarial signature, justifies the warning.
+ */
+const WHOLESALE_ERASE_MIN_KEYS = 3
 
 /** UTF-8 byte-order mark — JSON.parse rejects it, "smart" external tools write it */
 const BOM = '\uFEFF'
@@ -284,6 +319,55 @@ const RECOVERY_MODE_LABELS: Record<CorruptRecoveryMode, string> = {
   truncated: 'truncated',
 }
 
+/**
+ * Last healthy state seen on disk per settings path (BUG-1774). Updated on
+ * every parseable read; the merge-write reads through the same function, so
+ * an external erasure is always noticed before the next merge can salt it
+ * in. Bounded by one small object per settings path the process touches.
+ */
+const lastHealthySettings = new Map<string, AppSettings>()
+
+/**
+ * The distinct erased on-disk states already reported, per path
+ * (size:mtime fingerprint, same dedup shape as the corrupt-state `.bak`):
+ * readAppSettingsFile runs on every getter, so without this each read of a
+ * wiped file would re-copy and re-warn. A later healthy read with a
+ * non-wiped key count re-arms the path.
+ */
+const reportedWholesaleErases = new Map<string, string>()
+
+/**
+ * Observe one parseable read (BUG-1774): remember it as the last healthy
+ * state, and when the key set collapsed from an established baseline to a
+ * near-empty file, preserve the previous state as `.previous` and warn.
+ * Never throws: detection must not fail the read.
+ */
+function noteHealthySettingsRead(settingsPath: string, settings: AppSettings): void {
+  const previous = lastHealthySettings.get(settingsPath)
+  lastHealthySettings.set(settingsPath, settings)
+  if (!previous) return
+  const previousKeys = Object.keys(previous).length
+  const currentKeys = Object.keys(settings).length
+  if (previousKeys < WHOLESALE_ERASE_BASELINE_KEYS || currentKeys >= WHOLESALE_ERASE_MIN_KEYS) {
+    // not an established file, or the current state does not look wiped
+    return
+  }
+  try {
+    const stat = statSync(settingsPath)
+    const fingerprint = `${stat.size}:${stat.mtimeMs}`
+    if (reportedWholesaleErases.get(settingsPath) === fingerprint) return
+    reportedWholesaleErases.set(settingsPath, fingerprint)
+    const previousPath = `${settingsPath}${APP_SETTINGS_PREVIOUS_SUFFIX}`
+    writeFileSync(previousPath, JSON.stringify(previous, null, 2), { encoding: 'utf8' })
+    console.warn(
+      `[app-settings] settings key count dropped ${previousKeys} -> ${currentKeys} without this process writing; ` +
+        `an external wholesale editor likely replaced the file — previous state preserved as ${previousPath}`,
+    )
+  } catch (error) {
+    console.warn(`[app-settings] could not preserve the pre-erasure settings: ${String(error)}`)
+  }
+}
+
 export function readAppSettingsFile(settingsPath: string): AppSettings {
   let raw: string
   try {
@@ -296,6 +380,8 @@ export function readAppSettingsFile(settingsPath: string): AppSettings {
   if (direct) {
     // healthy file: re-arm the forensic backup for a possible future corruption
     preservedCorruptStates.delete(settingsPath)
+    // BUG-1774: remember the healthy state and notice a wholesale erasure
+    noteHealthySettingsRead(settingsPath, direct)
     return direct
   }
   // BUG-1771: these bytes would be destroyed by the very next merge-write.
