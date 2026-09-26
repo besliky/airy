@@ -7,6 +7,109 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-09-26
+
+### Fixed
+
+- Sheets:
+  - Defined names over structured references compute, and `]]` column-name
+    escapes no longer silently kill a formula (BUG-1753 + BUG-1754 — the P3
+    tails of the PAR-205/#238 structured-reference line). A defined name whose
+    body is a structured reference (`SalesTotal = SUM(Sales[Amount])`) is
+    valid Excel, but the IronCalc channel's import only accepts cell/range-ref
+    or LAMBDA bodies for defined names (`InvalidDefinedNameFormula`), so
+    `=SalesTotal` returned `#NAME?` while the same formula typed directly into
+    a cell computed fine. The recalc channel now inlines such a body into the
+    cell formula — both the cold-import pass over shared formulas and the
+    user-edit path in `recalc_cells` — while the file keeps the defined name
+    verbatim. Name-vs-table resolution follows Excel: a token followed by `[`
+    never expands, a token matching a loaded table wins, function calls,
+    `Sheet!` qualifications and string literals are skipped; inlining is one
+    level (a body referencing another name expands only if that name itself
+    contains a structured reference), a documented limit. Separately, a
+    doubled-bracket escape in a column name (`=SUM(Tbl[[#Data],[Odd]]Col]])`
+    for the column `Odd]Col`) made the formula silently stop being a formula:
+    the selector parser never decoded `]]`, the cell pinned on an empty cache
+    and read as a quiet 0 where Excel computes 27 — and Convert to Range would
+    have written `#REF!`. The escape is now normalized on cold import and on
+    edits, in the recalc channel and in `parseRefSelector`. 13 new Rust units
+    (cargo 312 lib + 13) on the PAR-205 regression fixtures (PR #258).
+  - The table slicer's 200-member cap is honest, and F9 spam cannot poison
+    undo (UX-1762 + UX-1763 — the P4 observations the 0.26.0 notes left
+    named). A column with more distinct members than the cap used to render
+    exactly 200 value buttons with no hint of truncation, so picking from the
+    visible set silently hid every out-of-list value under "all selected =
+    unfiltered" semantics. `tableSlicerMembers` now reports `moreCount`, the
+    panel shows "+N more" with an explanatory hint (dialog strings localized
+    into 20 languages), and the truncation state survives panel create and
+    restore. Separately, a model invariant test (`f9-undo-spam.univer`) pins
+    the sheets-side undo contract: F9 recalcs are mutations, not commands —
+    they never enter the undo stack, and one Ctrl+Z after a 50-press F9 spam
+    returns the preceding edit with recomputed caches. The docs-side twin
+    (`addToHistory:false` in `applyFieldCaches`, `refreshNestedTableFormulas`
+    and the TOC path) stays a named follow-up, on the record in
+    LOG UX-1762.md (PR #261).
+- Docs:
+  - Directional formulas read through merged cells (BUG-1759 — the docs
+    audit's P3 tail). In the merged-cells repro (A5:A6 merged vertically, 7
+    in A5), `=SUM(LEFT)` in B6 — whose left neighbor is the merge
+    continuation, physically empty — produced "Undefined Bookmark": the
+    operand scan stopped at the empty continuation cell and collected zero
+    operands, and the textual error was then saved as the field's cache,
+    where Word computes 7. The same rule made `=SUM(LEFT)` blind to an origin
+    hidden behind a horizontal gridSpan. `FormulaGrid.mergeAnchors` now
+    resolves a vMerge continuation to its origin's value, and a merge is
+    counted once; the neighboring merge formulas that already worked stay
+    correct and chain-refreshed. Verified in both the engine and the editor
+    test suites (PR #259).
+- MCP:
+  - `findReplace` replaces inside table cells, and formula caches are fresh
+    on workbook save (BUG-1760 + BUG-1761 — the MCP audit's P3 tails).
+    `findReplace` used to match text inside tables but could not touch it —
+    it iterated edit runs, which table cells do not have — and still reported
+    "matched 3, changed 0" as a success (`isError=false`), with nothing
+    changed on disk after save. Replacement now reaches table cells through a
+    cloned `TableModel` + `patchTableCellTexts`, and structures that cannot
+    be patched produce honest warnings instead of a green verdict.
+    Separately, the empty/stale formula-cache class first fixed for the app's
+    save gateway (#230) was still live on the MCP path: a save emitted
+    formulas with no `<v>` (openpyxl `data_only` reads None) or with stale
+    caches (a cached 5 when the truth is 103). Workbook save now runs the
+    sidecar `recalc_cells` with a formula overlay (the same `formulaValues`
+    overlay the app uses) and writes fresh numeric `<v>` values with `<f>`
+    untouched; when the engine cannot help (no edits, empty or partial
+    formula index, engine failure) the save degrades honestly — a warning
+    plus the existing `fullCalcOnLoad` mitigation (PR #260).
+
+### Performance
+
+- Markdown:
+  - Keystrokes on giant paragraphs no longer pay the accessibility tree
+    (PERF-1700b — the tail PERF-1700 opened). Editing a 4MB single-line
+    paragraph cost ~2.0–2.3s per keystroke — paid for an edit anywhere in the
+    document — and tracing showed the stall was never the software
+    compositor it had been blamed on: `LocalFrameView::RunAccessibilitySteps`
+    inside the BeginMainFrame commit recomputed the Chromium AX tree for the
+    whole document on every change, scaling linearly with the giant
+    paragraph's text volume; because it runs in the commit/lifecycle phase it
+    never appears as a longtask, which is why per-keystroke attribution kept
+    missing it. The fix keeps giant paragraphs (≥100k chars — the same
+    population the DOM text chunking already targets) out of the
+    accessibility tree with `aria-hidden="true"` applied as a ProseMirror
+    node decoration, plus a visually-hidden summary widget in front of each
+    ("Very long paragraph, N characters", 20 locales) so assistive technology
+    still sees the block's existence and size. Measured on the 4MB
+    one-liner: keystroke keydown→presented frame 2151–2361ms → 253–320ms
+    (the ≤300ms target met), undo ×5 → 167–207ms, open→first keystroke with a
+    live screen reader 6.3s → 2.3s, AX objects 340 → 90;
+    `RunAccessibilitySteps` is gone from the trace, and
+    containment/content-visibility/layerization alternatives were rejected by
+    measurement. The accessibility tradeoff is deliberate and documented in
+    the module: screen readers cannot browse these paragraphs (caret,
+    selection, find, copy/paste and IME are DOM-level and unaffected;
+    splitting the content into paragraphs restores full access), and the
+    decorations are view-only — serialization is byte-identical (PR #257).
+
 ## [0.26.0] - 2026-09-26
 
 ### Fixed
