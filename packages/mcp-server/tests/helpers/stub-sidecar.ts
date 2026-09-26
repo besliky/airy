@@ -21,9 +21,34 @@ export interface StubRangeCell {
   readonly formula?: string
 }
 
+/** canned read_formula_cells reply cell (the file's indexed formula cells) */
+export interface StubFormulaCell {
+  readonly sheetId: string
+  readonly row: number
+  readonly column: number
+  readonly value?: unknown
+}
+
+/** canned recalc_cells reply cell (the engine's evaluated values) */
+export interface StubRecalcCell {
+  readonly sheet: string
+  readonly row: number
+  readonly column: number
+  readonly number?: number
+  readonly isFormula: boolean
+}
+
 export interface StubIoOptions {
   sheets?: readonly StubSheet[]
   cells?: readonly StubRangeCell[]
+  /** per-sheet formula-cell listing for read_formula_cells */
+  formulaCells?: readonly StubFormulaCell[]
+  /** read_formula_cells reply flags (defaults: complete and not truncated) */
+  formulaIndexingComplete?: boolean
+  formulaTruncated?: boolean
+  /** evaluated cells recalc_cells reports (and optionally the error it raises) */
+  recalcCells?: readonly StubRecalcCell[]
+  recalcError?: Error
   openError?: Error
   /** raw byte length the stub open reply reports (real sidecars always
    * send it; omitted → the reply has no rawBytes, the pre-BUG-1305 shape) */
@@ -35,9 +60,22 @@ export interface StubIoOptions {
 
 export interface StubIo extends XlsxIo {
   /** calls per session id: open -> readRange/close counts for assertions */
-  readonly calls: { open: string[]; readRange: string[]; close: string[]; convert: string[] }
+  readonly calls: {
+    open: string[]
+    readRange: string[]
+    close: string[]
+    convert: string[]
+    readFormulaCells: string[]
+    recalcCells: string[]
+  }
   /** every read_range request's range as "r0..r1 x c0..c1" (0-based, inclusive) */
   readonly readRanges: string[]
+  /** every recalc_cells request (path + edits + read count) for assertions */
+  readonly recalcRequests: Array<{
+    path: string
+    edits: readonly { sheet: string; row: number; column: number; input: string }[]
+    reads: readonly { sheet: string; range: { startRow: number; endRow: number } }[]
+  }>
 }
 
 export function makeStubIo(options: StubIoOptions = {}): StubIo {
@@ -50,12 +88,16 @@ export function makeStubIo(options: StubIoOptions = {}): StubIo {
     readRange: [] as string[],
     close: [] as string[],
     convert: [] as string[],
+    readFormulaCells: [] as string[],
+    recalcCells: [] as string[],
   }
   const readRanges: string[] = []
+  const recalcRequests: StubIo['recalcRequests'] = []
   let sessionCounter = 0
   const io: StubIo = {
     calls,
     readRanges,
+    recalcRequests,
     async open(path: string) {
       calls.open.push(path)
       if (options.openError) throw options.openError
@@ -85,8 +127,33 @@ export function makeStubIo(options: StubIoOptions = {}): StubIo {
         indexingComplete: true,
       }
     },
-    async readFormulaCells() {
-      return { cells: [], indexingComplete: true, truncated: false }
+    async readFormulaCells(input: { sessionId: string; sheetId: string }) {
+      calls.readFormulaCells.push(`${input.sessionId}:${input.sheetId}`)
+      return {
+        cells: (options.formulaCells ?? []).filter((cell) => cell.sheetId === input.sheetId),
+        indexingComplete: options.formulaIndexingComplete !== false,
+        truncated: options.formulaTruncated === true,
+      }
+    },
+    async recalcCells(input: {
+      path: string
+      edits: readonly { sheet: string; row: number; column: number; input: string }[]
+      reads: readonly {
+        sheet: string
+        range: { startRow: number; endRow: number; startColumn: number; endColumn: number }
+      }[]
+    }) {
+      calls.recalcCells.push(input.path)
+      recalcRequests.push({
+        path: input.path,
+        edits: input.edits.map((edit) => ({ ...edit })),
+        reads: input.reads.map((read) => ({
+          sheet: read.sheet,
+          range: { startRow: read.range.startRow, endRow: read.range.endRow },
+        })),
+      })
+      if (options.recalcError) throw options.recalcError
+      return { cells: [...(options.recalcCells ?? [])] }
     },
     async close(sessionId: string) {
       calls.close.push(sessionId)
