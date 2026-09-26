@@ -65,6 +65,9 @@ const NEED_ISOLATION = [
   // Boots the real Univer DI graph (formula engine + undo service) for the
   // F9-spam undo round-trip (UX-1763).
   'tests/f9-undo-spam.univer.test.ts',
+  // Boots the real Univer DI graph (filter model) for the slicer-restore
+  // totals-band round-trip (BUG-1755).
+  'tests/slicer-totals-restore.univer.test.ts',
 ]
 
 export default defineConfig({

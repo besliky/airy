@@ -1182,8 +1182,13 @@ export function restoreImportedTableSlicers(ctx: PivotActionContext): void {
         continue
       }
       const absoluteColumn = area.startColumn + colId
+      // Same member collection as handleCreateTableSlicer: the totals band is
+      // not a slicer member (Excel keeps the totals row outside the filter),
+      // otherwise every reopen grows the panel with a phantom "Total" member
+      // that no data row can ever match (BUG-1755).
+      const totalsRows = tableMeta.totalsRowCount ?? 0
       const { members, moreCount } = tableSlicerMembers(
-        columnRawValues(worksheet, area.startRow + 1, absoluteColumn, area.endRow),
+        columnRawValues(worksheet, area.startRow + 1, absoluteColumn, area.endRow - totalsRows),
         t('appBlank'),
       )
       if (members.length === 0) continue
