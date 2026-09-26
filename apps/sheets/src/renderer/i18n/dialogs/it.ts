@@ -476,4 +476,21 @@ export const it = {
   dlgOutlineSummaryRight: 'Colonne di totali a destra del dettaglio',
   dlgOutlineSummaryLeft: 'Colonne di totali a sinistra del dettaglio',
   dlgOutlineSettingsNote: 'Si applica a questo foglio; salvato nelle impostazioni della struttura.',
+  dlgTableTitle: 'Progettazione tabella',
+  dlgTableName: 'Nome tabella',
+  dlgTableRange: 'Intervallo',
+  dlgTableStyle: 'Stile tabella',
+  dlgTableBandedRows: 'Righe con bande',
+  dlgTableConvert: 'Converti in intervallo',
+  dlgTableConvertConfirm:
+    'Convertire questa tabella in un intervallo normale? Filtri, bande e riga dei totali smettono di funzionare; i dati restano al loro posto.',
+  dlgTableNote:
+    'Il ridimensionamento tiene ancorata la cella di intestazione; restringendo, le celle liberate restano dov’è.',
+  dlgTableNotInTable: 'Seleziona prima una cella all’interno di una tabella.',
+  dlgTableBadName: 'Questo nome non è consentito per una tabella.',
+  dlgTableNameTaken: 'Questo nome di tabella è già in uso.',
+  dlgTableBadRange: 'Immetti un intervallo valido come A1:B4.',
+  dlgTableMoveHeader: "L'intervallo deve iniziare dalla cella di intestazione della tabella.",
+  dlgTablePendingShifts:
+    'Salva o annulla le modifiche di righe/colonne in sospeso prima di modificare le tabelle.',
 } satisfies Record<keyof typeof zh, string>

@@ -1435,4 +1435,10 @@ export const ms = {
   appOutlineSettingsSaved: 'Tetapan rangka direkodkan — dilaksanakan semasa menyimpan.',
   appOutlineNoSummaryLine: 'Baris ringkasan akan berada di luar helaian.',
   appTextToColsDone: '{rows} baris dipecahkan kepada {columns} lajur di {cell}.',
+  appTableDesign: 'Reka bentuk jadual',
+  appTableDesignDetail: 'Saiz semula, nama semula, gaya, tukar',
+  appTableUpdated: 'Jadual dikemas kini — simpan dengan ⌘S.',
+  appTableConverted: 'Jadual ditukar kepada julat — simpan dengan ⌘S.',
+  appSaveErrTableEditWithRowCol:
+    'Suntingan jadual tidak boleh disimpan bersama perubahan baris/lajur — simpan jadual dahulu.',
 } satisfies Record<keyof typeof zh, string>

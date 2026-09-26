@@ -1456,4 +1456,10 @@ export const ko = {
   appOutlineSettingsSaved: '윤곽 설정이 기록되었습니다. 저장 시 적용됩니다.',
   appOutlineNoSummaryLine: '요약 행이 시트 밖에 배치됩니다.',
   appTextToColsDone: '{rows}행을 {columns}열로 분리했습니다({cell}).',
+  appTableDesign: '테이블 디자인',
+  appTableDesignDetail: '크기 조정, 이름 바꾸기, 스타일, 변환',
+  appTableUpdated: '테이블이 업데이트되었습니다 — ⌘S로 저장하세요.',
+  appTableConverted: '테이블이 범위로 변환되었습니다 — ⌘S로 저장하세요.',
+  appSaveErrTableEditWithRowCol:
+    '테이블 편집은 행/열 변경과 함께 저장할 수 없습니다 — 먼저 테이블을 저장하세요.',
 } satisfies Record<keyof typeof zh, string>

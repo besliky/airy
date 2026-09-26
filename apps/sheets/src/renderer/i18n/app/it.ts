@@ -1475,4 +1475,10 @@ export const it = {
   appOutlineSettingsSaved: 'Impostazioni struttura registrate — applicate al salvataggio.',
   appOutlineNoSummaryLine: 'La riga dei totali cadrebbe fuori dal foglio.',
   appTextToColsDone: '{rows} righe divise in {columns} colonne a {cell}.',
+  appTableDesign: 'Progettazione tabella',
+  appTableDesignDetail: 'Ridimensiona, rinomina, stile, converti',
+  appTableUpdated: 'Tabella aggiornata — salva con ⌘S.',
+  appTableConverted: 'Tabella convertita in intervallo — salva con ⌘S.',
+  appSaveErrTableEditWithRowCol:
+    'Le modifiche alle tabelle non possono essere salvate insieme a cambiamenti di righe/colonne — salva prima la tabella.',
 } satisfies Record<keyof typeof zh, string>

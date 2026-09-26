@@ -475,4 +475,21 @@ export const id = {
   dlgOutlineSummaryRight: 'Kolom ringkasan di kanan detail',
   dlgOutlineSummaryLeft: 'Kolom ringkasan di kiri detail',
   dlgOutlineSettingsNote: 'Berlaku untuk sheet ini; disimpan dalam pengaturan kerangkanya.',
+  dlgTableTitle: 'Desain tabel',
+  dlgTableName: 'Nama tabel',
+  dlgTableRange: 'Rentang',
+  dlgTableStyle: 'Gaya tabel',
+  dlgTableBandedRows: 'Baris bergaris',
+  dlgTableConvert: 'Konversi ke rentang',
+  dlgTableConvertConfirm:
+    'Ubah tabel ini menjadi rentang biasa? Filter, garis-garis, dan baris total berhenti bekerja; datanya tetap ada.',
+  dlgTableNote:
+    'Pengubahan ukuran menahan sel header tetap; penyusutan membiarkan sel yang dilepas tetap di tempatnya.',
+  dlgTableNotInTable: 'Pilih sel di dalam tabel terlebih dahulu.',
+  dlgTableBadName: 'Nama itu tidak diizinkan untuk tabel.',
+  dlgTableNameTaken: 'Nama tabel itu sudah dipakai.',
+  dlgTableBadRange: 'Masukkan rentang yang valid seperti A1:B4.',
+  dlgTableMoveHeader: 'Rentang harus dimulai dari sel header tabel.',
+  dlgTablePendingShifts:
+    'Simpan atau batalkan perubahan baris/kolom yang tertunda sebelum mengedit tabel.',
 } satisfies Record<keyof typeof zh, string>

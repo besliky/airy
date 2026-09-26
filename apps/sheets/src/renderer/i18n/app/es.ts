@@ -1477,4 +1477,10 @@ export const es = {
   appOutlineSettingsSaved: 'Configuración del esquema registrada: se aplica al guardar.',
   appOutlineNoSummaryLine: 'La fila de totales quedaría fuera de la hoja.',
   appTextToColsDone: '{rows} filas divididas en {columns} columnas en {cell}.',
+  appTableDesign: 'Diseño de tabla',
+  appTableDesignDetail: 'Cambiar tamaño, renombrar, estilo, convertir',
+  appTableUpdated: 'Tabla actualizada — guarde con ⌘S.',
+  appTableConverted: 'Tabla convertida en rango — guarde con ⌘S.',
+  appSaveErrTableEditWithRowCol:
+    'Las ediciones de tabla no se pueden guardar junto con cambios de filas o columnas: guarde primero la tabla.',
 } satisfies Record<keyof typeof zh, string>

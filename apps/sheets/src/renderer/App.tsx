@@ -386,6 +386,12 @@ import {
   recordStructuralOp,
   shiftVisualForStructuralOp,
 } from './edit-journal'
+import {
+  applyTableDesignChange,
+  findTableDesignTarget,
+  parseRangeText,
+  type TableDesignSeed,
+} from './table-design'
 import { shiftPinnedCells } from './formula-closure'
 import { getLang, t, aiLangDirective } from './i18n/locale'
 import { planStillMatches } from './lazy-plan'
@@ -830,6 +836,50 @@ export function App(): React.JSX.Element {
       setMessage,
       setPendingEdits,
     }
+  }
+
+  /** The table under the active cell, for the Table Design dialog. */
+  function handleGetTableDesignSeed():
+    { kind: 'table'; seed: TableDesignSeed } | { kind: 'none'; message: string } {
+    const state = lazyWorkbookRef.current
+    const workbook = univerRef.current?.univerAPI.getActiveWorkbook()
+    const worksheet = workbook?.getActiveSheet()
+    const range = (() => {
+      try {
+        return workbook?.getActiveRange() ?? null
+      } catch {
+        return null
+      }
+    })()
+    if (!state || !worksheet || !range) return { kind: 'none', message: t('dlgTableNotInTable') }
+    return findTableDesignTarget(state, worksheet.getSheetId(), range.getRow(), range.getColumn())
+  }
+
+  /** Applies the Table Design dialog to the journal; error string or null. */
+  function handleApplyTableDesign(change: {
+    seed: TableDesignSeed
+    name: string
+    areaText: string
+    style: string | undefined
+    bandedRows: boolean
+    convertToRange: boolean
+  }): string | null {
+    const state = lazyWorkbookRef.current
+    if (!state) return t('appTablesNeedFile')
+    const area = parseRangeText(change.areaText)
+    if (!area) return t('dlgTableBadRange')
+    const failure = applyTableDesignChange(univerRef.current, state, {
+      seed: change.seed,
+      name: change.name,
+      area,
+      style: change.style,
+      bandedRows: change.bandedRows,
+      convertToRange: change.convertToRange,
+    })
+    if (failure !== null) return failure
+    setPendingEdits(journalSize(state.editJournal))
+    setMessage(change.convertToRange ? t('appTableConverted') : t('appTableUpdated'))
+    return null
   }
 
   /** App-scope refs/state bundle for the extracted visual-insert actions (visual-actions.ts). */
@@ -4657,6 +4707,8 @@ export function App(): React.JSX.Element {
         onGetSourceRange={() => getSourceRangeImpl(pivotContext())}
         onCreatePivot={(config) => handleCreatePivotImpl(pivotContext(), config)}
         onGetPivotEditSeed={() => pivotEditInitialImpl(pivotContext())}
+        onGetTableDesignSeed={handleGetTableDesignSeed}
+        onApplyTableDesign={handleApplyTableDesign}
         onEditPivot={(config) => handleEditPivotApplyImpl(pivotContext(), config)}
         onRefreshPivot={() => handleRefreshPivotImpl(pivotContext())}
         onIsSelectionInPivot={() => isSelectionInPivotImpl(pivotContext())}

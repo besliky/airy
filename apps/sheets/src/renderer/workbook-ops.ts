@@ -94,6 +94,9 @@ export function applyAiTableAdd(
   }
   // Rendering is best-effort (the facade call is async); the journal entry
   // below is what the save writes, and the gateway re-checks conflicts.
+  // The id is echoed in the journal so Table Design can resync (resize) or
+  // remove (Convert to Range) the Univer-side registration later.
+  const tableId = `ai-table-${state.editJournal.tableAdds.length + 1}-${Date.now().toString(36)}`
   void worksheet.addTable(
     name,
     {
@@ -102,7 +105,7 @@ export function applyAiTableAdd(
       endRow: bounds.endRow,
       endColumn: bounds.endColumn,
     },
-    `ai-table-${state.editJournal.tableAdds.length + 1}-${Date.now().toString(36)}`,
+    tableId,
   )
   recordTableAdd(state.editJournal, {
     sheetId: op.sheetId,
@@ -114,6 +117,7 @@ export function applyAiTableAdd(
     },
     name,
     columnNames,
+    tableId,
     ...(op.style === undefined ? {} : { style: op.style }),
     bandedRows: op.bandedRows ?? true,
   })

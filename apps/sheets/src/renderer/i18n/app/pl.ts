@@ -1464,4 +1464,10 @@ export const pl = {
   appOutlineSettingsSaved: 'Zapisano ustawienia konspektu — zostaną zastosowane przy zapisie.',
   appOutlineNoSummaryLine: 'Wiersz sum znalazłby się poza arkuszem.',
   appTextToColsDone: 'Podzielono {rows} wierszy na {columns} kolumny od {cell}.',
+  appTableDesign: 'Projekt tabeli',
+  appTableDesignDetail: 'Rozmiar, nazwa, styl, konwertuj',
+  appTableUpdated: 'Tabela zaktualizowana — zapisz przez ⌘S.',
+  appTableConverted: 'Tabela przekształcona w zakres — zapisz przez ⌘S.',
+  appSaveErrTableEditWithRowCol:
+    'Zmian tabeli nie można zapisać razem ze zmianami wierszy/kolumn — najpierw zapisz tabelę.',
 } satisfies Record<keyof typeof zh, string>

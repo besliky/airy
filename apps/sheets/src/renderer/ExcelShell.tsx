@@ -63,6 +63,8 @@ import { TextToColumnsDialog, type TextToColumnsSource } from './TextToColumnsDi
 import type { TextToColumnsConfig } from './text-to-columns'
 import type { TextToColumnsSourceResult } from './data-tools-actions'
 import { OutlineSettingsDialog, type OutlineSettingsValue } from './OutlineSettingsDialog'
+import { TableDesignDialog } from './TableDesignDialog'
+import type { TableDesignSeed } from './table-design'
 import type { PrintSetupOverrides } from './page-layout-actions'
 import type { PrintGuard } from './print-guard'
 import type { WorkbookExportPdfRequest } from '../shared/desktop-api'
@@ -285,6 +287,20 @@ interface ExcelShellProps {
   /// A3 editing of an existing pivot: when it returns null, App has already shown
   /// the reason and the dialog is not opened.
   readonly onGetPivotEditSeed: () => PivotEditSeed | null
+  /// The table under the active cell (session-added or file-stored), or a
+  /// user-facing reason there is none.
+  readonly onGetTableDesignSeed: () =>
+    | { readonly kind: 'table'; readonly seed: TableDesignSeed }
+    | { readonly kind: 'none'; readonly message: string }
+  /// Applies the Table Design dialog; returns an error message or null.
+  readonly onApplyTableDesign: (change: {
+    readonly seed: TableDesignSeed
+    readonly name: string
+    readonly areaText: string
+    readonly style: string | undefined
+    readonly bandedRows: boolean
+    readonly convertToRange: boolean
+  }) => string | null
   readonly onEditPivot: (config: OoXmlPivotConfig) => string | null
   readonly onRefreshPivot: () => string | null
   readonly onIsSelectionInPivot: () => boolean
@@ -408,6 +424,8 @@ export function ExcelShell({
   onGetSourceRange,
   onCreatePivot,
   onGetPivotEditSeed,
+  onGetTableDesignSeed,
+  onApplyTableDesign,
   onEditPivot,
   onRefreshPivot,
   onIsSelectionInPivot,
@@ -485,6 +503,8 @@ export function ExcelShell({
   const [showDedupeDialog, setShowDedupeDialog] = useState(false)
   const [showNameManager, setShowNameManager] = useState(false)
   const [showPivotDialog, setShowPivotDialog] = useState(false)
+  /// Non-null while the Table Design dialog shows a file/session table.
+  const [tableDesignSeed, setTableDesignSeed] = useState<TableDesignSeed | null>(null)
   const [pivotEditSeed, setPivotEditSeed] = useState<PivotEditSeed | null>(null)
   /** null = closed; string = open on that catalog category ('All' for the plain button) */
   const [insertFunctionCat, setInsertFunctionCat] = useState<string | null>(null)
@@ -817,7 +837,11 @@ export function ExcelShell({
             else if (command === 'name-manager-open') setShowNameManager(true)
             else if (command === 'pivot-open') setShowPivotDialog(true)
             else if (command === 'pivot-edit') setPivotEditSeed(onGetPivotEditSeed())
-            else if (command === 'insert-function-open') setInsertFunctionCat('All')
+            else if (command === 'table-design-open') {
+              const target = onGetTableDesignSeed()
+              if (target.kind === 'table') setTableDesignSeed(target.seed)
+              else onSetStatusMessage(target.message)
+            } else if (command === 'insert-function-open') setInsertFunctionCat('All')
             else if (command.startsWith('insert-function-open:'))
               setInsertFunctionCat(command.slice('insert-function-open:'.length))
             else if (command === 'goal-seek-open') setShowGoalSeek(true)
@@ -1018,6 +1042,13 @@ export function ExcelShell({
           sourceRange={onGetSourceRange()}
           onCreate={onCreatePivot}
           onClose={() => setShowPivotDialog(false)}
+        />
+      )}
+      {tableDesignSeed && (
+        <TableDesignDialog
+          seed={tableDesignSeed}
+          onApply={onApplyTableDesign}
+          onClose={() => setTableDesignSeed(null)}
         />
       )}
       {pivotEditSeed && (
@@ -1800,6 +1831,13 @@ function Ribbon({
             detail={t('appRealExcelTable')}
             symbol="▦"
             onClick={() => onCommand('format-as-table')}
+          />
+          <RibbonButton
+            large
+            label={t('appTableDesign')}
+            detail={t('appTableDesignDetail')}
+            symbol="▤"
+            onClick={() => onCommand('table-design-open')}
           />
         </RibbonGroup>
         <RibbonGroup label={t('appGroupIllustrations')}>

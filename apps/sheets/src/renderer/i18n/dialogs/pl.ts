@@ -476,4 +476,20 @@ export const pl = {
   dlgOutlineSummaryRight: 'Kolumny sum po prawej stronie szczegółów',
   dlgOutlineSummaryLeft: 'Kolumny sum po lewej stronie szczegółów',
   dlgOutlineSettingsNote: 'Dotyczy tego arkusza; zapisywane w ustawieniach konspektu.',
+  dlgTableTitle: 'Projekt tabeli',
+  dlgTableName: 'Nazwa tabeli',
+  dlgTableRange: 'Zakres',
+  dlgTableStyle: 'Styl tabeli',
+  dlgTableBandedRows: 'Pasiaste wiersze',
+  dlgTableConvert: 'Konwertuj na zakres',
+  dlgTableConvertConfirm:
+    'Przekształcić tę tabelę w zwykły zakres? Filtry, pasy i wiersz sum przestaną działać; dane pozostają na miejscu.',
+  dlgTableNote:
+    'Zmiana rozmiaru utrzymuje komórkę nagłówka na miejscu; zmniejszenie zostawia zwolnione komórki na miejscu.',
+  dlgTableNotInTable: 'Najpierw wybierz komórkę wewnątrz tabeli.',
+  dlgTableBadName: 'Ta nazwa nie jest dozwolona dla tabeli.',
+  dlgTableNameTaken: 'Ta nazwa tabeli jest już zajęta.',
+  dlgTableBadRange: 'Podaj poprawny zakres, np. A1:B4.',
+  dlgTableMoveHeader: 'Zakres musi zaczynać się od komórki nagłówka tabeli.',
+  dlgTablePendingShifts: 'Zapisz lub cofnij oczekujące zmiany wierszy/kolumn przed edycją tabel.',
 } satisfies Record<keyof typeof zh, string>

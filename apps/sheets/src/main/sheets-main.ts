@@ -4056,6 +4056,16 @@ async function writeWorkbookTo(
     style: table.style,
     bandedRows: table.bandedRows,
   }))
+  // File-table edits (PAR-202): sheetId → sheet name; everything else the
+  // gateway re-validates against the package.
+  const tableEdits = request.tableEdits.map((edit) => ({
+    sheetName: resolveSheetName(edit.sheetId),
+    tableName: edit.tableName,
+    ...(edit.rename === undefined ? {} : { rename: edit.rename }),
+    ...(edit.resize === undefined ? {} : { resize: edit.resize }),
+    ...(edit.style === undefined ? {} : { style: edit.style }),
+    ...(edit.convertToRange === undefined ? {} : { convertToRange: edit.convertToRange }),
+  }))
   const pivotAdditions = request.pivotAdditions.map((pivot) => ({
     sheetName: resolveSheetName(pivot.sheetId),
     sourceSheetName: resolveSheetName(pivot.sourceSheetId),
@@ -4127,6 +4137,7 @@ async function writeWorkbookTo(
     noteStates,
     threadedCommentStates,
     tableAdditions,
+    tableEdits,
     pivotAdditions,
     sparklineAdditions,
     formulaValues,

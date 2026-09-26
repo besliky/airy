@@ -30,6 +30,7 @@ import type {
   SheetSparklineAddition,
   SheetStructuralOps,
   SheetTableAddition,
+  SheetTableEditRequest,
   SheetVisualAddition,
   SheetFormulaValues,
 } from './xlsx-gateway'
@@ -108,6 +109,8 @@ export interface StreamingSaveRequest {
   readonly noteStates?: readonly SheetNoteState[] | undefined
   readonly threadedCommentStates?: readonly SheetThreadedCommentState[] | undefined
   readonly tableAdditions?: readonly SheetTableAddition[] | undefined
+  /// Edits to tables already in the file: resize/rename/style/convert.
+  readonly tableEdits?: readonly SheetTableEditRequest[] | undefined
   readonly pivotAdditions?: readonly SheetPivotAddition[] | undefined
   readonly pivotCacheRefreshPaths?: readonly string[] | undefined
   readonly pivotRefreshUpdates?: readonly PivotRefreshUpdate[] | undefined
@@ -186,6 +189,7 @@ export async function saveWorkbookViaSidecar(
       request.protectedRangeStates ?? [],
       request.bulkConstantFills ?? [],
       request.threadedCommentStates ?? [],
+      request.tableEdits ?? [],
     )
 
     const replacements = await writePlanContents(workDir, 'replace', plan.replaced)

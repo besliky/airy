@@ -479,4 +479,21 @@ export const de = {
   dlgOutlineSummaryLeft: 'Summenspalten links der Details',
   dlgOutlineSettingsNote:
     'Gilt für dieses Blatt; wird in dessen Gliederungseinstellungen gespeichert.',
+  dlgTableTitle: 'Tabellenentwurf',
+  dlgTableName: 'Tabellenname',
+  dlgTableRange: 'Bereich',
+  dlgTableStyle: 'Tabellenstil',
+  dlgTableBandedRows: 'Zebrastreifen',
+  dlgTableConvert: 'In Bereich umwandeln',
+  dlgTableConvertConfirm:
+    'Diese Tabelle in einen normalen Bereich umwandeln? Filter, Banding und die Ergebniszeile funktionieren dann nicht mehr; die Daten bleiben erhalten.',
+  dlgTableNote:
+    'Beim Ändern der Größe bleibt die Kopfzelle verankert; beim Verkleinern bleiben die freigegebenen Zellen an Ort und Stelle.',
+  dlgTableNotInTable: 'Wählen Sie zuerst eine Zelle innerhalb einer Tabelle.',
+  dlgTableBadName: 'Dieser Name ist für eine Tabelle nicht zulässig.',
+  dlgTableNameTaken: 'Dieser Tabellenname wird bereits verwendet.',
+  dlgTableBadRange: 'Geben Sie einen gültigen Bereich wie A1:B4 ein.',
+  dlgTableMoveHeader: 'Der Bereich muss an der Kopfzelle der Tabelle beginnen.',
+  dlgTablePendingShifts:
+    'Sichern oder widerrufen Sie zuerst die ausstehenden Zeilen-/Spaltenänderungen, bevor Sie Tabellen bearbeiten.',
 } satisfies Record<keyof typeof zh, string>

@@ -1981,8 +1981,46 @@ export const workbookTableAddSchema = z
       .regex(/^TableStyle(?:Light|Medium|Dark)[1-9][0-9]?$/)
       .optional(),
     bandedRows: z.boolean(),
+    /// Renderer-assigned Univer table id, echoed for in-session table
+    /// resyncs (remove/add on rename or Convert to Range). The save itself
+    /// ignores it.
+    tableId: z.string().min(1).max(120).optional(),
   })
   .strict()
+
+/// One edit against a table already stored in the file (PAR-202): resize
+/// (header-anchored), rename, style tweak, and/or Convert to Range. The
+/// gateway re-validates everything fail-closed against the actual package.
+export const workbookTableEditSchema = z
+  .object({
+    sheetId: z.string().min(1),
+    /// The table's current name (the displayName token structured refs use).
+    tableName: z.string().min(1).max(255),
+    rename: z.string().min(1).max(255).optional(),
+    /// New area; the start row/column must stay put (Excel's Resize Table
+    /// keeps the header cell anchored).
+    resize: z.object({ area: cellAreaSchema }).strict().optional(),
+    style: z
+      .object({
+        style: z
+          .string()
+          .regex(/^TableStyle(?:Light|Medium|Dark)[1-9][0-9]?$/)
+          .optional(),
+        bandedRows: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
+    convertToRange: z.boolean().optional(),
+  })
+  .strict()
+  .refine(
+    (edit) =>
+      edit.rename !== undefined ||
+      edit.resize !== undefined ||
+      edit.style !== undefined ||
+      edit.convertToRange === true,
+    { message: 'A table edit needs at least one change.' },
+  )
 
 /// A PivotTable created in the editor this session. The aggregated grid is
 /// already baked into cells (as ordinary cell edits); the save additionally
@@ -2196,6 +2234,8 @@ export const workbookSaveRequestSchema = z
     visualEdits: z.array(workbookVisualEditSchema).max(100),
     visualAdditions: z.array(workbookVisualAddSchema).max(50),
     tableAdditions: z.array(workbookTableAddSchema).max(50),
+    /// Edits to tables already in the file: resize/rename/style/convert.
+    tableEdits: z.array(workbookTableEditSchema).max(50).default([]),
     pivotAdditions: z.array(workbookPivotAddSchema).max(20),
     sheetOps: z.array(workbookSheetOpSchema).max(100),
     /// Final tab order (Univer sheet ids); required with any sheet op.
@@ -2372,6 +2412,7 @@ export const workbookSaveRequestSchema = z
       request.protectedRangeStates.length > 0 ||
       request.visualAdditions.length > 0 ||
       request.tableAdditions.length > 0 ||
+      request.tableEdits.length > 0 ||
       request.pivotAdditions.length > 0 ||
       request.sparklineAdditions.length > 0,
     { message: 'A save needs at least one edit.' },
@@ -2647,6 +2688,7 @@ export type ScreenCaptureResult = z.infer<typeof screenCaptureResultSchema>
 export type WorkbookVisualObject = z.infer<typeof visualObjectSchema>
 export type WorkbookVisualAdd = z.infer<typeof workbookVisualAddSchema>
 export type WorkbookTableAdd = z.infer<typeof workbookTableAddSchema>
+export type WorkbookTableEdit = z.infer<typeof workbookTableEditSchema>
 export type WorkbookPivotAdd = z.infer<typeof workbookPivotAddSchema>
 export type WorkbookCellStyle = z.infer<typeof cellStyleSchema>
 export type WorkbookRichRun = z.infer<typeof richRunSchema>

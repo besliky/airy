@@ -1438,4 +1438,10 @@ export const cs = {
   appOutlineSettingsSaved: 'Nastavení osnovy zaznamenáno — použije se při uložení.',
   appOutlineNoSummaryLine: 'Řádek souhrnu by spadl mimo list.',
   appTextToColsDone: 'Rozděleno {rows} řádků do {columns} sloupců od {cell}.',
+  appTableDesign: 'Návrh tabulky',
+  appTableDesignDetail: 'Velikost, přejmenování, styl, převod',
+  appTableUpdated: 'Tabulka aktualizována — uložte pomocí ⌘S.',
+  appTableConverted: 'Tabulka převedena na oblast — uložte pomocí ⌘S.',
+  appSaveErrTableEditWithRowCol:
+    'Úpravy tabulky nelze uložit spolu se změnami řádků/sloupců — nejprve tabulku uložte.',
 } satisfies Record<keyof typeof zh, string>

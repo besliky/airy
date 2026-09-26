@@ -1800,6 +1800,7 @@ function parseSaveRequest(input: WorkbookSaveRequest): WorkbookSaveRequest {
   cappedArray('visual edits', input.visualEdits, 100)
   cappedArray('visual additions', input.visualAdditions, 100)
   cappedArray('table additions', input.tableAdditions, 50)
+  cappedArray('table edits', input.tableEdits ?? [], 50)
   cappedArray('pivot additions', input.pivotAdditions, 20)
   cappedArray('sheet operations', input.sheetOps, 100)
   cappedArray('sheet order', input.sheetOrder, 1_000)
@@ -1888,6 +1889,7 @@ function parseSaveRequest(input: WorkbookSaveRequest): WorkbookSaveRequest {
     input.visualEdits.length === 0 &&
     input.visualAdditions.length === 0 &&
     input.tableAdditions.length === 0 &&
+    (input.tableEdits?.length ?? 0) === 0 &&
     input.pivotAdditions.length === 0 &&
     (input.sparklineAdditions?.length ?? 0) === 0 &&
     input.sheetOps.length === 0 &&
@@ -1955,6 +1957,26 @@ function parseSaveRequest(input: WorkbookSaveRequest): WorkbookSaveRequest {
       throw new Error('Invalid workbook table addition.')
     }
     parseCellArea(table.area)
+  }
+  for (const edit of input.tableEdits ?? []) {
+    if (
+      !isRecord(edit) ||
+      typeof edit.sheetId !== 'string' ||
+      edit.sheetId.length === 0 ||
+      typeof edit.tableName !== 'string' ||
+      edit.tableName.length === 0 ||
+      edit.tableName.length > 255 ||
+      (edit.rename !== undefined &&
+        (typeof edit.rename !== 'string' ||
+          edit.rename.length === 0 ||
+          edit.rename.length > 255)) ||
+      (edit.resize !== undefined && !isRecord(edit.resize)) ||
+      (edit.style !== undefined && !isRecord(edit.style)) ||
+      (edit.convertToRange !== undefined && typeof edit.convertToRange !== 'boolean')
+    ) {
+      throw new Error('Invalid workbook table edit.')
+    }
+    if (edit.resize !== undefined) parseCellArea(edit.resize.area)
   }
   for (const pivot of input.pivotAdditions) {
     if (

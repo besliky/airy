@@ -476,4 +476,21 @@ export const es = {
   dlgOutlineSummaryRight: 'Columnas de totales a la derecha del detalle',
   dlgOutlineSummaryLeft: 'Columnas de totales a la izquierda del detalle',
   dlgOutlineSettingsNote: 'Se aplica a esta hoja; se guarda en su configuración de esquema.',
+  dlgTableTitle: 'Diseño de tabla',
+  dlgTableName: 'Nombre de la tabla',
+  dlgTableRange: 'Rango',
+  dlgTableStyle: 'Estilo de tabla',
+  dlgTableBandedRows: 'Filas con bandas',
+  dlgTableConvert: 'Convertir en rango',
+  dlgTableConvertConfirm:
+    '¿Convertir esta tabla en un rango normal? Los filtros, las bandas y la fila de totales dejan de funcionar; los datos permanecen.',
+  dlgTableNote:
+    'Al cambiar el tamaño, la celda de encabezado queda anclada; al reducir, las celdas liberadas permanecen en su lugar.',
+  dlgTableNotInTable: 'Seleccione primero una celda dentro de una tabla.',
+  dlgTableBadName: 'Ese nombre no está permitido para una tabla.',
+  dlgTableNameTaken: 'Ese nombre de tabla ya está en uso.',
+  dlgTableBadRange: 'Escriba un rango válido como A1:B4.',
+  dlgTableMoveHeader: 'El rango debe comenzar en la celda de encabezado de la tabla.',
+  dlgTablePendingShifts:
+    'Guarde o deshaga los cambios de filas o columnas pendientes antes de editar tablas.',
 } satisfies Record<keyof typeof zh, string>

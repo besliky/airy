@@ -475,4 +475,20 @@ export const en = {
   dlgOutlineSummaryRight: 'Summary columns to the right of detail',
   dlgOutlineSummaryLeft: 'Summary columns to the left of detail',
   dlgOutlineSettingsNote: 'Applies to this sheet; saved into its outline settings.',
+  dlgTableTitle: 'Table Design',
+  dlgTableName: 'Table name',
+  dlgTableRange: 'Range',
+  dlgTableStyle: 'Table style',
+  dlgTableBandedRows: 'Banded rows',
+  dlgTableConvert: 'Convert to range',
+  dlgTableConvertConfirm:
+    'Convert this table to a normal range? Filters, banding, and the totals row stop working; the data itself stays.',
+  dlgTableNote:
+    'Resizing keeps the header cell anchored; shrinking leaves the released cells in place.',
+  dlgTableNotInTable: 'Select a cell inside a table first.',
+  dlgTableBadName: 'That name is not allowed for a table.',
+  dlgTableNameTaken: 'That table name is already taken.',
+  dlgTableBadRange: 'Enter a valid range like A1:B4.',
+  dlgTableMoveHeader: 'The range must start at the header cell of the table.',
+  dlgTablePendingShifts: 'Save or undo the pending row/column changes before editing tables.',
 } satisfies Record<keyof typeof zh, string>

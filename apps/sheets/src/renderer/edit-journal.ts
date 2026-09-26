@@ -12,6 +12,7 @@ import type {
   WorkbookPivotAdd,
   WorkbookStyleEdit,
   WorkbookTableAdd,
+  WorkbookTableEdit,
   WorkbookVisualAdd,
   WorkbookVisualEdit,
   WorkbookVisualObject,
@@ -154,6 +155,11 @@ export interface EditJournal {
   /// Tables created this session; the save writes each as a new xl/tables
   /// part registered on its worksheet.
   readonly tableAdds: WorkbookTableAdd[]
+  /// Edits to tables already in the file (PAR-202), keyed by the table's
+  /// original name: resize (header-anchored), rename, style, Convert to
+  /// Range. Coordinates are final at record time — the renderer refuses
+  /// table edits on sheets with pending row/column shifts.
+  readonly tableEdits: TableEditEntry[]
   /// Pivots created this session; the baked cells ride the normal cell
   /// journal, the save additionally writes native pivot parts.
   readonly pivotAdds: WorkbookPivotAdd[]
@@ -281,6 +287,7 @@ export function createEditJournal(): EditJournal {
     visualAdds: [],
     visualEdits: new Map(),
     tableAdds: [],
+    tableEdits: [],
     pivotAdds: [],
     sparklineAdds: [],
     sheets: {
@@ -668,8 +675,9 @@ export function recordTableAdd(journal: EditJournal, table: WorkbookTableAdd): v
   journal.tableAdds.push(table)
 }
 
-/// Updates the stored area and optionally columnNames of a session-added table.
-/// Returns false when no matching table is found (fail-closed: caller should throw).
+/// Updates the stored area, column names, name, style, or Univer table id
+/// of a session-added table. Returns false when no matching table is found
+/// (fail-closed: caller should throw).
 export function updateTableAdd(
   journal: EditJournal,
   sheetId: string,
@@ -677,6 +685,10 @@ export function updateTableAdd(
   patch: {
     area?: { startRow: number; startColumn: number; endRow: number; endColumn: number }
     columnNames?: readonly string[]
+    name?: string
+    style?: string | undefined
+    bandedRows?: boolean
+    tableId?: string
   },
 ): boolean {
   const index = journal.tableAdds.findIndex(
@@ -688,8 +700,67 @@ export function updateTableAdd(
     ...existing,
     ...(patch.area !== undefined ? { area: patch.area } : {}),
     ...(patch.columnNames !== undefined ? { columnNames: [...patch.columnNames] } : {}),
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.style !== undefined ? { style: patch.style } : {}),
+    ...(patch.bandedRows !== undefined ? { bandedRows: patch.bandedRows } : {}),
+    ...(patch.tableId !== undefined ? { tableId: patch.tableId } : {}),
   }
   return true
+}
+
+/// One pending edit set for a file table, addressed by its name in the file
+/// at the time of the first edit this session. Successive edits merge (the
+/// latest resize/name/style wins, `convertToRange` is final).
+export interface TableEditEntry {
+  readonly sheetId: string
+  readonly tableName: string
+  rename?: string | undefined
+  resize?: { area: WorkbookTableAdd['area'] } | undefined
+  style?: { style?: string | undefined; bandedRows?: boolean | undefined } | undefined
+  convertToRange?: boolean | undefined
+}
+
+/// Records (or merges into) a file-table edit; returns the merged entry.
+export function recordTableEdit(journal: EditJournal, entry: TableEditEntry): TableEditEntry {
+  const index = journal.tableEdits.findIndex(
+    (candidate) =>
+      candidate.sheetId === entry.sheetId &&
+      candidate.tableName.toLowerCase() === entry.tableName.toLowerCase(),
+  )
+  if (index < 0) {
+    journal.tableEdits.push(entry)
+    return entry
+  }
+  const merged: TableEditEntry = {
+    ...journal.tableEdits[index]!,
+    ...(entry.rename !== undefined ? { rename: entry.rename } : {}),
+    ...(entry.resize !== undefined ? { resize: entry.resize } : {}),
+    ...(entry.style !== undefined
+      ? {
+          style: {
+            ...journal.tableEdits[index]!.style,
+            ...entry.style,
+          },
+        }
+      : {}),
+    ...(entry.convertToRange !== undefined ? { convertToRange: entry.convertToRange } : {}),
+  }
+  ;(journal.tableEdits as TableEditEntry[])[index] = merged
+  return merged
+}
+
+/// File-table edits for the save request; edits on removed sheets drop.
+export function toSaveTableEdits(journal: EditJournal): WorkbookTableEdit[] {
+  return journal.tableEdits
+    .filter((entry) => !isSheetRemoved(journal, entry.sheetId))
+    .map((entry) => ({
+      sheetId: entry.sheetId,
+      tableName: entry.tableName,
+      ...(entry.rename === undefined ? {} : { rename: entry.rename }),
+      ...(entry.resize === undefined ? {} : { resize: entry.resize }),
+      ...(entry.style === undefined ? {} : { style: entry.style }),
+      ...(entry.convertToRange === undefined ? {} : { convertToRange: entry.convertToRange }),
+    }))
 }
 
 export function recordPivotAdd(journal: EditJournal, pivot: WorkbookPivotAdd): void {

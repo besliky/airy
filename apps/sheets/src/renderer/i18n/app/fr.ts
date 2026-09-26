@@ -1499,4 +1499,10 @@ export const fr = {
   appOutlineSettingsSaved: 'Paramètres du plan enregistrés — appliqués à l’enregistrement.',
   appOutlineNoSummaryLine: 'La ligne de total serait hors de la feuille.',
   appTextToColsDone: '{rows} lignes fractionnées en {columns} colonnes à {cell}.',
+  appTableDesign: 'Création de tableau',
+  appTableDesignDetail: 'Redimensionner, renommer, style, convertir',
+  appTableUpdated: 'Tableau mis à jour — enregistrez avec ⌘S.',
+  appTableConverted: 'Tableau converti en plage — enregistrez avec ⌘S.',
+  appSaveErrTableEditWithRowCol:
+    'Les modifications de tableau ne peuvent pas être enregistrées avec des changements de lignes/colonnes — enregistrez d’abord le tableau.',
 } satisfies Record<keyof typeof zh, string>

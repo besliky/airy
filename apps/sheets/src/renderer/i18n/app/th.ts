@@ -1401,4 +1401,10 @@ export const th = {
   appOutlineSettingsSaved: 'บันทึกการตั้งค่าเค้าร่างแล้ว จะมีผลเมื่อบันทึก',
   appOutlineNoSummaryLine: 'แถวสรุปจะอยู่นอกชีต',
   appTextToColsDone: 'แยก {rows} แถวเป็น {columns} คอลัมน์ที่ {cell}',
+  appTableDesign: 'ออกแบบตาราง',
+  appTableDesignDetail: 'ปรับขนาด เปลี่ยนชื่อ สไตล์ แปลง',
+  appTableUpdated: 'อัปเดตตารางแล้ว — บันทึกด้วย ⌘S',
+  appTableConverted: 'แปลงตารางเป็นช่วงข้อมูลแล้ว — บันทึกด้วย ⌘S',
+  appSaveErrTableEditWithRowCol:
+    'แก้ไขตารางไม่สามารถบันทึกพร้อมกับการเปลี่ยนแปลงแถว/คอลัมน์ได้ — บันทึกตารางก่อน',
 } satisfies Record<keyof typeof zh, string>

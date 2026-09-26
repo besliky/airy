@@ -1488,4 +1488,10 @@ export const de = {
     'Gliederungseinstellungen aufgezeichnet — sie werden beim Speichern übernommen.',
   appOutlineNoSummaryLine: 'Die Summenzeile läge außerhalb des Blatts.',
   appTextToColsDone: '{rows} Zeilen in {columns} Spalten bei {cell} aufgeteilt.',
+  appTableDesign: 'Tabellenentwurf',
+  appTableDesignDetail: 'Größe, Name, Stil, Konvertieren',
+  appTableUpdated: 'Tabelle aktualisiert — mit ⌘S sichern.',
+  appTableConverted: 'Tabelle in einen Bereich umgewandelt — mit ⌘S sichern.',
+  appSaveErrTableEditWithRowCol:
+    'Tabellenbearbeitungen können nicht zusammen mit Zeilen-/Spaltenänderungen gesichert werden — sichern Sie zuerst die Tabelle.',
 } satisfies Record<keyof typeof zh, string>

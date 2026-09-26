@@ -1431,4 +1431,10 @@ export const hi = {
   appOutlineSettingsSaved: 'रूपरेखा सेटिंग्स दर्ज हुईं — सहेजने पर लागू होंगी।',
   appOutlineNoSummaryLine: 'सारांश पंक्ति शीट के बाहर होगी।',
   appTextToColsDone: '{cell} पर {rows} पंक्तियाँ {columns} कॉलम में विभाजित हुईं।',
+  appTableDesign: 'टेबल डिज़ाइन',
+  appTableDesignDetail: 'आकार बदलें, नाम बदलें, स्टाइल, रूपांतरित करें',
+  appTableUpdated: 'टेबल अपडेट हुआ — ⌘S से सहेजें।',
+  appTableConverted: 'टेबल को रेंज में बदल दिया गया — ⌘S से सहेजें।',
+  appSaveErrTableEditWithRowCol:
+    'टेबल संपादन को पंक्ति/स्तंभ परिवर्तनों के साथ नहीं सहेजा जा सकता — पहले टेबल सहेजें।',
 } satisfies Record<keyof typeof zh, string>

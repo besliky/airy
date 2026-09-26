@@ -1345,4 +1345,9 @@ export const zhTW = {
   appOutlineSettingsSaved: '已記錄大綱設定，儲存時寫入檔案。',
   appOutlineNoSummaryLine: '摘要列將落在工作表之外。',
   appTextToColsDone: '已將 {rows} 列分割為 {columns} 欄，起始儲存格 {cell}。',
+  appTableDesign: '表格設計',
+  appTableDesignDetail: '調整大小、重新命名、樣式、轉換',
+  appTableUpdated: '表格已更新——請用 ⌘S 儲存。',
+  appTableConverted: '表格已轉換為範圍——請用 ⌘S 儲存。',
+  appSaveErrTableEditWithRowCol: '表格編輯不能與列欄變更一起儲存——請先儲存表格。',
 } satisfies Record<keyof typeof zh, string>

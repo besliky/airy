@@ -475,4 +475,21 @@ export const pt = {
   dlgOutlineSummaryRight: 'Colunas de totais à direita do detalhe',
   dlgOutlineSummaryLeft: 'Colunas de totais à esquerda do detalhe',
   dlgOutlineSettingsNote: 'Aplica-se a esta planilha; salvo em suas configurações de estrutura.',
+  dlgTableTitle: 'Design de tabela',
+  dlgTableName: 'Nome da tabela',
+  dlgTableRange: 'Intervalo',
+  dlgTableStyle: 'Estilo de tabela',
+  dlgTableBandedRows: 'Linhas listradas',
+  dlgTableConvert: 'Converter em intervalo',
+  dlgTableConvertConfirm:
+    'Converter esta tabela num intervalo normal? Filtros, faixas e a linha de totais deixam de funcionar; os dados permanecem.',
+  dlgTableNote:
+    'Redimensionar mantém a célula de cabeçalho ancorada; encolher deixa as células libertadas no lugar.',
+  dlgTableNotInTable: 'Selecione primeiro uma célula dentro de uma tabela.',
+  dlgTableBadName: 'Esse nome não é permitido para uma tabela.',
+  dlgTableNameTaken: 'Esse nome de tabela já está em uso.',
+  dlgTableBadRange: 'Introduza um intervalo válido como A1:B4.',
+  dlgTableMoveHeader: 'O intervalo deve começar na célula de cabeçalho da tabela.',
+  dlgTablePendingShifts:
+    'Guarde ou desfça as alterações pendentes de linhas/colunas antes de editar tabelas.',
 } satisfies Record<keyof typeof zh, string>
