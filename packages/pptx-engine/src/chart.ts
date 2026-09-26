@@ -40,11 +40,31 @@ export type ChartKind =
   | 'waterfall'
   | 'unknown'
 
+/** One series trendline (c:trendline). Only the linear regression is modeled —
+ *  exp/log/poly/power/movingAvg stay PowerPoint-only (documented limitation). */
+export interface ChartTrendline {
+  kind: 'linear'
+  /** c:name display name (render layer falls back to the series name) */
+  name?: string
+  /** Line stroke #RRGGBB (c:spPr a:ln solidFill) */
+  color?: string
+  /** Line width pt (c:spPr a:ln @w) */
+  widthPt?: number
+  /** Line dash (c:spPr a:prstDash, non-solid only) */
+  dash?: string
+  /** Show R² next to the line (c:dispRSqr) */
+  dispRSqr?: boolean
+  /** Show the y = slope·x + intercept equation (c:dispEq) */
+  dispEq?: boolean
+}
+
 export interface ChartSeries {
   name?: string
   /** Series main color #RRGGBB (explicit spPr color; render layer fills in from the theme palette otherwise) */
   color?: string
   values: Array<number | null>
+  /** Linear trendlines attached to this series (c:trendline; non-linear regressions are dropped at parse) */
+  trendlines?: ChartTrendline[]
   /** Combo chart (e.g. bar+line): the plot type this series belongs to; default = ChartModel.kind */
   plotKind?: 'line' | 'bar' | 'area'
   /** Scatter: x values (c:xVal numeric cache; y values in values). Empty → render layer uses ordinals 1..n */
@@ -451,6 +471,17 @@ export function parseChartXml(
       // scatter/radar: default marker decided by style; only set for explicit symbol (none → false)
       else if ((plotKind === 'scatter' || plotKind === 'radar') && markerSym != null)
         s.marker = markerSym !== 'none'
+      // Trendlines (c:trendline, schema position after c:dLbls): only linear is modeled,
+      // other regressions (exp/log/poly/power/movingAvg) drop here
+      const tlRaws: any[] = Array.isArray(ser['c:trendline'])
+        ? ser['c:trendline']
+        : ser['c:trendline']
+          ? [ser['c:trendline']]
+          : []
+      const trendlines = tlRaws
+        .map(parseTrendline)
+        .filter((t): t is ChartTrendline => t != null)
+      if (trendlines.length) s.trendlines = trendlines
       const expl = parseInt(ser['c:explosion']?.['@_val'], 10)
       if (Number.isFinite(expl) && expl > 0) s.explosionPct = expl
       // Per-data-point colors (one color per pie slice)
@@ -965,6 +996,29 @@ function serColor(ser: any, theme: Theme | undefined, preferLine: boolean): stri
   const lnColor = resolveColorNode(spPr['a:ln']?.['a:solidFill'], theme)
   const fillColor = resolveColorNode(spPr['a:solidFill'], theme)
   return preferLine ? (lnColor ?? fillColor) : (fillColor ?? lnColor)
+}
+
+/** One c:trendline → ChartTrendline; null for regressions we do not draw (non-linear types). */
+function parseTrendline(tl: any): ChartTrendline | null {
+  if (!tl || typeof tl !== 'object') return null
+  // Missing c:trendlineType defaults to linear per the schema (PowerPoint always writes it)
+  const type = tl['c:trendlineType']?.['@_val'] ?? 'linear'
+  if (type !== 'linear') return null
+  const out: ChartTrendline = { kind: 'linear' }
+  const name = tl['c:name']
+  if (typeof name === 'string' && name) out.name = name
+  const ln = tl['c:spPr']?.['a:ln']
+  if (ln && typeof ln === 'object') {
+    const color = resolveColorNode(ln['a:solidFill'], undefined)
+    if (color) out.color = color
+    const w = parseInt(ln['@_w'], 10)
+    if (Number.isFinite(w) && w > 0) out.widthPt = w / 12700
+    const dash = ln['a:prstDash']?.['@_val']
+    if (typeof dash === 'string' && dash !== 'solid') out.dash = dash
+  }
+  if (tl['c:dispRSqr']?.['@_val'] === '1') out.dispRSqr = true
+  if (tl['c:dispEq']?.['@_val'] === '1') out.dispEq = true
+  return out
 }
 
 function parseAxis(ax: any, theme?: Theme): ChartAxisStyle | undefined {

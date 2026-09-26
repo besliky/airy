@@ -9,11 +9,12 @@
  * independent right-side range + tick labels). Unrecognized types fall back to a
  * placeholder chip upstream.
  */
-import type { ChartModel } from '@airy-office/pptx-engine'
+import type { ChartModel, ChartTrendline } from '@airy-office/pptx-engine'
 import type { ChartRenderNode } from './render-tree'
 import type { PlacedBox } from './coords'
 import { emuToPx, ptToPx, type Viewport } from './coords'
 import type { FontMetricsProvider, RunStyle } from './metrics'
+import { formatRSquared, formatTrendEquation, linearFit, type LinearFit } from './trendline'
 
 /** Default series palette (approximation of PowerPoint's default theme accent sequence). */
 const PALETTE = ['#4472C4', '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5', '#70AD47']
@@ -113,6 +114,65 @@ function dashArray(val: string | undefined, widthPx: number): number[] {
     default:
       return [4 * u, 3 * u]
   }
+}
+
+/**
+ * One linear trendline (c:trendline): a dashed segment across the plot with the
+ * y endpoints clamped into the plot area, plus the optional equation / R² tag
+ * floating just above the right end. PowerPoint's default trendline formatting
+ * is a dashed line in the series color — an explicit c:spPr color/dash wins,
+ * and an explicit `prstDash solid` from a foreign file still renders dashed
+ * (the parser models non-solid dashes only — documented approximation).
+ *
+ * `dataX0/dataX1` are the fit's domain values at the segment ends (category
+ * ordinals or scatter x), `pxX0/pxX1` their pixel positions; `yAt` maps a fit
+ * value to pixel y.
+ */
+function pushTrendline(
+  node: ChartRenderNode,
+  tl: ChartTrendline,
+  fit: LinearFit,
+  dataX0: number,
+  dataX1: number,
+  pxX0: number,
+  pxX1: number,
+  yAt: (v: number) => number,
+  plot: { x: number; y: number; w: number; h: number },
+  fallbackColor: string,
+  widthPx: number,
+  measure: (t: string, sizePx: number) => number,
+  tagFontPx: number,
+): void {
+  const clampY = (v: number) => Math.min(Math.max(yAt(v), plot.y), plot.y + plot.h)
+  const yStart = clampY(fit.slope * dataX0 + fit.intercept)
+  const yEnd = clampY(fit.slope * dataX1 + fit.intercept)
+  node.polylines.push({
+    points: [pxX0, yStart, pxX1, yEnd],
+    color: tl.color ?? fallbackColor,
+    widthPx,
+    dash: tl.dash ? dashArray(tl.dash, widthPx) : [4, 3],
+  })
+  const tags = [
+    ...(tl.dispEq ? [formatTrendEquation(fit.slope, fit.intercept)] : []),
+    ...(tl.dispRSqr ? [formatRSquared(fit.r2)] : []),
+  ]
+  if (!tags.length) return
+  // PowerPoint floats the label just above the line's right end, kept inside the plot
+  const textW = Math.max(...tags.map((t) => measure(t, tagFontPx)))
+  const tx = Math.min(Math.max(pxX1 - textW / 2, plot.x + 2), plot.x + plot.w - textW - 2)
+  const ty = Math.min(
+    Math.max(yEnd - tagFontPx * 1.35 * tags.length, plot.y + 2),
+    plot.y + plot.h - tagFontPx * 1.25 * tags.length,
+  )
+  tags.forEach((t, k) => {
+    node.labels.push({
+      text: t,
+      x: tx,
+      y: ty + k * tagFontPx * 1.25,
+      fontSizePx: tagFontPx,
+      color: '#404040',
+    })
+  })
 }
 
 export function buildChartNode(
@@ -1083,6 +1143,44 @@ function buildChartNodeInner(
           ...(ser.smooth ? { smooth: true } : {}),
           ...(ser.dash ? { dash: dashArray(ser.dash, w) } : {}),
         })
+      }
+    })
+  }
+
+  // ── Linear trendlines (c:trendline, least squares over the series values) ──
+  // Fit runs over category ordinals 0..n-1 (percent-stacked series use their
+  // normalized plot values); the segment spans the full category range and is
+  // clamped into the plot area like PowerPoint's.
+  {
+    const trendW = Math.max(1.5, ptToPx(1.5, vp.scale))
+    const tagFontPx = labelSizePx * 0.9
+    model.series.forEach((ser, si) => {
+      if (!ser.trendlines?.length) return
+      const pairs: Array<{ x: number; y: number }> = []
+      for (let i = 0; i < n; i++) {
+        const v = valueAt(si, i)
+        if (v != null) pairs.push({ x: i, y: v })
+      }
+      const fit = linearFit(pairs)
+      if (!fit) return
+      const yOfSer = onSecAxis(ser) ? yOf2 : yOf
+      const pxAt = (i: number) => plot.x + catSlot(i) * slotW + slotW / 2
+      for (const tl of ser.trendlines) {
+        pushTrendline(
+          node,
+          tl,
+          fit,
+          0,
+          n - 1,
+          pxAt(0),
+          pxAt(n - 1),
+          yOfSer,
+          plot,
+          seriesColor(si)!,
+          tl.widthPt ? Math.max(1, ptToPx(tl.widthPt, vp.scale)) : trendW,
+          (t, px) => measure(t, px),
+          tagFontPx,
+        )
       }
     })
   }
@@ -2563,6 +2661,37 @@ function buildScatterNode(
       })
     }
   })
+
+  // Linear trendlines (c:trendline): least squares over the real x/y pairs,
+  // drawn across the series' own x extent (endpoints clamped into the plot)
+  {
+    const trendW = Math.max(1.5, ptToPx(1.5, vp.scale))
+    const tagFontPx = labelSizePx * 0.9
+    model.series.forEach((ser, si) => {
+      if (!ser.trendlines?.length) return
+      const pts = points[si]
+      const fit = pts && pts.length >= 2 ? linearFit(pts) : null
+      if (!fit) return
+      const xs = pts!.map((p) => p.x)
+      for (const tl of ser.trendlines) {
+        pushTrendline(
+          node,
+          tl,
+          fit,
+          Math.min(...xs),
+          Math.max(...xs),
+          xOf(Math.min(...xs)),
+          xOf(Math.max(...xs)),
+          yOf,
+          plot,
+          seriesColor(si)!,
+          tl.widthPt ? Math.max(1, ptToPx(tl.widthPt, vp.scale)) : trendW,
+          measure,
+          tagFontPx,
+        )
+      }
+    })
+  }
 
   addSeriesLegend(node, model, box, plot, labelSizePx, measure, pad, seriesColor)
   return node
