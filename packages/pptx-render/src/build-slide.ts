@@ -805,12 +805,14 @@ function chartStyleInfo(m: ChartElement['chart']): import('./render-tree').Chart
           : m.pseudo3D
             ? 'pie3D'
             : 'pie'
-        : m.kind === 'funnel' ||
-            m.kind === 'sunburst' ||
-            m.kind === 'treemap' ||
-            m.kind === 'waterfall'
-          ? 'unknown'
-          : m.kind
+        : m.kind === 'pieOfPie'
+          ? 'pie'
+          : m.kind === 'funnel' ||
+              m.kind === 'sunburst' ||
+              m.kind === 'treemap' ||
+              m.kind === 'waterfall'
+            ? 'unknown'
+            : m.kind
   return {
     kind,
     legendPos: m.legendPos == null ? 'none' : m.legendPos === 'tr' ? 'r' : m.legendPos,

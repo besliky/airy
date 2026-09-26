@@ -31,6 +31,7 @@ export type ChartKind =
   | 'line'
   | 'bar'
   | 'pie'
+  | 'pieOfPie'
   | 'area'
   | 'scatter'
   | 'radar'
@@ -194,6 +195,23 @@ export interface ChartModel {
   catAxis?: ChartAxisStyle
   /** Doughnut hole (% of radius, c:holeSize; pie = 0) */
   holePct?: number
+  /**
+   * Pie-of-pie (c:ofPieChart): a main pie with the trailing small slices split
+   * into a secondary chart. Only the default auto split is modeled — cust /
+   * percent / pos / val split types fall back to auto (documented limitation).
+   */
+  pieOfPie?: {
+    /** c:ofPieType ('pie' = secondary pie with connector lines, 'bar' = secondary stacked bar) */
+    type: 'pie' | 'bar'
+    /** c:splitType (render layer honors 'auto'; other types degrade to it) */
+    splitType?: 'auto' | 'cust' | 'percent' | 'pos' | 'val'
+    /** c:splitPos: with the auto split, the trailing slices' share threshold (% of the total, default 10) */
+    splitPos?: number
+    /** c:secondPieSize: secondary chart diameter as % of the main pie (default 75) */
+    secondPieSizePct?: number
+    /** c:gapWidth: gap between the two charts as % of the secondary radius (default 100) */
+    gapWidthPct?: number
+  }
   /** First slice start angle (degrees, 12 o'clock = 0, clockwise; c:firstSliceAng) */
   firstSliceAngDeg?: number
   /** Scatter style (c:scatterStyle: line/lineMarker/marker/smooth/smoothMarker/none) */
@@ -344,7 +362,11 @@ export function parseChartXml(
     cartesian.push({ kind: 'line', plot: p })
   for (const p of plots(stockPlot)) cartesian.push({ kind: 'line', plot: p, stock: true })
 
-  const piePlot = plotArea['c:pieChart'] ?? plotArea['c:pie3DChart'] ?? plotArea['c:doughnutChart']
+  // Pie-of-pie rides the pie series pipeline (one series, c:cat/c:val); the
+  // render layer splits the trailing small slices into the secondary chart
+  const ofPiePlot = plotArea['c:ofPieChart']
+  const piePlot =
+    plotArea['c:pieChart'] ?? plotArea['c:pie3DChart'] ?? plotArea['c:doughnutChart'] ?? ofPiePlot
 
   const is3D = !!(
     plotArea['c:bar3DChart'] ||
@@ -360,7 +382,7 @@ export function parseChartXml(
     kind = cartesian[0]!.kind
     plot = cartesian[0]!.plot
   } else if (piePlot) {
-    kind = 'pie'
+    kind = piePlot === ofPiePlot ? 'pieOfPie' : 'pie'
     plot = piePlot
   } else if (plotArea['c:scatterChart'] || plotArea['c:bubbleChart']) {
     // Bubble rides the scatter pipeline: same x/y value model, sized markers via bubbleSizes
@@ -478,9 +500,7 @@ export function parseChartXml(
         : ser['c:trendline']
           ? [ser['c:trendline']]
           : []
-      const trendlines = tlRaws
-        .map(parseTrendline)
-        .filter((t): t is ChartTrendline => t != null)
+      const trendlines = tlRaws.map(parseTrendline).filter((t): t is ChartTrendline => t != null)
       if (trendlines.length) s.trendlines = trendlines
       const expl = parseInt(ser['c:explosion']?.['@_val'], 10)
       if (Number.isFinite(expl) && expl > 0) s.explosionPct = expl
@@ -617,6 +637,26 @@ export function parseChartXml(
     if (first != null) model.firstSliceAngDeg = parseInt(first, 10) || 0
     const vary = plot['c:varyColors']?.['@_val']
     if (vary === '0' || vary === 'false') model.varyColors = false
+  }
+
+  if (kind === 'pieOfPie' && ofPiePlot) {
+    // Self-closing elements parse to '' and must not win over the defaults
+    const posNum = (n: any, dflt: number) => {
+      const v = Number(n?.['@_val'])
+      return Number.isFinite(v) && v >= 0 ? v : dflt
+    }
+    const splitType = ofPiePlot['c:splitType']?.['@_val']
+    model.pieOfPie = {
+      type: ofPiePlot['c:ofPieType']?.['@_val'] === 'bar' ? 'bar' : 'pie',
+      ...(typeof splitType === 'string' && splitType
+        ? { splitType: splitType as NonNullable<ChartModel['pieOfPie']>['splitType'] }
+        : {}),
+      splitPos: posNum(ofPiePlot['c:splitPos'], 10),
+      secondPieSizePct: posNum(ofPiePlot['c:secondPieSize'], 75),
+      gapWidthPct: posNum(ofPiePlot['c:gapWidth'], 100),
+    }
+    const first = ofPiePlot['c:firstSliceAng']?.['@_val']
+    if (first != null) model.firstSliceAngDeg = parseInt(first, 10) || 0
   }
 
   if (kind === 'scatter') {

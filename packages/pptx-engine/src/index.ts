@@ -2797,7 +2797,9 @@ export function editChartElement(
               : existing.pseudo3D
                 ? 'pie3D'
                 : 'pie'
-            : (existing.kind as NewChartKind)
+            : existing.kind === 'pieOfPie'
+              ? 'pie'
+              : (existing.kind as NewChartKind)
   const kind: NewChartKind = patch.kind ?? derivedKind
   // Horizontal bar direction is preserved through rebuilds; an explicit type change resets it unless the patch asks for barDir 'bar' (the gallery's horizontal-bar entry)
   const barDir =
