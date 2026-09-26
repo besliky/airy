@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   TABLE_SLICER_MAX_MEMBERS,
+  slicerCriteriaApplied,
   tableSlicerMembers,
   tableSlicerSelection,
 } from '../src/renderer/pivot-actions'
@@ -119,5 +120,47 @@ describe('slicer adds across table rename/convert (BUG-1751)', () => {
     recordTableEdit(journal, { sheetId: 's1', tableName: 'Sales', rename: 'Sales2026' })
     expect(toSaveSlicerAdds(journal)).toEqual([])
     expect(tableNameAfterEdits(journal, 's1', 'Sales')).toBe('Sales2026')
+  })
+})
+
+describe('slicerCriteriaApplied (honest applied status, BUG-1752)', () => {
+  it('accepts only an exact model snapshot of the request', () => {
+    expect(slicerCriteriaApplied(null, null)).toBe(true)
+    expect(slicerCriteriaApplied(null, undefined)).toBe(true)
+    expect(slicerCriteriaApplied(null, { colId: 0, filters: { filters: ['de'] } })).toBe(false)
+    const applied = { colId: 0, filters: { filters: ['de', 'it'] } }
+    expect(slicerCriteriaApplied({ values: ['it', 'de'] }, applied)).toBe(true)
+    expect(slicerCriteriaApplied({ values: ['de'] }, applied)).toBe(false)
+    expect(slicerCriteriaApplied({ values: ['de', 'it', 'fr'] }, applied)).toBe(false)
+    // The blank slot is part of the contract in both directions.
+    expect(
+      slicerCriteriaApplied(
+        { values: ['de'], blank: true },
+        {
+          colId: 0,
+          filters: { filters: ['de'], blank: true },
+        },
+      ),
+    ).toBe(true)
+    expect(slicerCriteriaApplied({ values: ['de'], blank: true }, applied)).toBe(false)
+    expect(
+      slicerCriteriaApplied(
+        { values: ['de'] },
+        {
+          colId: 0,
+          filters: { filters: ['de'], blank: true },
+        },
+      ),
+    ).toBe(false)
+    // Custom-criteria columns (no filters block) never count as applied.
+    expect(
+      slicerCriteriaApplied(
+        { values: ['de'] },
+        {
+          colId: 0,
+          customFilters: { customFilters: [{ val: 1 }] },
+        },
+      ),
+    ).toBe(false)
   })
 })

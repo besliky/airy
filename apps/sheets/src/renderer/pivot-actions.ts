@@ -6,6 +6,7 @@
 import { columnLabel, parseRange } from '../domain/cell-address'
 import { applyPivotSlicer, growPivotDefinition, recomputePivotData } from '../domain/pivot-engine'
 import { timelineDomainOf, timelineSelection, type MonthKey } from '../domain/pivot-timeline'
+import type { IFilterColumn } from '@univerjs/preset-sheets-filter'
 import type { WorkbookFile, WorkbookPivotDefinition } from '../shared/desktop-api'
 import {
   journalSize,
@@ -20,7 +21,7 @@ import type { OoXmlPivotConfig, PivotEditSeed, PivotField } from './PivotDialog'
 import type { SlicerMember, SlicerUiState, TableSlicerUiState } from './SlicerPanel'
 import type { TimelineUiState } from './TimelinePanel'
 import type { LazyWorkbookState, UniverRuntime } from './univer-state'
-import { applyFilterCriteria } from './univer-sync'
+import { applySlicerCriteria } from './univer-sync'
 import {
   applyAiPivotAdd,
   applyGrownPivotOutput,
@@ -1006,7 +1007,9 @@ export function handleCreateTableSlicer(ctx: PivotActionContext, colId: number):
 
 /// Writes the slicer's selection into the sheet's filter model — the
 /// criteria values are the members that stay visible. Returns an error
-/// message; null = success.
+/// message; null = success. Success is only reported when the model really
+/// holds the criteria (and the rows re-hid), so the "applied — save to
+/// write" status never promises a save that would write nothing.
 function applyTableSlicerCriteria(
   ctx: PivotActionContext,
   slicer: TableSlicerUiState,
@@ -1027,26 +1030,41 @@ function applyTableSlicerCriteria(
   if (!area) return t('appSlicerPivotMissing')
   const filter = worksheet.getFilter()
   if (!filter) return t('appTableSlicerNeedsFilter')
+  const selectAll = selectedMembers === null || selectedMembers.length === slicer.members.length
+  const requested = selectAll
+    ? null
+    : {
+        values: selectedMembers
+          .map((member) => slicer.members[member]?.label)
+          .filter((label): label is string => label !== undefined && label !== ''),
+        ...(selectedMembers.some((member) => slicer.members[member]?.label === '')
+          ? { blank: true as const }
+          : {}),
+      }
+  let applied: IFilterColumn | null
   try {
-    if (selectedMembers === null || selectedMembers.length === slicer.members.length) {
-      // Clear (select-all) or the panel was removed.
-      applyFilterCriteria(worksheet, columnLabel(area.startColumn + slicer.colId), null)
-    } else {
-      const blankLabels = selectedMembers.some((member) => slicer.members[member]?.label === '')
-      const values = selectedMembers
-        .map((member) => slicer.members[member]?.label)
-        .filter((label): label is string => label !== undefined && label !== '')
-      applyFilterCriteria(worksheet, columnLabel(area.startColumn + slicer.colId), {
-        values,
-        ...(blankLabels ? { blank: true } : {}),
-      })
-    }
+    applied = applySlicerCriteria(runtime, worksheet, area.startColumn + slicer.colId, requested)
   } catch (error) {
     return error instanceof Error ? error.message : t('appSlicerFilterFailed')
   }
+  if (!slicerCriteriaApplied(requested, applied)) return t('appSlicerFilterFailed')
   recordFilterChange(state.editJournal, slicer.sheetId)
   ctx.setPendingEdits(journalSize(state.editJournal))
   return null
+}
+
+/// True when the filter model holds exactly the requested criteria: a clear
+/// must have removed the column's criteria, a selection must be present with
+/// the same member set (plus the blank slot when requested).
+export function slicerCriteriaApplied(
+  requested: { readonly values: readonly string[]; readonly blank?: boolean | undefined } | null,
+  applied: IFilterColumn | null | undefined,
+): boolean {
+  if (requested === null) return applied == null
+  if (applied == null || applied.filters === undefined) return false
+  if (Boolean(applied.filters.blank) !== (requested.blank === true)) return false
+  const kept = new Set(applied.filters.filters ?? [])
+  return kept.size === requested.values.length && requested.values.every((value) => kept.has(value))
 }
 
 export function handleTableSlicerToggle(

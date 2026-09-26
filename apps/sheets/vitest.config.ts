@@ -54,6 +54,9 @@ const NEED_ISOLATION = [
   // Boots the real Univer DI graph (filter model + commands) for the by-color
   // criteria round-trip.
   'tests/color-filter.univer.test.ts',
+  // Boots the real Univer DI graph (filter model + row mutations) for the
+  // slicer-toggle round-trip (BUG-1752).
+  'tests/slicer-filter-model.univer.test.ts',
   // TEST-1726: boots the real Univer DI graph for its two wrapper tests and
   // flaked in a full serial run with the exact FUniver breakage above (2
   // failed of 3138; alone it is green 5/5, so the cause is the shared
