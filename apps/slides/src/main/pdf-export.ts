@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildPrintDocumentHtml } from '../shared/print-html'
+import { PDF_EXPORT_TEMP_PREFIX } from './pdf-export-temp'
 
 export interface PdfExportWindow {
   loadFile(path: string): Promise<void>
@@ -183,7 +184,7 @@ export async function exportSlidesPdf({
   const win = createWindow()
   let tempDir: string | null = null
   try {
-    tempDir = await mkdtemp(join(tmpdir(), 'airy-slides-pdf-'))
+    tempDir = await mkdtemp(join(tmpdir(), PDF_EXPORT_TEMP_PREFIX))
     const htmlPath = join(tempDir, 'slides.html')
     await writeFile(htmlPath, html, 'utf8')
     await win.loadFile(htmlPath)

@@ -27,6 +27,7 @@ import { existsSync, mkdirSync, realpathSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { cleanupExpiredGeneratedPages } from './generated-page-temp'
+import { sweepStalePdfExportTempDirs } from './pdf-export-temp'
 import { sweepStaleVideoExportTemps, videoExportTempPath } from './video-export-temp'
 import {
   exportDirInsidePick,
@@ -39,6 +40,7 @@ import {
   ALL_OPEN_EXTENSIONS,
   OPEN_EXTENSION_GROUPS,
   appMenuLabels,
+  atomicWriteFile,
   checkSaveStaleness,
   configuredAuthorName,
   configuredDefaultSaveDir,
@@ -4350,8 +4352,18 @@ export function registerSlidesIpc(): void {
             )
           : null
         if (!paths) return { ok: false, error: tm('errExportDestNotPicked') }
+        // The atomic temps below are dot-prefixed siblings in the export
+        // directory (the shared atomicWriteFile shape, same as the video
+        // streaming temps): a kill -9 mid-series would otherwise leave its
+        // interrupted temp there forever. Age alone decides, so a live
+        // series' temps are never candidates (OBS-1658 pattern).
+        void sweepStaleVideoExportTemps(op.dir)
+        // BUG-1767 (EXP-3): each member commits through temp+rename, so a
+        // kill -9 mid-series leaves every already-written file valid and the
+        // interrupted member absent — a direct writeFile would truncate
+        // exactly the file being written.
         for (let i = 0; i < paths.length; i++) {
-          await writeFile(paths[i], Buffer.from(op.pngsBase64[i], 'base64'))
+          await atomicWriteFile(paths[i], Buffer.from(op.pngsBase64[i], 'base64'))
         }
         return { ok: true, paths }
       } catch (err) {
@@ -4397,6 +4409,10 @@ export function registerSlidesIpc(): void {
     if (!pickedFile || !exportFileMatchesPick(pickedFile, op.filePath, (p) => realpathSync(p))) {
       return { ok: false, error: tm('errExportDestNotPicked') }
     }
+    // BUG-1767 (EXP-4): a kill -9 mid-export bypasses exportSlidesPdf's
+    // finally-block and orphans its mkdtemp print-HTML directory in the OS
+    // temp root forever — each fresh export sweeps the expired ones first.
+    void sweepStalePdfExportTempDirs()
     return exportSlidesPdf({
       ...op,
       // the sandboxed export window has none of the renderer's font
