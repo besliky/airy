@@ -7,6 +7,120 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-09-26
+
+### Added
+
+- Sheets:
+  - Table slicers with OOXML persistence: Insert → Slicer on a table column
+    now opens a column picker and creates a slicer panel — value buttons for
+    the column's distinct members ("(blank)" collapses into one member,
+    capped at 200), multi-select, clear-all and panel removal — that filters
+    the table through the existing sheet filter model, so hidden rows,
+    copy-of-visible and the save snapshot behave exactly as with the funnel
+    (a full book load is required; partial loads get an honest
+    `appSlicerNeedsFullLoad` error). Persistence follows Excel's own layout:
+    `xl/slicers/slicerN.xml` + `xl/slicerCaches/slicerCacheN.xml` with the
+    x15 `tableSlicerCache` binding (tableId + column position), the workbook
+    x15 `slicerCaches` extension with its relationship and the hidden
+    `Slicer_*` defined name, the worksheet x15 `slicerList` extension, and
+    the content-type overrides; a table-owned filter snapshot is written
+    into the table part's own `<autoFilter>` — never a worksheet-level
+    autoFilter over the table — and clearing the filter removes the table's
+    autoFilter entirely, as Excel does. On import the sidecar parses table
+    slicers (pivot-bound caches are skipped) plus the table's filter
+    criteria, and the panels come back after a full load with the file's
+    selection; the parts survive a re-save byte-for-byte. Honest level: the
+    on-sheet drawing anchor (graphicFrame) is deliberately not written —
+    the app renders the slicer as a panel, and Excel shows the table's
+    filter state without the slicer button — pivot slicers stay
+    session-only, and deleting a slicer in session leaves already-written
+    parts in the file (named follow-up). 13 new tests (`xlsx-slicer` ×5,
+    `table-slicer` ×6, Rust `slicers::tests` ×2); cargo 281 lib + 13 bin,
+    targeted slicer/filter/table vitest 51/51, full sheets vitest 3192
+    passed / 1 skipped (PR #246).
+  - Table editing agrees with structured references end to end, and
+    Convert to Range bakes the stripes. The two 0.24.0 table features now
+    meet in the engine: after a Rename, the rewritten bare, `@`-shorthand
+    and `[#All]` formulas are proven against the real engine by driving the
+    file through the recalc channel — they evaluate (10/100/200 against
+    stale caches) through `normalize_at_shorthand` and IronCalc's native
+    resolve over the updated table parts — with the user-facing `@` text
+    still round-tripping byte-verbatim, and a unit matrix covers the
+    combination space (bare, quoted `'Old Name'[@Col]`, `[@Col]`,
+    `[@[Unit Price]]`, `[@[Jan]:[Dec]]`, `[@]`, `[[#This Row],[Col]]`,
+    multi-specifier, `[#Totals]`; the name changes, the selector group is
+    preserved verbatim). Convert to Range folds multi-specifier selectors
+    into a single A1 range — `[[#Data],[#Totals],[Col]]` unions the
+    adjacent bands into one range (`B2:B6`), `[[#Headers],[#Data]]` spans
+    headers plus data, any specifier order works, and unions with a gap or
+    an empty band (`#Totals` without a totals row) fall back to `#REF!`
+    like every unresolvable selector — and the converted sheet computes: a
+    converted Sales file evaluates the rewritten A1 formulas through the
+    engine while other tables keep resolving. The 0.24.0 banding tail
+    closes: the convert now bakes the row stripes into cells — the renderer
+    carries the file-resolved stripe color on the Convert-to-Range journal
+    entry and the save derives a solid-fill format from each body cell's
+    current formatting through the shared stylesheet editor — even data
+    rows get the stripe, cells with their own fill keep it, missing body
+    cells are created so the banding stays continuous, header/totals rows
+    are untouched, and without a stripe fill the convert is byte-identical
+    to before. CSE/array `@` forms remain unrewritten by design (IronCalc
+    0.8.3 has no CSE input API; the rewrite would destroy CSE semantics —
+    documented residual). Gates: cargo 279 lib + 13 bin (Rust unchanged),
+    target vitest 181 passed, full sheets gate vitest 3191 passed + 1
+    skipped, compat `"passed": true` (PR #244).
+  - Legacy imports carry the shape of the book: the .ods/.xls converter
+    (values, formulas and the .xls BIFF layout already worked) closes its
+    five highest-impact tails, each with a LibreOffice-generated fixture, a
+    regression test and a round-trip through the sidecar reader. .ods dates
+    and times used to land as plain text — they now convert into real Excel
+    serials on the fallback date styles plus a new elapsed-time style
+    (builtin numFmtId 46), Lotus epoch included; merged ranges are rebuilt
+    by a content.xml walk (spanned cells + covered continuations, the
+    emitted dimension extends to the merge extents); column widths, row
+    heights and hidden rows map through the same Calibri-11 character
+    width LibreOffice applies on its own export, with the repeated
+    default-width tail filtered like the BIFF COLINFO catch-all; fills,
+    bold/italic/colored/sized fonts, borders (a width ladder onto Excel
+    line weights) and alignments become synthetic BIFF-style Font/XF
+    entries, so one proven interner emits styles.xml for both legacy walks;
+    and defined names are emitted for both branches — .xls BIFF NAME
+    records and .ods cell-range addresses / `of:` expressions, translated
+    to Excel notation, with anything not fully understood dropped instead
+    of poisoning the converted book. Still out: comments / tables /
+    protection / conditional formatting import, ODF data-style→numFmt
+    mapping, and .ods in the desktop open filter (needs another package,
+    outside the branch boundary). cargo 299 lib + 13 bin (+20 tests,
+    0 regressions), sheets vitest 3181 passed / 1 skipped (PR #247).
+- Slides:
+  - Linear trendlines round-trip and pie-of-pie renders. `c:trendline`
+    (linear) parses into the series model — name, stroke/dash, and the
+    display-R² / display-equation flags; other regression types stay
+    PowerPoint-only, documented — the renderer fits ordinary least squares
+    over the series values (category ordinals; real x values for scatter)
+    and draws a PowerPoint-style dashed segment clamped into the plot area
+    with the optional `y = …x ± …` and `R² = …` labels at its right end
+    (the PowerPoint default — dashed, series color — when the file carries
+    no explicit formatting), and `addChart` can write a trendline for one
+    series; chart edits keep the parsed trendline, so Edit Data does not
+    regress. A python-pptx probe opens the saved deck and finds the
+    trendline with the right type, flags and child order. Pie-of-pie
+    (`c:ofPieChart`) parses and renders: the trailing small slices (auto
+    split ≤ splitPos% of the total) move into a secondary chart beside the
+    main pie — an aggregated darkened wedge of the first moved slice's
+    color, per-slice palette colors, connector hairlines for the pie
+    variant, a stacked column for the bar variant — with second-pie size
+    and gap width honored; with nothing divisible it degrades to a plain
+    pie, and Edit Data rebuilds stay a pie instead of degrading to bars.
+    Honest subset: non-linear regressions (exp/log/poly/power/movingAvg)
+    are dropped on parse, cust/percent/pos/val split falls back to the auto
+    rule, and there is no trendline toggle in the Ribbon yet. New unit
+    tests (least-squares fit, label formatting, parse/serialize round-
+    trips, render smoke for line/scatter and pie/bar/fallback) + the
+    python-pptx structural probe; pptx-engine 985, pptx-render 280, slides
+    1207 passed / 13 skipped (PR #245).
+
 ## [0.24.0] - 2026-09-26
 
 ### Added
