@@ -65,6 +65,15 @@ const MAX_RECALC_READ_CELLS = 20_000
 const RECALC_MAX_SOURCE_BYTES = 64_000_000
 /** the sidecar refuses recalc requests with more edits (MAX_RECALC_EDITS) */
 const MAX_RECALC_EDITS = 10_000
+/**
+ * Grace period for the fresh session's lazy formula index after a reopen
+ * (PERF-1778): the index of a 100k book completes a few hundred ms after
+ * open, and an immediate read used to report indexingComplete=false — the
+ * save degraded instantly instead of using the warm recalc model. Bounded:
+ * an index that never completes degrades exactly as before, 2s later.
+ */
+const FORMULA_INDEX_GRACE_MS = 2_000
+const FORMULA_INDEX_RETRY_MS = 200
 
 export type WorkbookFormat = 'xlsx' | 'xlsm' | 'xls' | 'ods'
 
@@ -704,6 +713,23 @@ export class XlsxSession {
     this.savedTargets.add(target)
     if (target === this.backingPath) {
       this.baseline = await statOrNull(this.backingPath)
+      // PERF-1778: the in-place save replaced the backing bytes with content
+      // the recalc engine's resident model already reflects (the overlay
+      // recalculated the same journal). Refresh the resident model's file
+      // stamp before the reopen below re-indexes, so the next save's overlay
+      // is a resident hit (~ms) instead of a whole-book IronCalc re-import
+      // (~20s on a 100k book, previously paid after every single save).
+      // Degraded overlays (recalcNote !== null) skip the restamp: the model
+      // may lack the saved edits, and only a rebuild from the file is safe.
+      // Best-effort by contract: a sidecar predating the command (or any
+      // transient error) keeps today's rebuild behavior.
+      if (recalcNote === null) {
+        try {
+          await this.io.restampRecalc(this.backingPath)
+        } catch {
+          // stamp stays stale; the next recalc rebuilds (pre-existing behavior)
+        }
+      }
       // the sidecar's in-memory index still reflects the pre-save file:
       // reopen the session so subsequent reads see the saved cells
       await this.reopenSidecar()
@@ -761,7 +787,7 @@ export class XlsxSession {
     for (const sheet of this.sheets) {
       let raw: unknown
       try {
-        raw = await this.io.readFormulaCells({ sessionId: this.sessionId, sheetId: sheet.id })
+        raw = await this.readFormulaCellsWhenIndexed(sheet.id)
       } catch {
         return degrade('the formula-cell index was unavailable')
       }
@@ -867,6 +893,26 @@ export class XlsxSession {
     }
   }
 
+  /**
+   * read_formula_cells with the reopen grace period: the fresh session's
+   * lazy indexer needs a few hundred ms on a large book, and the very first
+   * read reports indexingComplete=false. Poll (bounded) until the index
+   * completes so a warm overlay-save is served by the resident recalc model
+   * instead of degrading; a `truncated` reply is a property of the book and
+   * returns immediately (the caller degrades on it).
+   */
+  private async readFormulaCellsWhenIndexed(sheetId: string): Promise<unknown> {
+    const deadline = Date.now() + FORMULA_INDEX_GRACE_MS
+    for (;;) {
+      const raw = await this.io.readFormulaCells({ sessionId: this.sessionId, sheetId })
+      const result = asRecord(raw, 'formula-cells result')
+      if (result.indexingComplete === true || result.truncated === true || Date.now() >= deadline) {
+        return raw
+      }
+      await new Promise((resolve) => setTimeout(resolve, FORMULA_INDEX_RETRY_MS))
+    }
+  }
+
   private defaultTarget(): string {
     if (this.originPath === null) return this.backingPath
     return join(dirname(this.originPath), `${siblingStem(basename(this.originPath))}.xlsx`)
@@ -965,17 +1011,26 @@ export class XlsxSession {
     }
   }
 
+  /**
+   * Refresh the sidecar's read index after an in-place save. The fresh
+   * session opens BEFORE the stale one closes (PERF-1778): the sidecar
+   * releases the resident recalc model only with the last session on the
+   * path, so the refresh keeps the model the restamp above just renewed —
+   * closing first used to drop it and force every save to pay a cold
+   * re-import. Failure ordering improves too: a failed open now leaves the
+   * old (stale-index) session alive instead of a closed one.
+   */
   private async reopenSidecar(): Promise<void> {
     const previous = this.sessionId
+    const openInfo = parseOpenResult(await this.io.open(this.backingPath))
+    this.sessionId = openInfo.sessionId
+    this.sheets = openInfo.sheets
+    this.activeSheetIndex = openInfo.activeTab
     try {
       await this.io.close(previous)
     } catch {
       // a stale session leak is preferable to failing a completed save
     }
-    const openInfo = parseOpenResult(await this.io.open(this.backingPath))
-    this.sessionId = openInfo.sessionId
-    this.sheets = openInfo.sheets
-    this.activeSheetIndex = openInfo.activeTab
   }
 
   // ---- lifecycle ----

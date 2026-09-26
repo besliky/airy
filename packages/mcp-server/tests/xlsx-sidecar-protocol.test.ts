@@ -7,7 +7,7 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { encodeRequest, parseSidecarLine, XlsxSidecarClient } from '../src/xlsx/sidecar-client.js'
 
@@ -81,20 +81,23 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   }
   if (command === 'close') return reply({ ok: true, result: { closed: true } })
   if (command === 'cancel') return reply({ ok: true, result: { cancelled: true } })
+  if (command === 'recalc_cells') return // never replies (timeout budgets)
+  if (command === 'restamp_recalc') return reply({ ok: true, result: { restamped: true } })
   return reply({ ok: false, error: { code: 'invalid_request', message: 'unknown command' } })
 })
 `
 
 describe('XlsxSidecarClient against a fake sidecar process', () => {
   let dir: string
+  let scriptPath: string
   let client: XlsxSidecarClient
 
   beforeAll(async () => {
     dir = await mkdtemp(join(tmpdir(), 'airy-fake-sidecar-'))
-    const script = join(dir, 'fake-sidecar')
-    await writeFile(script, FAKE_SIDECAR, 'utf8')
-    await chmod(script, 0o755)
-    client = new XlsxSidecarClient(script)
+    scriptPath = join(dir, 'fake-sidecar')
+    await writeFile(scriptPath, FAKE_SIDECAR, 'utf8')
+    await chmod(scriptPath, 0o755)
+    client = new XlsxSidecarClient(scriptPath)
   })
 
   afterAll(async () => {
@@ -133,5 +136,46 @@ describe('XlsxSidecarClient against a fake sidecar process', () => {
     const expectation = expect(pending).rejects.toThrow('XLSX sidecar stopped.')
     client.stop()
     await expectation
+  })
+
+  // PERF-1778: the overlay's recalc chunk imports the whole book on a cold
+  // engine (~22s per 100k rows) — the plain 30s request budget would clip a
+  // ~200k-row book's cold chunk and degrade the overlay nondeterministically
+  // by size, so recalc_cells must keep the whole-archive (120s) budget.
+  // Runs on a dedicated client: the shared one was stop()ed by an earlier
+  // test and its late child-exit event would reject unrelated pendings.
+  it('gives recalc_cells the archive timeout budget, not the default', async () => {
+    const timedClient = new XlsxSidecarClient(scriptPath)
+    vi.useFakeTimers()
+    try {
+      const reads = [
+        { sheet: 'S1', range: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 } },
+      ]
+      const pending = timedClient.recalcCells({ path: '/tmp/book.xlsx', edits: [], reads })
+      const failure = expect(pending).rejects.toThrow('timed out')
+      let rejected = false
+      pending.catch(() => {
+        rejected = true
+      })
+      // the default 30s budget passes without a rejection...
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(rejected).toBe(false)
+      // ...and so does everything short of the archive budget...
+      await vi.advanceTimersByTimeAsync(89_999)
+      expect(rejected).toBe(false)
+      // ...the archive budget (120s) is the one that fires
+      await vi.advanceTimersByTimeAsync(1_001)
+      expect(rejected).toBe(true)
+      await failure
+    } finally {
+      vi.useRealTimers()
+      timedClient.stop()
+    }
+  })
+
+  it('round-trips restamp_recalc (PERF-1778) against a live process', async () => {
+    await expect(client.restampRecalc('/tmp/book.xlsx')).resolves.toEqual({
+      restamped: true,
+    })
   })
 })

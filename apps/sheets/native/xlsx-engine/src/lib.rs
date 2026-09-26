@@ -420,6 +420,22 @@ impl WorkbookSessions {
             .map(|session| session.path.clone())
     }
 
+    /// Whether closing `session_id` would leave no other live session on the
+    /// same workbook path. The close-time recalc purge releases the resident
+    /// model when the file's last reader goes away; an index refresh that
+    /// opened the fresh session before closing the stale one (PERF-1778)
+    /// keeps the model a surviving session still stands behind.
+    pub fn is_last_session_for_path(&self, session_id: &str) -> bool {
+        let Some(session) = self.sessions.get(session_id) else {
+            return true;
+        };
+        let path = &session.path;
+        !self
+            .sessions
+            .iter()
+            .any(|(id, candidate)| id != session_id && &candidate.path == path)
+    }
+
     pub fn read_media(
         &self,
         session_id: &str,
