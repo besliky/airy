@@ -264,7 +264,8 @@ describe('html save respects the remembered encoding', () => {
     const sender = view.webContents as unknown as FakeWebContents
     await callHandler(HTML_CHANNELS.setEncoding, sender, filePath, 'gb18030')
 
-    // 你好 live in the two-byte grid: the save stays gb18030, claim intact
+    // The two-byte pair lives in the gb18030 two-byte grid: the save stays
+    // gb18030, claim intact
     const edited =
       '<!doctype html>\n<html>\n<head><meta charset="gb18030"></head>\n<body><p>你好，世界</p></body>\n</html>\n'
     const first = await saveFor(sender, { text: edited, imageSources: [], mode: 'save' })
