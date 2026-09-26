@@ -8,6 +8,7 @@
  * later restores the user's real preference instead of whatever the last
  * no-op click sent. The UI shows the effective state plus a note.
  */
+import { normalizeBooleanSetting } from '@airy-office/electron-utils'
 
 /** env surface the decisions read (loose so tests and partial envs fit) */
 type BridgeEnv = { AIRY_DISABLE_BRIDGE?: string | undefined }
@@ -19,10 +20,13 @@ export function bridgeEnvDisabled(env: BridgeEnv = process.env): boolean {
 /**
  * Effective state: the env override wins over the stored preference, and an
  * absent stored value means enabled (the bridge ships on by default).
+ * BUG-1773: the stored value is normalized to its schema type first — a
+ * string "no"/"false"/"" written by an external editor used to count as
+ * enabled under the old `!== false` check.
  */
 export function effectiveLiveBridgeEnabled(stored: unknown, env: BridgeEnv = process.env): boolean {
   if (bridgeEnvDisabled(env)) return false
-  return stored !== false
+  return normalizeBooleanSetting(stored, true)
 }
 
 /** Whether a toggle request may persist and drive the server (false = visible no-op). */

@@ -250,6 +250,34 @@ function preserveCorruptFile(settingsPath: string): boolean {
   }
 }
 
+/**
+ * String spellings of the two booleans that typed-but-sloppy external
+ * editors write into app-settings.json (BUG-1773). Matched case- and
+ * whitespace-insensitively; "0"/"1" included because number-in-a-string is
+ * the same class of mistake.
+ */
+const BOOLEAN_FALSE_STRINGS = new Set(['', 'no', 'false', 'off', '0'])
+const BOOLEAN_TRUE_STRINGS = new Set(['yes', 'true', 'on', '1'])
+
+/**
+ * Coerce a stored settings value to its schema type (boolean) BEFORE the
+ * caller decides anything (BUG-1773, SET-26-3): readers used to answer
+ * `value !== false`, so a string `"no"` written by an external editor — or
+ * any non-false junk — silently counted as "enabled". Recognized boolean
+ * spellings win; real booleans pass through; every other value (typed junk
+ * like `42`, `{}` or `"banana"`, or an absent key) falls back to the key's
+ * schema default passed as `fallback`.
+ */
+export function normalizeBooleanSetting(value: unknown, fallback: boolean): boolean {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') {
+    const text = value.trim().toLowerCase()
+    if (BOOLEAN_FALSE_STRINGS.has(text)) return false
+    if (BOOLEAN_TRUE_STRINGS.has(text)) return true
+  }
+  return fallback
+}
+
 const RECOVERY_MODE_LABELS: Record<CorruptRecoveryMode, string> = {
   bom: 'BOM-prefixed',
   trailing: 'garbage-trailed',

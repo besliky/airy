@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  normalizeBooleanSetting,
   queueAppSettingsUpdate,
   readAppSettingsFile,
   recoverCorruptAppSettings,
@@ -58,6 +59,53 @@ describe('readAppSettingsFile', () => {
   it('parses a valid settings object', () => {
     writeFileSync(settingsPath, JSON.stringify({ language: 'zh', onboardingSeen: true }))
     expect(readAppSettingsFile(settingsPath)).toEqual({ language: 'zh', onboardingSeen: true })
+  })
+})
+
+// ── BUG-1773: typed junk in known keys must not flip the decision ──
+// The audited trap (SET-26-3): `restoreSession: "no"` counted as "restore on"
+// under `!== false`. Every schema-boolean spelling resolves through
+// normalizeBooleanSetting; junk falls back to the key's default.
+
+describe('normalizeBooleanSetting (BUG-1773 typed-junk matrix)', () => {
+  it('passes real booleans through', () => {
+    expect(normalizeBooleanSetting(true, false)).toBe(true)
+    expect(normalizeBooleanSetting(false, true)).toBe(false)
+  })
+
+  it('reads the false spellings a sloppy external editor writes', () => {
+    for (const value of ['no', 'No', 'NO', 'false', 'FALSE', 'False', 'off', '0', '', '   ']) {
+      expect(normalizeBooleanSetting(value, true), JSON.stringify(value)).toBe(false)
+    }
+  })
+
+  it('reads the true spellings the same way', () => {
+    for (const value of ['yes', 'Yes', 'true', 'TRUE', 'on', 'ON', '1']) {
+      expect(normalizeBooleanSetting(value, false), JSON.stringify(value)).toBe(true)
+    }
+  })
+
+  it('falls back to the schema default for typed junk and absent keys', () => {
+    for (const value of ['banana', 'nope', 'enabled', 42, 0, null, undefined, {}, [], NaN]) {
+      expect(normalizeBooleanSetting(value, true), JSON.stringify(value ?? 'null')).toBe(true)
+      expect(normalizeBooleanSetting(value, false), JSON.stringify(value ?? 'null')).toBe(false)
+    }
+  })
+
+  it('restoreSession semantics: the audited "no" string disables, absent stays on', () => {
+    // mirrors the shell call shape (read + normalize with default on)
+    writeFileSync(settingsPath, JSON.stringify({ restoreSession: 'no' }))
+    expect(normalizeBooleanSetting(readAppSettingsFile(settingsPath).restoreSession, true)).toBe(
+      false,
+    )
+    writeFileSync(settingsPath, JSON.stringify({ restoreSession: true }))
+    expect(normalizeBooleanSetting(readAppSettingsFile(settingsPath).restoreSession, true)).toBe(
+      true,
+    )
+    writeFileSync(settingsPath, JSON.stringify({ theme: 'dark' }))
+    expect(normalizeBooleanSetting(readAppSettingsFile(settingsPath).restoreSession, true)).toBe(
+      true,
+    )
   })
 })
 

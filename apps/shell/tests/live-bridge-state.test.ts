@@ -29,6 +29,17 @@ describe('effectiveLiveBridgeEnabled', () => {
     expect(effectiveLiveBridgeEnabled(true, ENV_OFF)).toBe(true)
   })
 
+  it('normalizes typed junk to the schema type before deciding (BUG-1773)', () => {
+    // the audited trap: a string "no" used to count as enabled (`!== false`)
+    expect(effectiveLiveBridgeEnabled('no', ENV_OFF)).toBe(false)
+    expect(effectiveLiveBridgeEnabled('false', ENV_OFF)).toBe(false)
+    expect(effectiveLiveBridgeEnabled('', ENV_OFF)).toBe(false)
+    expect(effectiveLiveBridgeEnabled('true', ENV_OFF)).toBe(true)
+    // unrecognized junk falls back to the default (enabled)
+    expect(effectiveLiveBridgeEnabled('banana', ENV_OFF)).toBe(true)
+    expect(effectiveLiveBridgeEnabled(42, ENV_OFF)).toBe(true)
+  })
+
   it('lets AIRY_DISABLE_BRIDGE=1 win over any stored preference', () => {
     expect(effectiveLiveBridgeEnabled(true, ENV_ON)).toBe(false)
     expect(effectiveLiveBridgeEnabled(undefined, ENV_ON)).toBe(false)

@@ -70,6 +70,7 @@ import {
   installContextMenu,
   installNavigationGuard,
   isRecoverableRendererCrash,
+  normalizeBooleanSetting,
   toggleDevToolsItem,
   isUsableSaveDir,
   showOpenDialogWithMemory,
@@ -787,9 +788,14 @@ function persistWindowState(win: BrowserWindow): void {
 
 // ---- session persistence (tab set + active tab, restored on launch) ----
 
-/** "Restore previous session" preference (app-settings.json `restoreSession`); absent = on */
+/**
+ * "Restore previous session" preference (app-settings.json `restoreSession`);
+ * absent = on. BUG-1773: the value is normalized to its schema type first —
+ * a string "no"/"false"/"" written by an external editor used to count as
+ * "restore on" under the old `!== false` check.
+ */
 function sessionRestoreEnabled(): boolean {
-  return readAppSettings(APP_SETTINGS_PATH()).restoreSession !== false
+  return normalizeBooleanSetting(readAppSettings(APP_SETTINGS_PATH()).restoreSession, true)
 }
 
 let sessionSaveTimer: ReturnType<typeof setTimeout> | null = null
