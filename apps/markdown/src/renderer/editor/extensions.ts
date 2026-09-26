@@ -19,6 +19,7 @@ import { InactiveSelection } from './inactiveSelection'
 import { SearchHighlight } from './searchHighlight'
 import { LinkDiagnostics } from './linkDiagnostics'
 import { GiantTextChunking } from './giantTextChunking'
+import { GiantParagraphA11y } from './giantParagraphA11y'
 import { buildMathExtensions } from './math'
 import { SlashCommand } from './slashCommand'
 import type { SlashController, SlashItem } from './slashCommand'
@@ -130,6 +131,9 @@ export function buildExtensions(options: BuildExtensionsOptions): AnyExtension[]
     LinkDiagnostics,
     // DOM text-node chunking for giant single paragraphs (PERF-1700); view-only
     GiantTextChunking,
+    // AX-tree policy for giant paragraphs (PERF-1700b): aria-hidden + SR
+    // summary; view-only, never touches model or serialization
+    GiantParagraphA11y,
     Placeholder.configure({ placeholder: () => t('placeholder') }),
     SlashCommand.configure({
       controller: options.slashController,

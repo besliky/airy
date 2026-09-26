@@ -1,5 +1,6 @@
 export const strings = {
   zh: {
+    giantParaA11ySummary: '超长段落,{chars} 个字符',
     pastePlain: '粘贴为纯文本 (Ctrl+Shift+V)',
     aiToolReadFm: '读取文档属性',
     aiToolSetFm: '更新文档属性',
@@ -192,6 +193,7 @@ export const strings = {
     footnoteUnsupported: '暂不支持脚注([^1] 语法),将按普通文本显示',
   },
   en: {
+    giantParaA11ySummary: 'Very long paragraph, {chars} characters',
     pastePlain: 'Paste as plain text (Ctrl+Shift+V)',
     aiToolReadFm: 'Read document properties',
     aiToolSetFm: 'Update document properties',
@@ -391,6 +393,7 @@ export const strings = {
     footnoteUnsupported: 'Footnotes ([^1]) are not supported yet — they stay as plain text',
   },
   ja: {
+    giantParaA11ySummary: '非常に長い段落、{chars} 文字',
     pastePlain: 'プレーンテキストとして貼り付け (Ctrl+Shift+V)',
     aiToolReadFm: 'ドキュメントのプロパティを読み取り',
     aiToolSetFm: 'ドキュメントのプロパティを更新',
@@ -587,6 +590,7 @@ export const strings = {
     footnoteUnsupported: '脚注([^1])には未対応です。普通のテキストとして表示されます',
   },
   ko: {
+    giantParaA11ySummary: '매우 긴 단락, {chars}자',
     pastePlain: '일반 텍스트로 붙여넣기 (Ctrl+Shift+V)',
     aiToolReadFm: '문서 속성 읽기',
     aiToolSetFm: '문서 속성 업데이트',
@@ -784,6 +788,7 @@ export const strings = {
     footnoteUnsupported: '각주([^1])는 아직 지원되지 않으며 일반 텍스트로 표시됩니다',
   },
   fr: {
+    giantParaA11ySummary: 'Paragraphe très long, {chars} caractères',
     pastePlain: 'Coller comme texte brut (Ctrl+Shift+V)',
     aiToolReadFm: 'Lecture des propriétés du document',
     aiToolSetFm: 'Mise à jour des propriétés du document',
@@ -988,6 +993,7 @@ export const strings = {
       'Les notes de bas de page ([^1]) ne sont pas encore prises en charge — elles restent du texte brut',
   },
   de: {
+    giantParaA11ySummary: 'Sehr langer Absatz, {chars} Zeichen',
     pastePlain: 'Als einfachen Text einfügen (Ctrl+Shift+V)',
     aiToolReadFm: 'Dokumenteigenschaften lesen',
     aiToolSetFm: 'Dokumenteigenschaften aktualisieren',
@@ -1192,6 +1198,7 @@ export const strings = {
       'Fußnoten ([^1]) werden noch nicht unterstützt — sie bleiben einfacher Text',
   },
   es: {
+    giantParaA11ySummary: 'Párrafo muy largo, {chars} caracteres',
     pastePlain: 'Pegar como texto sin formato (Ctrl+Shift+V)',
     aiToolReadFm: 'Leer propiedades del documento',
     aiToolSetFm: 'Actualizar propiedades del documento',
@@ -1396,6 +1403,7 @@ export const strings = {
       'Las notas al pie ([^1]) aún no son compatibles: se muestran como texto normal',
   },
   th: {
+    giantParaA11ySummary: 'ย่อหน้ายาวมาก {chars} ตัวอักษร',
     pastePlain: 'วางเป็นข้อความธรรมดา (Ctrl+Shift+V)',
     aiToolReadFm: 'อ่านคุณสมบัติเอกสาร',
     aiToolSetFm: 'อัปเดตคุณสมบัติเอกสาร',
@@ -1591,6 +1599,7 @@ export const strings = {
     footnoteUnsupported: 'ยังไม่รองรับเชิงอรรถ ([^1]) — จะแสดงเป็นข้อความธรรมดา',
   },
   id: {
+    giantParaA11ySummary: 'Paragraf sangat panjang, {chars} karakter',
     pastePlain: 'Tempel sebagai teks biasa (Ctrl+Shift+V)',
     aiToolReadFm: 'Baca properti dokumen',
     aiToolSetFm: 'Perbarui properti dokumen',
@@ -1790,6 +1799,7 @@ export const strings = {
       'Catatan kaki ([^1]) belum didukung — tetap ditampilkan sebagai teks biasa',
   },
   ru: {
+    giantParaA11ySummary: 'Очень длинный абзац, {chars} символов',
     pastePlain: 'Вставить как обычный текст (Ctrl+Shift+V)',
     aiToolReadFm: 'Чтение свойств документа',
     aiToolSetFm: 'Обновление свойств документа',
@@ -1989,6 +1999,7 @@ export const strings = {
     footnoteUnsupported: 'Сноски ([^1]) пока не поддерживаются — они остаются обычным текстом',
   },
   ar: {
+    giantParaA11ySummary: 'فقرة طويلة جدًا، {chars} حرفًا',
     pastePlain: 'لصق كنص عادي (Ctrl+Shift+V)',
     aiToolReadFm: 'قراءة خصائص المستند',
     aiToolSetFm: 'تحديث خصائص المستند',
@@ -2184,6 +2195,7 @@ export const strings = {
     footnoteUnsupported: 'الحواشي السفلية ([^1]) غير مدعومة بعد — تبقى كنص عادي',
   },
   pt: {
+    giantParaA11ySummary: 'Parágrafo muito longo, {chars} caracteres',
     pastePlain: 'Colar como texto simples (Ctrl+Shift+V)',
     aiToolReadFm: 'Ler propriedades do documento',
     aiToolSetFm: 'Atualizar propriedades do documento',
@@ -2386,6 +2398,7 @@ export const strings = {
       'Notas de rodapé ([^1]) ainda não são compatíveis — permanecem como texto simples',
   },
   it: {
+    giantParaA11ySummary: 'Paragrafo molto lungo, {chars} caratteri',
     pastePlain: 'Incolla come testo semplice (Ctrl+Shift+V)',
     aiToolReadFm: 'Lettura delle proprietà del documento',
     aiToolSetFm: 'Aggiornamento delle proprietà del documento',
@@ -2588,6 +2601,7 @@ export const strings = {
       'Le note a piè di pagina ([^1]) non sono ancora supportate — restano testo normale',
   },
   pl: {
+    giantParaA11ySummary: 'Bardzo długi akapit, {chars} znaków',
     pastePlain: 'Wklej jako zwykły tekst (Ctrl+Shift+V)',
     aiToolReadFm: 'Odczyt właściwości dokumentu',
     aiToolSetFm: 'Aktualizacja właściwości dokumentu',
@@ -2787,6 +2801,7 @@ export const strings = {
     footnoteUnsupported: 'Przypisy ([^1]) nie są jeszcze obsługiwane — pozostają zwykłym tekstem',
   },
   cs: {
+    giantParaA11ySummary: 'Velmi dlouhý odstavec, {chars} znaků',
     pastePlain: 'Vložit jako prostý text (Ctrl+Shift+V)',
     aiToolReadFm: 'Číst vlastnosti dokumentu',
     aiToolSetFm: 'Aktualizovat vlastnosti dokumentu',
@@ -2986,6 +3001,7 @@ export const strings = {
     mermaidError: 'Chyba syntaxe diagramu',
   },
   nl: {
+    giantParaA11ySummary: 'Zeer lange alinea, {chars} tekens',
     pastePlain: 'Plakken als platte tekst (Ctrl+Shift+V)',
     aiToolReadFm: 'Documenteigenschappen lezen',
     aiToolSetFm: 'Documenteigenschappen bijwerken',
@@ -3187,6 +3203,7 @@ export const strings = {
     footnoteUnsupported: 'Voetnoten ([^1]) worden nog niet ondersteund — ze blijven gewone tekst',
   },
   ms: {
+    giantParaA11ySummary: 'Perenggan sangat panjang, {chars} aksara',
     pastePlain: 'Tampal sebagai teks biasa (Ctrl+Shift+V)',
     aiToolReadFm: 'Baca sifat dokumen',
     aiToolSetFm: 'Kemas kini sifat dokumen',
@@ -3386,6 +3403,7 @@ export const strings = {
     footnoteUnsupported: 'Nota kaki ([^1]) belum disokong — kekal sebagai teks biasa',
   },
   he: {
+    giantParaA11ySummary: 'פסקה ארוכה מאוד, {chars} תווים',
     pastePlain: 'הדבק כטקסט רגיל (Ctrl+Shift+V)',
     aiToolReadFm: 'קריאת מאפייני המסמך',
     aiToolSetFm: 'עדכון מאפייני המסמך',
@@ -3579,6 +3597,7 @@ export const strings = {
     footnoteUnsupported: 'הערות שוליים ([^1]) עדיין אינן נתמכות — הן נשארות טקסט רגיל',
   },
   hi: {
+    giantParaA11ySummary: 'बहुत लंबा अनुच्छेद, {chars} वर्ण',
     pastePlain: 'सादे टेक्स्ट के रूप में पेस्ट करें (Ctrl+Shift+V)',
     aiToolReadFm: 'दस्तावेज़ गुण पढ़ें',
     aiToolSetFm: 'दस्तावेज़ गुण अपडेट करें',
@@ -3777,6 +3796,7 @@ export const strings = {
     footnoteUnsupported: 'फ़ुटनोट ([^1]) अभी समर्थित नहीं हैं — ये सादे पाठ के रूप में रहते हैं',
   },
   'zh-TW': {
+    giantParaA11ySummary: '超長段落,{chars} 個字元',
     pastePlain: '貼上為純文字 (Ctrl+Shift+V)',
     aiToolReadFm: '讀取文件屬性',
     aiToolSetFm: '更新文件屬性',
