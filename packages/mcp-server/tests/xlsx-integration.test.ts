@@ -137,90 +137,119 @@ describeWithBinary(
       )
     })
 
-    it('refreshes formula caches on save (BUG-1761: empty and stale <v> modes)', async () => {
-      // A1=10, A2=20, A3 =SUM(A1:A2), B1 =A3*10; editing A1 to 100 makes the
-      // true values 120/1200. The two audit modes: (a) a book with no caches
-      // at all — the save used to write formulas without <v>, so openpyxl
-      // data_only/pandas read None; (b) a book with stale caches — the save
-      // kept A3's cached 30 while the true sum was 120. The package mirrors
-      // the app's recalc fixture: IronCalc's importer is strict (complete
-      // styles with cellStyles, no whitespace text nodes).
-      const buildBook = (cached: boolean): Promise<Buffer> => {
-        const zip = new JSZip()
-        zip.file(
-          '[Content_Types].xml',
-          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-            '<Default Extension="xml" ContentType="application/xml"/>' +
-            '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
-            '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
-            '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
-            '</Types>',
-        )
-        zip.file(
-          '_rels/.rels',
-          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
-            '</Relationships>',
-        )
-        zip.file(
-          'xl/workbook.xml',
-          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-            '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
-            '<sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets>' +
-            '</workbook>',
-        )
-        zip.file(
-          'xl/_rels/workbook.xml.rels',
-          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
-            '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
-            '</Relationships>',
-        )
-        zip.file(
-          'xl/styles.xml',
-          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-            '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-            '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>' +
-            '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
-            '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
-            '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-            '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>' +
-            '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
-            '</styleSheet>',
-        )
-        const a3 = cached
-          ? '<c r="A3"><f>SUM(A1:A2)</f><v>30</v></c>'
-          : '<c r="A3"><f>SUM(A1:A2)</f></c>'
-        const b1 = cached ? '<c r="B1"><f>A3*10</f><v>300</v></c>' : '<c r="B1"><f>A3*10</f></c>'
-        zip.file(
-          'xl/worksheets/sheet1.xml',
-          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-            '<dimension ref="A1:B3"/>' +
-            '<sheetViews><sheetView workbookViewId="0"/></sheetViews>' +
-            '<sheetFormatPr defaultRowHeight="15"/>' +
-            '<sheetData>' +
-            `<row r="1"><c r="A1"><v>10</v></c>${b1}</row>` +
-            '<row r="2"><c r="A2"><v>20</v></c></row>' +
-            `<row r="3">${a3}</row>` +
-            '</sheetData>' +
-            '</worksheet>',
-        )
-        return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
-      }
+    // A1=10, A2=20, A3 =SUM(A1:A2), B1 =A3*10; editing A1 to 100 makes the
+    // true values 120/1200. The two audit modes: (a) a book with no caches
+    // at all — the save used to write formulas without <v>, so openpyxl
+    // data_only/pandas read None; (b) a book with stale caches — the save
+    // kept A3's cached 30 while the true sum was 120. The package mirrors
+    // the app's recalc fixture: IronCalc's importer is strict (complete
+    // styles with cellStyles, no whitespace text nodes).
+    const buildBook = (cached: boolean): Promise<Buffer> => {
+      const zip = new JSZip()
+      zip.file(
+        '[Content_Types].xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+          '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Default Extension="xml" ContentType="application/xml"/>' +
+          '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+          '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+          '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+          '</Types>',
+      )
+      zip.file(
+        '_rels/.rels',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+          '</Relationships>',
+      )
+      zip.file(
+        'xl/workbook.xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+          '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+          '<sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets>' +
+          '</workbook>',
+      )
+      zip.file(
+        'xl/_rels/workbook.xml.rels',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+          '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+          '</Relationships>',
+      )
+      zip.file(
+        'xl/styles.xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+          '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+          '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>' +
+          '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
+          '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
+          '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+          '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>' +
+          '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
+          '</styleSheet>',
+      )
+      const a3 = cached
+        ? '<c r="A3"><f>SUM(A1:A2)</f><v>30</v></c>'
+        : '<c r="A3"><f>SUM(A1:A2)</f></c>'
+      const b1 = cached ? '<c r="B1"><f>A3*10</f><v>300</v></c>' : '<c r="B1"><f>A3*10</f></c>'
+      zip.file(
+        'xl/worksheets/sheet1.xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+          '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+          '<dimension ref="A1:B3"/>' +
+          '<sheetViews><sheetView workbookViewId="0"/></sheetViews>' +
+          '<sheetFormatPr defaultRowHeight="15"/>' +
+          '<sheetData>' +
+          `<row r="1"><c r="A1"><v>10</v></c>${b1}</row>` +
+          '<row r="2"><c r="A2"><v>20</v></c></row>' +
+          `<row r="3">${a3}</row>` +
+          '</sheetData>' +
+          '</worksheet>',
+      )
+      return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+    }
 
+    /** the saved sheet XML cell for one ref, for <v> assertions below */
+    const savedCellXml = async (path: string, ref: string): Promise<string> => {
+      const after = await JSZip.loadAsync(await readFile(path))
+      const xml = (await after.file('xl/worksheets/sheet1.xml')?.async('text')) ?? ''
+      return new RegExp(`<c r="${ref}"[^>]*>[\\s\\S]*?</c>`).exec(xml)?.[0] ?? ''
+    }
+
+    it('refreshes formula caches on a cold save with no prior read (BUG-1776)', async () => {
+      // The canonical agent flow: open -> edit -> save, never reading the
+      // sheet. BUG-1776: the overlay's read_formula_cells call raced the
+      // sidecar's lazy worksheet index, always saw indexingComplete:false and
+      // degraded — the save wrote every formula WITHOUT a <v> (worse than
+      // stale: even the file's own caches were dropped). The overlay now
+      // waits the index out, so the cold save is as honest as the warm one.
+      const bookPath = join(root, 'cold-cache.xlsx')
+      await writeFile(bookPath, await buildBook(true))
+      const session = await XlsxSession.open(bookPath, root, client!)
+      session.setCells({ sheet: 'Data', cells: [{ ref: 'A1', value: 100 }] })
+      const saved = await session.save(join(root, 'cold-cache-out.xlsx'))
+      expect(saved.unchanged).toBe(false)
+      expect(saved.warnings).toEqual([])
+      await session.close()
+      const staleA3 = await savedCellXml(saved.path, 'A3')
+      expect(staleA3).toContain('<f>SUM(A1:A2)</f>')
+      expect(staleA3).toContain('<v>120</v>')
+      expect(staleA3).not.toContain('<v>30</v>')
+      expect(await savedCellXml(saved.path, 'B1')).toContain('<v>1200</v>')
+    })
+
+    it('refreshes formula caches on save (BUG-1761: empty and stale <v> modes)', async () => {
       let saveRun = 0
       const savedCell = async (cached: boolean, ref: string): Promise<string> => {
         saveRun += 1
         const bookPath = join(root, `${cached ? 'cache' : 'nocache'}-${String(saveRun)}.xlsx`)
         await writeFile(bookPath, await buildBook(cached))
         const session = await XlsxSession.open(bookPath, root, client!)
-        // the agent flow reads before editing — the read also waits out the
-        // sidecar's lazy formula-cell index, which the cache refresh needs
+        // the warm path: the agent reads before editing (the cold
+        // open -> edit -> save flow is covered by the BUG-1776 test above)
         await session.readWorkbook({ sheet: 'Data', range: 'A1:B3' })
         session.setCells({ sheet: 'Data', cells: [{ ref: 'A1', value: 100 }] })
         const saved = await session.save(
@@ -229,9 +258,7 @@ describeWithBinary(
         expect(saved.unchanged).toBe(false)
         expect(saved.warnings).toEqual([])
         await session.close()
-        const after = await JSZip.loadAsync(await readFile(saved.path))
-        const xml = (await after.file('xl/worksheets/sheet1.xml')?.async('text')) ?? ''
-        return new RegExp(`<c r="${ref}"[^>]*>[\\s\\S]*?</c>`).exec(xml)?.[0] ?? ''
+        return savedCellXml(saved.path, ref)
       }
 
       // (a) cacheless formulas gain a real cached value; the formula stays

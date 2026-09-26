@@ -45,6 +45,13 @@ export interface StubIoOptions {
   formulaCells?: readonly StubFormulaCell[]
   /** read_formula_cells reply flags (defaults: complete and not truncated) */
   formulaIndexingComplete?: boolean
+  /**
+   * read_formula_cells reports an incomplete index for this many polls per
+   * sheet before completing — models the sidecar's lazy background indexer,
+   * which the first call spawns and later calls observe (BUG-1776). Undefined
+   * keeps every reply at formulaIndexingComplete.
+   */
+  formulaIndexingCompleteAfter?: number
   formulaTruncated?: boolean
   /** evaluated cells recalc_cells reports (and optionally the error it raises) */
   recalcCells?: readonly StubRecalcCell[]
@@ -93,6 +100,7 @@ export function makeStubIo(options: StubIoOptions = {}): StubIo {
   }
   const readRanges: string[] = []
   const recalcRequests: StubIo['recalcRequests'] = []
+  const formulaCellPolls = new Map<string, number>()
   let sessionCounter = 0
   const io: StubIo = {
     calls,
@@ -129,9 +137,14 @@ export function makeStubIo(options: StubIoOptions = {}): StubIo {
     },
     async readFormulaCells(input: { sessionId: string; sheetId: string }) {
       calls.readFormulaCells.push(`${input.sessionId}:${input.sheetId}`)
+      const polls = formulaCellPolls.get(input.sheetId) ?? 0
+      formulaCellPolls.set(input.sheetId, polls + 1)
+      const lazyAfter = options.formulaIndexingCompleteAfter
+      const complete =
+        lazyAfter === undefined ? options.formulaIndexingComplete !== false : polls >= lazyAfter
       return {
         cells: (options.formulaCells ?? []).filter((cell) => cell.sheetId === input.sheetId),
-        indexingComplete: options.formulaIndexingComplete !== false,
+        indexingComplete: complete,
         truncated: options.formulaTruncated === true,
       }
     },
