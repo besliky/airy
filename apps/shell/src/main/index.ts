@@ -26,6 +26,7 @@ import {
 import type { MenuItemConstructorOptions, NativeImage, Rectangle, WebContents } from 'electron'
 import { homeChannelAccess } from './home-channel-access'
 import { isElectronProcessCommand } from './dev-takeover'
+import { applyAccessibilityPolicy } from './accessibility-policy'
 import { createLiveBridgeToggle } from './live-bridge-toggle'
 import { stringPathsCapped } from '../shared/home-paths'
 import {
@@ -3594,7 +3595,10 @@ app.whenReady().then(async () => {
   }
 
   void installMainProcessProxy()
-  app.setAccessibilitySupportEnabled(true)
+  // PERF-1700c: do not force Chromium's accessibility support on for everyone;
+  // it turns itself on when an assistive-tech client is detected (see the
+  // module doc for the measured evidence). AIRY_FORCE_A11Y=1 opts back in.
+  applyAccessibilityPolicy()
   // Settle the shared uiLang from saved settings BEFORE any tab renderer can
   // ask 'app:get-language': the editor handlers return the i18n module's
   // mutable lang, whose 'zh' default otherwise wins the race for whichever
