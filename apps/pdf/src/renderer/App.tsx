@@ -63,6 +63,7 @@ import { OutlinePanel } from './OutlinePanel'
 import type { OutlineNode } from './OutlinePanel'
 import { AttachmentsPanel } from './AttachmentsPanel'
 import type { PdfAttachment } from './AttachmentsPanel'
+import { ScanNotice } from './ScanNotice'
 import { printPdf } from './print'
 import { PasswordDialog } from './PasswordDialog'
 import { PropertiesDialog } from './PropertiesDialog'
@@ -846,6 +847,9 @@ export default function App() {
   docFontsRef.current = docFonts
   /** OCR results for scanned pages, keyed by original page index (reset per doc) */
   const [ocrPages, setOcrPages] = useState<Map<number, OcrPageData>>(new Map())
+  /** The base (pre-OCR) index is a pure scan: every page lacks extractable text.
+      Recomputed with the auto-OCR pass that already builds the index (UX-1733b) */
+  const [scanBaseNoLayer, setScanBaseNoLayer] = useState(false)
   const searchIndexRef = useRef<{ doc: PDFDocumentProxy; promise: Promise<SearchIndex> } | null>(
     null,
   )
@@ -1837,6 +1841,7 @@ export default function App() {
   // reproject.
   useEffect(() => {
     setOcrPages(new Map())
+    setScanBaseNoLayer(false)
     if (!doc || sizes.length !== doc.numPages) return
     let stale = false
     void (async () => {
@@ -1845,6 +1850,9 @@ export default function App() {
       const scanned = index
         .map((entry, i) => (isScannedEntry(entry) ? i : -1))
         .filter((i) => i >= 0)
+      // Same classifier as the search state (UX-1733): a pure scan is one where
+      // every page lacks a text layer; mixed documents keep the plain story
+      setScanBaseNoLayer(indexHasNoTextLayer(index))
       const from = scanned.findIndex((i) => i >= currentOrigIdxRef.current)
       const ordered = from > 0 ? [...scanned.slice(from), ...scanned.slice(0, from)] : scanned
       for (const origIdx of ordered) {
@@ -1870,6 +1878,12 @@ export default function App() {
       stale = true
     }
   }, [doc, sizes.length])
+
+  /** Scan affordance visibility (UX-1733b): the document is a pure scan and OCR
+      has not overlaid any text yet — selection and search genuinely have nothing
+      to address. Once recognition produces text (the auto-OCR pass on win/mac),
+      the effective index has a layer somewhere and the notice retires itself. */
+  const docHasNoTextLayer = scanBaseNoLayer && ocrPages.size === 0
 
   /** Paragraph boxes are keyed to the loaded doc; drop them on save-reload */
   useEffect(() => {
@@ -8762,6 +8776,9 @@ export default function App() {
 
           <footer className="status-bar">
             <div className="status-left">
+              {/* Scan affordance (UX-1733b): quiet chip explaining why text
+                  selection/search does nothing on a raster-only document */}
+              <ScanNotice show={docHasNoTextLayer} t={t} />
               <span className="status-item">
                 {t('appPageOf', { current: currentPage, total: pageCount })}
               </span>

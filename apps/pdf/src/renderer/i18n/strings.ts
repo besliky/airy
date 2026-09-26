@@ -133,6 +133,10 @@ export const strings = {
     searchNoResults: '无结果',
     searchNoTextLayerOcr: '这些页面没有文本层。文本识别（OCR）会在 Windows 和 macOS 上自动运行。',
     searchNoTextLayerNoOcr: '这些页面没有文本层。此平台不支持文本识别（OCR）。',
+    scanNoTextLabel: '扫描文档',
+    scanNoTextTipOcr:
+      '这是没有文本层的扫描件，无法用鼠标选择文本。文本识别（OCR）会在此平台自动运行，识别后即可搜索。',
+    scanNoTextTipNoOcr: '这是没有文本层的扫描件，无法选择或搜索文本。此平台不支持文本识别（OCR）。',
     print: '打印',
     printPreparing: '准备打印…',
     undo: '撤销',
@@ -464,6 +468,11 @@ export const strings = {
       'No text layer on these pages. Text recognition (OCR) runs automatically on Windows and macOS.',
     searchNoTextLayerNoOcr:
       'No text layer on these pages. Text recognition (OCR) is not available on this platform.',
+    scanNoTextLabel: 'Scanned document',
+    scanNoTextTipOcr:
+      'This is a scan without a text layer — selecting text with the mouse does nothing. Text recognition (OCR) runs automatically on this platform and makes the text searchable.',
+    scanNoTextTipNoOcr:
+      'This is a scan without a text layer — text cannot be selected or searched. Text recognition (OCR) is not available on this platform.',
     print: 'Print',
     printPreparing: 'Preparing…',
     undo: 'Undo',
@@ -801,6 +810,11 @@ export const strings = {
       'これらのページにはテキスト層がありません。テキスト認識（OCR）は Windows と macOS で自動的に実行されます。',
     searchNoTextLayerNoOcr:
       'これらのページにはテキスト層がありません。このプラットフォームではテキスト認識（OCR）を利用できません。',
+    scanNoTextLabel: 'スキャン文書',
+    scanNoTextTipOcr:
+      'テキスト層のないスキャン画像のため、マウスでテキストを選択できません。テキスト認識（OCR）はこのプラットフォームで自動的に実行され、実行後は検索できます。',
+    scanNoTextTipNoOcr:
+      'テキスト層のないスキャン画像のため、テキストの選択や検索はできません。このプラットフォームではテキスト認識（OCR）を利用できません。',
     print: '印刷',
     printPreparing: '準備中…',
     undo: '元に戻す',
@@ -1139,6 +1153,11 @@ export const strings = {
       '이 페이지에는 텍스트 레이어가 없습니다. 텍스트 인식(OCR)은 Windows와 macOS에서 자동으로 실행됩니다.',
     searchNoTextLayerNoOcr:
       '이 페이지에는 텍스트 레이어가 없습니다. 이 플랫폼에서는 텍스트 인식(OCR)을 사용할 수 없습니다.',
+    scanNoTextLabel: '스캔 문서',
+    scanNoTextTipOcr:
+      '텍스트 레이어가 없는 스캔 문서이므로 마우스로 텍스트를 선택할 수 없습니다. 텍스트 인식(OCR)이 이 플랫폼에서 자동으로 실행되며, 실행 후에는 검색할 수 있습니다.',
+    scanNoTextTipNoOcr:
+      '텍스트 레이어가 없는 스캔 문서이므로 텍스트를 선택하거나 검색할 수 없습니다. 이 플랫폼에서는 텍스트 인식(OCR)을 사용할 수 없습니다.',
     print: '인쇄',
     printPreparing: '준비 중…',
     undo: '실행 취소',
@@ -1478,6 +1497,11 @@ export const strings = {
       'Ces pages n’ont pas de couche de texte. La reconnaissance de texte (OCR) s’exécute automatiquement sous Windows et macOS.',
     searchNoTextLayerNoOcr:
       'Ces pages n’ont pas de couche de texte. La reconnaissance de texte (OCR) n’est pas disponible sur cette plateforme.',
+    scanNoTextLabel: 'Document numérisé',
+    scanNoTextTipOcr:
+      'Il s’agit d’un document numérisé sans couche de texte — la sélection de texte à la souris ne donne rien. La reconnaissance de texte (OCR) s’exécute automatiquement sur cette plateforme et rend le texte interrogeable.',
+    scanNoTextTipNoOcr:
+      'Il s’agit d’un document numérisé sans couche de texte — le texte ne peut être ni sélectionné ni recherché. La reconnaissance de texte (OCR) n’est pas disponible sur cette plateforme.',
     print: 'Imprimer',
     printPreparing: 'Préparation…',
     undo: 'Annuler',
@@ -1822,6 +1846,11 @@ export const strings = {
       'Diese Seiten haben keine Textebene. Texterkennung (OCR) wird unter Windows und macOS automatisch ausgeführt.',
     searchNoTextLayerNoOcr:
       'Diese Seiten haben keine Textebene. Texterkennung (OCR) ist auf dieser Plattform nicht verfügbar.',
+    scanNoTextLabel: 'Gescanntes Dokument',
+    scanNoTextTipOcr:
+      'Dies ist ein Scan ohne Textebene — Text lässt sich mit der Maus nicht auswählen. Texterkennung (OCR) wird auf dieser Plattform automatisch ausgeführt und macht den Text durchsuchbar.',
+    scanNoTextTipNoOcr:
+      'Dies ist ein Scan ohne Textebene — Text kann weder ausgewählt noch durchsucht werden. Texterkennung (OCR) ist auf dieser Plattform nicht verfügbar.',
     print: 'Drucken',
     printPreparing: 'Vorbereitung…',
     undo: 'Rückgängig',
@@ -2163,6 +2192,11 @@ export const strings = {
       'Estas páginas no tienen capa de texto. El reconocimiento de texto (OCR) se ejecuta automáticamente en Windows y macOS.',
     searchNoTextLayerNoOcr:
       'Estas páginas no tienen capa de texto. El reconocimiento de texto (OCR) no está disponible en esta plataforma.',
+    scanNoTextLabel: 'Documento escaneado',
+    scanNoTextTipOcr:
+      'Este es un escaneo sin capa de texto: no se puede seleccionar texto con el ratón. El reconocimiento de texto (OCR) se ejecuta automáticamente en esta plataforma y permite buscar el texto.',
+    scanNoTextTipNoOcr:
+      'Este es un escaneo sin capa de texto: no se puede seleccionar ni buscar texto. El reconocimiento de texto (OCR) no está disponible en esta plataforma.',
     print: 'Imprimir',
     printPreparing: 'Preparando…',
     undo: 'Deshacer',
@@ -2505,6 +2539,11 @@ export const strings = {
       'หน้าเหล่านี้ไม่มีเลเยอร์ข้อความ การจดจำข้อความ (OCR) จะทำงานอัตโนมัติบน Windows และ macOS',
     searchNoTextLayerNoOcr:
       'หน้าเหล่านี้ไม่มีเลเยอร์ข้อความ การจดจำข้อความ (OCR) ไม่พร้อมใช้งานบนแพลตฟอร์มนี้',
+    scanNoTextLabel: 'เอกสารสแกน',
+    scanNoTextTipOcr:
+      'นี่คือเอกสารสแกนที่ไม่มีเลเยอร์ข้อความ จึงเลือกข้อความด้วยเมาส์ไม่ได้ การจดจำข้อความ (OCR) จะทำงานอัตโนมัติบนแพลตฟอร์มนี้ และทำให้ค้นหาข้อความได้',
+    scanNoTextTipNoOcr:
+      'นี่คือเอกสารสแกนที่ไม่มีเลเยอร์ข้อความ จึงเลือกหรือค้นหาข้อความไม่ได้ การจดจำข้อความ (OCR) ไม่พร้อมใช้งานบนแพลตฟอร์มนี้',
     print: 'พิมพ์',
     printPreparing: 'กำลังเตรียม…',
     undo: 'เลิกทำ',
@@ -2842,6 +2881,11 @@ export const strings = {
       'Halaman-halaman ini tidak memiliki lapisan teks. Pengenalan teks (OCR) berjalan otomatis di Windows dan macOS.',
     searchNoTextLayerNoOcr:
       'Halaman-halaman ini tidak memiliki lapisan teks. Pengenalan teks (OCR) tidak tersedia di platform ini.',
+    scanNoTextLabel: 'Dokumen hasil pindai',
+    scanNoTextTipOcr:
+      'Ini adalah pindaian tanpa lapisan teks — teks tidak dapat dipilih dengan tetikus. Pengenalan teks (OCR) berjalan otomatis di platform ini dan membuat teks dapat dicari.',
+    scanNoTextTipNoOcr:
+      'Ini adalah pindaian tanpa lapisan teks — teks tidak dapat dipilih atau dicari. Pengenalan teks (OCR) tidak tersedia di platform ini.',
     print: 'Cetak',
     printPreparing: 'Menyiapkan…',
     undo: 'Urungkan',
@@ -3182,6 +3226,11 @@ export const strings = {
       'На этих страницах нет текстового слоя. Распознавание текста (OCR) выполняется автоматически в Windows и macOS.',
     searchNoTextLayerNoOcr:
       'На этих страницах нет текстового слоя. Распознавание текста (OCR) недоступно на этой платформе.',
+    scanNoTextLabel: 'Отсканированный документ',
+    scanNoTextTipOcr:
+      'Это скан без текстового слоя — выделить текст мышью не получится. Распознавание текста (OCR) выполняется на этой платформе автоматически и делает текст доступным для поиска.',
+    scanNoTextTipNoOcr:
+      'Это скан без текстового слоя — текст нельзя выделить или найти. Распознавание текста (OCR) недоступно на этой платформе.',
     print: 'Печать',
     printPreparing: 'Подготовка…',
     undo: 'Отменить',
@@ -3521,6 +3570,11 @@ export const strings = {
       'لا تحتوي هذه الصفحات على طبقة نص. يعمل التعرف على النص (OCR) تلقائيًا على Windows و macOS.',
     searchNoTextLayerNoOcr:
       'لا تحتوي هذه الصفحات على طبقة نص. التعرف على النص (OCR) غير متاح على هذه المنصة.',
+    scanNoTextLabel: 'مستند ممسوح ضوئيًا',
+    scanNoTextTipOcr:
+      'هذا مسح ضوئي بلا طبقة نص، لذا لا يمكن تحديد النص بالماوس. يعمل التعرف على النص (OCR) تلقائيًا على هذه المنصة ويجعل النص قابلًا للبحث.',
+    scanNoTextTipNoOcr:
+      'هذا مسح ضوئي بلا طبقة نص، لذا لا يمكن تحديد النص أو البحث فيه. التعرف على النص (OCR) غير متاح على هذه المنصة.',
     print: 'طباعة',
     printPreparing: 'جارٍ التجهيز…',
     undo: 'تراجع',
@@ -3859,6 +3913,11 @@ export const strings = {
       'Estas páginas não têm camada de texto. O reconhecimento de texto (OCR) é executado automaticamente no Windows e no macOS.',
     searchNoTextLayerNoOcr:
       'Estas páginas não têm camada de texto. O reconhecimento de texto (OCR) não está disponível nesta plataforma.',
+    scanNoTextLabel: 'Documento digitalizado',
+    scanNoTextTipOcr:
+      'Este é um digitalizado sem camada de texto — não é possível selecionar texto com o mouse. O reconhecimento de texto (OCR) é executado automaticamente nesta plataforma e torna o texto pesquisável.',
+    scanNoTextTipNoOcr:
+      'Este é um digitalizado sem camada de texto — não é possível selecionar nem pesquisar texto. O reconhecimento de texto (OCR) não está disponível nesta plataforma.',
     print: 'Imprimir',
     printPreparing: 'Preparando…',
     undo: 'Desfazer',
@@ -4201,6 +4260,11 @@ export const strings = {
       'Queste pagine non hanno livello di testo. Il riconoscimento del testo (OCR) viene eseguito automaticamente su Windows e macOS.',
     searchNoTextLayerNoOcr:
       'Queste pagine non hanno livello di testo. Il riconoscimento del testo (OCR) non è disponibile su questa piattaforma.',
+    scanNoTextLabel: 'Documento scansionato',
+    scanNoTextTipOcr:
+      'Questa è una scansione senza livello di testo: non è possibile selezionare il testo con il mouse. Il riconoscimento del testo (OCR) viene eseguito automaticamente su questa piattaforma e rende il testo ricercabile.',
+    scanNoTextTipNoOcr:
+      'Questa è una scansione senza livello di testo: il testo non può essere selezionato o cercato. Il riconoscimento del testo (OCR) non è disponibile su questa piattaforma.',
     print: 'Stampa',
     printPreparing: 'Preparazione…',
     undo: 'Annulla',
@@ -4544,6 +4608,11 @@ export const strings = {
       'Te strony nie mają warstwy tekstu. Rozpoznawanie tekstu (OCR) działa automatycznie w systemach Windows i macOS.',
     searchNoTextLayerNoOcr:
       'Te strony nie mają warstwy tekstu. Rozpoznawanie tekstu (OCR) nie jest dostępne na tej platformie.',
+    scanNoTextLabel: 'Dokument zeskanowany',
+    scanNoTextTipOcr:
+      'To skan bez warstwy tekstu — nie można zaznaczać tekstu myszą. Rozpoznawanie tekstu (OCR) działa automatycznie na tej platformie i pozwala przeszukiwać tekst.',
+    scanNoTextTipNoOcr:
+      'To skan bez warstwy tekstu — nie można zaznaczać ani przeszukiwać tekstu. Rozpoznawanie tekstu (OCR) nie jest dostępne na tej platformie.',
     print: 'Drukuj',
     printPreparing: 'Przygotowywanie…',
     undo: 'Cofnij',
@@ -4884,6 +4953,11 @@ export const strings = {
       'Tyto stránky nemají textovou vrstvu. Rozpoznávání textu (OCR) se automaticky spouští v systémech Windows a macOS.',
     searchNoTextLayerNoOcr:
       'Tyto stránky nemají textovou vrstvu. Rozpoznávání textu (OCR) není na této platformě k dispozici.',
+    scanNoTextLabel: 'Skenovaný dokument',
+    scanNoTextTipOcr:
+      'Jde o sken bez textové vrstvy — text nelze myší označit. Rozpoznávání textu (OCR) se na této platformě spouští automaticky a umožní text vyhledávat.',
+    scanNoTextTipNoOcr:
+      'Jde o sken bez textové vrstvy — text nelze označit ani vyhledávat. Rozpoznávání textu (OCR) není na této platformě k dispozici.',
     print: 'Tisk',
     printPreparing: 'Příprava…',
     undo: 'Zpět',
@@ -5226,6 +5300,11 @@ export const strings = {
       'Deze pagina’s hebben geen tekstlaag. Tekstherkenning (OCR) wordt automatisch uitgevoerd op Windows en macOS.',
     searchNoTextLayerNoOcr:
       'Deze pagina’s hebben geen tekstlaag. Tekstherkenning (OCR) is niet beschikbaar op dit platform.',
+    scanNoTextLabel: 'Gescand document',
+    scanNoTextTipOcr:
+      'Dit is een scan zonder tekstlaag — tekst kan niet met de muis worden geselecteerd. Tekstherkenning (OCR) wordt op dit platform automatisch uitgevoerd en maakt de tekst doorzoekbaar.',
+    scanNoTextTipNoOcr:
+      'Dit is een scan zonder tekstlaag — tekst kan niet worden geselecteerd of doorzocht. Tekstherkenning (OCR) is niet beschikbaar op dit platform.',
     print: 'Afdrukken',
     printPreparing: 'Voorbereiden…',
     undo: 'Ongedaan maken',
@@ -5566,6 +5645,11 @@ export const strings = {
       'Halaman-halaman ini tidak mempunyai lapisan teks. Pengecaman teks (OCR) berjalan secara automatik pada Windows dan macOS.',
     searchNoTextLayerNoOcr:
       'Halaman-halaman ini tidak mempunyai lapisan teks. Pengecaman teks (OCR) tidak tersedia pada platform ini.',
+    scanNoTextLabel: 'Dokumen imbasan',
+    scanNoTextTipOcr:
+      'Ini ialah imbasan tanpa lapisan teks — teks tidak boleh dipilih dengan tetikus. Pengecaman teks (OCR) berjalan secara automatik pada platform ini dan menjadikan teks boleh dicari.',
+    scanNoTextTipNoOcr:
+      'Ini ialah imbasan tanpa lapisan teks — teks tidak boleh dipilih atau dicari. Pengecaman teks (OCR) tidak tersedia pada platform ini.',
     print: 'Cetak',
     printPreparing: 'Sedang menyediakan…',
     undo: 'Buat asal',
@@ -5903,6 +5987,11 @@ export const strings = {
     searchNoTextLayerOcr:
       'לעמודים אלה אין שכבת טקסט. זיהוי טקסט (OCR) פועל באופן אוטומטי ב-Windows ו-macOS.',
     searchNoTextLayerNoOcr: 'לעמודים אלה אין שכבת טקסט. זיהוי טקסט (OCR) אינו זמין בפלטפורמה זו.',
+    scanNoTextLabel: 'מסמך סרוק',
+    scanNoTextTipOcr:
+      'זהו סריקה ללא שכבת טקסט, ולכן לא ניתן לסמן טקסט בעכבר. זיהוי טקסט (OCR) פועל באופן אוטומטי בפלטפורמה זו והופך את הטקסט לניתן לחיפוש.',
+    scanNoTextTipNoOcr:
+      'זהו סריקה ללא שכבת טקסט, ולכן לא ניתן לסמן או לחפש טקסט. זיהוי טקסט (OCR) אינו זמין בפלטפורמה זו.',
     print: 'הדפסה',
     printPreparing: 'מכין…',
     undo: 'ביטול פעולה',
@@ -6236,6 +6325,11 @@ export const strings = {
       'इन पृष्ठों पर टेक्स्ट लेयर नहीं है। टेक्स्ट पहचान (OCR) Windows और macOS पर स्वतः चलती है।',
     searchNoTextLayerNoOcr:
       'इन पृष्ठों पर टेक्स्ट लेयर नहीं है। इस प्लेटफ़ॉर्म पर टेक्स्ट पहचान (OCR) उपलब्ध नहीं है।',
+    scanNoTextLabel: 'स्कैन किया गया दस्तावेज़',
+    scanNoTextTipOcr:
+      'यह बिना टेक्स्ट लेयर वाला स्कैन है — माउस से टेक्स्ट चुना नहीं जा सकता। टेक्स्ट पहचान (OCR) इस प्लेटफ़ॉर्म पर स्वतः चलती है और टेक्स्ट को खोजने योग्य बनाती है।',
+    scanNoTextTipNoOcr:
+      'यह बिना टेक्स्ट लेयर वाला स्कैन है — टेक्स्ट चुना या खोजा नहीं जा सकता। टेक्स्ट पहचान (OCR) इस प्लेटफ़ॉर्म पर उपलब्ध नहीं है।',
     print: 'प्रिंट करें',
     printPreparing: 'तैयार किया जा रहा है…',
     undo: 'पूर्ववत करें',
@@ -6571,6 +6665,11 @@ export const strings = {
     searchNoResults: '無結果',
     searchNoTextLayerOcr: '這些頁面沒有文字層。文字辨識（OCR）會在 Windows 和 macOS 上自動執行。',
     searchNoTextLayerNoOcr: '這些頁面沒有文字層。此平台不支援文字辨識（OCR）。',
+    scanNoTextLabel: '掃描文件',
+    scanNoTextTipOcr:
+      '這是沒有文字層的掃描文件，無法用滑鼠選取文字。文字辨識（OCR）會在此平台自動執行，完成後即可搜尋。',
+    scanNoTextTipNoOcr:
+      '這是沒有文字層的掃描文件，無法選取或搜尋文字。此平台不支援文字辨識（OCR）。',
     print: '列印',
     printPreparing: '準備列印…',
     undo: '復原',
