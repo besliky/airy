@@ -276,6 +276,45 @@ describe('convert to range makes structured references computable', { skip: !HAS
   })
 })
 
+describe('rename → convert in one session (BUG-1750)', { skip: !HAS_SIDECAR }, () => {
+  it('converts the renamed references to A1; nothing points at the deleted table', async () => {
+    // The audited chain: Rename (Apply) then Convert to Range (Apply) in one
+    // session — the journal merges both into a single edit keyed by the
+    // original name. The conversion must match the post-rename token, or the
+    // structured references ride to the file untouched while their table part
+    // is deleted (#NAME? across the workbook in Excel).
+    const mutation = await runTableEdits([
+      { sheetName: 'Data', tableName: 'Sales', rename: 'Revenue', convertToRange: true },
+    ])
+    const zip = await JSZip.loadAsync(mutation.buffer)
+    expect(zip.file('xl/tables/table1.xml')).toBeNull()
+    const worksheet = await zip.file('xl/worksheets/sheet1.xml')!.async('text')
+    // Every reference became its A1 equivalent, under either token.
+    expect(worksheet).toContain('<f>B2</f>') // @-shorthand
+    expect(worksheet).toContain('<f>SUM(B2:B5)</f>') // data body
+    expect(worksheet).toContain('<f>SUM(A1:B6)</f>') // #All (whole table)
+    expect(worksheet).toContain('<f>SUM(B2:B6)</f>') // [[#Data],[#Totals]] union
+    expect(worksheet).not.toContain('Sales[')
+    expect(worksheet).not.toContain('Revenue')
+    // Prices survives with its references untouched.
+    expect(worksheet).toContain('<f>SUM(Prices[[Unit Price]])</f>')
+    expect(worksheet).toContain('<tableParts count="1">')
+
+    // Engine-level: the A1 formulas evaluate (the stale caches were 99/999).
+    const path = await writeFixture(mutation.buffer, 'renamed-converted.xlsx')
+    const client = new XlsxSidecarClient(SIDECAR)
+    try {
+      expect(await readNumber(client, path, [], 1, 4)).toBe(10) // B2
+      expect(await readNumber(client, path, [], 2, 4)).toBe(100) // SUM(B2:B5)
+      expect(await readNumber(client, path, [], 3, 4)).toBe(200) // SUM(B1:B6)
+      expect(await readNumber(client, path, [], 1, 5)).toBe(200) // SUM(B2:B6)
+      expect(await readNumber(client, path, [], 2, 5)).toBe(12) // Prices untouched
+    } finally {
+      client.stop()
+    }
+  })
+})
+
 describe('convert to range bakes the row stripes', () => {
   it('writes the stripe fill into alternating body cells and creates missing cells', async () => {
     const mutation = await runTableEdits(

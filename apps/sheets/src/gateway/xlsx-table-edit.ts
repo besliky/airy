@@ -79,23 +79,32 @@ export async function applyTableEdits(
     }
     let xml = await pkg.readText(table.path)
     if (edit.resize) xml = await applyResize(pkg, edit, table, xml)
-    if (edit.rename !== undefined && edit.rename !== table.name) {
+    const renamed = edit.rename !== undefined && edit.rename !== table.name
+    if (renamed) {
       xml = await applyRename(pkg, edit, table, xml, touchedEntries)
     }
     if (edit.style) xml = applyStyleEdit(xml, edit.style)
     if (edit.convertToRange === true) {
+      // A rename inside this same edit has already rewritten every structured
+      // reference to the new token, so the A1 conversion must match the
+      // post-rename name. Matching the captured (pre-rename) name here finds
+      // nothing and ships the references verbatim next to the deleted table
+      // part — #NAME? across the workbook in Excel (a rename→convert session
+      // merges into one journal entry keyed by the original name).
+      const converted =
+        renamed && edit.rename !== undefined ? { ...table, name: edit.rename } : table
       if (edit.stripeFill !== undefined) {
         if (stylesheet === null) {
           throw new TableEditError(
             `Baking the stripe fill of "${edit.tableName}" needs the workbook stylesheet.`,
           )
         }
-        await applyConvertToRange(pkg, edit.worksheetPath, table, touchedEntries, {
+        await applyConvertToRange(pkg, edit.worksheetPath, converted, touchedEntries, {
           stripeFill: edit.stripeFill,
           stylesheet,
         })
       } else {
-        await applyConvertToRange(pkg, edit.worksheetPath, table, touchedEntries, null)
+        await applyConvertToRange(pkg, edit.worksheetPath, converted, touchedEntries, null)
       }
       continue
     }

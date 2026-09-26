@@ -31,6 +31,7 @@ import {
   recordPivotAdd,
   recordStructuralOp,
   recordTableAdd,
+  recordTableEdit,
   recordVisualAdd,
   toNeutralStyle,
   toRecalcUserInput,
@@ -39,6 +40,7 @@ import {
   toSaveEdits,
   toSavePivotAdds,
   toSaveTableAdds,
+  toSaveTableEdits,
   toSaveSheetOps,
   toSaveStructuralOps,
 } from '../src/renderer/edit-journal'
@@ -314,6 +316,31 @@ describe('recordTableAdd', () => {
     recordSheetRemove(journal, 'sheet-1')
     expect(journalSize(journal)).toBe(1) // the sheet removal itself
     expect(toSaveTableAdds(journal)).toEqual([])
+  })
+})
+
+describe('recordTableEdit', () => {
+  it('merges a rename→convert session into one entry keyed by the original name', () => {
+    // The save payload must carry BOTH operations: the gateway applies the
+    // rename first and then converts the references by the new token
+    // (BUG-1750 — dropping the rename left the conversion matching nothing).
+    const journal = createEditJournal()
+    recordTableEdit(journal, { sheetId: 'sheet-1', tableName: 'Sales', rename: 'Revenue' })
+    recordTableEdit(journal, { sheetId: 'sheet-1', tableName: 'Sales', convertToRange: true })
+    expect(journal.tableEdits).toHaveLength(1)
+    expect(toSaveTableEdits(journal)).toEqual([
+      { sheetId: 'sheet-1', tableName: 'Sales', rename: 'Revenue', convertToRange: true },
+    ])
+  })
+
+  it('keeps the latest rename when a table is renamed twice', () => {
+    const journal = createEditJournal()
+    recordTableEdit(journal, { sheetId: 'sheet-1', tableName: 'Sales', rename: 'Middle' })
+    recordTableEdit(journal, { sheetId: 'sheet-1', tableName: 'Sales', rename: 'Final' })
+    expect(journal.tableEdits).toHaveLength(1)
+    expect(toSaveTableEdits(journal)).toEqual([
+      { sheetId: 'sheet-1', tableName: 'Sales', rename: 'Final' },
+    ])
   })
 })
 
