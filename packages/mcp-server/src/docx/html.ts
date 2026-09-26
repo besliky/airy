@@ -17,6 +17,7 @@ import {
   type GeneratedBlock,
   type Run,
   type TableModel,
+  type TableCell,
 } from '@airy-office/docx-engine'
 
 // ---- link href policy (mirrors the renderer's sanitizeLinkHref) ----
@@ -483,12 +484,94 @@ export function blockPreviewText(block: Block | GeneratedBlock): string {
   }
   const b = block as Block
   if (b.type === 'table') {
-    const rows = b.table?.rows ?? []
-    const flat = rows.map((row) => row.map((cell) => cell.paras.join(' ')).join(' | ')).join(' / ')
-    return flat.replace(/\s+/g, ' ').trim()
+    return tablePreviewText(b.table).replace(/\s+/g, ' ').trim()
   }
   const label = b.label ?? b.previewText
   return [label, b.previewText].filter(Boolean).join(' — ').replace(/\s+/g, ' ').trim()
+}
+
+// ---- table rendering (read honesty: BUG-1777) ----
+
+/**
+ * Display text of one run inside a table cell. Field runs keep their cached
+ * value verbatim (the exact text the findReplace path matches in the rich
+ * runs) and gain a bracketed instruction note, so a formula cell reads as a
+ * formula with its last-computed result instead of empty or plain text.
+ */
+function cellRunText(run: Run): string {
+  if (run.formulaField) return fieldRunText(run.text, `formula: ${run.formulaField}`)
+  if (run.instrField) return fieldRunText(run.text, `field: ${run.instrField}`)
+  if (run.refField) return fieldRunText(run.text, `field: REF ${run.refField}`)
+  return run.text
+}
+
+/** cached value plus the bracketed note; a whitespace-only cache shows the note alone */
+function fieldRunText(cache: string, note: string): string {
+  return cache.trim() === '' ? `[${note}]` : `${cache} [${note}]`
+}
+
+/**
+ * Display text of one table-cell paragraph: the rich runs when present — the
+ * same content the replace path edits (BUG-1777: the plain `paras` text is
+ * raw XML text that carries field instruction noise the model never matches)
+ * — falling back to the plain text for models without rich runs (inserted
+ * tables). Mirrors replaceInRuns' rich-first rule so read and edit agree.
+ */
+function cellParaText(cell: TableCell, index: number): string {
+  const rich = cell.richParas?.[index]
+  if (rich !== undefined) return rich.runs.map(cellRunText).join('')
+  return cell.paras[index] ?? ''
+}
+
+/** collapsed preview text of a table model: cells, then nested tables depth-last */
+function tablePreviewText(model: TableModel | undefined): string {
+  return (model?.rows ?? [])
+    .map((row) =>
+      row
+        .map((cell) => {
+          const paras = cell.paras.map((_, i) => cellParaText(cell, i)).join(' ')
+          const nested = (cell.nestedTables ?? [])
+            .map((nestedModel) => tablePreviewText(nestedModel))
+            .join(' ')
+          return [paras, nested].filter((text) => text !== '').join(' ')
+        })
+        .join(' | '),
+    )
+    .join(' / ')
+}
+
+/** one table model (outer or nested) as a static restricted-HTML <table> */
+function tableToHtml(model: TableModel | undefined): string {
+  const rows = model?.rows ?? []
+  const header = rows.length > 1 && rows[0]!.every((c) => c.bold || c.fill !== undefined)
+  const trs = rows.map((row, r) => {
+    const tag = header && r === 0 ? 'th' : 'td'
+    return `<tr>${row.map((cell) => cellToHtml(cell, tag)).join('')}</tr>`
+  })
+  return `<table>${trs.join('')}</table>`
+}
+
+/**
+ * One cell as restricted HTML: paragraph texts with nested tables interleaved
+ * at their paragraph anchors (nestedTableAnchors counts the paragraphs that
+ * precede each nested table). Nested tables render as real <table> elements
+ * inside the cell, so read shows the content findReplace can reach (BUG-1777)
+ * while the outer table's row/cell structure stays untouched.
+ */
+function cellToHtml(cell: TableCell, tag: string): string {
+  const paras = cell.paras.map((_, i) => cellParaText(cell, i))
+  const nested = cell.nestedTables ?? []
+  const anchors = cell.nestedTableAnchors ?? nested.map(() => paras.length)
+  const parts: string[] = []
+  let cursor = 0
+  nested.forEach((model, i) => {
+    const at = Math.min(anchors[i] ?? paras.length, paras.length)
+    if (at > cursor) parts.push(escapeHtml(paras.slice(cursor, at).join('\n')))
+    parts.push(tableToHtml(model))
+    cursor = Math.max(cursor, at)
+  })
+  if (cursor < paras.length) parts.push(escapeHtml(paras.slice(cursor).join('\n')))
+  return `<${tag}>${parts.filter((part) => part !== '').join('\n')}</${tag}>`
 }
 
 /** one block as restricted HTML (list grouping is handled by blocksToHtml) */
@@ -501,13 +584,7 @@ export function blockToHtml(block: Block | GeneratedBlock): string {
     return `<li>${runsToHtml(block.runs)}</li>` // wrapped by blocksToHtml
   }
   if (block.type === 'table') {
-    const rows = (block as Block).table?.rows ?? []
-    const header = rows.length > 1 && rows[0].every((c) => c.bold || c.fill !== undefined)
-    const trs = rows.map((row, r) => {
-      const tag = header && r === 0 ? 'th' : 'td'
-      return `<tr>${row.map((cell) => `<${tag}>${escapeHtml(cell.paras.join('\n'))}</${tag}>`).join('')}</tr>`
-    })
-    return `<table>${trs.join('')}</table>`
+    return tableToHtml((block as Block).table)
   }
   if (block.type === 'image') {
     const b = block as Block
