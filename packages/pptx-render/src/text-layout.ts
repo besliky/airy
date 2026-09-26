@@ -554,7 +554,26 @@ const WORD_SEG: Intl.Segmenter | null =
 
 /** Strong RTL characters (Hebrew/Arabic + presentation forms) — bidi analysis runs only on a match. */
 const RTL_RE = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/
+// eslint-disable-next-line no-misleading-character-class -- broad strong-LTR ranges; combining marks inside are irrelevant for the direction decision
+const LTR_RE = /[A-Za-z\u00c0-\u058f\u0900-\ud7ff\uf900-\ufdcf]/
 let bidiApi: ReturnType<typeof bidiFactory> | null = null
+
+/**
+ * Whether a glyph run draws with canvas direction=rtl (BUG-1765). The stamp is
+ * decided by the run's own STRONG bidi characters only:
+ *   - strong RTL text (Arabic/Hebrew) always draws rtl — that is what the level
+ *     stamp exists for;
+ *   - a run whose strong characters are LTR (Latin/Cyrillic mixed with neutrals —
+ *     emoji, CJK, digits) never draws rtl: the RTL paragraph rules would reorder
+ *     and reshape the LTR glyphs (the reported "Cyrillic drawn upside down" class);
+ *   - pure-neutral runs (spaces/punctuation/emoji between RTL words) keep the
+ *     level stamp so paired-bracket mirroring still applies.
+ */
+export function runDrawsRtl(text: string, level: number | undefined): boolean {
+  if (level == null || level % 2 === 0) return false
+  if (RTL_RE.test(text)) return true
+  return !LTR_RE.test(text)
+}
 
 /**
  * Runs UAX#9 over the paragraph token stream: tokens crossing direction levels are
@@ -858,7 +877,7 @@ function buildLine(
       ...(tok.shadow ? { shadow: tok.shadow } : {}),
       ...(tok.blShift ? { baselineShiftPx: tok.blShift } : {}),
       ...(tok.blPct ? { baselinePct: tok.blPct } : {}),
-      ...(tok.level != null && tok.level % 2 === 1 ? { rtl: true } : {}),
+      ...(runDrawsRtl(tok.text, tok.level) ? { rtl: true } : {}),
       srcRunIdx: tok.srcRun,
       ...(tok.link ? { link: tok.link } : {}),
       ...(tok.logicalOrder != null ? { logicalOrder: tok.logicalOrder } : {}),
