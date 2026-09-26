@@ -19,6 +19,7 @@ import {
   checkSaveStaleness,
   configuredDefaultSaveDir,
   contextMenuLabels,
+  encodeTextAsEncoding,
   installContextMenu,
   installNavigationGuard,
   safeExternalUrl,
@@ -48,7 +49,6 @@ import {
   writeImageIntoOwnedAssets,
 } from './asset-lifecycle'
 import { createMarkdownConversionSession, writeMarkdownConversion } from './conversion-lifecycle'
-import { encodeTextAsEncoding } from './encode-text'
 import {
   decodeBytesAsEncoding,
   forgetFileEncoding,

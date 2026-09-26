@@ -10,6 +10,7 @@ export const HTML_CHANNELS = {
   presentNewTab: 'html:present-new-tab',
   readFile: 'html:read-file',
   setEncoding: 'html:set-encoding',
+  getEncoding: 'html:get-encoding',
   getEditorPrefs: 'html:get-editor-prefs',
   setEditorPrefs: 'html:set-editor-prefs',
   writeRecovery: 'html:write-recovery',
@@ -228,6 +229,13 @@ export interface HtmlApi {
    * allowed; the pick survives tab close and relaunch (UX-1653).
    */
   setEncoding(path: string, encoding: string | null): Promise<boolean>
+  /**
+   * The persisted charset this file is pinned to — the charset the open
+   * decoded with and the save writes in — or null when auto-detection applies
+   * (BUG-1782: the picker must show the truth, not mask an override with a
+   * session-local 'auto'). Read-only; only paths granted to this view.
+   */
+  getEncoding(path: string): Promise<string | null>
   /** Editor view preferences (word wrap, split scroll-sync), persisted workspace-wide (UX-1704) */
   getEditorPrefs(): Promise<EditorPrefs>
   /**

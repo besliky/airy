@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./drop-open": "./src/drop-open.ts",
-    "./atomic-write": "./src/atomic-write.ts"
+    "./atomic-write": "./src/atomic-write.ts",
+    "./encode-text": "./src/encode-text.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -5,6 +5,10 @@
 /// otherwise — the next open re-decoded the new bytes as the old charset and
 /// produced mojibake. Saving must respect the remembered charset.
 ///
+/// Lives here (not in an app) because both plain-text editors — markdown and
+/// html — save through it: BUG-1782 is the html app missing this half of the
+/// #237 fix.
+///
 /// Node/Electron only ships a UTF-8 TextEncoder, so every other selectable
 /// charset is encoded through its decoder: a charset's decode side defines a
 /// closed character set, and its inverse map is built once per charset by
@@ -66,8 +70,9 @@ function inverseMap(charset: string): Map<string, number[]> | null {
 
 function utf16beFromLe(le: Buffer): Buffer {
   for (let i = 0; i + 1 < le.length; i += 2) {
-    const first = le[i]
-    le[i] = le[i + 1]
+    const first = le[i]!
+    const second = le[i + 1]!
+    le[i] = second
     le[i + 1] = first
   }
   return le

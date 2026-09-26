@@ -58,6 +58,38 @@ describe('html reopen-with-encoding wiring', () => {
   })
 })
 
+describe('html encoding picker truthfulness (BUG-1782)', () => {
+  it('the read-only getEncoding channel is registered, wired and pick-aware', () => {
+    expect(shared).toContain("getEncoding: 'html:get-encoding'")
+    expect(shared).toContain('getEncoding(path: string): Promise<string | null>')
+    expect(preload).toContain('getEncoding: (path) =>')
+    expect(preload).toContain('ipcRenderer.invoke(HTML_CHANNELS.getEncoding, path)')
+    expect(main).toContain('HTML_CHANNELS.getEncoding,')
+    expect(main).toContain('readRememberedFileEncoding(appSettingsPath(), path) ?? null')
+  })
+
+  it('the renderer narrows the persisted answer through asEncodingPick', () => {
+    expect(renderer).toContain('import { EncodingPicker, asEncodingPick, type EncodingPick } from')
+  })
+
+  it('the picker mirrors the persisted pick at open and after every save', () => {
+    // open: the persisted pick governs the decode just used — show it
+    expect(renderer).toContain('window.htmlApi.getEncoding(pending).catch(() => null)')
+    // save: a Save As onto a fresh path has no pick, a fallback UTF-8 write
+    // dropped the old one — re-read the truth for the resolved path
+    expect(renderer).toContain('window.htmlApi.getEncoding(result.path).catch(() => null)')
+    expect(renderer).toContain('setEncodingPick(asEncodingPick(remembered))')
+  })
+
+  it('the save encodes into the remembered charset and keeps the meta claim honest', () => {
+    expect(main).toContain('encodeForSave(textToWrite, target)')
+    expect(main).toContain('readRememberedFileEncoding(appSettingsPath(), target)')
+    // the declaration is synced to the charset the bytes actually use
+    expect(main).toContain('syncCharsetDeclaration(text, encoding)')
+    expect(main).toContain("syncCharsetDeclaration(text, 'utf-8')")
+  })
+})
+
 describe('html reopen-with-encoding i18n', () => {
   const locales = Object.keys(appStrings) as Array<keyof typeof appStrings>
 

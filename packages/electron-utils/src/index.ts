@@ -130,3 +130,4 @@ export {
 } from './witnessed-drops'
 export { WITNESS_DROP_CHANNEL } from './witness-channel'
 export { truncateByCodePoints } from './truncate'
+export { encodeTextAsEncoding } from './encode-text'

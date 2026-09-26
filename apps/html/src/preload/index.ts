@@ -11,6 +11,7 @@ const api: HtmlApi = {
   consumePending: () => ipcRenderer.invoke(HTML_CHANNELS.consumePending),
   readFile: (path) => ipcRenderer.invoke(HTML_CHANNELS.readFile, path),
   setEncoding: (path, encoding) => ipcRenderer.invoke(HTML_CHANNELS.setEncoding, path, encoding),
+  getEncoding: (path) => ipcRenderer.invoke(HTML_CHANNELS.getEncoding, path),
   getEditorPrefs: () => ipcRenderer.invoke(HTML_CHANNELS.getEditorPrefs),
   setEditorPrefs: (patch) => ipcRenderer.invoke(HTML_CHANNELS.setEditorPrefs, patch),
   writeRecovery: (path, text) => ipcRenderer.invoke(HTML_CHANNELS.writeRecovery, path, text),
