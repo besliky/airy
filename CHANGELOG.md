@@ -7,6 +7,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-09-26
+
+### Fixed
+
+- Sheets:
+  - Structured references live in the session again (BUG-1749, P1 — a PAR-205
+    regression surfaced by the sheets PAR-surface audit). In fully loaded books
+    the renderer treated the table token before `[` as an unresolved name
+    (`containsUnresolvedNames` → always-keeps-cache), so imported sref cells
+    silently degraded to style-only and a typed `=SUM(Sales[Amount])` showed
+    `#NAME?` forever — while the sidecar computed the very same file correctly.
+    The fix is renderer-side only: a syntactic `usesStructuredReferences`
+    detector (selector forms `Table[` / `'Table Name'[`; string literals and
+    external-workbook brackets excluded) moves sref cells out of the
+    always-keeps-cache class, so the import installs them as `{f}` / `{f,v}`,
+    and a new `runStructuredRefRecalc` pass (after preload and after every
+    edit) computes file and session-typed sref formulas of fully loaded books
+    through one sidecar `recalcWorkbook` request, pinning values value-only
+    with a guard that never pins a sidecar `#NAME?`/`#ERROR!`; the pin
+    interceptor matches only the same formula, so a stale pin cannot leak into
+    a freshly retyped cell; CSE masters stay cache-kept and the streamed
+    sidecar channel is untouched. 9 new tests, including the audit's live
+    circuit (import → read → type → recalc) against the real sidecar binary:
+    file formulas return 11.5/100/200 and a typed `=SUM(Sales[Amount])`
+    computes 100 (PR #255).
+  - Rename → Convert to Range in one session no longer leaves structured refs
+    pointing at the deleted table (BUG-1750). The journal squashes
+    `{rename, convertToRange}` into one entry, and the gateway applied the
+    rename first — rewriting every formula to the new name — then matched the
+    convert against the old name, found zero occurrences, removed the table
+    part and shipped the formulas verbatim (`#NAME?` in every referencing
+    cell). The convert step now matches the post-rename name; rename
+    validations and single-step converts are unchanged. Verified by the engine:
+    the merged-entry scenario writes only A1 formulas (table part removed,
+    a second table intact) and the real sidecar recomputes them to
+    10/100/200/200/12 over stale caches; the regression test fails without the
+    fix (PR #251).
+  - Table slicers agree with table rename/convert, and the slicer toggle
+    filters for real (BUG-1751 + BUG-1752). A slicer panel pinned its table
+    name at creation, so a later rename or Convert to Range in the same
+    session made the save gateway throw `SlicerAddError` and abort the entire
+    save — nothing in the session reached disk until the panel was deleted.
+    Slicer journal entries and filter criteria are now resolved through the
+    pending table edits at save-request build time: after a rename the slicer
+    re-binds to the renamed part (Excel semantics — the x15 `tableSlicerCache`
+    binds by tableId + column, not by name), and a convert drops the table's
+    slicers and criteria the way Excel does, writing the filtered rows as
+    plain hidden-row state without a worksheet autoFilter over the range.
+    Separately, the toggle used to report "applied" while writing through a
+    facade call that silently no-ops without a filter model — criteria now go
+    through the filter model (`setCriteria`) with row visibility reapplied by
+    row-hidden/row-visible mutations, and the "applied — save to write" status
+    appears only when the model holds exactly the requested members (PR #253).
+- Docs:
+  - F9 on a table formula no longer doubles the cached value (BUG-1756, the
+    audit's "600600" repro). The audit's comment-range hypothesis was refuted:
+    the comment markers were innocent bystanders. The real defect — a complex
+    field with an EMPTY cache parsed as a space placeholder carrying the
+    formula mark, while the visible "600" stayed in an adjacent plain run, so
+    F9 replaced only the placeholder and the value doubled (reproducible
+    without any comment range). The parser now folds the adjacent numeric run
+    into the formula run as its cache (complex fields and empty
+    `w:fldSimple`), so a clean F9 is a no-op, the comment survives, and
+    well-formed fields keep their byte-identical path (PR #252).
+  - Nested-table formulas recompute on their own grid, and copy-paste of a
+    formula cell keeps its instruction (BUG-1757 + BUG-1758). Nested tables
+    parse into `docNestedTable` atoms, so F9 never saw their formulas — inner
+    caches were stale forever — and the audit's "pmTableGrid descends into
+    foreign cells" mechanism does not exist on the current HEAD (honest
+    correction recorded in the PR body). A new `refreshNestedTableFormulas`
+    pass recomputes each nested level on that level's own physical grid
+    (colSpan / vMerge continuations / grid gaps, levels 2+ recursive), outer
+    formulas no longer read inner values, and nested saves emit a rich patch
+    so the updated cache returns into `w:fldSimple` instead of destroying the
+    field form. Pasting a copied formula cell now carries the instruction
+    (`data-table-formula` → mark attrs), F9 after paste recomputes on the
+    receiver's grid, and a degenerate empty instruction is never written as
+    `w:fldSimple w:instr=""` — the file keeps the cache text, and the F9
+    guards no longer stamp "!Syntax Error" over it (PR #254).
+
+### Tests
+
+- The html-tab e2e family is determinized (TEST-1748 — the family 0.25.0 named
+  after its third recorded flake). The Ctrl+Z relay test gates each keypress on
+  the preview reload actually committing (the sandboxed iframe's `?v=<nonce>`
+  version advanced plus `load`), and both save tests retry the whole Ctrl+S
+  gesture in a `toPass` wrapper until `.status-save` reads "Saved" — a re-press
+  is idempotent and the byte-identity asserts stay the arbiters, so nothing is
+  weakened. One file changed (`e2e/html-tab.spec.ts`, +53/−5); the modified
+  tests pass 10× repeats (20/20) and the whole spec passes 3 consecutive runs;
+  product code, helpers and baselines are untouched (PR #250).
+
 ## [0.25.0] - 2026-09-26
 
 ### Added
