@@ -1518,7 +1518,6 @@ mod tests {
         assert_eq!(result.cells, 4);
 
         let styles = read_entry(&target, "xl/styles.xml");
-        println!("STYLES dump: {styles}");
         // The yellow solid fill and the red bold-14 italic-free font.
         assert!(styles.contains(r#"<fill><patternFill patternType="solid"><fgColor rgb="FFFFCC00"/></patternFill></fill>"#));
         assert!(styles.contains(r#"<font><b/><sz val="14"/><color rgb="FFFF0000"/><name val="Cambria"/></font>"#));

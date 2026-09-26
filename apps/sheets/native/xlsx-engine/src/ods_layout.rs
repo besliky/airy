@@ -428,7 +428,6 @@ impl StyleTablesWalk {
     fn begin_style(&mut self, reader: &Reader<&[u8]>, element: &BytesStart<'_>) {
         let name = read_attr(reader, element, b"name");
         let family = read_attr(reader, element, b"family");
-        eprintln!("DBG begin_style name={name:?} family={family:?}");
         self.current = name.zip(family).and_then(|(name, family)| {
             let slot = match family.as_str() {
                 "table-column" => ColumnOrRow::Column,
