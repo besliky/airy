@@ -80,8 +80,13 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
     let repaired = legacy_xls::LegacyXlsStrings::extract(source);
     // BUG-1602: merges, column widths and basic cell styles, walked from the
     // BIFF stream directly (calamine exposes none of them). Empty for every
-    // non-.xls source, which keeps those conversions unchanged.
-    let layout = xls_layout::WorkbookLayout::extract(source);
+    // non-.xls source, which keeps those conversions unchanged. For an .ods
+    // source the content.xml walk (PAR-214) carries the same shape instead:
+    // merged headers survive the conversion just like on the .xls path.
+    let mut layout = xls_layout::WorkbookLayout::extract(source);
+    if layout.is_empty() {
+        layout = crate::ods_layout::extract(source);
+    }
     let mut styler = StyleInterner::new(&layout);
     let names: Vec<String> = workbook.sheet_names().to_vec();
     if names.is_empty() {
@@ -141,7 +146,23 @@ pub fn convert_to_xlsx(source: &Path, target: &Path) -> Result<ConvertResult, Si
 
     add("[Content_Types].xml", &content_types_xml(names.len()))?;
     add("_rels/.rels", ROOT_RELS)?;
-    add("xl/workbook.xml", &workbook_xml(&names, &repaired))?;
+    let defined_names: Vec<(String, String)> = workbook
+        .defined_names()
+        .iter()
+        .filter(|(name, _)| crate::ods_formula::is_valid_defined_name(name))
+        .filter_map(|(name, formula)| {
+            // A name the translator cannot carry is dropped, not mangled:
+            // ODF syntax in workbook.xml would poison the whole converted
+            // book for the formula engine.
+            crate::ods_formula::translate_defined_name(formula)
+                .filter(|translated| !translated.contains('#') && translated.len() <= 1024)
+                .map(|translated| (name.clone(), translated))
+        })
+        .collect();
+    add(
+        "xl/workbook.xml",
+        &workbook_xml(&names, &repaired, &defined_names),
+    )?;
     add(
         "xl/_rels/workbook.xml.rels",
         &workbook_rels_xml(names.len()),
@@ -286,13 +307,22 @@ fn worksheet_xml(
         body.push_str("</row>");
     }
 
-    let dimension = match (range.start(), range.end()) {
-        (Some(start), Some(end)) => format!(
+    let dimension = {
+        // A merge may reach past the last written cell (a vertical merge
+        // anchoring the sheet's last content row); the grid must reach it,
+        // exactly like the table-range extension on the open path.
+        let mut end = range.end().unwrap_or((0, 0));
+        if let Some(layout) = layout {
+            for (rows, columns) in &layout.merges {
+                end = (end.0.max(rows[1]), end.1.max(columns[1]));
+            }
+        }
+        let start = range.start().unwrap_or((0, 0));
+        format!(
             "{}:{}",
             cell_reference(start.0, start.1),
             cell_reference(end.0, end.1),
-        ),
-        _ => "A1:A1".into(),
+        )
     };
     // Schema order: dimension, sheetFormatPr, cols, sheetData, mergeCells.
     let format_pr = layout.map(sheet_format_pr_xml).unwrap_or_default();
@@ -386,6 +416,139 @@ fn merges_xml(layout: &xls_layout::SheetLayout) -> String {
     xml
 }
 
+/// ODF date/time lexemes -> (Excel serial, fallback date style). calamine
+/// hands .ods date and time cells over as the ISO strings they carry in
+/// `office:date-value` / `office:time-value` (`Data::DateTimeIso` /
+/// `Data::DurationIso`), and writing them as text loses the date typing the
+/// source had — LibreOffice and Excel both keep a real serial + number
+/// format when converting the same book. The three fallback shapes mirror
+/// the `Data::DateTime` branch below: xf 1 short date, xf 2 date+time,
+/// xf 3 elapsed time. `None` = not a lexeme we understand (keep the text).
+fn odf_datetime_to_serial(text: &str) -> Option<(f64, usize)> {
+    if let Some(body) = text.strip_prefix(['P', 'p']) {
+        return odf_duration_to_serial(body).map(|fraction| (fraction, 3));
+    }
+    let (date, rest) = text.split_once('T').unwrap_or((text, ""));
+    let (year, month, day) = parse_iso_date(date)?;
+    let serial = days_since_excel_epoch(year, month, day)? as f64;
+    if rest.is_empty() {
+        return Some((serial, 1));
+    }
+    // Time of day, with an optional UTC marker or offset (`Z`, `+hh:mm`)
+    // that carries no serial weight — the wall-clock digits are the value.
+    let time = match rest.strip_suffix('Z') {
+        Some(time) => time,
+        None => rest.split_once(['+', '-']).map_or(rest, |(time, _)| time),
+    };
+    let (hours, minutes, seconds) = parse_iso_time(time)?;
+    Some((
+        serial + f64::from(hours * 3600 + minutes * 60 + seconds) / 86_400.0,
+        2,
+    ))
+}
+
+/// Elapsed-time lexeme body (`T10H30M15S`, `T45M`, `1DT2H`, ...): the
+/// fraction of a day it represents. LibreOffice writes time-of-day cells
+/// exactly this way (`PT10H30M15S`), and Excel stores a time of day as a
+/// fraction too, so one shape serves both.
+fn odf_duration_to_serial(body: &str) -> Option<f64> {
+    let signed = body.trim_start_matches(['-', '+']);
+    let negative = signed.len() != body.len();
+    // Shape: [days]['T' time] — the `T` separator is required by ODF
+    // whenever a time component is present.
+    let (days, time) = match signed.split_once('D') {
+        Some((days, rest)) => (Some(days), Some(rest.strip_prefix('T').unwrap_or(rest))),
+        None => (None, signed.strip_prefix('T')),
+    };
+    let time = match time {
+        // A dangling `T` carries no component — not a lexeme we honor.
+        Some("") => return None,
+        Some(time) => time,
+        None => "",
+    };
+    if time.is_empty() && days.is_none() {
+        return None;
+    }
+    let mut seconds = match days {
+        Some(days) => days.parse::<f64>().ok()? * 86_400.0,
+        None => 0.0,
+    };
+    // (value, unit) pairs whose units must appear in H, M, S order; the
+    // seconds value may carry a fraction.
+    let mut unit_rank = 0;
+    let mut digits = String::new();
+    for ch in time.chars().chain(std::iter::once('\0')) {
+        match ch {
+            '0'..='9' | '.' => digits.push(ch),
+            'H' | 'M' | 'S' => {
+                let rank = match ch {
+                    'H' => 1,
+                    'M' => 2,
+                    _ => 3,
+                };
+                if rank < unit_rank || digits.is_empty() {
+                    return None;
+                }
+                let value: f64 = digits.parse().ok()?;
+                seconds += match ch {
+                    'H' => value * 3600.0,
+                    'M' => value * 60.0,
+                    _ => value,
+                };
+                digits.clear();
+                unit_rank = rank;
+            }
+            '\0' if digits.is_empty() => {}
+            _ => return None,
+        }
+    }
+    let fraction = seconds / 86_400.0;
+    Some(if negative { -fraction } else { fraction })
+}
+
+/// `YYYY-MM-DD` -> (year, month, day).
+fn parse_iso_date(date: &str) -> Option<(i32, u32, u32)> {
+    let (year, rest) = date.split_once('-')?;
+    let (month, day) = rest.split_once('-')?;
+    if year.len() != 4 || rest.len() != 5 {
+        return None;
+    }
+    Some((year.parse().ok()?, month.parse().ok()?, day.parse().ok()?))
+}
+
+/// `HH:MM(:SS(.frac)?)` -> whole (hours, minutes, seconds); fractions are
+/// dropped — they are below the resolution the fallback formats show.
+fn parse_iso_time(time: &str) -> Option<(u32, u32, u32)> {
+    let base = time.split('.').next().unwrap_or(time);
+    let mut parts = base.split(':');
+    let hours: u32 = parts.next()?.parse().ok()?;
+    let minutes: u32 = parts.next()?.parse().ok()?;
+    let seconds: u32 = parts.next().unwrap_or("0").parse().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Some((hours, minutes, seconds))
+}
+
+/// Days from 1899-12-30 (the Excel serial epoch, leap-bug included) to the
+/// given civil date. Howard Hinnant's days_from_civil, no calendar deps.
+fn days_since_excel_epoch(year: i32, month: u32, day: u32) -> Option<i64> {
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    let shifted_year = i64::from(year) - i64::from(month <= 2);
+    let era = shifted_year.div_euclid(400);
+    let year_of_era = shifted_year - era * 400;
+    let month = i64::from(month);
+    let day_of_year = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + i64::from(day) - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    // days_from_civil counts days since 1970-01-01 continuously; the Excel
+    // serial calendar reproduces Lotus's phantom 1900-02-29, so every real
+    // date from 1900-03-01 on sits one serial past the continuous count.
+    let continuous = era * 146_097 + day_of_era - 719_468;
+    Some(continuous + if continuous < -25_508 { 25_568 } else { 25_569 })
+}
+
 fn cell_xml(
     position: (u32, u32),
     value: &Data,
@@ -431,13 +594,26 @@ fn cell_xml(
                 .unwrap_or_else(|| format!(r#" s="{fallback}""#));
             format!(r#"<c r="{reference}"{style_attr}>{formula_xml}<v>{serial}</v></c>"#)
         }
+        Data::DateTimeIso(text) | Data::DurationIso(text) => {
+            // An ODF date/time cell becomes a real serial with the fallback
+            // date styles; a lexeme outside the understood shapes keeps the
+            // text, exactly as before.
+            match odf_datetime_to_serial(text) {
+                Some((serial, fallback)) => {
+                    let style_attr = style
+                        .map(|style| format!(r#" s="{style}""#))
+                        .unwrap_or_else(|| format!(r#" s="{fallback}""#));
+                    format!(r#"<c r="{reference}"{style_attr}>{formula_xml}<v>{serial}</v></c>"#)
+                }
+                None => format!(
+                    r#"<c r="{reference}"{style_attr} t="inlineStr">{formula_xml}<is><t xml:space="preserve">{}</t></is></c>"#,
+                    escape_xml(text),
+                ),
+            }
+        }
         Data::Error(error) => format!(
             r#"<c r="{reference}"{style_attr} t="e">{formula_xml}<v>{}</v></c>"#,
             escape_xml(&error.to_string()),
-        ),
-        Data::DateTimeIso(text) | Data::DurationIso(text) => format!(
-            r#"<c r="{reference}"{style_attr} t="inlineStr">{formula_xml}<is><t xml:space="preserve">{}</t></is></c>"#,
-            escape_xml(text),
         ),
     };
     Some(cell)
@@ -476,7 +652,29 @@ fn content_types_xml(sheet_count: usize) -> String {
 const ROOT_RELS: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#;
 
-fn workbook_xml(names: &[String], repaired: &legacy_xls::LegacyXlsStrings) -> String {
+/// `<definedNames>` for the carried-over names, in workbook order.
+fn defined_names_xml(names: &[(String, String)]) -> String {
+    if names.is_empty() {
+        return String::new();
+    }
+    let entries: String = names
+        .iter()
+        .map(|(name, formula)| {
+            format!(
+                r#"<definedName name="{}">{}</definedName>"#,
+                escape_xml(name),
+                escape_xml(formula),
+            )
+        })
+        .collect();
+    format!(r#"<definedNames>{entries}</definedNames>"#)
+}
+
+fn workbook_xml(
+    names: &[String],
+    repaired: &legacy_xls::LegacyXlsStrings,
+    defined_names: &[(String, String)],
+) -> String {
     let sheets: String = names
         .iter()
         .enumerate()
@@ -497,7 +695,8 @@ fn workbook_xml(names: &[String], repaired: &legacy_xls::LegacyXlsStrings) -> St
         .collect();
     format!(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>{sheets}</sheets></workbook>"#,
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>{sheets}</sheets>{}</workbook>"#,
+        defined_names_xml(defined_names),
     )
 }
 
@@ -795,13 +994,13 @@ mod tests {
         assert!(!sheet.contains("8.68"), "catch-all width leaked into cols");
         // Merge continuations keep the header's fill and borders via styled
         // empty cells, the way LibreOffice writes them.
-        assert!(sheet.contains(r#"<c r="B1" s="3"/>"#));
-        assert!(sheet.contains(r#"<c r="C3" s="4"/>"#));
+        assert!(sheet.contains(r#"<c r="B1" s="4"/>"#));
+        assert!(sheet.contains(r#"<c r="C3" s="5"/>"#));
         // Title cell: bold 14pt on the amber fill, centered — cellXfs 3.
-        assert!(sheet.contains(r#"<c r="A1" s="3" t="inlineStr">"#));
+        assert!(sheet.contains(r#"<c r="A1" s="4" t="inlineStr">"#));
         // A date keeps its real number format (custom 165 = yyyy-mm-dd),
         // not the fallback short-date style.
-        assert!(sheet.contains(r#"<c r="D5" s="6"><v>46223</v></c>"#));
+        assert!(sheet.contains(r#"<c r="D5" s="7"><v>46223</v></c>"#));
 
         let styles = read_entry(&target, "xl/styles.xml");
         assert!(styles.contains(r#"<font><b/><sz val="14"/><name val="Cambria"/></font>"#));
@@ -810,8 +1009,8 @@ mod tests {
         assert!(styles.contains(r#"<left style="thin"><color rgb="FF000000"/></left>"#));
         assert!(styles.contains(r#"<numFmt numFmtId="165" formatCode="yyyy\-mm\-dd"/>"#));
         assert!(styles.contains(r#"<alignment horizontal="center" vertical="center"/>"#));
-        // cellXfs 0-2 are the converter's fallback styles, unchanged.
-        assert!(styles.contains(r#"<cellXfs count="7">"#));
+        // cellXfs 0-3 are the converter's fallback styles, unchanged.
+        assert!(styles.contains(r#"<cellXfs count="8">"#));
         // BUG-1659: the mandatory named style, after cellXfs in schema
         // order — IronCalc's importer panics on a book without it.
         assert!(styles.contains(
@@ -913,7 +1112,7 @@ mod tests {
         assert!(!sheet.contains("mergeCell"));
         assert!(!sheet.contains("<cols>"));
         let styles = read_entry(&target, "xl/styles.xml");
-        assert!(styles.contains(r#"<cellXfs count="3">"#));
+        assert!(styles.contains(r#"<cellXfs count="4">"#));
     }
 
     /// BUG-1659: a real .ods book converts with a complete styles.xml —
@@ -977,6 +1176,379 @@ mod tests {
         assert!(workbook.contains(r#"<sheet name="Data" sheetId="2" r:id="rId2"/>"#));
     }
 
+    /// PAR-214: a LibreOffice-written .ods with date, date+time and
+    /// time-of-day cells converts them into real Excel serials carrying a
+    /// date number format — they used to arrive as `Data::DateTimeIso` /
+    /// `Data::DurationIso` and land in the sheet as plain text. The serials
+    /// are the exact values LibreOffice itself writes into its xlsx
+    /// conversion of the same book; the round trip re-opens the converted
+    /// file and reads the numbers back the way the app does.
+    #[test]
+    fn carries_ods_dates_and_times_as_serials() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/par214-ods-datetime.ods"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let result = convert_to_xlsx(source, &target).unwrap();
+        assert_eq!(result.cells, 8);
+
+        let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
+        // Date-only: serial 45306 = 2024-01-15, short-date style xf 1.
+        assert!(sheet.contains(r#"<c r="B1" s="1"><v>45306</v></c>"#));
+        // Date+time: the fraction is the wall-clock time, style xf 2.
+        assert!(sheet.contains(r#"<c r="B2" s="2"><v>45306.4375</v></c>"#));
+        // Time of day: a fraction of a day on the elapsed-time style xf 3.
+        let time = sheet
+            .split(r#"<c r="B3""#)
+            .nth(1)
+            .unwrap()
+            .split("</c>")
+            .next()
+            .unwrap();
+        assert!(time.starts_with(r#" s="3"><v>0.4376"#), "unexpected: {time}");
+        // A second date keeps its serial even under a different display
+        // format (the fallback format approximates the source's data style).
+        assert!(sheet.contains(r#"<c r="B4" s="1"><v>36525</v></c>"#));
+        // No ISO lexeme survives as text.
+        assert!(!sheet.contains("2024-01-15"), "date leaked as text");
+
+        // Round trip: the converted book re-opens and reads back numbers.
+        let mut sessions = crate::WorkbookSessions::new();
+        let metadata = sessions.open(&target).unwrap();
+        let range = sessions
+            .read_range(
+                &metadata.session_id,
+                "sheet-1",
+                &crate::CellRange {
+                    start_row: 0,
+                    end_row: 3,
+                    start_column: 1,
+                    end_column: 1,
+                },
+            )
+            .unwrap();
+        let numbers: Vec<f64> = range
+            .cells
+            .iter()
+            .filter_map(|cell| match cell.value {
+                Some(crate::CellValue::Number(number)) => Some(number),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(numbers.len(), 4);
+        assert_eq!(numbers[0], 45306.0);
+        assert_eq!(numbers[1], 45306.4375);
+        assert!((numbers[2] - 0.437_673_611).abs() < 1e-9, "{}", numbers[2]);
+        assert_eq!(numbers[3], 36525.0);
+    }
+
+    /// PAR-214: the ISO lexeme grammar — accepted shapes and refusals.
+    #[test]
+    fn odf_datetime_lexemes_convert_or_refuse() {
+        assert_eq!(odf_datetime_to_serial("2024-01-15"), Some((45306.0, 1)));
+        assert_eq!(
+            odf_datetime_to_serial("2024-01-15T10:30:00"),
+            Some((45306.4375, 2))
+        );
+        // The Excel leap-bug epoch: 1900-02-28 -> 59, 1900-03-01 -> 61.
+        assert_eq!(odf_datetime_to_serial("1900-02-28").unwrap().0, 59.0);
+        assert_eq!(odf_datetime_to_serial("1900-03-01").unwrap().0, 61.0);
+        assert_eq!(odf_datetime_to_serial("1999-12-31").unwrap().0, 36525.0);
+        // Elapsed/time-of-day durations: a fraction, on the time style.
+        let (serial, style) = odf_datetime_to_serial("PT10H30M15S").unwrap();
+        assert_eq!(style, 3);
+        assert!((serial - 0.437_673_611).abs() < 1e-9, "{serial}");
+        assert_eq!(
+            odf_datetime_to_serial("P1DT0H30M0S").unwrap().0,
+            1.020_833_333_333_333_3
+        );
+        assert_eq!(odf_datetime_to_serial("PT45M").unwrap().0, 45.0 / 1440.0);
+        assert_eq!(odf_datetime_to_serial("PT0S").unwrap().0, 0.0);
+        // Refusals keep the text path.
+        assert_eq!(odf_datetime_to_serial("not a date"), None);
+        assert_eq!(odf_datetime_to_serial("2024-13-01"), None);
+        assert_eq!(odf_datetime_to_serial("2024-01"), None);
+        assert_eq!(odf_datetime_to_serial("PT"), None);
+        assert_eq!(odf_datetime_to_serial("PTH"), None);
+        assert_eq!(odf_datetime_to_serial("P1DT"), None);
+    }
+
+    /// PAR-214: a LibreOffice-written .ods form keeps its merged ranges
+    /// through conversion — the anchors (`table:number-*-spanned`) and
+    /// their covered continuations used to collapse into loose cells. The
+    /// round trip re-opens the converted file and reads the merges back
+    /// the way the app does.
+    #[test]
+    fn carries_merges_from_an_ods_book() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/par214-ods-merges.ods"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let result = convert_to_xlsx(source, &target).unwrap();
+        assert_eq!(result.cells, 4);
+
+        let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
+        // The three fixture merges (title, box, vertical), sorted like the
+        // .xls path emits them.
+        assert!(sheet.contains(r#"<mergeCells count="3">"#));
+        assert!(sheet.contains(r#"<mergeCell ref="A1:C1"/>"#));
+        assert!(sheet.contains(r#"<mergeCell ref="B3:D4"/>"#));
+        assert!(sheet.contains(r#"<mergeCell ref="A7:A9"/>"#));
+
+        // Round trip: the reader hands the merges to the grid.
+        let mut sessions = crate::WorkbookSessions::new();
+        let metadata = sessions.open(&target).unwrap();
+        let range = sessions
+            .read_range(
+                &metadata.session_id,
+                "sheet-1",
+                &crate::CellRange {
+                    start_row: 0,
+                    end_row: 8,
+                    start_column: 0,
+                    end_column: 5,
+                },
+            )
+            .unwrap();
+        let address = |row: usize, column: usize| {
+            let mut letters = String::new();
+            let mut remaining = column + 1;
+            while remaining > 0 {
+                remaining -= 1;
+                letters.insert(0, char::from(b'A' + (remaining % 26) as u8));
+                remaining /= 26;
+            }
+            format!("{letters}{}", row + 1)
+        };
+        let mut refs: Vec<String> = range
+            .merges
+            .iter()
+            .map(|merge| {
+                format!(
+                    "{}:{}",
+                    address(merge.start_row, merge.start_column),
+                    address(merge.end_row, merge.end_column)
+                )
+            })
+            .collect();
+        refs.sort();
+        assert_eq!(refs, vec!["A1:C1", "A7:A9", "B3:D4"]);
+    }
+
+    /// PAR-214: named ranges survive conversion on both legacy paths. The
+    /// .ods fixture carries a single-cell and a range name in ODF
+    /// cell-range-address form (`$Data.$A$1:.$A$4`); the .xls fixture the
+    /// same names as BIFF NAME records, rendered `Sheet!$A$1:$A$4`. Both
+    /// re-open through the sidecar with the names in its metadata.
+    #[test]
+    fn carries_defined_names_from_legacy_books() {
+        for (fixture, expected) in [
+            (
+                "par214-ods-defined-names.ods",
+                vec![
+                    ("Rate".to_string(), "Calc!$A$1".to_string()),
+                    ("Values".to_string(), "Data!$A$1:$A$4".to_string()),
+                ],
+            ),
+            (
+                "par214-xls-defined-names.xls",
+                vec![
+                    ("Rate".to_string(), "Calc!$A$1".to_string()),
+                    ("Values".to_string(), "Data!$A$1:$A$4".to_string()),
+                ],
+            ),
+        ] {
+            let source = std::path::Path::new(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/",
+            ))
+            .join(fixture);
+            let dir = tempfile::tempdir().unwrap();
+            let target = dir.path().join("converted.xlsx");
+
+            let result = convert_to_xlsx(&source, &target).unwrap();
+            assert_eq!(result.sheets, 2, "{fixture}");
+
+            let workbook = read_entry(&target, "xl/workbook.xml");
+            assert!(
+                workbook
+                    .contains(r#"<definedName name="Values">Data!$A$1:$A$4</definedName>"#),
+                "{fixture}: {workbook}"
+            );
+            assert!(
+                workbook.contains(r#"<definedName name="Rate">Calc!$A$1</definedName>"#),
+                "{fixture}: {workbook}"
+            );
+
+            // Round trip: the open metadata carries the names the grid and
+            // the formula engine consume.
+            let mut sessions = crate::WorkbookSessions::new();
+            let metadata = sessions.open(&target).unwrap();
+            let names: Vec<(String, String)> = metadata
+                .defined_names
+                .iter()
+                .map(|defined| (defined.name.clone(), defined.formula.clone()))
+                .collect();
+            assert_eq!(names, expected, "{fixture}");
+        }
+    }
+
+    /// PAR-214: the defined-name grammar — ODF range addresses and `of:`
+    /// expressions translate; 3-D endpoints, address-less parts, garbage
+    /// and Excel-invalid names are skipped instead of mis-emitted.
+    #[test]
+    fn defined_name_payloads_translate_or_drop() {
+        assert_eq!(
+            crate::ods_formula::translate_defined_name("$Data.$A$1:.$A$4").as_deref(),
+            Some("Data!$A$1:$A$4")
+        );
+        assert_eq!(
+            crate::ods_formula::translate_defined_name("$Calc.$A$1").as_deref(),
+            Some("Calc!$A$1")
+        );
+        // A quoted sheet name keeps Excel quoting.
+        assert_eq!(
+            crate::ods_formula::translate_defined_name("$'My Sheet'.$A$1:.$B$2").as_deref(),
+            Some("'My Sheet'!$A$1:$B$2")
+        );
+        // A sheet name that reads as an address stays quoted.
+        assert_eq!(
+            crate::ods_formula::translate_defined_name("$A1.$B$2").as_deref(),
+            Some("'A1'!$B$2")
+        );
+        // Named expressions ride the formula translator.
+        assert_eq!(
+            crate::ods_formula::translate_defined_name("of:=SUM([.A1:.A4])").as_deref(),
+            Some("SUM(A1:A4)")
+        );
+        // 3-D endpoints, address-less parts and garbage are dropped.
+        assert_eq!(
+            crate::ods_formula::translate_defined_name("$Data.$A$1:$Other.$A$4"),
+            None
+        );
+        assert_eq!(crate::ods_formula::translate_defined_name("$Data.Wide"), None);
+        assert_eq!(crate::ods_formula::translate_defined_name("what is this"), None);
+        // Excel-invalid names never reach workbook.xml.
+        assert!(crate::ods_formula::is_valid_defined_name("Values_2024"));
+        assert!(crate::ods_formula::is_valid_defined_name("_Private"));
+        assert!(!crate::ods_formula::is_valid_defined_name("A1"));
+        assert!(!crate::ods_formula::is_valid_defined_name("1Values"));
+        assert!(!crate::ods_formula::is_valid_defined_name("has space"));
+        assert!(!crate::ods_formula::is_valid_defined_name("_xlnm.Print_Area"));
+        assert!(!crate::ods_formula::is_valid_defined_name(""));
+    }
+
+    /// PAR-214: an .ods form keeps its column widths, custom row heights
+    /// and hidden rows through conversion. The fixture (LibreOffice
+    /// generated) has a 24- and a 12.5-character column, a 30pt header row
+    /// and one hidden row; the round trip reads the widths and the hidden
+    /// flag back out of the open metadata.
+    #[test]
+    fn carries_column_and_row_layout_from_an_ods_book() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/par214-ods-form-layout.ods"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let result = convert_to_xlsx(source, &target).unwrap();
+        assert_eq!(result.cells, 4);
+
+        let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
+        // The two user-set widths ((inches*96-5)/7 from the source's
+        // 1.85in and 0.9638in); the default-width tail stays out.
+        assert!(sheet.contains(r#"<col min="1" max="1" width="24.66" customWidth="1"/>"#));
+        assert!(sheet.contains(r#"<col min="2" max="2" width="12.5" customWidth="1"/>"#));
+        assert!(!sheet.contains("width=\"8.46\""), "default tail leaked into cols");
+        // The 30pt header (LibreOffice stores 0.4165in = 29.99pt), the
+        // hidden row without a height (its style is auto-fit), and the
+        // untouched default rows stay bare.
+        assert!(sheet.contains(r#"<row r="1" ht="29.99" customHeight="1">"#));
+        assert!(sheet.contains(r#"<row r="3" hidden="1"/>"#));
+        assert!(sheet.contains(r#"<row r="4"><c r="A4""#));
+
+        // Round trip: the reader metadata carries widths and hidden rows.
+        let mut sessions = crate::WorkbookSessions::new();
+        let metadata = sessions.open(&target).unwrap();
+        let sheet_metadata = &metadata.sheets[0];
+        assert_eq!(sheet_metadata.column_widths.len(), 2);
+        assert_eq!(sheet_metadata.column_widths[0].start_column, 0);
+        assert_eq!(sheet_metadata.column_widths[0].end_column, 0);
+        assert_eq!(sheet_metadata.column_widths[0].width, Some(24.66));
+        let range = sessions
+            .read_range(
+                &metadata.session_id,
+                "sheet-1",
+                &crate::CellRange {
+                    start_row: 0,
+                    end_row: 3,
+                    start_column: 0,
+                    end_column: 1,
+                },
+            )
+            .unwrap();
+        let hidden = range.rows.iter().find(|row| row.row == 2).unwrap();
+        assert!(hidden.hidden);
+    }
+
+    /// PAR-214: an .ods form keeps its cell formatting through conversion —
+    /// the fixture's header (bold 14pt red Cambria on a yellow fill,
+    /// centered) and an italic data cell used to convert into an unstyled
+    /// grid because the automatic styles were never read. Emission goes
+    /// through the same interner as the .xls styles, so the styles.xml
+    /// shapes match the BIFF path. The round trip reads the styles back
+    /// out of the open metadata.
+    #[test]
+    fn carries_fills_and_fonts_from_an_ods_form() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/par214-ods-form-layout.ods"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let result = convert_to_xlsx(source, &target).unwrap();
+        assert_eq!(result.cells, 4);
+
+        let styles = read_entry(&target, "xl/styles.xml");
+        // The yellow solid fill and the red bold-14 italic-free font.
+        assert!(styles.contains(r#"<fill><patternFill patternType="solid"><fgColor rgb="FFFFCC00"/></patternFill></fill>"#));
+        assert!(styles.contains(r#"<font><b/><sz val="14"/><color rgb="FFFF0000"/><name val="Cambria"/></font>"#));
+        assert!(styles.contains(r#"<font><i/><sz val="11"/><name val="Cambria"/></font>"#));
+        // Centered header alignment.
+        assert!(styles.contains(r#"<alignment horizontal="center""#));
+        // Styled cells carry their interned xfs (fallback styles 0-3).
+        let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
+        assert!(sheet.contains(r#"<c r="A1" s="4" t="inlineStr">"#));
+        assert!(sheet.contains(r#"<c r="B2" s="5" t="inlineStr">"#));
+
+        // Round trip: the reader's style metadata carries the same looks.
+        let mut sessions = crate::WorkbookSessions::new();
+        let metadata = sessions.open(&target).unwrap();
+        let filled = metadata
+            .styles
+            .iter()
+            .find(|style| style.fill_color.as_deref().is_some_and(|color| color.contains("FFCC00")))
+            .unwrap();
+        assert!(filled.bold);
+        assert_eq!(filled.font_size, Some(14.0));
+        assert!(
+            metadata
+                .styles
+                .iter()
+                .any(|style| style.italic && style.bold == false),
+            "italic style missing"
+        );
+        let _ = result;
+    }
+
     /// BUG-1659: an empty book (no cells, no styles) still converts with a
     /// complete styles.xml — the minimal output must not skip the section
     /// IronCalc's importer requires.
@@ -990,7 +1562,7 @@ mod tests {
         let result = convert_to_xlsx(&source, &target).unwrap();
         assert_eq!(result.cells, 0);
         let styles = read_entry(&target, "xl/styles.xml");
-        assert!(styles.contains(r#"<cellXfs count="3">"#));
+        assert!(styles.contains(r#"<cellXfs count="4">"#));
         assert!(styles.contains(
             r#"<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>"#
         ));
@@ -1172,3 +1744,4 @@ mod tests {
         writer.finish().unwrap();
     }
 }
+

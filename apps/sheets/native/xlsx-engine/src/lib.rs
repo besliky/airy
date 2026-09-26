@@ -25,6 +25,7 @@ mod xls_layout;
 
 mod cell_images;
 mod ods_formula;
+mod ods_layout;
 mod refs;
 mod slicers;
 mod sparklines;

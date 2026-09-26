@@ -93,6 +93,8 @@ const MAX_ROW_HEIGHT_TWIPS: u16 = 8_190;
 /// whose own default differs carries it into `<sheetFormatPr>`; a row
 /// whose custom height equals it has nothing to say.
 const DEFAULT_ROW_HEIGHT_PT: f64 = 15.0;
+/// Direct-color palette slots (see `StyleTables::intern_color`).
+const MAX_DIRECT_COLORS: usize = 56;
 const MAX_FONTS: usize = 65_536;
 const MAX_XFS: usize = 65_536;
 const MAX_FORMATS: usize = 65_536;
@@ -122,8 +124,9 @@ const BORDER_STYLES: [&str; 14] = [
 #[derive(Default)]
 pub(crate) struct SheetLayout {
     /// Merged ranges, 0-based inclusive (row first/last, column first/last),
-    /// sorted and deduplicated.
-    pub(crate) merges: Vec<([u16; 2], [u16; 2])>,
+    /// sorted and deduplicated. Wide on purpose: ODF sheets (the .ods walk
+    /// shares this type) carry more than BIFF's 65 536 rows.
+    pub(crate) merges: Vec<([u32; 2], [u32; 2])>,
     /// User-set column spans (merged runs), ascending.
     pub(crate) cols: Vec<ColSpan>,
     /// Source XF index per styled cell. Plain unformatted cells are absent:
@@ -175,47 +178,67 @@ pub(crate) struct ColSpan {
     pub(crate) hidden: bool,
 }
 
-/// FONT record subset the converter maps into an xlsx `<font>`.
-struct FontSpec {
-    bold: bool,
-    italic: bool,
+/// FONT record subset the converter maps into an xlsx `<font>`. The .ods
+/// walk builds these synthetically from automatic-styles text properties.
+pub(crate) struct FontSpec {
+    pub(crate) bold: bool,
+    pub(crate) italic: bool,
     /// BIFF underline code: 0 none, 1 single, 2 double, 33/34 accounting.
-    underline: u8,
+    pub(crate) underline: u8,
     /// dyHeight is in twips (1/20 pt); kept in points for `<sz val=>`.
-    height_pt: f64,
-    color: u16,
-    name: String,
+    pub(crate) height_pt: f64,
+    pub(crate) color: u16,
+    pub(crate) name: String,
 }
 
-/// XF record subset the converter maps into an xlsx `<xf>`.
-struct XfSpec {
-    font: u16,
-    format: u16,
+/// XF record subset the converter maps into an xlsx `<xf>`. The .ods walk
+/// builds these synthetically from automatic-styles cell properties.
+pub(crate) struct XfSpec {
+    pub(crate) font: u16,
+    pub(crate) format: u16,
     /// Horizontal: 0 general, 1 left, 2 center, 3 right, 4 fill, 5 justify,
     /// 6 center-continuous ([MS-XLS] 2.5.8 AlignH).
-    horizontal: u8,
+    pub(crate) horizontal: u8,
     /// Vertical: 0 top, 1 center, 2 bottom, 3 justify, 4 distributed.
-    vertical: u8,
-    wrap: bool,
-    /// Border line styles, order left/right/top/bottom (0 = none).
-    borders: [u8; 4],
+    pub(crate) vertical: u8,
+    pub(crate) wrap: bool,
+    /// Border line style codes, order left/right/top/bottom (0 = none).
+    pub(crate) borders: [u8; 4],
     /// Border color indexes in the same order.
-    border_colors: [u16; 4],
+    pub(crate) border_colors: [u16; 4],
     /// 0 = no fill, 1 = solid; 2..=18 are the standard pattern fills.
-    fill_pattern: u8,
-    fill_color: u16,
+    pub(crate) fill_pattern: u8,
+    pub(crate) fill_color: u16,
 }
 
-/// Style tables from the workbook globals substream.
+/// Style tables from the workbook globals substream. The .ods walk fills
+/// the same tables synthetically from automatic-styles, so one interner
+/// and one styles.xml emission serve both legacy walks.
 #[derive(Default)]
-struct StyleTables {
-    fonts: Vec<FontSpec>,
-    xfs: Vec<XfSpec>,
+pub(crate) struct StyleTables {
+    pub(crate) fonts: Vec<FontSpec>,
+    pub(crate) xfs: Vec<XfSpec>,
     /// Custom number formats as (id, code) in FORMAT record order.
-    formats: Vec<(u16, String)>,
+    pub(crate) formats: Vec<(u16, String)>,
     /// PALETTE overrides: RGB for color indexes 8, 9, ... ([MS-XLS] 2.4.125:
     /// the overrides start at index 8; lower slots are fixed system colors).
-    palette: Vec<[u8; 3]>,
+    pub(crate) palette: Vec<[u8; 3]>,
+}
+
+impl StyleTables {
+    /// Interns an RGB triple as a direct palette entry, returning its BIFF
+    /// color index (8 + slot). `None` once the palette is full — the color
+    /// degrades to "unspecified" instead of displacing an earlier one.
+    pub(crate) fn intern_color(&mut self, rgb: [u8; 3]) -> Option<u16> {
+        if let Some(slot) = self.palette.iter().position(|seen| *seen == rgb) {
+            return Some(8 + slot as u16);
+        }
+        if self.palette.len() >= MAX_DIRECT_COLORS {
+            return None;
+        }
+        self.palette.push(rgb);
+        Some(8 + (self.palette.len() - 1) as u16)
+    }
 }
 
 /// Best-effort layout of a legacy workbook. Empty unless the source is a
@@ -256,9 +279,26 @@ impl WorkbookLayout {
         layout
     }
 
+    /// A layout assembled from parts another walk already understands —
+    /// the .ods walker shares this type (and the style emission that hangs
+    /// off it) while sourcing merges/cols/rows/styles from content.xml.
+    pub(crate) fn from_parts(sheets: Vec<SheetLayout>, styles: StyleTables, default_font: u16) -> Self {
+        Self {
+            sheets,
+            styles,
+            default_font,
+        }
+    }
+
     /// Layout for the sheet at calamine's index (BOUNDSHEET order).
     pub(crate) fn sheet(&self, index: usize) -> Option<&SheetLayout> {
         self.sheets.get(index).filter(|sheet| !(*sheet).is_empty())
+    }
+
+    /// Whether nothing at all was walked for this book — the convert path
+    /// uses it to fall back to the .ods walk (or the plain output).
+    pub(crate) fn is_empty(&self) -> bool {
+        self.sheets.is_empty()
     }
 
     pub(crate) fn default_font(&self) -> u16 {
@@ -397,7 +437,7 @@ fn parse_stream(stream: &[u8]) -> Option<(Vec<SheetLayout>, StyleTables, u16)> {
 /// and the ROW table.
 #[derive(Default)]
 struct SheetAccumulator {
-    merges: Vec<([u16; 2], [u16; 2])>,
+    merges: Vec<([u32; 2], [u32; 2])>,
     colinfos: Vec<(u16, u16, u16, bool)>,
     cells: HashMap<(u32, u32), u16>,
     /// Raw ROW records: row -> (height twips, grbit). One per row in
@@ -524,7 +564,10 @@ impl SheetAccumulator {
             );
             if row_first <= row_last && col_first <= col_last {
                 self.merges
-                    .push(([row_first, row_last], [col_first, col_last]));
+                    .push((
+                        [u32::from(row_first), u32::from(row_last)],
+                        [u32::from(col_first), u32::from(col_last)],
+                    ));
             }
         }
     }
@@ -956,7 +999,9 @@ impl<'a> StyleInterner<'a> {
             vertical,
             wrap,
         });
-        Some(self.composed.len() - 1 + 3)
+        // After the four fallback styles (general, short date, date+time,
+        // elapsed time).
+        Some(self.composed.len() - 1 + 4)
     }
 
     /// Emitted font index for a source font (0 = the base/body font slot).
@@ -1016,8 +1061,8 @@ impl<'a> StyleInterner<'a> {
     }
 
     /// The complete styles.xml: the converter's fallback styles (general,
-    /// short date, date+time — indexes 0-2, unchanged from the minimal
-    /// output) followed by every style the walk picked up.
+    /// short date, date+time, elapsed time — indexes 0-3) followed by every
+    /// style the walk picked up.
     pub(crate) fn styles_xml(&self) -> String {
         if self.composed.is_empty() {
             return BASE_STYLES_XML.into();
@@ -1084,7 +1129,7 @@ impl<'a> StyleInterner<'a> {
         xml.push_str(
             r#"<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>"#,
         );
-        xml.push_str(&format!(r#"<cellXfs count="{}">"#, self.composed.len() + 3));
+        xml.push_str(&format!(r#"<cellXfs count="{}">"#, self.composed.len() + 4));
         xml.push_str(FALLBACK_CELL_XFS);
         for entry in &self.composed {
             let alignment = alignment_xml(entry.horizontal, entry.vertical, entry.wrap);
@@ -1150,6 +1195,7 @@ impl<'a> StyleInterner<'a> {
 
 /// Filling pattern names shared by BIFF and the xlsx pattern enum; solid is
 /// the only one a form realistically uses, the rest pass through by name.
+/// (The synthetic .ods codes are the 8-entry prefix of this table.)
 const FILL_NAMES: [&str; 19] = [
     "none",
     "solid",
@@ -1227,7 +1273,8 @@ fn escape(text: &str) -> String {
 
 /// The styles.xml of the minimal converter (no .xls styles found):
 /// xf 0 general, xf 1 short date (numFmt 14), xf 2 date+time (numFmt 22),
-/// closed by the mandatory `<cellStyles>` section (BUG-1659).
+/// xf 3 elapsed time (numFmt 46, what ODF `PT…` durations land on), closed
+/// by the mandatory `<cellStyles>` section (BUG-1659).
 const BASE_STYLES_XML: &str = concat!(
     r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 "#,
@@ -1236,18 +1283,20 @@ const BASE_STYLES_XML: &str = concat!(
     r#"<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>"#,
     r#"<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>"#,
     r#"<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>"#,
-    r#"<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>"#,
+    r#"<cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>"#,
     r#"<xf numFmtId="14" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>"#,
-    r#"<xf numFmtId="22" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>"#,
+    r#"<xf numFmtId="22" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>"#,
+    r#"<xf numFmtId="46" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>"#,
     default_cell_styles_xml!(),
     "</styleSheet>",
 );
 
-/// The three fallback cellXfs entries (verbatim prefix of BASE_STYLES_XML).
+/// The fallback cellXfs entries (verbatim prefix of BASE_STYLES_XML).
 const FALLBACK_CELL_XFS: &str = concat!(
     r#"<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>"#,
     r#"<xf numFmtId="14" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>"#,
     r#"<xf numFmtId="22" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>"#,
+    r#"<xf numFmtId="46" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>"#,
 );
 
 #[cfg(test)]
