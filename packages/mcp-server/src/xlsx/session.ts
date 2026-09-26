@@ -65,6 +65,28 @@ const MAX_RECALC_READ_CELLS = 20_000
 const RECALC_MAX_SOURCE_BYTES = 64_000_000
 /** the sidecar refuses recalc requests with more edits (MAX_RECALC_EDITS) */
 const MAX_RECALC_EDITS = 10_000
+/**
+ * The sidecar indexes a worksheet lazily: the first read per sheet spawns a
+ * background indexer, and read_formula_cells itself never blocks (the sheets
+ * app polls it from its UI), so the cache refresh polls until the index
+ * completes. Bounded so a pathological sheet degrades to the honest save
+ * warning instead of stalling it (BUG-1776: the overlay used to make exactly
+ * one cold call — always indexingComplete:false — and gave up, killing the
+ * overlay in the canonical open -> edit -> save flow that never read first).
+ */
+const RECALC_INDEX_WAIT_MS = 10_000
+const RECALC_INDEX_POLL_MS = 250
+/** current index wait budget (mutable only through the test seam below) */
+let recalcIndexWaitMs = RECALC_INDEX_WAIT_MS
+
+/**
+ * Test seam: shrink the index wait budget so unit tests cover the
+ * never-completing degradation path without spending real seconds polling
+ * (same role as setSharedIo).
+ */
+export function setRecalcIndexWaitForTests(waitMs: number): void {
+  recalcIndexWaitMs = waitMs
+}
 
 export type WorkbookFormat = 'xlsx' | 'xlsm' | 'xls' | 'ods'
 
@@ -723,7 +745,7 @@ export class XlsxSession {
           ? [
               `Formula caches were not refreshed (${recalcNote}). The file keeps the ` +
                 'fullCalcOnLoad recalc flag, so spreadsheet apps recalculate on open, but script ' +
-                'readers (openpyxl data_only, pandas) may see stale cached values.',
+                'readers (openpyxl data_only, pandas) see no cached values for the formula cells.',
             ]
           : []),
       ],
@@ -733,9 +755,11 @@ export class XlsxSession {
 
   /**
    * Fresh cached values for every formula cell of the workbook, evaluated with
-   * the pending journal applied (BUG-1761). Best-effort by design: any engine
-   * or budget failure degrades to an empty overlay plus a reason for the save
-   * warning, never to a failed save.
+   * the pending journal applied (BUG-1761). Best-effort by design: any engine,
+   * index or budget failure degrades to an empty overlay plus a reason for the
+   * save warning, never to a failed save. The sidecar's lazy worksheet index
+   * is waited out (BUG-1776), so the refresh works in the cold flow — a save
+   * with no prior read_range in the session — within the same budget.
    *
    * Only numeric results are overlaid: the recalc wire reports text results
    * only through their formatted display string, and baking number formats
@@ -756,24 +780,14 @@ export class XlsxSession {
       return degrade('the workbook is above the recalculation engine size budget')
     }
 
-    // every formula cell of the workbook, indexed by the sidecar
+    // every formula cell of the workbook, indexed by the sidecar. The first
+    // call per sheet starts the sidecar's lazy background indexer, and the
+    // wire command never blocks, so poll until the index completes (BUG-1776)
     const formulaCells: Array<{ sheetName: string; row: number; column: number }> = []
     for (const sheet of this.sheets) {
-      let raw: unknown
-      try {
-        raw = await this.io.readFormulaCells({ sessionId: this.sessionId, sheetId: sheet.id })
-      } catch {
-        return degrade('the formula-cell index was unavailable')
-      }
-      const result = asRecord(raw, 'formula-cells result')
-      if (
-        result.indexingComplete !== true ||
-        result.truncated === true ||
-        !Array.isArray(result.cells)
-      ) {
-        return degrade('the sheet index was incomplete or truncated')
-      }
-      for (const cellRaw of result.cells) {
+      const cells = await this.formulaCellsOfSheet(sheet)
+      if (typeof cells === 'string') return degrade(cells)
+      for (const cellRaw of cells) {
         const cell = asRecord(cellRaw, 'formula cell')
         if (typeof cell.row === 'number' && typeof cell.column === 'number') {
           formulaCells.push({ sheetName: sheet.name, row: cell.row, column: cell.column })
@@ -864,6 +878,35 @@ export class XlsxSession {
     return {
       values: [...overlay].map(([sheetName, cells]) => ({ sheetName, cells })),
       note: null,
+    }
+  }
+
+  /**
+   * The formula cells of one sheet, waiting out the sidecar's lazy worksheet
+   * index (BUG-1776). The wire command returns immediately — whatever has been
+   * indexed so far plus an `indexingComplete` flag — because the sheets app
+   * polls it from its UI, and a blocking wait would stall the sidecar's serial
+   * request loop. The overlay needs the finished index, so it polls (the first
+   * call also spawns the indexer) and degrades with a named reason when the
+   * index errors, reports truncation or misses the wait budget. Returns the
+   * cell list, or the degradation note when the index is not usable.
+   */
+  private async formulaCellsOfSheet(sheet: XlsxSheetSummary): Promise<readonly unknown[] | string> {
+    const deadline = Date.now() + recalcIndexWaitMs
+    for (;;) {
+      let raw: unknown
+      try {
+        raw = await this.io.readFormulaCells({ sessionId: this.sessionId, sheetId: sheet.id })
+      } catch {
+        return 'the formula-cell index was unavailable'
+      }
+      const result = asRecord(raw, 'formula-cells result')
+      if (result.truncated === true || !Array.isArray(result.cells)) {
+        return 'the formula-cell index was truncated or malformed'
+      }
+      if (result.indexingComplete === true) return result.cells
+      if (Date.now() >= deadline) return 'the sheet index did not finish building in time'
+      await delay(RECALC_INDEX_POLL_MS)
     }
   }
 
@@ -1017,6 +1060,10 @@ async function statOrNull(path: string): Promise<FileStamp | null> {
   } catch {
     return null
   }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function toCellEdit(
