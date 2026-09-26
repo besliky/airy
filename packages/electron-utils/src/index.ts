@@ -21,9 +21,11 @@ export {
   renameDurably,
 } from './atomic-write'
 export {
+  normalizeBooleanSetting,
   queueAppSettingsUpdate,
   readAppSettingsFile,
   writeAppSettingsFile,
+  APP_SETTINGS_PREVIOUS_SUFFIX,
   type AppSettings,
   type AppSettingsUpdate,
 } from './app-settings-file'

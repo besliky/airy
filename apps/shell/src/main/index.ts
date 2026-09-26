@@ -70,6 +70,7 @@ import {
   installContextMenu,
   installNavigationGuard,
   isRecoverableRendererCrash,
+  normalizeBooleanSetting,
   toggleDevToolsItem,
   isUsableSaveDir,
   showOpenDialogWithMemory,
@@ -259,6 +260,7 @@ import {
   writeSessionState,
 } from './session-state'
 import {
+  createGeometrySaver,
   isWindowOnScreen,
   readWindowState,
   writeWindowState,
@@ -787,9 +789,14 @@ function persistWindowState(win: BrowserWindow): void {
 
 // ---- session persistence (tab set + active tab, restored on launch) ----
 
-/** "Restore previous session" preference (app-settings.json `restoreSession`); absent = on */
+/**
+ * "Restore previous session" preference (app-settings.json `restoreSession`);
+ * absent = on. BUG-1773: the value is normalized to its schema type first —
+ * a string "no"/"false"/"" written by an external editor used to count as
+ * "restore on" under the old `!== false` check.
+ */
 function sessionRestoreEnabled(): boolean {
-  return readAppSettings(APP_SETTINGS_PATH()).restoreSession !== false
+  return normalizeBooleanSetting(readAppSettings(APP_SETTINGS_PATH()).restoreSession, true)
 }
 
 let sessionSaveTimer: ReturnType<typeof setTimeout> | null = null
@@ -1008,26 +1015,18 @@ function createShellWindow(options: CreateShellWindowOptions = {}): ShellWindowE
   }
 
   // Only the primary window owns the persisted geometry: a second window
-  // cascades and does not clobber the saved bounds.
+  // cascades and does not clobber the saved bounds. Move/resize coalesce
+  // into one short-debounced write (UX-1775 — a kill -9 right after a move
+  // must not lose it); close and the maximize transitions flush synchronously.
   if (primary) {
-    let geometrySaveTimer: ReturnType<typeof setTimeout> | null = null
-    const scheduleGeometrySave = (): void => {
-      if (geometrySaveTimer) clearTimeout(geometrySaveTimer)
-      geometrySaveTimer = setTimeout(() => {
-        geometrySaveTimer = null
-        persistWindowState(win)
-      }, 500)
-    }
-    win.on('resize', scheduleGeometrySave)
-    win.on('move', scheduleGeometrySave)
-    win.on('maximize', () => persistWindowState(win))
-    win.on('unmaximize', () => persistWindowState(win))
-    win.on('enter-full-screen', () => persistWindowState(win))
-    win.on('leave-full-screen', () => persistWindowState(win))
-    win.on('close', () => {
-      if (geometrySaveTimer) clearTimeout(geometrySaveTimer)
-      persistWindowState(win)
-    })
+    const geometrySaver = createGeometrySaver(() => persistWindowState(win))
+    win.on('resize', geometrySaver.schedule)
+    win.on('move', geometrySaver.schedule)
+    win.on('maximize', geometrySaver.flush)
+    win.on('unmaximize', geometrySaver.flush)
+    win.on('enter-full-screen', geometrySaver.flush)
+    win.on('leave-full-screen', geometrySaver.flush)
+    win.on('close', geometrySaver.flush)
   }
   // dragging the window by the tab strip's blank (draggable) area produces no
   // DOM event anywhere — will-move is the only signal to dismiss popovers
