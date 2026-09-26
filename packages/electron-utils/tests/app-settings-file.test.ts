@@ -1,12 +1,23 @@
 import { watch } from 'node:fs'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   queueAppSettingsUpdate,
   readAppSettingsFile,
+  recoverCorruptAppSettings,
   writeAppSettingsFile,
+  type AppSettings,
 } from '../src/app-settings-file'
 
 /**
@@ -15,6 +26,9 @@ import {
  * contract: concurrent read-modify-write cycles through the public API —
  * queued reducers, queued patches and synchronous merges interleaved with
  * random microtask/macrotask yields — must never drop or corrupt a key.
+ * BUG-1771 adds the corrupt-file contract: corrupt bytes are preserved as
+ * `.bak` before any rewrite and salvaged as far as strict JSON parsing
+ * allows.
  */
 
 let dir: string
@@ -256,5 +270,247 @@ describe.skipIf(process.platform === 'win32')('fs.watch observer sees no key los
     } finally {
       watcher.close()
     }
+  })
+})
+
+// ── BUG-1771: a corrupt file is preserved before any rewrite and salvaged ──
+
+const backupPath = () => `${settingsPath}.bak`
+
+/** silence + capture the forensic warnings for one test */
+function captureWarnings(): { warnings: string[]; restore: () => void } {
+  const warnings: string[] = []
+  const spy = vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+    warnings.push(args.map(String).join(' '))
+  })
+  return { warnings, restore: () => spy.mockRestore() }
+}
+
+/**
+ * The seven corruption variants from the SET-26-1 audit. Repairable ones
+ * must come back (fully or partially); wrong-type/empty roots have no object
+ * content to salvage and honestly fall back to defaults. EVERY variant must
+ * leave its exact corrupt bytes in the `.bak` — that copy is the only chance
+ * a user has at forensic recovery once the merge-write replaces the file.
+ */
+const CORRUPT_VARIANTS: Array<{
+  name: string
+  content: string
+  expected: AppSettings
+  salvaged: boolean
+}> = [
+  {
+    name: 'truncated JSON',
+    content: '{"language":"de","theme":"dark","autoSaveDef',
+    expected: { language: 'de', theme: 'dark' },
+    salvaged: true,
+  },
+  {
+    name: 'trailing garbage after a valid object',
+    content: '{"language":"de","theme":"dark"} trailing garbage',
+    expected: { language: 'de', theme: 'dark' },
+    salvaged: true,
+  },
+  {
+    name: 'UTF-8 BOM before a valid object',
+    content: '\uFEFF{"language":"de","theme":"dark"}',
+    expected: { language: 'de', theme: 'dark' },
+    salvaged: true,
+  },
+  { name: 'empty file', content: '', expected: {}, salvaged: false },
+  { name: 'JSON array root', content: '[1, 2, 3]', expected: {}, salvaged: false },
+  { name: 'JSON number root', content: '42', expected: {}, salvaged: false },
+  { name: 'whitespace-only file', content: '  \n\t ', expected: {}, salvaged: false },
+]
+
+describe('BUG-1771: corrupt app-settings.json forensics', () => {
+  it('preserves every corrupt variant as .bak and salvages what parses', () => {
+    for (const variant of CORRUPT_VARIANTS) {
+      writeFileSync(settingsPath, variant.content)
+      try {
+        expect(readAppSettingsFile(settingsPath)).toEqual(variant.expected)
+        const preserved = readFileSync(backupPath(), 'utf8')
+        expect(preserved, `bak bytes for: ${variant.name}`).toBe(variant.content)
+      } catch (error) {
+        throw new Error(`variant failed: ${variant.name}`, { cause: error })
+      } finally {
+        rmSync(backupPath(), { force: true })
+        rmSync(settingsPath, { force: true })
+      }
+    }
+  })
+
+  it('a valid file never gets a .bak and never logs', () => {
+    const { warnings, restore } = captureWarnings()
+    try {
+      writeFileSync(settingsPath, JSON.stringify({ language: 'de' }))
+      expect(readAppSettingsFile(settingsPath)).toEqual({ language: 'de' })
+      expect(existsSync(backupPath())).toBe(false)
+      expect(warnings).toEqual([])
+    } finally {
+      restore()
+    }
+  })
+
+  it('a missing file gets no .bak (normal first run)', () => {
+    expect(readAppSettingsFile(settingsPath)).toEqual({})
+    expect(existsSync(backupPath())).toBe(false)
+  })
+
+  it('reading a corrupt file is side-effect free apart from the .bak', () => {
+    // the corrupt file itself must stay byte-identical until a WRITE replaces
+    // it — repair lands through the ordinary merge-write, never from a read
+    const corrupt = CORRUPT_VARIANTS[0]!.content
+    writeFileSync(settingsPath, corrupt)
+    const { restore } = captureWarnings()
+    try {
+      readAppSettingsFile(settingsPath)
+      expect(readFileSync(settingsPath, 'utf8')).toBe(corrupt)
+    } finally {
+      restore()
+    }
+  })
+
+  it('logs the preservation once per distinct corrupt state, not per read', () => {
+    writeFileSync(settingsPath, '{"language":"de"')
+    const { warnings, restore } = captureWarnings()
+    try {
+      readAppSettingsFile(settingsPath)
+      readAppSettingsFile(settingsPath)
+      readAppSettingsFile(settingsPath)
+      const preservedLogs = warnings.filter((line) => line.includes('preserved'))
+      expect(preservedLogs).toHaveLength(1)
+    } finally {
+      restore()
+    }
+  })
+
+  it('refreshes the .bak when the file corrupts again with different bytes', () => {
+    const { restore } = captureWarnings()
+    try {
+      writeFileSync(settingsPath, '{a')
+      readAppSettingsFile(settingsPath)
+      // different SIZE guarantees a different fingerprint even in one ms
+      writeFileSync(settingsPath, '{"much-longer-corrupt-payload":true,')
+      readAppSettingsFile(settingsPath)
+      expect(readFileSync(backupPath(), 'utf8')).toBe('{"much-longer-corrupt-payload":true,')
+    } finally {
+      restore()
+    }
+  })
+
+  it('re-arms after the file becomes valid, preserving a later corruption too', () => {
+    const { restore } = captureWarnings()
+    try {
+      writeFileSync(settingsPath, '{a')
+      readAppSettingsFile(settingsPath)
+      writeAppSettingsFile(settingsPath, { language: 'de' }) // file is healthy now
+      readAppSettingsFile(settingsPath)
+      expect(existsSync(backupPath())).toBe(true) // from the first corruption
+      const firstBak = readFileSync(backupPath(), 'utf8')
+      expect(firstBak).toBe('{a')
+      writeFileSync(settingsPath, '[broken-beyond-repair')
+      readAppSettingsFile(settingsPath)
+      expect(readFileSync(backupPath(), 'utf8')).toBe('[broken-beyond-repair')
+    } finally {
+      restore()
+    }
+  })
+
+  it('the .bak keeps the corrupt bytes own timestamps for forensics', () => {
+    const yesterday = new Date(Date.now() - 86_400_000)
+    writeFileSync(settingsPath, '{"language":"de"')
+    utimesSync(settingsPath, yesterday, yesterday)
+    const { restore } = captureWarnings()
+    try {
+      readAppSettingsFile(settingsPath)
+      const preserved = statSync(backupPath())
+      expect(Math.abs(preserved.mtimeMs - yesterday.getTime())).toBeLessThan(1000)
+    } finally {
+      restore()
+    }
+  })
+
+  it('the merge-write persists salvaged keys — the audited total-loss repro', () => {
+    // SET-26-1 live repro: seeded language + corrupt file + one theme toggle
+    // used to end with ONLY the toggled key on disk; now language survives.
+    writeFileSync(settingsPath, '{"language":"de","theme":"light","autoSaveDef')
+    writeAppSettingsFile(settingsPath, { theme: 'dark' })
+    expect(readAppSettingsFile(settingsPath)).toEqual({ language: 'de', theme: 'dark' })
+  })
+
+  it('the queued writer (#108) reads salvaged state and preserves the corrupt bytes', async () => {
+    const corrupt = '{"language":"de","theme":"dark","autoSaveDef'
+    writeFileSync(settingsPath, corrupt)
+    await queueAppSettingsUpdate(settingsPath, (current) => ({
+      ...current,
+      onboardingSeen: true,
+    }))
+    expect(readAppSettingsFile(settingsPath)).toEqual({
+      language: 'de',
+      theme: 'dark',
+      onboardingSeen: true,
+    })
+    expect(readFileSync(backupPath(), 'utf8')).toBe(corrupt)
+    // the canonical write stays atomic: no temp leftovers
+    expect(readdirSync(dir).filter((name) => name.endsWith('.tmp'))).toEqual([])
+  })
+})
+
+describe('recoverCorruptAppSettings (strict-prefix salvage)', () => {
+  const salvage = (text: string): AppSettings | null =>
+    recoverCorruptAppSettings(text)?.settings ?? null
+
+  it('completes a truncated tail keeping every finished member', () => {
+    expect(salvage('{"language":"de","theme":"dark","autoSaveDef')).toEqual({
+      language: 'de',
+      theme: 'dark',
+    })
+    expect(salvage('{"a":1,"b":2,"c":3')).toEqual({ a: 1, b: 2, c: 3 })
+    expect(salvage('{"a":1,')).toEqual({ a: 1 })
+  })
+
+  it('closes a string truncated mid-value', () => {
+    expect(salvage('{"authorName":"Ada Lovelace","bio":"writ')).toEqual({
+      authorName: 'Ada Lovelace',
+      bio: 'writ',
+    })
+  })
+
+  it('cuts back to the last member boundary when a truncated KEY cannot close', () => {
+    expect(salvage('{"language":"de","the')).toEqual({ language: 'de' })
+  })
+
+  it('recovers truncated nested objects and array values', () => {
+    expect(salvage('{"starPrompt":{"at":1,"b":')).toEqual({ starPrompt: { at: 1 } })
+    expect(salvage('{"lastDialogDirs":["a","b","c')).toEqual({ lastDialogDirs: ['a', 'b', 'c'] })
+  })
+
+  it('survives doubled separators near the truncation point', () => {
+    expect(salvage('{"a":1,,')).toEqual({ a: 1 })
+  })
+
+  it('keeps the first complete object when garbage follows it', () => {
+    expect(salvage('{"a":1}{"b":2}junk')).toEqual({ a: 1 })
+  })
+
+  it('rejects wrong-type, empty and whitespace roots as unsalvageable', () => {
+    for (const text of ['', '   \n\t ', '[1, 2, 3]', '42', '"settings"', 'null', 'true']) {
+      expect(recoverCorruptAppSettings(text)).toBeNull()
+    }
+  })
+
+  it('handles a BOM combined with trailing garbage', () => {
+    expect(salvage('\uFEFF{"language":"de"} junk')).toEqual({ language: 'de' })
+  })
+
+  it('recovers a large pretty-printed file truncated mid-way', () => {
+    const entries = Array.from({ length: 5000 }, (_, i) => `  "k${i}": ${i}`).join(',\n')
+    const full = `{\n${entries}\n}\n`
+    const truncated = full.slice(0, Math.floor(full.length * 0.6))
+    const recovered = salvage(truncated)
+    expect(recovered).not.toBeNull()
+    expect(recovered!.k0).toBe(0)
+    expect(Object.keys(recovered!).length).toBeGreaterThan(1000)
   })
 })
