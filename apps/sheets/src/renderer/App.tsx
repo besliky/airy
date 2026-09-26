@@ -896,6 +896,20 @@ export function App(): React.JSX.Element {
       convertToRange: change.convertToRange,
     })
     if (failure !== null) return failure
+    if (change.convertToRange) {
+      // Excel deletes a table's slicers with Convert to Range; the journal
+      // entries went at apply (table-design.ts) — the panels follow.
+      const convertedSheet = change.seed.sheetId
+      const convertedName = change.seed.tableName.toLowerCase()
+      setTableSlicers((current) =>
+        current.filter(
+          (slicer) =>
+            !(
+              slicer.sheetId === convertedSheet && slicer.tableName.toLowerCase() === convertedName
+            ),
+        ),
+      )
+    }
     setPendingEdits(journalSize(state.editJournal))
     setMessage(change.convertToRange ? t('appTableConverted') : t('appTableUpdated'))
     return null

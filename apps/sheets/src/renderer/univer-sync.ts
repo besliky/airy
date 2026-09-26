@@ -88,6 +88,7 @@ import {
   escapeCssLeadingDigit,
   fromNeutralStyle,
   bulkConstantFillValueAt,
+  isTableConverted,
   journalCellContentAt,
   isSheetRemoved,
   journalEntriesInRange,
@@ -95,6 +96,7 @@ import {
   ooxmlTextRotationToUniver,
   recordHyperlinkEdit,
   recordSetRangeValues,
+  tableNameAfterEdits,
   toRecalcUserInput,
   type EditJournal,
   type VisualEditEntry,
@@ -5513,6 +5515,75 @@ export function collectNoteStates(
   return noteStates
 }
 
+/// Writes one table-slicer selection into the sheet's filter model through
+/// the internal channel the file restore uses (restoreFilterCriteria).
+/// Univer's filter packages never touch row visibility themselves — the
+/// model only computes the filtered row set — so this also re-applies the
+/// filter's row visibility on the sheet: rows the recalculated set filters
+/// out hide, rows the previous criteria hid that now stay unhide. Returns
+/// the criteria the model holds for the column afterwards (null = cleared)
+/// so callers can refuse to claim success over an unapplied request — the
+/// panel's "applied — save to write" status must promise exactly what the
+/// save snapshot will collect. Throws when the sheet has no filter model.
+export function applySlicerCriteria(
+  runtime: UniverRuntime,
+  worksheet: UniverWorksheet,
+  absoluteColumn: number,
+  criteria: { readonly values: readonly string[]; readonly blank?: boolean | undefined } | null,
+): IFilterColumn | null {
+  const unitId = worksheet.getSheet().getUnitId()
+  const subUnitId = worksheet.getSheetId()
+  const filterModel = runtime.univer
+    .__getInjector()
+    .get(SheetsFilterService)
+    .getFilterModel(unitId, subUnitId)
+  if (!filterModel) {
+    // The model service lost the sheet (e.g. after a session swap): rerun
+    // the criteria through the facade command, and still return what the
+    // model actually holds — the caller decides what the status may claim.
+    applyFilterCriteria(worksheet, columnLabel(absoluteColumn), criteria)
+    return worksheet.getFilter()?.getColumnFilterCriteria(absoluteColumn) ?? null
+  }
+  const range = filterModel.getRange()
+  if (!range || absoluteColumn < range.startColumn || absoluteColumn > range.endColumn) {
+    throw new Error('The slicer column is outside the auto-filter range.')
+  }
+  const previouslyHidden = new Set(filterModel.filteredOutRows)
+  const column: IFilterColumn | undefined =
+    criteria === null
+      ? undefined
+      : {
+          colId: absoluteColumn,
+          filters: {
+            filters: [...criteria.values],
+            ...(criteria.blank === true ? { blank: true as const } : {}),
+          },
+        }
+  // reCalc=true makes the model recompute the filtered row set across all
+  // columns. Direct model writes execute no command, so the toggle stays out
+  // of the undo stack (the save snapshots the model declaratively).
+  filterModel.setCriteria(absoluteColumn, column, true)
+  const hiddenRows = [...filterModel.filteredOutRows].sort((left, right) => left - right)
+  const unhideRows = [...previouslyHidden]
+    .filter((row) => !filterModel.filteredOutRows.has(row))
+    .sort((left, right) => left - right)
+  if (hiddenRows.length > 0) {
+    runtime.univerAPI.syncExecuteCommand('sheet.mutation.set-row-hidden', {
+      unitId,
+      subUnitId,
+      ranges: rowIndexRanges(worksheet, hiddenRows),
+    })
+  }
+  if (unhideRows.length > 0) {
+    runtime.univerAPI.syncExecuteCommand('sheet.mutation.set-row-visible', {
+      unitId,
+      subUnitId,
+      ranges: rowIndexRanges(worksheet, unhideRows),
+    })
+  }
+  return filterModel.getFilterColumn(absoluteColumn)?.serialize() ?? null
+}
+
 /// Shared landing path for column filter criteria: the AI op
 /// `set_filter_criteria` and the Advanced Filter dialog both come through
 /// here, so manual and AI edits hit the same facade command (and journal
@@ -5652,20 +5723,36 @@ export function collectFilterStates(
           endColumn: Math.max(range.endColumn, origin.range.endColumn),
         }
       : range
+    // A table-owned filter keeps its criteria in the table part (the slicer
+    // round-trip): the save routes the snapshot there instead of writing a
+    // worksheet-level autoFilter over the table. The name resolves through
+    // this session's pending table edits — the gateway applies a rename
+    // before the deferred filter write and finds the part by its new name;
+    // a pending Convert to Range removes the part (its criteria die with
+    // it, and the filter's hidden rows stay as plain row state, like Excel).
+    let tableName: string | undefined
+    if (origin?.origin === 'table') {
+      const matched =
+        sheetMetaTableName(state, sheetId, range) ?? sheetMetaFirstTableName(state, sheetId)
+      if (matched !== undefined) {
+        if (isTableConverted(state.editJournal, sheetId, matched)) {
+          filterStates.push({
+            sheetId,
+            filter: null,
+            hiddenRows: filter.getFilteredOutRows(),
+            visibilityRange: toCellArea(visibilityRange),
+          })
+          continue
+        }
+        tableName = tableNameAfterEdits(state.editJournal, sheetId, matched)
+      }
+    }
     filterStates.push({
       sheetId,
       filter: { range: toCellArea(range), columns },
       hiddenRows: filter.getFilteredOutRows(),
       visibilityRange: toCellArea(visibilityRange),
-      // A table-owned filter keeps its criteria in the table part (the
-      // slicer round-trip): the save routes the snapshot there instead of
-      // writing a worksheet-level autoFilter over the table.
-      ...(origin?.origin === 'table'
-        ? {
-            tableName:
-              sheetMetaTableName(state, sheetId, range) ?? sheetMetaFirstTableName(state, sheetId),
-          }
-        : {}),
+      ...(tableName !== undefined ? { tableName } : {}),
     })
   }
   return filterStates

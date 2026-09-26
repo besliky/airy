@@ -8,7 +8,13 @@
 import { columnLabel, parseRange, type RangeBounds } from '../domain/cell-address'
 import { tableNameError } from '../domain/table-refs'
 import type { WorkbookFile } from '../shared/desktop-api'
-import { recordTableEdit, removeTableAdd, updateTableAdd, type EditJournal } from './edit-journal'
+import {
+  recordTableEdit,
+  removeSlicerAddsForTable,
+  removeTableAdd,
+  updateTableAdd,
+  type EditJournal,
+} from './edit-journal'
 import { t } from './i18n/locale'
 import type { LazyWorkbookState, UniverRuntime } from './univer-state'
 
@@ -178,6 +184,12 @@ export function applyTableDesignChange(
   const { seed } = change
   const journal = state.editJournal
   if (change.convertToRange) {
+    // Excel removes a table's slicers when the table converts to a range —
+    // the slicer cache has no source without the table part (whose autoFilter
+    // and criteria die with it). Drop the journal entries so the save does
+    // not try to bind slicers to a part that no longer exists; the App
+    // removes the matching panels the same way.
+    removeSlicerAddsForTable(journal, seed.sheetId, seed.tableName)
     if (seed.origin === 'session') {
       const removed = removeTableAdd(journal, seed.sheetId, seed.tableName)
       if (!removed) return t('appCommandFailed')
