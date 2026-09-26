@@ -5,6 +5,10 @@
 /// otherwise — the next open re-decoded the new bytes as the old charset and
 /// produced mojibake. Saving must respect the remembered charset.
 ///
+/// Lives here (not in an app) because both plain-text editors — markdown and
+/// html — save through it: BUG-1782 is the html app missing this half of the
+/// #237 fix.
+///
 /// Node/Electron only ships a UTF-8 TextEncoder, so every other selectable
 /// charset is encoded through its decoder: a charset's decode side defines a
 /// closed character set, and its inverse map is built once per charset by
