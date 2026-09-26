@@ -176,4 +176,56 @@ describe('installCachedValueFallbackInterceptor', () => {
     expect(handler({ v: '#DIV/0!' }, at(0, 0), passthrough)).toMatchObject({ v: 42 })
     expect(handler({ v: '#VALUE!' }, at(0, 1), passthrough)).toMatchObject({ v: 7 })
   })
+
+  it('shows the sidecar overlay value for structured-reference formulas (BUG-1749)', () => {
+    // The grid engine has no table registry: its #NAME? is never the truth.
+    // The overlay pin — keyed to the SAME formula — is.
+    const state = {
+      ...makeState({ '0:0': 42 }),
+      recalc: { overlay: new Map([['sheet-1', new Map([['0:0', { v: 100 }]])]]) },
+    }
+    state.editJournal.cells.set(
+      'sheet-1',
+      new Map([['0:0', { hasValue: true, formula: '=SUM(Sales[Amount])' }]]),
+    )
+    const { handler } = captureInterceptor({ current: state })
+    const location = { ...at(0, 0), rawData: { f: '=SUM(Sales[Amount])' } }
+    expect(handler({ v: '#NAME?' }, location, passthrough)).toMatchObject({ v: 100 })
+    // Even a non-error engine result (an IFERROR-wrapped fallback literal)
+    // is wrong for a formula the engine cannot resolve: pin wins.
+    expect(handler({ v: 0 }, location, passthrough)).toMatchObject({ v: 100 })
+  })
+
+  it('matches file formulas against the formula-text store too (BUG-1749)', () => {
+    const state = {
+      ...makeState({}),
+      formulaText: new Map([['sheet-1', new Map([['3:1', '=Sales[@Amount]']])]]),
+      recalc: { overlay: new Map([['sheet-1', new Map([['3:1', { v: 'alpha' }]])]]) },
+    }
+    const { handler } = captureInterceptor({ current: state })
+    const location = { subUnitId: 'sheet-1', row: 3, col: 1, rawData: { f: '=Sales[@Amount]' } }
+    expect(handler({ v: '#NAME?' }, location, passthrough)).toMatchObject({
+      v: 'alpha',
+      t: CellValueType.STRING,
+    })
+  })
+
+  it('does not leak an overlay pin into a different formula typed at the same key', () => {
+    const state = {
+      ...makeState({}),
+      recalc: {
+        // Pin the structured-ref pass left over from =SUM(Sales[Amount]) —
+        // it carries the formula the value was computed FOR.
+        overlay: new Map([['sheet-1', new Map([['0:0', { f: '=SUM(Sales[Amount])', v: 100 }]])]]),
+      },
+    }
+    state.editJournal.cells.set(
+      'sheet-1',
+      new Map([['0:0', { hasValue: true, formula: '=Sales[@Amount]' }]]),
+    )
+    const { handler } = captureInterceptor({ current: state })
+    const location = { ...at(0, 0), rawData: { f: '=Sales[@Amount]' } }
+    const cell = { v: '#NAME?' }
+    expect(handler(cell, location, passthrough)).toBe(cell)
+  })
 })

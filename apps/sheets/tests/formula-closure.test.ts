@@ -8,6 +8,7 @@ import {
   parseFormulaReferences,
   recalcReadRanges,
   shiftPinnedCells,
+  usesStructuredReferences,
   type ClosureSheetInput,
 } from '../src/renderer/formula-closure'
 import { formulaKeepsCache, usesLocaleDependentFunction } from '../src/renderer/univer-sync'
@@ -114,6 +115,36 @@ describe('formulaKeepsCache', () => {
     expect(usesLocaleDependentFunction('DOLLARS(A1)')).toBe(false)
     expect(usesLocaleDependentFunction('CONCAT("DOLLAR(",A1)')).toBe(false)
     expect(usesLocaleDependentFunction('SUM(A1:A5)')).toBe(false)
+  })
+
+  it('keeps the cached value for defined names but not structured references (BUG-1749)', () => {
+    // A defined name has no compute channel: the cached value is the best
+    // display. A structured reference has one — the sidecar loads the
+    // workbook's tables — so the cell must install as a live formula instead
+    // of collapsing to its style (or bare cache) with the formula erased.
+    expect(formulaKeepsCache('Total*2')).toBe(true)
+    expect(formulaKeepsCache('=SUM(Sales[Amount])')).toBe(false)
+    expect(formulaKeepsCache('=Sales[@Amount]')).toBe(false)
+  })
+})
+
+describe('usesStructuredReferences', () => {
+  it('detects table selectors, this-row shorthands and special items', () => {
+    expect(usesStructuredReferences('=SUM(Sales[Amount])')).toBe(true)
+    expect(usesStructuredReferences('=Sales[@Amount]')).toBe(true)
+    expect(usesStructuredReferences('=SUM(Sales[[#All],[Amount]])')).toBe(true)
+    expect(usesStructuredReferences('=Prices[@[Unit Price]]+1')).toBe(true)
+    expect(usesStructuredReferences("='My Table'[@Column]")).toBe(true)
+    expect(usesStructuredReferences('=IF(Sales[Amount]>2,MAX(Sales[Amount]),0)')).toBe(true)
+  })
+
+  it('ignores string literals, external-workbook brackets and plain formulas', () => {
+    expect(usesStructuredReferences('=SUM(A1:A5)')).toBe(false)
+    expect(usesStructuredReferences('="Sales[Amount]"')).toBe(false)
+    expect(usesStructuredReferences('=CONCAT("[1]",A1)')).toBe(false)
+    expect(usesStructuredReferences('=[1]Sheet1!A1')).toBe(false)
+    expect(usesStructuredReferences('=SUM([2]Data!$A$1:$A$9)')).toBe(false)
+    expect(usesStructuredReferences("'C:\\data\\[source.xlsx]Sheet1'!A1*2")).toBe(false)
   })
 })
 

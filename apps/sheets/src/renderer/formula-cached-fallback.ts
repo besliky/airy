@@ -11,6 +11,7 @@ import { CellValueType } from '@univerjs/core'
 import { ERROR_TYPE_SET, ErrorType } from '@univerjs/engine-formula'
 import { INTERCEPTOR_POINT, SheetInterceptorService } from '@univerjs/sheets'
 
+import { usesStructuredReferences } from './formula-closure'
 import type { LazyWorkbookState, UniverRuntime } from './univer-state'
 
 /// Journal ops that renumber rows/columns; the recorded cache coordinates are
@@ -61,6 +62,36 @@ export function installCachedValueFallbackInterceptor(
     // the formula text), above NUMFMT (10).
     priority: 9997,
     handler: (cell, location, next) => {
+      const state = lazyWorkbookRef.current
+      // Structured-reference formulas: the grid engine has no table registry,
+      // so its result (#NAME?, or a wrapped fallback literal) is never the
+      // file's truth — the sidecar-computed overlay value is (BUG-1749). The
+      // pin must belong to THIS formula: a pin carrying a different formula
+      // (typed over an older structured reference) must not leak through.
+      const rawFormula = location.rawData?.f
+      if (state && typeof rawFormula === 'string' && usesStructuredReferences(rawFormula)) {
+        const key = `${location.row}:${location.col}`
+        const pinned = state.recalc?.overlay.get(location.subUnitId)?.get(key)
+        if (pinned && pinned.v !== undefined && pinned.v !== null) {
+          const formulaMatches =
+            pinned.f !== undefined
+              ? pinned.f === rawFormula
+              : rawFormula === state.editJournal.cells.get(location.subUnitId)?.get(key)?.formula ||
+                rawFormula === state.formulaText?.get(location.subUnitId)?.get(key)
+          if (formulaMatches) {
+            return next({
+              ...cell,
+              v: pinned.v,
+              t:
+                typeof pinned.v === 'number'
+                  ? CellValueType.NUMBER
+                  : typeof pinned.v === 'boolean'
+                    ? CellValueType.BOOLEAN
+                    : CellValueType.STRING,
+            })
+          }
+        }
+      }
       const value = cell?.v
       if (typeof value !== 'string' || !ERROR_TYPE_SET.has(value as ErrorType)) {
         return next(cell)
@@ -69,7 +100,6 @@ export function installCachedValueFallbackInterceptor(
         const formula = location.rawData?.f
         if (typeof formula === 'string' && isPlainArithmeticFormula(formula)) return next(cell)
       }
-      const state = lazyWorkbookRef.current
       if (!state) return next(cell)
       const sheetId = location.subUnitId
       const ops = state.editJournal.structuralOps.get(sheetId)

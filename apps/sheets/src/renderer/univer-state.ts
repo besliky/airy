@@ -138,6 +138,11 @@ export interface LazyWorkbookState {
     /// so the engine fallback is off for the session — cached values stand
     engineOverBudget: boolean
     readonly formulaCells: Map<string, ReadonlySet<number>>
+    /// Structured-reference formula cells per sheet ('row:col', file
+    /// coordinates), recorded while formula text is harvested. The grid
+    /// engine cannot resolve tables, so in fully-loaded workbooks these
+    /// cells' values come from the sidecar recalc overlay (BUG-1749).
+    readonly structuredRefCells: Map<string, Set<string>>
     readonly overlay: Map<string, Map<string, PinnedClosureCell>>
     /// per-sheet: viewport row the last SUCCESSFUL overlay window was
     /// anchored at and whether it covered every formula band; a partial
