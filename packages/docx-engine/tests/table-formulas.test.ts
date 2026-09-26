@@ -200,6 +200,109 @@ describe('fldSimple formula parse/serialize inside table cells', () => {
   })
 })
 
+/** BUG-1756 shape: the complex/fldSimple field carries NO cached result; the
+ *  displayed value follows the field as a plain run (common generator output) */
+const EMPTY_COMPLEX_FORMULA_CELL =
+  '<w:tc><w:p>' +
+  '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+  '<w:r><w:instrText xml:space="preserve"> =SUM(ABOVE) </w:instrText></w:r>' +
+  '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+  '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+  '<w:r><w:t>600</w:t></w:r>' +
+  '</w:p></w:tc>'
+
+const wrapTable = (cellXml: string) =>
+  '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+  '<w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid>' +
+  `<w:tr>${cellXml}</w:tr></w:tbl>`
+
+const tableRun = async (bodyXml: string) => {
+  const parsed = await parseDocx(await buildDocx({ bodyXml }))
+  const table = parsed.blocks.find((b) => b.type === 'table')
+  if (!table || table.type !== 'table' || !table.table) return null
+  return table.table.rows[0][0].richParas?.[0].runs ?? []
+}
+
+describe('empty-cache formula fields fold the trailing value run (BUG-1756)', () => {
+  it('folds the plain numeric run after an empty complex field into the formula run', async () => {
+    const runs = await tableRun(wrapTable(EMPTY_COMPLEX_FORMULA_CELL))
+    expect(runs).toHaveLength(1)
+    expect(runs?.[0]?.text).toBe('600')
+    expect(runs?.[0]?.formulaField).toBe('=SUM(ABOVE)')
+  })
+
+  it('re-emits one fldSimple with the folded cache and no stray run on save', async () => {
+    const parsed = await parseDocx(
+      await buildDocx({ bodyXml: wrapTable(EMPTY_COMPLEX_FORMULA_CELL) }),
+    )
+    const table = parsed.blocks.find((b) => b.type === 'table')
+    if (!table || table.type !== 'table' || !table.table) return
+    const xml = generateTableModelXml(table.table)
+    expect(xml.match(/<w:fldSimple /g)).toHaveLength(1)
+    expect(xml).toContain(
+      '<w:fldSimple w:instr="=SUM(ABOVE)"><w:r><w:t xml:space="preserve">600</w:t></w:r></w:fldSimple>',
+    )
+    expect(xml.match(/>600<\/w:t>/g)).toHaveLength(1)
+  })
+
+  it('keeps the single-space placeholder when nothing foldable follows the field', async () => {
+    const cellXml =
+      '<w:tc><w:p>' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText xml:space="preserve"> =SUM(ABOVE) </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+      '<w:r><w:t>Total</w:t></w:r>' +
+      '</w:p></w:tc>'
+    const runs = await tableRun(wrapTable(cellXml))
+    expect(runs).toHaveLength(2)
+    expect(runs?.[0]?.text).toBe(' ')
+    expect(runs?.[0]?.formulaField).toBe('=SUM(ABOVE)')
+    expect(runs?.[1]?.text).toBe('Total')
+    expect(runs?.[1]?.formulaField).toBeUndefined()
+  })
+
+  it('folds under a comment range and keeps the comment anchor on the folded run', async () => {
+    const cellXml =
+      '<w:tc><w:p><w:commentRangeStart w:id="0"/>' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText xml:space="preserve"> =SUM(ABOVE) </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+      '<w:r><w:t>600</w:t></w:r>' +
+      '<w:commentRangeEnd w:id="0"/>' +
+      '<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="0"/></w:r>' +
+      '</w:p></w:tc>'
+    const runs = await tableRun(wrapTable(cellXml))
+    expect(runs).toHaveLength(1)
+    expect(runs?.[0]?.text).toBe('600')
+    expect(runs?.[0]?.formulaField).toBe('=SUM(ABOVE)')
+    expect(runs?.[0]?.commentIds).toEqual(['0'])
+    const parsed = await parseDocx(await buildDocx({ bodyXml: wrapTable(cellXml) }))
+    const table = parsed.blocks.find((b) => b.type === 'table')
+    if (!table || table.type !== 'table' || !table.table) return
+    const xml = generateTableModelXml(table.table)
+    // the saved cell keeps the comment range around exactly one fldSimple cache
+    expect(xml.indexOf('<w:commentRangeStart w:id="0"/>')).toBeLessThan(
+      xml.indexOf('<w:fldSimple w:instr="=SUM(ABOVE)"'),
+    )
+    expect(xml.indexOf('<w:fldSimple w:instr="=SUM(ABOVE)"')).toBeLessThan(
+      xml.indexOf('<w:commentRangeEnd w:id="0"/>'),
+    )
+    expect(xml.match(/>600<\/w:t>/g)).toHaveLength(1)
+  })
+
+  it('folds an empty w:fldSimple formula the same way', async () => {
+    const cellXml =
+      '<w:tc><w:p><w:fldSimple w:instr="=SUM(ABOVE)"></w:fldSimple>' +
+      '<w:r><w:t>600</w:t></w:r></w:p></w:tc>'
+    const runs = await tableRun(wrapTable(cellXml))
+    expect(runs).toHaveLength(1)
+    expect(runs?.[0]?.text).toBe('600')
+    expect(runs?.[0]?.formulaField).toBe('=SUM(ABOVE)')
+  })
+})
+
 describe('Word dialog prefill', () => {
   it('proposes SUM(ABOVE) over a numeric column, else SUM(LEFT)', () => {
     const g = gridOf([
