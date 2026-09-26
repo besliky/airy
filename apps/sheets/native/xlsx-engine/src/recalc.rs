@@ -20,7 +20,10 @@ use ironcalc::base::locale::{get_default_locale, get_locale};
 use ironcalc::import::load_from_xlsx;
 use serde::{Deserialize, Serialize};
 
-use crate::structured_refs::{normalize_at_shorthand, normalize_model_structured_references};
+use crate::structured_refs::{
+    has_structured_reference, normalize_model_structured_references, prepare_sref_formula,
+    sref_context,
+};
 use crate::{CellRange, SidecarError};
 
 pub const MAX_RECALC_EDITS: usize = 10_000;
@@ -312,9 +315,10 @@ fn run(
                 profile.import = Some(import_started.elapsed().as_millis() as u64);
             }
             let pin_started = std::time::Instant::now();
-            // Structured references: rewrite the `@` this-row shorthand
-            // IronCalc 0.8.3 cannot lex before pinning what still fails, so
-            // table formulas from real Excel files evaluate instead of
+            // Structured references: inline defined names over tables, rewrite
+            // the `]]` column escape and spell out the `@` this-row shorthand
+            // IronCalc 0.8.3 cannot lex, all before pinning what still fails,
+            // so table formulas from real Excel files evaluate instead of
             // erroring or staying frozen at their cached values.
             normalize_model_structured_references(&mut model);
             pin_unparsable_formulas(&mut model);
@@ -333,18 +337,24 @@ fn run(
 
     let mut dirty = false;
     let edits_started = std::time::Instant::now();
+    // The defined names and tables the structured-reference preparation of
+    // the edits below resolves against; collected once, owned strings, so
+    // the loop can mutate the model freely.
+    let sref = sref_context(&entry.model);
     for edit in edits {
         let key = (edit.sheet.clone(), edit.row, edit.column);
         if entry.applied.get(&key) == Some(&edit.input) {
             continue;
         }
         let sheet = sheet_index(&entry.model, &edit.sheet)?;
-        // Excel's `@` this-row shorthand inside structured references must be
-        // spelled out before IronCalc sees the formula. The applied-edit cache
-        // keeps the original input so repeated requests stay comparable; the
-        // rewrite is deterministic.
+        // Excel's structured-reference syntax has two forms the engine
+        // cannot lex natively: defined names over table selectors and the
+        // `@` this-row shorthand (plus the `]]` column escape). The
+        // preparation rewrites both deterministically; the applied-edit
+        // cache keeps the original input so repeated requests stay
+        // comparable.
         let input = if edit.input.starts_with('=') {
-            normalize_at_shorthand(&edit.input).into_owned()
+            prepare_sref_formula(&sref, &edit.input).into_owned()
         } else {
             edit.input.clone()
         };
@@ -480,7 +490,18 @@ fn pin_unparsable_formulas(model: &mut Model) {
                     parsed.get(formula as usize),
                     Some((Node::ParseErrorKind { .. }, _))
                 ) {
-                    pins.push((sheet as u32, *row, *column, value));
+                    // A formula that still carries a structured reference
+                    // after the normalize passes keeps its formula: pinning
+                    // would replace it with the file's cached value — or,
+                    // for a cached 0, silently turn the cell into a 0
+                    // literal (BUG-1754). The engine error stays visible
+                    // instead, and the renderer keeps the formula text.
+                    // External-workbook references carry no table token in
+                    // front of the bracket and keep the pin.
+                    let text = worksheet.shared_formulas.get(formula as usize);
+                    if !text.is_some_and(|text| has_structured_reference(text)) {
+                        pins.push((sheet as u32, *row, *column, value));
+                    }
                 }
             }
         }
