@@ -20,7 +20,7 @@ import {
 
 describe('tableSlicerMembers', () => {
   it('collects distinct values in first-appearance order and collapses blanks', () => {
-    const members = tableSlicerMembers(
+    const { members } = tableSlicerMembers(
       ['de', 'fr', 'de', null, '', 10, true, 'fr', false],
       '(blank)',
     )
@@ -35,14 +35,44 @@ describe('tableSlicerMembers', () => {
     expect(members.map((member) => member.member)).toEqual([0, 1, 2, 3, 4, 5])
   })
 
-  it('caps the member list', () => {
+  it('caps the member list and counts the distinct values beyond it (UX-1762)', () => {
     const values = Array.from({ length: TABLE_SLICER_MAX_MEMBERS + 50 }, (_v, i) => `v${i}`)
-    expect(tableSlicerMembers(values, '(blank)')).toHaveLength(TABLE_SLICER_MAX_MEMBERS)
+    const result = tableSlicerMembers(values, '(blank)')
+    expect(result.members).toHaveLength(TABLE_SLICER_MAX_MEMBERS)
+    expect(result.moreCount).toBe(50)
+  })
+
+  it('reports zero overflow when the column fits under the cap', () => {
+    expect(tableSlicerMembers(['de', 'fr', 'de'], '(blank)')).toEqual({
+      members: [
+        { member: 0, label: 'de' },
+        { member: 1, label: 'fr' },
+      ],
+      moreCount: 0,
+    })
+  })
+
+  it('keeps deduplicating and blank-collapsing past the cap', () => {
+    const values: (string | null)[] = [
+      // Under the cap: one blank plus 199 distinct strings.
+      null,
+      ...Array.from({ length: TABLE_SLICER_MAX_MEMBERS - 1 }, (_v, i) => `v${i}`),
+      // Over the cap: a repeat of a shown value, a repeat of the shown
+      // blank, and two genuinely new distinct values.
+      'v0',
+      null,
+      'new-1',
+      'new-2',
+      'new-1',
+    ]
+    const result = tableSlicerMembers(values, '(blank)')
+    expect(result.members).toHaveLength(TABLE_SLICER_MAX_MEMBERS)
+    expect(result.moreCount).toBe(2)
   })
 })
 
 describe('tableSlicerSelection', () => {
-  const members = tableSlicerMembers(['de', 'fr', 'it'], '(blank)')
+  const { members } = tableSlicerMembers(['de', 'fr', 'it'], '(blank)')
 
   it('selects everything without criteria', () => {
     expect(tableSlicerSelection(members, null)).toEqual([0, 1, 2])
@@ -57,7 +87,7 @@ describe('tableSlicerSelection', () => {
   })
 
   it('maps a kept blank criterion onto the blank member', () => {
-    const withBlank = tableSlicerMembers(['de', '', 'it'], '(blank)')
+    const { members: withBlank } = tableSlicerMembers(['de', '', 'it'], '(blank)')
     // The blank member's label is the locale's blank text, matched by the
     // blank flag, not by the label.
     expect(tableSlicerSelection(withBlank, { values: ['de'], blank: true })).toEqual([0, 1])

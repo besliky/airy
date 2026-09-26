@@ -144,6 +144,9 @@ export const nl = {
   dlgSlicerAria: 'Slicer {name}',
   dlgSlicerClear: 'Filter wissen (alles selecteren)',
   dlgSlicerRemove: 'Slicer verwijderen (alle leden herstellen)',
+  dlgSlicerMoreMembers: '+{more} meer',
+  dlgSlicerMoreHint:
+    'De eerste {shown} van {total} waarden worden getoond. Een selectie in deze lijst verbergt alle overige waarden.',
   dlgTimelineInsertTitle: 'Tijdlijn invoegen',
   dlgTimelinePickNote:
     'Kies een datumveld; klikken op maanden (Shift+klik om het bereik uit te breiden) filtert de draaitabel op datumbereik.',

@@ -145,6 +145,9 @@ export const id = {
   dlgSlicerAria: 'Pemotong {name}',
   dlgSlicerClear: 'Hapus filter (pilih semua)',
   dlgSlicerRemove: 'Hapus pemotong (pulihkan semua anggota)',
+  dlgSlicerMoreMembers: '+{more} lainnya',
+  dlgSlicerMoreHint:
+    'Menampilkan {shown} nilai pertama dari total {total}. Pilihan dari daftar ini menyembunyikan semua nilai di luarnya.',
   dlgTimelineInsertTitle: 'Sisipkan Garis Waktu',
   dlgTimelinePickNote:
     'Pilih bidang tanggal; mengklik bulan (Shift+klik untuk memperluas rentang) akan memfilter PivotTable menurut rentang tanggal.',

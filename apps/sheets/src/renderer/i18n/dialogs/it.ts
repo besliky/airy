@@ -146,6 +146,9 @@ export const it = {
   dlgSlicerAria: 'Filtro dati {name}',
   dlgSlicerClear: 'Cancella filtro (seleziona tutto)',
   dlgSlicerRemove: 'Rimuovi filtro dati (ripristina tutti i membri)',
+  dlgSlicerMoreMembers: '+{more} altri',
+  dlgSlicerMoreHint:
+    'Vengono mostrati i primi {shown} di {total} valori. Una selezione in questo elenco nasconde tutti i valori fuori elenco.',
   dlgTimelineInsertTitle: 'Inserisci sequenza temporale',
   dlgTimelinePickNote:
     "Scegli un campo data; facendo clic sui mesi (Maiusc+clic per estendere l'intervallo) si filtra la tabella pivot per intervallo di date.",

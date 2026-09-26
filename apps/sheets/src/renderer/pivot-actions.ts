@@ -806,8 +806,18 @@ export function handleRemoveTimeline(ctx: PivotActionContext, timelineId: string
 
 /// Distinct slicer members from a column's raw values, in first-appearance
 /// order (matching how Excel orders table slicer items). Blank/null values
-/// collapse into one member. Capped — panels past the cap would be unusable.
+/// collapse into one member. Capped — panels past the cap would be unusable;
+/// the distinct values beyond the cap are still counted (an indexOf-level
+/// scan) so the panel can state the truncation honestly (UX-1762).
 export const TABLE_SLICER_MAX_MEMBERS = 200
+
+export interface TableSlicerMembers {
+  readonly members: SlicerMember[]
+  /// Distinct column values beyond TABLE_SLICER_MAX_MEMBERS (0 when the
+  /// column fit under the cap). Selecting from the shown members hides every
+  /// value outside the list, so the panel must surface this number.
+  readonly moreCount: number
+}
 
 /// Raw values of one table column across the data rows [firstRow, lastRow].
 function columnRawValues(
@@ -828,9 +838,10 @@ function columnRawValues(
 export function tableSlicerMembers(
   values: readonly (string | number | boolean | null)[],
   blankLabel: string,
-): SlicerMember[] {
+): TableSlicerMembers {
   const members: SlicerMember[] = []
   const seen = new Map<string, number>()
+  let moreCount = 0
   for (const value of values) {
     const isBlank = value === null || value === undefined || value === ''
     const label = isBlank
@@ -843,12 +854,16 @@ export function tableSlicerMembers(
     const at = seen.get(label)
     if (at !== undefined) continue
     seen.set(label, members.length)
+    if (members.length >= TABLE_SLICER_MAX_MEMBERS) {
+      // Over the cap: keep counting distinct values, stop collecting panels.
+      moreCount += 1
+      continue
+    }
     members.push(
       isBlank ? { member: members.length, label, blank: true } : { member: members.length, label },
     )
-    if (members.length >= TABLE_SLICER_MAX_MEMBERS) break
   }
-  return members
+  return { members, moreCount }
 }
 
 /// Visible members for the panel: a live criteria list holds the values that
@@ -978,7 +993,7 @@ export function handleCreateTableSlicer(ctx: PivotActionContext, colId: number):
   }
   const absoluteColumn = area.startColumn + colId
   const totalsRows = tableMeta?.totalsRowCount ?? 0
-  const members = tableSlicerMembers(
+  const { members, moreCount } = tableSlicerMembers(
     columnRawValues(worksheet, area.startRow + 1, absoluteColumn, area.endRow - totalsRows),
     t('appBlank'),
   )
@@ -992,6 +1007,7 @@ export function handleCreateTableSlicer(ctx: PivotActionContext, colId: number):
     colId,
     fieldName: picker.columns[colId]?.name ?? '',
     members,
+    moreMembers: moreCount,
     selected,
   }
   recordSlicerAdd(state.editJournal, {
@@ -1166,7 +1182,7 @@ export function restoreImportedTableSlicers(ctx: PivotActionContext): void {
         continue
       }
       const absoluteColumn = area.startColumn + colId
-      const members = tableSlicerMembers(
+      const { members, moreCount } = tableSlicerMembers(
         columnRawValues(worksheet, area.startRow + 1, absoluteColumn, area.endRow),
         t('appBlank'),
       )
@@ -1179,6 +1195,7 @@ export function restoreImportedTableSlicers(ctx: PivotActionContext): void {
         colId,
         fieldName: tableMeta.columns?.[colId] ?? slicer.caption ?? slicer.tableName,
         members,
+        moreMembers: moreCount,
         selected: tableSlicerSelection(members, criteria?.filters ?? null),
       })
       existing.add(key)

@@ -145,6 +145,9 @@ export const ru = {
   dlgSlicerAria: 'Срез {name}',
   dlgSlicerClear: 'Очистить фильтр (выбрать всё)',
   dlgSlicerRemove: 'Удалить срез (восстановить все элементы)',
+  dlgSlicerMoreMembers: 'ещё {more}',
+  dlgSlicerMoreHint:
+    'Показаны первые {shown} из {total} значений. Выбор из этого списка скрывает все значения вне его.',
   dlgTimelineInsertTitle: 'Вставить временную шкалу',
   dlgTimelinePickNote:
     'Выберите поле даты; щелчки по месяцам (Shift+щелчок расширяет диапазон) фильтруют сводную таблицу по диапазону дат.',

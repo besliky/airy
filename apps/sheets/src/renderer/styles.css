@@ -5248,6 +5248,14 @@ textarea:focus {
   border-color: var(--accent);
 }
 
+/* Honest "+N more" line under the capped member list (UX-1762) */
+.slicer-more {
+  padding: 0 10px 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  user-select: none;
+}
+
 .timeline-range {
   padding: 6px 10px 0;
   color: var(--sheets-member-ink);
