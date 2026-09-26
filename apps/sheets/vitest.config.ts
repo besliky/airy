@@ -62,6 +62,9 @@ const NEED_ISOLATION = [
   // failed of 3138; alone it is green 5/5, so the cause is the shared
   // isolate:false worker, not the test).
   'tests/cf-segment-merge.test.ts',
+  // Boots the real Univer DI graph (formula engine + undo service) for the
+  // F9-spam undo round-trip (UX-1763).
+  'tests/f9-undo-spam.univer.test.ts',
 ]
 
 export default defineConfig({
