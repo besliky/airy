@@ -215,6 +215,8 @@ export const en = {
   appBlank: '(blank)',
   appFieldNoMembers: 'This field has no members to filter.',
   appSlicerCreated: 'Slicer "{name}" created — click members to filter the PivotTable.',
+  appTableSlicerNeedsFilter:
+    "A table slicer needs the table's own filter — this table has no usable filter.",
   appSlicerNeedsFullLoad:
     'Slicer filtering needs full-load mode — this workbook is too large and was stream-loaded.',
   appSlicerPivotMissing: 'The PivotTable bound to this slicer no longer exists.',

@@ -163,6 +163,10 @@ export interface EditJournal {
   /// Pivots created this session; the baked cells ride the normal cell
   /// journal, the save additionally writes native pivot parts.
   readonly pivotAdds: WorkbookPivotAdd[]
+  /// Table slicers created this session (PAR-203), keyed by sheet id: the
+  /// bound table name plus the slicer column's 0-based offset in the table's
+  /// column list. Criteria live in the sheet's filter model (filterDirty).
+  readonly slicerAdds: SlicerAddEntry[]
   /// Sparkline groups created this session (x14 extLst on save).
   readonly sparklineAdds: SparklineAddEntry[]
   readonly sheets: SheetJournal
@@ -289,6 +293,7 @@ export function createEditJournal(): EditJournal {
     tableAdds: [],
     tableEdits: [],
     pivotAdds: [],
+    slicerAdds: [],
     sparklineAdds: [],
     sheets: {
       added: new Map(),
@@ -773,6 +778,41 @@ export interface SparklineAddEntry {
   readonly type: 'line' | 'column' | 'stacked'
   readonly color?: string | undefined
   readonly cells: readonly { cell: string; sourceRef: string }[]
+}
+
+/// One session-created table slicer (PAR-203): the column is addressed by
+/// its 0-based offset into the table's column list, final at record time.
+export interface SlicerAddEntry {
+  readonly sheetId: string
+  readonly tableName: string
+  readonly colId: number
+}
+
+/// Records a table slicer addition; slicers are unique per (table, column),
+/// so a duplicate record replaces nothing — the caller refuses duplicates.
+export function recordSlicerAdd(journal: EditJournal, entry: SlicerAddEntry): void {
+  journal.slicerAdds.push(entry)
+}
+
+/// Session slicer adds for the save request; slicers on removed sheets drop.
+export function toSaveSlicerAdds(journal: EditJournal): SlicerAddEntry[] {
+  return journal.slicerAdds.filter((slicer) => !isSheetRemoved(journal, slicer.sheetId))
+}
+
+/// Drops the journal entry when the panel is removed before saving.
+export function removeSlicerAdd(
+  journal: EditJournal,
+  sheetId: string,
+  tableName: string,
+  colId: number,
+): void {
+  const index = journal.slicerAdds.findIndex(
+    (slicer) =>
+      slicer.sheetId === sheetId &&
+      slicer.tableName.toLowerCase() === tableName.toLowerCase() &&
+      slicer.colId === colId,
+  )
+  if (index >= 0) (journal.slicerAdds as SlicerAddEntry[]).splice(index, 1)
 }
 
 export function recordSparklineAdd(journal: EditJournal, entry: SparklineAddEntry): void {
@@ -2520,6 +2560,9 @@ export function journalSize(journal: EditJournal): number {
     if (!isSheetRemoved(journal, pivot.sheetId) && !isSheetRemoved(journal, pivot.sourceSheetId)) {
       total += 1
     }
+  }
+  for (const slicer of journal.slicerAdds) {
+    if (!isSheetRemoved(journal, slicer.sheetId)) total += 1
   }
   for (const sparkline of journal.sparklineAdds) {
     if (!isSheetRemoved(journal, sparkline.sheetId)) total += 1

@@ -26,6 +26,7 @@ mod xls_layout;
 mod cell_images;
 mod ods_formula;
 mod refs;
+mod slicers;
 mod sparklines;
 mod structured_refs;
 mod table_styles;
@@ -38,6 +39,7 @@ mod xml_util;
 
 use cell_images::*;
 use refs::*;
+use slicers::*;
 use sparklines::*;
 use table_styles::*;
 pub use types::*;
@@ -266,6 +268,7 @@ impl WorkbookSessions {
                 tables,
                 comments,
                 threaded_comments,
+                slicers: read_sheet_slicers(&mut archive, &worksheet_path)?,
                 pivot_ranges,
                 pivot_tables,
                 sparklines,

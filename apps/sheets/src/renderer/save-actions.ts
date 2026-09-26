@@ -15,6 +15,7 @@ import {
   toSavePageSetupStates,
   toSavePivotAdds,
   toSaveSheetOps,
+  toSaveSlicerAdds,
   toSaveSparklineAdds,
   toSaveStructuralOps,
   toSaveTableAdds,
@@ -127,6 +128,9 @@ export async function handleSave(
   // style tweaks can hold for a two-phase save instead of blocking it.
   const tableEdits = toSaveTableEdits(state.editJournal)
   const pivotAdditions = toSavePivotAdds(state.editJournal)
+  // Table slicers (PAR-203): the column offset is table-coordinate-bearing,
+  // so they hold back with the tables during structure-carrying saves.
+  const slicerAdditions = toSaveSlicerAdds(state.editJournal)
   const sparklineAdditions = toSaveSparklineAdds(state.editJournal)
   const sheetOps = toSaveSheetOps(state.editJournal)
   const hyperlinkEdits = toSaveHyperlinkEdits(state.editJournal)
@@ -235,13 +239,16 @@ export async function handleSave(
   const heldTableEdits = hasShifts ? coordinateFreeTableEdits : tableEdits
   const heldPivots = hasShifts ? pivotAdditions : []
   const heldTables = structuralOps.length > 0 ? tableAdditions : []
+  const heldSlicers = structuralOps.length > 0 ? slicerAdditions : []
   const heldNames = hasShifts ? definedNamesState : null
-  const splitSave = heldPivots.length > 0 || heldTables.length > 0 || heldNames !== null
+  const splitSave =
+    heldPivots.length > 0 || heldTables.length > 0 || heldSlicers.length > 0 || heldNames !== null
   if (splitSave) {
     const addedSheetIds = state.editJournal.sheets.added
     const strandedHeld = [
       ...heldPivots.flatMap((pivot) => [pivot.sheetId, pivot.sourceSheetId]),
       ...heldTables.map((table) => table.sheetId),
+      ...heldSlicers.map((slicer) => slicer.sheetId),
     ].some((sheetId) => addedSheetIds.has(sheetId))
     if (strandedHeld) {
       if (mode !== 'recovery') {
@@ -274,6 +281,7 @@ export async function handleSave(
     visualEdits.length +
     tableAdditions.length +
     tableEdits.length +
+    slicerAdditions.length +
     pivotAdditions.length +
     sparklineAdditions.length
   // A restored crash-recovery session carries its changes in the workbook
@@ -364,6 +372,7 @@ export async function handleSave(
     visualAdditions,
     tableAdditions,
     tableEdits,
+    slicerAdditions,
     pivotAdditions,
     sheetOps,
     sheetOrder,
@@ -415,6 +424,7 @@ export async function handleSave(
       // Phase 1 carries the shifts — even coordinate-free table edits wait
       // for phase 2 (the gateway refuses any overlap with shifts).
       tableEdits: splitSave ? [] : tableEdits,
+      slicerAdditions: splitSave && heldSlicers.length > 0 ? [] : slicerAdditions,
       pivotAdditions: splitSave && heldPivots.length > 0 ? [] : pivotAdditions,
       sheetOps,
       sheetOrder,
@@ -489,6 +499,7 @@ export async function handleSave(
         visualAdditions: [],
         tableAdditions: heldTables,
         tableEdits: heldTableEdits,
+        slicerAdditions: heldSlicers,
         pivotAdditions: heldPivots,
         sheetOps: [],
         sheetOrder: [],

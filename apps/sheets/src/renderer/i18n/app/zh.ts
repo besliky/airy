@@ -199,6 +199,7 @@ export const zh = {
   appBlank: '(空白)',
   appFieldNoMembers: '该字段没有可筛选的成员。',
   appSlicerCreated: '切片器 "{name}" 已创建——点选成员即可筛选透视表。',
+  appTableSlicerNeedsFilter: '表切片器需要表格自身的筛选——此表当前没有可用的筛选。',
   appSlicerNeedsFullLoad: '切片器筛选需要完整加载模式——这个工作簿太大,只做了流式加载。',
   appSlicerPivotMissing: '切片器绑定的透视表不存在了。',
   appSlicerSheetMissing: '切片器绑定的工作表不存在了。',

@@ -200,6 +200,7 @@ export const zhTW = {
   appBlank: '(空白)',
   appFieldNoMembers: '該欄位沒有可篩選的成員。',
   appSlicerCreated: '交叉分析篩選器 "{name}" 已建立——點選成員即可篩選樞紐分析表。',
+  appTableSlicerNeedsFilter: '表切片器需要表格自身的篩選——此表格目前沒有可用的篩選。',
   appSlicerNeedsFullLoad: '交叉分析篩選器篩選需要完整載入模式——這個活頁簿太大，只做了串流載入。',
   appSlicerPivotMissing: '交叉分析篩選器繫結的樞紐分析表已不存在。',
   appSlicerSheetMissing: '交叉分析篩選器繫結的工作表已不存在。',

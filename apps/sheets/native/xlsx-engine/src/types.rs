@@ -122,6 +122,11 @@ pub struct SheetMetadata {
     /// In-cell rich-value pictures ("place picture in cell").
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub cell_images: Vec<CellImageInfo>,
+    /// Table slicers (slicerN.xml + tableSlicerCache) bound to this sheet's
+    /// tables. Pivot slicers are not surfaced — the host keeps its own
+    /// session-side panels for those.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub slicers: Vec<SlicerInfo>,
 }
 
 #[derive(Clone, Debug, Serialize)]

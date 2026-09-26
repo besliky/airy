@@ -230,13 +230,18 @@ import {
   getSourceRange as getSourceRangeImpl,
   handleCreatePivot as handleCreatePivotImpl,
   handleCreateSlicer as handleCreateSlicerImpl,
+  handleCreateTableSlicer as handleCreateTableSlicerImpl,
   handleEditPivotApply as handleEditPivotApplyImpl,
   handleRefreshPivot as handleRefreshPivotImpl,
   handleCreateTimeline as handleCreateTimelineImpl,
+  restoreImportedTableSlicers,
   handleRemoveSlicer as handleRemoveSlicerImpl,
+  handleRemoveTableSlicer as handleRemoveTableSlicerImpl,
   handleRemoveTimeline as handleRemoveTimelineImpl,
   handleSlicerSelectAll as handleSlicerSelectAllImpl,
   handleSlicerToggle as handleSlicerToggleImpl,
+  handleTableSlicerSelectAll as handleTableSlicerSelectAllImpl,
+  handleTableSlicerToggle as handleTableSlicerToggleImpl,
   handleTimelineRange as handleTimelineRangeImpl,
   isSelectionInPivot as isSelectionInPivotImpl,
   pivotEditInitial as pivotEditInitialImpl,
@@ -244,6 +249,7 @@ import {
   type PivotActionContext,
   type PivotEditContext,
   type SlicerPickerState,
+  type TableSlicerPickerState,
   type TimelinePickerState,
 } from './pivot-actions'
 import type { ChartRecommendations } from '../domain/chart-recommend'
@@ -424,7 +430,12 @@ import {
   setManualCalculation,
 } from './calc-options'
 import { solveGoalSeek } from './goal-seek'
-import { SlicerFieldPicker, SlicerPanels, type SlicerUiState } from './SlicerPanel'
+import {
+  SlicerFieldPicker,
+  SlicerPanels,
+  type SlicerUiState,
+  type TableSlicerUiState,
+} from './SlicerPanel'
 import { WatchWindowPanel, watchKey, type WatchCell, type WatchRowValue } from './WatchWindowPanel'
 import { TimelineFieldPicker, TimelinePanels, type TimelineUiState } from './TimelinePanel'
 import { ThreadedCommentsPanel } from './ThreadedCommentsPanel'
@@ -759,8 +770,7 @@ export function App(): React.JSX.Element {
   /// journal size (pendingEdits) alone misses same-target re-edits and the
   /// ribbon echo would go stale.
   const [, setVisualEditTick] = useState(0)
-  /// In-session slicers (OOXML slicer part persistence: see the TODO in
-  /// SlicerPanel).
+  /// In-session pivot slicers (session-only: see SlicerPanel's kind notes).
   const [slicers, setSlicers] = useState<readonly SlicerUiState[]>([])
   const [watchOpen, setWatchOpen] = useState(false)
   /// Threaded-comments panel (Excel's Comments pane) and the thread its
@@ -773,6 +783,11 @@ export function App(): React.JSX.Element {
   const [calcManual, setCalcManual] = useState(false)
   /// Non-null while the "Insert Slicer" field picker is open.
   const [slicerPicker, setSlicerPicker] = useState<SlicerPickerState | null>(null)
+  /// Table slicers (PAR-203): bound to a table column, persisted through the
+  /// slicer OOXML parts; their criteria ride the sheet's filter model.
+  const [tableSlicers, setTableSlicers] = useState<readonly TableSlicerUiState[]>([])
+  /// Non-null while the "Insert Slicer" column picker is open for a table.
+  const [tableSlicerPicker, setTableSlicerPicker] = useState<TableSlicerPickerState | null>(null)
   /// In-session timelines (same session-only model as slicers).
   const [timelines, setTimelines] = useState<readonly TimelineUiState[]>([])
   /// Non-null while the "Insert Timeline" field picker is open.
@@ -829,6 +844,10 @@ export function App(): React.JSX.Element {
       slicerPicker,
       setSlicers,
       setSlicerPicker,
+      tableSlicers,
+      setTableSlicers,
+      tableSlicerPicker,
+      setTableSlicerPicker,
       timelines,
       timelinePicker,
       setTimelines,
@@ -4213,6 +4232,8 @@ export function App(): React.JSX.Element {
     // switching files invalidates them.
     setSlicers([])
     setSlicerPicker(null)
+    setTableSlicers([])
+    setTableSlicerPicker(null)
     setTimelines([])
     setTimelinePicker(null)
     disposeVisuals(visualDisposablesRef.current)
@@ -4343,7 +4364,9 @@ export function App(): React.JSX.Element {
             : undefined,
         )
         if (state.formulaMode) {
-          void preloadEntireWorkbook(runtime, lazyWorkbookRef, setMessage, setCircularRefs)
+          void preloadEntireWorkbook(runtime, lazyWorkbookRef, setMessage, setCircularRefs).then(
+            () => restoreImportedTableSlicers(pivotContext()),
+          )
         } else {
           // Deferred so first paint and initial streaming win the sidecar.
           setTimeout(() => {
@@ -4600,9 +4623,11 @@ export function App(): React.JSX.Element {
                     if (!runtime || fullLoadRunning.current) return
                     fullLoadRunning.current = true
                     setMessage(t('appFullLoadRunning'))
-                    void preloadEntireWorkbook(runtime, lazyWorkbookRef, setMessage).finally(() => {
-                      fullLoadRunning.current = false
-                    })
+                    void preloadEntireWorkbook(runtime, lazyWorkbookRef, setMessage)
+                      .then(() => restoreImportedTableSlicers(pivotContext()))
+                      .finally(() => {
+                        fullLoadRunning.current = false
+                      })
                   }}
                 >
                   {t('appFullLoadStart')}
@@ -4808,11 +4833,33 @@ export function App(): React.JSX.Element {
           onClose={() => setSlicerPicker(null)}
         />
       )}
+      {tableSlicerPicker !== null && (
+        <SlicerFieldPicker
+          fields={tableSlicerPicker.columns.map((column) => ({
+            field: column.colId,
+            name: column.name,
+          }))}
+          onPick={(colId) => handleCreateTableSlicerImpl(pivotContext(), colId)}
+          onClose={() => setTableSlicerPicker(null)}
+        />
+      )}
       <SlicerPanels
-        slicers={slicers}
-        onToggle={(slicerId, member) => handleSlicerToggleImpl(pivotContext(), slicerId, member)}
-        onSelectAll={(slicerId) => handleSlicerSelectAllImpl(pivotContext(), slicerId)}
-        onRemove={(slicerId) => handleRemoveSlicerImpl(pivotContext(), slicerId)}
+        slicers={[...slicers, ...tableSlicers]}
+        onToggle={(slicerId, member) =>
+          tableSlicers.some((entry) => entry.id === slicerId)
+            ? handleTableSlicerToggleImpl(pivotContext(), slicerId, member)
+            : handleSlicerToggleImpl(pivotContext(), slicerId, member)
+        }
+        onSelectAll={(slicerId) =>
+          tableSlicers.some((entry) => entry.id === slicerId)
+            ? handleTableSlicerSelectAllImpl(pivotContext(), slicerId)
+            : handleSlicerSelectAllImpl(pivotContext(), slicerId)
+        }
+        onRemove={(slicerId) =>
+          tableSlicers.some((entry) => entry.id === slicerId)
+            ? handleRemoveTableSlicerImpl(pivotContext(), slicerId)
+            : handleRemoveSlicerImpl(pivotContext(), slicerId)
+        }
       />
       {timelinePicker !== null && (
         <TimelineFieldPicker

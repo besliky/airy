@@ -219,6 +219,8 @@ export const id = {
   appBlank: '(kosong)',
   appFieldNoMembers: 'Bidang ini tidak memiliki anggota untuk difilter.',
   appSlicerCreated: 'Pemotong "{name}" dibuat — klik anggota untuk memfilter PivotTable.',
+  appTableSlicerNeedsFilter:
+    'Pemotong tabel memerlukan filter milik tabel itu sendiri — tabel ini tidak memiliki filter yang dapat digunakan.',
   appSlicerNeedsFullLoad:
     'Pemfilteran dengan pemotong memerlukan mode muat penuh — buku kerja ini terlalu besar dan dimuat secara streaming.',
   appSlicerPivotMissing: 'PivotTable yang terikat pada pemotong ini sudah tidak ada.',

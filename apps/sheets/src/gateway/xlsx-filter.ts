@@ -42,6 +42,10 @@ export interface SheetFilterState {
   } | null
   readonly hiddenRows: readonly number[]
   readonly visibilityRange: CellArea
+  /// Present when the filter belongs to a table (the table part's own
+  /// autoFilter) rather than the worksheet: the criteria are written into
+  /// that table part and no worksheet autoFilter is created.
+  readonly tableName?: string | undefined
 }
 
 const CUSTOM_OPERATORS = new Set([
@@ -71,7 +75,50 @@ export function applyFilterState(
   } else if (element !== '') {
     xml = insertAfterSheetData(worksheetXml, element)
   }
-  return applyRowVisibility(xml, state.visibilityRange, new Set(state.hiddenRows))
+  return applyFilterRows(xml, state)
+}
+
+/// Writes a TABLE-owned filter snapshot into the table part's XML: criteria
+/// go inside the table's own `<autoFilter>` element (its ref is kept); a
+/// null filter removes the element entirely, matching what Excel writes for
+/// a table with the filter toggled off.
+export function applyTableFilterState(
+  tableXml: string,
+  state: SheetFilterState,
+  dxfs?: DxfSink | undefined,
+): string {
+  const existing = /<autoFilter\b[^>]*\/>|<autoFilter\b[^>]*>[\s\S]*?<\/autoFilter>/.exec(tableXml)
+  if (state.filter === null) {
+    if (!existing) return tableXml
+    return tableXml.slice(0, existing.index) + tableXml.slice(existing.index + existing[0].length)
+  }
+  const ref = existing ? /\bref="([^"]+)"/.exec(existing[0])?.[1] : undefined
+  // Keep the existing element's ref (it tracks the table's area through
+  // resizes); a fresh element takes the filter range, which for a
+  // table-owned filter is the table's own area.
+  const element = serializeAutoFilter(state.filter, dxfs)
+  const withRef = ref === undefined ? element : element.replace(/\bref="[^"]+"/, `ref="${ref}"`)
+  if (existing) {
+    return (
+      tableXml.slice(0, existing.index) +
+      withRef +
+      tableXml.slice(existing.index + existing[0].length)
+    )
+  }
+  // No autoFilter in the part yet: Excel places it right after the <table>
+  // open tag (before tableColumns).
+  const openEnd = /<table\b[^>]*>/.exec(tableXml)
+  if (!openEnd) throw new FilterEditError('The table part is malformed.')
+  return (
+    tableXml.slice(0, openEnd.index + openEnd[0].length) +
+    withRef +
+    tableXml.slice(openEnd.index + openEnd[0].length)
+  )
+}
+
+/// Declarative row visibility for a filter snapshot (worksheet XML side).
+export function applyFilterRows(worksheetXml: string, state: SheetFilterState): string {
+  return applyRowVisibility(worksheetXml, state.visibilityRange, new Set(state.hiddenRows))
 }
 
 function serializeAutoFilter(

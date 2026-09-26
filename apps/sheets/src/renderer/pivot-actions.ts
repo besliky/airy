@@ -7,12 +7,20 @@ import { columnLabel, parseRange } from '../domain/cell-address'
 import { applyPivotSlicer, growPivotDefinition, recomputePivotData } from '../domain/pivot-engine'
 import { timelineDomainOf, timelineSelection, type MonthKey } from '../domain/pivot-timeline'
 import type { WorkbookFile, WorkbookPivotDefinition } from '../shared/desktop-api'
-import { journalSize, recordPivotCacheRefresh, recordPivotRefreshUpdate } from './edit-journal'
+import {
+  journalSize,
+  recordFilterChange,
+  recordPivotCacheRefresh,
+  recordPivotRefreshUpdate,
+  recordSlicerAdd,
+  removeSlicerAdd,
+} from './edit-journal'
 import { t } from './i18n/locale'
 import type { OoXmlPivotConfig, PivotEditSeed, PivotField } from './PivotDialog'
-import type { SlicerMember, SlicerUiState } from './SlicerPanel'
+import type { SlicerMember, SlicerUiState, TableSlicerUiState } from './SlicerPanel'
 import type { TimelineUiState } from './TimelinePanel'
 import type { LazyWorkbookState, UniverRuntime } from './univer-state'
+import { applyFilterCriteria } from './univer-sync'
 import {
   applyAiPivotAdd,
   applyGrownPivotOutput,
@@ -39,6 +47,14 @@ export interface SlicerPickerState {
   fields: readonly { field: number; name: string }[]
 }
 
+/// Non-null while the "Insert Slicer" column picker is open for a TABLE
+/// slicer (PAR-203).
+export interface TableSlicerPickerState {
+  sheetId: string
+  tableName: string
+  columns: readonly { colId: number; name: string }[]
+}
+
 /// Non-null while the "Insert Timeline" field picker is open.
 export interface TimelinePickerState {
   sheetId: string
@@ -55,6 +71,13 @@ export interface PivotActionContext {
   slicerPicker: SlicerPickerState | null
   setSlicers: (update: (current: readonly SlicerUiState[]) => readonly SlicerUiState[]) => void
   setSlicerPicker: (value: SlicerPickerState | null) => void
+  /// Table slicers (PAR-203) and their column picker.
+  tableSlicers: readonly TableSlicerUiState[]
+  setTableSlicers: (
+    update: (current: readonly TableSlicerUiState[]) => readonly TableSlicerUiState[],
+  ) => void
+  tableSlicerPicker: TableSlicerPickerState | null
+  setTableSlicerPicker: (value: TableSlicerPickerState | null) => void
   timelines: readonly TimelineUiState[]
   timelinePicker: TimelinePickerState | null
   setTimelines: (
@@ -466,6 +489,8 @@ export function handleOpenSlicerPicker(ctx: PivotActionContext): void {
   }
   const found = findPivotAtSelection(ctx)
   if (!found) {
+    // Not a pivot: a table under the cursor opens the table-slicer picker.
+    if (handleOpenTableSlicerPicker(ctx)) return
     ctx.setMessage(t('appCursorNotInPivot'))
     return
   }
@@ -774,4 +799,372 @@ export function handleRemoveTimeline(ctx: PivotActionContext, timelineId: string
   }
   ctx.setTimelines((current) => current.filter((entry) => entry.id !== timelineId))
   ctx.setMessage(t('appTimelineRemoved', { name: timeline.fieldName }))
+}
+
+// ---- Table slicers (PAR-203) ----
+
+/// Distinct slicer members from a column's raw values, in first-appearance
+/// order (matching how Excel orders table slicer items). Blank/null values
+/// collapse into one member. Capped — panels past the cap would be unusable.
+export const TABLE_SLICER_MAX_MEMBERS = 200
+
+/// Raw values of one table column across the data rows [firstRow, lastRow].
+function columnRawValues(
+  worksheet: {
+    getRange(row: number, column: number, h: number, w: number): { getRawValues(): unknown[][] }
+  },
+  firstRow: number,
+  absoluteColumn: number,
+  lastRow: number,
+): (string | number | boolean | null)[] {
+  if (lastRow < firstRow) return []
+  const raw = worksheet
+    .getRange(firstRow, absoluteColumn, lastRow - firstRow + 1, 1)
+    .getRawValues() as (string | number | boolean | null)[][]
+  return raw.map((row) => row[0] ?? null)
+}
+
+export function tableSlicerMembers(
+  values: readonly (string | number | boolean | null)[],
+  blankLabel: string,
+): SlicerMember[] {
+  const members: SlicerMember[] = []
+  const seen = new Map<string, number>()
+  for (const value of values) {
+    const isBlank = value === null || value === undefined || value === ''
+    const label = isBlank
+      ? blankLabel
+      : typeof value === 'boolean'
+        ? value
+          ? 'TRUE'
+          : 'FALSE'
+        : String(value)
+    const at = seen.get(label)
+    if (at !== undefined) continue
+    seen.set(label, members.length)
+    members.push(
+      isBlank ? { member: members.length, label, blank: true } : { member: members.length, label },
+    )
+    if (members.length >= TABLE_SLICER_MAX_MEMBERS) break
+  }
+  return members
+}
+
+/// Visible members for the panel: a live criteria list holds the values that
+/// STAY visible, so selection = membership; no criteria means unfiltered.
+/// Custom-criteria filters have no member mapping — the panel starts fully
+/// selected and the next toggle replaces the criteria.
+export function tableSlicerSelection(
+  members: readonly SlicerMember[],
+  criteria: { readonly values?: readonly string[]; readonly blank?: boolean } | null | undefined,
+): number[] {
+  if (!criteria || (criteria.values === undefined && criteria.blank !== true)) {
+    return members.map((entry) => entry.member)
+  }
+  const kept = new Set(criteria.values ?? [])
+  return members
+    .filter((entry) => (entry.blank === true ? criteria.blank === true : kept.has(entry.label)))
+    .map((entry) => entry.member)
+}
+
+/// The table (file or session-added) under the selection's anchor cell, with
+/// the column at the cursor. null when the cursor is not inside a table.
+export function findTableAtSelection(ctx: {
+  univerRef: { readonly current: UniverRuntime | null }
+  lazyWorkbookRef: { readonly current: LazyWorkbookState | null }
+}): { sheetId: string; tableName: string; area: TableAreaAtCursor } | null {
+  const runtime = ctx.univerRef.current
+  const state = ctx.lazyWorkbookRef.current
+  if (!runtime || !state) return null
+  const workbook = runtime.univerAPI.getActiveWorkbook()
+  const worksheet = workbook?.getActiveSheet()
+  const range = workbook?.getActiveRange()
+  if (!worksheet || !range) return null
+  const sheetId = worksheet.getSheetId()
+  const row = range.getRow()
+  const column = range.getColumn()
+  const sheetMeta = state.file.sheets.find((sheet) => sheet.id === sheetId)
+  for (const table of sheetMeta?.tables ?? []) {
+    const name = table.name
+    if (!name) continue
+    const area = table.range
+    if (row < area.startRow || row > area.endRow) continue
+    if (column < area.startColumn || column > area.endColumn) continue
+    return { sheetId, tableName: name, area }
+  }
+  for (const added of state.editJournal.tableAdds) {
+    if (added.sheetId !== sheetId) continue
+    const area = added.area
+    if (row < area.startRow || row > area.endRow) continue
+    if (column < area.startColumn || column > area.endColumn) continue
+    return { sheetId, tableName: added.name, area }
+  }
+  return null
+}
+
+interface TableAreaAtCursor {
+  readonly startRow: number
+  readonly endRow: number
+  readonly startColumn: number
+  readonly endColumn: number
+}
+
+/// Insert-slicer fallback when the cursor sits on a table (not a pivot):
+/// opens the column picker for that table.
+export function handleOpenTableSlicerPicker(ctx: PivotActionContext): boolean {
+  const state = ctx.lazyWorkbookRef.current
+  const found = state === undefined || state === null ? null : findTableAtSelection(ctx)
+  if (found === null) return false
+  const sheetMeta = state?.file.sheets.find((sheet) => sheet.id === found.sheetId)
+  const columns =
+    sheetMeta?.tables.find((table) => table.name === found.tableName)?.columns ??
+    state?.editJournal.tableAdds.find(
+      (table) => table.sheetId === found.sheetId && table.name === found.tableName,
+    )?.columnNames
+  if (columns === undefined) return false
+  const taken = new Set(
+    ctx.tableSlicers
+      .filter((slicer) => slicer.tableName === found.tableName)
+      .map((slicer) => slicer.colId),
+  )
+  const available = columns
+    .map((name, colId) => ({ colId, name }))
+    .filter((column) => !taken.has(column.colId))
+  if (available.length === 0) {
+    ctx.setMessage(t('appFieldFilterTaken'))
+    return true
+  }
+  ctx.setTableSlicerPicker({
+    sheetId: found.sheetId,
+    tableName: found.tableName,
+    columns: available,
+  })
+  return true
+}
+
+/// Creates the table slicer panel after column selection: members come from
+/// the column's distinct data values (the workbook must be fully loaded),
+/// selection mirrors the live filter criteria. Returns an error message;
+/// null = success.
+export function handleCreateTableSlicer(ctx: PivotActionContext, colId: number): string | null {
+  const state = ctx.lazyWorkbookRef.current
+  const picker = ctx.tableSlicerPicker
+  if (!state || !picker) return t('appSlicerPivotStale')
+  const runtime = ctx.univerRef.current
+  const workbook = runtime?.univerAPI.getActiveWorkbook()
+  const worksheet = workbook?.getSheetBySheetId(picker.sheetId)
+  const sheetMeta = state.file.sheets.find((sheet) => sheet.id === picker.sheetId)
+  if (!runtime || !workbook || !worksheet || !sheetMeta) return t('appSlicerSheetMissing')
+  if (!state.flags.preloadComplete || !state.formulaMode) {
+    return t('appSlicerNeedsFullLoad')
+  }
+  const tableMeta = sheetMeta.tables.find((table) => table.name === picker.tableName)
+  const addedMeta = state.editJournal.tableAdds.find(
+    (table) => table.sheetId === picker.sheetId && table.name === picker.tableName,
+  )
+  const area = tableMeta?.range ?? addedMeta?.area
+  if (!area) return t('appSlicerPivotStale')
+  const filter = worksheet.getFilter()
+  if (!filter) return t('appTableSlicerNeedsFilter')
+  const bounds = filter.getRange().getRange()
+  if (
+    bounds.startRow !== area.startRow ||
+    bounds.startColumn !== area.startColumn ||
+    bounds.endRow !== area.endRow ||
+    bounds.endColumn !== area.endColumn
+  ) {
+    return t('appTableSlicerNeedsFilter')
+  }
+  const absoluteColumn = area.startColumn + colId
+  const totalsRows = tableMeta?.totalsRowCount ?? 0
+  const members = tableSlicerMembers(
+    columnRawValues(worksheet, area.startRow + 1, absoluteColumn, area.endRow - totalsRows),
+    t('appBlank'),
+  )
+  if (members.length === 0) return t('appFieldNoMembers')
+  const criteria = filter.getColumnFilterCriteria(absoluteColumn)
+  const selected = tableSlicerSelection(members, criteria?.filters ?? null)
+  const slicer: TableSlicerUiState = {
+    id: `tslicer-${Date.now().toString(36)}-${ctx.tableSlicers.length + 1}`,
+    sheetId: picker.sheetId,
+    tableName: picker.tableName,
+    colId,
+    fieldName: picker.columns[colId]?.name ?? '',
+    members,
+    selected,
+  }
+  recordSlicerAdd(state.editJournal, {
+    sheetId: picker.sheetId,
+    tableName: picker.tableName,
+    colId,
+  })
+  ctx.setPendingEdits(journalSize(state.editJournal))
+  ctx.setTableSlicers((current) => [...current, slicer])
+  ctx.setMessage(t('appSlicerCreated', { name: slicer.fieldName }))
+  return null
+}
+
+/// Writes the slicer's selection into the sheet's filter model — the
+/// criteria values are the members that stay visible. Returns an error
+/// message; null = success.
+function applyTableSlicerCriteria(
+  ctx: PivotActionContext,
+  slicer: TableSlicerUiState,
+  selectedMembers: readonly number[] | null,
+): string | null {
+  const state = ctx.lazyWorkbookRef.current
+  const runtime = ctx.univerRef.current
+  if (!state || !runtime) return t('appOpenXlsxFirst')
+  const workbook = runtime.univerAPI.getActiveWorkbook()
+  const worksheet = workbook?.getSheetBySheetId(slicer.sheetId)
+  if (!workbook || !worksheet) return t('appSlicerSheetMissing')
+  const sheetMeta = state.file.sheets.find((sheet) => sheet.id === slicer.sheetId)
+  const tableMeta = sheetMeta?.tables.find((table) => table.name === slicer.tableName)
+  const addedMeta = state.editJournal.tableAdds.find(
+    (table) => table.sheetId === slicer.sheetId && table.name === slicer.tableName,
+  )
+  const area = tableMeta?.range ?? addedMeta?.area
+  if (!area) return t('appSlicerPivotMissing')
+  const filter = worksheet.getFilter()
+  if (!filter) return t('appTableSlicerNeedsFilter')
+  try {
+    if (selectedMembers === null || selectedMembers.length === slicer.members.length) {
+      // Clear (select-all) or the panel was removed.
+      applyFilterCriteria(worksheet, columnLabel(area.startColumn + slicer.colId), null)
+    } else {
+      const blankLabels = selectedMembers.some((member) => slicer.members[member]?.label === '')
+      const values = selectedMembers
+        .map((member) => slicer.members[member]?.label)
+        .filter((label): label is string => label !== undefined && label !== '')
+      applyFilterCriteria(worksheet, columnLabel(area.startColumn + slicer.colId), {
+        values,
+        ...(blankLabels ? { blank: true } : {}),
+      })
+    }
+  } catch (error) {
+    return error instanceof Error ? error.message : t('appSlicerFilterFailed')
+  }
+  recordFilterChange(state.editJournal, slicer.sheetId)
+  ctx.setPendingEdits(journalSize(state.editJournal))
+  return null
+}
+
+export function handleTableSlicerToggle(
+  ctx: PivotActionContext,
+  slicerId: string,
+  member: number,
+): void {
+  const slicer = ctx.tableSlicers.find((entry) => entry.id === slicerId)
+  if (!slicer) return
+  const next = slicer.selected.includes(member)
+    ? slicer.selected.filter((entry) => entry !== member)
+    : [...slicer.selected, member].sort((a, b) => a - b)
+  if (next.length === 0) {
+    ctx.setMessage(t('appSlicerKeepOne'))
+    return
+  }
+  const failure = applyTableSlicerCriteria(ctx, slicer, next)
+  if (failure !== null) {
+    ctx.setMessage(failure)
+    return
+  }
+  ctx.setTableSlicers((current) =>
+    current.map((entry) => (entry.id === slicerId ? { ...entry, selected: next } : entry)),
+  )
+  ctx.setMessage(t('appSlicerApplied', { name: slicer.fieldName }))
+}
+
+export function handleTableSlicerSelectAll(ctx: PivotActionContext, slicerId: string): void {
+  const slicer = ctx.tableSlicers.find((entry) => entry.id === slicerId)
+  if (!slicer) return
+  const failure = applyTableSlicerCriteria(ctx, slicer, null)
+  if (failure !== null) {
+    ctx.setMessage(failure)
+    return
+  }
+  ctx.setTableSlicers((current) =>
+    current.map((entry) =>
+      entry.id === slicerId
+        ? { ...entry, selected: entry.members.map((item) => item.member) }
+        : entry,
+    ),
+  )
+  ctx.setMessage(t('appSlicerCleared', { name: slicer.fieldName }))
+}
+
+export function handleRemoveTableSlicer(ctx: PivotActionContext, slicerId: string): void {
+  const slicer = ctx.tableSlicers.find((entry) => entry.id === slicerId)
+  if (!slicer) return
+  const failure = applyTableSlicerCriteria(ctx, slicer, null)
+  if (failure !== null) {
+    ctx.setMessage(failure)
+    return
+  }
+  const state = ctx.lazyWorkbookRef.current
+  if (state) {
+    removeSlicerAdd(state.editJournal, slicer.sheetId, slicer.tableName, slicer.colId)
+    ctx.setPendingEdits(journalSize(state.editJournal))
+  }
+  ctx.setTableSlicers((current) => current.filter((entry) => entry.id !== slicerId))
+  ctx.setMessage(t('appSlicerRemoved', { name: slicer.fieldName }))
+}
+
+/// Restores panels for the file's own table slicers (PAR-203 round-trip).
+/// Runs once after a full load: member values come from the worksheet and
+/// the initial selection mirrors the live filter criteria (the file's
+/// filter state). Import only — these panels are not re-journaled.
+export function restoreImportedTableSlicers(ctx: PivotActionContext): void {
+  const state = ctx.lazyWorkbookRef.current
+  const runtime = ctx.univerRef.current
+  if (!state || !runtime || !state.flags.preloadComplete) return
+  const workbook = runtime.univerAPI.getActiveWorkbook()
+  if (!workbook) return
+  const restored: TableSlicerUiState[] = []
+  const existing = new Set(
+    ctx.tableSlicers.map((slicer) => `${slicer.sheetId}#${slicer.tableName}#${slicer.colId}`),
+  )
+  for (const sheet of state.file.sheets) {
+    const imported = sheet.slicers ?? []
+    if (imported.length === 0) continue
+    const worksheet = workbook.getSheetBySheetId(sheet.id)
+    if (!worksheet) continue
+    const filter = worksheet.getFilter()
+    const bounds = filter?.getRange().getRange()
+    for (const slicer of imported) {
+      const colId = slicer.column - 1
+      const key = `${sheet.id}#${slicer.tableName}#${colId}`
+      if (existing.has(key)) continue
+      const tableMeta = sheet.tables.find((table) => table.name === slicer.tableName)
+      if (!tableMeta) continue
+      const area = tableMeta.range
+      if (
+        !filter ||
+        !bounds ||
+        bounds.startRow !== area.startRow ||
+        bounds.startColumn !== area.startColumn ||
+        bounds.endRow !== area.endRow ||
+        bounds.endColumn !== area.endColumn
+      ) {
+        continue
+      }
+      const absoluteColumn = area.startColumn + colId
+      const members = tableSlicerMembers(
+        columnRawValues(worksheet, area.startRow + 1, absoluteColumn, area.endRow),
+        t('appBlank'),
+      )
+      if (members.length === 0) continue
+      const criteria = filter.getColumnFilterCriteria(absoluteColumn)
+      restored.push({
+        id: `tslicer-${key}`,
+        sheetId: sheet.id,
+        tableName: slicer.tableName,
+        colId,
+        fieldName: tableMeta.columns?.[colId] ?? slicer.caption ?? slicer.tableName,
+        members,
+        selected: tableSlicerSelection(members, criteria?.filters ?? null),
+      })
+      existing.add(key)
+    }
+  }
+  if (restored.length > 0) ctx.setTableSlicers((current) => [...current, ...restored])
 }

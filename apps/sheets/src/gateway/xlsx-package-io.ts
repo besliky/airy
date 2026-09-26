@@ -28,6 +28,7 @@ import type {
   SheetProtectionState,
   SheetPivotAddition,
   SheetSparklineAddition,
+  SheetSlicerAddition,
   SheetStructuralOps,
   SheetTableAddition,
   SheetTableEditRequest,
@@ -111,6 +112,8 @@ export interface StreamingSaveRequest {
   readonly tableAdditions?: readonly SheetTableAddition[] | undefined
   /// Edits to tables already in the file: resize/rename/style/convert.
   readonly tableEdits?: readonly SheetTableEditRequest[] | undefined
+  /// Table slicers created this session (PAR-203).
+  readonly slicerAdditions?: readonly SheetSlicerAddition[] | undefined
   readonly pivotAdditions?: readonly SheetPivotAddition[] | undefined
   readonly pivotCacheRefreshPaths?: readonly string[] | undefined
   readonly pivotRefreshUpdates?: readonly PivotRefreshUpdate[] | undefined
@@ -190,6 +193,7 @@ export async function saveWorkbookViaSidecar(
       request.bulkConstantFills ?? [],
       request.threadedCommentStates ?? [],
       request.tableEdits ?? [],
+      request.slicerAdditions ?? [],
     )
 
     const replacements = await writePlanContents(workDir, 'replace', plan.replaced)

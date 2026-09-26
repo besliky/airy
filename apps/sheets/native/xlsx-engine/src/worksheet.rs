@@ -21,6 +21,12 @@ pub(crate) fn index_worksheet(
     let file = File::open(workbook_path)?;
     let mut archive = ZipArchive::new(file)?;
     let link_targets = visuals::hyperlink_targets(&mut archive, worksheet_path)?;
+    // Criteria of the sheet's first table autoFilter, read before the
+    // worksheet entry pins the archive borrow. Used at finalize only when
+    // the sheet itself has no autoFilter — a table-owned filter keeps its
+    // criteria in the table part, not the sheet (slicer round-trip).
+    let table_filter_columns = slicers::read_table_filter_columns(&mut archive, worksheet_path)
+        .unwrap_or_default();
     let entry = zip_entry(&mut archive, worksheet_path)?;
     let mut reader = Reader::from_reader(BufReader::new(entry));
     let mut buffer = Vec::new();
@@ -971,6 +977,12 @@ pub(crate) fn index_worksheet(
     }
     index.conditional_rules = conditional_rules;
     index.auto_filter = auto_filter;
+    // A table-owned filter (no worksheet autoFilter) still carries live
+    // criteria — the table part's own autoFilter — so the host can restore
+    // them onto the filter model it creates over the table's range.
+    if index.auto_filter.is_none() && !table_filter_columns.is_empty() {
+        auto_filter_columns = table_filter_columns;
+    }
     // Same wire caps as the save side's schema (1,000 columns, 10,000 values
     // of ≤32,767 units, 1-2 custom criteria) — an out-of-spec file loses the
     // offending entries, not the whole sheet.

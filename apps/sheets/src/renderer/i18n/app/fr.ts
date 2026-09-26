@@ -239,6 +239,8 @@ export const fr = {
   appFieldNoMembers: "Ce champ n'a aucun membre à filtrer.",
   appSlicerCreated:
     'Segment « {name} » créé — cliquez sur les membres pour filtrer le tableau croisé dynamique.',
+  appTableSlicerNeedsFilter:
+    'Un segment de table nécessite le filtre du tableau — ce tableau n’a pas de filtre utilisable.',
   appSlicerNeedsFullLoad:
     'Le filtrage par segment nécessite le mode de chargement complet — ce classeur est trop volumineux et a été chargé en flux.',
   appSlicerPivotMissing: "Le tableau croisé dynamique lié à ce segment n'existe plus.",

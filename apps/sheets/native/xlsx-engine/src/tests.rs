@@ -196,6 +196,7 @@ fn rejects_oversized_ranges() {
         print_titles: None,
         has_scoped_defined_names: false,
         cell_images: Vec::new(),
+        slicers: Vec::new(),
     };
     let range = CellRange {
         start_row: 0,
@@ -361,6 +362,7 @@ fn omits_empty_sparklines_field_from_metadata_json() {
         print_titles: None,
         has_scoped_defined_names: false,
         cell_images: Vec::new(),
+        slicers: Vec::new(),
     };
     let json = serde_json::to_string(&sheet).unwrap();
     assert!(!json.contains("sparklines"));

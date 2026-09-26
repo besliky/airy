@@ -227,6 +227,8 @@ export const pl = {
   appFieldNoMembers: 'To pole nie ma elementów do filtrowania.',
   appSlicerCreated:
     'Utworzono fragmentator „{name}” — klikaj elementy, aby filtrować tabelę przestawną.',
+  appTableSlicerNeedsFilter:
+    'fragmentator tabeli wymaga własnego filtra tabeli — ta tabela nie ma użytecznego filtra.',
   appSlicerNeedsFullLoad:
     'Filtrowanie fragmentatorem wymaga trybu pełnego ładowania — ten skoroszyt jest zbyt duży i został załadowany strumieniowo.',
   appSlicerPivotMissing: 'Tabela przestawna powiązana z tym fragmentatorem już nie istnieje.',
