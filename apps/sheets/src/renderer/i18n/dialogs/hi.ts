@@ -143,6 +143,9 @@ export const hi = {
   dlgSlicerAria: 'स्लाइसर {name}',
   dlgSlicerClear: 'फ़िल्टर साफ़ करें (सभी चुनें)',
   dlgSlicerRemove: 'स्लाइसर हटाएं (सभी सदस्य पुनर्स्थापित करें)',
+  dlgSlicerMoreMembers: '+{more} अधिक',
+  dlgSlicerMoreHint:
+    'कुल {total} में से पहले {shown} मान दिखाए जा रहे हैं। इस सूची से चयन करने पर सूची के बाहर के सभी मान छिप जाएँगे।',
   dlgTimelineInsertTitle: 'समयरेखा सम्मिलित करें',
   dlgTimelinePickNote:
     'एक दिनांक फ़ील्ड चुनें; महीनों पर क्लिक करने (सीमा बढ़ाने के लिए Shift+क्लिक) से पिवट तालिका दिनांक सीमा के अनुसार फ़िल्टर होती है।',

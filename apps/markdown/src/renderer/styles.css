@@ -2881,3 +2881,21 @@ div.tiptap-mathematics-render {
 .app-toast.success .app-toast-icon {
   color: var(--md-toast-ok);
 }
+
+/* Screen-reader-only summary for paragraphs hidden from the AX tree by the
+ * giantParagraphA11y extension (PERF-1700b). Zero visual footprint by design:
+ * it exists only so assistive technology still sees the block's existence
+ * and size. Contains no chrome colors (document-adjacent text is never
+ * themed). */
+.md-giant-para-summary {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

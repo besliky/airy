@@ -144,6 +144,9 @@ export const ms = {
   dlgSlicerAria: 'Penghiris {name}',
   dlgSlicerClear: 'Kosongkan penapis (pilih semua)',
   dlgSlicerRemove: 'Alih keluar penghiris (pulihkan semua ahli)',
+  dlgSlicerMoreMembers: '+{more} lagi',
+  dlgSlicerMoreHint:
+    'Menunjukkan {shown} nilai pertama daripada jumlah {total}. Sebarang pilihan daripada senarai ini menyembunyikan nilai di luarnya.',
   dlgTimelineInsertTitle: 'Selitkan Garis Masa',
   dlgTimelinePickNote:
     'Pilih medan tarikh; klik bulan (Shift+klik untuk meluaskan julat) untuk menapis Jadual Pangsi mengikut julat tarikh.',

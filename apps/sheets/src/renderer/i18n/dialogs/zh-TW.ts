@@ -136,6 +136,8 @@ export const zhTW = {
   dlgSlicerAria: '交叉分析篩選器 {name}',
   dlgSlicerClear: '清除篩選(全選)',
   dlgSlicerRemove: '刪除交叉分析篩選器(還原全部成員)',
+  dlgSlicerMoreMembers: '+{more} 項',
+  dlgSlicerMoreHint: '僅顯示前 {shown} 項（共 {total} 項）；在此清單中選擇會隱藏清單外的所有值。',
   dlgTimelineInsertTitle: '插入時間表',
   dlgTimelinePickNote:
     '選擇一個日期欄位，點選月份（Shift+點選擴展範圍）即可按日期範圍篩選樞紐分析表。',

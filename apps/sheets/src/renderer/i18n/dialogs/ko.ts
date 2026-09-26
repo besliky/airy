@@ -141,6 +141,9 @@ export const ko = {
   dlgSlicerAria: '슬라이서 {name}',
   dlgSlicerClear: '필터 지우기(모두 선택)',
   dlgSlicerRemove: '슬라이서 제거(모든 구성원 복원)',
+  dlgSlicerMoreMembers: '외 {more}개',
+  dlgSlicerMoreHint:
+    '전체 {total}개 중 처음 {shown}개만 표시됩니다. 이 목록에서 선택하면 목록에 없는 값은 모두 숨겨집니다.',
   dlgTimelineInsertTitle: '시간 표시 막대 삽입',
   dlgTimelinePickNote:
     '날짜 필드를 선택하세요. 월을 클릭(Shift+클릭으로 범위 확장)하면 날짜 범위로 피벗 테이블이 필터링됩니다.',

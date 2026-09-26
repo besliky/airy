@@ -135,6 +135,8 @@ export const zh = {
   dlgSlicerAria: '切片器 {name}',
   dlgSlicerClear: '清除筛选(全选)',
   dlgSlicerRemove: '删除切片器(恢复全部成员)',
+  dlgSlicerMoreMembers: '+{more} 项',
+  dlgSlicerMoreHint: '仅显示前 {shown} 项（共 {total} 项）；在此列表中选择会隐藏列表外的所有值。',
   dlgTimelineInsertTitle: '插入日程表',
   dlgTimelinePickNote: '选择一个日期字段，点选月份（Shift+点选扩展范围）即可按日期范围筛选透视表。',
   dlgTimelineAria: '日程表 {name}',

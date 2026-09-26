@@ -145,6 +145,9 @@ export const es = {
   dlgSlicerAria: 'Segmentación de datos {name}',
   dlgSlicerClear: 'Borrar filtro (seleccionar todo)',
   dlgSlicerRemove: 'Quitar segmentación (restaurar todos los elementos)',
+  dlgSlicerMoreMembers: '+{more} más',
+  dlgSlicerMoreHint:
+    'Se muestran los primeros {shown} de {total} valores. Cualquier selección en esta lista oculta los valores que no están en ella.',
   dlgTimelineInsertTitle: 'Insertar escala de tiempo',
   dlgTimelinePickNote:
     'Elige un campo de fecha; al hacer clic en los meses (Mayús+clic para ampliar el intervalo) se filtra la tabla dinámica por intervalo de fechas.',

@@ -215,3 +215,45 @@ describe('tableRefsToA1InFormulaText with multiple specifiers', () => {
     )
   })
 })
+
+/// Single-column table whose only column name ends in a `]`, the shape the
+/// audit's escaped-column corpus carries (data 2..5, totals 6).
+const ESCAPED_TABLE: TableA1Rewrite = {
+  name: 'Tbl',
+  geometry: {
+    startRow: 0,
+    endRow: 5,
+    startColumn: 0,
+    endColumn: 0,
+    headerRowCount: 1,
+    totalsRowCount: 1,
+  },
+  columns: ['Odd]Col'],
+  sheetName: 'Data',
+}
+
+describe('tableRefsToA1InFormulaText with escaped column names (BUG-1754)', () => {
+  it('decodes doubled-bracket escapes so selectors resolve to A1', () => {
+    // The Excel-written nested form: `]]` is the escaped `]` of the column
+    // `Odd]Col`, the final `]` closes the selector group.
+    expect(
+      tableRefsToA1InFormulaText('SUM(Tbl[[#Data],[Odd]]Col]])', ESCAPED_TABLE, 0, 'Data'),
+    ).toBe('SUM(A2:A5)')
+    // Un-nested item form.
+    expect(tableRefsToA1InFormulaText('SUM(Tbl[Odd]]Col])', ESCAPED_TABLE, 0, 'Data')).toBe(
+      'SUM(A2:A5)',
+    )
+  })
+
+  it('keeps plain closes structural and refuses unknown columns', () => {
+    expect(
+      tableRefsToA1InFormulaText('SUM(Tbl[[#Data],[Nope]]Col]])', ESCAPED_TABLE, 0, 'Data'),
+    ).toBe('SUM(#REF!)')
+  })
+
+  it('decodes apostrophe-prefixed escapes as well', () => {
+    expect(
+      tableRefsToA1InFormulaText("SUM(Tbl[[#Data],[Odd']Col]])", ESCAPED_TABLE, 0, 'Data'),
+    ).toBe('SUM(A2:A5)')
+  })
+})

@@ -148,6 +148,9 @@ export const fr = {
   dlgSlicerAria: 'Segment {name}',
   dlgSlicerClear: 'Effacer le filtre (tout sélectionner)',
   dlgSlicerRemove: 'Supprimer le segment (restaurer tous les membres)',
+  dlgSlicerMoreMembers: '+ {more} autres',
+  dlgSlicerMoreHint:
+    'Les {shown} premières valeurs sur {total} sont affichées. Toute sélection dans cette liste masque les valeurs hors de la liste.',
   dlgTimelineInsertTitle: 'Insérer une chronologie',
   dlgTimelinePickNote:
     'Choisissez un champ de date ; cliquer sur les mois (Maj+clic pour étendre la plage) filtre le tableau croisé dynamique par plage de dates.',

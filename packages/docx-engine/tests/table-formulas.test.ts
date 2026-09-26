@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  collectDirectionOperands,
   evaluateFormulaInGrid,
   FORMULA_DIV_ZERO_ERROR,
   FORMULA_EMPTY_ERROR,
@@ -314,5 +315,108 @@ describe('Word dialog prefill', () => {
     expect(proposeTableFormula(g.texts, 2, 2)).toBe('=SUM(LEFT)')
     // Word's default stays =SUM(ABOVE) when neither neighbor is numeric
     expect(proposeTableFormula(g.texts, 2, 0)).toBe('=SUM(ABOVE)')
+  })
+})
+
+describe('direction operands across merged cells (BUG-1759)', () => {
+  /** the audit's f_merge shape: A1:A2 merged vertically (7 in A1), B holds 1
+   * and the formula cell; every slot of the merged cell carries the origin's
+   * (row, col) — the origin's own slot maps to itself */
+  const vMergeGrid = () => ({
+    texts: [
+      ['7', '1'],
+      ['', ''],
+    ],
+    mergeAnchors: [
+      [[0, 0], undefined],
+      [[0, 0], undefined],
+    ] as const,
+  })
+
+  it('resolves a SUM(LEFT) neighbor that is a vMerge continuation to the origin value', () => {
+    const g = vMergeGrid()
+    // the continuation cell is physically '' but Word sees the merged cell = 7
+    expect(evaluateFormulaInGrid('=SUM(LEFT)', g, 1, 1)).toBe('7')
+    // the row above (formula next to the merge origin) is unchanged
+    expect(evaluateFormulaInGrid('=SUM(LEFT)', g, 0, 1)).toBe('7')
+  })
+
+  it('counts a vertically merged cell once during an ABOVE scan', () => {
+    const g = {
+      texts: [
+        ['7', '1'],
+        ['', ''],
+        ['', ''],
+      ],
+      mergeAnchors: [
+        [[0, 0], undefined],
+        [[0, 0], undefined],
+        [[0, 0], undefined],
+      ] as const,
+    }
+    // the merge spans rows 0-1 but counts once, not per physical row
+    expect(evaluateFormulaInGrid('=SUM(ABOVE)', g, 2, 0)).toBe('7')
+    // the plain column stops at its blank row-1 cell like before
+    expect(evaluateFormulaInGrid('=SUM(ABOVE)', g, 2, 1)).toBe(FORMULA_EMPTY_ERROR)
+  })
+
+  it('resolves a LEFT scan through a horizontal gridSpan to the origin value, once', () => {
+    const g = {
+      texts: [['5', '', '']],
+      mergeAnchors: [[[0, 0], [0, 0], undefined]] as const,
+    }
+    // formula right of the gridSpan cell: one merged cell = 5
+    expect(evaluateFormulaInGrid('=SUM(LEFT)', g, 0, 2)).toBe('5')
+    // formula left of the gridSpan cell: the origin counts once, not per column
+    expect(evaluateFormulaInGrid('=SUM(RIGHT)', g, 0, 0)).toBe('5')
+  })
+
+  it('resolves through a cell merged in both directions (rowspan + colspan)', () => {
+    const g = {
+      texts: [
+        ['9', '', '2'],
+        ['', '', ''],
+      ],
+      mergeAnchors: [
+        [[0, 0], [0, 0], undefined],
+        [[0, 0], [0, 0], undefined],
+      ] as const,
+    }
+    expect(evaluateFormulaInGrid('=SUM(LEFT)', g, 1, 2)).toBe('9')
+    expect(evaluateFormulaInGrid('=SUM(ABOVE)', g, 1, 2)).toBe('2')
+  })
+
+  it('stops the scan when the merged origin is not numeric', () => {
+    const g = {
+      texts: [['Total', '', '1']],
+      mergeAnchors: [[[0, 0], [0, 0], undefined]] as const,
+    }
+    expect(evaluateFormulaInGrid('=SUM(LEFT)', g, 0, 2)).toBe(FORMULA_EMPTY_ERROR)
+  })
+
+  it('keeps the plain blank-cell behavior without merge anchors', () => {
+    const texts = [
+      ['7', '1'],
+      ['', ''],
+    ]
+    expect(evaluateFormulaInGrid('=SUM(LEFT)', { texts }, 1, 1)).toBe(FORMULA_EMPTY_ERROR)
+    // same for collectDirectionOperands with the anchors argument omitted
+    expect(collectDirectionOperands(texts, 1, 1, 'LEFT')).toEqual([])
+    expect(collectDirectionOperands(texts, 0, 1, 'LEFT')).toEqual([7])
+  })
+
+  it('prefills SUM(LEFT) when the left neighbor is a numeric merge continuation', () => {
+    // the cell above holds text, so only the merge continuation offers a number
+    const g = {
+      texts: [
+        ['7', 'Total'],
+        ['', ''],
+      ],
+      mergeAnchors: [
+        [[0, 0], undefined],
+        [[0, 0], undefined],
+      ] as const,
+    }
+    expect(proposeTableFormula(g.texts, 1, 1, undefined, g.mergeAnchors)).toBe('=SUM(LEFT)')
   })
 })

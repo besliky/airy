@@ -43,6 +43,10 @@ export interface TableSlicerUiState {
   readonly colId: number
   readonly fieldName: string
   readonly members: readonly SlicerMember[]
+  /// Distinct column values beyond the TABLE_SLICER_MAX_MEMBERS cap (UX-1762):
+  /// the panel shows them as "+N more" — a selection from the shown members
+  /// hides every value outside the list, so the truncation must be visible.
+  readonly moreMembers: number
   /// Selected member indices; all selected = unfiltered.
   readonly selected: readonly number[]
 }
@@ -119,6 +123,11 @@ export function SlicerPanels({
         const filtered = selected.size < slicer.members.length
         const tip =
           'pivotPath' in slicer ? slicer.pivotPath : `table:${slicer.tableName}#${slicer.colId}`
+        // Table slicers cap the member buttons at TABLE_SLICER_MAX_MEMBERS;
+        // when the column had more distinct values, say so instead of letting
+        // the panel read as complete (UX-1762).
+        const moreMembers = 'pivotPath' in slicer ? 0 : slicer.moreMembers
+        const shownTotal = slicer.members.length + moreMembers
         return (
           <section
             key={slicer.id}
@@ -160,6 +169,17 @@ export function SlicerPanels({
                 </button>
               ))}
             </div>
+            {moreMembers > 0 ? (
+              <div
+                className="slicer-more"
+                data-tip={t('dlgSlicerMoreHint', {
+                  shown: slicer.members.length,
+                  total: shownTotal,
+                })}
+              >
+                {t('dlgSlicerMoreMembers', { more: moreMembers })}
+              </div>
+            ) : null}
           </section>
         )
       })}

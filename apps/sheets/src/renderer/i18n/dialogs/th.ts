@@ -141,6 +141,9 @@ export const th = {
   dlgSlicerAria: 'ตัวแบ่งส่วนข้อมูล {name}',
   dlgSlicerClear: 'ล้างตัวกรอง (เลือกทั้งหมด)',
   dlgSlicerRemove: 'ลบตัวแบ่งส่วนข้อมูล (คืนค่าสมาชิกทั้งหมด)',
+  dlgSlicerMoreMembers: 'อีก {more} รายการ',
+  dlgSlicerMoreHint:
+    'แสดง {shown} รายการแรกจากทั้งหมด {total} รายการ การเลือกจากรายการนี้จะซ่อนค่าที่อยู่นอกรายการทั้งหมด',
   dlgTimelineInsertTitle: 'แทรกไทม์ไลน์',
   dlgTimelinePickNote:
     'เลือกเขตข้อมูลวันที่ คลิกเดือน (Shift+คลิกเพื่อขยายช่วง) เพื่อกรอง PivotTable ตามช่วงวันที่',

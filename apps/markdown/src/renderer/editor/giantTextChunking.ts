@@ -42,8 +42,11 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 const CHUNK_CHARS = 16_384
 
 /** Only paragraphs at least this long get chunked; normal documents never
- * see a single widget decoration (the iterDeco fast path stays active). */
-const PARAGRAPH_CHARS = 100_000
+ * see a single widget decoration (the iterDeco fast path stays active).
+ * Shared with giantParagraphA11y, which applies the same "giant paragraph"
+ * threshold to the accessibility policy. */
+export const GIANT_PARAGRAPH_CHARS = 100_000
+const PARAGRAPH_CHARS = GIANT_PARAGRAPH_CHARS
 
 /** A piece is re-anchored (boundaries recomputed) once edits made it longer
  * than this — keeps the per-keystroke DOM write and paint damage bounded. */
@@ -79,6 +82,8 @@ function giantParagraphRanges(doc: PMNode): Array<{ from: number; to: number }> 
   })
   return ranges
 }
+
+// PROTOTYPE (PERF-1700b measurement): hide giant paragraphs from the AX tree
 
 function insideRanges(ranges: Array<{ from: number; to: number }>, pos: number): boolean {
   return ranges.some((r) => pos > r.from && pos < r.to)
@@ -159,7 +164,9 @@ export const GiantTextChunking = Extension.create({
         },
         props: {
           decorations(state) {
-            return giantTextChunkingKey.getState(state)?.decos ?? DecorationSet.empty
+            const st = giantTextChunkingKey.getState(state)
+            if (!st) return DecorationSet.empty
+            return st.decos
           },
         },
       }),

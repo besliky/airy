@@ -145,6 +145,9 @@ export const pt = {
   dlgSlicerAria: 'Segmentação {name}',
   dlgSlicerClear: 'Limpar filtro (selecionar tudo)',
   dlgSlicerRemove: 'Remover segmentação (restaurar todos os membros)',
+  dlgSlicerMoreMembers: '+{more} restantes',
+  dlgSlicerMoreHint:
+    'Mostrando os primeiros {shown} de {total} valores. Uma seleção nesta lista oculta todos os valores fora dela.',
   dlgTimelineInsertTitle: 'Inserir Linha do Tempo',
   dlgTimelinePickNote:
     'Escolha um campo de data; clicar nos meses (Shift+clique para estender o intervalo) filtra a Tabela Dinâmica por intervalo de datas.',
