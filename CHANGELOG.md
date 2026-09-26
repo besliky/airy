@@ -7,6 +7,134 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-09-26
+
+### Fixed
+
+- Docs:
+  - F9 field-cache refreshes stay out of the undo history (UX-1763 — the
+    docs half the 0.27.0 notes left as a named follow-up). The F9
+    (updateFields) pass rewrites field caches — PAGE/NUMPAGES/REF, table
+    formulas (`=SUM(ABOVE)…`) and nested-table models — in transactions
+    that already carried `TRACK_IGNORE` but not `addToHistory:false`, so
+    prosemirror-history recorded every press as an undo step: after an F9
+    spam a single Ctrl+Z consumed an invisible refresh instead of the
+    user's edit. `applyFieldCaches` and `refreshNestedTableFormulas` now
+    mark their transactions `addToHistory:false` — a cache refresh is not
+    an authored edit. Semantics match the sheets side (#261): the
+    nested-table cache lives in the same attribute as the content and
+    rolls back with it, so the next F9 recomputes. The new regression test
+    pins the contract — edit → F9 ×50 → one Ctrl+Z returns the edit
+    (exactly +50 undo events across 50 edit+refresh pairs, the nested
+    refresh adds none) — and was proven red on the unfixed sources
+    (3/3 fail). The ribbon's manual "Update field" keeps its deliberate
+    one-undo-step semantics (PR #263).
+- Slides:
+  - Notes-pages PDF export continues long notes onto extra sheets instead
+    of silently clipping them (BUG-1766). The notes page was a fixed A4
+    box with `overflow: hidden`, so a speaker note longer than the space
+    under the slide was cut at the first sheet with no warning: a
+    30,000-character note survived into the PDF text layer only as ~11%
+    ("Line 250"/"Line 399" missing) while the export reported success. The
+    export/print windows run sandboxed with javascript disabled, so
+    PowerPoint-style shrink-to-fit cannot measure text there and a
+    char-width heuristic could clip again; instead the notes page keeps
+    its A4 frame via `min-height` but grows in block flow
+    (`height:auto`, `overflow:visible`), letting Chromium's print
+    fragmentation continue the note onto following sheets line-exactly —
+    `box-decoration-break: clone` repeats the page padding on every
+    continuation sheet, and `overflow-wrap: anywhere` wraps an unbreakable
+    30k one-liner at the line box instead of off the page edge. Landscape
+    notes size the slide image with an explicit inch box (percentage caps
+    no longer resolve on an auto-height page, which also fixes the old
+    horizontal clip of wide slides). Short notes render exactly as before.
+    A live probe through the production window recipe (sandboxed,
+    `printToPDF`): the audit's 30k corpus now yields 21 A4 pages with all
+    3000 corpus tokens plus an end-of-note marker in the text layer,
+    against 3 pages / ~11% before (PR #265).
+  - A kill -9 mid-export can no longer leave a broken JPEG member or an
+    eternal temp directory (BUG-1767). The `slides:export-images` handler
+    wrote each file with a plain `writeFile`, so SIGKILL during the series
+    left a truncated, unmarked member on disk (9 valid + 1 undecodable out
+    of 200 in the audit); each member now commits through the shared
+    `atomicWriteFile` (temp + rename) — already-written members stay
+    valid, the interrupted member is simply absent, and each fresh export
+    sweeps the dot-temp orphans from the export directory first (the #160
+    video-temp pattern). The same kill during a PDF export bypassed the
+    `finally`-cleanup and orphaned the multi-MB `airy-slides-pdf-*`
+    print-HTML directory in /tmp forever; each fresh PDF export now sweeps
+    expired ones first — one-hour TTL, age alone decides — and the mkdtemp
+    prefix moved into the sweep module so the pattern and the construction
+    cannot drift (PR #266).
+  - Glyph-run direction is stamped from strong bidi characters only
+    (BUG-1765). The audit's upside-down-Cyrillic rendering on the mixed
+    emoji+CJK+Cyrillic line did not reproduce on the release base — a
+    pixel-level comparison of the audit's own JPEG evidence matches the
+    substituted font at ~97%, a reading artifact of small-zoom proportional
+    glyphs — but the diagnosis left a real latent defect on the table: a
+    run's `direction:'rtl'` stamp was derived from the raw UAX#9 level
+    alone, so any token landing on an odd level without strong RTL
+    characters of its own (emoji or neutrals between LTR segments) drew
+    under RTL paragraph rules, reordering and reshaping LTR glyphs.
+    `runDrawsRtl` now decides from the run's own characters: strong RTL
+    text (Arabic/Hebrew) keeps the rtl base, a run whose strong characters
+    are LTR never draws rtl, and pure-neutral runs keep the level stamp so
+    paired-bracket mirroring parity is preserved. Real RTL decks are
+    unaffected — the live JPEG export of an Arabic paragraph is
+    pixel-identical before/after (PR #268).
+- Shell:
+  - A corrupt app-settings.json no longer means silent total loss of every
+    setting (BUG-1771). Any unreadable byte (truncated JSON, trailing
+    garbage, UTF-8 BOM, empty file, array/scalar/whitespace root — 7/7
+    audited variants) made the reader answer `{}`, so the very next
+    merge-write silently destroyed every persisted setting: the app booted
+    with defaults, one toggle rewrote the file, and
+    language/theme/author were gone with no error, dialog or log line. The
+    single writer now preserves the corrupt bytes verbatim as
+    `app-settings.json.bak` before anything can overwrite them (stable
+    name, kept timestamps, once per distinct corrupt state, re-armed by a
+    healthy read, a `console.warn` that lands in main.log) and salvages
+    what strict JSON parsing allows — a BOM is stripped (full recovery), a
+    complete object trailed by garbage is kept, a truncated tail is
+    completed or cut back to the newest member boundary that still parses;
+    every candidate is validated by a real `JSON.parse`, so a repair can
+    only keep what already parses, never invent data. Wrong-type/empty
+    roots fall back to honest defaults, and the ordinary merge-write
+    persists the salvaged keys — the audited repro (seeded `language` +
+    corruption + one `setTheme`) keeps `language` alive. The fix lives in
+    the shared writer in electron-utils, so editor-module writes (dialog
+    memory, author name, default save dir) are covered too; the atomic
+    temp+rename write and the per-path write queue are unchanged
+    (PR #267).
+
+### Performance
+
+- Shell:
+  - The accessibility tree is no longer forced on for users without
+    assistive technology (PERF-1700c — the a11y-policy half PERF-1700
+    opened). The shell had forced Chromium accessibility support on for
+    every user since the first release
+    (`app.setAccessibilitySupportEnabled(true)`), although Electron's own
+    docs warn this should not be enabled by default: the renderer then
+    builds and maintains the AX tree — `RunAccessibilitySteps` runs inside
+    the BeginMainFrame commit — even with no assistive technology present.
+    That force is what made the PERF-1700 stall (2.3s per keystroke on a
+    multi-megabyte paragraph) possible for users without a screen reader,
+    and it still built a full tree for every ordinary document (measured:
+    593 AX objects for a 300KB document without AT; 92 for the 4MB
+    one-liner). A new `applyAccessibilityPolicy` replaces the unconditional
+    call: support is left to Chromium's own detection — which on Linux
+    includes late AT connections, verified live on Electron 43 (an
+    Orca-style AT-SPI client flips support on at runtime; note the legacy
+    `isAccessibilitySupportEnabled()` boolean stays false on that lazy
+    path and no `accessibility-support-changed` event fires, so neither
+    can gate the decision) — and `AIRY_FORCE_A11Y=1` restores the old
+    always-on behavior for setups where detection misses. Measured live
+    under xvfb: with an active AT client, AX exposure is at parity (92 and
+    593 objects, keystroke latency within noise), so screen-reader users
+    lose nothing; without AT, no tree is built at all (3 stub objects).
+    GiantParagraphA11y (#257) is untouched (PR #264).
+
 ## [0.27.0] - 2026-09-26
 
 ### Fixed
