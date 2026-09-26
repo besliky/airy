@@ -360,6 +360,16 @@ export function buildCtxItems(ctx: ActionCtx): Array<CtxItem | null> {
             : []),
         ]
       : []),
+    // Charts: "Edit Data" opens the embedded workbook's data grid (same action
+    // as the Chart Design ribbon group)
+    ...(node && node.type === 'chart'
+      ? [
+          {
+            label: t('ribbonEditData'),
+            onClick: () => void styleActions.openChartDataDialog(ctx),
+          } as CtxItem,
+        ]
+      : []),
     ...(canGroup
       ? [
           {

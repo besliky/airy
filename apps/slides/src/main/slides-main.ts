@@ -91,6 +91,7 @@ import {
   listSlideLayouts,
   editChartElement,
   getChartElementData,
+  getChartElementWorkbookData,
   materializeSlide,
   listMasterParts,
   parseMasterPart,
@@ -3093,7 +3094,21 @@ export function registerSlidesIpc(): void {
     if (!session) return null
     const slide = session.opened.deck.slides[slideIndex]
     if (!slide) return null
-    return getChartElementData(slide, sourceId)
+    const data = getChartElementData(slide, sourceId)
+    if (!data) return null
+    // Edit Data prefers the embedded workbook's Sheet1 rectangle (PAR-302) —
+    // the numbers PowerPoint itself shows; the parsed chart model fills
+    // kind/title and covers charts without a workbook
+    const wb = getChartElementWorkbookData(session.opened, slideIndex, sourceId)
+    if (!wb) return data
+    return {
+      ...data,
+      categories: wb.categories,
+      series: wb.series.map((s) => ({
+        name: s.name ?? '',
+        values: s.values.map((v) => v ?? 0),
+      })),
+    }
   })
 
   ipcMain.handle('slides:reorder-element', (e, op: ReorderElementOp) => {

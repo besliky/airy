@@ -77,6 +77,13 @@ import type {
 } from './types'
 import { patchTableStyleXml, ensureTableStyleXml, type TableStyleEdit } from './table-edit'
 import { buildChartSpaceXml, type NewChartKind, type NewChartOptions } from './chart-insert'
+import {
+  findChartEmbeddingPath,
+  findChartPartPath,
+  readChartWorkbookBytes,
+  syncChartWorkbookForChart,
+  type ChartWorkbookTable,
+} from './chart-workbook'
 import { parseLayoutPlaceholders, placeholderSpXml, prepareInsertSlideWithLayout } from './layout'
 import {
   chooseLayout,
@@ -290,6 +297,17 @@ export {
   type NewChartKind,
   type NewChartOptions,
 } from './chart-insert'
+export {
+  buildChartWorkbookBytes,
+  patchChartWorkbookBytes,
+  readChartWorkbookBytes,
+  findChartEmbeddingPath,
+  findChartPartPath,
+  chartWorkbookTableFromModel,
+  readZipContainer,
+  writeZipContainer,
+  type ChartWorkbookTable,
+} from './chart-workbook'
 export {
   addSmartArt,
   buildSmartArtXml,
@@ -2854,6 +2872,11 @@ export function editChartElement(
   }
   const newXml = buildChartSpaceXml(opts)
   archive.entries.set(chartPath, Buffer.from(newXml, 'utf8'))
+  // PAR-302: keep the embedded workbook in sync — the rebuilt part's caches are
+  // the render source of truth, the ppt/embeddings/*.xlsx sheet is what "Edit
+  // Data" (here and in PowerPoint) shows. Best-effort: a missing/unreadable
+  // workbook never blocks the chart edit itself.
+  syncChartWorkbookForChart(archive, chartPath)
   slide.structureDirty = true
   return true
 }
@@ -3003,6 +3026,28 @@ export function getChartElementData(
     seriesColors: chartEl.chart.series.map((s) => s.color),
     pointColors: chartEl.chart.series.map((s) => (s.pointColors ? [...s.pointColors] : undefined)),
   }
+}
+
+/**
+ * Read a chart element's embedded workbook (ppt/embeddings/*.xlsx) as a data
+ * table — the numbers PowerPoint's own "Edit Data" would show. Returns null
+ * when the chart has no workbook or its container is unreadable; callers fall
+ * back to getChartElementData's parsed-model view.
+ */
+export function getChartElementWorkbookData(
+  opened: OpenedPptx,
+  slideIndex: number,
+  elementId: string,
+): ChartWorkbookTable | null {
+  const slide = opened.deck.slides[slideIndex]
+  if (!slide) return null
+  const chartPath = findChartPartPath(opened.archive, slide, elementId)
+  if (!chartPath) return null
+  const embeddingPath = findChartEmbeddingPath(opened.archive, chartPath)
+  if (!embeddingPath) return null
+  const bytes = opened.archive.readBytes(embeddingPath)
+  if (!bytes) return null
+  return readChartWorkbookBytes(bytes)
 }
 
 /**

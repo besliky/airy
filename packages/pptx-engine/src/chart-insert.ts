@@ -1,17 +1,19 @@
 /**
  * Chart insertion — writes the chart part (ppt/charts/chartN.xml) + Content_Types
- * Override + slide rels + graphicFrame fragment, going through appendRawElements to
- * reuse the existing chart parsing/rendering.
+ * Override + slide rels + embedded workbook (ppt/embeddings/*.xlsx, PAR-302:
+ * "Edit Data" parity — PowerPoint reads the same sheet) + graphicFrame fragment,
+ * going through appendRawElements to reuse the existing chart parsing/rendering.
  *
  * The chartSpace template mirrors docx-engine's buildChartPartXml (data goes through
- * strCache/numCache caches, no embedded workbook attached; PowerPoint renders it
- * fine, but "Edit Data" is unavailable).
+ * strCache/numCache caches; the matching embedded workbook keeps cache and
+ * "Edit Data" numbers in agreement).
  */
 import type { EmuRect, Slide } from './types'
 import { escapeXmlAttr, escapeXmlText, creationIdExtXml, appChartMarkerExtXml } from './xml-utils'
 import { relsPathFor } from './zip'
 import { appendRawElements, type OpenedPptx } from './index'
 import { nextCNvPrId } from './insert'
+import { attachChartWorkbook } from './chart-workbook'
 
 export type NewChartKind =
   | 'bar'
@@ -362,6 +364,19 @@ export function addChart(
     relsPath,
     Buffer.from(rels.replace('</Relationships>', `${relXml}</Relationships>`), 'utf8'),
   )
+
+  // 3.5) embedded workbook (PAR-302): chart data lands in ppt/embeddings/*.xlsx
+  // and the chart part points at it (<c:externalData> + …/package rel), so
+  // "Edit Data" — here and in PowerPoint — has a sheet to open and stays in
+  // sync with the rendered chart. Values clamp to the category count, matching
+  // the numCache ranges the chart part carries.
+  attachChartWorkbook(archive, chartPath, {
+    categories: opts.categories,
+    series: opts.series.map((s) => ({
+      name: s.name,
+      values: s.values.slice(0, opts.categories.length),
+    })),
+  })
 
   // 4) graphicFrame fragment + append reparse
   const id = nextCNvPrId(slide)
