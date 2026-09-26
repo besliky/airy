@@ -139,6 +139,9 @@ export const he = {
   dlgSlicerAria: 'כלי פריסה {name}',
   dlgSlicerClear: 'ניקוי מסנן (בחירת הכול)',
   dlgSlicerRemove: 'הסרת כלי הפריסה (שחזור כל החברים)',
+  dlgSlicerMoreMembers: '+{more} נוספים',
+  dlgSlicerMoreHint:
+    'מוצגים {shown} הערכים הראשונים מתוך {total}. כל בחירה ברשימה זו מסתירה את כל הערכים שמחוצה לה.',
   dlgTimelineInsertTitle: 'הוספת ציר זמן',
   dlgTimelinePickNote:
     'בחרו שדה תאריך; לחיצה על חודשים (Shift+לחיצה להרחבת הטווח) מסננת את טבלת הציר לפי טווח תאריכים.',

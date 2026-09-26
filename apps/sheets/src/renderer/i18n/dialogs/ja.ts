@@ -144,6 +144,9 @@ export const ja = {
   dlgSlicerAria: 'スライサー {name}',
   dlgSlicerClear: 'フィルターのクリア（すべて選択）',
   dlgSlicerRemove: 'スライサーの削除（全メンバーを復元）',
+  dlgSlicerMoreMembers: 'ほか {more} 件',
+  dlgSlicerMoreHint:
+    '先頭から {total} 件中 {shown} 件を表示しています。このリストで選択すると、リスト外の値はすべて非表示になります。',
   dlgTimelineInsertTitle: 'タイムラインの挿入',
   dlgTimelinePickNote:
     '日付フィールドを選択します。月をクリック（Shift+クリックで範囲を拡張）すると、日付範囲でピボットテーブルを絞り込めます。',

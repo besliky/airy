@@ -148,6 +148,9 @@ export const de = {
   dlgSlicerAria: 'Datenschnitt {name}',
   dlgSlicerClear: 'Filter löschen (alles auswählen)',
   dlgSlicerRemove: 'Datenschnitt entfernen (alle Elemente wiederherstellen)',
+  dlgSlicerMoreMembers: '+{more} weitere',
+  dlgSlicerMoreHint:
+    'Die ersten {shown} von {total} Werten werden angezeigt. Eine Auswahl in dieser Liste blendet alle übrigen Werte aus.',
   dlgTimelineInsertTitle: 'Zeitachse einfügen',
   dlgTimelinePickNote:
     'Wählen Sie ein Datumsfeld; das Klicken auf Monate (Umschalt+Klick erweitert den Bereich) filtert die PivotTable nach Datumsbereich.',

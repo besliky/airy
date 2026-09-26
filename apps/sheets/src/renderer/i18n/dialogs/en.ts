@@ -144,6 +144,9 @@ export const en = {
   dlgSlicerAria: 'Slicer {name}',
   dlgSlicerClear: 'Clear filter (select all)',
   dlgSlicerRemove: 'Remove slicer (restore all members)',
+  dlgSlicerMoreMembers: '+{more} more',
+  dlgSlicerMoreHint:
+    'Showing the first {shown} of {total} values. A selection from this list hides all values outside it.',
   dlgTimelineInsertTitle: 'Insert Timeline',
   dlgTimelinePickNote:
     'Pick a date field; click months (Shift+click to extend the range) to filter the PivotTable by date range.',

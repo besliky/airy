@@ -145,6 +145,9 @@ export const cs = {
   dlgSlicerAria: 'Průřez {name}',
   dlgSlicerClear: 'Vymazat filtr (vybrat vše)',
   dlgSlicerRemove: 'Odebrat průřez (obnovit všechny členy)',
+  dlgSlicerMoreMembers: '+{more} dalších',
+  dlgSlicerMoreHint:
+    'Zobrazuje se prvních {shown} z {total} hodnot. Výběr v tomto seznamu skryje všechny hodnoty mimo něj.',
   dlgTimelineInsertTitle: 'Vložit časovou osu',
   dlgTimelinePickNote:
     'Vyberte pole s datem; kliknutím na měsíce (Shift+kliknutí rozšíří rozsah) filtrujete kontingenční tabulku podle období.',

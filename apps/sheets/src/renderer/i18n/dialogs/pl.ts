@@ -146,6 +146,9 @@ export const pl = {
   dlgSlicerAria: 'Fragmentator {name}',
   dlgSlicerClear: 'Wyczyść filtr (zaznacz wszystko)',
   dlgSlicerRemove: 'Usuń fragmentator (przywróć wszystkie elementy)',
+  dlgSlicerMoreMembers: '+{more} więcej',
+  dlgSlicerMoreHint:
+    'Pokazano pierwsze {shown} z {total} wartości. Zaznaczenie na tej liście ukrywa wszystkie wartości poza nią.',
   dlgTimelineInsertTitle: 'Wstaw oś czasu',
   dlgTimelinePickNote:
     'Wybierz pole daty; klikanie miesięcy (Shift+kliknięcie rozszerza zakres) filtruje tabelę przestawną według zakresu dat.',

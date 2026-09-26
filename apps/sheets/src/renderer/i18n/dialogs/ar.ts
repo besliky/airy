@@ -143,6 +143,9 @@ export const ar = {
   dlgSlicerAria: 'مقسم طريقة العرض {name}',
   dlgSlicerClear: 'مسح التصفية (تحديد الكل)',
   dlgSlicerRemove: 'إزالة مقسم طريقة العرض (استعادة كل العناصر)',
+  dlgSlicerMoreMembers: '+{more} أخرى',
+  dlgSlicerMoreHint:
+    'يتم عرض أول {shown} من إجمالي {total} قيمة. أي تحديد في هذه القائمة يخفي كل القيم خارجها.',
   dlgTimelineInsertTitle: 'إدراج مخطط زمني',
   dlgTimelinePickNote:
     'اختر حقل تاريخ؛ يؤدي النقر على الأشهر (Shift+نقر لتوسيع النطاق) إلى تصفية PivotTable حسب نطاق التاريخ.',
