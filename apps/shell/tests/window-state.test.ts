@@ -1,12 +1,13 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * Window-state persistence (src/main/window-state.ts): the pure parse and
  * on-screen validation logic that guards restoring the shell window's
- * geometry, plus the atomic file round-trip.
+ * geometry, the atomic file round-trip, and the debounced geometry saver
+ * (UX-1775: a kill -9 inside the debounce window must not lose the move).
  */
 
 let WindowState: typeof import('../src/main/window-state')
@@ -207,5 +208,82 @@ describe('state file round-trip', () => {
       }),
     ).toThrow()
     expect(WindowState.readWindowState(join(scratch, 'window-state.json'))?.x).toBe(0)
+  })
+})
+
+// ── UX-1775: the debounced geometry saver ──
+// The audit (SET-26-5): with a 500 ms debounce, kill -9 right after a move
+// lost it. The debounce is now short, and close/maximize flush synchronously.
+
+describe('GEOMETRY_SAVE_DEBOUNCE_MS', () => {
+  it('is short enough that a kill in the window loses almost nothing', () => {
+    expect(WindowState.GEOMETRY_SAVE_DEBOUNCE_MS).toBe(150)
+  })
+})
+
+describe('createGeometrySaver', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('coalesces a burst of moves into one deferred write', () => {
+    const persist = vi.fn()
+    const saver = WindowState.createGeometrySaver(persist)
+    for (let i = 0; i < 10; i++) {
+      saver.schedule()
+      vi.advanceTimersByTime(50)
+    }
+    expect(persist).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(WindowState.GEOMETRY_SAVE_DEBOUNCE_MS)
+    expect(persist).toHaveBeenCalledTimes(1)
+  })
+
+  it('writes the final state synchronously on flush and nothing lands after', () => {
+    const persist = vi.fn()
+    const saver = WindowState.createGeometrySaver(persist)
+    saver.schedule()
+    saver.flush() // the close path: one immediate write …
+    expect(persist).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(10_000) // … and no deferred write afterwards
+    expect(persist).toHaveBeenCalledTimes(1)
+  })
+
+  it('flush without a pending write still persists once (close persists)', () => {
+    const persist = vi.fn()
+    const saver = WindowState.createGeometrySaver(persist)
+    saver.flush()
+    expect(persist).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancel drops a pending deferred write without persisting', () => {
+    const persist = vi.fn()
+    const saver = WindowState.createGeometrySaver(persist)
+    saver.schedule()
+    saver.cancel()
+    vi.advanceTimersByTime(10_000)
+    expect(persist).not.toHaveBeenCalled()
+  })
+
+  it('schedules again after a flush (move after maximize)', () => {
+    const persist = vi.fn()
+    const saver = WindowState.createGeometrySaver(persist)
+    saver.flush()
+    saver.schedule()
+    vi.advanceTimersByTime(WindowState.GEOMETRY_SAVE_DEBOUNCE_MS)
+    expect(persist).toHaveBeenCalledTimes(2)
+  })
+
+  it('honors a custom debounce (injectable for tests)', () => {
+    const persist = vi.fn()
+    const saver = WindowState.createGeometrySaver(persist, 1000)
+    saver.schedule()
+    vi.advanceTimersByTime(999)
+    expect(persist).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(persist).toHaveBeenCalledTimes(1)
   })
 })

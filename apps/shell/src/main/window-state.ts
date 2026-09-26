@@ -114,3 +114,56 @@ export function writeWindowState(path: string, state: WindowState): void {
     throw error
   }
 }
+
+/**
+ * Move/resize events arrive in bursts, so the write they trigger is
+ * debounced — but short (UX-1775): a kill -9 inside the debounce window
+ * loses the last move, and half a second is far too much window to lose.
+ * At this width the file trails the window by at most ~150 ms, and the
+ * close/maximize paths below still flush synchronously.
+ */
+export const GEOMETRY_SAVE_DEBOUNCE_MS = 150
+
+/** The three geometry-write entry points the primary window wires up. */
+export interface GeometrySaver {
+  /** coalesce a burst of move/resize events into one deferred write */
+  schedule: () => void
+  /** write NOW (window close, maximize transitions) and drop the pending one */
+  flush: () => void
+  /** drop a pending deferred write without writing */
+  cancel: () => void
+}
+
+/**
+ * Debounced geometry saver around a persist callback (pure, unit-tested):
+ * a burst of `schedule()` calls collapses into a single write
+ * {@link GEOMETRY_SAVE_DEBOUNCE_MS} after the last event; `flush()` writes
+ * immediately and cancels the pending deferred write so nothing lands after
+ * the synchronous one.
+ */
+export function createGeometrySaver(
+  persist: () => void,
+  debounceMs: number = GEOMETRY_SAVE_DEBOUNCE_MS,
+): GeometrySaver {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const cancel = (): void => {
+    if (timer !== null) {
+      clearTimeout(timer)
+      timer = null
+    }
+  }
+  return {
+    schedule: () => {
+      cancel()
+      timer = setTimeout(() => {
+        timer = null
+        persist()
+      }, debounceMs)
+    },
+    flush: () => {
+      cancel()
+      persist()
+    },
+    cancel,
+  }
+}
