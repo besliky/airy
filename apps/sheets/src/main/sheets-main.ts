@@ -3997,6 +3997,7 @@ async function writeWorkbookTo(
     filter: state.filter,
     hiddenRows: state.hiddenRows,
     visibilityRange: state.visibilityRange,
+    ...(state.tableName === undefined ? {} : { tableName: state.tableName }),
   }))
   const linksBySheet = new Map<string, { row: number; column: number; target: string | null }[]>()
   for (const link of request.hyperlinkEdits) {
@@ -4065,6 +4066,13 @@ async function writeWorkbookTo(
     ...(edit.resize === undefined ? {} : { resize: edit.resize }),
     ...(edit.style === undefined ? {} : { style: edit.style }),
     ...(edit.convertToRange === undefined ? {} : { convertToRange: edit.convertToRange }),
+  }))
+  // Table slicers (PAR-203): sheetId → sheet name; the gateway validates the
+  // table binding against the package.
+  const slicerAdditions = request.slicerAdditions.map((slicer) => ({
+    sheetName: resolveSheetName(slicer.sheetId),
+    tableName: slicer.tableName,
+    colId: slicer.colId,
   }))
   const pivotAdditions = request.pivotAdditions.map((pivot) => ({
     sheetName: resolveSheetName(pivot.sheetId),
@@ -4138,6 +4146,7 @@ async function writeWorkbookTo(
     threadedCommentStates,
     tableAdditions,
     tableEdits,
+    slicerAdditions,
     pivotAdditions,
     sparklineAdditions,
     formulaValues,

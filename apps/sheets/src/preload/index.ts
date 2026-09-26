@@ -858,6 +858,31 @@ function parseWorkbookFile(input: unknown): WorkbookFile {
           : { headerBottomBorderStyle: table.headerBottomBorderStyle }),
       }
     })
+    // Table slicers parsed by the sidecar (PAR-203). Absent (stale sidecar)
+    // degrades to an empty set, like sparklines.
+    const openSlicers = Array.isArray(sheet.slicers) ? sheet.slicers : []
+    if (openSlicers.length > 100) {
+      throw new Error('Invalid worksheet slicer.')
+    }
+    const slicers = openSlicers.map((slicer) => {
+      if (
+        !isRecord(slicer) ||
+        !isBoundedString(slicer.name, 255) ||
+        !isBoundedString(slicer.cacheName, 255) ||
+        (slicer.caption !== undefined && !isBoundedString(slicer.caption, 255)) ||
+        !isBoundedString(slicer.tableName, 255) ||
+        !isPositiveInteger(slicer.column)
+      ) {
+        throw new Error('Invalid worksheet slicer.')
+      }
+      return {
+        name: slicer.name,
+        cacheName: slicer.cacheName,
+        ...(slicer.caption === undefined ? {} : { caption: slicer.caption }),
+        tableName: slicer.tableName,
+        column: slicer.column,
+      }
+    })
     const comments = sheet.comments.map((comment) => {
       if (
         !isRecord(comment) ||
@@ -971,6 +996,7 @@ function parseWorkbookFile(input: unknown): WorkbookFile {
         ? { zoomScale: sheet.zoomScale }
         : {}),
       tables,
+      slicers,
       comments,
       threadedComments,
       pivotRanges: sheet.pivotRanges.map(parseCellArea),
@@ -1819,6 +1845,7 @@ function parseSaveRequest(input: WorkbookSaveRequest): WorkbookSaveRequest {
   cappedArray('visual additions', input.visualAdditions, 100)
   cappedArray('table additions', input.tableAdditions, 50)
   cappedArray('table edits', input.tableEdits ?? [], 50)
+  cappedArray('table slicers', input.slicerAdditions ?? [], 50)
   cappedArray('pivot additions', input.pivotAdditions, 20)
   cappedArray('sheet operations', input.sheetOps, 100)
   cappedArray('sheet order', input.sheetOrder, 1_000)
@@ -1908,6 +1935,7 @@ function parseSaveRequest(input: WorkbookSaveRequest): WorkbookSaveRequest {
     input.visualAdditions.length === 0 &&
     input.tableAdditions.length === 0 &&
     (input.tableEdits?.length ?? 0) === 0 &&
+    (input.slicerAdditions?.length ?? 0) === 0 &&
     input.pivotAdditions.length === 0 &&
     (input.sparklineAdditions?.length ?? 0) === 0 &&
     input.sheetOps.length === 0 &&
@@ -1995,6 +2023,20 @@ function parseSaveRequest(input: WorkbookSaveRequest): WorkbookSaveRequest {
       throw new Error('Invalid workbook table edit.')
     }
     if (edit.resize !== undefined) parseCellArea(edit.resize.area)
+  }
+  for (const slicer of input.slicerAdditions ?? []) {
+    if (
+      !isRecord(slicer) ||
+      typeof slicer.sheetId !== 'string' ||
+      slicer.sheetId.length === 0 ||
+      typeof slicer.tableName !== 'string' ||
+      slicer.tableName.length === 0 ||
+      slicer.tableName.length > 255 ||
+      !isNonnegativeInteger(slicer.colId) ||
+      slicer.colId > 16_383
+    ) {
+      throw new Error('Invalid workbook slicer addition.')
+    }
   }
   for (const pivot of input.pivotAdditions) {
     if (
@@ -2111,7 +2153,11 @@ function parseSaveRequest(input: WorkbookSaveRequest): WorkbookSaveRequest {
       state.sheetId.length === 0 ||
       !Array.isArray(state.hiddenRows) ||
       state.hiddenRows.length > 100_000 ||
-      state.hiddenRows.some((row) => !isNonnegativeInteger(row))
+      state.hiddenRows.some((row) => !isNonnegativeInteger(row)) ||
+      (state.tableName !== undefined &&
+        (typeof state.tableName !== 'string' ||
+          state.tableName.length === 0 ||
+          state.tableName.length > 255))
     ) {
       throw new Error('Invalid workbook filter state.')
     }

@@ -43,7 +43,9 @@ import {
   type PivotValueSpec,
 } from './xlsx-pivot-add'
 import type { SheetFilterState } from './xlsx-filter'
-import { applyFilterState } from './xlsx-filter'
+import { applyFilterRows, applyFilterState, applyTableFilterState } from './xlsx-filter'
+import { findTablePart } from './xlsx-table-edit'
+import { applySlicerAdditions } from './xlsx-slicer'
 import { normalizeOoxmlPartPrefix } from './xlsx-namespace'
 import type { SheetAllocation, SheetEditPlan, SheetElement } from './xlsx-sheets'
 import {
@@ -578,6 +580,18 @@ export interface SheetTableAddition {
   readonly bandedRows: boolean
 }
 
+/// A table slicer created this session (PAR-203): persisted as slicer part +
+/// slicerCache with the x15 tableSlicerCache binding plus the workbook and
+/// worksheet extLst hooks. The bound table must already exist in the file
+/// (or be added in the same save — additions run after table additions).
+export interface SheetSlicerAddition {
+  readonly sheetName: string
+  /// The table's displayName token.
+  readonly tableName: string
+  /// 0-based offset into the table's tableColumns list.
+  readonly colId: number
+}
+
 /// One edit against a table already stored in the file (PAR-202): resize
 /// (header-anchored), rename, style tweak, and/or Convert to Range. All
 /// operations are fail-closed at save: unknown tables, bad names, and
@@ -667,6 +681,7 @@ export async function planCellEditsToXlsx(
   bulkConstantFills: readonly BulkConstantFill[] = [],
   threadedCommentStates: readonly SheetThreadedCommentState[] = [],
   tableEdits: readonly SheetTableEditRequest[] = [],
+  slicerAdditions: readonly SheetSlicerAddition[] = [],
 ): Promise<MutationPlan> {
   // A pending pivot pins final coordinates for its source and output; shifts
   // on either sheet, and sheet renames (worksheetSource@sheet), would desync
@@ -1099,10 +1114,18 @@ export async function planCellEditsToXlsx(
 
   // Filter snapshots run after structural replay and cell edits, so their
   // coordinates and row set match the sheet's final content. The stylesheet
-  // interns color-filter dxf entries alongside the CF ones.
+  // interns color-filter dxf entries alongside the CF ones. Table-owned
+  // filters (tableName set) are deferred below the table writes — the table
+  // part may be added or reshaped later in this very save.
+  const deferredTableFilters: SheetFilterState[] = []
   for (const state of filterStates) {
     const worksheetXml = worksheetXmls.get(state.sheetName)
     if (worksheetXml === undefined) continue
+    if (state.tableName !== undefined) {
+      deferredTableFilters.push(state)
+      worksheetXmls.set(state.sheetName, applyFilterRows(worksheetXml, state))
+      continue
+    }
     worksheetXmls.set(
       state.sheetName,
       applyFilterState(worksheetXml, state, stylesheet ?? undefined),
@@ -1228,6 +1251,24 @@ export async function planCellEditsToXlsx(
       })
     }
     await applyTableAdditions(pkg, resolvedTables, touchedEntries)
+  }
+
+  // Table-owned filter criteria: written after the table writes so a table
+  // added in this same save is already a real part.
+  for (const state of deferredTableFilters) {
+    const worksheetPath = worksheetPaths.get(state.sheetName)
+    if (!worksheetPath) continue
+    const table = await findTablePart(pkg, worksheetPath, state.tableName!)
+    if (!table) {
+      throw new Error(
+        `The table "${state.tableName}" owning this sheet's filter was not found in the workbook.`,
+      )
+    }
+    pkg.write(
+      table.path,
+      applyTableFilterState(await pkg.readText(table.path), state, stylesheet ?? undefined),
+    )
+    touchedEntries.add(table.path)
   }
 
   // New sparklines also run on the flushed worksheet XML (extLst is the
@@ -1368,6 +1409,23 @@ export async function planCellEditsToXlsx(
   if (workbookXml !== originalWorkbookXml) {
     pkg.write(workbookPath, workbookXml)
     touchedEntries.add(workbookPath)
+  }
+
+  // Slicers (PAR-203) run last: they bind to the final table parts and hook
+  // the workbook/worksheet extLsts, so they must come after the workbook
+  // write above (which flushes the pivot/calcPr rewrites).
+  if (slicerAdditions.length > 0) {
+    const resolvedSlicers = []
+    for (const slicer of slicerAdditions) {
+      resolvedSlicers.push({
+        worksheetPath:
+          additionPaths.get(slicer.sheetName) ??
+          (await resolveWorksheetPath(pkg, slicer.sheetName)),
+        tableName: slicer.tableName,
+        colId: slicer.colId,
+      })
+    }
+    await applySlicerAdditions(pkg, resolvedSlicers, touchedEntries)
   }
 
   return pkg.toPlan(touchedEntries)

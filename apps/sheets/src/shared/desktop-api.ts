@@ -132,6 +132,27 @@ const worksheetMetadataSchema = z
         })
         .strict(),
     ),
+    /// Table slicers of this sheet parsed from the slicer parts (PAR-203).
+    /// Optional for compatibility with an older sidecar binary.
+    slicers: z
+      .array(
+        z
+          .object({
+            /// slicer/@name — workbook-unique.
+            name: z.string().min(1).max(255),
+            /// slicer/@cache — the slicerCacheDefinition token.
+            cacheName: z.string().min(1).max(255),
+            /// slicer/@caption when present.
+            caption: z.string().max(255).optional(),
+            /// The bound table's displayName token.
+            tableName: z.string().min(1).max(255),
+            /// 1-based position in the table's tableColumns list.
+            column: z.number().int().min(1).max(16_384),
+          })
+          .strict(),
+      )
+      .max(100)
+      .optional(),
     comments: z.array(
       z
         .object({
@@ -1771,6 +1792,9 @@ export const workbookFilterStateSchema = z
       .nullable(),
     hiddenRows: z.array(z.number().int().nonnegative().max(1_048_575)).max(100_000),
     visibilityRange: cellAreaSchema,
+    /// Present when the filter belongs to a table: the criteria are written
+    /// into that table part's own autoFilter, not the worksheet.
+    tableName: z.string().min(1).max(255).optional(),
   })
   .strict()
 
@@ -2249,6 +2273,21 @@ export const workbookSaveRequestSchema = z
     tableAdditions: z.array(workbookTableAddSchema).max(50),
     /// Edits to tables already in the file: resize/rename/style/convert.
     tableEdits: z.array(workbookTableEditSchema).max(50).default([]),
+    /// Table slicers created this session (PAR-203): bound to a table column
+    /// that already exists in the file or is added in the same save.
+    slicerAdditions: z
+      .array(
+        z
+          .object({
+            sheetId: z.string().min(1),
+            tableName: z.string().min(1).max(255),
+            /// 0-based offset into the table's tableColumns list.
+            colId: z.number().int().min(0).max(16_383),
+          })
+          .strict(),
+      )
+      .max(50)
+      .default([]),
     pivotAdditions: z.array(workbookPivotAddSchema).max(20),
     sheetOps: z.array(workbookSheetOpSchema).max(100),
     /// Final tab order (Univer sheet ids); required with any sheet op.
