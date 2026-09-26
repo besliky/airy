@@ -28,6 +28,7 @@ import {
   checkSaveStaleness,
   configuredDefaultSaveDir,
   contextMenuLabels,
+  encodeTextAsEncoding,
   fetchRemoteImage,
   forgetRendererFileAccess,
   forgetWitnessedDrops,
@@ -61,6 +62,7 @@ import {
   readRememberedFileEncoding,
   rememberFileEncoding,
 } from './encoding-memory'
+import { syncCharsetDeclaration } from './charset-declaration'
 import { readEditorPrefs, writeEditorPrefs } from './editor-prefs'
 import type { EditorPrefsPatch } from './editor-prefs'
 import {
@@ -1324,8 +1326,38 @@ export function requestHtmlSave(contents: WebContents, mode: SaveMode): Promise<
   })
 }
 
-async function writeTextAtomic(path: string, text: string): Promise<void> {
-  await atomicWriteFile(path, Buffer.from(text, 'utf8'))
+/**
+ * The bytes a save writes for `text` into `target`, plus the charset those
+ * bytes actually use. The file's remembered charset when one is pinned and
+ * the text fits it (BUG-1782 — the write used to be Buffer.from-utf8
+ * unconditionally, silently transcoding pinned files while the pick kept
+ * claiming otherwise), UTF-8 otherwise. A text the pinned charset cannot
+ * represent falls back to a lossless UTF-8 write and the now-false pick is
+ * dropped, so the reopen auto-detects the file the way it actually is; the
+ * returned charset is the truth about the bytes either way, and the
+ * <meta charset> declaration is synced to it before encoding — a stale claim
+ * would make browsers decode the saved file as mojibake.
+ */
+async function encodeForSave(
+  text: string,
+  target: string,
+): Promise<{ bytes: Buffer; encoding: string }> {
+  const remembered = readRememberedFileEncoding(appSettingsPath(), target)
+  const encoding = remembered ?? 'utf-8'
+  const synced = syncCharsetDeclaration(text, encoding)
+  const bytes = encodeTextAsEncoding(synced.text, encoding)
+  if (bytes) return { bytes, encoding }
+  // the pinned charset cannot represent the text (a CJK ideograph in a
+  // windows-1251 file, a gb18030 char only reachable through the four-byte
+  // form): stay lossless as UTF-8, drop the now-false pick and re-sync the
+  // declaration, which cannot fail — utf-8 encodes everything
+  if (remembered) {
+    await forgetFileEncoding(appSettingsPath(), target).catch(() => {
+      // best-effort: the write below still produced a correct UTF-8 file
+    })
+  }
+  const fallback = syncCharsetDeclaration(text, 'utf-8')
+  return { bytes: Buffer.from(fallback.text, 'utf8'), encoding: 'utf-8' }
 }
 
 type ExternalChangeChoice = 'saveAs' | 'overwrite' | 'cancel'
@@ -1565,6 +1597,16 @@ function registerHtmlIpc(): void {
     },
   )
 
+  // BUG-1782: the status-bar picker shows the persisted pick (the charset the
+  // open decodes with and the save writes in), not a session-local 'auto' that
+  // would mask an active override — read-only, granted paths only.
+  ipcMain.handle(HTML_CHANNELS.getEncoding, (e, path: unknown): string | null => {
+    if (typeof path !== 'string' || !allowedByWc.get(e.sender.id)?.has(path)) {
+      throw new Error('html: path not granted to this view')
+    }
+    return readRememberedFileEncoding(appSettingsPath(), path) ?? null
+  })
+
   // UX-1704: the source editor's view preferences (word wrap, split
   // scroll-sync) persist workspace-wide in app-settings.json through the
   // single-writer queue (PR #108 discipline) — a toggle write re-reads inside
@@ -1665,8 +1707,9 @@ function registerHtmlIpc(): void {
             : null
         const textToWrite = prepared?.text ?? request.text
         const savedImageSources = prepared?.imageSources ?? imageSources
+        const { bytes: bytesToWrite } = await encodeForSave(textToWrite, target)
         try {
-          await writeTextAtomic(target, textToWrite)
+          await atomicWriteFile(target, bytesToWrite)
         } catch (error) {
           if (prepared) await rollbackPreparedSaveAsAssets(prepared).catch(() => {})
           throw error

@@ -25,7 +25,7 @@ import type { ComputedSnapshot, ElementRect, FromInspector } from './preview/ins
 import inspectorSource from './preview/inspector.js?raw'
 import { AiPanel, AiryMark, type AiPreset, type HtmlAiDeps } from './ai/AiPanel'
 import { AiAskPopover, type AnchorRect, type AskMode } from './components/AiAskPopover'
-import { EncodingPicker, type EncodingPick } from './components/EncodingPicker'
+import { EncodingPicker, asEncodingPick, type EncodingPick } from './components/EncodingPicker'
 import {
   EDIT_QUEUE_MAX,
   buildSelectionInstruction,
@@ -164,8 +164,9 @@ export default function App() {
   )
   const [panelDismissedSid, setPanelDismissedSid] = useState<number | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  // UX-1696: the encoding override picked in this session ('auto' until then;
-  // a pick persisted by an earlier session still decodes the file at open)
+  // UX-1696 + BUG-1782: the status-bar encoding value mirrors the persisted
+  // pick for the open file (an override from an earlier session is visible,
+  // not masked); 'auto' only when nothing is stored for the path
   const [encodingPick, setEncodingPick] = useState<EncodingPick>('auto')
   // UX-1704 editor view prefs; hydrated from the workspace settings before the
   // document is ready (defaults keep the pre-toggle behavior: wrap on, sync off)
@@ -267,6 +268,14 @@ export default function App() {
             : Promise.resolve(null),
         ])
         const opened = pending ? await window.htmlApi.readFile(pending) : null
+        // BUG-1782: the picker mirrors the persisted pick — the charset this
+        // read decoded with and the charset a save will write — instead of a
+        // session-local 'auto' that hides an override an earlier session made
+        const remembered = pending
+          ? await window.htmlApi.getEncoding(pending).catch(() => null)
+          : null
+        if (cancelled) return
+        setEncodingPick(asEncodingPick(remembered))
         const raw = opened?.text ?? ''
         const recovered = opened?.recovered === true
         if (cancelled) return
@@ -1172,6 +1181,11 @@ export default function App() {
           // edits that landed during the write keep the document dirty
           setSaveState(textRef.current === textAtSave ? 'saved' : 'idle')
           if (textRef.current !== textAtSave) window.htmlApi.setDirty(true)
+          // BUG-1782: re-sync the picker from the persisted truth — a Save As
+          // onto a fresh path has no pick (Auto), and a save whose text could
+          // not be written in the pinned charset dropped that pick
+          const remembered = await window.htmlApi.getEncoding(result.path).catch(() => null)
+          setEncodingPick(asEncodingPick(remembered))
           return true
         }
         setSaveState(result.ok ? 'idle' : 'failed')
