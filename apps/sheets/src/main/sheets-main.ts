@@ -4066,6 +4066,7 @@ async function writeWorkbookTo(
     ...(edit.resize === undefined ? {} : { resize: edit.resize }),
     ...(edit.style === undefined ? {} : { style: edit.style }),
     ...(edit.convertToRange === undefined ? {} : { convertToRange: edit.convertToRange }),
+    ...(edit.stripeFill === undefined ? {} : { stripeFill: edit.stripeFill }),
   }))
   // Table slicers (PAR-203): sheetId → sheet name; the gateway validates the
   // table binding against the package.

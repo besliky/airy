@@ -82,6 +82,16 @@ export class StylesheetEditor {
     return internElement(this.dxfs, dxfXml)
   }
 
+  /// True when the format references a solid pattern fill — the cell's own
+  /// background, which wins over a baked table stripe.
+  xfHasOwnFill(xfIndex: number): boolean {
+    const xf = this.cellXfs[xfIndex]
+    if (xf === undefined) return false
+    const fillId = Number(readAttribute(xf, 'fillId') ?? 0)
+    const fill = this.fills[fillId]
+    return fill !== undefined && /patternType="solid"/.test(fill)
+  }
+
   /// Returns the cellXfs index of a format equal to the base format with the
   /// delta applied, appending new numFmt/font/fill/xf entries as needed.
   resolveStyle(baseXfIndex: number, delta: WorkbookStyleEdit): number {

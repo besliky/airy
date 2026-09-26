@@ -224,9 +224,12 @@ function findSelectorEnd(text: string, openIndex: number): number | null {
   return null
 }
 
+type RefBand = 'all' | 'data' | 'headers' | 'totals' | 'thisRow'
+
 interface RefSelection {
-  /// Row band selector.
-  readonly band: 'all' | 'data' | 'headers' | 'totals' | 'thisRow'
+  /// Row bands the selector unions: a single band for plain selectors, or
+  /// several special items ("[[#Data],[#Totals],[Col]]").
+  readonly bands: readonly RefBand[]
   /// Column span resolved from names; null = all table columns.
   readonly startColumn: number | null
   readonly endColumn: number | null
@@ -280,24 +283,28 @@ function parseRefSelector(
   if (depth !== 0 || tokens.length === 0) return null
 
   const decoded = tokens.map(decodeRefToken)
-  const keyword = decoded.find((entry) => /^#\w/i.test(entry.trim()))
+  // Every special item in the group unions its band ("[[#Data],[#Totals],[Col]]"
+  // spans data plus totals); Excel's Convert to Range folds contiguous bands
+  // into one A1 range.
+  const bands = new Set<RefBand>()
+  for (const entry of decoded) {
+    const value = entry.trim().toLowerCase()
+    if (value === '#all') bands.add('all')
+    else if (value === '#headers') bands.add('headers')
+    else if (value === '#data') bands.add('data')
+    else if (value === '#totals') bands.add('totals')
+    else if (value === '#this row') bands.add('thisRow')
+  }
   // " [@Col]" is the legacy spelling of "[[#This Row],[Col]]".
-  const hadAt = decoded.some((entry) => entry.trim().startsWith('@'))
-  const band = (() => {
-    const value = (keyword ?? '').trim().toLowerCase()
-    if (value === '#all') return 'all' as const
-    if (value === '#headers') return 'headers' as const
-    if (value === '#totals') return 'totals' as const
-    if (value === '#this row') return 'thisRow' as const
-    if (hadAt && keyword === undefined) return 'thisRow' as const
-    return 'data' as const
-  })()
+  if (bands.size === 0) {
+    bands.add(decoded.some((entry) => entry.trim().startsWith('@')) ? 'thisRow' : 'data')
+  }
   const columnTokens = decoded
     .filter((entry) => !/^#\w/i.test(entry.trim()))
     .map((entry) => entry.trim().replace(/^@/, ''))
     .filter((entry) => entry !== '')
   if (columnTokens.length === 0) {
-    return { selection: { band, startColumn: null, endColumn: null }, end: index }
+    return { selection: { bands: [...bands], startColumn: null, endColumn: null }, end: index }
   }
   const indexes: number[] = []
   for (const columnToken of columnTokens) {
@@ -309,22 +316,48 @@ function parseRefSelector(
     }
   }
   return {
-    selection: { band, startColumn: Math.min(...indexes), endColumn: Math.max(...indexes) },
+    selection: {
+      bands: [...bands],
+      startColumn: Math.min(...indexes),
+      endColumn: Math.max(...indexes),
+    },
     end: index,
   }
 }
 
-/// Resolves a selection to an absolute 0-based row range, or null when the
-/// band is empty (totals without a totals row) or "this row" falls outside
-/// the data body.
+/// Resolves a selection to an absolute 0-based row range, or null when a
+/// selected band is empty (totals without a totals row), "this row" falls
+/// outside the data body, or the union has a gap (headers and totals without
+/// data) — such unions have no single A1 equivalent.
 function selectionRows(
   selection: RefSelection,
   table: TableRefGeometry,
   formulaRow: number,
 ): { start: number; end: number } | null {
+  const ranges: { start: number; end: number }[] = []
+  for (const band of selection.bands) {
+    const rows = singleBandRows(band, table, formulaRow)
+    if (rows === null) return null
+    ranges.push(rows)
+  }
+  ranges.sort((a, b) => a.start - b.start || a.end - b.end)
+  let end = ranges[0]!.end
+  for (const range of ranges.slice(1)) {
+    if (range.start > end + 1) return null
+    end = Math.max(end, range.end)
+  }
+  return { start: ranges[0]!.start, end }
+}
+
+/// Row range of one band, or null when the band resolves to nothing.
+function singleBandRows(
+  band: RefBand,
+  table: TableRefGeometry,
+  formulaRow: number,
+): { start: number; end: number } | null {
   const headerEnd = table.startRow + table.headerRowCount - 1
   const totalsStart = table.endRow - table.totalsRowCount + 1
-  switch (selection.band) {
+  switch (band) {
     case 'all':
       return { start: table.startRow, end: table.endRow }
     case 'headers':
@@ -443,7 +476,7 @@ export function tableRefsToA1InFormulaText(
           selector === null ? (findSelectorEnd(text, openIndex) ?? openIndex) : selector.end
       } else {
         const rows = selectionRows(
-          { band: 'data', startColumn: null, endColumn: null },
+          { bands: ['data'], startColumn: null, endColumn: null },
           table.geometry,
           formulaRow,
         )
