@@ -6,7 +6,7 @@ import {
   type OpentypeFontLike,
   type RunStyle,
 } from '../src/metrics'
-import { DEFAULT_INSETS_EMU, layoutText } from '../src/text-layout'
+import { DEFAULT_INSETS_EMU, layoutText, runDrawsRtl } from '../src/text-layout'
 import { makeViewport } from '../src/coords'
 import { DEFAULT_BODY_INSETS, type Paragraph, type TextBody } from '@airy-office/pptx-engine'
 
@@ -1839,3 +1839,85 @@ describe('latinOnly substitution hint', () => {
     ).toBe(true)
   })
 })
+
+describe('BUG-1765 run direction from strong bidi characters', () => {
+  // The audit vector: emoji (neutral) + Cyrillic + CJK in one run of an LTR deck.
+  // No run may carry the rtl stamp — neutrals must not flip LTR text.
+  it('audit vector "Mixed 🚀тест 中文 end": no run draws rtl', () => {
+    const laid = layoutText({
+      body: body({
+        paragraphs: [{ runs: [{ text: 'Mixed 🚀тест 中文 end', fontSize: 36 }], rtl: false }],
+      }),
+      boxWidthPx: 2000,
+      boxHeightPx: 200,
+      metrics: new HeuristicMetrics(),
+      vp,
+    })
+    const runs = laid.lines.flatMap((l) => l.runs)
+    expect(runs.map((r) => r.text).join('')).toBe('Mixed 🚀тест 中文 end')
+    expect(runs.every((r) => !r.rtl)).toBe(true)
+  })
+
+  it('pure LTR + Cyrillic: no rtl at any level', () => {
+    expect(runDrawsRtl('Hello', 0)).toBe(false)
+    expect(runDrawsRtl('привет', 0)).toBe(false)
+    expect(runDrawsRtl('привет', undefined)).toBe(false)
+  })
+
+  it('strong RTL text draws rtl at an odd level', () => {
+    expect(runDrawsRtl('\u0633\u0644\u0627\u0645', 1)).toBe(true) // سلام
+    expect(runDrawsRtl('\u05e9\u05dc\u05d5\u05dd', 1)).toBe(true) // שלום
+    // Latin mixed into the same RTL word keeps the RTL base (levels 1..2 word)
+    expect(runDrawsRtl('abc\u0633\u0644\u0627\u0645', 1)).toBe(true)
+  })
+
+  it('emoji-only run: neutral level stamp keeps rtl (mirroring parity), LTR text never flips', () => {
+    // Neutral-only run between RTL words: keeps today's direction stamp
+    expect(runDrawsRtl('🚀', 1)).toBe(true)
+    expect(runDrawsRtl('  ', 1)).toBe(true)
+    // The flip guard: strong-LTR text mixed with neutrals never draws rtl,
+    // even if a neutral prefix drags the token to an odd level
+    expect(runDrawsRtl('🚀тест', 1)).toBe(false)
+    expect(runDrawsRtl('🚀тест 中文', 1)).toBe(false)
+  })
+
+  it('layout through layoutText: an all-RTL line stamps rtl; the mixed LTR deck never does', () => {
+    const rtlLine = layoutText({
+      body: body({
+        paragraphs: [
+          {
+            runs: [
+              { text: '\u0633\u0644\u0627\u0645 🚀 \u0639\u0644\u064a\u0643\u0645', fontSize: 18 },
+            ],
+            rtl: true,
+          },
+        ],
+      }),
+      boxWidthPx: 2000,
+      boxHeightPx: 200,
+      metrics: new HeuristicMetrics(),
+      vp,
+    }).lines[0]!
+    // Arabic words land at the odd base level (rtl stamp); the emoji neutral
+    // resolves even (UAX#9) and draws without rtl — direction-invariant glyphs
+    const arabic = rtlLine.runs.filter((r) => RTL_TEST_RE.test(r.text))
+    expect(arabic.length).toBeGreaterThan(0)
+    expect(arabic.every((r) => r.rtl === true)).toBe(true)
+    const emoji = rtlLine.runs.filter((r) => r.text.includes('🚀'))
+    expect(emoji.length).toBeGreaterThan(0)
+    expect(emoji.every((r) => !r.rtl)).toBe(true)
+    const ltrDeck = layoutText({
+      body: body({
+        paragraphs: [{ runs: [{ text: 'Mixed 🚀тест 中文 end', fontSize: 18 }] }],
+      }),
+      boxWidthPx: 2000,
+      boxHeightPx: 200,
+      metrics: new HeuristicMetrics(),
+      vp,
+    }).lines[0]!
+    expect(ltrDeck.runs.every((r) => !r.rtl)).toBe(true)
+  })
+})
+
+// Arabic/Hebrew range probe shared by the BUG-1765 assertions above
+const RTL_TEST_RE = /[\u0590-\u08ff]/
