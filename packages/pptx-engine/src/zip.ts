@@ -90,6 +90,13 @@ export class PackageArchive {
     private readonly zip: JSZip,
     /** Original bytes of every entry, keyed by path inside the zip */
     readonly entries: Map<string, Uint8Array>,
+    /**
+     * Original last-modification timestamp of every entry, keyed by path. buildZip
+     * writes these back on save: JSZip would otherwise stamp every header with the
+     * wall clock, so two saves of the same deck could disagree byte-for-byte
+     * (TEST-1747). Entries added after open have no date here.
+     */
+    readonly dates: Map<string, Date>,
     readonly originalHash: string,
   ) {}
 
@@ -101,13 +108,15 @@ export class PackageArchive {
     const zip = await JSZip.loadAsync(bytes)
     assertZipWithinLimits(zip)
     const entries = new Map<string, Uint8Array>()
+    const dates = new Map<string, Date>()
     const names = Object.keys(zip.files)
     for (const name of names) {
       const file = zip.files[name]
       if (file.dir) continue
       entries.set(name, await file.async('uint8array'))
+      dates.set(name, file.date)
     }
-    return new PackageArchive(zip, entries, originalHash)
+    return new PackageArchive(zip, entries, dates, originalHash)
   }
 
   has(path: string): boolean {

@@ -4,7 +4,9 @@
  * per-entry and emitted data descriptors). Pins the container contract:
  * no general-purpose bit 3, local headers carry real crc/sizes and agree with the
  * central directory, no trailing data-descriptor signatures — and the streamed file
- * stays byte-identical to the in-memory savePptx output.
+ * stays byte-identical to the in-memory savePptx output. Repeated saves are
+ * byte-identical too: entry timestamps round-trip from the source package instead
+ * of being stamped with the wall clock (TEST-1747).
  */
 import { describe, it, expect } from 'vitest'
 import { mkdtempSync, readFileSync } from 'node:fs'
@@ -46,6 +48,24 @@ describe('savePptxToFile zip container (BUG-1671)', () => {
     const fromFile = readFileSync(target)
     const fromMemory = Buffer.from(await savePptx(await openPptx(fx('01_standard_business.pptx'))))
     expect(Buffer.compare(fromFile, fromMemory)).toBe(0)
+  })
+
+  it('is deterministic across repeated saves: entry stamps come from the source, not the wall clock (TEST-1747)', async () => {
+    const fixture = fx('01_standard_business.pptx')
+    const first = Buffer.from(await savePptx(await openPptx(fixture)))
+    const second = Buffer.from(await savePptx(await openPptx(fixture)))
+    expect(Buffer.compare(first, second)).toBe(0)
+
+    // The deterministic regression pin for the byte compare above: JSZip's default
+    // stamps every zip header with `new Date()`, so two saves landing on opposite
+    // sides of a 2-second DOS-tick boundary flaked the byte-identity check.
+    const source = await JSZip.loadAsync(fixture)
+    const saved = await JSZip.loadAsync(first)
+    for (const name of Object.keys(source.files)) {
+      const sourceEntry = source.files[name]!
+      const savedEntry = saved.files[name]!
+      expect(savedEntry.date.getTime(), name).toBe(sourceEntry.date.getTime())
+    }
   })
 
   it('keeps the container strict after a content edit (the Ctrl+S path)', async () => {

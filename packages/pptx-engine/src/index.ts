@@ -803,6 +803,14 @@ export function commitSaved(opened: OpenedPptx): void {
  */
 const COMPRESSED_EXTENSIONS = new Set(['xml', 'rels'])
 
+/**
+ * Timestamp for parts added after open (inserted media, generated slides) and for
+ * directory entries — the deterministic stand-in that keeps repeated saves of the
+ * same deck byte-identical (TEST-1747). Pinned via Date.UTC because JSZip encodes
+ * zip timestamps through getUTC*, and DOS dates cannot go below 1980.
+ */
+const FIXED_PART_DATE = new Date(Date.UTC(1980, 0, 1, 0, 0, 0))
+
 function slideIsDirty(s: Slide): boolean {
   return (
     !!s.structureDirty ||
@@ -829,14 +837,33 @@ function buildZip(opened: OpenedPptx): JSZip {
   }
 
   const zip = new JSZip()
+  // Save determinism (TEST-1747): JSZip stamps every entry — and the directory
+  // entries it silently wraps around each file — with `new Date()` unless told
+  // otherwise, so two saves of the same deck straddling a 2-second DOS-tick
+  // boundary came out byte-different. Source parts write back their original
+  // timestamp; parts born in-model and directory entries get a fixed DOS-epoch
+  // stamp (DOS dates cannot go below 1980, and JSZip encodes in UTC).
+  const writtenDirs = new Set<string>()
   for (const [path, data] of archive.entries) {
-    const slide = dirtyByPath.get(path)
-    if (slide) {
-      zip.file(path, patchSlideXml(slide))
-      continue
+    const date = archive.dates.get(path) ?? FIXED_PART_DATE
+    const segments = path.split('/')
+    for (let depth = 1; depth < segments.length; depth++) {
+      const dir = `${segments.slice(0, depth).join('/')}/`
+      if (writtenDirs.has(dir)) continue
+      writtenDirs.add(dir)
+      zip.file(dir, null, { dir: true, date: FIXED_PART_DATE, createFolders: false })
     }
     const ext = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
-    zip.file(path, data, COMPRESSED_EXTENSIONS.has(ext) ? {} : { compression: 'STORE' })
+    const slide = dirtyByPath.get(path)
+    if (slide) {
+      zip.file(path, patchSlideXml(slide), { date, createFolders: false })
+      continue
+    }
+    zip.file(path, data, {
+      ...(COMPRESSED_EXTENSIONS.has(ext) ? {} : { compression: 'STORE' }),
+      date,
+      createFolders: false,
+    })
   }
   return zip
 }
