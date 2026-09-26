@@ -191,8 +191,12 @@ export function collectTableFormulaJobs(editor: Editor): FieldCacheJob[] {
       if (!n.isText) return
       const mark = n.marks.find((m: PmMark) => m.type.name === 'tableFormula')
       if (!mark) return
+      const instr = String(mark.attrs.instr)
+      // a degenerate field without an instruction keeps its cached text: F9
+      // must not write Word's "!Syntax Error" over it (BUG-1758)
+      if (!instr.trim()) return
       const abs = cell.pos + 1 + off
-      const next = evaluateFormulaInGrid(String(mark.attrs.instr), gridOf(grid), cell.row, cell.col)
+      const next = evaluateFormulaInGrid(instr, gridOf(grid), cell.row, cell.col)
       if (next !== n.text)
         jobs.push({ from: abs, to: abs + n.nodeSize, text: next, marks: n.marks })
     })
@@ -263,6 +267,8 @@ function refreshNestedCellFormulas(
       let paraChanged = false
       const runs = para.runs.map((run) => {
         if (run.formulaField === undefined) return run
+        // a degenerate field without an instruction keeps its cached text (BUG-1758)
+        if (!String(run.formulaField).trim()) return run
         const value = evaluateFormulaInGrid(String(run.formulaField), grid, row, col)
         if (value === run.text) return run
         paraChanged = true
@@ -276,9 +282,7 @@ function refreshNestedCellFormulas(
     if (changed) {
       // keep the plain-text cache in step: the save diff compares cell paras
       const paras = cell.paras.map((text, p) =>
-        richParas[p] === cell.richParas![p]
-          ? text
-          : richParas[p].runs.map((r) => r.text).join(''),
+        richParas[p] === cell.richParas![p] ? text : richParas[p].runs.map((r) => r.text).join(''),
       )
       next = { ...cell, paras, richParas }
     }

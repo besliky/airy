@@ -278,7 +278,17 @@ export const TableFormulaMark = Mark.create({
     return { instr: { default: '' } }
   },
   parseHTML() {
-    return [{ tag: 'span[data-table-formula]' }]
+    return [
+      {
+        tag: 'span[data-table-formula]',
+        // clipboard round-trip: the copy side renders instr into the data
+        // attribute; without getAttrs a paste re-created the mark with the
+        // default empty instruction and F9 degraded to "!Syntax Error" (BUG-1758)
+        getAttrs: (el) => ({
+          instr: (el as HTMLElement).getAttribute('data-table-formula') ?? '',
+        }),
+      },
+    ]
   },
   renderHTML({ mark }) {
     return [

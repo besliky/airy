@@ -1,4 +1,5 @@
 import { TextSelection } from '@tiptap/pm/state'
+import { DOMSerializer, Fragment, type Node as PmModelNode } from '@tiptap/pm/model'
 import { parseDocx, type Block, type TableModel } from '@airy-office/docx-engine'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildDocx } from '../../../packages/docx-engine/tests/helpers/build-docx'
@@ -89,6 +90,14 @@ const TWO_LEVEL =
   '<w:tc><w:p><w:fldSimple w:instr="=SUM(ABOVE)"><w:r><w:t>5</w:t></w:r></w:fldSimple></w:p></w:tc></w:tr>' +
   '</w:tbl>'
 
+/** a different table shape for paste targets: 100 / 200 / empty formula slot */
+const DEST_TABLE =
+  '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+  '<w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid>' +
+  '<w:tr><w:tc><w:p><w:r><w:t>100</w:t></w:r></w:p></w:tc></w:tr>' +
+  '<w:tr><w:tc><w:p><w:r><w:t>200</w:t></w:r></w:p></w:tc></w:tr>' +
+  '<w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>'
+
 async function openDoc(bodyXml: string) {
   const source = await buildDocx({ bodyXml })
   const parsed = await parseDocx(source)
@@ -167,14 +176,14 @@ function nestedCacheTexts(editor: Editor): Array<{ text: string; instr: string }
 
 /** the first docNestedTable atom of the document */
 function nestedAtomOf(editor: Editor): { pos: number; model: TableModel } {
-  let found: { pos: number; model: TableModel } | null = null
+  const hits: Array<{ pos: number; model: TableModel }> = []
   editor.state.doc.descendants((node, pos) => {
-    if (!found && node.type.name === 'docNestedTable') {
-      found = { pos, model: node.attrs.model as TableModel }
+    if (!hits.length && node.type.name === 'docNestedTable') {
+      hits.push({ pos, model: node.attrs.model as TableModel })
     }
   })
-  expect(found).toBeTruthy()
-  return found as { pos: number; model: TableModel }
+  expect(hits).toHaveLength(1)
+  return hits[0]!
 }
 
 /** edit one nested-model cell's text the way the nested-table island commits it
@@ -201,6 +210,21 @@ function setNestedCellText(
   editor.view.dispatch(
     editor.state.tr.setNodeMarkup(atom.pos, undefined, { model: { ...target, rows } }),
   )
+}
+
+/** clipboard HTML for the (single) marked run, as the copy side renders it */
+function markedRunHtml(editor: Editor): string {
+  const marked: PmModelNode[] = []
+  editor.state.doc.descendants((node) => {
+    if (!marked.length && node.isText && node.marks.some((m) => m.type.name === 'tableFormula')) {
+      marked.push(node)
+    }
+  })
+  expect(marked).toHaveLength(1)
+  const dom = DOMSerializer.fromSchema(editor.schema).serializeFragment(Fragment.from(marked[0]!))
+  const div = document.createElement('div')
+  div.appendChild(dom)
+  return div.innerHTML
 }
 
 function savePlanTableXml(editor: Editor, blocks: Block[]) {
@@ -368,9 +392,7 @@ describe('table formula fields', () => {
     )
     const rows = atom.model.rows.map((r, ri) => {
       if (ri !== 0) return r
-      return r.map((c, ci) =>
-        ci === 1 ? { ...c, nestedTables: [{ ...l2, rows: l2Rows }] } : c,
-      )
+      return r.map((c, ci) => (ci === 1 ? { ...c, nestedTables: [{ ...l2, rows: l2Rows }] } : c))
     })
     editor.view.dispatch(
       editor.state.tr.setNodeMarkup(atom.pos, undefined, { model: { ...atom.model, rows } }),
@@ -395,5 +417,34 @@ describe('table formula fields', () => {
     expect((xml?.match(/<w:fldSimple w:instr="=SUM\(ABOVE\)">/g) ?? []).length).toBe(2)
     expect(xml).toContain('>10</w:t>') // inner cache recomputed
     expect(xml).not.toContain('99') // the stale inner cache is gone
+  })
+
+  it('paste between tables keeps the instruction and F9 recomputes at the new position (BUG-1758)', async () => {
+    const source = await openDoc(TABLE)
+    caretInCell(source.editor, '30')
+    insertCellFormula(source.editor, '=SUM(ABOVE)') // cache 30 in the source grid
+    const html = markedRunHtml(source.editor)
+    // paste into a cell of a DIFFERENT table whose column holds 100 + 200
+    const dest = await openDoc(DEST_TABLE)
+    caretInLastCell(dest.editor)
+    dest.editor.commands.insertContent(html)
+    // Word shows the copied cache until the field updates…
+    expect(formulaTextOf(dest.editor)).toEqual({ text: '30', instr: '=SUM(ABOVE)' })
+    // …then one F9 resolves the same instruction against the destination grid
+    const jobs = collectTableFormulaJobs(dest.editor)
+    expect(jobs).toEqual([expect.objectContaining({ text: '300' })])
+    applyFieldCaches(dest.editor, jobs)
+    expect(formulaTextOf(dest.editor)).toEqual({ text: '300', instr: '=SUM(ABOVE)' })
+  })
+
+  it('does not F9-write or save a degenerate empty-instruction field (BUG-1758)', async () => {
+    const { editor, parsed } = await openDoc(TABLE)
+    caretInLastCell(editor)
+    editor.commands.insertContent('<span data-table-formula="">300</span>')
+    // F9 leaves the cached text alone (no !Syntax Error rewrite)
+    expect(collectTableFormulaJobs(editor)).toEqual([])
+    const xml = savePlanTableXml(editor, parsed.blocks)
+    expect(xml).not.toContain('fldSimple')
+    expect(xml).toContain('>300</w:t>')
   })
 })
