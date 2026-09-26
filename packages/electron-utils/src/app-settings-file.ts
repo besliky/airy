@@ -195,7 +195,9 @@ export function recoverCorruptAppSettings(rawText: string): CorruptAppSettingsRe
   )
   if (completed) return { settings: completed, mode: 'truncated' }
   for (let i = scan.commaCuts.length - 1; i >= 0; i--) {
-    const head = text.slice(0, scan.commaCuts[i].index)
+    const cut = scan.commaCuts[i]
+    if (!cut) continue
+    const head = text.slice(0, cut.index)
     const repaired = parseSettingsText(`${head}${closersFor(scanText(head).openBrackets)}`)
     if (repaired) return { settings: repaired, mode: 'truncated' }
   }
