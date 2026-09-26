@@ -23,6 +23,15 @@
 //!   `normalize_escaped_brackets` rewrites the doubled form into it; left
 //!   alone the formula fails to parse and the unparsable-formula pin turns
 //!   the cell into a silent zero (BUG-1754).
+//!
+//! Defined names over structured references (`SalesTotal = SUM(
+//! Sales[Amount])`) are resolved by inlining the name's body into the cell
+//! formulas that use it (BUG-1753): IronCalc's importer re-parses
+//! defined-name formulas against an empty table set, and its defined-name
+//! parser only models cell/range references and LAMBDA definitions, so the
+//! name evaluates to #NAME? wherever a cell uses it. See
+//! `expand_defined_names_in_formula` for the Excel name-priority rules the
+//! inlining follows.
 
 use std::borrow::Cow;
 
@@ -415,6 +424,149 @@ pub(crate) fn has_structured_reference(formula: &str) -> bool {
     false
 }
 
+/// The workbook facts the defined-name inlining needs: structured-reference
+/// defined names as `(lowercased name, body)` pairs, plus the lowercased
+/// table names that shadow same-named tokens.
+pub(crate) struct SrefContext {
+    bodies: Vec<(String, String)>,
+    tables: Vec<String>,
+}
+
+impl SrefContext {
+    fn is_empty(&self) -> bool {
+        self.bodies.is_empty()
+    }
+}
+
+/// Collects the structured-reference defined names of a workbook. IronCalc's
+/// importer re-parses defined-name formulas against an empty table set and
+/// its defined-name parser only models plain cell/range references and
+/// LAMBDA definitions, so Excel's `SalesTotal = SUM(Sales[Amount])` —
+/// entirely valid there — evaluates to #NAME? wherever a cell uses the
+/// name.
+pub(crate) fn sref_context(model: &Model) -> SrefContext {
+    let tables = model
+        .workbook
+        .tables
+        .keys()
+        .map(|name| name.to_lowercase())
+        .collect();
+    let bodies = model
+        .workbook
+        .defined_names
+        .iter()
+        .filter(|defined_name| has_structured_reference(&defined_name.formula))
+        .map(|defined_name| {
+            (
+                defined_name.name.to_lowercase(),
+                defined_name.formula.trim_start_matches('=').to_string(),
+            )
+        })
+        .collect();
+    SrefContext { bodies, tables }
+}
+
+/// Replaces every use of a structured-reference defined name in a formula
+/// with its parenthesized body: `=SalesTotal*2` → `=(SUM(Sales[Amount]))*2`.
+///
+/// Excel keeps table names and defined names in one namespace and refuses
+/// duplicates, and the selector syntax (`Name[...]`) always means a table,
+/// so tokens followed by `[` never expand; a token that a loaded table
+/// shadows (third-party files can carry what Excel would reject) also stays
+/// with the native structured-reference resolution, which already handles
+/// the bare whole-table form. Tokens followed by `(` are calls and by `!`
+/// sheet qualifications; string literals are skipped. Bodies that reference
+/// further names resolve on the next engine pass only when the referenced
+/// name itself carries a structured reference.
+pub(crate) fn expand_defined_names_in_formula<'a>(
+    formula: &'a str,
+    context: &SrefContext,
+) -> Cow<'a, str> {
+    if context.bodies.is_empty() {
+        return Cow::Borrowed(formula);
+    }
+    let is_token_char = |ch: char| ch.is_alphanumeric() || matches!(ch, '_' | '\\' | '.');
+    let chars: Vec<char> = formula.chars().collect();
+    let mut out = String::with_capacity(formula.len());
+    let mut position = 0usize;
+    let mut in_string = false;
+    let mut rewritten = false;
+    while position < chars.len() {
+        let ch = chars[position];
+        if in_string {
+            out.push(ch);
+            if ch == '"' {
+                if chars.get(position + 1) == Some(&'"') {
+                    // "" is an escaped quote inside the literal.
+                    out.push('"');
+                    position += 1;
+                } else {
+                    in_string = false;
+                }
+            }
+            position += 1;
+            continue;
+        }
+        if ch == '"' {
+            in_string = true;
+            out.push(ch);
+            position += 1;
+            continue;
+        }
+        let token_start =
+            is_token_char(ch) && (position == 0 || !is_token_char(chars[position - 1]));
+        if token_start {
+            let mut end = position;
+            while end < chars.len() && is_token_char(chars[end]) {
+                end += 1;
+            }
+            let token: String = chars[position..end].iter().collect();
+            let lower = token.to_lowercase();
+            let shadowed = context.tables.iter().any(|name| *name == lower);
+            let body = context
+                .bodies
+                .iter()
+                .find(|(name, _)| *name == lower)
+                .map(|(_, body)| body.as_str());
+            if let Some(body) = body {
+                if !shadowed && !matches!(chars.get(end), Some('[') | Some('(') | Some('!')) {
+                    out.push('(');
+                    out.push_str(body);
+                    out.push(')');
+                    rewritten = true;
+                    position = end;
+                    continue;
+                }
+            }
+        }
+        out.push(ch);
+        position += 1;
+    }
+    if rewritten {
+        Cow::Owned(out)
+    } else {
+        Cow::Borrowed(formula)
+    }
+}
+
+/// The full structured-reference text preparation the engine channel runs
+/// before IronCalc parses a formula: defined names over structured refs are
+/// inlined (BUG-1753), the doubled `]]` column escape is rewritten into the
+/// `'` dialect (the `@` pass below relies on that order), and the `@`
+/// this-row shorthand is spelled out. All three rewrites are deterministic.
+pub(crate) fn prepare_sref_formula<'a>(context: &SrefContext, formula: &'a str) -> Cow<'a, str> {
+    match expand_defined_names_in_formula(formula, context) {
+        Cow::Borrowed(expanded) => match normalize_escaped_brackets(expanded) {
+            Cow::Borrowed(unescaped) => normalize_at_shorthand(unescaped),
+            Cow::Owned(unescaped) => Cow::Owned(normalize_at_shorthand(&unescaped).into_owned()),
+        },
+        Cow::Owned(expanded) => {
+            let unescaped = normalize_escaped_brackets(&expanded);
+            Cow::Owned(normalize_at_shorthand(&unescaped).into_owned())
+        }
+    }
+}
+
 /// Rewrites every plain formula cell of an imported IronCalc model whose
 /// stored text needs structured-reference preparation. Runs before
 /// `pin_unparsable_formulas` on the cold-import path, so formulas Excel
@@ -427,6 +579,7 @@ pub(crate) fn has_structured_reference(formula: &str) -> bool {
 /// their CSE/spill semantics. Only the resident compute model changes —
 /// never the file.
 pub(crate) fn normalize_model_structured_references(model: &mut Model) {
+    let context = sref_context(model);
     let mut rewrites: Vec<(u32, i32, i32, String)> = Vec::new();
     for (sheet_index, worksheet) in model.workbook.worksheets.iter().enumerate() {
         for (row, columns) in &worksheet.sheet_data {
@@ -440,18 +593,12 @@ pub(crate) fn normalize_model_structured_references(model: &mut Model) {
                 let Some(text) = worksheet.shared_formulas.get(*f as usize) else {
                     continue;
                 };
-                if !text.contains('[') && !text.contains('@') {
+                if !text.contains('[') && !text.contains('@') && context.is_empty() {
                     continue;
                 }
-                let unescaped = normalize_escaped_brackets(text);
-                let normalized = normalize_at_shorthand(&unescaped);
-                if matches!(
-                    (&unescaped, &normalized),
-                    (Cow::Borrowed(_), Cow::Borrowed(_))
-                ) {
-                    // Neither rewrite changed the stored text.
+                let Cow::Owned(normalized) = prepare_sref_formula(&context, text) else {
                     continue;
-                }
+                };
                 rewrites.push((sheet_index as u32, *row, *column, format!("={normalized}")));
             }
         }
@@ -642,9 +789,82 @@ mod tests {
         );
     }
 
+    // -- Defined-name inlining (BUG-1753) ------------------------------------
+
+    fn context_with(bodies: &[(&str, &str)], tables: &[&str]) -> SrefContext {
+        SrefContext {
+            bodies: bodies
+                .iter()
+                .map(|(name, body)| (name.to_lowercase(), body.to_string()))
+                .collect(),
+            tables: tables.iter().map(|name| name.to_lowercase()).collect(),
+        }
+    }
+
+    fn expand(formula: &str, context: &SrefContext) -> String {
+        expand_defined_names_in_formula(formula, context).into_owned()
+    }
+
+    #[test]
+    fn defined_name_bodies_are_inlined() {
+        let context = context_with(&[("salestotal", "SUM(Sales[Amount])")], &["Sales"]);
+        assert_eq!(
+            expand("=SalesTotal", &context),
+            "=(SUM(Sales[Amount]))".to_string()
+        );
+        assert_eq!(
+            expand("=SalesTotal*2+1", &context),
+            "=(SUM(Sales[Amount]))*2+1".to_string()
+        );
+        // Case-insensitive, but never a substring of a longer identifier.
+        assert_eq!(
+            expand("=salestotal+mySalesTotal", &context),
+            "=(SUM(Sales[Amount]))+mySalesTotal".to_string()
+        );
+    }
+
+    #[test]
+    fn selector_syntax_and_shadows_keep_the_table() {
+        let context = context_with(&[("sales", "SUM(Sales[Amount])")], &["Sales"]);
+        // `Sales[Amount]` is the table's structured reference, not the name.
+        assert_eq!(
+            expand("=SUM(Sales[Amount])", &context),
+            "=SUM(Sales[Amount])".to_string()
+        );
+        // A loaded table shadows a same-named defined name (Excel keeps the
+        // namespace duplicate-free; third-party files resolve to the table).
+        assert_eq!(expand("=Sales", &context), "=Sales".to_string());
+    }
+
+    #[test]
+    fn calls_sheets_and_strings_never_expand() {
+        let context = context_with(&[("mylambda", "LAMBDA(x,SUM(Sales[Amount]))")], &[]);
+        assert_eq!(expand("=MyLambda(3)", &context), "=MyLambda(3)".to_string());
+        let context = context_with(&[("sheetlike", "SUM(Sales[Amount])")], &[]);
+        assert_eq!(
+            expand("=SheetLike!A1+\"sheetlike\"", &context),
+            "=SheetLike!A1+\"sheetlike\"".to_string()
+        );
+    }
+
+    #[test]
+    fn full_preparation_chains_inlining_escapes_and_at() {
+        let context = context_with(&[("salestotal", "SUM(Sales[Amount])")], &["Sales"]);
+        assert_eq!(
+            prepare_sref_formula(&context, "=SalesTotal").into_owned(),
+            "=(SUM(Sales[Amount]))".to_string()
+        );
+        let context = context_with(&[], &["Tbl"]);
+        assert_eq!(
+            prepare_sref_formula(&context, "=SUM(Tbl[@[Odd]]Col]])").into_owned(),
+            "=SUM(Tbl[[#This Row],[Odd']Col]])".to_string()
+        );
+    }
+
     #[test]
     fn has_structured_reference_distinguishes_selectors_from_external_refs() {
         assert!(has_structured_reference("SUM(Sales[Amount])"));
+        assert!(has_structured_reference("SUM(Sales[Amount])+VAT"));
         assert!(!has_structured_reference("SUM(Sheet1!A1:A4)"));
         assert!(!has_structured_reference("[1]Sheet1!A1"));
         assert!(!has_structured_reference(
@@ -970,6 +1190,44 @@ mod tests {
             column,
             input: input.to_string(),
         }
+    }
+
+    /// BUG-1753: the defined name `SalesTotal = SUM(Sales[Amount])` (valid
+    /// Excel) must compute through the recalc channel like the same formula
+    /// typed directly, on the cold file path (Sheet2!D3) and the edit path.
+    #[test]
+    fn defined_name_over_a_structured_reference_computes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tables.xlsx");
+        write_bugfix_workbook(&path);
+        let mut cache = RecalcCache::new();
+        // Cold import: D2 carries the formula directly (control: 100), D3
+        // uses the defined name (Excel resolves it to 100 as well).
+        let cold = recalc_cells(
+            &mut cache,
+            &path,
+            &[],
+            &[read_cell("Sheet2", 1, 3), read_cell("Sheet2", 2, 3)],
+        )
+        .unwrap();
+        let number = |row: u32| {
+            cold.cells
+                .iter()
+                .find(|cell| cell.row == row)
+                .and_then(|cell| cell.number)
+        };
+        assert_eq!(number(1), Some(100.0), "direct formula control");
+        assert_eq!(number(2), Some(100.0), "defined name must not be #NAME?");
+        // Edit path: the same name typed into a cell computes too.
+        let typed = recalc_cells(
+            &mut cache,
+            &path,
+            &[sheet2_edit(5, 3, "=SalesTotal")],
+            &[read_cell("Sheet2", 5, 3)],
+        )
+        .unwrap();
+        assert_eq!(typed.cells[0].number, Some(100.0));
+        assert!(typed.cells[0].is_formula);
     }
 
     /// BUG-1754: the column `Odd]Col` is written with Excel's doubled-bracket
