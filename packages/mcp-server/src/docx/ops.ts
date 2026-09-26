@@ -11,7 +11,10 @@
 // byte-identical on save.
 import {
   mergePPrFormat,
+  patchTableCellTexts,
   type Block,
+  type CellParaPatch,
+  type CellTextsPatch,
   type GeneratedBlock,
   type ParaFormat,
   type Run,
@@ -507,6 +510,295 @@ function literalRanges(text: string, needle: string): FoldRange[] {
   return ranges
 }
 
+/** replace every occurrence of `find` in one run list, mutating the runs; returns the hit count */
+function replaceInRuns(runs: Run[], find: string, replace: string, matchCase: boolean): number {
+  let hits = 0
+  for (const run of runs) {
+    if (matchCase) {
+      if (!run.text.includes(find)) continue
+      hits += run.text.split(find).length - 1
+      run.text = run.text.split(find).join(replace)
+    } else {
+      // the shared fold-safe replace: lowered indices cannot slice the
+      // original (İ expands under toLowerCase, BUG-1101)
+      const outcome = replaceCaseInsensitive(run.text, find, replace)
+      if (outcome.count === 0) continue
+      hits += outcome.count
+      run.text = outcome.text
+    }
+  }
+  return hits
+}
+
+/** non-overlapping occurrence count of `find` in one text (no mutation) */
+function countOccurrences(text: string, find: string, matchCase: boolean): number {
+  if (find === '') return 0
+  return matchCase ? literalRanges(text, find).length : caseInsensitiveRanges(text, find).length
+}
+
+/** every paragraph text of a table model: direct cells first, nested tables depth-last */
+function tableParagraphTexts(model: TableModel): string[] {
+  const out: string[] = []
+  for (const row of model.rows) {
+    for (const cell of row) {
+      if (cell.gridGap) continue
+      out.push(...cell.paras)
+      for (const nested of cell.nestedTables ?? []) out.push(...tableParagraphTexts(nested))
+    }
+  }
+  return out
+}
+
+/** does any table cell paragraph contain `needle` (the target matcher cannot see table text) */
+function tableContainsText(
+  entry: Extract<SessionEntry, { kind: 'table' }>,
+  needle: string,
+  matchCase: boolean,
+): boolean {
+  const lowered = needle.toLowerCase()
+  return tableParagraphTexts(entry.model).some((text) =>
+    matchCase ? text.includes(needle) : text.toLowerCase().includes(lowered),
+  )
+}
+
+/** entries targeted by a findReplace target among the tables (containsText / blockIndexes) */
+function tableTargets(entries: SessionEntry[], target: Target, taken: Set<number>): number[] {
+  const out: number[] = []
+  const nodeType = target.nodeType === undefined ? undefined : normalizeNodeType(target.nodeType)
+  entries.forEach((entry, index) => {
+    if (entry.kind !== 'table' || taken.has(index)) return
+    if (target.blockIndexes && !target.blockIndexes.includes(index)) return
+    // a nodeType / headingLevel condition addresses text blocks only
+    if (nodeType !== undefined || target.headingLevel !== undefined) return
+    if (
+      target.containsText !== undefined &&
+      !tableContainsText(entry, target.containsText, target.matchCase !== false)
+    )
+      return
+    out.push(index)
+  })
+  return out
+}
+
+/**
+ * Top-level segments of `tag` between [from, to), depth-aware for nesting.
+ * Local mirror of the engine's internal xmlSegments (not exported) — the
+ * addressing below must agree with patchTableCellTexts exactly.
+ */
+function tableXmlSegments(
+  xml: string,
+  tag: string,
+  from: number,
+  to: number,
+): Array<{ start: number; end: number }> {
+  const openPrefix = `<${tag}`
+  const closeTag = `</${tag}>`
+  const segs: Array<{ start: number; end: number }> = []
+  let depth = 0
+  let segStart = -1
+  let i = from
+  while (i < to) {
+    const o = xml.indexOf(openPrefix, i)
+    const c = xml.indexOf(closeTag, i)
+    const hasOpen = o !== -1 && o < to
+    const hasClose = c !== -1 && c < to
+    if (!hasOpen && !hasClose) break
+    if (hasOpen && (!hasClose || o < c)) {
+      const after = xml.charAt(o + openPrefix.length)
+      if (after !== '>' && after !== ' ' && after !== '/') {
+        i = o + openPrefix.length // prefix of a longer tag (w:tr vs w:trPr)
+        continue
+      }
+      const gt = xml.indexOf('>', o)
+      if (gt !== -1 && xml.charAt(gt - 1) === '/') {
+        if (depth === 0) segs.push({ start: o, end: gt + 1 }) // self-closing
+        i = gt + 1
+        continue
+      }
+      if (depth === 0) segStart = o
+      depth++
+      i = o + openPrefix.length
+    } else if (depth === 0) {
+      break
+    } else {
+      depth--
+      if (depth === 0) segs.push({ start: segStart, end: c + closeTag.length })
+      if (depth < 0) break
+      i = c + closeTag.length
+    }
+  }
+  return segs
+}
+
+/** the declared nested-grid shape of CellTextsPatch (its cells are array-form only) */
+type NestedCellGrid = ReadonlyArray<
+  ReadonlyArray<readonly CellParaPatch[] | null | undefined> | null | undefined
+>
+
+/** outcome of replacing inside one table model (already a mutable clone) */
+interface TableReplaceOutcome {
+  /** occurrences actually replaced (model mutated accordingly) */
+  hits: number
+  /** occurrences found in content this op cannot edit safely — left untouched */
+  missed: number
+  /** sparse per-row patch grid for patchTableCellTexts; null when nothing replaced */
+  grid: CellTextsPatch[][] | null
+}
+
+/**
+ * Replace `find` with `replace` across a table's cell paragraphs, mutating the
+ * (cloned) model and returning the surgical patch grid for the table's XML.
+ *
+ * patchTableCellTexts addresses cells by document-order w:tr/w:tc indexes, so
+ * before patching, the model is checked 1:1 against the XML grid (BUG-1760's
+ * honesty guarantee): parse-time folds (gridGap placeholders, legacy hMerge
+ * merges, sdt-wrapped content) mark the table unverifiable and its matches are
+ * reported as missed instead of patched blind.
+ */
+function replaceTableModel(
+  model: TableModel,
+  xml: string,
+  find: string,
+  replace: string,
+  matchCase: boolean,
+): TableReplaceOutcome {
+  const countText = (texts: readonly string[]): number =>
+    texts.reduce((sum, text) => sum + countOccurrences(text, find, matchCase), 0)
+  const countModel = (m: TableModel): number => countText(tableParagraphTexts(m))
+
+  const miss = (missed: number): TableReplaceOutcome => ({ hits: 0, missed, grid: null })
+
+  const rowSegs = tableXmlSegments(xml, 'w:tr', 0, xml.length)
+  // gridGap placeholders and legacy hMerge folds break the 1:1 mapping; sdt
+  // content (childrenThroughSdt on the parse side) is invisible to the plain
+  // segment scan — none of it may be patched blind
+  if (
+    xml.includes('<w:sdt') ||
+    rowSegs.length !== model.rows.length ||
+    model.rows.some((row) => row.some((cell) => cell.gridGap))
+  ) {
+    return miss(countModel(model))
+  }
+
+  let hits = 0
+  let missed = 0
+  let gridUsed = false
+  const grid: CellTextsPatch[][] = model.rows.map(() => [])
+
+  model.rows.forEach((row, r) => {
+    const tcSegs = tableXmlSegments(xml, 'w:tc', rowSegs[r]!.start, rowSegs[r]!.end)
+    if (tcSegs.length !== row.length) {
+      missed += row.reduce(
+        (sum, cell) =>
+          sum +
+          countText(cell.paras) +
+          (cell.nestedTables ?? []).reduce(
+            (nestedSum, nestedModel) => nestedSum + countModel(nestedModel),
+            0,
+          ),
+        0,
+      )
+      return
+    }
+    row.forEach((cell, c) => {
+      const tcXml = xml.slice(tcSegs[c]!.start, tcSegs[c]!.end)
+      const openTag = /^<w:tc(?: [^>]*)?>/.exec(tcXml)?.[0] ?? ''
+      const tblSegs = openTag ? tableXmlSegments(tcXml, 'w:tbl', openTag.length, tcXml.length) : []
+      // the model's paragraph count comes from the cell's direct w:p children,
+      // so the XML scan must skip the nested-table regions to line up
+      const outside: Array<{ start: number; end: number }> = []
+      let cursor = openTag.length
+      for (const seg of tblSegs) {
+        if (seg.start > cursor) outside.push({ start: cursor, end: seg.start })
+        cursor = seg.end
+      }
+      if (cursor < tcXml.length) outside.push({ start: cursor, end: tcXml.length })
+      const pSegs = outside.flatMap((range) =>
+        tableXmlSegments(tcXml, 'w:p', range.start, range.end),
+      )
+      const paraCount = cell.paras.length
+      const nestedModels = cell.nestedTables ?? []
+      const modelAligned =
+        openTag !== '' &&
+        pSegs.length === paraCount &&
+        (cell.richParas === undefined || cell.richParas.length === paraCount)
+      if (!modelAligned) {
+        missed +=
+          countText(cell.paras) +
+          nestedModels.reduce((sum, nestedModel) => sum + countModel(nestedModel), 0)
+        return
+      }
+
+      // the engine refuses direct-cell patches whenever a nested table is
+      // present (patchCellXml bails; its nested form rewrites only the nested
+      // grids), so a nested-host cell's own text is always reported as missed
+      if (nestedModels.length > 0) {
+        missed += countText(cell.paras)
+        const nestedGrids: Array<NestedCellGrid | null> = []
+        let nestedChanged = false
+        nestedModels.forEach((nestedModel, n) => {
+          const seg = tblSegs[n]
+          if (seg === undefined) {
+            missed += countModel(nestedModel)
+            nestedGrids.push(null)
+            return
+          }
+          const outcome = replaceTableModel(
+            nestedModel,
+            tcXml.slice(seg.start, seg.end),
+            find,
+            replace,
+            matchCase,
+          )
+          hits += outcome.hits
+          missed += outcome.missed
+          // the engine type spells nested cells as array-form only, but
+          // patchNestedInCell re-dispatches object forms at runtime (its
+          // own call site casts the field), so deeper grids ride as-is
+          nestedGrids.push(outcome.grid as NestedCellGrid | null)
+          if (outcome.grid !== null) nestedChanged = true
+        })
+        if (nestedChanged) {
+          grid[r]![c] = { nested: nestedGrids }
+          gridUsed = true
+        }
+        return
+      }
+
+      const paraPatches: CellParaPatch[] = []
+      let cellChanged = false
+      for (let i = 0; i < paraCount; i++) {
+        const rich = cell.richParas?.[i]
+        if (rich !== undefined) {
+          const n = replaceInRuns(rich.runs, find, replace, matchCase)
+          if (n === 0) continue
+          hits += n
+          cellChanged = true
+          paraPatches[i] = { runs: rich.runs }
+          cell.paras[i] = rich.runs.map((run) => run.text).join('')
+        } else {
+          const text = cell.paras[i] ?? ''
+          const n = countOccurrences(text, find, matchCase)
+          if (n === 0) continue
+          hits += n
+          cellChanged = true
+          const next = matchCase
+            ? text.split(find).join(replace)
+            : replaceCaseInsensitive(text, find, replace).text
+          cell.paras[i] = next
+          paraPatches[i] = next
+        }
+      }
+      if (cellChanged) {
+        grid[r]![c] = paraPatches
+        gridUsed = true
+      }
+    })
+  })
+
+  return { hits, missed, grid: gridUsed ? grid : null }
+}
+
 // ---- numbering allocation (renderer allocateListNumId, headless variant) ----
 
 /** max numId across the document's numbering part and the pending additions */
@@ -809,27 +1101,59 @@ register({
     const find = op.find as string
     const replace = op.replace as string
     const matchCase = op.matchCase !== false
-    const { text, matched } = op.target
-      ? textIndexes(env, op.target)
-      : { text: allTextIndexes(env.entries), matched: env.entries.length }
+    let indexes: number[]
+    let matched: number
+    if (op.target !== undefined) {
+      const target = op.target as Target
+      // BUG-1760: tables hold text the shared matcher cannot see (their
+      // entryText is ''), so findReplace matches them separately — through
+      // containsText against the cell text, or an explicit blockIndex
+      const hit = matchTarget(env.entries, target)
+      indexes = [...hit, ...tableTargets(env.entries, target, new Set(hit))]
+      matched = indexes.length
+    } else {
+      indexes = env.entries.map((_, i) => i)
+      matched = env.entries.length
+    }
     let changed = 0
     let hits = 0
-    for (const index of text) {
-      const edit = editEntry(env.entries, index)
-      for (const run of edit.gen.runs ?? []) {
-        if (matchCase) {
-          if (!run.text.includes(find)) continue
-          hits += run.text.split(find).length - 1
-          run.text = run.text.split(find).join(replace)
-        } else {
-          // the shared fold-safe replace: lowered indices cannot slice the
-          // original (İ expands under toLowerCase, BUG-1101)
-          const outcome = replaceCaseInsensitive(run.text, find, replace)
-          if (outcome.count === 0) continue
-          hits += outcome.count
-          run.text = outcome.text
+    let missed = 0
+    for (const index of indexes) {
+      const entry = env.entries[index]!
+      // tables arrive as parsed originals (block.table + block.originalXml) or
+      // as inserted fragments ({ xml, model }); both hold editable cell text
+      const tableModel =
+        entry.kind === 'table'
+          ? entry.model
+          : entry.kind === 'original' && entry.block.type === 'table'
+            ? entry.block.table
+            : undefined
+      const tableXml =
+        entry.kind === 'table'
+          ? entry.xml
+          : entry.kind === 'original'
+            ? entry.block.originalXml
+            : null
+      if (tableModel !== undefined && tableXml !== null) {
+        // work on a clone and only then swap the entry: a later op's failure
+        // must not leave the shared table model half-edited (op atomicity)
+        const model = JSON.parse(JSON.stringify(tableModel)) as TableModel
+        const outcome = replaceTableModel(model, tableXml, find, replace, matchCase)
+        hits += outcome.hits
+        missed += outcome.missed
+        if (outcome.grid !== null) {
+          env.entries[index] = {
+            kind: 'table',
+            xml: patchTableCellTexts(tableXml, outcome.grid),
+            model,
+          }
+          changed++
         }
+        continue
       }
+      if (!TEXT_TYPES.has(entryType(entry))) continue
+      const edit = editEntry(env.entries, index)
+      hits += replaceInRuns(edit.gen.runs ?? [], find, replace, matchCase)
       if (edit.commit()) changed++
     }
     return {
@@ -838,6 +1162,16 @@ register({
       changed,
       skippedProtected: 0,
       detail: `${hits} replacement(s)`,
+      ...(missed > 0
+        ? {
+            warnings: [
+              `${missed} occurrence(s) matched inside table content this op cannot edit safely ` +
+                '(merged or placeholder table structure, or cells holding nested tables); ' +
+                'nothing was replaced there — rebuild such tables via insert_content/deleteBlocks ' +
+                'or edit them in the docs app',
+            ],
+          }
+        : {}),
     }
   },
 })

@@ -614,3 +614,114 @@ describe('XlsxSession journal + save matrix', () => {
     await expect(access(backing)).rejects.toThrow()
   })
 })
+
+// BUG-1761 (FM-7, the MCP twin of #230's recalc overlay): an edited save used
+// to keep the file's own formula caches — a formula-only book saved with no
+// <v> at all, a cached book kept stale numbers after its inputs changed, and
+// script readers (openpyxl data_only, pandas) silently read wrong values. The
+// save now evaluates the journal through the sidecar's recalc engine and
+// overlays the fresh results into <v>, degrading honestly when the engine is
+// unavailable.
+describe('save refreshes formula caches (BUG-1761)', () => {
+  interface FormulaHarness {
+    session: XlsxSession
+    io: ReturnType<typeof makeStubIo>
+    bookPath: string
+  }
+
+  async function formulaSession(
+    options: Parameters<typeof makeStubIo>[0] = {},
+  ): Promise<FormulaHarness> {
+    const bookPath = join(root, 'formula-wb.xlsx')
+    await writeFile(bookPath, 'stub-xlsx-bytes')
+    const io = makeStubIo({
+      formulaCells: [
+        { sheetId: 'sheet-0', row: 2, column: 0, value: 5 },
+        { sheetId: 'sheet-0', row: 0, column: 1, value: 50 },
+      ],
+      recalcCells: [
+        { sheet: 'Sheet1', row: 2, column: 0, number: 103, isFormula: true },
+        { sheet: 'Sheet1', row: 0, column: 1, number: 1030, isFormula: true },
+      ],
+      ...options,
+    })
+    const session = await XlsxSession.open(bookPath, root, io)
+    return { session, io, bookPath }
+  }
+
+  it('overlays recalculated values (not the file caches) into the save', async () => {
+    const { session, io } = await formulaSession()
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 100 }] })
+    const saved = await session.save(join(root, 'out.xlsx'))
+    expect(saved.warnings).toEqual([])
+
+    // the recalc request carried the journal edit as user input and read the
+    // formula cells 1x1 (A3 = row 2, col 0)
+    expect(io.recalcRequests).toHaveLength(1)
+    expect(io.recalcRequests[0]?.edits).toEqual([
+      { sheet: 'Sheet1', row: 0, column: 0, input: '100' },
+    ])
+    expect(io.recalcRequests[0]?.reads).toEqual([
+      { sheet: 'Sheet1', range: { startRow: 2, endRow: 2 } },
+      { sheet: 'Sheet1', range: { startRow: 0, endRow: 0 } },
+    ])
+
+    // the save gateway receives the fresh engine values — NOT the file's own
+    // stale caches (5/50); both non-journaled formula cells ride the overlay
+    expect(saveCalls[0]?.formulaValues).toEqual([
+      {
+        sheetName: 'Sheet1',
+        cells: [
+          { row: 2, column: 0, value: 103 },
+          { row: 0, column: 1, value: 1030 },
+        ],
+      },
+    ])
+  })
+
+  it('recalculates with the journal applied: a journaled formula is excluded', async () => {
+    const { session } = await formulaSession()
+    session.setCells({
+      sheet: 'Sheet1',
+      cells: [
+        { ref: 'A1', value: 100 },
+        { ref: 'B1', formula: 'A3*10' },
+      ],
+    })
+    await session.save(join(root, 'out.xlsx'))
+    // B1's own cache stays empty (the gateway writes formulas without <v>);
+    // overlaying an engine value there would freeze the OLD formula's result
+    expect(saveCalls[0]?.formulaValues).toEqual([
+      { sheetName: 'Sheet1', cells: [{ row: 2, column: 0, value: 103 }] },
+    ])
+  })
+
+  it('an engine failure degrades to an honest warning, never a failed save', async () => {
+    const { session, io } = await formulaSession({
+      recalcError: new Error('recalc_busy'),
+    })
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 100 }] })
+    const saved = await session.save(join(root, 'out.xlsx'))
+    expect(io.recalcRequests).toHaveLength(1)
+    expect(saveCalls[0]?.formulaValues).toEqual([])
+    expect(saved.warnings).toHaveLength(1)
+    expect(saved.warnings[0]).toContain('Formula caches were not refreshed')
+    expect(saved.warnings[0]).toContain('the formula engine was unavailable')
+  })
+
+  it('an incomplete formula index degrades with the reason named', async () => {
+    const { session } = await formulaSession({ formulaIndexingComplete: false })
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 100 }] })
+    const saved = await session.save(join(root, 'out.xlsx'))
+    expect(saved.warnings[0]).toContain('the sheet index was incomplete or truncated')
+  })
+
+  it('a zero-edit save pays no recalculation and stays byte-preserving', async () => {
+    const { session, io } = await formulaSession()
+    await session.save(join(root, 'out.xlsx'))
+    expect(io.calls.recalcCells).toHaveLength(0)
+    expect(io.calls.readFormulaCells).toHaveLength(0)
+    expect(saveCalls[0]?.formulaValues).toEqual([])
+    expect(saveCalls[0]?.edits).toEqual([])
+  })
+})

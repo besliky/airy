@@ -70,6 +70,15 @@ function addPinned(zip: JSZip, name: string, content: string): void {
 
 /** the representative test document: heading, styled paragraph, lists, table, tail */
 export async function buildFixtureDocx(): Promise<Uint8Array> {
+  return buildBodyDocx(BODY_XML)
+}
+
+/**
+ * Arbitrary-body fixture with the standard parts (styles + numbering from the
+ * representative document): lets a test spell exact table/paragraph XML for
+ * op-level edge cases without a dedicated builder per shape.
+ */
+export async function buildBodyDocx(bodyXml: string): Promise<Uint8Array> {
   const zip = new JSZip()
   addPinned(
     zip,
@@ -102,7 +111,7 @@ export async function buildFixtureDocx(): Promise<Uint8Array> {
   addPinned(
     zip,
     'word/document.xml',
-    `${XML_DECL}<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${BODY_XML}` +
+    `${XML_DECL}<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${bodyXml}` +
       '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
       '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>' +
       '</w:body></w:document>',

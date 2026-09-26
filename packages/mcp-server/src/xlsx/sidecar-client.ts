@@ -96,6 +96,24 @@ export interface XlsxIo {
     readonly sessionId: string
     readonly sheetId: string
   }): Promise<unknown>
+  recalcCells(input: {
+    readonly path: string
+    readonly edits: readonly {
+      readonly sheet: string
+      readonly row: number
+      readonly column: number
+      readonly input: string
+    }[]
+    readonly reads: readonly {
+      readonly sheet: string
+      readonly range: {
+        readonly startRow: number
+        readonly endRow: number
+        readonly startColumn: number
+        readonly endColumn: number
+      }
+    }[]
+  }): Promise<unknown>
   close(sessionId: string): Promise<void>
   convertWorkbook(input: { readonly path: string; readonly targetPath: string }): Promise<unknown>
   archiveManifest(path: string): Promise<unknown>
@@ -153,6 +171,29 @@ export class XlsxSidecarClient implements XlsxIo {
     readonly sheetId: string
   }): Promise<unknown> {
     return this.request({ command: 'read_formula_cells', ...input })
+  }
+
+  async recalcCells(input: {
+    readonly path: string
+    readonly edits: readonly {
+      readonly sheet: string
+      readonly row: number
+      readonly column: number
+      readonly input: string
+    }[]
+    readonly reads: readonly {
+      readonly sheet: string
+      readonly range: {
+        readonly startRow: number
+        readonly endRow: number
+        readonly startColumn: number
+        readonly endColumn: number
+      }
+    }[]
+  }): Promise<unknown> {
+    // the recalc worker runs the IronCalc import + evaluation off the request
+    // loop; a cold import alone can take seconds, so give it the archive budget
+    return this.request({ command: 'recalc_cells', ...input }, ARCHIVE_TIMEOUT_MS)
   }
 
   async close(sessionId: string): Promise<void> {

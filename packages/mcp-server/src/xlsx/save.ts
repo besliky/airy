@@ -18,7 +18,10 @@ export {
   saveWorkbookViaSidecar,
   SaveTargetExistsError,
 } from '../../../../apps/sheets/src/gateway/xlsx-package-io.js'
-export type { CellEdit } from '../../../../apps/sheets/src/gateway/xlsx-gateway.js'
+export type {
+  CellEdit,
+  SheetFormulaValues,
+} from '../../../../apps/sheets/src/gateway/xlsx-gateway.js'
 // Input schemas + types for agent-issued cell edits, straight from the save
 // gateway's shared contract so the tool-accepted shape cannot drift from what
 // the planner serializes (desktop-api is already part of the runtime bundle

@@ -36,6 +36,7 @@ import {
   SaveTargetExistsError,
   saveWorkbookViaSidecar,
   type CellEdit,
+  type SheetFormulaValues,
   type WorkbookRichRun,
   type WorkbookStyleEdit,
 } from './save.js'
@@ -47,6 +48,23 @@ import type { XlsxIo } from './sidecar-client.js'
 
 const READ_MAX_CHARS = 30_000
 const MAX_READ_CELLS = 20_000
+
+/**
+ * Formula-cache refresh on save (BUG-1761, the MCP twin of the sheets app's
+ * recalc overlay from #230): the sidecar's recalc read budget is 20k cells per
+ * request — the overlay chunks the formula cells into requests of at most that
+ * many 1x1 reads (the journal edits ride every request, so the resident model
+ * is reused after the first import).
+ */
+const MAX_RECALC_READ_CELLS = 20_000
+/**
+ * Recalculation imports the whole book into the engine; mirrors the sidecar's
+ * own speculative-work threshold (PREWARM_MAX_SOURCE_BYTES) so saving a
+ * mega-book never triggers a multi-gigabyte model import from a save.
+ */
+const RECALC_MAX_SOURCE_BYTES = 64_000_000
+/** the sidecar refuses recalc requests with more edits (MAX_RECALC_EDITS) */
+const MAX_RECALC_EDITS = 10_000
 
 export type WorkbookFormat = 'xlsx' | 'xlsm' | 'xls' | 'ods'
 
@@ -653,6 +671,15 @@ export class XlsxSession {
     // overwrite) replace by intent
     const replacement =
       options.overwrite === true || target === this.backingPath || this.savedTargets.has(target)
+    // BUG-1761: without this overlay an edited save keeps the file's own (or
+    // absent) formula caches — script readers (openpyxl data_only, pandas)
+    // silently read stale or missing numbers. The sidecar's recalc engine
+    // evaluates the journal edits and the results land in <v> via the same
+    // gateway overlay the sheets app saves through.
+    const { values: formulaValues, note: recalcNote } =
+      this.edits.length > 0
+        ? await this.recalculateFormulaCaches()
+        : { values: [] as SheetFormulaValues[], note: null as string | null }
     let result: Awaited<ReturnType<typeof saveWorkbookViaSidecar>>
     try {
       result = await saveWorkbookViaSidecar({
@@ -660,6 +687,7 @@ export class XlsxSession {
         sourcePath: this.backingPath,
         targetPath: target,
         edits: this.edits.map((edit) => ({ ...edit, cell: { ...edit.cell } })),
+        formulaValues,
         exclusiveTarget: !replacement,
       })
     } catch (e) {
@@ -685,13 +713,157 @@ export class XlsxSession {
       bytes: bytes?.size ?? 0,
       format: 'xlsx',
       unchanged,
-      warnings:
-        this.originPath !== null
+      warnings: [
+        ...(this.originPath !== null
           ? [
               `Saved as .xlsx; the original ${this.format === 'ods' ? '.ods' : '.xls'} file "${this.originPath}" was left untouched.`,
             ]
-          : [],
+          : []),
+        ...(recalcNote !== null
+          ? [
+              `Formula caches were not refreshed (${recalcNote}). The file keeps the ` +
+                'fullCalcOnLoad recalc flag, so spreadsheet apps recalculate on open, but script ' +
+                'readers (openpyxl data_only, pandas) may see stale cached values.',
+            ]
+          : []),
+      ],
       touchedEntries: [...result.touchedEntries],
+    }
+  }
+
+  /**
+   * Fresh cached values for every formula cell of the workbook, evaluated with
+   * the pending journal applied (BUG-1761). Best-effort by design: any engine
+   * or budget failure degrades to an empty overlay plus a reason for the save
+   * warning, never to a failed save.
+   *
+   * Only numeric results are overlaid: the recalc wire reports text results
+   * only through their formatted display string, and baking number formats
+   * into a cached <v> would corrupt the value (the fullCalcOnLoad flag stays
+   * the mitigation for those cells). Journaled cells are excluded — the
+   * journal wins on its own cells, same as the app's overlay.
+   */
+  private async recalculateFormulaCaches(): Promise<{
+    values: SheetFormulaValues[]
+    note: string | null
+  }> {
+    const degrade = (note: string): { values: SheetFormulaValues[]; note: string } => ({
+      values: [],
+      note,
+    })
+    const backing = await statOrNull(this.backingPath)
+    if (backing !== null && backing.size > RECALC_MAX_SOURCE_BYTES) {
+      return degrade('the workbook is above the recalculation engine size budget')
+    }
+
+    // every formula cell of the workbook, indexed by the sidecar
+    const formulaCells: Array<{ sheetName: string; row: number; column: number }> = []
+    for (const sheet of this.sheets) {
+      let raw: unknown
+      try {
+        raw = await this.io.readFormulaCells({ sessionId: this.sessionId, sheetId: sheet.id })
+      } catch {
+        return degrade('the formula-cell index was unavailable')
+      }
+      const result = asRecord(raw, 'formula-cells result')
+      if (
+        result.indexingComplete !== true ||
+        result.truncated === true ||
+        !Array.isArray(result.cells)
+      ) {
+        return degrade('the sheet index was incomplete or truncated')
+      }
+      for (const cellRaw of result.cells) {
+        const cell = asRecord(cellRaw, 'formula cell')
+        if (typeof cell.row === 'number' && typeof cell.column === 'number') {
+          formulaCells.push({ sheetName: sheet.name, row: cell.row, column: cell.column })
+        }
+      }
+    }
+    if (formulaCells.length === 0) return { values: [], note: null }
+
+    // the journal's content edits, as user input for the engine (a journaled
+    // formula goes in verbatim); cells the journal writes are excluded from
+    // the overlay below — the journal wins on its own cells
+    const contentEdits = this.edits.filter((edit) => edit.writeValue)
+    if (contentEdits.length > MAX_RECALC_EDITS) {
+      return degrade('too many pending edits for the recalculation engine budget')
+    }
+    const edits = contentEdits.map(
+      (
+        edit,
+      ): {
+        sheet: string
+        row: number
+        column: number
+        input: string
+      } => {
+        const value = edit.cell.value
+        const input =
+          edit.cell.formula !== undefined
+            ? edit.cell.formula
+            : value === null
+              ? ''
+              : typeof value === 'boolean'
+                ? value
+                  ? 'TRUE'
+                  : 'FALSE'
+                : String(value)
+        return { sheet: edit.sheetName, row: edit.row, column: edit.column, input }
+      },
+    )
+    const journaled = new Set(
+      contentEdits.map((edit) => `${edit.sheetName}!${String(edit.row)},${String(edit.column)}`),
+    )
+
+    // 1x1 reads over the formula cells, chunked under the engine's read budget
+    type OverlayCell = { row: number; column: number; value: number }
+    const overlay = new Map<string, OverlayCell[]>()
+    for (let start = 0; start < formulaCells.length; start += MAX_RECALC_READ_CELLS) {
+      const chunk = formulaCells.slice(start, start + MAX_RECALC_READ_CELLS)
+      let raw: unknown
+      try {
+        raw = await this.io.recalcCells({
+          path: this.backingPath,
+          edits,
+          reads: chunk.map((cell) => ({
+            sheet: cell.sheetName,
+            range: {
+              startRow: cell.row,
+              endRow: cell.row,
+              startColumn: cell.column,
+              endColumn: cell.column,
+            },
+          })),
+        })
+      } catch {
+        return degrade('the formula engine was unavailable')
+      }
+      const result = asRecord(raw, 'recalc result')
+      if (!Array.isArray(result.cells)) return degrade('the formula engine reply was malformed')
+      for (const cellRaw of result.cells) {
+        const cell = asRecord(cellRaw, 'recalc cell')
+        if (
+          cell.isFormula !== true ||
+          typeof cell.row !== 'number' ||
+          typeof cell.column !== 'number' ||
+          typeof cell.number !== 'number' ||
+          !Number.isFinite(cell.number)
+        ) {
+          continue
+        }
+        const sheetName = typeof cell.sheet === 'string' ? cell.sheet : ''
+        if (!this.sheets.some((sheet) => sheet.name === sheetName)) continue
+        const key = `${sheetName}!${String(cell.row)},${String(cell.column)}`
+        if (journaled.has(key)) continue
+        const cells = overlay.get(sheetName) ?? []
+        cells.push({ row: cell.row, column: cell.column, value: cell.number })
+        overlay.set(sheetName, cells)
+      }
+    }
+    return {
+      values: [...overlay].map(([sheetName, cells]) => ({ sheetName, cells })),
+      note: null,
     }
   }
 

@@ -742,8 +742,12 @@ export function registerTools(server: McpServer): void {
         'byte-identical except ' +
         'xl/workbook.xml, which is rewritten when needed to force recalculation on open (the ' +
         'fullCalcOnLoad flag) — so even a zero-edit xlsx save may touch that one entry, and for ' +
-        'workbooks the unchanged result flag reflects the edit journal, not the bytes. Returns ' +
-        'the absolute path.',
+        'workbooks the unchanged result flag reflects the edit journal, not the bytes. A workbook ' +
+        'save with journaled edits also refreshes the cached results of formula cells (BUG-1761): ' +
+        'the sidecar recalculation engine evaluates the journal and numeric results are written ' +
+        'into <v>, so script readers (openpyxl data_only, pandas) see fresh values; when the ' +
+        'engine is unavailable the save still succeeds, keeps the fullCalcOnLoad flag and says so ' +
+        'in its warnings. Returns the absolute path.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),
         path: z
