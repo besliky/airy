@@ -282,6 +282,35 @@ describe('convert to range', () => {
     expect(workbook).toContain('SUM(Data!A2:A4)')
   })
 
+  it('converts by the post-rename name when one edit renames and converts', async () => {
+    // A rename→convert session merges into one journal entry keyed by the
+    // original name (BUG-1750): the rename pass rewrites the formulas first,
+    // so matching the old token during the conversion would find nothing and
+    // ship dangling structured references next to the deleted table part
+    // (#NAME? across the workbook in Excel).
+    const plan = await planWith(await tableSource(), [
+      { sheetName: 'Data', tableName: 'Users', rename: 'Clients', convertToRange: true },
+    ])
+    expect(plan.removedEntries).toContain('xl/tables/table1.xml')
+    const worksheet = plan.replaced.get('xl/worksheets/sheet1.xml')!
+    expect(worksheet).toContain('<f>SUM(B2:B4)</f>')
+    expect(worksheet).not.toContain('Users[')
+    expect(worksheet).not.toContain('Clients[')
+    expect(worksheet).not.toContain('<tablePart')
+    const workbook = plan.replaced.get('xl/workbook.xml')!
+    expect(workbook).toContain('SUM(Data!A2:A4)')
+    expect(workbook).not.toContain('Clients[')
+  })
+
+  it('still converts by the original name when the rename is a no-op', async () => {
+    const plan = await planWith(await tableSource(), [
+      { sheetName: 'Data', tableName: 'Users', rename: 'Users', convertToRange: true },
+    ])
+    const worksheet = plan.replaced.get('xl/worksheets/sheet1.xml')!
+    expect(worksheet).toContain('<f>SUM(B2:B4)</f>')
+    expect(worksheet).not.toContain('Users[')
+  })
+
   it('fails closed when the table does not exist', async () => {
     await expect(
       planWith(await tableSource(), [
