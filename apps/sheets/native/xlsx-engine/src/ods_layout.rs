@@ -10,6 +10,18 @@
 //! converter can carry, reusing the `xls_layout` emission types so the
 //! convert path treats both walks alike.
 //!
+//! Cell formatting (fills, font weight/color/size, borders, alignment)
+//! lives in the same automatic-styles tables; the walk turns every used
+//! cell style into a synthetic BIFF-style Font/XF entry so the proven
+//! `xls_layout` style emission produces the styles.xml unchanged — one
+//! interner for both legacy walks.
+//!
+//! ODF number formats (`number:date-style` data styles) are deliberately
+//! not translated: a style whose only feature is a data style stays out of
+//! styles.xml, so those cells keep the converter's type-derived fallback
+//! formats (short date for date values, and so on) instead of a custom
+//! format without a code.
+//!
 //! Everything is best-effort, exactly like the BIFF walk: only an ODF
 //! spreadsheet package (mimetype entry, content-based) is walked, any
 //! structural surprise yields an empty layout, and every count is
@@ -25,7 +37,9 @@ use quick_xml::events::BytesStart;
 use quick_xml::events::Event;
 use zip::ZipArchive;
 
-use crate::xls_layout::{ColSpan, RowSpec, SheetLayout, WorkbookLayout};
+use crate::xls_layout::{
+    ColSpan, FontSpec, RowSpec, SheetLayout, StyleTables, WorkbookLayout, XfSpec,
+};
 
 /// Caps: a legitimate form carries tens of merges; the caps only bind for
 /// hostile or pathological input, where the walk degrades to a partial
@@ -41,6 +55,11 @@ const MAX_COLUMN_REPEAT: u32 = 16_384;
 /// ODF spans are counts (>= 1); anything past the grid is hostile input.
 const MAX_SPAN: u32 = 1_048_576;
 const MAX_STYLES: usize = 65_536;
+/// The BIFF palette overlay starts at color index 8 and the classic table
+/// ends at 63: at most 56 ODF colors can ride it. Beyond the cap the color
+/// degrades to "unspecified" instead of displacing an earlier color.
+/// Styled cells carried per sheet — the BIFF walk's cell cap.
+const MAX_CELLS_PER_SHEET: usize = 1_000_000;
 const MAX_COLUMN_ENTRIES_PER_SHEET: usize = 4_096;
 /// BIFF sheets carry 65 536 ROW records at most; the same bound holds the
 /// .ods row table.
@@ -83,7 +102,10 @@ pub(crate) fn extract(source: &Path) -> WorkbookLayout {
     if content.read_to_string(&mut xml).is_err() {
         return empty();
     }
-    WorkbookLayout::from_parts(walk(&xml), Default::default(), 0)
+    let (sheets, style_tables) = walk(&xml);
+    // No default font: every synthetic font must intern (the sentinel
+    // matches nothing), and the base font stays the converter's Calibri.
+    WorkbookLayout::from_parts(sheets, style_tables, u16::MAX)
 }
 
 /// Column/row styles from `<office:automatic-styles>` — the style tables
@@ -94,14 +116,54 @@ pub(crate) fn extract(source: &Path) -> WorkbookLayout {
 struct StyleTablesWalk {
     columns: HashMap<String, ColumnStyle>,
     rows: HashMap<String, RowStyle>,
+    cells: HashMap<String, CellStyleDef>,
     /// The `style:style` element in flight: (name, family).
     current: Option<(String, ColumnOrRow)>,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum ColumnOrRow {
     Column,
     Row,
+    Cell,
+}
+
+/// One automatic cell style (`style:family="table-cell"`): the visual
+/// features its cells carry. `None` fields mean "source says nothing".
+#[derive(Default, Clone)]
+struct CellStyleDef {
+    /// Solid background RGB.
+    fill: Option<[u8; 3]>,
+    bold: bool,
+    italic: bool,
+    font_color: Option<[u8; 3]>,
+    font_size_pt: Option<f64>,
+    /// `style:font-name` — the display name, as BIFF FONT records carry.
+    font_name: Option<String>,
+    /// 0 top, 1 center; bottom (the default) stays None.
+    vertical: Option<u8>,
+    /// 1 left, 2 center, 3 right, 5 justify; general stays None.
+    horizontal: Option<u8>,
+    wrap: bool,
+    /// Border line codes (BIFF order left/right/top/bottom; 0 = none) and
+    /// their colors.
+    borders: [u8; 4],
+    border_colors: [Option<[u8; 3]>; 4],
+}
+
+impl CellStyleDef {
+    /// Whether the style carries anything the conversion cannot guess.
+    fn is_interesting(&self) -> bool {
+        self.fill.is_some()
+            || self.bold
+            || self.italic
+            || self.font_color.is_some()
+            || self.font_size_pt.is_some()
+            || self.vertical.is_some()
+            || self.horizontal.is_some()
+            || self.wrap
+            || self.borders.iter().any(|&code| code != 0)
+    }
 }
 
 /// `style:family="table-column"`: the width the converter maps into `<col>`
@@ -130,10 +192,11 @@ struct ColumnEntry {
 
 /// Walks content.xml and returns one layout per `table:table`, in document
 /// order — the same order calamine numbers sheets by.
-fn walk(xml: &str) -> Vec<SheetLayout> {
+fn walk(xml: &str) -> (Vec<SheetLayout>, StyleTables) {
     let mut reader = Reader::from_str(xml);
-    let mut sheets: Vec<SheetLayout> = Vec::new();
+    let mut sheets: Vec<TableWalk> = Vec::new();
     let mut styles = StyleTablesWalk::default();
+    let mut style_names = StyleNameIds::default();
     // Current table state; None outside any table (automatic-styles,
     // named expressions, ...).
     let mut table: Option<TableWalk> = None;
@@ -143,13 +206,16 @@ fn walk(xml: &str) -> Vec<SheetLayout> {
                 b"style" => styles.begin_style(&reader, &element),
                 b"table-column-properties" => styles.column_properties(&reader, &element),
                 b"table-row-properties" => styles.row_properties(&reader, &element),
+                b"table-cell-properties" => styles.cell_properties(&reader, &element),
+                b"text-properties" => styles.text_properties(&reader, &element),
+                b"paragraph-properties" => styles.paragraph_properties(&reader, &element),
                 b"table" => {
                     // A table without a name is invisible to calamine too
                     // (it only collects named tables): skip it whole so its
                     // rows never pollute the neighboring sheet's walk.
                     if read_attr(&reader, &element, b"name").is_some() {
                         if let Some(finished) = table.take() {
-                            sheets.push(finished.finish());
+                            sheets.push(finished);
                         }
                         table = Some(TableWalk::default());
                     }
@@ -166,7 +232,7 @@ fn walk(xml: &str) -> Vec<SheetLayout> {
                 }
                 b"table-cell" | b"covered-table-cell" => {
                     if let Some(walk) = table.as_mut() {
-                        walk.cell(&reader, &element);
+                        walk.cell(&reader, &element, &mut style_names);
                     }
                 }
                 _ => {}
@@ -180,7 +246,7 @@ fn walk(xml: &str) -> Vec<SheetLayout> {
                 }
                 b"table" => {
                     if let Some(finished) = table.take() {
-                        sheets.push(finished.finish());
+                        sheets.push(finished);
                     }
                 }
                 _ => {}
@@ -195,6 +261,9 @@ fn walk(xml: &str) -> Vec<SheetLayout> {
                 }
                 b"table-column-properties" => styles.column_properties(&reader, &element),
                 b"table-row-properties" => styles.row_properties(&reader, &element),
+                b"table-cell-properties" => styles.cell_properties(&reader, &element),
+                b"text-properties" => styles.text_properties(&reader, &element),
+                b"paragraph-properties" => styles.paragraph_properties(&reader, &element),
                 b"table-column" => {
                     if let Some(walk) = table.as_mut() {
                         walk.column(&reader, &element, &styles);
@@ -208,7 +277,7 @@ fn walk(xml: &str) -> Vec<SheetLayout> {
                 }
                 b"table-cell" | b"covered-table-cell" => {
                     if let Some(walk) = table.as_mut() {
-                        walk.cell(&reader, &element);
+                        walk.cell(&reader, &element, &mut style_names);
                     }
                 }
                 _ => {}
@@ -220,19 +289,151 @@ fn walk(xml: &str) -> Vec<SheetLayout> {
         }
     }
     if let Some(finished) = table.take() {
-        sheets.push(finished.finish());
+        sheets.push(finished);
     }
-    sheets
+    // Named styles -> synthetic BIFF-style tables; only styles with visible
+    // features become xfs, everything else falls back by construction.
+    let mut style_tables = StyleTables::default();
+    let mut xf_by_name: HashMap<String, u16> = HashMap::new();
+    let mut names: Vec<&String> = styles.cells.keys().collect();
+    names.sort();
+    for name in names {
+        let def = &styles.cells[name];
+        if def.is_interesting() && let Some(xf) = build_xf(def, &mut style_tables) {
+            xf_by_name.insert(name.clone(), xf);
+        }
+    }
+    let layouts = sheets
+        .into_iter()
+        .map(|mut table| {
+            let styled = std::mem::take(&mut table.styled_cells);
+            let mut finished = table.finish();
+            finished.cells = styled
+                .into_iter()
+                .filter_map(|(position, id)| {
+                    let name = style_names.name(id)?;
+                    xf_by_name.get(name).map(|xf| (position, *xf))
+                })
+                .collect();
+            finished
+        })
+        .collect();
+    (layouts, style_tables)
+}
+
+/// Interned style names: the walk stores a u32 per styled cell, the final
+/// mapping resolves ids against the collected automatic styles.
+#[derive(Default)]
+struct StyleNameIds {
+    ids: HashMap<String, u32>,
+    names: Vec<String>,
+}
+
+impl StyleNameIds {
+    fn id(&mut self, name: &str) -> Option<u32> {
+        // "Default" is the producer's word for "nothing to carry".
+        if name == "Default" {
+            return None;
+        }
+        Some(if let Some(&id) = self.ids.get(name) {
+            id
+        } else {
+            let id = self.names.len() as u32;
+            self.names.push(name.to_string());
+            self.ids.insert(name.to_string(), id);
+            id
+        })
+    }
+
+    fn name(&self, id: u32) -> Option<&String> {
+        self.names.get(id as usize)
+    }
+}
+
+/// Builds the synthetic BIFF-style xf for one cell style: fonts, fills,
+/// borders and alignments are interned into the shared style tables the
+/// xls_layout emission consumes. `None` when the style's colors no longer
+/// fit the palette — the cells then keep the fallback look.
+fn build_xf(def: &CellStyleDef, tables: &mut StyleTables) -> Option<u16> {
+    // Fonts: 0 is the base-font slot; unique font combinations follow.
+    let font = if !def.bold
+        && !def.italic
+        && def.font_color.is_none()
+        && def.font_size_pt.is_none()
+        && def.font_name.is_none()
+    {
+        0
+    } else {
+        let color = def.font_color.and_then(|rgb| tables.intern_color(rgb));
+        let fonts = &mut tables.fonts;
+
+        let position = fonts.iter().position(|font| {
+            font.bold == def.bold
+                && font.italic == def.italic
+                && font.name == def.font_name.as_deref().unwrap_or("")
+                && font.height_pt == def.font_size_pt.unwrap_or(11.0)
+                && font.color == color.unwrap_or(32767)
+        });
+        let index = match position {
+            Some(index) => index as u16,
+            None => {
+                fonts.push(FontSpec {
+                    bold: def.bold,
+                    italic: def.italic,
+                    underline: 0,
+                    height_pt: def.font_size_pt.unwrap_or(11.0),
+                    color: color.unwrap_or(32767),
+                    name: def.font_name.clone().unwrap_or_default(),
+                });
+                (fonts.len() - 1) as u16
+            }
+        };
+        index
+    };
+    // Fill: a solid fill rides the palette; a fill whose color no longer
+    // fits degrades to no fill instead of painting an arbitrary color.
+    let mut fill_pattern = 0;
+    let mut fill_color = 0;
+    if let Some(rgb) = def.fill
+        && let Some(index) = tables.intern_color(rgb)
+    {
+        fill_pattern = 1;
+        fill_color = index;
+    }
+    let mut border_colors = [0u16; 4];
+    for (index, color) in def.border_colors.iter().enumerate() {
+        if def.borders[index] != 0
+            && let Some(rgb) = color
+            && let Some(palette_index) = tables.intern_color(*rgb)
+        {
+            border_colors[index] = palette_index;
+        }
+    }
+    let xfs = &mut tables.xfs;
+    xfs.push(XfSpec {
+        font,
+        format: 0,
+        horizontal: def.horizontal.unwrap_or(0),
+        vertical: def.vertical.unwrap_or(2),
+        wrap: def.wrap,
+        borders: def.borders,
+        border_colors,
+        fill_pattern,
+        fill_color,
+    });
+    Some((xfs.len() - 1) as u16)
 }
 
 impl StyleTablesWalk {
     fn begin_style(&mut self, reader: &Reader<&[u8]>, element: &BytesStart<'_>) {
         let name = read_attr(reader, element, b"name");
         let family = read_attr(reader, element, b"family");
+        eprintln!("DBG begin_style name={name:?} family={family:?}");
         self.current = name.zip(family).and_then(|(name, family)| {
             let slot = match family.as_str() {
                 "table-column" => ColumnOrRow::Column,
                 "table-row" => ColumnOrRow::Row,
+                "table-cell" => ColumnOrRow::Cell,
                 _ => return None,
             };
             Some((name, slot))
@@ -257,6 +458,87 @@ impl StyleTablesWalk {
                     hidden,
                 },
             );
+        }
+    }
+
+    fn cell_properties(&mut self, reader: &Reader<&[u8]>, element: &BytesStart<'_>) {
+        let Some((name, ColumnOrRow::Cell)) = &self.current else {
+            return;
+        };
+        let style = style_entry(&mut self.cells, name);
+        if let Some(fill) = read_attr(reader, element, b"background-color")
+            .and_then(|value| parse_color(&value))
+        {
+            style.fill = Some(fill);
+        }
+        match read_attr(reader, element, b"vertical-align").as_deref() {
+            Some("top") => style.vertical = Some(0),
+            Some("middle") => style.vertical = Some(1),
+            _ => {}
+        }
+        // Shorthand first, then the per-side overrides.
+        let shorthand = read_attr(reader, element, b"border").and_then(|value| parse_border(&value));
+        let mut sides: [Option<(u8, Option<[u8; 3]>)>; 4] = [None, None, None, None];
+        if let Some(border) = shorthand {
+            sides = [Some(border.clone()), Some(border.clone()), Some(border.clone()), Some(border)];
+        }
+        for (side, attr) in std::iter::zip(
+            sides.iter_mut(),
+            [
+                b"border-left" as &[u8],
+                b"border-right",
+                b"border-top",
+                b"border-bottom",
+            ],
+        ) {
+            if let Some(border) = read_attr(reader, element, attr).and_then(|value| parse_border(&value)) {
+                *side = Some(border);
+            }
+        }
+        for (index, side) in sides.into_iter().enumerate() {
+            if let Some((code, color)) = side {
+                style.borders[index] = code;
+                style.border_colors[index] = color;
+            }
+        }
+    }
+
+    fn text_properties(&mut self, reader: &Reader<&[u8]>, element: &BytesStart<'_>) {
+        let Some((name, ColumnOrRow::Cell)) = &self.current else {
+            return;
+        };
+        let style = style_entry(&mut self.cells, name);
+        if read_attr(reader, element, b"font-weight").is_some_and(|value| value == "bold") {
+            style.bold = true;
+        }
+        if read_attr(reader, element, b"font-style").is_some_and(|value| value == "italic") {
+            style.italic = true;
+        }
+        if let Some(color) = read_attr(reader, element, b"color").and_then(|value| parse_color(&value)) {
+            style.font_color = Some(color);
+        }
+        if let Some(size) = read_attr(reader, element, b"font-size").and_then(|value| parse_length(&value)) {
+            style.font_size_pt = Some((size * 72.0 * 100.0).round() / 100.0);
+        }
+        if let Some(name) = read_attr(reader, element, b"font-name") {
+            style.font_name = Some(name);
+        }
+    }
+
+    fn paragraph_properties(&mut self, reader: &Reader<&[u8]>, element: &BytesStart<'_>) {
+        let Some((name, ColumnOrRow::Cell)) = &self.current else {
+            return;
+        };
+        let style = style_entry(&mut self.cells, name);
+        match read_attr(reader, element, b"text-align").as_deref() {
+            Some("left") | Some("start") => style.horizontal = Some(1),
+            Some("center") => style.horizontal = Some(2),
+            Some("right") | Some("end") => style.horizontal = Some(3),
+            Some("justify") => style.horizontal = Some(5),
+            _ => {}
+        }
+        if read_attr(reader, element, b"wrap-option").is_some_and(|value| value == "wrap") {
+            style.wrap = true;
         }
     }
 
@@ -298,6 +580,59 @@ fn parse_length(text: &str) -> Option<f64> {
         _ => return None,
     };
     (inches > 0.0 && inches < 100.0).then_some(inches)
+}
+
+/// The automatic cell style being accumulated: created on first touch.
+fn style_entry<'a>(
+    cells: &'a mut HashMap<String, CellStyleDef>,
+    name: &str,
+) -> &'a mut CellStyleDef {
+    cells.entry(name.to_string()).or_default()
+}
+
+/// `#rrggbb` (the only color shape LibreOffice writes for cell
+/// backgrounds and text); `transparent`/`none`/system colors are refused
+/// so the style carries nothing instead of painting black.
+fn parse_color(text: &str) -> Option<[u8; 3]> {
+    let hex = text.strip_prefix('#')?;
+    if hex.len() != 6 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some([
+        u8::from_str_radix(&hex[0..2], 16).ok()?,
+        u8::from_str_radix(&hex[2..4], 16).ok()?,
+        u8::from_str_radix(&hex[4..6], 16).ok()?,
+    ])
+}
+
+/// A border shorthand (`0.5pt solid #808080`, `0.74pt dotted #ff0000`):
+/// the BIFF line code the emission names, and the color when present.
+fn parse_border(text: &str) -> Option<(u8, Option<[u8; 3]>)> {
+    let mut parts = text.split_whitespace();
+    let width_pt = parts.next().and_then(parse_length)? * 72.0;
+    let line = parts.next()?;
+    let color = parts.next().and_then(parse_color);
+    let code = match line {
+        "none" | "hidden" => 0,
+        "solid" => {
+            // LibreOffice writes its thin border as 0.5pt; the ladder maps
+            // the producer's widths onto Excel's four weights.
+            if width_pt < 0.25 {
+                7 // hair
+            } else if width_pt < 1.75 {
+                1 // thin
+            } else if width_pt < 2.75 {
+                2 // medium
+            } else {
+                5 // thick
+            }
+        }
+        "double" => 6,
+        "dashed" => 3,
+        "dotted" => 4,
+        _ => return None,
+    };
+    (code != 0).then_some((code, color))
 }
 
 /// Excel character width for a physical column width: the app's Calibri 11
@@ -349,6 +684,10 @@ struct TableWalk {
     merges: Vec<([u32; 2], [u32; 2])>,
     col_entries: Vec<ColumnEntry>,
     rows: Vec<(u32, RowSpec)>,
+    /// Styled cell positions -> interned style-name id. "Default" and
+    /// unknown names never enter; the synthetic xf mapping happens once,
+    /// after the walk.
+    styled_cells: HashMap<(u32, u32), u32>,
     row: u32,
     column: u32,
     /// The repeat count of the row in flight (1 outside a row).
@@ -363,6 +702,7 @@ impl Default for TableWalk {
             merges: Vec::new(),
             col_entries: Vec::new(),
             rows: Vec::new(),
+            styled_cells: HashMap::new(),
             row: 0,
             column: 0,
             row_repeat: 1,
@@ -443,7 +783,12 @@ impl TableWalk {
         self.row_spec = None;
     }
 
-    fn cell<'a>(&mut self, reader: &Reader<&'a [u8]>, element: &BytesStart<'a>) {
+    fn cell<'a>(
+        &mut self,
+        reader: &Reader<&'a [u8]>,
+        element: &BytesStart<'a>,
+        style_names: &mut StyleNameIds,
+    ) {
         let repeat = read_count(reader, element, b"number-columns-repeated", MAX_COLUMN_REPEAT);
         let columns_spanned = read_count(reader, element, b"number-columns-spanned", MAX_SPAN);
         let rows_spanned = read_count(reader, element, b"number-rows-spanned", MAX_SPAN);
@@ -462,6 +807,28 @@ impl TableWalk {
                     .min(MAX_COLUMNS - 1);
                 self.merges
                     .push(([self.row, last_row], [self.column, last_column]));
+            }
+        }
+        // A named cell style is recorded with its position; merge
+        // continuations inherit the anchor's style so a merged header keeps
+        // its fill across the whole range the way LibreOffice's own export
+        // writes it.
+        let style_id = read_attr(reader, element, b"style-name")
+            .and_then(|name| style_names.id(&name));
+        if let Some(id) = style_id {
+            for row in 0..rows_spanned.min(MAX_SPAN) {
+                for column in 0..columns_spanned.min(MAX_SPAN) {
+                    if self.styled_cells.len() >= MAX_CELLS_PER_SHEET {
+                        break;
+                    }
+                    self.styled_cells.insert(
+                        (
+                            self.row.saturating_add(row).min(MAX_ROWS - 1),
+                            self.column.saturating_add(column).min(MAX_COLUMNS - 1),
+                        ),
+                        id,
+                    );
+                }
             }
         }
         self.column = self.column.saturating_add(repeat).min(MAX_COLUMNS);
@@ -548,8 +915,13 @@ fn same_width(a: f64, b: f64) -> bool {
 mod tests {
     use super::*;
 
+    /// The layout-only view of a walk, for the merge/geometry tests.
+    fn walk_sheets(content: &str) -> Vec<SheetLayout> {
+        walk(content).0
+    }
+
     fn merges_of(content: &str) -> Vec<([u32; 2], [u32; 2])> {
-        let mut sheets = walk(content);
+        let mut sheets = walk_sheets(content);
         assert_eq!(sheets.len(), 1, "expected exactly one sheet");
         sheets.remove(0).merges
     }
@@ -583,7 +955,7 @@ mod tests {
     #[test]
     fn walks_tables_in_order_and_skips_nameless_ones() {
         let content = r#"<office:document-content xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"><office:body><office:spreadsheet><table:table table:name="A"><table:table-row><table:table-cell table:number-columns-spanned="2"/></table:table-row></table:table><table:table><table:table-row><table:table-cell table:number-columns-spanned="2"/></table:table-row></table:table><table:table table:name="B"><table:table-row><table:table-cell table:number-columns-spanned="4" table:number-rows-spanned="2"/><table:covered-table-cell table:number-columns-repeated="3"/></table:table-row><table:table-row><table:covered-table-cell table:number-columns-repeated="4"/></table:table-row></table:table></office:spreadsheet></office:body></office:document-content>"#;
-        let sheets = walk(content);
+        let sheets = walk_sheets(content);
         assert_eq!(sheets.len(), 2);
         assert_eq!(sheets[0].merges, vec![([0, 0], [0, 1])]);
         assert_eq!(sheets[1].merges, vec![([0, 1], [0, 3])]);
@@ -595,6 +967,64 @@ mod tests {
     fn a_repeated_merge_row_records_one_range() {
         let content = r#"<office:document-content xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"><office:body><office:spreadsheet><table:table table:name="S"><table:table-row table:number-rows-repeated="3"><table:table-cell table:number-columns-spanned="2"/></table:table-row></table:table></office:spreadsheet></office:body></office:document-content>"#;
         assert_eq!(merges_of(content), vec![([0, 0], [0, 1])]);
+    }
+
+    /// A cell style with a fill and bold font interns into the synthetic
+    /// tables; the styled cell carries its xf.
+    #[test]
+    fn cell_styles_intern_into_synthetic_tables() {
+        let content = r##"<office:document-content xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"><office:automatic-styles><style:style style:name="ce1" style:family="table-cell"><style:table-cell-properties fo:background-color="#ffcc00"/><style:text-properties fo:color="#ff0000" fo:font-size="14pt" fo:font-weight="bold" style:font-name="Cambria"/></style:style></office:automatic-styles><office:body><office:spreadsheet><table:table table:name="S"><table:table-row><table:table-cell table:style-name="ce1" office:value-type="string"><text:p>H</text:p></table:table-cell><table:table-cell table:style-name="Default"/></table:table-row></table:table></office:spreadsheet></office:body></office:document-content>"##;
+        let (sheets, tables) = walk(content);
+        assert_eq!(sheets.len(), 1);
+        assert_eq!(sheets[0].cells.len(), 1, "default-named cells stay out");
+        let xf = *sheets[0].cells.values().next().unwrap();
+        let font = &tables.fonts[tables.xfs[xf as usize].font as usize];
+        assert!(font.bold);
+        assert_eq!(font.name, "Cambria");
+        // Font color interns first (build_xf resolves fonts before fills).
+        assert_eq!(tables.palette, vec![[0xFF, 0x00, 0x00], [0xFF, 0xCC, 0x00]]);
+    }
+
+    /// Border shorthands map onto BIFF line codes with a width ladder.
+    #[test]
+    fn borders_map_to_line_codes() {
+        assert_eq!(parse_border("0.5pt solid #808080"), Some((1, Some([128, 128, 128]))));
+        assert_eq!(parse_border("0.1pt solid #000000"), Some((7, Some([0, 0, 0]))));
+        assert_eq!(parse_border("1.5pt solid #000000"), Some((1, Some([0, 0, 0]))));
+        assert_eq!(parse_border("2.5pt solid #000000"), Some((2, Some([0, 0, 0]))));
+        assert_eq!(parse_border("3pt solid #000000"), Some((5, Some([0, 0, 0]))));
+        assert_eq!(parse_border("0.5pt double #000000"), Some((6, Some([0, 0, 0]))));
+        assert_eq!(parse_border("0.5pt dashed #000000"), Some((3, Some([0, 0, 0]))));
+        assert_eq!(parse_border("0.5pt dotted #000000"), Some((4, Some([0, 0, 0]))));
+        assert_eq!(parse_border("0.5pt none"), None);
+        assert_eq!(parse_border("solid"), None);
+    }
+
+    /// Colors: hex only; named/system colors stay unresolvable.
+    #[test]
+    fn colors_parse_hex_only() {
+        assert_eq!(parse_color("#FFCC00"), Some([0xFF, 0xCC, 0x00]));
+        assert_eq!(parse_color("#ffcc00"), Some([0xFF, 0xCC, 0x00]));
+        assert_eq!(parse_color("transparent"), None);
+        assert_eq!(parse_color("#fff"), None);
+        assert_eq!(parse_color("#GGGGGG"), None);
+    }
+
+    /// A truncated .ods never panics the walk: the cut fixture degrades to
+    /// whatever prefix was readable, exactly like the BIFF walk.
+    #[test]
+    fn truncated_ods_fixture_never_panics_the_walk() {
+        let full = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/par214-ods-form-layout.ods"
+        ))
+        .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        for cut in (0..full.len()).step_by(64) {
+            let path = dir.path().join("cut.ods");
+            std::fs::write(&path, &full[..cut]).unwrap();
+            let _ = extract(&path);
+        }
     }
 
     /// ODF lengths parse across the unit zoo and refuse nonsense.

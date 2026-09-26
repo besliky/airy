@@ -93,6 +93,8 @@ const MAX_ROW_HEIGHT_TWIPS: u16 = 8_190;
 /// whose own default differs carries it into `<sheetFormatPr>`; a row
 /// whose custom height equals it has nothing to say.
 const DEFAULT_ROW_HEIGHT_PT: f64 = 15.0;
+/// Direct-color palette slots (see `StyleTables::intern_color`).
+const MAX_DIRECT_COLORS: usize = 56;
 const MAX_FONTS: usize = 65_536;
 const MAX_XFS: usize = 65_536;
 const MAX_FORMATS: usize = 65_536;
@@ -176,47 +178,67 @@ pub(crate) struct ColSpan {
     pub(crate) hidden: bool,
 }
 
-/// FONT record subset the converter maps into an xlsx `<font>`.
-struct FontSpec {
-    bold: bool,
-    italic: bool,
+/// FONT record subset the converter maps into an xlsx `<font>`. The .ods
+/// walk builds these synthetically from automatic-styles text properties.
+pub(crate) struct FontSpec {
+    pub(crate) bold: bool,
+    pub(crate) italic: bool,
     /// BIFF underline code: 0 none, 1 single, 2 double, 33/34 accounting.
-    underline: u8,
+    pub(crate) underline: u8,
     /// dyHeight is in twips (1/20 pt); kept in points for `<sz val=>`.
-    height_pt: f64,
-    color: u16,
-    name: String,
+    pub(crate) height_pt: f64,
+    pub(crate) color: u16,
+    pub(crate) name: String,
 }
 
-/// XF record subset the converter maps into an xlsx `<xf>`.
-struct XfSpec {
-    font: u16,
-    format: u16,
+/// XF record subset the converter maps into an xlsx `<xf>`. The .ods walk
+/// builds these synthetically from automatic-styles cell properties.
+pub(crate) struct XfSpec {
+    pub(crate) font: u16,
+    pub(crate) format: u16,
     /// Horizontal: 0 general, 1 left, 2 center, 3 right, 4 fill, 5 justify,
     /// 6 center-continuous ([MS-XLS] 2.5.8 AlignH).
-    horizontal: u8,
+    pub(crate) horizontal: u8,
     /// Vertical: 0 top, 1 center, 2 bottom, 3 justify, 4 distributed.
-    vertical: u8,
-    wrap: bool,
-    /// Border line styles, order left/right/top/bottom (0 = none).
-    borders: [u8; 4],
+    pub(crate) vertical: u8,
+    pub(crate) wrap: bool,
+    /// Border line style codes, order left/right/top/bottom (0 = none).
+    pub(crate) borders: [u8; 4],
     /// Border color indexes in the same order.
-    border_colors: [u16; 4],
+    pub(crate) border_colors: [u16; 4],
     /// 0 = no fill, 1 = solid; 2..=18 are the standard pattern fills.
-    fill_pattern: u8,
-    fill_color: u16,
+    pub(crate) fill_pattern: u8,
+    pub(crate) fill_color: u16,
 }
 
-/// Style tables from the workbook globals substream.
+/// Style tables from the workbook globals substream. The .ods walk fills
+/// the same tables synthetically from automatic-styles, so one interner
+/// and one styles.xml emission serve both legacy walks.
 #[derive(Default)]
 pub(crate) struct StyleTables {
-    fonts: Vec<FontSpec>,
-    xfs: Vec<XfSpec>,
+    pub(crate) fonts: Vec<FontSpec>,
+    pub(crate) xfs: Vec<XfSpec>,
     /// Custom number formats as (id, code) in FORMAT record order.
-    formats: Vec<(u16, String)>,
+    pub(crate) formats: Vec<(u16, String)>,
     /// PALETTE overrides: RGB for color indexes 8, 9, ... ([MS-XLS] 2.4.125:
     /// the overrides start at index 8; lower slots are fixed system colors).
-    palette: Vec<[u8; 3]>,
+    pub(crate) palette: Vec<[u8; 3]>,
+}
+
+impl StyleTables {
+    /// Interns an RGB triple as a direct palette entry, returning its BIFF
+    /// color index (8 + slot). `None` once the palette is full — the color
+    /// degrades to "unspecified" instead of displacing an earlier one.
+    pub(crate) fn intern_color(&mut self, rgb: [u8; 3]) -> Option<u16> {
+        if let Some(slot) = self.palette.iter().position(|seen| *seen == rgb) {
+            return Some(8 + slot as u16);
+        }
+        if self.palette.len() >= MAX_DIRECT_COLORS {
+            return None;
+        }
+        self.palette.push(rgb);
+        Some(8 + (self.palette.len() - 1) as u16)
+    }
 }
 
 /// Best-effort layout of a legacy workbook. Empty unless the source is a
@@ -1173,6 +1195,7 @@ impl<'a> StyleInterner<'a> {
 
 /// Filling pattern names shared by BIFF and the xlsx pattern enum; solid is
 /// the only one a form realistically uses, the rest pass through by name.
+/// (The synthetic .ods codes are the 8-entry prefix of this table.)
 const FILL_NAMES: [&str; 19] = [
     "none",
     "solid",

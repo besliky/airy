@@ -1498,6 +1498,58 @@ mod tests {
         assert!(hidden.hidden);
     }
 
+    /// PAR-214: an .ods form keeps its cell formatting through conversion —
+    /// the fixture's header (bold 14pt red Cambria on a yellow fill,
+    /// centered) and an italic data cell used to convert into an unstyled
+    /// grid because the automatic styles were never read. Emission goes
+    /// through the same interner as the .xls styles, so the styles.xml
+    /// shapes match the BIFF path. The round trip reads the styles back
+    /// out of the open metadata.
+    #[test]
+    fn carries_fills_and_fonts_from_an_ods_form() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/par214-ods-form-layout.ods"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let result = convert_to_xlsx(source, &target).unwrap();
+        assert_eq!(result.cells, 4);
+
+        let styles = read_entry(&target, "xl/styles.xml");
+        println!("STYLES dump: {styles}");
+        // The yellow solid fill and the red bold-14 italic-free font.
+        assert!(styles.contains(r#"<fill><patternFill patternType="solid"><fgColor rgb="FFFFCC00"/></patternFill></fill>"#));
+        assert!(styles.contains(r#"<font><b/><sz val="14"/><color rgb="FFFF0000"/><name val="Cambria"/></font>"#));
+        assert!(styles.contains(r#"<font><i/><sz val="11"/><name val="Cambria"/></font>"#));
+        // Centered header alignment.
+        assert!(styles.contains(r#"<alignment horizontal="center""#));
+        // Styled cells carry their interned xfs (fallback styles 0-3).
+        let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
+        assert!(sheet.contains(r#"<c r="A1" s="4" t="inlineStr">"#));
+        assert!(sheet.contains(r#"<c r="B2" s="5" t="inlineStr">"#));
+
+        // Round trip: the reader's style metadata carries the same looks.
+        let mut sessions = crate::WorkbookSessions::new();
+        let metadata = sessions.open(&target).unwrap();
+        let filled = metadata
+            .styles
+            .iter()
+            .find(|style| style.fill_color.as_deref().is_some_and(|color| color.contains("FFCC00")))
+            .unwrap();
+        assert!(filled.bold);
+        assert_eq!(filled.font_size, Some(14.0));
+        assert!(
+            metadata
+                .styles
+                .iter()
+                .any(|style| style.italic && style.bold == false),
+            "italic style missing"
+        );
+        let _ = result;
+    }
+
     /// BUG-1659: an empty book (no cells, no styles) still converts with a
     /// complete styles.xml — the minimal output must not skip the section
     /// IronCalc's importer requires.
