@@ -5,7 +5,9 @@
 //   child runs are the cached result shown until the field updates (F9).
 // - Direction operands (ABOVE/BELOW/LEFT/RIGHT) select the contiguous cells
 //   nearest the formula cell while they hold numbers; a blank/text cell stops
-//   the scan, and repeating-header rows (w:tblHeader) are ignored.
+//   the scan, and repeating-header rows (w:tblHeader) are ignored. A merged
+//   cell (vMerge/gridSpan) counts as one cell at its origin's value, so a
+//   direction that runs into a merge continuation resolves through it.
 // - Explicit cell references (A1, B2:C4) skip blank/text cells instead of
 //   stopping (Word sums the numeric cells of the range).
 // - A direction that finds no numeric cells (e.g. an empty column) produces
@@ -27,10 +29,16 @@ export type FormulaDirection = 'ABOVE' | 'BELOW' | 'LEFT' | 'RIGHT'
 export type FormulaGridTexts = readonly (readonly string[])[]
 /** header-row predicate (rows marked w:tblHeader are ignored by direction scans) */
 export type HeaderRowPredicate = (row: number) => boolean
+/**
+ * merge-anchor map parallel to texts: a merge-continuation slot maps to the
+ * (row, col) of its logical cell's origin; plain slots stay undefined
+ */
+export type FormulaGridAnchors = readonly (readonly (readonly [number, number] | undefined)[])[]
 
 export interface FormulaGrid {
   texts: FormulaGridTexts
   isHeaderRow?: HeaderRowPredicate
+  mergeAnchors?: FormulaGridAnchors
 }
 
 interface ParsedFormula {
@@ -83,7 +91,9 @@ function asDirection(name: string): FormulaDirection | null {
  * Word's positional operand: the contiguous run of cells in `dir` starting at
  * the neighbor of (row, col), kept while the cells hold numbers. Blank or
  * text cells stop the scan; repeating-header rows are skipped (Word ignores
- * heading rows for positional arguments).
+ * heading rows for positional arguments). A merge-continuation slot resolves
+ * to its origin cell's value (Word sees one merged cell, not a blank —
+ * BUG-1759), and each merged cell counts at most once per scan.
  */
 export function collectDirectionOperands(
   texts: FormulaGridTexts,
@@ -91,23 +101,41 @@ export function collectDirectionOperands(
   col: number,
   dir: FormulaDirection,
   isHeaderRow?: HeaderRowPredicate,
+  mergeAnchors?: FormulaGridAnchors,
 ): number[] {
   const out: number[] = []
+  // value of the slot at (r, c): the slot's own number, the origin's number
+  // for a merge-continuation slot, 'skip' for the rest of an already-counted
+  // merged cell, or null when the slot stops the scan
+  const consumed = new Set<string>()
+  const slotValue = (r: number, c: number): number | null | 'skip' => {
+    const anchor = mergeAnchors?.[r]?.[c]
+    if (!anchor) return parseCellNumber(texts[r]?.[c] ?? '')
+    const key = `${anchor[0]}:${anchor[1]}`
+    if (consumed.has(key)) return 'skip'
+    const n = parseCellNumber(texts[anchor[0]]?.[anchor[1]] ?? '')
+    if (n !== null) consumed.add(key)
+    return n
+  }
+  // count one slot; false stops the scan
+  const step = (r: number, c: number): boolean => {
+    const v = slotValue(r, c)
+    if (v === 'skip') return true
+    if (v === null) return false
+    out.push(v)
+    return true
+  }
   if (dir === 'LEFT' || dir === 'RIGHT') {
     const dc = dir === 'LEFT' ? -1 : 1
     const rowTexts = texts[row] ?? []
     for (let c = col + dc; c >= 0 && c < rowTexts.length; c += dc) {
-      const n = parseCellNumber(rowTexts[c] ?? '')
-      if (n === null) break
-      out.push(n)
+      if (!step(row, c)) break
     }
   } else {
     const dr = dir === 'ABOVE' ? -1 : 1
     for (let r = row + dr; r >= 0 && r < texts.length; r += dr) {
       if (isHeaderRow?.(r)) continue
-      const n = parseCellNumber(texts[r]?.[col] ?? '')
-      if (n === null) break
-      out.push(n)
+      if (!step(r, col)) break
     }
   }
   return out
@@ -457,7 +485,14 @@ function buildScope(grid: FormulaGrid, row: number, col: number): EvalScope {
       return out
     },
     direction(dir) {
-      return collectDirectionOperands(grid.texts, row, col, dir, grid.isHeaderRow)
+      return collectDirectionOperands(
+        grid.texts,
+        row,
+        col,
+        dir,
+        grid.isHeaderRow,
+        grid.mergeAnchors,
+      )
     },
   }
   return scope
@@ -517,10 +552,11 @@ export function proposeTableFormula(
   row: number,
   col: number,
   isHeaderRow?: HeaderRowPredicate,
+  mergeAnchors?: FormulaGridAnchors,
 ): string {
-  const above = collectDirectionOperands(texts, row, col, 'ABOVE', isHeaderRow)
+  const above = collectDirectionOperands(texts, row, col, 'ABOVE', isHeaderRow, mergeAnchors)
   if (above.length > 0) return '=SUM(ABOVE)'
-  const left = collectDirectionOperands(texts, row, col, 'LEFT', isHeaderRow)
+  const left = collectDirectionOperands(texts, row, col, 'LEFT', isHeaderRow, mergeAnchors)
   if (left.length > 0) return '=SUM(LEFT)'
   return '=SUM(ABOVE)'
 }

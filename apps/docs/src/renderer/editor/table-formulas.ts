@@ -5,6 +5,7 @@ import type { Mark as PmMark } from '@tiptap/pm/model'
 import {
   evaluateFormulaInGrid,
   proposeTableFormula as proposeFromGrid,
+  type FormulaGridAnchors,
   type TableCell,
   type TableModel,
 } from '@airy-office/docx-engine'
@@ -34,6 +35,8 @@ export interface TableGridInfo {
   tablePos: number
   /** physical grid of cell texts (rowspan/colspan expanded), [row][col] */
   texts: string[][]
+  /** merge-anchor grid parallel to texts: continuation slot → origin (row/col) */
+  origins: FormulaGridAnchors
   /** physical row indexes whose rows repeat as headers (w:tblHeader) */
   headerRows: Set<number>
   /** every real (non-continuation) cell with its physical row/col */
@@ -60,18 +63,22 @@ export function pmTableGrid(table: PmNode, tablePos: number): TableGridInfo {
   const headerRows = new Set<number>()
   const cells: PhysicalCell[] = []
   const texts: string[][] = []
-  // rowspan continuations carried into following rows: col → { remaining, span }
-  const active = new Map<number, { remaining: number; span: number }>()
+  const origins: (readonly [number, number] | undefined)[][] = []
+  // rowspan continuations carried into following rows:
+  // col → { remaining, span, originRow }
+  const active = new Map<number, { remaining: number; span: number; originRow: number }>()
   let rowIndex = -1
   table.forEach((rowNode, rowOffset) => {
     rowIndex++
     const rowPos = tablePos + 1 + rowOffset
     if (rowNode.attrs?.repeatHeader) headerRows.add(rowIndex)
     texts[rowIndex] = []
+    origins[rowIndex] = []
     const occupied = new Set<number>()
     for (const [col, span] of active) {
       for (let i = 0; i < span.span; i++) {
         texts[rowIndex][col + i] = ''
+        origins[rowIndex][col + i] = [span.originRow, col]
         occupied.add(col + i)
       }
     }
@@ -84,19 +91,25 @@ export function pmTableGrid(table: PmNode, tablePos: number): TableGridInfo {
       }
     })
     let cursor = 0
-    const added = new Map<number, { remaining: number; span: number }>()
+    const added = new Map<number, { remaining: number; span: number; originRow: number }>()
     for (const cell of rowCells) {
       while (occupied.has(cursor)) cursor++
       const colspan = Math.max(1, Number(cell.node.attrs?.colspan) || 1)
       const rowspan = Math.max(1, Number(cell.node.attrs?.rowspan) || 1)
       const text = cellOwnText(cell.node)
-      for (let i = 0; i < colspan; i++) texts[rowIndex][cursor + i] = i === 0 ? text : ''
+      // every slot of a multi-slot (merged) cell anchors at the cell's origin
+      const anchored = colspan > 1 || rowspan > 1
+      for (let i = 0; i < colspan; i++) {
+        texts[rowIndex][cursor + i] = i === 0 ? text : ''
+        origins[rowIndex][cursor + i] = anchored ? [rowIndex, cursor] : undefined
+      }
       cells.push({ node: cell.node, pos: cell.pos, row: rowIndex, col: cursor })
-      if (rowspan > 1) added.set(cursor, { remaining: rowspan - 1, span: colspan })
+      if (rowspan > 1)
+        added.set(cursor, { remaining: rowspan - 1, span: colspan, originRow: rowIndex })
       for (let i = 0; i < colspan; i++) occupied.add(cursor + i)
       cursor += colspan
     }
-    const next = new Map<number, { remaining: number; span: number }>()
+    const next = new Map<number, { remaining: number; span: number; originRow: number }>()
     for (const [col, span] of active) {
       if (span.remaining > 1) next.set(col, { ...span, remaining: span.remaining - 1 })
     }
@@ -104,12 +117,13 @@ export function pmTableGrid(table: PmNode, tablePos: number): TableGridInfo {
     active.clear()
     for (const [k, v] of next) active.set(k, v)
   })
-  return { table, tablePos, texts, headerRows, cells }
+  return { table, tablePos, texts, origins, headerRows, cells }
 }
 
 const gridOf = (info: TableGridInfo) => ({
   texts: info.texts,
   isHeaderRow: (r: number) => info.headerRows.has(r),
+  mergeAnchors: info.origins,
 })
 
 export interface FormulaCell {
@@ -146,7 +160,13 @@ export function selectedFormulaCell(editor: Editor): FormulaCell | null {
 export function proposeCellFormula(editor: Editor): string {
   const sel = selectedFormulaCell(editor)
   if (!sel) return '=SUM(ABOVE)'
-  return proposeFromGrid(sel.grid.texts, sel.row, sel.col, (r) => sel.grid.headerRows.has(r))
+  return proposeFromGrid(
+    sel.grid.texts,
+    sel.row,
+    sel.col,
+    (r) => sel.grid.headerRows.has(r),
+    sel.grid.origins,
+  )
 }
 
 /**
@@ -220,6 +240,8 @@ export function collectTableFormulaJobs(editor: Editor): FieldCacheJob[] {
 interface ModelGrid {
   texts: string[][]
   isHeaderRow: (row: number) => boolean
+  /** merge-anchor grid parallel to texts (BUG-1759): continuation slot → origin */
+  mergeAnchors?: FormulaGridAnchors
 }
 
 /** visible text of a nested-model cell for grid math */
@@ -231,19 +253,45 @@ function nestedCellText(cell: TableCell): string {
 }
 
 /** physical texts grid of a nested TableModel: vMerge continuations and gridGap
- * placeholders contribute empty (non-numeric) text; colSpan widens its cell */
+ * placeholders contribute empty (non-numeric) text; colSpan widens its cell;
+ * merge-continuation slots carry the anchor of their origin cell (BUG-1759) */
 function nestedModelGrid(model: TableModel): ModelGrid {
   const texts: string[][] = []
+  const mergeAnchors: (readonly [number, number] | undefined)[][] = []
   const repeats = model.repeatHeaderRows ?? []
+  // physical col → origin row of the open vertical merge in that column
+  const openMerges = new Map<number, number>()
   model.rows.forEach((row, r) => {
     const textsRow: string[] = []
+    const anchorRow: (readonly [number, number] | undefined)[] = []
+    let col = 0
     for (const cell of row) {
-      textsRow.push(cell.gridGap || cell.vMerge === 'continue' ? '' : nestedCellText(cell))
-      for (let i = 1; i < Math.max(1, cell.colSpan ?? 1); i++) textsRow.push('')
+      const span = Math.max(1, cell.colSpan ?? 1)
+      if (cell.vMerge === 'continue') {
+        const originRow = openMerges.get(col)
+        for (let i = 0; i < span; i++) {
+          textsRow.push('')
+          anchorRow.push(originRow === undefined ? undefined : [originRow, col])
+          col++
+        }
+        continue
+      }
+      if (cell.vMerge === 'restart') openMerges.set(col, r)
+      else openMerges.delete(col)
+      textsRow.push(cell.gridGap ? '' : nestedCellText(cell))
+      // every slot of a multi-slot (merged) cell anchors at the cell's origin
+      anchorRow.push(span > 1 || cell.vMerge === 'restart' ? [r, col] : undefined)
+      for (let i = 1; i < span; i++) {
+        textsRow.push('')
+        anchorRow.push([r, col])
+        col++
+      }
+      col++
     }
     texts[r] = textsRow
+    mergeAnchors[r] = anchorRow
   })
-  return { texts, isHeaderRow: (row: number) => repeats[row] === true }
+  return { texts, mergeAnchors, isHeaderRow: (row: number) => repeats[row] === true }
 }
 
 interface Refreshed<T> {

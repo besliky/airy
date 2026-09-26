@@ -448,3 +448,51 @@ describe('table formula fields', () => {
     expect(xml).toContain('>300</w:t>')
   })
 })
+
+/** BUG-1759 shape: A1:A2 merged vertically (7 in A1), B holds 1 and the empty
+ * formula cell whose left neighbor is the merge continuation */
+const VMERGE_TABLE =
+  '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+  '<w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>' +
+  '<w:tr><w:tc><w:tcPr><w:vMerge w:val="restart"/></w:tcPr><w:p><w:r><w:t>7</w:t></w:r></w:p></w:tc>' +
+  '<w:tc><w:p><w:r><w:t>1</w:t></w:r></w:p></w:tc></w:tr>' +
+  '<w:tr><w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc>' +
+  '<w:tc><w:p/></w:tc></w:tr></w:tbl>'
+
+/** same row shape but merged horizontally: one gridSpan cell (5) then the
+ * empty formula cell right of it */
+const GRIDSPAN_TABLE =
+  '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+  '<w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>' +
+  '<w:tr><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p><w:r><w:t>5</w:t></w:r></w:p></w:tc>' +
+  '<w:tc><w:p/></w:tc></w:tr></w:tbl>'
+
+describe('table formulas next to merged cells (BUG-1759)', () => {
+  it('inserts =SUM(LEFT) beside a vMerge continuation with the origin value', async () => {
+    const { editor } = await openDoc(VMERGE_TABLE)
+    caretInLastCell(editor) // B2, whose left neighbor is the merge continuation
+    expect(insertCellFormula(editor, '=SUM(LEFT)')).toBe(true)
+    // Word sees the merged cell (7), not "Undefined Bookmark" on the blank slot
+    expect(formulaTextOf(editor)).toEqual({ text: '7', instr: '=SUM(LEFT)' })
+  })
+
+  it('F9 recomputes the merge-continuation formula after the origin changes', async () => {
+    const { editor } = await openDoc(VMERGE_TABLE)
+    caretInLastCell(editor)
+    // cache 14 keeps the origin edit (7 → 9) a unique text replacement
+    insertCellFormula(editor, '=SUM(LEFT)*2')
+    expect(formulaTextOf(editor)?.text).toBe('14')
+    replaceCellText(editor, '7', '9')
+    const jobs = collectTableFormulaJobs(editor)
+    expect(jobs).toEqual([expect.objectContaining({ text: '18' })])
+    applyFieldCaches(editor, jobs)
+    expect(formulaTextOf(editor)?.text).toBe('18')
+  })
+
+  it('resolves =SUM(LEFT) through a gridSpan cell to the origin value', async () => {
+    const { editor } = await openDoc(GRIDSPAN_TABLE)
+    caretInLastCell(editor)
+    expect(insertCellFormula(editor, '=SUM(LEFT)')).toBe(true)
+    expect(formulaTextOf(editor)).toEqual({ text: '5', instr: '=SUM(LEFT)' })
+  })
+})
