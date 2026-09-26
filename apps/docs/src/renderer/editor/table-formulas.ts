@@ -388,6 +388,11 @@ export function refreshNestedTableFormulas(editor: Editor): number {
     tr.setNodeMarkup(pos, undefined, { ...node.attrs, model: rec.value })
     updated += rec.count
   })
-  if (updated > 0) editor.view.dispatch(tr.setMeta(TRACK_IGNORE, true))
+  if (updated > 0)
+    editor.view.dispatch(
+      // addToHistory:false as well (UX-1763): a recomputed cache is not an
+      // authored edit, so an F9 press must not consume a Ctrl+Z step
+      tr.setMeta(TRACK_IGNORE, true).setMeta('addToHistory', false),
+    )
   return updated
 }

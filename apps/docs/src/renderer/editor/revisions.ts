@@ -59,7 +59,9 @@ export interface FieldCacheJob {
  * cached results in one transaction marked TRACK_IGNORE. Word's update-fields
  * command recomputes results silently even with Track Changes on — a refreshed
  * result is recomputation, not an authored edit, so the recorder must never
- * turn it into tracked ins/del (BUG-917).
+ * turn it into tracked ins/del (BUG-917), and prosemirror-history must not
+ * record it either: an F9 cache write entering the undo history makes every
+ * press eat one Ctrl+Z step, so F9 spam buries the user's real edits (UX-1763).
  */
 export function applyFieldCaches(editor: Editor, jobs: readonly FieldCacheJob[]): void {
   if (jobs.length === 0) return
@@ -69,6 +71,7 @@ export function applyFieldCaches(editor: Editor, jobs: readonly FieldCacheJob[])
     tr = tr.replaceWith(j.from, j.to, editor.state.schema.text(j.text, [...j.marks]))
   }
   tr.setMeta(TRACK_IGNORE, true)
+  tr.setMeta('addToHistory', false)
   editor.view.dispatch(tr)
 }
 
