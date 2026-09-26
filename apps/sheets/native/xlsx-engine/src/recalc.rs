@@ -20,7 +20,10 @@ use ironcalc::base::locale::{get_default_locale, get_locale};
 use ironcalc::import::load_from_xlsx;
 use serde::{Deserialize, Serialize};
 
-use crate::structured_refs::{normalize_at_shorthand, normalize_model_structured_references};
+use crate::structured_refs::{
+    has_structured_reference, normalize_at_shorthand, normalize_escaped_brackets,
+    normalize_model_structured_references,
+};
 use crate::{CellRange, SidecarError};
 
 pub const MAX_RECALC_EDITS: usize = 10_000;
@@ -312,10 +315,11 @@ fn run(
                 profile.import = Some(import_started.elapsed().as_millis() as u64);
             }
             let pin_started = std::time::Instant::now();
-            // Structured references: rewrite the `@` this-row shorthand
-            // IronCalc 0.8.3 cannot lex before pinning what still fails, so
-            // table formulas from real Excel files evaluate instead of
-            // erroring or staying frozen at their cached values.
+            // Structured references: rewrite the `]]` column escape and the
+            // `@` this-row shorthand IronCalc 0.8.3 cannot lex before pinning
+            // what still fails, so table formulas from real Excel files
+            // evaluate instead of erroring or staying frozen at their cached
+            // values.
             normalize_model_structured_references(&mut model);
             pin_unparsable_formulas(&mut model);
             if profiling() {
@@ -339,12 +343,14 @@ fn run(
             continue;
         }
         let sheet = sheet_index(&entry.model, &edit.sheet)?;
-        // Excel's `@` this-row shorthand inside structured references must be
-        // spelled out before IronCalc sees the formula. The applied-edit cache
-        // keeps the original input so repeated requests stay comparable; the
+        // Excel's `]]` column escape and `@` this-row shorthand inside
+        // structured references must be rewritten into the forms IronCalc
+        // lexes before they reach the parser. The applied-edit cache keeps
+        // the original input so repeated requests stay comparable; the
         // rewrite is deterministic.
         let input = if edit.input.starts_with('=') {
-            normalize_at_shorthand(&edit.input).into_owned()
+            let unescaped = normalize_escaped_brackets(&edit.input);
+            normalize_at_shorthand(&unescaped).into_owned()
         } else {
             edit.input.clone()
         };
@@ -480,7 +486,18 @@ fn pin_unparsable_formulas(model: &mut Model) {
                     parsed.get(formula as usize),
                     Some((Node::ParseErrorKind { .. }, _))
                 ) {
-                    pins.push((sheet as u32, *row, *column, value));
+                    // A formula that still carries a structured reference
+                    // after the normalize passes keeps its formula: pinning
+                    // would replace it with the file's cached value — or,
+                    // for a cached 0, silently turn the cell into a 0
+                    // literal (BUG-1754). The engine error stays visible
+                    // instead, and the renderer keeps the formula text.
+                    // External-workbook references carry no table token in
+                    // front of the bracket and keep the pin.
+                    let text = worksheet.shared_formulas.get(formula as usize);
+                    if !text.is_some_and(|text| has_structured_reference(text)) {
+                        pins.push((sheet as u32, *row, *column, value));
+                    }
                 }
             }
         }

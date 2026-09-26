@@ -206,14 +206,20 @@ export function renameTableInFormulaText(formula: string, from: string, to: stri
 
 /// Index just past the structured-reference bracket group opening at
 /// `openIndex` (which must point at '['), or null when the group never
-/// closes. Plain depth counting: column names containing "]" are beyond
-/// this heuristic's reach (they stay untouched instead of being rewritten).
+/// closes. Depth counting with the doubled `]]` escape honored, so the
+/// group of a selector whose columns carry `]` is consumed whole instead of
+/// ending early at an escaped bracket.
 function findSelectorEnd(text: string, openIndex: number): number | null {
   let depth = 0
   let index = openIndex
   while (index < text.length) {
-    if (text[index] === '[') depth += 1
-    else if (text[index] === ']') {
+    const char = text[index]
+    if (char === '[') depth += 1
+    else if (char === ']') {
+      if (text[index + 1] === ']' && isEscapedBracketPair(text, index)) {
+        index += 2
+        continue
+      }
       depth -= 1
       index += 1
       if (depth === 0) return index
@@ -235,9 +241,33 @@ interface RefSelection {
   readonly endColumn: number | null
 }
 
-/// Decodes structured-reference escapes inside a bracket token.
+/// Decodes structured-reference escapes inside a bracket token: the doubled
+/// forms (`''`, `]]`) and the apostrophe-prefixed forms (`'[`, `']`, `'#`).
 function decodeRefToken(token: string): string {
-  return token.replace(/''/g, "'").replace(/'#/g, '#').replace(/\[\[/g, '[').replace(/\]\]/g, ']')
+  return token
+    .replace(/''/g, "'")
+    .replace(/'\[/g, '[')
+    .replace(/'\]/g, ']')
+    .replace(/'#/g, '#')
+    .replace(/'@/g, '@')
+    .replace(/\[\[/g, '[')
+    .replace(/\]\]/g, ']')
+}
+
+/// Whether the `]` at `close` opens Excel's doubled right-bracket escape
+/// (`]]`) rather than terminating the token. The pair is the escape when
+/// what follows it continues the column name; when the character after the
+/// pair would close the selector instead (`,`/`:` separators, operators,
+/// whitespace, end of text), the first `]` is structural. A third bracket
+/// continues the escape only when it itself reads as an item terminator
+/// followed by a selector continuation (`[Jan]]]:[Dec]]`); otherwise —
+/// `[Amount]]])` — the pair is the item and group closes.
+function isEscapedBracketPair(text: string, close: number): boolean {
+  const after = text[close + 2]
+  if (after === undefined) return false
+  if (after !== ']') return !',:;)+-*/^&=<>% \t\r\n'.includes(after)
+  const third = text[close + 3]
+  return third === ',' || third === ':' || third === ']'
 }
 
 /// Parses the bracket selector following a table name starting at `start`
@@ -261,6 +291,13 @@ function parseRefSelector(
       continue
     }
     if (char === ']') {
+      if (text[index + 1] === ']' && isEscapedBracketPair(text, index)) {
+        // Excel's doubled right-bracket escape: keep the pair for
+        // decodeRefToken and continue the token (BUG-1754).
+        token += ']]'
+        index += 2
+        continue
+      }
       depth -= 1
       index += 1
       if (depth === 0) {
@@ -275,6 +312,13 @@ function parseRefSelector(
       // consumed by the depth branch above on the next pass.
       const separator = /^\s*[:,]/.exec(text.slice(index))
       if (separator) index += separator[0].length
+      continue
+    }
+    if (char === "'") {
+      // The apostrophe-prefixed escape of the next character; the pair is
+      // kept verbatim for decodeRefToken.
+      token += text.slice(index, index + 2)
+      index += 2
       continue
     }
     token += char
