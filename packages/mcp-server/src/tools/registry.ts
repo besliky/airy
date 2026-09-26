@@ -744,9 +744,11 @@ export function registerTools(server: McpServer): void {
         'fullCalcOnLoad flag) — so even a zero-edit xlsx save may touch that one entry, and for ' +
         'workbooks the unchanged result flag reflects the edit journal, not the bytes. A workbook ' +
         'save with journaled edits also refreshes the cached results of formula cells (BUG-1761): ' +
-        'the sidecar recalculation engine evaluates the journal and numeric results are written ' +
-        'into <v>, so script readers (openpyxl data_only, pandas) see fresh values; when the ' +
-        'engine is unavailable the save still succeeds, keeps the fullCalcOnLoad flag and says so ' +
+        "the save waits out the sheets' lazy formula index and the sidecar recalculation engine " +
+        'evaluates the journal, so numeric results land in <v> even when no range was read in the ' +
+        'session; script readers (openpyxl data_only, pandas) see fresh values. When the ' +
+        'recalculation cannot run (engine unavailable, workbook above the size budget, index not ' +
+        'ready in time) the save still succeeds, keeps the fullCalcOnLoad flag and says so ' +
         'in its warnings. Returns the absolute path.',
       inputSchema: {
         handle: z.string().min(1).describe('Session handle from open_document'),

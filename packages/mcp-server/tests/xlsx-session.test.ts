@@ -34,7 +34,7 @@ vi.mock('../src/import/soffice.js', () => ({
   }),
 }))
 
-import { XlsxSession } from '../src/xlsx/session.js'
+import { XlsxSession, setRecalcIndexWaitForTests } from '../src/xlsx/session.js'
 import { saveWorkbookViaSidecar } from '../src/xlsx/save.js'
 import { MAX_SHEET_COLUMNS, MAX_SHEET_ROWS, parseA1Range } from '../src/xlsx/refs.js'
 import { FencingError } from '../src/docx/session.js'
@@ -709,11 +709,53 @@ describe('save refreshes formula caches (BUG-1761)', () => {
     expect(saved.warnings[0]).toContain('the formula engine was unavailable')
   })
 
-  it('an incomplete formula index degrades with the reason named', async () => {
-    const { session } = await formulaSession({ formulaIndexingComplete: false })
+  it('waits out a lazy formula index and still overlays (BUG-1776 cold flow)', async () => {
+    // read_formula_cells returns immediately with whatever the sidecar's lazy
+    // background indexer has so far (the sheets app polls it). The canonical
+    // open -> edit -> save flow never reads first, so the overlay's single
+    // cold call used to always see indexingComplete:false and degrade — the
+    // save wrote formulas with no <v> at all. The refresh now polls until the
+    // index completes, so a cold save overlays exactly like a warm one.
+    const { session, io } = await formulaSession({ formulaIndexingCompleteAfter: 1 })
     session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 100 }] })
     const saved = await session.save(join(root, 'out.xlsx'))
-    expect(saved.warnings[0]).toContain('the sheet index was incomplete or truncated')
+    expect(io.calls.readFormulaCells.length).toBeGreaterThanOrEqual(2)
+    expect(saved.warnings).toEqual([])
+    expect(saveCalls[0]?.formulaValues).toEqual([
+      {
+        sheetName: 'Sheet1',
+        cells: [
+          { row: 2, column: 0, value: 103 },
+          { row: 0, column: 1, value: 1030 },
+        ],
+      },
+    ])
+  })
+
+  it('an index that never completes degrades with the reason named', async () => {
+    // shrink the wait budget: the first cold reply schedules one 250ms poll,
+    // the budget is then exhausted and the save degrades instead of hanging
+    setRecalcIndexWaitForTests(10)
+    try {
+      const { session, io } = await formulaSession({ formulaIndexingComplete: false })
+      session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 100 }] })
+      const saved = await session.save(join(root, 'out.xlsx'))
+      // it retried past the first cold reply before giving up, and the
+      // warning states the real effect (no caches, not "stale" caches)
+      expect(io.calls.readFormulaCells.length).toBeGreaterThan(1)
+      expect(saved.warnings[0]).toContain('Formula caches were not refreshed')
+      expect(saved.warnings[0]).toContain('the sheet index did not finish building in time')
+      expect(saved.warnings[0]).toContain('see no cached values for the formula cells')
+    } finally {
+      setRecalcIndexWaitForTests(10_000)
+    }
+  })
+
+  it('a truncated formula index degrades with the reason named', async () => {
+    const { session } = await formulaSession({ formulaTruncated: true })
+    session.setCells({ sheet: 'Sheet1', cells: [{ ref: 'A1', value: 100 }] })
+    const saved = await session.save(join(root, 'out.xlsx'))
+    expect(saved.warnings[0]).toContain('the formula-cell index was truncated or malformed')
   })
 
   it('a zero-edit save pays no recalculation and stays byte-preserving', async () => {
