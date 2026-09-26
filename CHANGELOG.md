@@ -7,6 +7,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-09-26
+
+### Added
+
+- Pdf:
+  - A quiet status-bar chip explains scanned documents (UX-1733b — the
+    selection-affordance follow-up UX-1733 named). While a PDF's text index
+    is a pure scan (every page without a text layer) and background OCR has
+    not produced text yet, the status bar shows a chip — a scan icon and
+    "Scanned document" — with a hover tip that reuses the UX-1733 platform
+    split: on Windows/macOS text recognition (OCR) runs automatically and
+    makes the text searchable, on Linux it says honestly that OCR is not
+    available on this platform. The chip retires itself as soon as the
+    auto-OCR pass overlays recognized text on any page and stays on Linux,
+    where that moment never comes. Visibility is computed by the same
+    classifier as the UX-1733 search state, inside the pass that already
+    builds the index; when the index never got built (a broken index) or the
+    document is password-protected/read-only, the chip stays silent rather
+    than claim what it does not know. The selection code itself is untouched,
+    and all three strings ship in all 20 locales (PR #270).
+
+### Fixed
+
+- Shell:
+  - Three settings-storage fixes from the 2026-09-26 shell-settings audit
+    (BUG-1773, BUG-1774, UX-1775). Typed junk no longer flips boolean
+    settings: `restoreSession: "no"` written by an external editor counted as
+    restore-on under the old `!== false` check — any non-false nonsense meant
+    "restore" — and `liveBridge` had the same trap; a shared
+    `normalizeBooleanSetting(value, fallback)` now resolves recognized
+    boolean spellings (`no/false/off/0/''` and `yes/true/on/1`, case- and
+    whitespace-insensitive), lets real booleans through, and falls back to
+    the key's schema default for any other junk, while absent keys keep their
+    meaning (both default on). A wholesale external editor that rewrites
+    `app-settings.json` without reading it no longer passes unnoticed — the
+    #108 single-writer discipline covers only this process, so the audit's
+    adversarial writer (48 full rewrites against 10 theme toggles) left the
+    file with zero application keys while the app noticed nothing and its
+    next ordinary merge salted the erasure in: healthy reads now track the
+    last key set per path, and a sharp drop (5 or more keys down to fewer
+    than 3) logs a warning into main.log and preserves the last healthy state
+    as `app-settings.json.previous` — the same stable-name forensic pattern
+    as the BUG-1771 `.bak`, once per distinct on-disk state, re-armed when
+    the keys come back. Detection only observes — the merge is never blocked
+    — and small or organically shrinking files never trigger. Window
+    geometry no longer trails the window by a 500 ms debounce that a kill -9
+    could outrun: move/resize writes coalesce through a unit-tested
+    `createGeometrySaver` with a 150 ms debounce, while close and
+    maximize/full-screen transitions flush synchronously — one immediate
+    final write that also cancels any pending deferred write, so a kill now
+    loses at most ~150 ms of movement and graceful exits lose nothing
+    (PR #271).
+- Sheets:
+  - A restored table slicer no longer counts the totals row as a member
+    (BUG-1755). `handleCreateTableSlicer` collects panel members over the
+    table's data rows (`area.endRow - totalsRowCount`), but
+    `restoreImportedTableSlicers` read the full table area — so after every
+    reopen the panel gained a phantom "Total" member no data row can ever
+    match, and toggling it wrote a criterion with no data rows behind it.
+    Restore now applies the same data-row bound as creation (the totals row
+    stays outside the filter — Excel semantics, the same PAR-203 line the
+    slicer tests already pin), proven red before the fix on the real Univer
+    filter model: a table with a one-row totals band restores 4 members
+    (alpha through delta), not 5. The same PR also carries a slides fix:
+    Record Slide Show stores per-slide auto-advance (`advTm`) with
+    millisecond precision (UX-1768) — `finishRecord`/`finishRehearse` used
+    to round each slide's dwell to whole seconds (`Math.round(ms/1000)`),
+    up to ±0.5 s of error per slide against PowerPoint's ms-precision
+    `advTm`; the dwell is now carried and saved as exact milliseconds end to
+    end, with second rounding kept display-only in the HUD clock. The audit's
+    wall-clock scenario (2.2/1.6/1.0/0.7 s dwells) survives unrounded as
+    [2200, 1600, 1000, 700], and a save+reopen round-trip asserts
+    `advTm="1650"` verbatim in the slide XML; pause/resume semantics are
+    unchanged (PR #272).
+  - The sheets standalone entry stops forcing the accessibility tree on
+    every user (PERF-1727b — the follow-up the 0.28.0 notes named: the same
+    unconditional force still sat in `sheets-main.ts`). Standalone sheets now
+    apply the same lazy policy as the shell (#264): a local
+    `applyAccessibilityPolicy()` forces support only on `AIRY_FORCE_A11Y=1`
+    and otherwise leaves it to Chromium's own detection — including a screen
+    reader that connects after the app starts, verified live on Electron 43
+    in PERF-1700c — so the renderer no longer builds and maintains an AX
+    tree nobody is reading; `AIRY_FORCE_A11Y=1` is now the single escape
+    hatch for both entries, and no unconditional
+    `setAccessibilitySupportEnabled(true)` is left anywhere in the suite
+    (PR #273).
+
 ## [0.28.0] - 2026-09-26
 
 ### Fixed
