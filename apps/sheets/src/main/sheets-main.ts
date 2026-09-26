@@ -138,6 +138,7 @@ import {
 } from '../shared/desktop-api'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
 import { atomicWriteFile } from '@airy-office/electron-utils'
+import { applyAccessibilityPolicy } from './accessibility-policy'
 import { CaptureConsentTracker } from './capture-consent'
 import { AiStreamRegistry } from './ai-streams'
 import { closeGuardDecision } from './close-guard'
@@ -4540,7 +4541,10 @@ export function startSheetsStandalone(): void {
   void applyMainProcessProxy()
   app.whenReady().then(() => {
     setUiLang(normalizeLang(process.env.AIRY_LANG ?? app.getLocale()))
-    app.setAccessibilitySupportEnabled(true)
+    // PERF-1727b: same lazy accessibility policy as the shell (PERF-1700c);
+    // do not force Chromium's AX tree on for everyone — it enables itself
+    // when an assistive-tech client is detected. AIRY_FORCE_A11Y=1 opts in.
+    applyAccessibilityPolicy()
     installApplicationMenu()
     startCaptureServer()
     return createSheetsWindow()
