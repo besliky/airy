@@ -57,6 +57,33 @@ describe('renameTableInFormulaText', () => {
     )
   })
 
+  it('rewrites @-shorthand selectors keeping the group verbatim', () => {
+    expect(renameTableInFormulaText('SUM(Users[@[Unit Price]])', 'Users', 'Clients')).toBe(
+      'SUM(Clients[@[Unit Price]])',
+    )
+    expect(renameTableInFormulaText('COUNTA(Users[@])', 'Users', 'Clients')).toBe(
+      'COUNTA(Clients[@])',
+    )
+    expect(renameTableInFormulaText('SUM(Users[@[Jan]:[Dec]])', 'Users', 'Clients')).toBe(
+      'SUM(Clients[@[Jan]:[Dec]])',
+    )
+    expect(renameTableInFormulaText("SUM('Old Name'[@Col])", 'Old Name', 'New_Table')).toBe(
+      'SUM(New_Table[@Col])',
+    )
+  })
+
+  it('rewrites special-item selector groups', () => {
+    expect(renameTableInFormulaText('Users[[#This Row],[Col]]', 'Users', 'Clients')).toBe(
+      'Clients[[#This Row],[Col]]',
+    )
+    expect(
+      renameTableInFormulaText('SUM(Users[[#Data],[#Totals],[Col]])', 'Users', 'Clients'),
+    ).toBe('SUM(Clients[[#Data],[#Totals],[Col]])')
+    expect(renameTableInFormulaText('SUM(Users[#Totals])', 'Users', 'Clients')).toBe(
+      'SUM(Clients[#Totals])',
+    )
+  })
+
   it('leaves string literals, sheet names, lookalikes, and calls alone', () => {
     expect(renameTableInFormulaText('IF(A1="Users",Users,0)', 'Users', 'Clients')).toBe(
       'IF(A1="Users",Clients,0)',
@@ -119,5 +146,72 @@ describe('tableRefsToA1InFormulaText', () => {
 
   it('never rewrites table-name lookalikes', () => {
     expect(tableRefsToA1InFormulaText('SUM(MyUsers)', TABLE, 0, 'Data')).toBe('SUM(MyUsers)')
+  })
+})
+
+/// Same shape but with a totals row: data 2..4, totals 5.
+const TOTALS_TABLE: TableA1Rewrite = {
+  name: 'Sales',
+  geometry: {
+    startRow: 0,
+    endRow: 4,
+    startColumn: 0,
+    endColumn: 1,
+    headerRowCount: 1,
+    totalsRowCount: 1,
+  },
+  columns: ['Product', 'Amount'],
+  sheetName: 'Data',
+}
+
+describe('tableRefsToA1InFormulaText with multiple specifiers', () => {
+  it('folds contiguous band unions into one A1 range', () => {
+    // Data + totals are adjacent rows, so the union is a single range.
+    expect(
+      tableRefsToA1InFormulaText('SUM(Sales[[#Data],[#Totals],[Amount]])', TOTALS_TABLE, 0, 'Data'),
+    ).toBe('SUM(B2:B5)')
+    // Headers + data sit above the totals row.
+    expect(
+      tableRefsToA1InFormulaText('COUNTA(Sales[[#Headers],[#Data]])', TOTALS_TABLE, 0, 'Data'),
+    ).toBe('COUNTA(A1:B4)')
+    // Column span with band union keeps the column slice.
+    expect(
+      tableRefsToA1InFormulaText(
+        'SUM(Sales[[#Totals],[[Product]:[Amount]]])',
+        TOTALS_TABLE,
+        0,
+        'Data',
+      ),
+    ).toBe('SUM(A5:B5)')
+  })
+
+  it('unions resolve in any specifier order', () => {
+    expect(
+      tableRefsToA1InFormulaText('SUM(Sales[[#Totals],[#Data],[Amount]])', TOTALS_TABLE, 0, 'Data'),
+    ).toBe('SUM(B2:B5)')
+  })
+
+  it('maps unions with a gap or an empty band to #REF!', () => {
+    // Headers + totals without data: no single A1 equivalent.
+    expect(
+      tableRefsToA1InFormulaText(
+        'SUM(Sales[[#Headers],[#Totals],[Amount]])',
+        TOTALS_TABLE,
+        0,
+        'Data',
+      ),
+    ).toBe('SUM(#REF!)')
+    // #Totals on a table without a totals row stays unresolvable.
+    expect(
+      tableRefsToA1InFormulaText('SUM(Users[[#Data],[#Totals],[Users]])', TABLE, 0, 'Data'),
+    ).toBe('SUM(#REF!)')
+  })
+
+  it('keeps this-row resolution for @ items alongside special items', () => {
+    expect(tableRefsToA1InFormulaText('Sales[@Amount]', TOTALS_TABLE, 2, 'Data')).toBe('B3')
+    expect(tableRefsToA1InFormulaText('Sales[@]', TOTALS_TABLE, 2, 'Data')).toBe('A3:B3')
+    expect(tableRefsToA1InFormulaText('Sales[@[Product]:[Amount]]', TOTALS_TABLE, 3, 'Data')).toBe(
+      'A4:B4',
+    )
   })
 })
