@@ -220,6 +220,8 @@ export const ko = {
   appFieldNoMembers: '이 필드에는 필터링할 수 있는 구성원이 없습니다.',
   appSlicerCreated:
     '슬라이서 "{name}"을(를) 만들었습니다. 구성원을 클릭하면 피벗 테이블이 필터링됩니다.',
+  appTableSlicerNeedsFilter:
+    '테이블 슬라이서에는 테이블 자체의 필터가 필요합니다. 이 테이블에는 사용할 수 있는 필터가 없습니다.',
   appSlicerNeedsFullLoad:
     '슬라이서 필터링에는 전체 로드 모드가 필요합니다. 이 통합 문서는 너무 커서 스트리밍 방식으로만 로드되었습니다.',
   appSlicerPivotMissing: '슬라이서에 연결된 피벗 테이블이 더 이상 없습니다.',

@@ -230,6 +230,8 @@ export const it = {
   appFieldNoMembers: 'Questo campo non ha membri da filtrare.',
   appSlicerCreated:
     'Filtro dati "{name}" creato — fai clic sui membri per filtrare la tabella pivot.',
+  appTableSlicerNeedsFilter:
+    'Un filtro dati tabella richiede il filtro della tabella: questa tabella non ha un filtro utilizzabile.',
   appSlicerNeedsFullLoad:
     'Il filtraggio con filtro dati richiede la modalità a caricamento completo — questa cartella di lavoro è troppo grande ed è stata caricata in streaming.',
   appSlicerPivotMissing: 'La tabella pivot collegata a questo filtro dati non esiste più.',

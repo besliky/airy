@@ -220,6 +220,8 @@ export const ms = {
   appBlank: '(kosong)',
   appFieldNoMembers: 'Medan ini tiada ahli untuk ditapis.',
   appSlicerCreated: 'Penghiris "{name}" dicipta — klik ahli untuk menapis Jadual Pangsi.',
+  appTableSlicerNeedsFilter:
+    'Penghiris jadual memerlukan penapis jadual itu sendiri — jadual ini tiada penapis yang boleh digunakan.',
   appSlicerNeedsFullLoad:
     'Penapisan penghiris memerlukan mod muat penuh — buku kerja ini terlalu besar dan dimuatkan secara penstriman.',
   appSlicerPivotMissing: 'Jadual Pangsi yang terikat pada penghiris ini tidak lagi wujud.',

@@ -218,6 +218,8 @@ export const cs = {
   appBlank: '(prázdné)',
   appFieldNoMembers: 'Toto pole nemá žádné členy k filtrování.',
   appSlicerCreated: 'Průřez „{name}“ vytvořen — klepnutím na členy filtrujte kontingenční tabulku.',
+  appTableSlicerNeedsFilter:
+    'Průřez tabulky vyžaduje vlastní filtr tabulky — tato tabulka nemá použitelný filtr.',
   appSlicerNeedsFullLoad:
     'Filtrování průřezem vyžaduje režim úplného načtení — tento sešit je příliš velký a byl načten streamováním.',
   appSlicerPivotMissing: 'Kontingenční tabulka svázaná s tímto průřezem již neexistuje.',

@@ -227,6 +227,8 @@ export const ja = {
   appFieldNoMembers: 'このフィールドにはフィルター可能なメンバーがありません。',
   appSlicerCreated:
     'スライサー "{name}" を作成しました。メンバーをクリックするとピボットテーブルをフィルターできます。',
+  appTableSlicerNeedsFilter:
+    'テーブルスライサーにはテーブル自身のフィルターが必要です。このテーブルには使用可能なフィルターがありません。',
   appSlicerNeedsFullLoad:
     'スライサーによるフィルターには完全読み込みモードが必要です。このブックは大きすぎるため、ストリーミング読み込みのみ行われました。',
   appSlicerPivotMissing: 'スライサーに関連付けられたピボットテーブルが存在しません。',

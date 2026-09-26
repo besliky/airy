@@ -230,6 +230,8 @@ export const pt = {
   appFieldNoMembers: 'Este campo não tem membros para filtrar.',
   appSlicerCreated:
     'Segmentação "{name}" criada — clique nos membros para filtrar a Tabela Dinâmica.',
+  appTableSlicerNeedsFilter:
+    'Uma segmentação de tabela precisa do filtro da própria tabela — esta tabela não tem filtro utilizável.',
   appSlicerNeedsFullLoad:
     'A filtragem por segmentação requer o modo de carregamento completo — esta pasta de trabalho é muito grande e foi carregada por streaming.',
   appSlicerPivotMissing: 'A Tabela Dinâmica vinculada a esta segmentação não existe mais.',

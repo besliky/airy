@@ -206,6 +206,7 @@ export const he = {
   appBlank: '(ריק)',
   appFieldNoMembers: 'לשדה זה אין חברים לסינון.',
   appSlicerCreated: 'כלי הפריסה "{name}" נוצר — לחץ על חברים כדי לסנן את טבלת הציר.',
+  appTableSlicerNeedsFilter: 'מפריד טבלה זקוק למסנן של הטבלה עצמה — לטבלה זו אין מסנן שמיש.',
   appSlicerNeedsFullLoad:
     'סינון בכלי פריסה דורש מצב טעינה מלאה — חוברת עבודה זו גדולה מדי ונטענה בהזרמה.',
   appSlicerPivotMissing: 'טבלת הציר המשויכת לכלי פריסה זה אינה קיימת עוד.',

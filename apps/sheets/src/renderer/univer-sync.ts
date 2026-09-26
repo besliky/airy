@@ -5231,7 +5231,10 @@ function applySheetFilter(
         area.endColumn - area.startColumn + 1,
       )
       .createFilter()
-    if (autoFilter && autoFilterColumns.length > 0) {
+    // Criteria ride along for worksheet filters AND table-owned ones (the
+    // sidecar reads a table part's own autoFilter when the sheet has none) —
+    // the slicer round-trip needs the file's selection back.
+    if (autoFilterColumns.length > 0) {
       restoreFilterCriteria(runtime, worksheet, state, sheetId, range, autoFilterColumns)
     }
   } catch {
@@ -5518,7 +5521,7 @@ export function applyFilterCriteria(
   worksheet: UniverWorksheet,
   column: string,
   criteria:
-    | { readonly values: readonly string[] }
+    | { readonly values: readonly string[]; readonly blank?: boolean | undefined }
     | {
         readonly customs: {
           readonly and: boolean
@@ -5542,7 +5545,10 @@ export function applyFilterCriteria(
   if ('values' in criteria) {
     filter.setColumnFilterCriteria(filterColumn, {
       colId,
-      filters: { filters: [...criteria.values] },
+      filters: {
+        filters: [...criteria.values],
+        ...(criteria.blank === true ? { blank: true as const } : {}),
+      },
     })
     return
   }
@@ -5651,9 +5657,51 @@ export function collectFilterStates(
       filter: { range: toCellArea(range), columns },
       hiddenRows: filter.getFilteredOutRows(),
       visibilityRange: toCellArea(visibilityRange),
+      // A table-owned filter keeps its criteria in the table part (the
+      // slicer round-trip): the save routes the snapshot there instead of
+      // writing a worksheet-level autoFilter over the table.
+      ...(origin?.origin === 'table'
+        ? {
+            tableName:
+              sheetMetaTableName(state, sheetId, range) ?? sheetMetaFirstTableName(state, sheetId),
+          }
+        : {}),
     })
   }
   return filterStates
+}
+
+/// The file/session table whose range exactly covers the live filter.
+function sheetMetaTableName(
+  state: LazyWorkbookState,
+  sheetId: string,
+  range: IRange,
+): string | undefined {
+  const sheet = state.file.sheets.find((candidate) => candidate.id === sheetId)
+  const matched = sheet?.tables.find(
+    (table) =>
+      table.range.startRow === range.startRow &&
+      table.range.startColumn === range.startColumn &&
+      table.range.endRow === range.endRow &&
+      table.range.endColumn === range.endColumn,
+  )
+  if (matched?.name) return matched.name
+  const added = state.editJournal.tableAdds.find(
+    (table) =>
+      table.sheetId === sheetId &&
+      table.area.startRow === range.startRow &&
+      table.area.startColumn === range.startColumn &&
+      table.area.endRow === range.endRow &&
+      table.area.endColumn === range.endColumn,
+  )
+  return added?.name
+}
+
+function sheetMetaFirstTableName(state: LazyWorkbookState, sheetId: string): string | undefined {
+  return (
+    state.file.sheets.find((candidate) => candidate.id === sheetId)?.tables[0]?.name ??
+    state.editJournal.tableAdds.find((table) => table.sheetId === sheetId)?.name
+  )
 }
 
 function toCellArea(range: IRange): WorkbookFilterState['visibilityRange'] {

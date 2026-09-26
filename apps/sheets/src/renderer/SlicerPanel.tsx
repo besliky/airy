@@ -1,22 +1,24 @@
 import { useI18n } from './i18n/locale'
 
-/// Slicer: a visual filter control bound to one pivot dimension field. When
-/// members are clicked, App writes the unselected members as the pivot's hidden
-/// entries and recomputes (pivot-engine's applyPivotSlicer), matching how Excel
-/// slicers drive pivotField hidden items.
-///
-/// TODO(OOXML persistence): the xl/slicers/slicer1.xml + xl/slicerCaches/ parts
-/// (incl. workbook rels, contentTypes, and x14/x15 extensions) are heavy, so
-/// slicers currently exist only within the session (App state); the hidden
-/// entries and output-area data they drive are persisted through the existing
-/// pivot refresh write-back path — Excel shows the same filtered result on open,
-/// just without the slicer control itself.
+/// Slicer: a visual filter control. Two kinds exist:
+/// - Pivot slicers (SlicerUiState): bound to one pivot dimension field. When
+///   members are clicked, App writes the unselected members as the pivot's
+///   hidden entries and recomputes (pivot-engine's applyPivotSlicer). These
+///   stay session-only: the filtered result persists through the pivot
+///   refresh write-back path, the control itself does not.
+/// - Table slicers (TableSlicerUiState, PAR-203): bound to a table column.
+///   Selections write the column's filter criteria into the sheet's filter
+///   model (applyFilterCriteria) and persist through the table part's own
+///   autoFilter plus the slicer OOXML parts (see gateway/xlsx-slicer.ts).
 
 export interface SlicerMember {
   /// fieldItems index (the member's entry position in the pivot cache, stable
   /// across layout growth).
   readonly member: number
   readonly label: string
+  /// Table slicers only: the collapsed blank member. Its selection follows
+  /// the criteria's blank flag instead of the label.
+  readonly blank?: boolean
 }
 
 export interface SlicerUiState {
@@ -31,6 +33,21 @@ export interface SlicerUiState {
   /// Selected members (fieldItems indices); all selected = unfiltered.
   readonly selected: readonly number[]
 }
+
+export interface TableSlicerUiState {
+  readonly id: string
+  readonly sheetId: string
+  /// Bound table's displayName token (PAR-203).
+  readonly tableName: string
+  /// 0-based offset of the sliced column in the table's column list.
+  readonly colId: number
+  readonly fieldName: string
+  readonly members: readonly SlicerMember[]
+  /// Selected member indices; all selected = unfiltered.
+  readonly selected: readonly number[]
+}
+
+export type AnySlicerUiState = SlicerUiState | TableSlicerUiState
 
 /// Field picker when creating a slicer: lists the current pivot's dimension
 /// fields (row/column/report filter).
@@ -80,14 +97,15 @@ export function SlicerFieldPicker({
 }
 
 /// Slicer overlay on the worksheet: one panel per slicer, with multi-select
-/// toggle buttons for members.
+/// toggle buttons for members. Both slicer kinds (pivot-bound and
+/// table-bound) render identically; the tooltip carries the binding.
 export function SlicerPanels({
   slicers,
   onToggle,
   onSelectAll,
   onRemove,
 }: {
-  readonly slicers: readonly SlicerUiState[]
+  readonly slicers: readonly AnySlicerUiState[]
   readonly onToggle: (slicerId: string, member: number) => void
   readonly onSelectAll: (slicerId: string) => void
   readonly onRemove: (slicerId: string) => void
@@ -99,6 +117,8 @@ export function SlicerPanels({
       {slicers.map((slicer) => {
         const selected = new Set(slicer.selected)
         const filtered = selected.size < slicer.members.length
+        const tip =
+          'pivotPath' in slicer ? slicer.pivotPath : `table:${slicer.tableName}#${slicer.colId}`
         return (
           <section
             key={slicer.id}
@@ -106,7 +126,7 @@ export function SlicerPanels({
             aria-label={t('dlgSlicerAria', { name: slicer.fieldName })}
           >
             <header>
-              <span className="slicer-title" data-tip={slicer.pivotPath}>
+              <span className="slicer-title" data-tip={tip}>
                 {slicer.fieldName}
               </span>
               <button

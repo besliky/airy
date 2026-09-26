@@ -211,6 +211,8 @@ export const th = {
   appBlank: '(ว่าง)',
   appFieldNoMembers: 'เขตข้อมูลนี้ไม่มีสมาชิกให้กรอง',
   appSlicerCreated: 'สร้างตัวแบ่งส่วนข้อมูล "{name}" แล้ว — คลิกสมาชิกเพื่อกรอง PivotTable',
+  appTableSlicerNeedsFilter:
+    'ตัวแบ่งส่วนข้อมูลตารางต้องใช้ตัวกรองของตารางเอง — ตารางนี้ไม่มีตัวกรองที่ใช้ได้',
   appSlicerNeedsFullLoad:
     'การกรองด้วยตัวแบ่งส่วนข้อมูลต้องใช้โหมดโหลดเต็ม — เวิร์กบุ๊กนี้ใหญ่เกินไปจึงโหลดแบบสตรีม',
   appSlicerPivotMissing: 'PivotTable ที่ผูกกับตัวแบ่งส่วนข้อมูลนี้ไม่มีอยู่แล้ว',

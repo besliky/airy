@@ -228,6 +228,8 @@ export const nl = {
   appBlank: '(leeg)',
   appFieldNoMembers: 'Dit veld heeft geen leden om te filteren.',
   appSlicerCreated: 'Slicer "{name}" gemaakt — klik op leden om de draaitabel te filteren.',
+  appTableSlicerNeedsFilter:
+    'Een tabelslicer heeft het eigen filter van de tabel nodig — deze tabel heeft geen bruikbaar filter.',
   appSlicerNeedsFullLoad:
     'Filteren met een slicer vereist de volledig geladen modus — deze werkmap is te groot en is streamend geladen.',
   appSlicerPivotMissing: 'De draaitabel die aan deze slicer is gekoppeld, bestaat niet meer.',

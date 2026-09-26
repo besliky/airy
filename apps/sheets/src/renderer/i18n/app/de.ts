@@ -232,6 +232,8 @@ export const de = {
   appFieldNoMembers: 'Dieses Feld hat keine filterbaren Elemente.',
   appSlicerCreated:
     'Datenschnitt „{name}“ erstellt — klicken Sie auf Elemente, um die PivotTable zu filtern.',
+  appTableSlicerNeedsFilter:
+    'Ein Tabellenslicer benötigt den Filter der Tabelle — diese Tabelle hat keinen verwendbaren Filter.',
   appSlicerNeedsFullLoad:
     'Das Filtern per Datenschnitt erfordert den Volllademodus — diese Arbeitsmappe ist zu groß und wurde per Streaming geladen.',
   appSlicerPivotMissing: 'Die mit diesem Datenschnitt verbundene PivotTable existiert nicht mehr.',
