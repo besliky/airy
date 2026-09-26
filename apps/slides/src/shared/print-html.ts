@@ -70,6 +70,20 @@ export function buildPrintDocumentHtml(o: PrintDocOptions): string {
   const pageH = isFull ? SLIDE_H : landscape ? A4_W : A4_H
   const perPage =
     layout === 'handout2' ? 2 : layout === 'handout3' ? 3 : layout === 'handout6' ? 6 : 1
+  /**
+   * Landscape notes slide-image sizing (BUG-1766). The notes page height is
+   * auto (notes flow onto continuation sheets), so the old percentage cap
+   * (`max-height: 55%` against a fixed-height page) no longer resolves: the
+   * box is computed explicitly from the same 55%-of-content-height budget,
+   * bounded by the inner page width, at the slide ratio.
+   */
+  const notesImgCss = (() => {
+    if (!landscape) return 'width: 100%; height: auto;'
+    const r3 = (x: number) => Math.round(x * 1000) / 1000
+    const innerW = pageW - 1 // 0.5in padding on each side
+    const h = Math.min(0.55 * (pageH - 1), innerW / o.ratio)
+    return `width: ${r3(h * o.ratio)}in; height: ${r3(h)}in; margin: 0 auto;`
+  })()
   const esc = (x: string) =>
     x.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)
   /** One slide as markup: the inline vector page when provided, else the bitmap <img> */
@@ -144,10 +158,20 @@ html, body { margin: 0; padding: 0; font-family: -apple-system, 'Segoe UI', sans
   background: repeating-linear-gradient(#fff 0 0.28in, #ccc 0.28in calc(0.28in + 1px));
 }
 .page.handout.h6 { display: grid; grid-template-columns: ${h6Cols}; grid-auto-rows: 1fr; }
-.page.notes { padding: 0.5in; display: flex; flex-direction: column; }
-.page.notes img { width: ${landscape ? 'auto' : '100%'}; ${landscape ? 'max-height: 55%; align-self: center;' : 'height: auto;'} border: 1px solid #bbb; }
-.page.notes svg { width: ${landscape ? 'auto' : '100%'}; ${landscape ? 'max-height: 55%; align-self: center;' : 'height: auto;'} border: 1px solid #bbb; }
-.page.notes .note { margin-top: 0.3in; font-size: 11pt; line-height: 1.5; white-space: pre-wrap; }
+/* BUG-1766: a note longer than the space under the slide used to be silently
+   clipped by the fixed page box (overflow: hidden) — the PDF text layer lost
+   everything past the first sheet without any indication. The notes page keeps
+   its A4 frame through min-height but grows instead of clipping, so Chromium's
+   print fragmentation continues the text onto following sheets. Block flow
+   (not flex: flex items do not fragment across pages), and box-decoration-break
+   clones the page padding onto every printed continuation sheet. */
+.page.notes { padding: 0.5in; height: auto; min-height: ${pageH}in; overflow: visible; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.page.notes img { display: block; ${notesImgCss} border: 1px solid #bbb; }
+.page.notes svg { display: block; ${notesImgCss} border: 1px solid #bbb; }
+/* overflow-wrap: anywhere: an unbreakable run (a 30k-char one-liner) must wrap
+   at the line box instead of overflowing the page width horizontally, where the
+   PDF text layer would silently lose it. Normal words are unaffected. */
+.page.notes .note { margin-top: 0.3in; font-size: 11pt; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 ${frameCss}
 ${previewCss}
 </style></head><body>${body}</body></html>`

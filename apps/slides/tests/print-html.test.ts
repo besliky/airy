@@ -106,6 +106,69 @@ describe('buildPrintDocumentHtml', () => {
     expect(html).toContain('a &lt; b<br>next')
   })
 
+  it('notes pages are not clipping boxes: they grow and fragment onto continuation sheets', () => {
+    const html = buildPrintDocumentHtml({ srcs: srcs(1), ratio: 16 / 9, layout: 'notes' })
+    // the generic .page clip (fixed height + overflow: hidden) must be overridden
+    expect(html).toContain(
+      '.page.notes { padding: 0.5in; height: auto; min-height: 11.69in; overflow: visible;',
+    )
+    // block flow: flex items do not fragment across printed pages
+    expect(html.match(/\.page\.notes \{[^}]*display: flex[^}]*\}/g)).toBeNull()
+  })
+
+  it('BUG-1766: a 30k-character note is fully in the printed flow, not silently clipped', () => {
+    const note30k = 'LOREMNOTE'.repeat(3000) // the audit corpus shape: 30 000 chars, one line
+    const html = buildPrintDocumentHtml({
+      srcs: srcs(1),
+      ratio: 16 / 9,
+      layout: 'notes',
+      notes: [note30k],
+    })
+    // every character survives into the DOM (the PDF text layer)
+    expect(html).toContain(note30k)
+    // still one page block per slide: the overflow continues via pagination,
+    // not via extra slide-less divs
+    expect(html.match(/class="page notes"/g)).toHaveLength(1)
+
+    const lines = Array.from({ length: 400 }, (_x, i) => `Line ${i}: lorem`).join('\n')
+    const lineHtml = buildPrintDocumentHtml({
+      srcs: srcs(1),
+      ratio: 16 / 9,
+      layout: 'notes',
+      notes: [lines],
+    })
+    expect(lineHtml).toContain('Line 0: lorem<br>Line 1: lorem')
+    expect(lineHtml).toContain('Line 399: lorem')
+  })
+
+  it('short notes keep the single framed page and the 11pt note styles', () => {
+    const html = buildPrintDocumentHtml({
+      srcs: srcs(1),
+      ratio: 16 / 9,
+      layout: 'notes',
+      notes: ['tiny'],
+    })
+    expect(html).toContain(
+      '<div class="page notes"><img src="blob:img-0"><div class="note">tiny</div></div>',
+    )
+    expect(html).toContain(
+      '.page.notes .note { margin-top: 0.3in; font-size: 11pt; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }',
+    )
+  })
+
+  it('landscape notes bound the slide image with an explicit box (no percentage heights on auto pages)', () => {
+    const html = buildPrintDocumentHtml({
+      srcs: srcs(1),
+      ratio: 16 / 9,
+      layout: 'notes',
+      orientation: 'landscape',
+      notes: ['n'],
+    })
+    expect(html).toContain('min-height: 8.27in')
+    // 55% of the landscape content height (7.27in), bounded by the inner width, at the slide ratio
+    expect(html).toContain('width: 7.108in; height: 3.999in; margin: 0 auto;')
+  })
+
   it('preview mode adds page badges with the total page count', () => {
     const html = buildPrintDocumentHtml({
       srcs: srcs(5),
