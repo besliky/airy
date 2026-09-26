@@ -493,8 +493,8 @@ export function App() {
   const [customShows, setCustomShows] = useState<CustomShow[]>([])
   const [customShowDlgOpen, setCustomShowDlgOpen] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
-  /** Per-page dwell seconds awaiting confirmation after rehearsal/recording (non-null shows the "save?" confirmation dialog); record=true when captured by Record Slide Show */
-  const [pendingRehearse, setPendingRehearse] = useState<{ sec: number[]; record: boolean } | null>(
+  /** Per-page dwell milliseconds awaiting confirmation after rehearsal/recording (non-null shows the "save?" confirmation dialog; written to advTm verbatim — UX-1768); record=true when captured by Record Slide Show */
+  const [pendingRehearse, setPendingRehearse] = useState<{ ms: number[]; record: boolean } | null>(
     null,
   )
   const [showRuler, setShowRuler] = useState(false)
@@ -1846,7 +1846,7 @@ export function App() {
   const startRehearseShow = useCallback(() => showActions.startRehearseShow(ctxRef.current), [])
   const startRecordShow = useCallback(() => showActions.startRecordShow(ctxRef.current), [])
   const onRehearseDone = useCallback(
-    (perPageSec: number[]) => showActions.onRehearseDone(ctxRef.current, perPageSec),
+    (perPageMs: number[]) => showActions.onRehearseDone(ctxRef.current, perPageMs),
     [],
   )
   const saveRehearseTimings = useCallback(() => showActions.saveRehearseTimings(ctxRef.current), [])
@@ -4395,7 +4395,7 @@ export function App() {
             <h2>{t(pendingRehearse.record ? 'appRecordTitle' : 'appRehearseTitle')}</h2>
             <p className="rehearse-summary">
               {t('appRehearseSummary', {
-                duration: formatClock(pendingRehearse.sec.reduce((a, b) => a + b, 0) * 1000),
+                duration: formatClock(pendingRehearse.ms.reduce((a, b) => a + b, 0)),
               })}
             </p>
             <div className="modal-actions">

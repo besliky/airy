@@ -1,7 +1,8 @@
 /**
  * Record Slide Show (PAR-314) regression tests:
  * - Record session model: dwell accumulation per slide, pause/resume freezing the
- *   clock, stop converting to per-slide seconds (same contract as rehearsal)
+ *   clock, stop keeping per-slide dwell in exact milliseconds (same contract as
+ *   rehearsal; UX-1768 — advTm is written with ms precision, no second rounding)
  * - Timing round-trip: recorded auto-advance times (advTm) survive a full
  *   engine save + reopen, and the slide XML carries the advTm attribute that
  *   PowerPoint / python-pptx read as the auto-advance timing
@@ -41,7 +42,8 @@ describe('record session accumulation', () => {
     expect(t.perPageMs).toEqual([2500, 0, 0])
     t = switchRecordPage(t, 0, 4000) // slide 1 dwelled 0.5s, back to slide 0
     expect(t.perPageMs).toEqual([2500, 500, 0])
-    expect(finishRecord(t, 6000)).toEqual([5, 1, 0]) // 4.5s rounds to 5; 0.5s counts at least 1
+    // UX-1768: exact milliseconds survive the finish (4.5s and 0.5s, no second rounding)
+    expect(finishRecord(t, 6000)).toEqual([4500, 500, 0])
   })
 
   it('pausing banks the current dwell and freezes both clocks; resume starts a fresh window', () => {
@@ -65,7 +67,7 @@ describe('record session accumulation', () => {
     expect(t.currentIndex).toBe(1)
     t = resumeRecord(t, 11_000)
     t = switchRecordPage(t, 2, 13_500)
-    expect(finishRecord(t, 13_500)).toEqual([2, 3, 0]) // 2.5s recorded on slide 1 (rounds up)
+    expect(finishRecord(t, 13_500)).toEqual([2000, 2500, 0]) // 2.5s recorded on slide 1
   })
 
   it('double pause / double resume are no-ops', () => {
@@ -81,6 +83,17 @@ describe('record session accumulation', () => {
     const t = startRecord(1, 0, 5000)
     expect(finishRecord(t, 4000)).toEqual([0])
     expect(currentRecordMs(t, 4000)).toBe(0)
+  })
+
+  it('sub-second dwells land exactly (UX-1768): wall-clock 2.2/1.6/1.0/0.7s stays unrounded', () => {
+    // The EXP-5 audit scenario: the old Math.round(ms/1000) collapsed these
+    // to {2000, 2000, 1000, 1000} — up to 0.5s of error per slide.
+    let t = startRecord(4, 0, 0)
+    t = switchRecordPage(t, 1, 2200)
+    t = switchRecordPage(t, 2, 3800)
+    t = switchRecordPage(t, 3, 4800)
+    t = switchRecordPage(t, -1, 5500)
+    expect(finishRecord(t, 5500)).toEqual([2200, 1600, 1000, 700])
   })
 
   it('HUD clocks and the rehearsal clock share the same m:ss format', () => {
@@ -101,6 +114,18 @@ describe('recorded timing round-trip through the pptx file', () => {
     expect(getSlideAdvanceTime(reopened.deck.slides[1]!)).toBeNull()
     // The structural artifact PowerPoint / python-pptx read: advTm on <p:transition>
     expect(reopened.deck.slides[0]!.bodySuffix).toContain('advTm="5000"')
+  })
+
+  it('sub-second advTm keeps millisecond precision through save + reopen (UX-1768)', async () => {
+    // 1650ms is not second- nor hundred-aligned: any ms→s rounding anywhere in
+    // the pipeline (model, ops, XML writer) would collapse it to 1000/2000.
+    const opened = await openPptx(await createBlankPptx())
+    expect(insertBlankSlide(opened, 0)).not.toBeNull()
+    setSlideAdvanceTime(opened.deck.slides[0]!, 1650)
+
+    const reopened = await openPptx(await savePptx(opened))
+    expect(getSlideAdvanceTime(reopened.deck.slides[0]!)).toBe(1650)
+    expect(reopened.deck.slides[0]!.bodySuffix).toContain('advTm="1650"')
   })
 })
 
@@ -135,14 +160,14 @@ describe('record slide show UI states', () => {
 
   it('finishing in a recording show tags the pending timings as recorded', () => {
     const ctx = makeCtx({ slideShow: { startAt: 0, rehearse: true, record: true } })
-    showActions.onRehearseDone(ctx, [3, 0, 2])
-    expect(ctx.setPendingRehearse).toHaveBeenCalledWith({ sec: [3, 0, 2], record: true })
+    showActions.onRehearseDone(ctx, [3000, 0, 2000])
+    expect(ctx.setPendingRehearse).toHaveBeenCalledWith({ ms: [3000, 0, 2000], record: true })
   })
 
   it('finishing a plain rehearsal keeps the rehearse tagging', () => {
     const ctx = makeCtx({ slideShow: { startAt: 0, rehearse: true } })
-    showActions.onRehearseDone(ctx, [3, 0, 2])
-    expect(ctx.setPendingRehearse).toHaveBeenCalledWith({ sec: [3, 0, 2], record: false })
+    showActions.onRehearseDone(ctx, [3000, 0, 2000])
+    expect(ctx.setPendingRehearse).toHaveBeenCalledWith({ ms: [3000, 0, 2000], record: false })
   })
 
   it('all-zero dwell (never shown) does not open the save prompt', () => {
@@ -151,15 +176,16 @@ describe('record slide show UI states', () => {
     expect(ctx.setPendingRehearse).not.toHaveBeenCalled()
   })
 
-  it('saving writes seconds as milliseconds through setAdvanceTimes and clears the prompt', async () => {
+  it('saving writes the dwell milliseconds 1:1 through setAdvanceTimes and clears the prompt (UX-1768)', async () => {
     const setAdvanceTimes = vi.fn(async () => true)
-    const ctx = makeCtx({ pendingRehearse: { sec: [2, 0, 5], record: true } })
+    // 1650ms is deliberately not second-aligned: no rounding may creep in.
+    const ctx = makeCtx({ pendingRehearse: { ms: [2000, 0, 1650], record: true } })
     vi.stubGlobal('window', { slidesApi: { setAdvanceTimes } })
     await showActions.saveRehearseTimings(ctx)
     expect(setAdvanceTimes).toHaveBeenCalledWith({
       times: [
         { slideIndex: 0, ms: 2000 },
-        { slideIndex: 2, ms: 5000 },
+        { slideIndex: 2, ms: 1650 },
       ],
     })
     expect(ctx.setPendingRehearse).toHaveBeenCalledWith(null)

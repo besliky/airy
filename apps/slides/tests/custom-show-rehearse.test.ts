@@ -1,7 +1,7 @@
 /**
  * Pure-logic tests for custom shows + rehearsal timing:
  * - computePlayOrder: hidden-page and out-of-range filtering for default/custom order
- * - Rehearsal time accumulation: page turns/revisits accumulate per-page dwell milliseconds, converted to seconds at the end
+ * - Rehearsal time accumulation: page turns/revisits accumulate per-page dwell milliseconds, kept as exact milliseconds at the end (UX-1768)
  * - Engine advTm patch: write/read/clear the auto-advance time; changing the transition effect doesn't lose advTm
  */
 import { describe, expect, it } from 'vitest'
@@ -50,8 +50,9 @@ describe('rehearsal timer accumulation', () => {
     expect(t.perPageMs).toEqual([2500, 0, 0])
     t = switchRehearsePage(t, 0, 4000) // page 1 dwelled 0.5s, back to page 0
     expect(t.perPageMs).toEqual([2500, 500, 0])
-    // End: page 0 accumulates 2s more -> 4.5s rounds to 5s; page 1's 0.5s records at least 1s; unvisited page 2 is 0
-    expect(finishRehearse(t, 6000)).toEqual([5, 1, 0])
+    // End: page 0 accumulates 2s more -> 4.5s total; page 1's 0.5s; unvisited page 2 is 0.
+    // UX-1768: the dwell is kept in exact milliseconds (advTm precision), no second rounding.
+    expect(finishRehearse(t, 6000)).toEqual([4500, 500, 0])
   })
 
   it('clock going backwards never produces negatives', () => {
