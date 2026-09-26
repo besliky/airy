@@ -590,6 +590,8 @@ export interface SheetTableEditRequest {
   readonly resize?: { readonly area: TableArea } | undefined
   readonly style?: TableStyleEdit | undefined
   readonly convertToRange?: boolean | undefined
+  /// Row-stripe fill to bake into body cells on Convert to Range.
+  readonly stripeFill?: string | undefined
 }
 
 export interface SheetPivotAddition {
@@ -819,7 +821,8 @@ export async function planCellEditsToXlsx(
   // Stylesheet editor created up front: cell-edit styles and CF need it, and
   // 'set-col-style' structural ops (select-all/full-column formatting, alpha
   // ledger r124) intern their column xf during the structural pass below.
-  // Color filters intern their criterion dxf in the same stylesheet.
+  // Color filters intern their criterion dxf in the same stylesheet, and a
+  // Convert-to-Range stripe bake interns its fills there too.
   let stylesheet: StylesheetEditor | null = null
   const stylesPath = 'xl/styles.xml'
   if (
@@ -828,7 +831,8 @@ export async function planCellEditsToXlsx(
     structuralOps.some(({ ops }) => ops.some((op) => op.kind === 'set-col-style')) ||
     filterStates.some(({ filter }) =>
       filter?.columns.some((column) => column.colorFilter !== undefined),
-    )
+    ) ||
+    tableEdits.some((edit) => edit.stripeFill !== undefined)
   ) {
     if (!(await pkg.has(stylesPath))) await addDefaultStylesheet(pkg, touchedEntries)
     stylesheet = new StylesheetEditor(await pkg.readText(stylesPath))
@@ -1119,10 +1123,6 @@ export async function planCellEditsToXlsx(
     }
     touchedEntries.add(worksheetPath)
   }
-  if (stylesheet?.changed) {
-    pkg.write(stylesPath, stylesheet.serialize())
-    touchedEntries.add(stylesPath)
-  }
 
   // Chart edits run after structural shifts so they patch the already-shifted
   // chart XML.
@@ -1194,7 +1194,9 @@ export async function planCellEditsToXlsx(
 
   // Edits to file tables run before new tables are added, so additions see
   // the edited state (rename collisions, freed ranges) and the flushed
-  // worksheet XML carries the final formula texts the rewrites need.
+  // worksheet XML carries the final formula texts the rewrites need. They
+  // run before the stylesheet is serialized so a Convert-to-Range stripe
+  // bake interns its fills in the same styles.xml write.
   if (tableEdits.length > 0) {
     const resolvedEdits: SheetTableEdit[] = []
     for (const edit of tableEdits) {
@@ -1206,9 +1208,14 @@ export async function planCellEditsToXlsx(
         ...(edit.resize === undefined ? {} : { resize: edit.resize }),
         ...(edit.style === undefined ? {} : { style: edit.style }),
         ...(edit.convertToRange === undefined ? {} : { convertToRange: edit.convertToRange }),
+        ...(edit.stripeFill === undefined ? {} : { stripeFill: edit.stripeFill }),
       })
     }
-    await applyTableEdits(pkg, resolvedEdits, touchedEntries)
+    await applyTableEdits(pkg, resolvedEdits, touchedEntries, stylesheet)
+  }
+  if (stylesheet?.changed) {
+    pkg.write(stylesPath, stylesheet.serialize())
+    touchedEntries.add(stylesPath)
   }
 
   // New tables also run on the flushed worksheet XML: the <tableParts>

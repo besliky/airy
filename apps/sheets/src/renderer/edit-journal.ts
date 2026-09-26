@@ -718,6 +718,9 @@ export interface TableEditEntry {
   resize?: { area: WorkbookTableAdd['area'] } | undefined
   style?: { style?: string | undefined; bandedRows?: boolean | undefined } | undefined
   convertToRange?: boolean | undefined
+  /// Row-stripe fill (sidecar-resolved palette color) to bake into the body
+  /// cells on convert — the style's banding dies with the table part.
+  stripeFill?: string | undefined
 }
 
 /// Records (or merges into) a file-table edit; returns the merged entry.
@@ -744,6 +747,7 @@ export function recordTableEdit(journal: EditJournal, entry: TableEditEntry): Ta
         }
       : {}),
     ...(entry.convertToRange !== undefined ? { convertToRange: entry.convertToRange } : {}),
+    ...(entry.stripeFill !== undefined ? { stripeFill: entry.stripeFill } : {}),
   }
   ;(journal.tableEdits as TableEditEntry[])[index] = merged
   return merged
@@ -760,6 +764,7 @@ export function toSaveTableEdits(journal: EditJournal): WorkbookTableEdit[] {
       ...(entry.resize === undefined ? {} : { resize: entry.resize }),
       ...(entry.style === undefined ? {} : { style: entry.style }),
       ...(entry.convertToRange === undefined ? {} : { convertToRange: entry.convertToRange }),
+      ...(entry.stripeFill === undefined ? {} : { stripeFill: entry.stripeFill }),
     }))
 }
 

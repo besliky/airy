@@ -9,6 +9,7 @@
  * Range turns structured references into equivalent A1 references).
  */
 
+import { columnIndex, columnLabel } from '../domain/cell-address'
 import {
   renameTableInFormulaText,
   SHEET_MAX_COLUMNS,
@@ -17,6 +18,7 @@ import {
   tableRefsToA1InFormulaText,
 } from '../domain/table-refs'
 import { relsPathFor, resolveRelTarget, type MutablePackage } from './xlsx-drawing-add'
+import { StylesheetEditor } from './xlsx-styles'
 import {
   areaToRef,
   collectExistingTableNames,
@@ -43,6 +45,9 @@ export interface SheetTableEdit {
   readonly resize?: { readonly area: TableArea } | undefined
   readonly style?: TableStyleEdit | undefined
   readonly convertToRange?: boolean | undefined
+  /// Row-stripe fill to bake into the body cells on convert (the style's
+  /// banding dies with the table part). Needs the save's stylesheet editor.
+  readonly stripeFill?: string | undefined
 }
 
 const TABLE_REL_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/table'
@@ -64,6 +69,7 @@ export async function applyTableEdits(
   pkg: MutablePackage,
   edits: readonly SheetTableEdit[],
   touchedEntries: Set<string>,
+  stylesheet: StylesheetEditor | null = null,
 ): Promise<void> {
   if (edits.length === 0) return
   for (const edit of edits) {
@@ -78,7 +84,19 @@ export async function applyTableEdits(
     }
     if (edit.style) xml = applyStyleEdit(xml, edit.style)
     if (edit.convertToRange === true) {
-      await applyConvertToRange(pkg, edit.worksheetPath, table, touchedEntries)
+      if (edit.stripeFill !== undefined) {
+        if (stylesheet === null) {
+          throw new TableEditError(
+            `Baking the stripe fill of "${edit.tableName}" needs the workbook stylesheet.`,
+          )
+        }
+        await applyConvertToRange(pkg, edit.worksheetPath, table, touchedEntries, {
+          stripeFill: edit.stripeFill,
+          stylesheet,
+        })
+      } else {
+        await applyConvertToRange(pkg, edit.worksheetPath, table, touchedEntries, null)
+      }
       continue
     }
     pkg.write(table.path, xml)
@@ -279,12 +297,14 @@ function applyStyleEdit(xml: string, style: TableStyleEdit): string {
 /// Convert to Range: structured references across the workbook become their
 /// equivalent A1 references, then the table part, its relationship, its
 /// worksheet tablePart entry, and its content type are removed. Cell data
-/// and formatting are not touched.
+/// and formatting are not touched — except the optional baked stripe fill
+/// (Excel keeps the visible banding as direct formatting).
 async function applyConvertToRange(
   pkg: MutablePackage,
   worksheetPath: string,
   table: ParsedTable,
   touchedEntries: Set<string>,
+  bake: { readonly stripeFill: string; readonly stylesheet: StylesheetEditor } | null,
 ): Promise<void> {
   const sheetNames = await sheetNamesByPath(pkg)
   const sheetName = sheetNames.get(worksheetPath) ?? ''
@@ -310,7 +330,12 @@ async function applyConvertToRange(
     ),
   )
 
-  const worksheetXml = await pkg.readText(worksheetPath)
+  let worksheetXml = await pkg.readText(worksheetPath)
+  if (bake) {
+    worksheetXml = bakeStripeFillIntoWorksheet(worksheetXml, table, bake.stylesheet, (base) =>
+      bake.stylesheet.resolveStyle(base, { fillColor: bake.stripeFill }),
+    )
+  }
   const partPattern = new RegExp(
     `<tablePart\\b[^>]*\\br:id="${escapeRegExp(table.relId)}"[^>]*\\/>`,
   )
@@ -355,6 +380,123 @@ function retallyTableParts(worksheetXml: string): string {
   const remaining = (wrapper[0].match(/<tablePart\b/g) ?? []).length
   if (remaining === 0) return worksheetXml.replace(wrapper[0], '')
   return worksheetXml.replace(wrapper[0], wrapper[0].replace(/count="\d+"/, `count="${remaining}"`))
+}
+
+const ROW_PATTERN = /<row\b[^>]*?\/>|<row\b[^>]*?>[\s\S]*?<\/row>/g
+const CELL_PATTERN = /<c\b[^>]*?\/>|<c\b[^>]*?>[\s\S]*?<\/c>/g
+
+/// Bakes the table's row-stripe fill into the body cells as direct
+/// formatting, so the banding survives Convert to Range (Excel keeps the
+/// visible stripes). Mirrors the renderer's banding approximation: parity
+/// counts from the first data row, and a cell with its own solid fill keeps
+/// it. The stripes stay physical — a live autoFilter's visible-order
+/// re-ranking and body rows missing from the sheet XML are not recreated.
+function bakeStripeFillIntoWorksheet(
+  worksheetXml: string,
+  table: ParsedTable,
+  stylesheet: StylesheetEditor,
+  resolveFillXf: (baseXfIndex: number) => number,
+): string {
+  const dataStartRow = table.area.startRow + table.headerRowCount
+  // Exclusive: the totals band is not striped.
+  const bodyEndRow = table.area.endRow - table.totalsRowCount
+  if (bodyEndRow <= dataStartRow) return worksheetXml
+  const stripeRows = new Set<number>()
+  for (let row = dataStartRow; row < bodyEndRow; row += 1) {
+    if ((row - dataStartRow) % 2 === 0) stripeRows.add(row)
+  }
+  return worksheetXml.replace(ROW_PATTERN, (rowXml) => {
+    const rowNumber = Number(/\br="(\d+)"/.exec(rowXml)?.[1])
+    if (!stripeRows.has(rowNumber - 1)) return rowXml
+    const selfClosing = rowXml.endsWith('/>')
+    const inner = selfClosing ? '' : rowXml.slice(rowXml.indexOf('>') + 1, -'</row>'.length)
+    const rebuilt = rebuildStripeRow(inner, rowNumber - 1, table, stylesheet, resolveFillXf)
+    if (rebuilt === inner) return rowXml
+    if (selfClosing) {
+      const head = rowXml.slice(0, -2)
+      return `${head}>${rebuilt}</row>`
+    }
+    return rowXml.slice(0, rowXml.indexOf('>') + 1) + rebuilt + '</row>'
+  })
+}
+
+/// Rewrites one body row's cells with the stripe fill and creates the cells
+/// the row is missing, preserving order and any non-cell segments.
+function rebuildStripeRow(
+  inner: string,
+  row: number,
+  table: ParsedTable,
+  stylesheet: StylesheetEditor,
+  resolveFillXf: (baseXfIndex: number) => number,
+): string {
+  const startColumn = table.area.startColumn
+  const endColumn = table.area.endColumn
+  const spanColumns: number[] = []
+  for (let column = startColumn; column <= endColumn; column += 1) spanColumns.push(column)
+  interface Piece {
+    text?: string
+    column?: number
+    xml?: string
+  }
+  const pieces: Piece[] = []
+  const existing = new Set<number>()
+  let cursor = 0
+  for (const match of inner.matchAll(CELL_PATTERN)) {
+    const cellXml = match[0]
+    const ref = /\br="([A-Z]+)(\d+)"/.exec(cellXml)
+    const column = ref ? columnIndex(ref[1]!) : -1
+    const gap = inner.slice(cursor, match.index)
+    if (gap !== '') pieces.push({ text: gap })
+    cursor = match.index + cellXml.length
+    if (ref === undefined || column! < startColumn || column! > endColumn) {
+      pieces.push({ column: -1, xml: cellXml })
+      continue
+    }
+    existing.add(column!)
+    // A cell with its own solid fill wins over the stripe (same rule the
+    // renderer's banding approximation uses).
+    const baseXf = Number(/\bs="(\d+)"/.exec(cellXml)?.[1] ?? 0)
+    if (stylesheet.xfHasOwnFill(baseXf)) {
+      pieces.push({ column, xml: cellXml })
+      continue
+    }
+    pieces.push({ column, xml: patchCellStyle(cellXml, resolveFillXf(baseXf)) })
+  }
+  const tail = inner.slice(cursor)
+  if (tail !== '') pieces.push({ text: tail })
+  const created = spanColumns.filter((column) => !existing.has(column))
+  let out = ''
+  let textBuffer = ''
+  let createdIndex = 0
+  for (const piece of pieces) {
+    if (piece.text !== undefined) {
+      textBuffer += piece.text
+      continue
+    }
+    while (
+      createdIndex < created.length &&
+      (piece.column === -1 || created[createdIndex]! < piece.column!)
+    ) {
+      out += `<c r="${columnLabel(created[createdIndex++]!)}${row + 1}" s="${resolveFillXf(0)}"/>`
+    }
+    out += textBuffer
+    textBuffer = ''
+    out += piece.xml!
+  }
+  while (createdIndex < created.length) {
+    out += `<c r="${columnLabel(created[createdIndex++]!)}${row + 1}" s="${resolveFillXf(0)}"/>`
+  }
+  return out + textBuffer
+}
+
+function patchCellStyle(cellXml: string, nextXf: number): string {
+  const close = cellXml.indexOf('>')
+  const selfClosing = cellXml[close - 1] === '/'
+  const head = selfClosing ? cellXml.slice(0, close - 1) : cellXml.slice(0, close)
+  const patched = /\bs="\d+"/.test(head)
+    ? head.replace(/\bs="\d+"/, `s="${nextXf}"`)
+    : `${head} s="${nextXf}"`
+  return selfClosing ? `${patched}/>` : `${patched}>${cellXml.slice(close + 1)}`
 }
 
 /// Runs `rewrite` over every worksheet `<f>` body and workbook definedName.

@@ -4065,6 +4065,7 @@ async function writeWorkbookTo(
     ...(edit.resize === undefined ? {} : { resize: edit.resize }),
     ...(edit.style === undefined ? {} : { style: edit.style }),
     ...(edit.convertToRange === undefined ? {} : { convertToRange: edit.convertToRange }),
+    ...(edit.stripeFill === undefined ? {} : { stripeFill: edit.stripeFill }),
   }))
   const pivotAdditions = request.pivotAdditions.map((pivot) => ({
     sheetName: resolveSheetName(pivot.sheetId),

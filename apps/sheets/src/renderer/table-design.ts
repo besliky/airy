@@ -25,6 +25,9 @@ export interface TableDesignSeed {
   readonly columnNames: readonly string[]
   readonly style: string | undefined
   readonly bandedRows: boolean
+  /// Sidecar-resolved row-stripe color; Convert to Range bakes it into the
+  /// body cells because the style's banding dies with the table part.
+  readonly stripeFill: string | undefined
   readonly tableId: string | undefined
 }
 
@@ -66,6 +69,9 @@ export function findTableDesignTarget(
         columnNames: session.columnNames,
         style: session.style,
         bandedRows: session.bandedRows,
+        // Session banding already lives in the cells (applyTableBanding at
+        // load), so nothing needs baking when the table goes away.
+        stripeFill: undefined,
         tableId: session.tableId,
       },
     }
@@ -95,6 +101,7 @@ export function findTableDesignTarget(
       columnNames: table.columns ?? [],
       style: entry?.style?.style ?? table.styleName,
       bandedRows: entry?.style?.bandedRows ?? table.showRowStripes,
+      stripeFill: table.stripeFill,
       tableId: undefined,
     },
   }
@@ -185,6 +192,9 @@ export function applyTableDesignChange(
       sheetId: seed.sheetId,
       tableName: seed.tableName,
       convertToRange: true,
+      // The dialog's final banding state decides whether the stripes are
+      // worth baking; the color is the sidecar-resolved style stripe.
+      ...(change.bandedRows && seed.stripeFill ? { stripeFill: seed.stripeFill } : {}),
     })
     return null
   }

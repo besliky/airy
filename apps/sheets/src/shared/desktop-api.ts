@@ -2024,6 +2024,13 @@ export const workbookTableEditSchema = z
       .strict()
       .optional(),
     convertToRange: z.boolean().optional(),
+    /// Row-stripe fill (sidecar-resolved palette color, e.g. "#B8CCE4") to
+    /// bake into the body cells when the table becomes a range — the style's
+    /// banding dies with the table part. Only meaningful with convertToRange.
+    stripeFill: z
+      .string()
+      .regex(/^#[0-9A-Fa-f]{6}$/)
+      .optional(),
   })
   .strict()
   .refine(
@@ -2034,6 +2041,9 @@ export const workbookTableEditSchema = z
       edit.convertToRange === true,
     { message: 'A table edit needs at least one change.' },
   )
+  .refine((edit) => edit.stripeFill === undefined || edit.convertToRange === true, {
+    message: 'Baking a stripe fill only applies to Convert to Range.',
+  })
 
 /// A PivotTable created in the editor this session. The aggregated grid is
 /// already baked into cells (as ordinary cell edits); the save additionally
