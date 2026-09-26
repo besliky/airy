@@ -1444,6 +1444,60 @@ mod tests {
         assert!(!crate::ods_formula::is_valid_defined_name(""));
     }
 
+    /// PAR-214: an .ods form keeps its column widths, custom row heights
+    /// and hidden rows through conversion. The fixture (LibreOffice
+    /// generated) has a 24- and a 12.5-character column, a 30pt header row
+    /// and one hidden row; the round trip reads the widths and the hidden
+    /// flag back out of the open metadata.
+    #[test]
+    fn carries_column_and_row_layout_from_an_ods_book() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/par214-ods-form-layout.ods"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let result = convert_to_xlsx(source, &target).unwrap();
+        assert_eq!(result.cells, 4);
+
+        let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
+        // The two user-set widths ((inches*96-5)/7 from the source's
+        // 1.85in and 0.9638in); the default-width tail stays out.
+        assert!(sheet.contains(r#"<col min="1" max="1" width="24.66" customWidth="1"/>"#));
+        assert!(sheet.contains(r#"<col min="2" max="2" width="12.5" customWidth="1"/>"#));
+        assert!(!sheet.contains("width=\"8.46\""), "default tail leaked into cols");
+        // The 30pt header (LibreOffice stores 0.4165in = 29.99pt), the
+        // hidden row without a height (its style is auto-fit), and the
+        // untouched default rows stay bare.
+        assert!(sheet.contains(r#"<row r="1" ht="29.99" customHeight="1">"#));
+        assert!(sheet.contains(r#"<row r="3" hidden="1"/>"#));
+        assert!(sheet.contains(r#"<row r="4"><c r="A4""#));
+
+        // Round trip: the reader metadata carries widths and hidden rows.
+        let mut sessions = crate::WorkbookSessions::new();
+        let metadata = sessions.open(&target).unwrap();
+        let sheet_metadata = &metadata.sheets[0];
+        assert_eq!(sheet_metadata.column_widths.len(), 2);
+        assert_eq!(sheet_metadata.column_widths[0].start_column, 0);
+        assert_eq!(sheet_metadata.column_widths[0].end_column, 0);
+        assert_eq!(sheet_metadata.column_widths[0].width, Some(24.66));
+        let range = sessions
+            .read_range(
+                &metadata.session_id,
+                "sheet-1",
+                &crate::CellRange {
+                    start_row: 0,
+                    end_row: 3,
+                    start_column: 0,
+                    end_column: 1,
+                },
+            )
+            .unwrap();
+        let hidden = range.rows.iter().find(|row| row.row == 2).unwrap();
+        assert!(hidden.hidden);
+    }
+
     /// BUG-1659: an empty book (no cells, no styles) still converts with a
     /// complete styles.xml — the minimal output must not skip the section
     /// IronCalc's importer requires.
