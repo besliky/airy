@@ -90,6 +90,7 @@ const PINNED_API_MEMBERS = `
   getAiSettings
   getAutoSaveDefault
   getEditorPrefs
+  getEncoding
   getLanguage
   getPathForFile
   getPreviewInfo
@@ -150,6 +151,7 @@ const PINNED_HTML_CHANNELS = `
   filesRead
   filesReadImage
   getEditorPrefs
+  getEncoding
   getAiPanelPrefs
   getAutoSaveDefault
   getLanguage

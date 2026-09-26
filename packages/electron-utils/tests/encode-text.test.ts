@@ -9,8 +9,30 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { SELECTABLE_ENCODINGS } from '../src/shared/ipc'
-import { encodeTextAsEncoding } from '../src/main/encode-text'
+import { encodeTextAsEncoding } from '../src/encode-text'
+
+/**
+ * The charsets the editors let a user pick (SELECTABLE_ENCODINGS in both
+ * apps' shared/ipc — the package must not depend on app code). Keep in sync
+ * with that list; the ASCII-passthrough pin below walks exactly it.
+ */
+const SELECTABLE_ENCODINGS = [
+  'utf-8',
+  'utf-16le',
+  'utf-16be',
+  'gb18030',
+  'shift_jis',
+  'big5',
+  'euc-kr',
+  'windows-1252',
+  'windows-1251',
+  'koi8-r',
+  'windows-1250',
+  'windows-1253',
+  'windows-1255',
+  'windows-1256',
+  'windows-874',
+] as const
 
 const decode = (charset: string, bytes: Uint8Array): string =>
   new TextDecoder(charset).decode(bytes)
