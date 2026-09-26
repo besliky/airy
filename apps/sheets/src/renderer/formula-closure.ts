@@ -136,6 +136,26 @@ export function containsUnresolvedNames(formula: string): boolean {
   return false
 }
 
+/// A structured-reference selector: a table name (bare or quoted) or a
+/// special item directly followed by a bracket selector — `Sales[Amount]`,
+/// `Sales[@[Unit Price]]`, `Sales[[#All],[Amount]]`. External-workbook
+/// references keep the bracket BEFORE the qualifier (`[1]Sheet1!A1`,
+/// `C:\dir\[Book.xlsx]Sheet'!A1`), so no identifier precedes the `[` and the
+/// pattern does not fire.
+const STRUCTURED_REFERENCE_PATTERN =
+  /(^|[^\p{L}\p{N}_.\]'])('(?:[^']|'')+'|[\p{L}_][\p{L}\p{N}_.]*)\[/u
+
+/// True when the formula carries structured references. The grid engine has
+/// no table registry and can never resolve them — their values belong to the
+/// sidecar recalc channel, which loads the workbook's table parts.
+export function usesStructuredReferences(formula: string): boolean {
+  const segments = formula.split('"')
+  for (let index = 0; index < segments.length; index += 2) {
+    if (STRUCTURED_REFERENCE_PATTERN.test(segments[index] ?? '')) return true
+  }
+  return false
+}
+
 export function computeFormulaClosure(
   sheets: readonly ClosureSheetInput[],
   maxCells: number,

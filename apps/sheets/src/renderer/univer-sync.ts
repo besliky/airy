@@ -108,6 +108,7 @@ import {
   keyColumn,
   keyRow,
   recalcReadRanges,
+  usesStructuredReferences,
   type ClosureSheetInput,
 } from './formula-closure'
 import { isPlainArithmeticFormula } from './formula-cached-fallback'
@@ -2300,6 +2301,48 @@ export function queueFormulaRecalc(
   }, RECALC_DEBOUNCE_MS)
 }
 
+/// Cheap gate for the structured-reference pass: file cells recorded at load,
+/// or a structured-reference formula typed this session.
+function hasStructuredRefTargets(state: LazyWorkbookState): boolean {
+  if (state.recalc.structuredRefCells.size > 0) return true
+  for (const [sheetId, entries] of state.editJournal.cells) {
+    if (state.editJournal.sheets.added.has(sheetId)) continue
+    for (const entry of entries.values()) {
+      if (entry.formula && usesStructuredReferences(entry.formula)) return true
+    }
+  }
+  return false
+}
+
+/// Fully-loaded (formulaMode) workbooks run their formulas in the grid
+/// engine, which has no table registry: structured-reference formulas would
+/// display #NAME? forever (BUG-1749). The sidecar channel resolves them
+/// against the workbook's table parts (IronCalc import plus the `@`-shorthand
+/// normalization), so their values — file cells and formulas typed this
+/// session alike — are computed there and pinned over the grid like the
+/// streamed recalc overlay. A no-op unless structured-reference cells exist.
+export function queueStructuredRefRecalc(
+  runtime: UniverRuntime,
+  lazyWorkbookRef: { current: LazyWorkbookState | null },
+  setMessage: (message: string) => void,
+): void {
+  const state = lazyWorkbookRef.current
+  if (!state || !state.formulaMode) return
+  // minimal states (tests, partial teardown) may carry no recalc slot
+  if (!state.recalc || state.recalc.failures >= RECALC_MAX_FAILURES) return
+  if (state.recalc.engineOverBudget) return
+  // The engine loads the file from disk; session structural edits would
+  // desync every coordinate — fail soft to whatever the grid shows.
+  if ([...state.editJournal.structuralOps.values()].some((ops) => ops.length > 0)) return
+  if (!hasStructuredRefTargets(state)) return
+  if (state.recalc.timer) clearTimeout(state.recalc.timer)
+  state.recalc.timer = setTimeout(() => {
+    state.recalc.timer = null
+    if (lazyWorkbookRef.current !== state) return
+    void runStructuredRefRecalc(runtime, lazyWorkbookRef, state, setMessage)
+  }, RECALC_DEBOUNCE_MS)
+}
+
 /// Formula-cell keys for one sheet, fetched once. A truncated list (>100k
 /// formulas) caches as empty — unknown coverage would recalc the wrong set;
 /// an incomplete index returns null so the next edit retries.
@@ -2342,8 +2385,48 @@ function storeFormulaText(
   // dropping the store only costs formula-bar text for long-unseen cells.
   if (bySheet.size > 200_000) bySheet.clear()
   for (const cell of cells) {
-    if (cell.formula) bySheet.set(`${cell.row}:${cell.column}`, cell.formula)
+    if (cell.formula) {
+      bySheet.set(`${cell.row}:${cell.column}`, cell.formula)
+      // Structured-reference formula cells are sidecar-owned in fully-loaded
+      // workbooks (the grid engine cannot resolve tables — BUG-1749); record
+      // their keys so the overlay pass knows what to recalculate.
+      if (usesStructuredReferences(cell.formula) && state.recalc) {
+        let keys = state.recalc.structuredRefCells.get(sheetId)
+        if (!keys) {
+          keys = new Set()
+          state.recalc.structuredRefCells.set(sheetId, keys)
+        }
+        keys.add(`${cell.row}:${cell.column}`)
+      }
+    }
   }
+}
+
+/// Journal edits for the sidecar recalc, shared by the streamed fallback and
+/// the structured-reference pass. Null when the workbook cannot be
+/// represented file-backed this session (a sheet added this session has no
+/// file part, or the edit set is over budget).
+function collectRecalcEdits(
+  state: LazyWorkbookState,
+): { sheetId: string; row: number; column: number; input: string }[] | null {
+  const edits: { sheetId: string; row: number; column: number; input: string }[] = []
+  for (const [editSheetId, entries] of state.editJournal.cells) {
+    if (isSheetRemoved(state.editJournal, editSheetId)) continue
+    // A sheet added this session has no file part; formulas may reference
+    // it, so the file-backed engine cannot represent this workbook.
+    if (state.editJournal.sheets.added.has(editSheetId)) return null
+    for (const entry of entries.values()) {
+      if (!entry.hasValue && !entry.formula) continue
+      if (edits.length >= RECALC_MAX_EDITS) return null
+      edits.push({
+        sheetId: editSheetId,
+        row: entry.row,
+        column: entry.column,
+        input: toRecalcUserInput(entry),
+      })
+    }
+  }
+  return edits
 }
 
 async function runFormulaRecalc(
@@ -2357,23 +2440,8 @@ async function runFormulaRecalc(
   if (!workbook || !worksheet) return
   const sheetId = worksheet.getSheetId()
   if (state.editJournal.sheets.added.has(sheetId)) return
-  const edits: { sheetId: string; row: number; column: number; input: string }[] = []
-  for (const [editSheetId, entries] of state.editJournal.cells) {
-    if (isSheetRemoved(state.editJournal, editSheetId)) continue
-    // A sheet added this session has no file part; formulas may reference
-    // it, so the file-backed engine cannot represent this workbook.
-    if (state.editJournal.sheets.added.has(editSheetId)) return
-    for (const entry of entries.values()) {
-      if (!entry.hasValue && !entry.formula) continue
-      if (edits.length >= RECALC_MAX_EDITS) return
-      edits.push({
-        sheetId: editSheetId,
-        row: entry.row,
-        column: entry.column,
-        input: toRecalcUserInput(entry),
-      })
-    }
-  }
+  const edits = collectRecalcEdits(state)
+  if (edits === null) return
   const generation = ++state.recalc.generation
   state.recalc.running = true
   state.recalc.lastRunAt = Date.now()
@@ -2406,14 +2474,24 @@ async function runFormulaRecalc(
     const formulaTextBySheet = state.formulaText.get(sheetId)
     for (const cell of result.cells) {
       if (cell.sheetId !== sheetId || !cell.isFormula) continue
-      // The user's own journaled edits stay authoritative on screen.
-      if (journalCells?.has(`${cell.row}:${cell.column}`)) continue
-      const formulaText = formulaTextBySheet?.get(`${cell.row}:${cell.column}`)
+      const key = `${cell.row}:${cell.column}`
+      const journalEntry = journalCells?.get(key)
+      // The user's own journaled edits stay authoritative on screen — except
+      // structured-reference formulas: the grid engine has no table registry,
+      // so its live result is a #NAME? that would stick forever, while the
+      // sidecar resolves them against the workbook's tables (BUG-1749).
+      if (
+        journalEntry !== undefined &&
+        !(journalEntry.formula && usesStructuredReferences(journalEntry.formula))
+      ) {
+        continue
+      }
+      const formulaText = journalEntry?.formula ?? formulaTextBySheet?.get(key)
       if (engineResultKeepsCache(cell.formatted, formulaText)) {
         unsupported += 1
         continue
       }
-      overlay.set(`${cell.row}:${cell.column}`, { v: cell.number ?? cell.formatted })
+      overlay.set(key, { v: cell.number ?? cell.formatted })
     }
     state.recalc.overlay.set(sheetId, overlay)
     state.recalc.follow.set(sheetId, { anchorRow: viewportStartRow, complete: windowComplete })
@@ -2480,6 +2558,155 @@ async function runFormulaRecalc(
         /* workbook mid-teardown */
       }
     }
+  }
+}
+
+/// One sidecar recalc pass over every structured-reference formula cell of a
+/// fully-loaded workbook (see queueStructuredRefRecalc). All sheets go in one
+/// request — the wire reads accept per-sheet ranges — so sheet switches never
+/// need a follow-up run. Exported for the live-channel regression tests.
+export async function runStructuredRefRecalc(
+  runtime: UniverRuntime,
+  lazyWorkbookRef: { current: LazyWorkbookState | null },
+  state: LazyWorkbookState,
+  setMessage: (message: string) => void,
+): Promise<void> {
+  const workbook = runtime.univerAPI.getActiveWorkbook()
+  if (!workbook) return
+  // Targets: file structured-reference formula cells recorded at load, plus
+  // structured-reference formulas typed this session (their grid result is a
+  // permanent #NAME? — the engine cannot resolve tables). Keyed 'row:col' in
+  // file coordinates; structural edits are rejected by the queue guard.
+  const targets = new Map<string, Map<string, string>>()
+  const targetFor = (sheetId: string): Map<string, string> => {
+    let byKey = targets.get(sheetId)
+    if (!byKey) {
+      byKey = new Map()
+      targets.set(sheetId, byKey)
+    }
+    return byKey
+  }
+  for (const [sheetId, keys] of state.recalc.structuredRefCells) {
+    if (isSheetRemoved(state.editJournal, sheetId)) continue
+    const text = state.formulaText.get(sheetId)
+    for (const key of keys) {
+      const formula = text?.get(key)
+      if (formula) targetFor(sheetId).set(key, formula)
+    }
+  }
+  for (const [sheetId, entries] of state.editJournal.cells) {
+    if (isSheetRemoved(state.editJournal, sheetId)) continue
+    // A sheet added this session has no file part for the engine to load.
+    if (state.editJournal.sheets.added.has(sheetId)) continue
+    for (const [key, entry] of entries) {
+      if (entry.formula && usesStructuredReferences(entry.formula)) {
+        targetFor(sheetId).set(key, entry.formula)
+      }
+    }
+  }
+  if (targets.size === 0) return
+  // Pins for cells that are no longer structured-reference targets (the user
+  // overwrote them with constants or plain formulas) would be re-applied by
+  // the reinstall paths — drop them up front; the run below re-pins the
+  // survivors with their fresh values.
+  for (const [sheetId, overlay] of state.recalc.overlay) {
+    const byKey = targets.get(sheetId)
+    for (const key of [...overlay.keys()]) {
+      if (byKey?.get(key) !== overlay.get(key)?.f) overlay.delete(key)
+    }
+  }
+  const edits = collectRecalcEdits(state)
+  if (edits === null) return
+
+  const generation = ++state.recalc.generation
+  state.recalc.running = true
+  state.recalc.lastRunAt = Date.now()
+  try {
+    // Cell-key bands per sheet, viewport-nearest first; the wire caps the
+    // request at 200 read ranges total.
+    const reads: {
+      sheetId: string
+      range: { startRow: number; endRow: number; startColumn: number; endColumn: number }
+    }[] = []
+    for (const [sheetId, byKey] of targets) {
+      const keys = new Set<number>()
+      for (const key of byKey.keys()) {
+        const [rowText, columnText] = key.split(':')
+        keys.add(cellKey(Number(rowText), Number(columnText)))
+      }
+      const viewportStartRow = state.loadedRanges.get(sheetId)?.startRow ?? 0
+      for (const range of recalcReadRanges(keys, viewportStartRow, RECALC_READ_BUDGET)) {
+        if (reads.length >= 200) break
+        reads.push({ sheetId, range })
+      }
+    }
+    if (reads.length === 0) return
+    const result = await window.desktopApi.recalcWorkbook({
+      sessionId: state.file.sessionId,
+      edits,
+      reads,
+    })
+    // A newer run superseded this one while the sidecar was evaluating.
+    if (lazyWorkbookRef.current !== state || state.recalc.generation !== generation) return
+    let applied = 0
+    for (const cell of result.cells) {
+      const byKey = targets.get(cell.sheetId)
+      if (!byKey || !cell.isFormula) continue
+      const key = `${cell.row}:${cell.column}`
+      const formulaText = byKey.get(key)
+      if (formulaText === undefined) continue
+      // #NAME?/#ERROR! from the sidecar mean it could not resolve the table
+      // either — keep whatever the grid shows instead of pinning the error.
+      if (engineResultKeepsCache(cell.formatted, formulaText)) continue
+      const overlay = state.recalc.overlay.get(cell.sheetId) ?? new Map()
+      state.recalc.overlay.set(cell.sheetId, overlay)
+      // The formula rides along so display consumers can tell which formula
+      // the value was computed FOR; the grid write below stays value-only —
+      // rewriting `f` would re-dirty the engine and undo the pin.
+      overlay.set(key, { f: formulaText, v: cell.number ?? cell.formatted })
+      applied += 1
+    }
+    state.recalc.failures = 0
+    if (applied === 0) return
+    journalSuppression.active = true
+    loadAutoHeightSuppression.active = true
+    try {
+      for (const sheetId of targets.keys()) {
+        const worksheet = workbook.getSheetBySheetId(sheetId)
+        const loaded = state.loadedRanges.get(sheetId)
+        const overlay = state.recalc.overlay.get(sheetId)
+        if (!worksheet || !loaded || !overlay?.size) continue
+        const valueOnly = new Map<string, PinnedClosureCell>()
+        for (const [key, cell] of overlay) {
+          if (cell.v === undefined) continue
+          valueOnly.set(key, { v: cell.v })
+        }
+        applyPinnedOverlay(worksheet, valueOnly, undefined, loaded)
+      }
+    } finally {
+      journalSuppression.active = false
+      loadAutoHeightSuppression.active = false
+    }
+    const activeId = workbook.getActiveSheet()?.getSheetId()
+    if (activeId !== undefined && targets.has(activeId)) {
+      setMessage(t('appRecalcDone', { count: applied }))
+    }
+  } catch (error: unknown) {
+    // Fail soft: the grid keeps showing what the engine computed. Repeated
+    // rejections disable the pass for the session, mirroring the streamed
+    // fallback; "busy" is not a failure — another recalculation holds the
+    // worker and this one simply retries later.
+    if (lazyWorkbookRef.current !== state || state.recalc.generation !== generation) return
+    const busy = error instanceof Error && error.message.includes('busy with another recalculation')
+    if (!busy) state.recalc.failures += 1
+    if (busy) {
+      setTimeout(() => {
+        if (lazyWorkbookRef.current !== state) return
+        queueStructuredRefRecalc(runtime, lazyWorkbookRef, setMessage)
+      }, RECALC_BUSY_RETRY_MS)
+    }
+  } finally {
+    if (state.recalc.generation === generation) state.recalc.running = false
   }
 }
 
@@ -3792,10 +4019,16 @@ export function formulaKeepsCache(formula: string, hasCachedValue = true): boole
     // IFERROR(__xludf.DUMMYFUNCTION("..."), <literal>); recalculating turns
     // the float-repr literal (46235.0) into a string that numfmt skips.
     // The cached <v> IS the computed value — keep it, like Excel does.
+    // Structured references stay OUT of the always-keep class: collapsing
+    // such a cell to its style (no cached value) or bare value erased the
+    // formula from the grid entirely (BUG-1749) — it installs as a live
+    // formula and the sidecar overlay supplies the value instead.
+    const structured = usesStructuredReferences(formula)
     const always =
-      formula.includes('__xludf.') ||
-      usesLocaleDependentFunction(formula) ||
-      containsUnresolvedNames(formula)
+      !structured &&
+      (formula.includes('__xludf.') ||
+        usesLocaleDependentFunction(formula) ||
+        containsUnresolvedNames(formula))
     const probe = supportedFunctionProbe
     const registryReady = probe === null || probe.ready()
     verdict = {
@@ -4937,7 +5170,15 @@ export function collectArrayFollowers(
     // A master the engine will not evaluate (unsupported function, Google
     // DUMMYFUNCTION, unresolved name) is installed as its cached value and
     // never spills again — blanking its followers would empty the range.
-    if (formulaKeepsCache(cell.formula, hasUsableCachedValue(cell.value))) continue
+    // Structured-reference masters stay cache-kept too: the grid engine
+    // cannot resolve tables (BUG-1749), so a spilled master would collapse
+    // to #NAME? and empty the declared spill range just the same.
+    if (
+      formulaKeepsCache(cell.formula, hasUsableCachedValue(cell.value)) ||
+      usesStructuredReferences(cell.formula)
+    ) {
+      continue
+    }
     let bounds: IRange
     try {
       bounds = parseRange(cell.arrayRef)
@@ -5140,6 +5381,9 @@ async function preloadEntireWorkbookInner(
   if (lazyWorkbookRef.current === state) {
     state.flags.preloadComplete = true
     if (state.formulaMode && !isManualCalculation(runtime)) requestFullRecalcAfterStream()
+    // Structured-reference formula cells carry no engine value (the grid
+    // engine cannot resolve tables — BUG-1749); fill them from the sidecar.
+    queueStructuredRefRecalc(runtime, lazyWorkbookRef, setMessage)
     setMessage(t('appFullyLoaded'))
   }
 }

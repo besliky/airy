@@ -18,6 +18,7 @@ import {
   preloadEntireWorkbook,
   workbookStructureLocked,
   queueFormulaRecalc,
+  queueStructuredRefRecalc,
   queueSparklineInstall,
   resolveRenderedSheetId,
   recalcOverBudgetAtOpen,
@@ -2550,6 +2551,12 @@ export function App(): React.JSX.Element {
         ) {
           setMessage(t('appFormulaRecordedPartial'))
         }
+        // Fully-loaded workbooks: structured-reference formulas own their
+        // values to the sidecar engine — the grid engine has no table
+        // registry and would leave #NAME? on screen (BUG-1749).
+        if (contentEdited) {
+          queueStructuredRefRecalc(runtime, lazyWorkbookRef, setMessage)
+        }
       },
     )
     const structuralDisposable = runtime.univerAPI.addEvent(
@@ -4160,6 +4167,7 @@ export function App(): React.JSX.Element {
         failures: 0,
         engineOverBudget: recalcOverBudgetAtOpen(selected.fileBytes, gridCellCount),
         formulaCells: new Map(),
+        structuredRefCells: new Map(),
         overlay: new Map(),
         follow: new Map(),
         running: false,
