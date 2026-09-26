@@ -10,6 +10,7 @@ import {
   BooleanNumber,
   BorderStyleTypes,
   CellValueType,
+  ColorKit,
   CommandType,
   DataValidationRenderMode,
   HorizontalAlign,
@@ -26,6 +27,7 @@ import {
 import { IFindReplaceService } from '@univerjs/preset-sheets-find-replace'
 import type { IFilterColumn } from '@univerjs/preset-sheets-filter'
 import { CustomFilterOperator, SheetsFilterService } from '@univerjs/sheets-filter'
+import type { IColorFilters } from '@univerjs/sheets-filter'
 import { FontCache, getFontStyleString, IRenderManagerService } from '@univerjs/engine-render'
 import { SheetSkeletonManagerService } from '@univerjs/sheets-ui'
 import { CFValueType, type IValueConfig } from '@univerjs/preset-sheets-conditional-formatting'
@@ -5289,11 +5291,24 @@ function restoreFilterCriteria(
         }
       }
     }
-    if (!filters && !customFilters) continue
+    // A file color criterion lands as a single-entry Univer colorFilters
+    // block. The hex normalizes through the same ColorKit path the filter's
+    // evaluator and the panel's color list use, so the criterion matches the
+    // rendered fills/fonts and shows as checked in the panel.
+    let colorFilters: IFilterColumn['colorFilters']
+    if (column.colorFilter) {
+      const color = new ColorKit(column.colorFilter.color).toRgbString()
+      colorFilters =
+        column.colorFilter.kind === 'fill'
+          ? { cellFillColors: [color] }
+          : { cellTextColors: [color] }
+    }
+    if (!filters && !customFilters && !colorFilters) continue
     const criteria: IFilterColumn = {
       colId: col,
       ...(filters === undefined ? {} : { filters }),
       ...(customFilters === undefined ? {} : { customFilters }),
+      ...(colorFilters === undefined ? {} : { colorFilters }),
     }
     filterModel.setCriteria(col, criteria, false)
   }
@@ -5594,8 +5609,16 @@ export function collectFilterStates(
     for (let column = range.startColumn; column <= range.endColumn; column += 1) {
       const criteria = filter.getColumnFilterCriteria(column)
       if (!criteria) continue
+      // OOXML encodes a color criterion as <colorFilter dxfId="n"/> — one
+      // dxf, one color per column. Univer's panel can check several colors
+      // of a kind (or the "no fill" slot), which has no OOXML mapping, so
+      // that state still fails closed.
       if (criteria.colorFilters) {
-        throw new Error(t('appColorFiltersUnsaveable'))
+        columns.push({
+          colId: column - range.startColumn,
+          colorFilter: toWireColorFilter(criteria.colorFilters),
+        })
+        continue
       }
       if (!criteria.filters && !criteria.customFilters) continue
       columns.push({
@@ -5640,6 +5663,40 @@ function toCellArea(range: IRange): WorkbookFilterState['visibilityRange'] {
     endRow: range.endRow,
     endColumn: range.endColumn,
   }
+}
+
+/// Univer model colorFilters → the wire's single-color criterion. Fill wins
+/// over font, mirroring Univer's own evaluation order. OOXML has no mapping
+/// for several checked colors or the "no fill" slot, so those stay unsaveable
+/// (fail closed, like the old all-colors rule).
+export function toWireColorFilter(
+  colorFilters: IColorFilters,
+): NonNullable<WorkbookFilterState['filter']>['columns'][number]['colorFilter'] {
+  const fills = colorFilters.cellFillColors ?? []
+  const fonts = colorFilters.cellTextColors ?? []
+  const kind = fills.length > 0 ? 'fill' : fonts.length > 0 ? 'font' : null
+  const colors = fills.length > 0 ? fills : fonts
+  if (kind === null || colors.length !== 1) throw new Error(t('appColorFiltersUnsaveable'))
+  const raw = colors[0]
+  if (raw === null || raw === undefined) throw new Error(t('appColorFiltersUnsaveable'))
+  const hex = univerColorToHex(raw)
+  if (hex === undefined) throw new Error(t('appColorFiltersUnsaveable'))
+  return { kind, color: hex }
+}
+
+/// Univer style colors arrive as `#hex` or ColorKit's `rgb(r, g, b)` form;
+/// the wire (and the saved dxf) wants `#RRGGBB`.
+function univerColorToHex(color: string): string | undefined {
+  const value = color.trim()
+  const hexChannels = /^#([0-9a-fA-F]{6})(?:[0-9a-fA-F]{2})?$/.exec(value)?.[1]
+  if (hexChannels !== undefined) return `#${hexChannels.toUpperCase()}`
+  const rgb = /^rgba?\(\s*(\d+)\s*[, ]\s*(\d+)\s*[, ]\s*(\d+)/.exec(value)
+  if (!rgb) return undefined
+  const channels = rgb
+    .slice(1, 4)
+    .map((channel) => Math.min(255, Number(channel)).toString(16).padStart(2, '0'))
+    .join('')
+  return `#${channels}`.toUpperCase()
 }
 
 /// Journals every cell of a just-reordered (sorted) range straight from the

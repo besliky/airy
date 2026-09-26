@@ -1668,11 +1668,29 @@ function parseAutoFilterColumn(input: unknown): WorkbookRangeResult['autoFilterC
       customs = { ...(raw.and === true ? { and: true } : {}), filters }
     }
   }
+  type ParsedColorFilter = NonNullable<
+    WorkbookRangeResult['autoFilterColumns'][number]['colorFilter']
+  >
+  // A malformed/unrepresentable color criterion (foreign writer, unknown
+  // kind, non-hex color) drops just the color block, like customs above.
+  let colorFilter: ParsedColorFilter | undefined
+  if (input.colorFilter !== undefined) {
+    const raw = input.colorFilter
+    if (
+      isRecord(raw) &&
+      (raw.kind === 'fill' || raw.kind === 'font') &&
+      typeof raw.color === 'string' &&
+      /^#[0-9a-fA-F]{6}$/.test(raw.color)
+    ) {
+      colorFilter = { kind: raw.kind, color: raw.color.toUpperCase() }
+    }
+  }
   return {
     colId: input.colId,
     ...(input.values === undefined ? {} : { values: input.values as string[] }),
     ...(input.blank === true ? { blank: true } : {}),
     ...(customs === undefined ? {} : { customs }),
+    ...(colorFilter === undefined ? {} : { colorFilter }),
   }
 }
 

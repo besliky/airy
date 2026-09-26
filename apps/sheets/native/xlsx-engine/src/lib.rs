@@ -295,6 +295,19 @@ impl WorkbookSessions {
                 .map(|style| style.styles_blank_cell(&default_style))
                 .collect(),
         );
+        // Per dxf, the autoFilter color criterion it yields: a dxf fill
+        // (bgColor) means "filter by cell color", a font color means "filter
+        // by font color" — the two shapes Excel writes for the filter kinds.
+        let filter_dxf_colors: Arc<Vec<Option<(bool, String)>>> = Arc::new(
+            dxf_styles
+                .iter()
+                .map(|dxf| match (&dxf.fill_color, &dxf.font_color) {
+                    (Some(fill), _) => Some((true, fill.clone())),
+                    (None, Some(font)) => Some((false, font.clone())),
+                    (None, None) => None,
+                })
+                .collect(),
+        );
         let visual_objects =
             visuals::read_visual_objects(&mut archive, &visual_sources, &color_context)?;
         let (defined_names, print_names, scoped_sheets) = read_defined_names(&mut archive)?;
@@ -323,6 +336,7 @@ impl WorkbookSessions {
                 shared_strings,
                 styled_xfs,
                 color_context: Arc::new(color_context),
+                filter_dxf_colors,
                 visuals: visual_objects.clone(),
                 cache_directory,
                 cancelled: Arc::new(AtomicBool::new(false)),
@@ -459,6 +473,11 @@ struct WorkbookSession {
     shared_strings: Arc<Vec<SharedString>>,
     styled_xfs: Arc<Vec<bool>>,
     color_context: Arc<ColorContext>,
+    /// Per styles.xml dxf index, the autoFilter color criterion it would
+    /// produce: `(is_fill, #RRGGBB)` — fill wins over font color. Built from
+    /// `dxf_styles` at open; the indexer resolves `<colorFilter dxfId>`
+    /// against it.
+    filter_dxf_colors: Arc<Vec<Option<(bool, String)>>>,
     visuals: Vec<VisualObject>,
     cache_directory: PathBuf,
     cancelled: Arc<AtomicBool>,
@@ -493,6 +512,7 @@ impl WorkbookSession {
         let shared_strings = Arc::clone(&self.shared_strings);
         let styled_xfs = Arc::clone(&self.styled_xfs);
         let color_context = Arc::clone(&self.color_context);
+        let filter_dxf_colors = Arc::clone(&self.filter_dxf_colors);
         // The capped overlay list is the single source of truth: only cells
         // that actually got a picture record lose their cached error.
         let rich_image_cells: Arc<HashSet<(usize, usize)>> = Arc::new(
@@ -515,6 +535,7 @@ impl WorkbookSession {
                     &styled_xfs,
                     &color_context,
                     &rich_image_cells,
+                    &filter_dxf_colors,
                     &state,
                     &cancelled,
                 );

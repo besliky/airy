@@ -876,12 +876,25 @@ const filterColumnStateSchema = z
       })
       .strict()
       .optional(),
+    /// Resolved <colorFilter> criterion: the sidecar resolves the file's
+    /// dxfId to the dxf's color (fill → patternFill/bgColor, font →
+    /// font/color), so the wire carries kind + #RRGGBB instead of an index.
+    colorFilter: z
+      .object({
+        kind: z.enum(['fill', 'font']),
+        color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .refine(
     (column) =>
-      column.values !== undefined || column.blank !== undefined || column.customs !== undefined,
-    { message: 'A filter column needs values, a blank flag, or custom criteria.' },
+      column.values !== undefined ||
+      column.blank !== undefined ||
+      column.customs !== undefined ||
+      column.colorFilter !== undefined,
+    { message: 'A filter column needs values, a blank flag, custom criteria, or a color.' },
   )
 
 /// <sheetProtection> attributes the app models. Raw OOXML semantics: true =

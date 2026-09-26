@@ -819,12 +819,16 @@ export async function planCellEditsToXlsx(
   // Stylesheet editor created up front: cell-edit styles and CF need it, and
   // 'set-col-style' structural ops (select-all/full-column formatting, alpha
   // ledger r124) intern their column xf during the structural pass below.
+  // Color filters intern their criterion dxf in the same stylesheet.
   let stylesheet: StylesheetEditor | null = null
   const stylesPath = 'xl/styles.xml'
   if (
     edits.some((edit) => edit.style !== undefined) ||
     cfStates.length > 0 ||
-    structuralOps.some(({ ops }) => ops.some((op) => op.kind === 'set-col-style'))
+    structuralOps.some(({ ops }) => ops.some((op) => op.kind === 'set-col-style')) ||
+    filterStates.some(({ filter }) =>
+      filter?.columns.some((column) => column.colorFilter !== undefined),
+    )
   ) {
     if (!(await pkg.has(stylesPath))) await addDefaultStylesheet(pkg, touchedEntries)
     stylesheet = new StylesheetEditor(await pkg.readText(stylesPath))
@@ -1094,11 +1098,15 @@ export async function planCellEditsToXlsx(
   }
 
   // Filter snapshots run after structural replay and cell edits, so their
-  // coordinates and row set match the sheet's final content.
+  // coordinates and row set match the sheet's final content. The stylesheet
+  // interns color-filter dxf entries alongside the CF ones.
   for (const state of filterStates) {
     const worksheetXml = worksheetXmls.get(state.sheetName)
     if (worksheetXml === undefined) continue
-    worksheetXmls.set(state.sheetName, applyFilterState(worksheetXml, state))
+    worksheetXmls.set(
+      state.sheetName,
+      applyFilterState(worksheetXml, state, stylesheet ?? undefined),
+    )
   }
 
   for (const [sheetName, worksheetXml] of worksheetXmls) {

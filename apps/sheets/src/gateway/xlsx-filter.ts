@@ -1,6 +1,10 @@
 /// Writes a declarative filter snapshot into worksheet XML: the
-/// `<autoFilter>` element (with per-column value / custom criteria) plus row
-/// visibility inside the filter's row span. Unsupported criteria fail closed.
+/// `<autoFilter>` element (with per-column value / custom / color criteria)
+/// plus row visibility inside the filter's row span. Unsupported criteria
+/// fail closed. Color criteria intern a dxf in the stylesheet — OOXML stores
+/// only the `dxfId` reference inside `<colorFilter>`.
+
+import type { DxfSink } from './xlsx-cf'
 
 export class FilterEditError extends Error {}
 
@@ -15,10 +19,19 @@ export interface FilterColumnState {
   readonly colId: number
   readonly values?: readonly string[] | undefined
   readonly blank?: boolean | undefined
-  readonly customs?: {
-    readonly and?: boolean | undefined
-    readonly filters: readonly { readonly val: string | number; readonly operator?: string | undefined }[]
-  } | undefined
+  readonly customs?:
+    | {
+        readonly and?: boolean | undefined
+        readonly filters: readonly {
+          readonly val: string | number
+          readonly operator?: string | undefined
+        }[]
+      }
+    | undefined
+  /// Resolved color criterion: the renderer translates the model's
+  /// colorFilters (dxf color already resolved) into kind + #RRGGBB; the
+  /// unrepresentable shapes never reach the wire.
+  readonly colorFilter?: { readonly kind: 'fill' | 'font'; readonly color: string } | undefined
 }
 
 export interface SheetFilterState {
@@ -32,35 +45,50 @@ export interface SheetFilterState {
 }
 
 const CUSTOM_OPERATORS = new Set([
-  'equal', 'notEqual', 'greaterThan', 'greaterThanOrEqual', 'lessThan', 'lessThanOrEqual',
+  'equal',
+  'notEqual',
+  'greaterThan',
+  'greaterThanOrEqual',
+  'lessThan',
+  'lessThanOrEqual',
 ])
 
-export function applyFilterState(worksheetXml: string, state: SheetFilterState): string {
-  const element = state.filter === null ? '' : serializeAutoFilter(state.filter)
-  const existing = /<autoFilter\b[^>]*\/>|<autoFilter\b[^>]*>[\s\S]*?<\/autoFilter>/
-    .exec(worksheetXml)
+export function applyFilterState(
+  worksheetXml: string,
+  state: SheetFilterState,
+  dxfs?: DxfSink | undefined,
+): string {
+  const element = state.filter === null ? '' : serializeAutoFilter(state.filter, dxfs)
+  const existing = /<autoFilter\b[^>]*\/>|<autoFilter\b[^>]*>[\s\S]*?<\/autoFilter>/.exec(
+    worksheetXml,
+  )
   let xml = worksheetXml
   if (existing) {
-    xml = worksheetXml.slice(0, existing.index) + element
-      + worksheetXml.slice(existing.index + existing[0].length)
+    xml =
+      worksheetXml.slice(0, existing.index) +
+      element +
+      worksheetXml.slice(existing.index + existing[0].length)
   } else if (element !== '') {
     xml = insertAfterSheetData(worksheetXml, element)
   }
   return applyRowVisibility(xml, state.visibilityRange, new Set(state.hiddenRows))
 }
 
-function serializeAutoFilter(filter: NonNullable<SheetFilterState['filter']>): string {
+function serializeAutoFilter(
+  filter: NonNullable<SheetFilterState['filter']>,
+  dxfs: DxfSink | undefined,
+): string {
   const ref = toRef(filter.range)
   const columns = [...filter.columns]
     .sort((left, right) => left.colId - right.colId)
-    .map(serializeFilterColumn)
+    .map((column) => serializeFilterColumn(column, dxfs))
     .join('')
   return columns === ''
     ? `<autoFilter ref="${ref}"/>`
     : `<autoFilter ref="${ref}">${columns}</autoFilter>`
 }
 
-function serializeFilterColumn(column: FilterColumnState): string {
+function serializeFilterColumn(column: FilterColumnState, dxfs: DxfSink | undefined): string {
   const parts: string[] = []
   if (column.values !== undefined || column.blank) {
     const blank = column.blank ? ' blank="1"' : ''
@@ -80,16 +108,40 @@ function serializeFilterColumn(column: FilterColumnState): string {
     const and = column.customs.and ? ' and="1"' : ''
     const filters = column.customs.filters
       .map((custom) => {
-        const operator = custom.operator === undefined || custom.operator === 'equal'
-          ? ''
-          : ` operator="${custom.operator}"`
+        const operator =
+          custom.operator === undefined || custom.operator === 'equal'
+            ? ''
+            : ` operator="${custom.operator}"`
         return `<customFilter${operator} val="${escapeXmlAttribute(String(custom.val))}"/>`
       })
       .join('')
     parts.push(`<customFilters${and}>${filters}</customFilters>`)
   }
+  if (column.colorFilter) {
+    if (!dxfs) {
+      throw new FilterEditError('A color filter needs the workbook stylesheet to save.')
+    }
+    // OOXML carries only the dxf reference; the criterion color lives in the
+    // interned dxf (fill → patternFill/bgColor, font → font/color — the two
+    // shapes Excel writes, and the ones the import side resolves back).
+    const dxfXml =
+      column.colorFilter.kind === 'fill'
+        ? `<dxf><fill><patternFill><bgColor rgb="${requireColor(column.colorFilter.color)}"/></patternFill></fill></dxf>`
+        : `<dxf><font><color rgb="${requireColor(column.colorFilter.color)}"/></font></dxf>`
+    parts.push(`<colorFilter dxfId="${dxfs.internDxf(dxfXml)}"/>`)
+  }
   if (parts.length === 0) return ''
   return `<filterColumn colId="${column.colId}">${parts.join('')}</filterColumn>`
+}
+
+/// #RRGGBB → FFRRGGBB (fully opaque ARGB, the dxf rgb encoding).
+function requireColor(color: string): string {
+  const hex = /^#([0-9a-fA-F]{6})$/.exec(color.trim())
+  const channels = hex?.[1]
+  if (channels === undefined) {
+    throw new FilterEditError(`The filter color "${color}" cannot be saved as XLSX.`)
+  }
+  return `FF${channels.toUpperCase()}`
 }
 
 /// Schema order places autoFilter after sheetData (and after the protection
@@ -133,8 +185,9 @@ function applyRowVisibility(
     },
   )
   const missing = [...hiddenRows]
-    .filter((rowIndex) => !seen.has(rowIndex)
-      && rowIndex >= firstDataRow && rowIndex <= range.endRow)
+    .filter(
+      (rowIndex) => !seen.has(rowIndex) && rowIndex >= firstDataRow && rowIndex <= range.endRow,
+    )
     .sort((left, right) => left - right)
   for (const rowIndex of missing) {
     xml = insertEmptyHiddenRow(xml, rowIndex + 1)
@@ -162,8 +215,10 @@ function insertEmptyHiddenRow(worksheetXml: string, rowNumber: number): string {
 }
 
 function toRef(range: CellArea): string {
-  return `${columnToLetters(range.startColumn)}${range.startRow + 1}`
-    + `:${columnToLetters(range.endColumn)}${range.endRow + 1}`
+  return (
+    `${columnToLetters(range.startColumn)}${range.startRow + 1}` +
+    `:${columnToLetters(range.endColumn)}${range.endRow + 1}`
+  )
 }
 
 function columnToLetters(column: number): string {

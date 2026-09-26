@@ -14,6 +14,7 @@ pub(crate) fn index_worksheet(
     styled_xfs: &[bool],
     colors: &ColorContext,
     rich_image_cells: &HashSet<(usize, usize)>,
+    filter_dxf_colors: &[Option<(bool, String)>],
     state: &Arc<(Mutex<SheetIndex>, Condvar)>,
     cancelled: &AtomicBool,
 ) -> Result<(), SidecarError> {
@@ -62,6 +63,10 @@ pub(crate) fn index_worksheet(
     let mut auto_filter_captured = false;
     let mut in_auto_filter = false;
     let mut filter_column: Option<FilterColumnCriteria> = None;
+    // dxfId of the current filterColumn's <colorFilter>; resolved against
+    // `filter_dxf_colors` (built from the styles.xml dxfs) when the
+    // filterColumn closes.
+    let mut filter_column_dxf: Option<usize> = None;
     let mut sheet_protection: Option<SheetProtectionInfo> = None;
     let mut row_breaks: Vec<usize> = Vec::new();
     let mut col_breaks: Vec<usize> = Vec::new();
@@ -376,6 +381,7 @@ pub(crate) fn index_worksheet(
             Event::Start(element) | Event::Empty(element)
                 if in_auto_filter && element.local_name().as_ref() == b"filterColumn" =>
             {
+                filter_column_dxf = None;
                 filter_column = attribute_value(&reader, &element, b"colId")?
                     .and_then(|value| value.parse::<usize>().ok())
                     .map(|col_id| FilterColumnCriteria {
@@ -383,17 +389,42 @@ pub(crate) fn index_worksheet(
                         values: None,
                         blank: false,
                         customs: None,
+                        color_filter: None,
                     });
             }
             Event::End(element)
                 if in_auto_filter && element.local_name().as_ref() == b"filterColumn" =>
             {
-                if let Some(column) = filter_column.take() {
-                    // Color/icon/dynamic/top10-only columns stay criteria-less.
-                    if column.values.is_some() || column.blank || column.customs.is_some() {
+                if let Some(mut column) = filter_column.take() {
+                    // Resolve a <colorFilter dxfId> against the styles.xml
+                    // dxfs (fill color wins over font color, mirroring which
+                    // dxf shape Excel writes per filter kind).
+                    if let Some(dxf_index) = filter_column_dxf.take() {
+                        column.color_filter = filter_dxf_colors
+                            .get(dxf_index)
+                            .and_then(|resolved| resolved.as_ref())
+                            .map(|(is_fill, color)| WireColorFilter {
+                                kind: if *is_fill { "fill" } else { "font" }.to_owned(),
+                                color: color.clone(),
+                            });
+                    }
+                    // Icon/dynamic/top10-only columns stay criteria-less.
+                    if column.values.is_some()
+                        || column.blank
+                        || column.customs.is_some()
+                        || column.color_filter.is_some()
+                    {
                         auto_filter_columns.push(column);
                     }
                 }
+            }
+            Event::Start(element) | Event::Empty(element)
+                if in_auto_filter && element.local_name().as_ref() == b"colorFilter" =>
+            {
+                // OOXML colorFilter carries no color of its own — just the
+                // dxfId of the dxfs entry holding the criterion color.
+                filter_column_dxf = attribute_value(&reader, &element, b"dxfId")?
+                    .and_then(|value| value.parse::<usize>().ok());
             }
             Event::Start(element) | Event::Empty(element)
                 if in_auto_filter && element.local_name().as_ref() == b"filters" =>
@@ -981,8 +1012,12 @@ pub(crate) fn index_worksheet(
             column.customs = None;
         }
     }
-    auto_filter_columns
-        .retain(|column| column.values.is_some() || column.blank || column.customs.is_some());
+    auto_filter_columns.retain(|column| {
+        column.values.is_some()
+            || column.blank
+            || column.customs.is_some()
+            || column.color_filter.is_some()
+    });
     index.auto_filter_columns = auto_filter_columns;
     index.sheet_protection = sheet_protection;
     // Wire caps (schema and preload reject larger sets; the save side caps
