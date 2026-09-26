@@ -387,6 +387,8 @@ export const pl = {
   ribbonRehearse: 'Próba tempa',
   ribbonRehearseTip:
     'Próba tempa: uruchamia pokaz od początku i rejestruje czas każdego slajdu; zapisz jako czasy automatycznej zmiany slajdów (zapisywane w pptx)',
+  ribbonRecordTip:
+    'Nagrywaj pokaz slajdów: uruchom pokaz od początku, mierząc czas na każdym slajdzie (pauza/wznowienie — P); czasy zostaną zapisane jako automatyczne przejście (do pptx)',
   ribbonRecord: 'Nagrywaj',
   ribbonGroupProofing: 'Sprawdzanie',
   ribbonSpellCheck: 'Pisownia',

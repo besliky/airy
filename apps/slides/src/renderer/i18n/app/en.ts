@@ -240,6 +240,7 @@ export const en = {
   appZoomOut: 'Zoom out',
   appZoomLabel: 'Zoom',
   appMediaCloseTitle: 'Close (Esc)',
+  appRecordTitle: 'Record Slide Show',
   appRehearseTitle: 'Rehearse Timings',
   appRehearseSummary:
     'The total time for the slide show was {duration}. Do you want to save the slide timings for automatic slide advance?',

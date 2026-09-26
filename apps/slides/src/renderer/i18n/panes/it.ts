@@ -320,6 +320,12 @@ export const it = {
   paneShowEndedClick: 'Fine della presentazione. Fai clic per uscire.',
   paneShowEnded: 'Fine della presentazione.',
   paneShowRehearseTip: 'Prova intervalli: tempo su questa diapositiva / tempo totale',
+  paneShowRecordTip:
+    'Registra presentazione: questa diapositiva / totale registrato — pausa con P, stop per salvare i tempi',
+  paneShowRecordPause: 'Metti in pausa la registrazione (P)',
+  paneShowRecordResume: 'Riprendi la registrazione (P)',
+  paneShowRecordStop: 'Ferma e salva i tempi',
+  paneShowRecordPaused: 'In pausa',
   paneShowRehearseTotal: 'Totale {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

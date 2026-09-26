@@ -248,6 +248,7 @@ export const hi = {
   appZoomOut: 'ज़ूम आउट',
   appZoomLabel: 'ज़ूम',
   appMediaCloseTitle: 'बंद करें (Esc)',
+  appRecordTitle: 'स्लाइड शो रिकॉर्ड करें',
   appRehearseTitle: 'समय का पूर्वाभ्यास',
   appRehearseSummary:
     'स्लाइड शो की कुल अवधि {duration} रही। क्या स्लाइड स्वतः बदलने के लिए प्रत्येक स्लाइड का समय सहेजना चाहते हैं?',

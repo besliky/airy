@@ -317,6 +317,12 @@ export const pl = {
   paneShowEndedClick: 'Koniec pokazu slajdów. Kliknij, aby wyjść.',
   paneShowEnded: 'Koniec pokazu slajdów.',
   paneShowRehearseTip: 'Próba tempa: czas na tym slajdzie / czas łączny',
+  paneShowRecordTip:
+    'Nagrywanie pokazu: ten slajd / łącznie nagrano — pauza pod P, stop zapisze czasy',
+  paneShowRecordPause: 'Wstrzymaj nagrywanie (P)',
+  paneShowRecordResume: 'Wznów nagrywanie (P)',
+  paneShowRecordStop: 'Zatrzymaj i zapisz czasy',
+  paneShowRecordPaused: 'Wstrzymano',
   paneShowRehearseTotal: 'Łącznie {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

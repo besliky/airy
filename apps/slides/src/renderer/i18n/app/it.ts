@@ -256,6 +256,7 @@ export const it = {
   appZoomOut: 'Riduci',
   appZoomLabel: 'Zoom',
   appMediaCloseTitle: 'Chiudi (Esc)',
+  appRecordTitle: 'Registra presentazione',
   appRehearseTitle: 'Prova intervalli',
   appRehearseSummary:
     "Il tempo totale della presentazione è stato {duration}. Vuoi salvare gli intervalli delle diapositive per l'avanzamento automatico?",

@@ -393,6 +393,8 @@ export const de = {
   ribbonRehearse: 'Neue Einblendezeiten testen',
   ribbonRehearseTip:
     'Neue Einblendezeiten testen: Präsentation von Beginn an abspielen und die Zeit pro Folie aufzeichnen; anschließend als automatische Einblendezeiten speichern (in pptx gespeichert)',
+  ribbonRecordTip:
+    'Bildschirmpräsentation aufzeichnen: Präsentation von Anfang an mit Zeitmessung pro Folie (P = Pausieren/Fortsetzen); die Zeiten werden als automatische Folienwechsel gespeichert (in pptx)',
   ribbonRecord: 'Aufzeichnen',
   ribbonGroupProofing: 'Dokumentprüfung',
   ribbonSpellCheck: 'Rechtschreibung',

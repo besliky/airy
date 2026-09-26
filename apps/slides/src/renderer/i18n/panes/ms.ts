@@ -319,6 +319,12 @@ export const ms = {
   paneShowEndedClick: 'Persembahan slaid tamat. Klik untuk keluar.',
   paneShowEnded: 'Persembahan slaid tamat.',
   paneShowRehearseTip: 'Raptai Pemasaan: masa pada slaid ini / jumlah masa',
+  paneShowRecordTip:
+    'Rakam Peragaan: slaid ini / jumlah direkod — jeda dengan P, hentikan untuk menyimpan masa',
+  paneShowRecordPause: 'Jeda rakaman (P)',
+  paneShowRecordResume: 'Sambung rakaman (P)',
+  paneShowRecordStop: 'Hentikan dan simpan masa',
+  paneShowRecordPaused: 'Dijeda',
   paneShowRehearseTotal: 'Jumlah {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

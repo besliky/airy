@@ -321,6 +321,12 @@ export const de = {
   paneShowEndedClick: 'Ende der Bildschirmpräsentation. Klicken Sie zum Beenden.',
   paneShowEnded: 'Ende der Bildschirmpräsentation.',
   paneShowRehearseTip: 'Neue Einblendezeiten testen: Zeit auf dieser Folie / Gesamtzeit',
+  paneShowRecordTip:
+    'Präsentation aufzeichnen: diese Folie / insgesamt aufgenommen — P pausiert, Stopp speichert die Zeiten',
+  paneShowRecordPause: 'Aufnahme pausieren (P)',
+  paneShowRecordResume: 'Aufnahme fortsetzen (P)',
+  paneShowRecordStop: 'Stoppen und Zeiten speichern',
+  paneShowRecordPaused: 'Pausiert',
   paneShowRehearseTotal: 'Gesamt {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

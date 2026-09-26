@@ -251,6 +251,7 @@ export const pl = {
   appZoomOut: 'Pomniejsz',
   appZoomLabel: 'Powiększenie',
   appMediaCloseTitle: 'Zamknij (Esc)',
+  appRecordTitle: 'Nagrywanie pokazu slajdów',
   appRehearseTitle: 'Próba tempa',
   appRehearseSummary:
     'Łączny czas pokazu wyniósł {duration}. Czy zapisać czasy wyświetlania slajdów do automatycznego przełączania?',

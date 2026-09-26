@@ -386,6 +386,8 @@ export const pt = {
   ribbonRehearse: 'Testar Intervalos',
   ribbonRehearseTip:
     'Testar intervalos: executa a apresentação desde o início e registra o tempo por slide; salve como intervalos de avanço automático (salvo no pptx)',
+  ribbonRecordTip:
+    'Gravar apresentação de diapositivos: execute a apresentação do início cronometrando cada diapositivo (pausar/retomar com P); os tempos são guardados como avanço automático (no pptx)',
   ribbonRecord: 'Gravar',
   ribbonGroupProofing: 'Revisão de Texto',
   ribbonSpellCheck: 'Ortografia',

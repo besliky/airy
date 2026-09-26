@@ -314,6 +314,11 @@ export const he = {
   paneShowEndedClick: 'סוף הצגת השקופיות. לחץ כדי לצאת.',
   paneShowEnded: 'סוף הצגת השקופיות.',
   paneShowRehearseTip: 'חזרה על תזמונים: זמן בשקופית זו / זמן כולל',
+  paneShowRecordTip: 'הקלטת מצגת: שקופית זו / סך הכול הוקלט — השהיה עם P, עצירה שומרת את הזמנים',
+  paneShowRecordPause: 'השהה את ההקלטה (P)',
+  paneShowRecordResume: 'המשך את ההקלטה (P)',
+  paneShowRecordStop: 'עצור ושמור את הזמנים',
+  paneShowRecordPaused: 'מושהה',
   paneShowRehearseTotal: 'סה״כ {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

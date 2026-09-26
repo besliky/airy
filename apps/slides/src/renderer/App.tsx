@@ -493,8 +493,10 @@ export function App() {
   const [customShows, setCustomShows] = useState<CustomShow[]>([])
   const [customShowDlgOpen, setCustomShowDlgOpen] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
-  /** Per-page dwell seconds awaiting confirmation after rehearsal (non-null shows the "save?" confirmation dialog) */
-  const [pendingRehearse, setPendingRehearse] = useState<number[] | null>(null)
+  /** Per-page dwell seconds awaiting confirmation after rehearsal/recording (non-null shows the "save?" confirmation dialog); record=true when captured by Record Slide Show */
+  const [pendingRehearse, setPendingRehearse] = useState<{ sec: number[]; record: boolean } | null>(
+    null,
+  )
   const [showRuler, setShowRuler] = useState(false)
   const [showGrid, setShowGrid] = useState(false)
   const [showGuides, setShowGuides] = useState(false)
@@ -1842,6 +1844,7 @@ export function App() {
     [],
   )
   const startRehearseShow = useCallback(() => showActions.startRehearseShow(ctxRef.current), [])
+  const startRecordShow = useCallback(() => showActions.startRecordShow(ctxRef.current), [])
   const onRehearseDone = useCallback(
     (perPageSec: number[]) => showActions.onRehearseDone(ctxRef.current, perPageSec),
     [],
@@ -3113,6 +3116,7 @@ export function App() {
         onPresenterView={startPresenterView}
         onCustomShow={() => setCustomShowDlgOpen(true)}
         onRehearse={startRehearseShow}
+        onRecord={startRecordShow}
         currentHidden={!!slide?.hidden}
         onToggleHidden={() => void toggleHidden(current)}
         inkTool={inkTool}
@@ -4248,6 +4252,7 @@ export function App() {
           startAt={slideShow.startAt}
           customOrder={slideShow.customOrder}
           rehearseMode={slideShow.rehearse}
+          recordMode={slideShow.record}
           onRehearseDone={onRehearseDone}
           onExit={exitSlideShow}
         />
@@ -4387,10 +4392,10 @@ export function App() {
       {pendingRehearse && (
         <div className="modal-backdrop">
           <div className="modal">
-            <h2>{t('appRehearseTitle')}</h2>
+            <h2>{t(pendingRehearse.record ? 'appRecordTitle' : 'appRehearseTitle')}</h2>
             <p className="rehearse-summary">
               {t('appRehearseSummary', {
-                duration: formatClock(pendingRehearse.reduce((a, b) => a + b, 0) * 1000),
+                duration: formatClock(pendingRehearse.sec.reduce((a, b) => a + b, 0) * 1000),
               })}
             </p>
             <div className="modal-actions">

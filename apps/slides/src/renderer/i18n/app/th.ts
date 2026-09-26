@@ -234,6 +234,7 @@ export const th = {
   appZoomOut: 'ย่อ',
   appZoomLabel: 'ย่อ/ขยาย',
   appMediaCloseTitle: 'ปิด (Esc)',
+  appRecordTitle: 'บันทึกการนำเสนอสไลด์',
   appRehearseTitle: 'ซ้อมการกำหนดเวลา',
   appRehearseSummary:
     'เวลารวมของการนำเสนอคือ {duration} ต้องการบันทึกเวลาของแต่ละสไลด์เพื่อใช้เปลี่ยนสไลด์อัตโนมัติหรือไม่',

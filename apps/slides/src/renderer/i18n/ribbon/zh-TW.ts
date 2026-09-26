@@ -362,6 +362,8 @@ export const zhTW = {
   ribbonRehearse: '排練計時',
   ribbonRehearseTip:
     '排練計時：從頭放映並記錄每頁停留時間，結束後可儲存為自動換頁時間（寫入 pptx）',
+  ribbonRecordTip:
+    '錄製投影片放映：從頭開始放映並為每張投影片計時（按 P 暫停/繼續）；計時將儲存為自動換片時間（寫入 pptx）',
   ribbonRecord: '錄製',
   ribbonGroupProofing: '校訂',
   ribbonSpellCheck: '拼字檢查',

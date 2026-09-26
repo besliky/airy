@@ -246,6 +246,7 @@ export const ru = {
   appZoomOut: 'Уменьшить',
   appZoomLabel: 'Масштаб',
   appMediaCloseTitle: 'Закрыть (Esc)',
+  appRecordTitle: 'Запись показа слайдов',
   appRehearseTitle: 'Настройка времени',
   appRehearseSummary:
     'Общая продолжительность показа: {duration}. Сохранить время показа слайдов для автоматической смены?',

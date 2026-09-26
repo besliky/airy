@@ -253,6 +253,7 @@ export const es = {
   appZoomOut: 'Alejar',
   appZoomLabel: 'Zoom',
   appMediaCloseTitle: 'Cerrar (Esc)',
+  appRecordTitle: 'Grabar presentación',
   appRehearseTitle: 'Ensayar intervalos',
   appRehearseSummary:
     'La duración total de la presentación fue {duration}. ¿Desea guardar los intervalos de las diapositivas para el avance automático?',

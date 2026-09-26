@@ -226,6 +226,7 @@ export const zh = {
   appZoomOut: '缩小',
   appZoomLabel: '缩放',
   appMediaCloseTitle: '关闭 (Esc)',
+  appRecordTitle: '录制幻灯片演示',
   appRehearseTitle: '排练计时',
   appRehearseSummary: '本次放映总时长 {duration}。是否保存每页停留时间作为自动换片时间？',
   appRehearseDiscard: '不保存',

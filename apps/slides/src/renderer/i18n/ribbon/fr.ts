@@ -397,6 +397,8 @@ export const fr = {
   ribbonRehearse: 'Vérification du minutage',
   ribbonRehearseTip:
     'Vérification du minutage : lancer le diaporama depuis le début et enregistrer le temps par diapositive ; enregistrer ensuite comme minutage de défilement automatique (enregistré dans le pptx)',
+  ribbonRecordTip:
+    'Enregistrer le diaporama : lancez le diaporama depuis le début en chronométrant chaque diapositive (pause/reprise avec P) ; les durées sont enregistrées comme avancement automatique (dans le pptx)',
   ribbonRecord: 'Enregistrer',
   ribbonGroupProofing: 'Vérification',
   ribbonSpellCheck: 'Orthographe',

@@ -320,6 +320,12 @@ export const fr = {
   paneShowEndedClick: 'Fin du diaporama. Cliquez pour quitter.',
   paneShowEnded: 'Fin du diaporama.',
   paneShowRehearseTip: 'Vérification du minutage : temps sur cette diapositive / temps total',
+  paneShowRecordTip:
+    'Enregistrer le diaporama : cette diapositive / total enregistré — pause avec P, arrêter pour enregistrer les durées',
+  paneShowRecordPause: "Mettre l'enregistrement en pause (P)",
+  paneShowRecordResume: "Reprendre l'enregistrement (P)",
+  paneShowRecordStop: 'Arrêter et enregistrer les durées',
+  paneShowRecordPaused: 'En pause',
   paneShowRehearseTotal: 'Total {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

@@ -256,6 +256,7 @@ export const de = {
   appZoomOut: 'Verkleinern',
   appZoomLabel: 'Zoom',
   appMediaCloseTitle: 'Schließen (Esc)',
+  appRecordTitle: 'Bildschirmpräsentation aufzeichnen',
   appRehearseTitle: 'Neue Einblendezeiten testen',
   appRehearseSummary:
     'Die Gesamtdauer der Bildschirmpräsentation betrug {duration}. Möchten Sie die Anzeigedauer der einzelnen Folien für den automatischen Folienwechsel speichern?',

@@ -313,6 +313,11 @@ export const zh = {
   paneShowEndedClick: '放映结束，单击退出。',
   paneShowEnded: '放映结束。',
   paneShowRehearseTip: '排练计时：当前页停留 / 总时长',
+  paneShowRecordTip: '录制幻灯片演示：本页时间 / 已录总时间 — 按 P 暂停，停止可保存计时',
+  paneShowRecordPause: '暂停录制（P）',
+  paneShowRecordResume: '继续录制（P）',
+  paneShowRecordStop: '停止并保存计时',
+  paneShowRecordPaused: '已暂停',
   paneShowRehearseTotal: '总时长 {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

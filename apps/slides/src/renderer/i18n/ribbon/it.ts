@@ -397,6 +397,8 @@ export const it = {
   ribbonRehearse: 'Prova Intervalli',
   ribbonRehearseTip:
     "Prova intervalli: avvia la presentazione dall'inizio e registra il tempo per diapositiva; salva come intervalli di avanzamento automatico (salvato nel pptx)",
+  ribbonRecordTip:
+    "Registra presentazione: avvia la presentazione dall'inizio cronometrando ogni diapositiva (pausa/ripresa con P); i tempi vengono salvati come avanzamento automatico (nel pptx)",
   ribbonRecord: 'Registra',
   ribbonGroupProofing: 'Strumenti di Correzione',
   ribbonSpellCheck: 'Controllo Ortografia',

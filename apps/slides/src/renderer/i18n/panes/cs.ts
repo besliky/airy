@@ -316,6 +316,12 @@ export const cs = {
   paneShowEndedClick: 'Konec prezentace. Kliknutím ukončíte.',
   paneShowEnded: 'Konec prezentace.',
   paneShowRehearseTip: 'Vyzkoušet časování: čas na tomto snímku / celkový čas',
+  paneShowRecordTip:
+    'Záznam prezentace: tento snímek / celkem zaznamenáno — pauza pod P, stop uloží časy',
+  paneShowRecordPause: 'Pozastavit záznam (P)',
+  paneShowRecordResume: 'Pokračovat v záznamu (P)',
+  paneShowRecordStop: 'Zastavit a uložit časy',
+  paneShowRecordPaused: 'Pozastaveno',
   paneShowRehearseTotal: 'Celkem {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

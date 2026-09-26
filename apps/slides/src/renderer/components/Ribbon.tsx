@@ -1218,6 +1218,7 @@ export function Ribbon({
   onPresenterView,
   onCustomShow,
   onRehearse,
+  onRecord,
   currentHidden,
   onToggleHidden,
   inkTool,
@@ -2712,7 +2713,17 @@ export function Ribbon({
                 </span>
                 <span>{t('ribbonRehearse')}</span>
               </button>
-              <DisabledBig icon={<IconRecord size={BIG} />} label={t('ribbonRecord')} />
+              <button
+                className="rb-big"
+                disabled={!hasDoc}
+                onClick={onRecord}
+                data-tip={t('ribbonRecordTip')}
+              >
+                <span className="rb-big-icon">
+                  <IconRecord size={BIG} />
+                </span>
+                <span>{t('ribbonRecord')}</span>
+              </button>
             </Group>
           </>
         ) : tab === 'review' ? (

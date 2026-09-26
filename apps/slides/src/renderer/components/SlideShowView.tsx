@@ -8,6 +8,8 @@
  *   going back/jumping shows the all-animations-finished state
  * - →/space/enter/PgDn/click next step/page; ←/PgUp/right-click previous page; Home/End first/last page;
  *   Esc exits; advancing past the last page shows the "end of show" black screen
+ * - Rehearsal/Record modes top the view with a timing HUD and report per-page dwell on exit;
+ *   plain shows self-advance on slides carrying a recorded timing (advTm) — PowerPoint parity
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RenderNode, RenderSlide, ShapeRenderNode } from '@airy-office/pptx-render'
@@ -18,11 +20,15 @@ import { MorphStage } from './MorphStage'
 import { planTransition } from '../transition-play'
 import {
   computePlayOrder,
-  finishRehearse,
+  currentRecordMs,
+  finishRecord,
   formatClock,
-  startRehearse,
-  switchRehearsePage,
-  type RehearseTiming,
+  pauseRecord,
+  resumeRecord,
+  startRecord,
+  switchRecordPage,
+  totalRecordMs,
+  type RecordSession,
 } from '../slideshow-utils'
 import { liftShowCurtain } from '../show-actions'
 
@@ -35,6 +41,7 @@ export function SlideShowView({
   onExit,
   customOrder,
   rehearseMode,
+  recordMode,
   onRehearseDone,
 }: {
   slides: RenderSlide[]
@@ -47,6 +54,8 @@ export function SlideShowView({
   customOrder?: number[]
   /** Rehearsal timing mode: shows a timer bar at the top and records each page's dwell time */
   rehearseMode?: boolean
+  /** Record Slide Show mode: rehearsal clock + explicit record session HUD (pause/resume/stop, P key) */
+  recordMode?: boolean
   /** Rehearsal-end callback (called before onExit on exit); perPageSec is by original page index, unvisited pages are 0 */
   onRehearseDone?: (perPageSec: number[]) => void
 }) {
@@ -78,6 +87,8 @@ export function SlideShowView({
   const linksRef = useRef<Array<Map<string, LinkTargetOp>>>([])
   /** Per-page run hyperlinks: "sourceId:para:run" → target; hit-tested against layout glyph runs */
   const runLinksRef = useRef<Array<Map<string, LinkTargetOp>>>([])
+  /** Per-page auto-advance times (advTm ms, null = none; also prefetched once) */
+  const advRef = useRef<Array<number | null>>([])
   /** Morph tween in progress: previous/target page original indexes + duration + replay nonce */
   const [morph, setMorph] = useState<{
     fromIdx: number
@@ -92,6 +103,9 @@ export function SlideShowView({
     let cancelled = false
     void Promise.all(slides.map((_, i) => window.slidesApi.getTransition(i))).then((specs) => {
       if (!cancelled) transRef.current = specs
+    })
+    void window.slidesApi.getAdvanceTimes().then((times) => {
+      if (!cancelled) advRef.current = times
     })
     void Promise.all(slides.map((_, i) => window.slidesApi.getAnimations(i))).then((lists) => {
       if (!cancelled) setAllAnims(lists)
@@ -122,23 +136,32 @@ export function SlideShowView({
   const slide = slides[order[pos]!]
   const player = useAnimPlayer(slide?.heightPx ?? 540, slide?.widthPx ?? 960)
 
-  // ── Rehearsal timing: start timing the first page on entry; accumulate the previous page's dwell on turn; redraw the timer bar every 500ms ──
-  const rehearseRef = useRef<RehearseTiming | null>(null)
-  const [, setRehearseTick] = useState(0)
+  // ── Recording clock (rehearsal + Record Slide Show share one session; only Record exposes pause/resume):
+  // start timing the first page on entry; accumulate the previous page's dwell on turn; redraw the HUD every 500ms ──
+  const timingActive = rehearseMode === true || recordMode === true
+  const recRef = useRef<RecordSession | null>(null)
+  const [, setRecTick] = useState(0)
   useEffect(() => {
-    if (!rehearseMode) return
-    rehearseRef.current = startRehearse(slides.length, order[pos] ?? startAt, Date.now())
-    const h = window.setInterval(() => setRehearseTick((n) => n + 1), 500)
+    if (!timingActive) return
+    recRef.current = startRecord(slides.length, order[pos] ?? startAt, Date.now())
+    const h = window.setInterval(() => setRecTick((n) => n + 1), 500)
     return () => window.clearInterval(h)
     // Initialize only once on entering the show (slides/order don't change during the show)
-  }, [rehearseMode]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [timingActive]) // eslint-disable-line react-hooks/exhaustive-deps
   const curIdx = order[pos]
   useEffect(() => {
-    const t = rehearseRef.current
+    const t = recRef.current
     if (t && curIdx != null && curIdx !== t.currentIndex) {
-      rehearseRef.current = switchRehearsePage(t, curIdx, Date.now())
+      recRef.current = switchRecordPage(t, curIdx, Date.now())
     }
   }, [curIdx])
+  const toggleRecordPause = useCallback(() => {
+    const t = recRef.current
+    if (!t) return
+    recRef.current =
+      t.phase === 'recording' ? pauseRecord(t, Date.now()) : resumeRecord(t, Date.now())
+    setRecTick((n) => n + 1)
+  }, [])
 
   // Load the page's animations when the page changes/prefetch completes (forward = initial state, back/jump = finished state)
   useEffect(() => {
@@ -147,11 +170,11 @@ export function SlideShowView({
 
   const exitRef = useRef(() => {})
   exitRef.current = () => {
-    // Rehearsal mode: report each page's dwell seconds before exit (ref nulled to prevent duplicate fullscreenchange triggers)
-    const t = rehearseRef.current
-    if (rehearseMode && onRehearseDone && t) {
-      rehearseRef.current = null
-      onRehearseDone(finishRehearse(t, Date.now()))
+    // Timing modes: report each page's dwell seconds before exit (ref nulled to prevent duplicate fullscreenchange triggers)
+    const t = recRef.current
+    if (timingActive && onRehearseDone && t) {
+      recRef.current = null
+      onRehearseDone(finishRecord(t, Date.now()))
     }
     onExit(order[Math.min(pos, order.length - 1)] ?? startAt)
   }
@@ -289,6 +312,20 @@ export function SlideShowView({
     if (pos > 0) goTo(pos - 1, false)
   }, [ended, pos, goTo])
 
+  // Auto-advance playback (PowerPoint parity): a slide carrying a recorded timing
+  // (advTm) advances by itself after that dwell, unless the user advances first.
+  // Suppressed in rehearse/record modes — there the presenter paces the show to
+  // record fresh timings instead of replaying the old ones.
+  const nextRef = useRef(next)
+  nextRef.current = next
+  useEffect(() => {
+    if (timingActive || ended) return
+    const ms = advRef.current[order[pos] ?? -1] ?? null
+    if (ms == null || ms <= 0) return
+    const h = window.setTimeout(() => nextRef.current(), ms)
+    return () => window.clearTimeout(h)
+  }, [pos, ended, timingActive, order])
+
   // Element hyperlinks during the show (PowerPoint behavior): a click on a linked element follows
   // the link instead of advancing — slide links (Zoom/jump) go to that page, URLs open in the browser
   const followLink = useCallback(
@@ -353,23 +390,22 @@ export function SlideShowView({
         e.preventDefault()
         setEnded(false)
         goTo(order.length - 1, false)
+      } else if (recordMode && (e.key === 'p' || e.key === 'P')) {
+        // P pauses/resumes the Record Slide Show session
+        e.preventDefault()
+        toggleRecordPause()
       }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [next, prev, goTo, order.length])
+  }, [next, prev, goTo, order.length, recordMode, toggleRecordPause])
 
   if (!slide) return null
   const fitW = Math.round(Math.min(size.w, (size.h * slide.widthPx) / slide.heightPx))
-  // Rehearsal timer bar values: current page dwell (including earlier revisit accumulation) + total elapsed
-  const rehearse = rehearseRef.current
-  const sinceEntered = rehearse ? Date.now() - rehearse.enteredAt : 0
-  const rehearseCurMs = rehearse
-    ? (rehearse.perPageMs[rehearse.currentIndex] ?? 0) + sinceEntered
-    : 0
-  const rehearseTotalMs = rehearse
-    ? rehearse.perPageMs.reduce((a, b) => a + b, 0) + sinceEntered
-    : 0
+  // Recording HUD values: current page dwell (including earlier revisit accumulation) + total recorded
+  const rec = recRef.current
+  const recCurMs = rec ? currentRecordMs(rec, Date.now()) : 0
+  const recTotalMs = rec ? totalRecordMs(rec, Date.now()) : 0
 
   return (
     <div
@@ -429,12 +465,49 @@ export function SlideShowView({
               </div>
             </div>
           )}
-          {rehearseMode && rehearse && (
+          {rehearseMode && !recordMode && rec && (
             <div className="ss-rehearse" data-tip={t('paneShowRehearseTip')}>
-              <span className="ss-rehearse-cur">⏱ {formatClock(rehearseCurMs)}</span>
+              <span className="ss-rehearse-cur">⏱ {formatClock(recCurMs)}</span>
               <span className="ss-rehearse-total">
-                {t('paneShowRehearseTotal', { time: formatClock(rehearseTotalMs) })}
+                {t('paneShowRehearseTotal', { time: formatClock(recTotalMs) })}
               </span>
+            </div>
+          )}
+          {recordMode && rec && (
+            <div
+              className={`ss-record${rec.phase === 'paused' ? ' ss-record-paused' : ''}`}
+              data-tip={t('paneShowRecordTip')}
+            >
+              <span className="ss-record-dot" aria-hidden="true" />
+              <span className="ss-record-state">
+                {rec.phase === 'paused' ? t('paneShowRecordPaused') : t('ribbonRecord')}
+              </span>
+              <span className="ss-record-clock">⏱ {formatClock(recCurMs)}</span>
+              <span className="ss-rehearse-total">
+                {t('paneShowRehearseTotal', { time: formatClock(recTotalMs) })}
+              </span>
+              <button
+                className="ss-record-btn"
+                onClick={(e) => {
+                  e.stopPropagation() // a HUD click must not also turn the page
+                  toggleRecordPause()
+                }}
+                data-tip={t(
+                  rec.phase === 'paused' ? 'paneShowRecordResume' : 'paneShowRecordPause',
+                )}
+              >
+                {rec.phase === 'paused' ? '▶' : '⏸'}
+              </button>
+              <button
+                className="ss-record-btn"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  exitRef.current() // stop = bank the dwell, offer to save, leave the show
+                }}
+                data-tip={t('paneShowRecordStop')}
+              >
+                ⏹
+              </button>
             </div>
           )}
           <div className="ss-counter">

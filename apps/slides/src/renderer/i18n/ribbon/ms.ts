@@ -388,6 +388,8 @@ export const ms = {
   ribbonRehearse: 'Raptai Pemasaan',
   ribbonRehearseTip:
     'Raptai pemasaan: jalankan tayangan dari awal dan rekodkan masa setiap slaid; simpan sebagai pemasaan mara automatik (disimpan dalam pptx)',
+  ribbonRecordTip:
+    'Rakam Peragaan Slaid: jalankan peragaan dari awal sambil mengukur masa setiap slaid (jeda/sambung dengan P); masa disimpan sebagai peralihan automatik (ke dalam pptx)',
   ribbonRecord: 'Rakam',
   ribbonGroupProofing: 'Pembacaan Pruf',
   ribbonSpellCheck: 'Ejaan',

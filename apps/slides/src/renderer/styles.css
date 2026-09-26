@@ -6806,6 +6806,77 @@ body.show-curtain::after {
   font-size: 12px;
 }
 
+/* ── Record Slide Show HUD (top of the show: REC state + clocks + pause/stop) ── */
+
+.slideshow .ss-record {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--slides-show-pill-bg);
+  border: 1px solid var(--slides-show-line-15);
+  border-radius: 6px;
+  padding: 6px 14px;
+  /* interactive (pause/stop buttons), unlike the read-only rehearsal bar */
+  pointer-events: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.slideshow .ss-record-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: ss-rec-blink 1.2s ease-in-out infinite;
+}
+
+.slideshow .ss-record-paused .ss-record-dot {
+  background: var(--slides-show-ink-60);
+  animation: none;
+}
+
+@keyframes ss-rec-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.slideshow .ss-record-state {
+  color: var(--slides-show-ink);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.slideshow .ss-record-clock {
+  color: var(--slides-show-ink);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.slideshow .ss-record-btn {
+  border: 1px solid var(--slides-show-line-15);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--slides-show-ink);
+  font-size: 13px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.slideshow .ss-record-btn:hover {
+  background: var(--slides-show-line-15);
+}
+
 /* ── Custom show management dialog ──────────────────────────────── */
 
 .modal.csd {

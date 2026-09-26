@@ -385,6 +385,8 @@ export const id = {
   ribbonRehearse: 'Latih Pengaturan Waktu',
   ribbonRehearseTip:
     'Latih pengaturan waktu: putar peragaan dari awal dan catat waktu tiap slide; dapat disimpan sebagai waktu peralihan otomatis (disimpan ke pptx)',
+  ribbonRecordTip:
+    'Rekam Peragaan Slide: jalankan peragaan dari awal sambil mengukur waktu tiap slide (jeda/lanjut dengan P); waktu disimpan sebagai pergantian otomatis (ke pptx)',
   ribbonRecord: 'Rekam',
   ribbonGroupProofing: 'Pemeriksaan',
   ribbonSpellCheck: 'Ejaan',

@@ -316,6 +316,12 @@ export const ja = {
   paneShowEndedClick: 'スライドショーの最後です。クリックで終了。',
   paneShowEnded: 'スライドショーの最後です。',
   paneShowRehearseTip: 'リハーサル：現在のスライドの時間 / 合計時間',
+  paneShowRecordTip:
+    'スライドショーの記録: このスライド / 合計記録時間 — P で一時停止、停止で計測を保存',
+  paneShowRecordPause: '記録を一時停止（P）',
+  paneShowRecordResume: '記録を再開（P）',
+  paneShowRecordStop: '停止して計測を保存',
+  paneShowRecordPaused: '一時停止中',
   paneShowRehearseTotal: '合計 {time}',
 
   // Alt text (cNvPr title/description) — Format pane, Size & Properties bottom section

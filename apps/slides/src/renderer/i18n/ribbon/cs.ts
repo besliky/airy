@@ -380,6 +380,8 @@ export const cs = {
   ribbonRehearse: 'Vyzkoušet časování',
   ribbonRehearseTip:
     'Vyzkoušet časování: spustí prezentaci od začátku a zaznamená čas na každý snímek; uloží se jako časování automatického přechodu (uloží se do pptx)',
+  ribbonRecordTip:
+    'Záznam prezentace: spusťte prezentaci od začátku a měřte čas na každém snímku (pauza/pokračování — P); časy se uloží jako automatický přechod (do pptx)',
   ribbonRecord: 'Záznam',
   ribbonGroupProofing: 'Kontrola pravopisu',
   ribbonSpellCheck: 'Pravopis',

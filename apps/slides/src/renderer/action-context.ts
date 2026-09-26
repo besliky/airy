@@ -40,6 +40,8 @@ export interface SlideShowState {
   startAt: number
   customOrder?: number[]
   rehearse?: boolean
+  /** Record Slide Show mode: rehearse clock + explicit record session (pause/resume/stop HUD) */
+  record?: boolean
 }
 
 export type CtxMenuState =
@@ -147,8 +149,9 @@ export interface ActionCtx {
   setPresenter: Set<{ startAt: number } | null>
   setCustomShows: Set<CustomShow[]>
   setCustomShowDlgOpen: Set<boolean>
-  pendingRehearse: number[] | null
-  setPendingRehearse: Set<number[] | null>
+  /** Recorded dwell seconds awaiting the "save?" confirmation; record=true when captured by Record Slide Show (dialog title). */
+  pendingRehearse: { sec: number[]; record: boolean } | null
+  setPendingRehearse: Set<{ sec: number[]; record: boolean } | null>
 
   // Sections
   sections: SectionInfo[]
