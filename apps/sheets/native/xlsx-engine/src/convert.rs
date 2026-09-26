@@ -386,6 +386,139 @@ fn merges_xml(layout: &xls_layout::SheetLayout) -> String {
     xml
 }
 
+/// ODF date/time lexemes -> (Excel serial, fallback date style). calamine
+/// hands .ods date and time cells over as the ISO strings they carry in
+/// `office:date-value` / `office:time-value` (`Data::DateTimeIso` /
+/// `Data::DurationIso`), and writing them as text loses the date typing the
+/// source had — LibreOffice and Excel both keep a real serial + number
+/// format when converting the same book. The three fallback shapes mirror
+/// the `Data::DateTime` branch below: xf 1 short date, xf 2 date+time,
+/// xf 3 elapsed time. `None` = not a lexeme we understand (keep the text).
+fn odf_datetime_to_serial(text: &str) -> Option<(f64, usize)> {
+    if let Some(body) = text.strip_prefix(['P', 'p']) {
+        return odf_duration_to_serial(body).map(|fraction| (fraction, 3));
+    }
+    let (date, rest) = text.split_once('T').unwrap_or((text, ""));
+    let (year, month, day) = parse_iso_date(date)?;
+    let serial = days_since_excel_epoch(year, month, day)? as f64;
+    if rest.is_empty() {
+        return Some((serial, 1));
+    }
+    // Time of day, with an optional UTC marker or offset (`Z`, `+hh:mm`)
+    // that carries no serial weight — the wall-clock digits are the value.
+    let time = match rest.strip_suffix('Z') {
+        Some(time) => time,
+        None => rest.split_once(['+', '-']).map_or(rest, |(time, _)| time),
+    };
+    let (hours, minutes, seconds) = parse_iso_time(time)?;
+    Some((
+        serial + f64::from(hours * 3600 + minutes * 60 + seconds) / 86_400.0,
+        2,
+    ))
+}
+
+/// Elapsed-time lexeme body (`T10H30M15S`, `T45M`, `1DT2H`, ...): the
+/// fraction of a day it represents. LibreOffice writes time-of-day cells
+/// exactly this way (`PT10H30M15S`), and Excel stores a time of day as a
+/// fraction too, so one shape serves both.
+fn odf_duration_to_serial(body: &str) -> Option<f64> {
+    let signed = body.trim_start_matches(['-', '+']);
+    let negative = signed.len() != body.len();
+    // Shape: [days]['T' time] — the `T` separator is required by ODF
+    // whenever a time component is present.
+    let (days, time) = match signed.split_once('D') {
+        Some((days, rest)) => (Some(days), Some(rest.strip_prefix('T').unwrap_or(rest))),
+        None => (None, signed.strip_prefix('T')),
+    };
+    let time = match time {
+        // A dangling `T` carries no component — not a lexeme we honor.
+        Some("") => return None,
+        Some(time) => time,
+        None => "",
+    };
+    if time.is_empty() && days.is_none() {
+        return None;
+    }
+    let mut seconds = match days {
+        Some(days) => days.parse::<f64>().ok()? * 86_400.0,
+        None => 0.0,
+    };
+    // (value, unit) pairs whose units must appear in H, M, S order; the
+    // seconds value may carry a fraction.
+    let mut unit_rank = 0;
+    let mut digits = String::new();
+    for ch in time.chars().chain(std::iter::once('\0')) {
+        match ch {
+            '0'..='9' | '.' => digits.push(ch),
+            'H' | 'M' | 'S' => {
+                let rank = match ch {
+                    'H' => 1,
+                    'M' => 2,
+                    _ => 3,
+                };
+                if rank < unit_rank || digits.is_empty() {
+                    return None;
+                }
+                let value: f64 = digits.parse().ok()?;
+                seconds += match ch {
+                    'H' => value * 3600.0,
+                    'M' => value * 60.0,
+                    _ => value,
+                };
+                digits.clear();
+                unit_rank = rank;
+            }
+            '\0' if digits.is_empty() => {}
+            _ => return None,
+        }
+    }
+    let fraction = seconds / 86_400.0;
+    Some(if negative { -fraction } else { fraction })
+}
+
+/// `YYYY-MM-DD` -> (year, month, day).
+fn parse_iso_date(date: &str) -> Option<(i32, u32, u32)> {
+    let (year, rest) = date.split_once('-')?;
+    let (month, day) = rest.split_once('-')?;
+    if year.len() != 4 || rest.len() != 5 {
+        return None;
+    }
+    Some((year.parse().ok()?, month.parse().ok()?, day.parse().ok()?))
+}
+
+/// `HH:MM(:SS(.frac)?)` -> whole (hours, minutes, seconds); fractions are
+/// dropped — they are below the resolution the fallback formats show.
+fn parse_iso_time(time: &str) -> Option<(u32, u32, u32)> {
+    let base = time.split('.').next().unwrap_or(time);
+    let mut parts = base.split(':');
+    let hours: u32 = parts.next()?.parse().ok()?;
+    let minutes: u32 = parts.next()?.parse().ok()?;
+    let seconds: u32 = parts.next().unwrap_or("0").parse().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Some((hours, minutes, seconds))
+}
+
+/// Days from 1899-12-30 (the Excel serial epoch, leap-bug included) to the
+/// given civil date. Howard Hinnant's days_from_civil, no calendar deps.
+fn days_since_excel_epoch(year: i32, month: u32, day: u32) -> Option<i64> {
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    let shifted_year = i64::from(year) - i64::from(month <= 2);
+    let era = shifted_year.div_euclid(400);
+    let year_of_era = shifted_year - era * 400;
+    let month = i64::from(month);
+    let day_of_year = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + i64::from(day) - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    // days_from_civil counts days since 1970-01-01 continuously; the Excel
+    // serial calendar reproduces Lotus's phantom 1900-02-29, so every real
+    // date from 1900-03-01 on sits one serial past the continuous count.
+    let continuous = era * 146_097 + day_of_era - 719_468;
+    Some(continuous + if continuous < -25_508 { 25_568 } else { 25_569 })
+}
+
 fn cell_xml(
     position: (u32, u32),
     value: &Data,
@@ -431,13 +564,26 @@ fn cell_xml(
                 .unwrap_or_else(|| format!(r#" s="{fallback}""#));
             format!(r#"<c r="{reference}"{style_attr}>{formula_xml}<v>{serial}</v></c>"#)
         }
+        Data::DateTimeIso(text) | Data::DurationIso(text) => {
+            // An ODF date/time cell becomes a real serial with the fallback
+            // date styles; a lexeme outside the understood shapes keeps the
+            // text, exactly as before.
+            match odf_datetime_to_serial(text) {
+                Some((serial, fallback)) => {
+                    let style_attr = style
+                        .map(|style| format!(r#" s="{style}""#))
+                        .unwrap_or_else(|| format!(r#" s="{fallback}""#));
+                    format!(r#"<c r="{reference}"{style_attr}>{formula_xml}<v>{serial}</v></c>"#)
+                }
+                None => format!(
+                    r#"<c r="{reference}"{style_attr} t="inlineStr">{formula_xml}<is><t xml:space="preserve">{}</t></is></c>"#,
+                    escape_xml(text),
+                ),
+            }
+        }
         Data::Error(error) => format!(
             r#"<c r="{reference}"{style_attr} t="e">{formula_xml}<v>{}</v></c>"#,
             escape_xml(&error.to_string()),
-        ),
-        Data::DateTimeIso(text) | Data::DurationIso(text) => format!(
-            r#"<c r="{reference}"{style_attr} t="inlineStr">{formula_xml}<is><t xml:space="preserve">{}</t></is></c>"#,
-            escape_xml(text),
         ),
     };
     Some(cell)
@@ -795,13 +941,13 @@ mod tests {
         assert!(!sheet.contains("8.68"), "catch-all width leaked into cols");
         // Merge continuations keep the header's fill and borders via styled
         // empty cells, the way LibreOffice writes them.
-        assert!(sheet.contains(r#"<c r="B1" s="3"/>"#));
-        assert!(sheet.contains(r#"<c r="C3" s="4"/>"#));
+        assert!(sheet.contains(r#"<c r="B1" s="4"/>"#));
+        assert!(sheet.contains(r#"<c r="C3" s="5"/>"#));
         // Title cell: bold 14pt on the amber fill, centered — cellXfs 3.
-        assert!(sheet.contains(r#"<c r="A1" s="3" t="inlineStr">"#));
+        assert!(sheet.contains(r#"<c r="A1" s="4" t="inlineStr">"#));
         // A date keeps its real number format (custom 165 = yyyy-mm-dd),
         // not the fallback short-date style.
-        assert!(sheet.contains(r#"<c r="D5" s="6"><v>46223</v></c>"#));
+        assert!(sheet.contains(r#"<c r="D5" s="7"><v>46223</v></c>"#));
 
         let styles = read_entry(&target, "xl/styles.xml");
         assert!(styles.contains(r#"<font><b/><sz val="14"/><name val="Cambria"/></font>"#));
@@ -810,8 +956,8 @@ mod tests {
         assert!(styles.contains(r#"<left style="thin"><color rgb="FF000000"/></left>"#));
         assert!(styles.contains(r#"<numFmt numFmtId="165" formatCode="yyyy\-mm\-dd"/>"#));
         assert!(styles.contains(r#"<alignment horizontal="center" vertical="center"/>"#));
-        // cellXfs 0-2 are the converter's fallback styles, unchanged.
-        assert!(styles.contains(r#"<cellXfs count="7">"#));
+        // cellXfs 0-3 are the converter's fallback styles, unchanged.
+        assert!(styles.contains(r#"<cellXfs count="8">"#));
         // BUG-1659: the mandatory named style, after cellXfs in schema
         // order — IronCalc's importer panics on a book without it.
         assert!(styles.contains(
@@ -913,7 +1059,7 @@ mod tests {
         assert!(!sheet.contains("mergeCell"));
         assert!(!sheet.contains("<cols>"));
         let styles = read_entry(&target, "xl/styles.xml");
-        assert!(styles.contains(r#"<cellXfs count="3">"#));
+        assert!(styles.contains(r#"<cellXfs count="4">"#));
     }
 
     /// BUG-1659: a real .ods book converts with a complete styles.xml —
@@ -977,6 +1123,106 @@ mod tests {
         assert!(workbook.contains(r#"<sheet name="Data" sheetId="2" r:id="rId2"/>"#));
     }
 
+    /// PAR-214: a LibreOffice-written .ods with date, date+time and
+    /// time-of-day cells converts them into real Excel serials carrying a
+    /// date number format — they used to arrive as `Data::DateTimeIso` /
+    /// `Data::DurationIso` and land in the sheet as plain text. The serials
+    /// are the exact values LibreOffice itself writes into its xlsx
+    /// conversion of the same book; the round trip re-opens the converted
+    /// file and reads the numbers back the way the app does.
+    #[test]
+    fn carries_ods_dates_and_times_as_serials() {
+        let source = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/par214-ods-datetime.ods"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("converted.xlsx");
+
+        let result = convert_to_xlsx(source, &target).unwrap();
+        assert_eq!(result.cells, 8);
+
+        let sheet = read_entry(&target, "xl/worksheets/sheet1.xml");
+        // Date-only: serial 45306 = 2024-01-15, short-date style xf 1.
+        assert!(sheet.contains(r#"<c r="B1" s="1"><v>45306</v></c>"#));
+        // Date+time: the fraction is the wall-clock time, style xf 2.
+        assert!(sheet.contains(r#"<c r="B2" s="2"><v>45306.4375</v></c>"#));
+        // Time of day: a fraction of a day on the elapsed-time style xf 3.
+        let time = sheet
+            .split(r#"<c r="B3""#)
+            .nth(1)
+            .unwrap()
+            .split("</c>")
+            .next()
+            .unwrap();
+        assert!(time.starts_with(r#" s="3"><v>0.4376"#), "unexpected: {time}");
+        // A second date keeps its serial even under a different display
+        // format (the fallback format approximates the source's data style).
+        assert!(sheet.contains(r#"<c r="B4" s="1"><v>36525</v></c>"#));
+        // No ISO lexeme survives as text.
+        assert!(!sheet.contains("2024-01-15"), "date leaked as text");
+
+        // Round trip: the converted book re-opens and reads back numbers.
+        let mut sessions = crate::WorkbookSessions::new();
+        let metadata = sessions.open(&target).unwrap();
+        let range = sessions
+            .read_range(
+                &metadata.session_id,
+                "sheet-1",
+                &crate::CellRange {
+                    start_row: 0,
+                    end_row: 3,
+                    start_column: 1,
+                    end_column: 1,
+                },
+            )
+            .unwrap();
+        let numbers: Vec<f64> = range
+            .cells
+            .iter()
+            .filter_map(|cell| match cell.value {
+                Some(crate::CellValue::Number(number)) => Some(number),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(numbers.len(), 4);
+        assert_eq!(numbers[0], 45306.0);
+        assert_eq!(numbers[1], 45306.4375);
+        assert!((numbers[2] - 0.437_673_611).abs() < 1e-9, "{}", numbers[2]);
+        assert_eq!(numbers[3], 36525.0);
+    }
+
+    /// PAR-214: the ISO lexeme grammar — accepted shapes and refusals.
+    #[test]
+    fn odf_datetime_lexemes_convert_or_refuse() {
+        assert_eq!(odf_datetime_to_serial("2024-01-15"), Some((45306.0, 1)));
+        assert_eq!(
+            odf_datetime_to_serial("2024-01-15T10:30:00"),
+            Some((45306.4375, 2))
+        );
+        // The Excel leap-bug epoch: 1900-02-28 -> 59, 1900-03-01 -> 61.
+        assert_eq!(odf_datetime_to_serial("1900-02-28").unwrap().0, 59.0);
+        assert_eq!(odf_datetime_to_serial("1900-03-01").unwrap().0, 61.0);
+        assert_eq!(odf_datetime_to_serial("1999-12-31").unwrap().0, 36525.0);
+        // Elapsed/time-of-day durations: a fraction, on the time style.
+        let (serial, style) = odf_datetime_to_serial("PT10H30M15S").unwrap();
+        assert_eq!(style, 3);
+        assert!((serial - 0.437_673_611).abs() < 1e-9, "{serial}");
+        assert_eq!(
+            odf_datetime_to_serial("P1DT0H30M0S").unwrap().0,
+            1.020_833_333_333_333_3
+        );
+        assert_eq!(odf_datetime_to_serial("PT45M").unwrap().0, 45.0 / 1440.0);
+        assert_eq!(odf_datetime_to_serial("PT0S").unwrap().0, 0.0);
+        // Refusals keep the text path.
+        assert_eq!(odf_datetime_to_serial("not a date"), None);
+        assert_eq!(odf_datetime_to_serial("2024-13-01"), None);
+        assert_eq!(odf_datetime_to_serial("2024-01"), None);
+        assert_eq!(odf_datetime_to_serial("PT"), None);
+        assert_eq!(odf_datetime_to_serial("PTH"), None);
+        assert_eq!(odf_datetime_to_serial("P1DT"), None);
+    }
+
     /// BUG-1659: an empty book (no cells, no styles) still converts with a
     /// complete styles.xml — the minimal output must not skip the section
     /// IronCalc's importer requires.
@@ -990,7 +1236,7 @@ mod tests {
         let result = convert_to_xlsx(&source, &target).unwrap();
         assert_eq!(result.cells, 0);
         let styles = read_entry(&target, "xl/styles.xml");
-        assert!(styles.contains(r#"<cellXfs count="3">"#));
+        assert!(styles.contains(r#"<cellXfs count="4">"#));
         assert!(styles.contains(
             r#"<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>"#
         ));

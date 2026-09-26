@@ -956,7 +956,9 @@ impl<'a> StyleInterner<'a> {
             vertical,
             wrap,
         });
-        Some(self.composed.len() - 1 + 3)
+        // After the four fallback styles (general, short date, date+time,
+        // elapsed time).
+        Some(self.composed.len() - 1 + 4)
     }
 
     /// Emitted font index for a source font (0 = the base/body font slot).
@@ -1016,8 +1018,8 @@ impl<'a> StyleInterner<'a> {
     }
 
     /// The complete styles.xml: the converter's fallback styles (general,
-    /// short date, date+time — indexes 0-2, unchanged from the minimal
-    /// output) followed by every style the walk picked up.
+    /// short date, date+time, elapsed time — indexes 0-3) followed by every
+    /// style the walk picked up.
     pub(crate) fn styles_xml(&self) -> String {
         if self.composed.is_empty() {
             return BASE_STYLES_XML.into();
@@ -1084,7 +1086,7 @@ impl<'a> StyleInterner<'a> {
         xml.push_str(
             r#"<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>"#,
         );
-        xml.push_str(&format!(r#"<cellXfs count="{}">"#, self.composed.len() + 3));
+        xml.push_str(&format!(r#"<cellXfs count="{}">"#, self.composed.len() + 4));
         xml.push_str(FALLBACK_CELL_XFS);
         for entry in &self.composed {
             let alignment = alignment_xml(entry.horizontal, entry.vertical, entry.wrap);
@@ -1227,7 +1229,8 @@ fn escape(text: &str) -> String {
 
 /// The styles.xml of the minimal converter (no .xls styles found):
 /// xf 0 general, xf 1 short date (numFmt 14), xf 2 date+time (numFmt 22),
-/// closed by the mandatory `<cellStyles>` section (BUG-1659).
+/// xf 3 elapsed time (numFmt 46, what ODF `PT…` durations land on), closed
+/// by the mandatory `<cellStyles>` section (BUG-1659).
 const BASE_STYLES_XML: &str = concat!(
     r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 "#,
@@ -1236,18 +1239,20 @@ const BASE_STYLES_XML: &str = concat!(
     r#"<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>"#,
     r#"<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>"#,
     r#"<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>"#,
-    r#"<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>"#,
+    r#"<cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>"#,
     r#"<xf numFmtId="14" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>"#,
-    r#"<xf numFmtId="22" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>"#,
+    r#"<xf numFmtId="22" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>"#,
+    r#"<xf numFmtId="46" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>"#,
     default_cell_styles_xml!(),
     "</styleSheet>",
 );
 
-/// The three fallback cellXfs entries (verbatim prefix of BASE_STYLES_XML).
+/// The fallback cellXfs entries (verbatim prefix of BASE_STYLES_XML).
 const FALLBACK_CELL_XFS: &str = concat!(
     r#"<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>"#,
     r#"<xf numFmtId="14" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>"#,
     r#"<xf numFmtId="22" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>"#,
+    r#"<xf numFmtId="46" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>"#,
 );
 
 #[cfg(test)]
