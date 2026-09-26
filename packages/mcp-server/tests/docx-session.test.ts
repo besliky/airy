@@ -52,7 +52,7 @@ import {
 import { resolveConfined, WORKSPACE_ROOT_ENV } from '../src/docx/paths.js'
 import type { Target } from '../src/docx/ops.js'
 import { parseRestrictedHtml, blocksToHtml } from '../src/docx/html.js'
-import { buildFixtureDocx, buildStyleListDocx } from './helpers/docx-fixture.js'
+import { buildBodyDocx, buildFixtureDocx, buildStyleListDocx } from './helpers/docx-fixture.js'
 
 let root: string
 let docPath: string
@@ -461,6 +461,107 @@ describe('apply_ops', () => {
     // a no-op batch still saves the original bytes verbatim
     const result = await session.save()
     expect(result.unchanged).toBe(true)
+  })
+})
+
+// BUG-1760 (FM-6): findReplace used to count table entries as matched while
+// iterating only body-paragraph runs — a document whose text lives in tables
+// reported "matched 3, changed 0 (0 replacement(s))" as a success and the
+// save wrote zero replacements. The op now replaces inside table cells
+// (surgical cell patch, the engine's patchTableCellTexts path) and reports
+// what it could not replace instead of staying silent.
+describe('findReplace reaches table cells (BUG-1760)', () => {
+  it('replaces text in table cells, counts the table as changed, and survives save', async () => {
+    const session = await openSession()
+    const { results, summary } = session.applyOps([
+      { op: 'findReplace', find: 'East', replace: 'West' },
+    ])
+    expect(results[0]).toMatchObject({ matched: 7, changed: 1 })
+    expect(String(results[0]?.detail)).toContain('1 replacement(s)')
+    expect(summary).toContain('findReplace: matched 7, changed 1 (1 replacement(s))')
+    // read-after-write shows the replaced cell text
+    expect(session.readDocument({ blocks: [5] })).toContain('<td>West</td>')
+
+    const saved = await session.save()
+    expect(saved.unchanged).toBe(false)
+    const { parseDocx } = await import('@airy-office/docx-engine')
+    const reparsed = await parseDocx(new Uint8Array(await readFile(saved.path)))
+    const table = reparsed.blocks.find((block) => block.type === 'table')?.table
+    expect(table?.rows[1]?.[0]?.paras).toEqual(['West'])
+    expect(table?.rows[1]?.[1]?.paras).toEqual(['4200'])
+  })
+
+  it('a containsText target matches the table through its cell text', async () => {
+    const session = await openSession()
+    const { results } = session.applyOps([
+      { op: 'findReplace', find: '4200', replace: '8400', target: { containsText: '4200' } },
+    ])
+    expect(results[0]).toMatchObject({ matched: 1, changed: 1 })
+    expect(session.readDocument({ blocks: [5] })).toContain('<td>8400</td>')
+  })
+
+  it('replaces inside nested table cells through the nested patch form', async () => {
+    const nestedPath = join(root, 'nested.docx')
+    await writeFile(
+      nestedPath,
+      await buildBodyDocx(
+        '<w:p><w:r><w:t>Intro.</w:t></w:r></w:p>' +
+          '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>' +
+          '<w:tr><w:tc>' +
+          '<w:p><w:r><w:t>Outer cell text</w:t></w:r></w:p>' +
+          '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>' +
+          '<w:tr><w:tc><w:p><w:r><w:t>InnerMarker deep</w:t></w:r></w:p></w:tc></w:tr>' +
+          '</w:tbl>' +
+          '</w:tc></w:tr></w:tbl>',
+      ),
+    )
+    const session = await DocxSession.open(nestedPath, root)
+    const { results } = session.applyOps([
+      { op: 'findReplace', find: 'InnerMarker', replace: 'Swapped' },
+    ])
+    expect(results[0]).toMatchObject({ changed: 1 })
+    expect(String(results[0]?.detail)).toContain('1 replacement(s)')
+
+    const saved = await session.save()
+    const { parseDocx } = await import('@airy-office/docx-engine')
+    const reparsed = await parseDocx(new Uint8Array(await readFile(saved.path)))
+    const outer = reparsed.blocks.find((block) => block.type === 'table')?.table
+    expect(outer?.rows[0]?.[0]?.paras).toEqual(['Outer cell text'])
+    expect(outer?.rows[0]?.[0]?.nestedTables?.[0]?.rows[0]?.[0]?.paras).toEqual(['Swapped deep'])
+  })
+
+  it('reports unverifiable table structure as missed instead of silent zero changes', async () => {
+    // gridBefore rows: the model carries a gridGap placeholder with no w:tc
+    // behind it, so the model-to-XML cell mapping cannot be verified — the
+    // match must be disclosed as missed, not dropped nor patched blind
+    const gapPath = join(root, 'gridgap.docx')
+    await writeFile(
+      gapPath,
+      await buildBodyDocx(
+        '<w:p><w:r><w:t>Plain intro.</w:t></w:r></w:p>' +
+          '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>' +
+          '<w:tr><w:trPr><w:gridBefore w:val="1"/><w:wBefore w:w="4000" w:type="dxa"/></w:trPr>' +
+          '<w:tc><w:p><w:r><w:t>GRIDONLY cell</w:t></w:r></w:p></w:tc></w:tr>' +
+          '</w:tbl>',
+      ),
+    )
+    const session = await DocxSession.open(gapPath, root)
+    const { results, summary } = session.applyOps([
+      { op: 'findReplace', find: 'GRIDONLY', replace: 'Swapped' },
+    ])
+    expect(results[0]?.changed).toBe(0)
+    expect(String(results[0]?.detail)).toContain('0 replacement(s)')
+    expect(results[0]?.warnings?.[0]).toContain(
+      '1 occurrence(s) matched inside table content this op cannot edit safely',
+    )
+    expect(summary).toContain('warning: 1 occurrence(s) matched inside table content')
+
+    // honest degradation, still a valid save: the cell text is untouched
+    const saved = await session.save()
+    const { parseDocx } = await import('@airy-office/docx-engine')
+    const reparsed = await parseDocx(new Uint8Array(await readFile(saved.path)))
+    const table = reparsed.blocks.find((block) => block.type === 'table')?.table
+    expect(table?.rows[0]?.[1]?.paras).toEqual(['GRIDONLY cell'])
   })
 })
 
