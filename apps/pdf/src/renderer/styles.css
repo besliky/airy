@@ -4250,6 +4250,14 @@ button {
   flex-shrink: 0;
 }
 
+/* Scan affordance (UX-1733b): a quiet chip in the bar's dim color — the icon
+   paints with currentColor, no hard-coded chrome colors */
+.pdf-status-scan {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .status-right {
   display: flex;
   align-items: center;
