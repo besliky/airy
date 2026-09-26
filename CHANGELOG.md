@@ -7,6 +7,131 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-09-26
+
+### Added
+
+- Sheets:
+  - Structured references evaluate: formulas with Excel table references
+    (`Sales[Amount]`, `Sales[@Amount]`, `#All`/`#Data`/`#Headers`/`#Totals`,
+    escaped column names, cross-table sums) now compute instead of falling
+    into `#NAME?`/pin. Resolution is native — IronCalc 0.8.3 already rewrites
+    `Table[...]` tokens into ranges at parse time from the workbook's loaded
+    table parts, so the engine keeps a single source of truth. The one 0.8.3
+    gap — Excel's `@` this-row shorthand — is closed by a scoped rewriter in
+    the xlsx sidecar: `[@Col]`, `[@[Col With Space]]`, `[@[Jan]:[Dec]]` and
+    `[@]` are spelled out to `[#This Row]` before formulas reach the engine,
+    on both the cold-import path (via the stored import text, before
+    unparsable-formula pinning) and user edit inputs; string literals,
+    external workbook refs, `@` outside brackets and already-expanded forms
+    are untouched. Stored formulas, the renderer and saved files keep the
+    user-facing `@` text — round-trip is byte-verbatim — and a stale cached
+    value beside a file-side `@`-formula recomputes on open. 20 Rust
+    unit/integration cases over a real two-table fixture + 6 vitest (sidecar
+    recalc, byte-verbatim save round-trip, openpyxl load); cargo 278 lib +
+    13 bin, sheets vitest 3148 passed / 1 skipped (PR #238).
+  - Excel tables become editable: Resize Table, Rename Table, style edits
+    and Convert to Range come to sheets for tables already stored in the
+    file and for tables created this session, driven by a new Table Design
+    dialog. Resize grows or shrinks the table across rows and columns with
+    the header cell anchored — the new area must keep a header plus at least
+    one data row, fit the sheet, and not overlap other tables, merged cells
+    or the sheet auto-filter; growing appends Excel-style `ColumnN` columns,
+    shrinking only releases cells and their data stays on the sheet. Rename
+    enforces Excel's name rules (no spaces, no cell-reference lookalikes,
+    unique against tables and defined names) and rewrites every structured
+    reference to the old name across all worksheet formulas and
+    workbook-level defined names — bare (`Users[Col]`) and quoted
+    (`'Old Name'[Col]`) forms, selector spans, whole-table references —
+    while string literals and quoted sheet names are skipped. Convert to
+    Range follows Excel's documented behavior: structured references become
+    their equivalent A1 references (data body, `[#All]`/`[#Data]`/
+    `[#Headers]`/`[#Totals]`, `[@Col]` this-row resolved against the formula
+    cell, cross-sheet qualification), then the table part, relationship,
+    worksheet hookup and content type are removed — cell data and
+    formatting are untouched. All operations are fail-closed at save; the
+    round-trip is verified structurally and with openpyxl (resized+renamed
+    table ref/columns; converted book has no tables and intact formulas).
+    Target vitest 67/67, full sheets gate 3165 passed + 1 skipped, cargo
+    258 lib + 13 bin (PR #240).
+  - Color filters survive the whole loop: a `<colorFilter dxfId="n"/>` in a
+    worksheet auto-filter used to be dropped on open and refused on save.
+    Import now resolves the dxfId against styles.xml dxfs (fill bgColor →
+    "filter by cell color", font color → "filter by font color", `#RRGGBB`;
+    an unresolvable index keeps losing its column — fail closed), the
+    criterion lands as Univer `colorFilters` with the hex normalized through
+    the same ColorKit path the evaluator and the filter panel's by-color tab
+    use — the panel lists the column's colors, filters rows by fill or font,
+    and resets cleanly — and save serializes a single-color criterion back
+    as `<colorFilter dxfId="n"/>` with the criterion dxf interned into
+    styles.xml: the exact shape Excel and openpyxl read back. Multi-color
+    and "no fill" selections have no OOXML mapping and still fail closed.
+    Tests: Rust dxf resolution, a sidecar wire round-trip against an
+    openpyxl-structured fixture, model-level by-fill/by-font filtering with
+    reset, and a structural save round-trip; cargo 259, sheets vitest 3152
+    passed / 1 skipped (PR #242).
+- Slides:
+  - Record Slide Show: the Record placeholder in Ribbon → Slideshow → Set Up
+    becomes a real recording mode. A `RecordSession` model accumulates each
+    slide's dwell only while recording — pause banks the current dwell and
+    freezes the clocks, page turns while paused move on without counting,
+    resume opens a new measuring window — and the show gains a REC HUD
+    (blinking dot, state, per-slide and total clocks, pause/resume + stop
+    buttons, P shortcut). Stop routes into the existing "save timings?"
+    prompt and persists the timings as `<p:transition advTm>` (ms), and the
+    show now self-advances on slides carrying recorded advTm — PowerPoint
+    parity (suppressed in rehearse/record modes, where the presenter sets
+    the pace). Narration is an explicit follow-up (no audio input in
+    headless/CI). 13 new tests (record model, advTm file round-trip, UI
+    states); slides suite 1207 passed / 13 skipped (PR #239).
+  - Charts carry their embedded workbook and Edit Data stays in sync:
+    `addChart` now mints `ppt/embeddings/*.xlsx` wired to the chart part
+    (package relationship + `c:externalData` + a Content_Types xlsx
+    default) — previously app-inserted charts had no workbook at all and
+    Edit Data was unavailable — and `editChartElement` rebuilds the chart
+    XML caches and rewrites the Sheet1 data rectangle in the same operation,
+    so the app dialog and PowerPoint always show the same numbers. Authored
+    workbooks are respected: formula cells stay byte-identical, cells
+    outside the data rectangle (helpers, notes, styled rows) survive, the
+    sheet dimension grows as a union, and a corrupt embedding is left alone
+    rather than destroyed. Edit Data (ribbon + a new context-menu item)
+    prefills from the workbook sheet, falling back to the parsed chart
+    model. The sync is synchronous by design — chart edits run inside the
+    guided-op executor and undo snapshots copy the archive entry map — so
+    the minimal zip reader/writer lives over `node:zlib` instead of async
+    JSZip (zip64 bails explicitly). 9 new tests incl. a python-pptx
+    round-trip and the real LibreOffice-interop; pptx-engine 973/973
+    (PR #241).
+
+### Fixed
+
+- Markdown & HTML editors:
+  - Save respects the file's remembered encoding, and a clean Ctrl+S leaves
+    the file byte-identical. Saving used to write
+    `Buffer.from(text, 'utf8')` unconditionally: a windows-1251 file pinned
+    through the status-bar picker was silently rewritten as UTF-8 while the
+    persisted `fileEncodings` entry kept claiming the old charset — the next
+    open decoded the new bytes AS windows-1251 and produced mojibake, and
+    the picker masked the stale override with a session-local
+    "Auto detect". Save now encodes into the file's remembered charset
+    (`encodeForSave`): Node ships no legacy TextEncoder, so `encode-text.ts`
+    derives each of the 15 selectable charsets' inverse decode table from
+    its own TextDecoder (256 single bytes plus the lead × trail grid for the
+    double-byte CJK sets), cached per process, with round-trip verified for
+    all 12 legacy charsets; a text the pinned charset cannot represent falls
+    back to a lossless UTF-8 write and drops the now-false pick, so reopen
+    auto-detects the file the way it actually is; plain UTF-8 paths keep the
+    exact previous bytes. A new read-only `markdown:get-encoding` channel
+    lets the picker mirror the persisted pick at open and re-sync after
+    every save. With it, the #196 regression closes: Ctrl+S with zero edits
+    no longer rewrites the file at all — `doSave` short-circuits an in-place
+    save of a clean document before serialization (the parse → serialize
+    round trip is not byte-faithful for every envelope, so a clean save
+    mutated CR-only/BOM files another tool wrote); menu Save already refused
+    clean views main-side, and Save As stays a deliberate write. 26 new
+    tests, red on the pre-fix base verified (7/8 fail on the old src);
+    markdown suite 394 → 420 (PR #237).
+
 ## [0.23.0] - 2026-09-25
 
 ### Added
